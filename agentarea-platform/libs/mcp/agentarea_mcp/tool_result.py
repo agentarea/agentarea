@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-# The image types every vision provider behind litellm accepts.
+# The image types every vision provider on both transports accepts.
 SUPPORTED_IMAGE_TYPES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"})
 # Anthropic's per-image limit, the strictest of the providers.
 MAX_TOOL_IMAGE_BYTES = 5 * 1024 * 1024

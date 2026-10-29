@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
 from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.model_charges import ModelFunding, UnfundedPlatformCallError, require_funding
 from agentarea_llm.application.model_service import (
@@ -22,6 +23,7 @@ from agentarea_llm.domain.models import ModelKind
 from agentarea_llm.infrastructure.model_clients import DecisionModel, ImageModel, VideoModel
 
 WORKSPACE = "ws-1"
+OPENROUTER = ProviderProfile(base_url="https://openrouter.ai/api/v1")
 
 
 def _instance(kind: str, *, managed_by=None, workspace_id=WORKSPACE, spec_workspace=WORKSPACE):
@@ -30,7 +32,7 @@ def _instance(kind: str, *, managed_by=None, workspace_id=WORKSPACE, spec_worksp
         endpoint_url=None,
         managed_by=managed_by,
         workspace_id=workspace_id,
-        provider_spec=SimpleNamespace(provider_type="openrouter"),
+        provider_spec=SimpleNamespace(provider_type="openrouter", profile=lambda: OPENROUTER),
     )
     spec = SimpleNamespace(
         kind=kind,
@@ -122,6 +124,7 @@ async def test_the_endpoint_carries_the_resolved_credential_not_the_reference():
     assert endpoint.managed_by == MANAGED_BY_PLATFORM
     assert endpoint.model_name == "vendor/model"
     assert endpoint.provider_type == "openrouter"
+    assert endpoint.provider == OPENROUTER
     assert endpoint.instance_id == str(instance.id)
 
 

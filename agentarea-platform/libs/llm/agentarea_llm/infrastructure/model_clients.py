@@ -2,9 +2,8 @@
 
 Each is built from a resolved ``ModelEndpoint`` (see ``ModelService``) and returns
 what it produced together with its cost in USD, as the provider reported it.
-Image generation goes through LiteLLM; video and decision models have no LiteLLM
-call, so they speak the provider's HTTP API (OpenRouter's ``/videos`` and
-``/systemone``) directly.
+Each speaks the provider's OpenAI-compatible HTTP API directly:
+``/images/generations``, ``/videos`` and ``/systemone``.
 """
 
 from __future__ import annotations
@@ -15,23 +14,19 @@ import logging
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, NoReturn, cast
+from typing import Any, NoReturn
 
 import httpx
+from agentarea_agents_sdk.models.provider_profiles import DEFAULT_PROFILE, ProviderProfile
 from agentarea_common.money import to_money
 from agentarea_common.outbound import Destination, outbound_client
 from agentarea_common.utils.url_safety import OutboundPolicy, UnsafeUrlError, endpoint_policy_for
 
 from agentarea_llm.domain.media import DecisionQuestionType, VideoJobStatus
-from agentarea_llm.domain.provider_profiles import profile_for
 
 logger = logging.getLogger(__name__)
 
 HttpClientFactory = Callable[[], httpx.AsyncClient]
-
-# LiteLLM moves the provider's ``usage.cost`` into this hidden header on an image
-# response; its own ``response_cost`` is a price-table estimate, not the charge.
-_LITELLM_PROVIDER_COST_HEADER = "llm_provider-x-litellm-response-cost"
 
 _IMAGE_SIGNATURES: tuple[tuple[bytes, str], ...] = (
     (b"\x89PNG\r\n\x1a\n", "image/png"),
@@ -80,6 +75,7 @@ class ModelTarget:
     max_output_tokens: int | None = None
     output_cost_per_image: Decimal | None = None
     output_cost_per_video_per_second: Decimal | None = None
+    provider: ProviderProfile = DEFAULT_PROFILE
 
 
 @dataclass(frozen=True)
@@ -89,7 +85,7 @@ class ModelEndpoint(ModelTarget):
     api_key: str | None = None
 
     def api_url(self, path: str) -> str:
-        url = profile_for(self.provider_type).resolve_api_url(self.endpoint_url, path)
+        url = self.provider.resolve_api_url(self.endpoint_url, path)
         if url is None:
             raise ModelCallError(
                 f"model instance {self.instance_id} uses provider {self.provider_type!r}, "
@@ -98,7 +94,7 @@ class ModelEndpoint(ModelTarget):
         return url
 
     def headers(self) -> dict[str, str]:
-        return profile_for(self.provider_type).build_headers(self.api_key)
+        return self.provider.build_headers(self.api_key)
 
 
 @dataclass(frozen=True)
@@ -179,8 +175,8 @@ def _raise_for_status(response: httpx.Response, what: str) -> None:
     raise ModelCallError(message)
 
 
-def _raise_for_member_status(response: httpx.Response, what: str) -> None:
-    """As ``_raise_for_status``, without repeating what a member's endpoint answered.
+def _raise_for_status_unechoed(response: httpx.Response, what: str) -> None:
+    """As ``_raise_for_status``, without repeating what the endpoint answered.
 
     The body stays in the log (GHSA-pprc-x767-m6jg).
     """
@@ -188,6 +184,20 @@ def _raise_for_member_status(response: httpx.Response, what: str) -> None:
         return
     logger.warning(f"{what} endpoint answered HTTP {response.status_code}: {response.text[:500]}")
     _raise_for_failure(what, response.status_code)
+
+
+def _transport_status(error: httpx.TransportError) -> int | None:
+    return 408 if isinstance(error, httpx.TimeoutException) else None
+
+
+def _json_object(response: httpx.Response, what: str) -> Mapping[str, Any]:
+    try:
+        payload = response.json()
+    except ValueError as error:
+        raise ModelCallError(f"{what} returned a body that is not JSON") from error
+    if not isinstance(payload, Mapping):
+        raise ModelCallError(f"{what} returned a body that is not a JSON object")
+    return payload
 
 
 def _raise_for_failure(what: str, status_code: int | None) -> NoReturn:
@@ -208,26 +218,26 @@ def _member_client(policy: OutboundPolicy) -> httpx.AsyncClient:
     return outbound_client(Destination.MEMBER, policy=policy, timeout=_IMAGE_TIMEOUT_SECONDS)
 
 
-class ImageModel:
-    """Generates one image per call.
+def _vendor_client() -> httpx.AsyncClient:
+    return outbound_client(Destination.VENDOR, timeout=_IMAGE_TIMEOUT_SECONDS)
 
-    A provider's or the platform's address goes through ``litellm.aimage_generation``.
-    An address a workspace member set never does: LiteLLM connects with its own
-    client and follows redirects, so it is called as an OpenAI-compatible
-    ``/images/generations`` through the vetted, pinned client instead.
+
+class ImageModel:
+    """Generates one image per call, as an OpenAI-compatible ``/images/generations``.
+
+    An address a workspace member set is called through the vetted, pinned client;
+    a provider's or the platform's through the vendor client.
     """
 
     def __init__(
         self,
         endpoint: ModelEndpoint,
         *,
-        litellm_client: Any = None,
+        http_client_factory: HttpClientFactory = _vendor_client,
         member_client: Callable[[OutboundPolicy], httpx.AsyncClient] = _member_client,
     ) -> None:
         self._endpoint = endpoint
-        # LiteLLM 1.100 runs the OpenRouter image call on its sync handler even
-        # from aimage_generation, so an injected client must be a sync HTTPHandler.
-        self._litellm_client = litellm_client
+        self._client = http_client_factory
         self._member_client = member_client
 
     @property
@@ -235,57 +245,8 @@ class ImageModel:
         return self._endpoint
 
     async def generate(self, prompt: str, *, size: str | None = None) -> GeneratedMedia:
-        import litellm
-
         endpoint = self._endpoint
         policy = endpoint_policy_for(endpoint.managed_by) if endpoint.endpoint_url else None
-        if policy is not None:
-            return await self._generate_at_member_endpoint(prompt, size, policy)
-        kwargs: dict[str, Any] = {
-            "model": f"{endpoint.provider_type}/{endpoint.model_name}",
-            "prompt": prompt,
-            "api_key": endpoint.api_key,
-        }
-        if endpoint.endpoint_url:
-            kwargs["api_base"] = endpoint.api_url("")
-        if size:
-            kwargs["size"] = size
-        if self._litellm_client is not None:
-            kwargs["client"] = self._litellm_client
-        try:
-            response = await litellm.aimage_generation(**kwargs)
-        except Exception as error:
-            # LiteLLM may follow a redirect the pre-check never saw, so what came
-            # back is not repeated; it stays in the log (GHSA-pprc-x767-m6jg).
-            logger.warning(f"Image generation failed: {error}", exc_info=True)
-            status_code = getattr(error, "status_code", None)
-            detail = f"HTTP {status_code}" if isinstance(status_code, int) else type(error).__name__
-            raise ModelCallError(f"image generation failed: {detail}") from error
-
-        if response.data is None:
-            raise ModelCallError("image model returned no image data")
-        images = [item for item in response.data if getattr(item, "b64_json", None)]
-        if not images:
-            raise ModelCallError("image model returned no image bytes")
-        try:
-            content = base64.b64decode(cast(str, images[0].b64_json), validate=True)
-        except (binascii.Error, ValueError) as error:
-            raise ModelCallError("image model returned malformed base64") from error
-
-        cost = _provider_cost(_litellm_provider_cost(response))
-        if cost is None:
-            # The provider was paid for this image: it is kept, its cost unknown.
-            logger.error(
-                "Image model instance %s (%s) reported no cost; the call's cost is unknown",
-                endpoint.instance_id,
-                endpoint.model_name,
-            )
-        return GeneratedMedia(content=content, media_type=_image_media_type(content), cost_usd=cost)
-
-    async def _generate_at_member_endpoint(
-        self, prompt: str, size: str | None, policy: OutboundPolicy
-    ) -> GeneratedMedia:
-        endpoint = self._endpoint
         body: dict[str, Any] = {
             "model": endpoint.model_name,
             "prompt": prompt,
@@ -295,46 +256,48 @@ class ImageModel:
         if size:
             body["size"] = size
         try:
-            async with self._member_client(policy) as client:
+            async with (
+                self._member_client(policy) if policy is not None else self._client()
+            ) as client:
                 response = await client.post(
                     endpoint.api_url("/images/generations"), json=body, headers=endpoint.headers()
                 )
         except UnsafeUrlError as error:
             logger.warning(f"Image model endpoint refused by the outbound policy: {error}")
-            raise ModelCallError(
-                "image model endpoint points to an address this deployment does not call"
-            ) from error
-        _raise_for_member_status(response, "image generation")
-        payload = response.json()
-        data = payload.get("data") if isinstance(payload, Mapping) else None
-        encoded = data[0].get("b64_json") if isinstance(data, list) and data else None
-        if not isinstance(encoded, str):
+            raise ModelCallError(f"image model {_REFUSED_ENDPOINT}") from error
+        except httpx.TransportError as error:
+            logger.warning(f"Image generation got no answer: {error}", exc_info=True)
+            _raise_for_failure("image generation", _transport_status(error))
+        _raise_for_status_unechoed(response, "image generation")
+        payload = _json_object(response, "image generation")
+        data = payload.get("data")
+        first = data[0] if isinstance(data, list) and data else None
+        encoded = first.get("b64_json") if isinstance(first, Mapping) else None
+        if not isinstance(encoded, str) or not encoded:
             raise ModelCallError("image model returned no image bytes")
         try:
             content = base64.b64decode(encoded, validate=True)
         except (binascii.Error, ValueError) as error:
             raise ModelCallError("image model returned malformed base64") from error
-        cost = _provider_cost(_usage(payload).get("cost"))
-        if cost is None:
+        return GeneratedMedia(
+            content=content, media_type=_image_media_type(content), cost_usd=self._cost(payload)
+        )
+
+    def _cost(self, payload: Mapping[str, Any]) -> Decimal | None:
+        reported = _provider_cost(_usage(payload).get("cost"))
+        if reported is not None:
+            return reported
+        endpoint = self._endpoint
+        if endpoint.output_cost_per_image is None:
+            # The provider was paid for this image: it is kept, its cost unknown.
             logger.error(
-                "Image model instance %s (%s) reported no cost; the call's cost is unknown",
+                "Image model instance %s (%s) reported no cost and its spec has no "
+                "per-image price; the call's cost is unknown",
                 endpoint.instance_id,
                 endpoint.model_name,
             )
-        return GeneratedMedia(content=content, media_type=_image_media_type(content), cost_usd=cost)
-
-
-def _litellm_provider_cost(response: Any) -> Any:
-    """The provider-reported cost LiteLLM carried on an image response, or None."""
-    hidden = getattr(response, "_hidden_params", None)
-    if not isinstance(hidden, Mapping):
-        raise ModelCallError("image response carries no LiteLLM metadata to read a cost from")
-    headers = hidden.get("additional_headers")
-    if headers is None:
-        return None
-    if not isinstance(headers, Mapping):
-        raise ModelCallError("image response metadata has malformed additional_headers")
-    return headers.get(_LITELLM_PROVIDER_COST_HEADER)
+            return None
+        return to_money(endpoint.output_cost_per_image)
 
 
 class VideoModel:
@@ -446,9 +409,8 @@ def _validate_questions(questions: Mapping[str, Any]) -> None:
 class DecisionModel:
     """Answers structured questions about a state, in the System One format.
 
-    A provider's or the platform's address goes through ``litellm.asystemone``,
-    which speaks each provider's decisions API. An address a workspace member set
-    never does: it gets ``POST /systemone`` through the vetted, pinned client.
+    Every address gets ``POST /systemone`` through the injected client factory,
+    which hands a workspace member's address the vetted, pinned client.
     """
 
     def __init__(self, endpoint: ModelEndpoint, *, http_client_factory: HttpClientFactory) -> None:
@@ -464,10 +426,20 @@ class DecisionModel:
     ) -> DecisionResult:
         _validate_questions(questions)
         endpoint = self._endpoint
-        if endpoint.endpoint_url and endpoint_policy_for(endpoint.managed_by) is not None:
-            payload = await self._at_member_endpoint(state, questions)
-        else:
-            payload = await self._through_litellm(state, questions)
+        body = {"model": endpoint.model_name, "state": state, "questions": dict(questions)}
+        try:
+            async with self._client() as client:
+                response = await client.post(
+                    endpoint.api_url("/systemone"), json=body, headers=endpoint.headers()
+                )
+        except UnsafeUrlError as error:
+            logger.warning(f"Decision model endpoint refused by the outbound policy: {error}")
+            raise ModelCallError(f"decision {_REFUSED_ENDPOINT}") from error
+        except httpx.TransportError as error:
+            logger.warning(f"Decision call got no answer: {error}", exc_info=True)
+            _raise_for_failure("decision", _transport_status(error))
+        _raise_for_status_unechoed(response, "decision")
+        payload = _json_object(response, "decision")
 
         raw_answers = payload.get("answers")
         if not isinstance(raw_answers, dict):
@@ -492,44 +464,6 @@ class DecisionModel:
             input_tokens=input_tokens,
             output_tokens=output_tokens,
         )
-
-    async def _through_litellm(
-        self, state: str | Mapping[str, Any] | list[Any], questions: Mapping[str, Any]
-    ) -> Mapping[str, Any]:
-        import litellm
-
-        endpoint = self._endpoint
-        kwargs: dict[str, Any] = {
-            "model": f"{endpoint.provider_type}/{endpoint.model_name}",
-            "state": state,
-            "questions": dict(questions),
-            "api_key": endpoint.api_key,
-        }
-        if endpoint.endpoint_url:
-            kwargs["api_base"] = endpoint.endpoint_url
-        try:
-            response = await litellm.asystemone(**kwargs)
-        except Exception as error:
-            logger.warning(f"Decision call failed: {error}", exc_info=True)
-            status_code = getattr(error, "status_code", None)
-            _raise_for_failure("decision", status_code if isinstance(status_code, int) else None)
-        return response.model_dump(mode="json")
-
-    async def _at_member_endpoint(
-        self, state: str | Mapping[str, Any] | list[Any], questions: Mapping[str, Any]
-    ) -> Mapping[str, Any]:
-        endpoint = self._endpoint
-        body = {"model": endpoint.model_name, "state": state, "questions": dict(questions)}
-        try:
-            async with self._client() as client:
-                response = await client.post(
-                    endpoint.api_url("/systemone"), json=body, headers=endpoint.headers()
-                )
-        except UnsafeUrlError as error:
-            logger.warning(f"Decision model endpoint refused by the outbound policy: {error}")
-            raise ModelCallError(f"decision {_REFUSED_ENDPOINT}") from error
-        _raise_for_member_status(response, "decision")
-        return response.json()
 
     def _cost(
         self, usage: Mapping[str, Any], input_tokens: int, output_tokens: int

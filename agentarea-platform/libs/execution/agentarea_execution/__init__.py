@@ -7,7 +7,7 @@ Core Components:
 - Activities: Atomic agent execution activities (focused on LLM and tool execution)
 - Interfaces: Service container for AgentArea service injection
 - Workflows: LangGraph-based workflows that orchestrate activities
-- LLM Integration: Direct LiteLLM integration for model execution
+- LLM Integration: the SDK's OpenAI-compatible and Anthropic transports
 - MCP Integration: Tool execution via MCP server instances
 - Agent Management: Agent configuration and state management
 

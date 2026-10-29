@@ -42,7 +42,6 @@ curl http://localhost:11434/api/tags
 The tests use the existing project dependencies:
 - `pytest`
 - `pytest-asyncio`
-- `litellm`
 - The `agentarea_execution` module
 
 ## Running the Tests
@@ -176,12 +175,8 @@ markers =
 
 The tests include reasonable timeouts:
 - Ollama availability check: 10 seconds
-- Individual LLM calls: Default litellm timeout
+- Individual LLM calls: the SDK transport's HTTP timeout
 - Streaming tests: Based on max_tokens
-
-### Resource Cleanup
-
-Note: You may see warnings about unclosed client sessions. These are from the underlying `litellm` library and don't affect test functionality.
 
 ## Adding New Tests
 

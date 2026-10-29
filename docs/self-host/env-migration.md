@@ -70,6 +70,7 @@ configured. Delete them; there is no replacement.
 | `AGENTAREA_CHANNEL_IN_STREAM`, `AGENTAREA_CHANNEL_IN_GROUP`, `AGENTAREA_CHANNEL_IN_DLQ`, `AGENTAREA_EVENT_STREAM` | The `channel.inbound` stream is gone. The event service publishes polled items to `streams.ingest`, read by the `ingest` consumer group (dead letters in `streams.ingest.ingest.dlq`); the names are fixed like every other topic. |
 | `AGENTAREA_EVENT_TELEGRAM_ENABLED` | Telegram is no longer polled by a switch on the event service. A Telegram source of kind `poll` (or `webhook`) is created through the streams source API; the event service polls every poll source the catalog describes. |
 | `AGENTAREA_CHANNEL_OUT_STREAM`, `AGENTAREA_CHANNEL_OUT_GROUP`, `AGENTAREA_CHANNEL_OUT_DLQ` | The outbound stream is gone. Replies are sent by the `delivery` consumer group on `tasks.events`, whose names are fixed (`tasks.events`, `delivery`, `tasks.events.delivery.dlq`) like every other topic. |
+| `LITELLM_CALLBACKS`, `LITELLM_LOCAL_MODEL_COST_MAP` | The platform no longer uses the LiteLLM SDK; it calls models over its own OpenAI-compatible and Anthropic transports. |
 
 ## Renamed
 

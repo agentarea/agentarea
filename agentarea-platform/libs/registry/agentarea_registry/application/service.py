@@ -78,6 +78,16 @@ from agentarea_registry.infrastructure.repository import (
 
 logger = logging.getLogger(__name__)
 
+# How a provider's API is reached; carried by llm-providers.json entries that state it.
+PROVIDER_CONTRACT_FIELDS = (
+    "base_url",
+    "transport",
+    "auth",
+    "models_path",
+    "list_shape",
+    "models_query",
+)
+
 # Per-socket-operation timeout for fetching a catalog over HTTP. urllib applies
 # it to each connect and read rather than to the transfer as a whole, so this
 # bounds a stalled host, not a large catalog. The previous 120s bound outlived
@@ -1531,6 +1541,15 @@ class RegistryService:
 
     # ── LLM provider handlers ──
 
+    @staticmethod
+    def _provider_contract(spec: dict[str, Any]) -> dict[str, Any]:
+        """The HTTP-contract values a catalog entry states, checked; absent ones stay unset."""
+        from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
+
+        contract = {field: spec[field] for field in PROVIDER_CONTRACT_FIELDS if field in spec}
+        ProviderProfile.from_mapping(contract)
+        return contract
+
     async def _create_llm_provider(self, item: RegistryItem) -> str:
         if not self.provider_spec_repo:
             raise ValueError("Provider spec repository not available")
@@ -1545,7 +1564,9 @@ class RegistryService:
             icon=spec.get("icon"),
             is_builtin=spec.get("is_builtin", True),
         )
-        created = await self.provider_spec_repo.upsert_by_provider_key(entity)
+        created = await self.provider_spec_repo.upsert_by_provider_key(
+            entity, self._provider_contract(spec)
+        )
         return str(created.id)
 
     async def _update_llm_provider(self, item: RegistryItem) -> Any:
@@ -1562,7 +1583,9 @@ class RegistryService:
             icon=spec.get("icon"),
             is_builtin=spec.get("is_builtin", True),
         )
-        return await self.provider_spec_repo.upsert_by_provider_key(entity)
+        return await self.provider_spec_repo.upsert_by_provider_key(
+            entity, self._provider_contract(spec)
+        )
 
     # ── LLM model handlers ──
 
@@ -1634,6 +1657,8 @@ class RegistryService:
                 spec.get("cache_creation_input_cost_per_token")
             ),
             supports_function_calling=spec.get("supports_function_calling", False),
+            supports_vision=spec.get("supports_vision", False),
+            supports_reasoning=spec.get("supports_reasoning", False),
             is_active=spec.get("is_active", True),
         )
         return str(model.id)
@@ -2146,6 +2171,11 @@ class RegistryService:
                         "provider_type": entry.get("provider_type", provider_key),
                         "icon": entry.get("icon"),
                         "is_builtin": entry.get("is_builtin", True),
+                        **{
+                            field: entry[field]
+                            for field in PROVIDER_CONTRACT_FIELDS
+                            if field in entry
+                        },
                     },
                     "tags": entry.get("tags", []),
                 }
@@ -2186,6 +2216,8 @@ class RegistryService:
                             "cache_creation_input_cost_per_token"
                         ),
                         "supports_function_calling": entry.get("supports_function_calling", False),
+                        "supports_vision": entry.get("supports_vision", False),
+                        "supports_reasoning": entry.get("supports_reasoning", False),
                         "is_active": entry.get("is_active", True),
                     },
                     "tags": entry.get("tags", []),

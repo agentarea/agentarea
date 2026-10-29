@@ -421,6 +421,7 @@ async def discover_models_preview(
         provider_key=data.provider_key,
         api_key=data.api_key,
         endpoint_url=data.endpoint_url,
+        provider=provider_spec.profile(),
     )
 
     if not discovered:
@@ -636,6 +637,7 @@ async def discover_models(
         provider_key=provider_key,
         api_key=api_key,
         endpoint_url=config.endpoint_url,
+        provider=config.provider_spec.profile(),
     )
 
     if not discovered:

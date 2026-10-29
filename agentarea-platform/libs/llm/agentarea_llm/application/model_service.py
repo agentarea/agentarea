@@ -105,6 +105,7 @@ class ModelService:
             output_cost_per_video_per_second=getattr(
                 spec, "output_cost_per_video_per_second", None
             ),
+            provider=config.provider_spec.profile(),
         )
 
     async def connect(self, target: ModelTarget, funding: ModelFunding) -> ModelEndpoint:

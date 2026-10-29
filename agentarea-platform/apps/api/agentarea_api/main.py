@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Suppress noisy third-party loggers before any imports trigger them
-for _noisy_logger in ("LiteLLM", "LiteLLM Proxy", "LiteLLM Router", "httpcore", "httpx"):
+for _noisy_logger in ("httpcore", "httpx"):
     logging.getLogger(_noisy_logger).setLevel(logging.WARNING)
 
 from agentarea_common import __version__

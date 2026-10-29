@@ -15,7 +15,7 @@ This SDK contains the core agentic AI components extracted from the main AgentAr
 ## Key Features
 
 - **Zero Dependencies** on other AgentArea libraries
-- **Multi-Provider LLM Support** via LiteLLM
+- **Multi-Provider LLM Support** over two transports: OpenAI-compatible and Anthropic
 - **Tool System** with OpenAI function calling compatibility
 - **ReAct Framework** for structured reasoning and acting
 - **Streaming Support** for real-time responses
@@ -182,9 +182,8 @@ agentarea-agents-sdk/
 ## Requirements
 
 - Python 3.14+
-- LiteLLM for LLM provider integration
 - Pydantic for data validation
-- httpx for HTTP requests
+- httpx for HTTP requests, including every model call
 
 ## License
 

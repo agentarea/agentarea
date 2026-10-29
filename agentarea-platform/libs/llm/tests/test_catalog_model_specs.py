@@ -190,6 +190,31 @@ def test_projection_carries_the_catalog_kind():
     assert spec.context_window is None
 
 
+def test_projection_carries_the_capability_flags():
+    spec = _project_catalog_model_spec(
+        _item(
+            spec={
+                "model_name": "gpt-4o",
+                "context_window": 128000,
+                "provider_key": "openai",
+                "supports_vision": True,
+                "supports_reasoning": True,
+                **_PRICES,
+            }
+        )
+    )
+
+    assert spec.supports_vision is True
+    assert spec.supports_reasoning is True
+
+
+def test_projection_without_capability_flags_reads_neither():
+    spec = _project_catalog_model_spec(_item())
+
+    assert spec.supports_vision is False
+    assert spec.supports_reasoning is False
+
+
 def test_projection_of_an_item_without_kind_is_chat():
     assert _project_catalog_model_spec(_item()).kind == "chat"
 

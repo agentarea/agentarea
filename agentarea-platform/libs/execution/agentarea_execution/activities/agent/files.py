@@ -1,5 +1,6 @@
 """Sandbox files: the completion artifact barrier, and activating a skill."""
 
+import functools
 import logging
 from collections.abc import Callable
 from types import SimpleNamespace
@@ -7,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import httpx
+import tiktoken
 from agentarea_agents.infrastructure.github_skill_importer import (
     GitHubRateLimitError,
     GitHubSourceGoneError,
@@ -100,11 +102,23 @@ _STORAGE_CODES = frozenset(
 )
 
 
+# BPE is quadratic in the length of one unbroken run, so text is encoded in
+# slices: a slice boundary adds at most one token.
+_TOKEN_COUNT_SLICE_CHARS = 1024
+
+
+@functools.cache
+def _encoding() -> tiktoken.Encoding:
+    return tiktoken.get_encoding("o200k_base")
+
+
 def count_tokens(text: str) -> int:
     """The tokens of ``text`` by the tokenizer the model calls are metered with."""
-    import litellm
-
-    return int(litellm.token_counter(text=text)) if text else 0
+    slices = [
+        text[start : start + _TOKEN_COUNT_SLICE_CHARS]
+        for start in range(0, len(text), _TOKEN_COUNT_SLICE_CHARS)
+    ]
+    return sum(map(len, _encoding().encode_ordinary_batch(slices)))
 
 
 def unreachable_service(error: BaseException) -> str | None:

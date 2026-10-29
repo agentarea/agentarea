@@ -6,13 +6,12 @@ address vetted and pinned on every hop, a vendor through the egress proxy, an
 internal service directly. A client built anywhere else decides that on its own,
 and GHSA-pprc-x767-m6jg came from one such path.
 
-Three things are counted per production module and held to the checked-in
+Two things are counted per production module and held to the checked-in
 baseline (``outbound_ratchet_baseline.json``):
 
 - ``http``: an ``httpx``/``httpx2``/``aiohttp``/``requests`` client or one-shot
   request, or ``urlopen``,
-- ``mail``: an SMTP or IMAP connection,
-- ``litellm``: a LiteLLM call, which connects with LiteLLM's own client.
+- ``mail``: an SMTP or IMAP connection.
 
 A count above the baseline fails: send the request through ``outbound_client``.
 A count below the baseline also fails, so the lower number is written down and
@@ -30,7 +29,7 @@ from pathlib import Path
 
 PLATFORM_ROOT = Path(__file__).resolve().parents[2]
 BASELINE = Path(__file__).with_name("outbound_ratchet_baseline.json")
-KINDS = ("http", "mail", "litellm")
+KINDS = ("http", "mail")
 # The outbound layer itself.
 LAYER = {
     "libs/common/agentarea_common/outbound.py",
@@ -63,20 +62,6 @@ MAIL_NAMES = {
     ("aioimaplib", "IMAP4"),
     ("aioimaplib", "IMAP4_SSL"),
 }
-LITELLM_NAMES = {
-    "acompletion",
-    "completion",
-    "aimage_generation",
-    "image_generation",
-    "aembedding",
-    "embedding",
-    "aspeech",
-    "atranscription",
-    "asystemone",
-    "systemone",
-    "adecisions",
-    "decisions",
-}
 
 
 def _production_modules() -> list[Path]:
@@ -108,7 +93,9 @@ def _module_aliases(tree: ast.AST) -> dict[str, str]:
     }
 
 
-def _kind(call: ast.Call, imported: dict[str, tuple[str, str]], modules: dict[str, str]) -> str | None:
+def _kind(
+    call: ast.Call, imported: dict[str, tuple[str, str]], modules: dict[str, str]
+) -> str | None:
     func = call.func
     if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
         # Only an imported module: a local named ``requests`` is not the library.
@@ -130,8 +117,6 @@ def _kind(call: ast.Call, imported: dict[str, tuple[str, str]], modules: dict[st
         return "http"
     if (root, name) in MAIL_NAMES:
         return "mail"
-    if root == "litellm" and name in LITELLM_NAMES:
-        return "litellm"
     return None
 
 
@@ -172,7 +157,6 @@ def test_every_way_of_naming_a_client_is_counted() -> None:
         "import httpx\n"
         "import httpx2 as h2\n"
         "import aiosmtplib\n"
-        "import litellm\n"
         "import urllib.request\n"
         "from aiohttp import ClientSession\n"
         "from urllib.request import urlopen as fetch\n"
@@ -186,13 +170,12 @@ def test_every_way_of_naming_a_client_is_counted() -> None:
         "urllib.request.urlopen('https://example.test')\n"
         "aiosmtplib.SMTP(hostname='mail')\n"
         "IMAP4_SSL('mail')\n"
-        "litellm.acompletion(model='m')\n"
         "outbound_client('vendor')\n"
         "httpx.Timeout(5)\n"
         "requests = {}\n"
         "requests.get('id')\n"
     )
-    assert _scan_source(source) == {"http": 6, "mail": 2, "litellm": 1}
+    assert _scan_source(source) == {"http": 6, "mail": 2}
 
 
 def test_outbound_clients_outside_the_layer_do_not_grow() -> None:

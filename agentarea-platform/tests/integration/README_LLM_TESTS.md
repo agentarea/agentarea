@@ -11,7 +11,7 @@ This directory contains comprehensive tests for LLM integration with ollama_chat
 - **`test_llm_with_structured_tools()`**: Tests LLM behavior when tools are provided - should return structured tool_calls
 - **`test_llm_content_based_responses()`**: Tests LLM behavior without tools - should return JSON in content field  
 - **`test_llm_streaming()`**: Tests streaming LLM responses with event capture
-- **`test_response_parser_with_different_formats()`**: Tests our `LiteLLMResponseParser` with both response formats
+- **`test_response_parser_with_different_formats()`**: Tests the response parser with both response formats
 - **`test_react_framework_issue()`**: Tests the ReAct framework issue where LLM jumps to tool calls without reasoning
 
 **Key Findings**:

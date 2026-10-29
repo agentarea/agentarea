@@ -18,7 +18,6 @@ from agentarea_common.utils.types import UtcDatetime
 from agentarea_common.utils.url_safety import UnsafeUrlError, endpoint_policy_for
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance, ModelKind
-from agentarea_llm.domain.provider_profiles import profile_for
 from agentarea_llm.infrastructure.model_spec_repository import ModelPricingNotConfiguredError
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -343,7 +342,7 @@ async def validate_model_instance(
             api_key = await secret_manager.get_secret(api_key_secret_name)
 
         # What a provider needs is provider data, not a branch per vendor.
-        profile = profile_for(provider_type)
+        profile = provider_config.provider_spec.profile()
 
         if not api_key and profile.requires_api_key:
             return ModelInstanceTestResponse(
@@ -382,6 +381,7 @@ async def validate_model_instance(
             api_key=api_key,
             endpoint_url=resolved_endpoint_url,
             endpoint_policy=endpoint_policy_for(provider_config.managed_by),
+            provider=profile,
         )
 
         llm_request = LLMRequest(

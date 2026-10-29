@@ -8,7 +8,7 @@ related:
   - /concepts/agents/context-strategies
   - /guides/governance/set-a-budget
   - /reference/limits
-last_updated: 2026-09-07
+last_updated: 2026-10-29
 ---
 
 Models are described by four objects, in two layers. Getting the layering right
@@ -62,8 +62,9 @@ different endpoint, a proxy — without touching any agent.
     ```
 
     `provider_spec_id` and `name` are the only required fields. `endpoint_url` points
-    at a compatible proxy or self-hosted gateway. Prefer `api_key_secret_id`, a
-    reference to a stored secret, over an inline `api_key`.
+    at a compatible proxy or self-hosted gateway, which is also how you
+    [reach a provider that speaks neither protocol](#reach-a-provider-that-speaks-neither-protocol).
+    Prefer `api_key_secret_id`, a reference to a stored secret, over an inline `api_key`.
 
     An `endpoint_url` that resolves to a private, loopback or link-local address is
     refused when the configuration is saved and on every call, and so is one with a
@@ -112,6 +113,32 @@ check a pairing before you create an instance for it.
 
 A failure here is a credential or endpoint problem, and it is much easier to
 read than the same failure surfacing mid-task.
+
+## Reach a provider that speaks neither protocol
+
+The platform calls models over two protocols: the OpenAI HTTP API
+(`/chat/completions`, `/images/generations`) and Anthropic's Messages API. A
+provider that speaks neither, such as Amazon Bedrock, Google Vertex AI, Azure
+OpenAI, SageMaker or IBM watsonx, is reached through an OpenAI-compatible gateway:
+
+| Gateway | Runs |
+|---|---|
+| [LiteLLM proxy](https://docs.litellm.ai/docs/simple_proxy) | on your infrastructure |
+| [Bifrost](https://github.com/maximhq/bifrost) | on your infrastructure |
+| [OpenRouter](https://openrouter.ai) | hosted; already a provider in the catalog |
+
+The gateway holds the cloud credentials (AWS keys, a GCP service account, an Azure
+deployment) and AgentArea holds only the gateway's key. Create a provider config as
+in the steps above for an OpenAI-compatible provider spec, set `endpoint_url` to the
+gateway's base URL (the part before `/chat/completions`, for example
+`https://llm-gateway.internal.example.com/v1`) and put the gateway's key in the
+secret. Model names are the ones the gateway exposes. A gateway on a private
+address needs its host in `AGENTAREA_HTTP_PRIVATE_ALLOWLIST`, as a local model
+server does.
+
+The tradeoff is one more service to run and one more hop per call. Every workspace
+that uses the gateway shares the cloud identity it was configured with, so give
+workspaces that must not share one their own gateway.
 
 ## What the model spec controls at runtime
 

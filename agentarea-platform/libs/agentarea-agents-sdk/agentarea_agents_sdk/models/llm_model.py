@@ -1,19 +1,13 @@
-"""LLM model for encapsulating litellm interactions."""
+"""LLM model: one chat call over the transport the provider speaks."""
 
-import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import httpx
-import litellm
-from litellm import (
-    ModelResponse,
-    acompletion,
-)
 
 from .messages import (
     AssistantMessage as SDKAssistantMessage,
@@ -27,6 +21,7 @@ from .messages import (
 from .messages import (
     UserMessage as SDKUserMessage,
 )
+from .provider_profiles import DEFAULT_PROFILE, ProviderProfile, Transport
 
 if TYPE_CHECKING:
     from agentarea_common.utils.url_safety import OutboundPolicy
@@ -38,18 +33,22 @@ logger = logging.getLogger(__name__)
 # internal names exist; that detail goes to the log only.
 ENDPOINT_REFUSED = "the endpoint URL points to an address this deployment does not call"
 
-# Configure LiteLLM callbacks via env to avoid noisy defaults during tests
-import os as _os  # noqa: E402
+# Anthropic requires max_tokens on every request.
+ANTHROPIC_DEFAULT_MAX_TOKENS = 4096
 
-_callbacks_env = _os.getenv("LITELLM_CALLBACKS")
-if _callbacks_env is not None:
-    try:
-        litellm.callbacks = [cb.strip() for cb in _callbacks_env.split(",") if cb.strip()]
-    except Exception:
-        litellm.callbacks = []
-else:
-    # Default to no callbacks unless explicitly configured
-    litellm.callbacks = []
+# Anthropic reports a failure inside an open stream as an event, not a status.
+_ANTHROPIC_STREAM_ERROR_STATUS = {
+    "invalid_request_error": 400,
+    "authentication_error": 401,
+    "permission_error": 403,
+    "not_found_error": 404,
+    "request_too_large": 413,
+    "rate_limit_error": 429,
+    "api_error": 500,
+    "overloaded_error": 529,
+}
+
+ChunkPublisher = Callable[[str, int, bool], Awaitable[Any]]
 
 
 class LLMProviderHTTPError(RuntimeError):
@@ -137,7 +136,7 @@ def provider_reported_cost(raw: Any) -> Decimal | None:
 
 
 def usage_from_provider(raw: Any) -> LLMUsage:
-    """Read a provider's usage block, in OpenAI, Anthropic or LiteLLM shape.
+    """Read a provider's usage block, in OpenAI or Anthropic shape.
 
     A block without ``total_tokens`` totals its parts; one without any counts
     stays at zero, which callers treat as no usage reported.
@@ -178,8 +177,131 @@ class LLMResponse:
     reasoning_content: str = ""
 
 
+def _text_of(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            part.get("text", "")
+            for part in content
+            if isinstance(part, dict) and part.get("type") == "text"
+        )
+    return "" if content is None else str(content)
+
+
+def _anthropic_image(part: dict[str, Any]) -> dict[str, Any]:
+    image = part.get("image_url")
+    url = image.get("url", "") if isinstance(image, dict) else str(image or "")
+    if url.startswith("data:") and ";base64," in url:
+        header, data = url.split(",", 1)
+        return {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": header[len("data:") :].split(";", 1)[0],
+                "data": data,
+            },
+        }
+    return {"type": "image", "source": {"type": "url", "url": url}}
+
+
+def _anthropic_blocks(content: Any) -> list[dict[str, Any]]:
+    if isinstance(content, str):
+        return [{"type": "text", "text": content}] if content else []
+    if isinstance(content, dict):
+        content = [content]
+    if not isinstance(content, list):
+        return [{"type": "text", "text": str(content)}] if content is not None else []
+    blocks: list[dict[str, Any]] = []
+    for part in content:
+        if not isinstance(part, dict):
+            blocks.append({"type": "text", "text": str(part)})
+        elif part.get("type") == "image_url":
+            blocks.append(_anthropic_image(part))
+        elif part.get("type") == "text":
+            if part.get("text"):
+                blocks.append({"type": "text", "text": part["text"]})
+        else:
+            blocks.append(part)
+    return blocks
+
+
+def _anthropic_tool_use(tool_call: dict[str, Any]) -> dict[str, Any]:
+    function = tool_call.get("function") or {}
+    arguments = function.get("arguments") or "{}"
+    try:
+        tool_input = json.loads(arguments) if isinstance(arguments, str) else arguments
+    except json.JSONDecodeError:
+        logger.warning("Tool call %s has arguments that are not JSON", tool_call.get("id"))
+        tool_input = {}
+    return {
+        "type": "tool_use",
+        "id": tool_call.get("id", ""),
+        "name": function.get("name", ""),
+        "input": tool_input if isinstance(tool_input, dict) else {},
+    }
+
+
+def to_anthropic_messages(
+    messages: list[dict[str, Any]],
+) -> tuple[str | None, list[dict[str, Any]]]:
+    """OpenAI-shaped chat messages as Anthropic's ``system`` plus alternating turns.
+
+    Tool results become ``tool_result`` blocks in a user turn, assistant tool calls
+    become ``tool_use`` blocks, and consecutive turns of one role are merged, since
+    the Messages API accepts only alternating roles.
+    """
+    system_parts: list[str] = []
+    turns: list[dict[str, Any]] = []
+    for message in messages:
+        role = message.get("role")
+        if role == "system":
+            text = _text_of(message.get("content"))
+            if text:
+                system_parts.append(text)
+            continue
+        if role == "tool":
+            content = message.get("content")
+            blocks = [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": message.get("tool_call_id", ""),
+                    "content": content if isinstance(content, str) else json.dumps(content),
+                }
+            ]
+            role = "user"
+        elif role == "assistant":
+            blocks = _anthropic_blocks(message.get("content"))
+            blocks += [_anthropic_tool_use(tc) for tc in message.get("tool_calls") or []]
+        else:
+            role = "user"
+            blocks = _anthropic_blocks(message.get("content"))
+        if not blocks:
+            continue
+        if turns and turns[-1]["role"] == role:
+            turns[-1]["content"].extend(blocks)
+        else:
+            turns.append({"role": role, "content": blocks})
+    return ("\n\n".join(system_parts) or None), turns
+
+
+def to_anthropic_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """OpenAI function tools as Anthropic tool definitions."""
+    converted = []
+    for tool in tools:
+        function = tool.get("function", tool)
+        converted.append(
+            {
+                "name": function.get("name", ""),
+                "description": function.get("description", ""),
+                "input_schema": function.get("parameters") or {"type": "object", "properties": {}},
+            }
+        )
+    return converted
+
+
 class LLMModel:
-    """Encapsulates LLM model logic using litellm."""
+    """One model at one provider, called over the transport its profile names."""
 
     def __init__(
         self,
@@ -192,14 +314,15 @@ class LLMModel:
         cached_input_cost_per_token: Decimal | None = None,
         endpoint_policy: OutboundPolicy | None = None,
         cache_creation_input_cost_per_token: Decimal | None = None,
+        provider: ProviderProfile = DEFAULT_PROFILE,
     ):
         """Initialize LLM model with explicit parameters.
 
         Args:
-            provider_type: The LLM provider type (e.g., "openai", "anthropic", "ollama_chat")
-            model_name: The model name (e.g., "gpt-3.5-turbo", "claude-3-opus")
+            provider_type: The provider type (e.g., "openai", "anthropic", "ollama_chat")
+            model_name: The model name (e.g., "gpt-4.1", "claude-sonnet-4-5")
             api_key: API key for the provider (optional for local models)
-            endpoint_url: Custom endpoint URL (optional, uses provider defaults)
+            endpoint_url: Custom endpoint URL; the provider's public address otherwise.
             input_cost_per_token: Persisted input-token price; zero means explicitly free.
             output_cost_per_token: Persisted output-token price; zero means explicitly free.
             cached_input_cost_per_token: Price of a prompt token read from the provider's
@@ -209,6 +332,9 @@ class LLMModel:
             endpoint_policy: Set when ``endpoint_url`` came from someone other than
                 whoever runs this process (a workspace member): every call to it is
                 refused unless the address passes this policy. None calls it as given.
+            provider: The provider spec's HTTP contract: its public address,
+                transport and auth. The default is OpenAI-compatible with no
+                public address, so ``endpoint_url`` is required.
         """
         self.provider_type = provider_type
         self.model_name = model_name
@@ -219,6 +345,7 @@ class LLMModel:
         self.cached_input_cost_per_token = cached_input_cost_per_token
         self.cache_creation_input_cost_per_token = cache_creation_input_cost_per_token
         self.endpoint_policy = endpoint_policy
+        self._profile = provider
 
     def _configured_cost(self, usage: LLMUsage) -> Decimal:
         """Calculate cost from the persisted model spec.
@@ -258,7 +385,7 @@ class LLMModel:
             return str(obj)
 
     def _to_content_parts(self, content: Any, metadata: dict[str, Any] | None = None) -> Any:
-        """Return content in a form accepted by LiteLLM/OpenAI:
+        """Return content in the OpenAI chat shape:
         - If metadata contains 'content_parts' list, use it directly (for multimodal)
         - If content is already list/dict (OpenAI format), pass through
         - If content is a JSON string representing list/dict, parse
@@ -290,10 +417,8 @@ class LLMModel:
         return str(content)
 
     def _normalize_message(self, msg: Any) -> Any:
-        """Normalize an SDK message or dict to LiteLLM-typed message or OpenAI dict.
-        - System messages mapped to ChatCompletionSystemMessage
-        - User/Assistant/Tool messages converted to typed classes when appropriate
-        - Assistant tool_calls mapped to ChatCompletionAssistantToolCall + Function
+        """Normalize an SDK message or dict to an OpenAI chat message dict.
+        - Assistant tool_calls kept in the OpenAI function-call shape
         - Supports multimodal by accepting list/dict content or metadata.content_parts
         """
         # SDK dataclass messages
@@ -355,81 +480,14 @@ class LLMModel:
     def _normalize_messages(self, messages: list[Any]) -> list[Any]:
         return [self._normalize_message(m) for m in messages]
 
-    def _build_litellm_params(self, request: LLMRequest) -> dict[str, Any]:
-        """Build parameters for litellm API call."""
-        # Prefer provider-prefixed model if provider_type is available (e.g., "ollama_chat/qwen2.5")
-        litellm_model = (
-            f"{self.provider_type}/{self.model_name}" if self.provider_type else self.model_name
-        )
-        params: dict[str, Any] = {
-            "model": litellm_model,
-        }
-
-        # Messages normalization: support SDK typed messages and dicts
-        if request.messages:
-            normalized_messages = self._normalize_messages(request.messages)
-            params["messages"] = normalized_messages
-        else:
-            params["messages"] = []
-
-        # Add API key if available
-        if self.api_key:
-            params["api_key"] = self.api_key
-
-        # Handle base URL for custom endpoints
-        if self.endpoint_url:
-            url = self.endpoint_url
-            if not url.startswith("http"):
-                url = f"http://{url}"
-            params["base_url"] = url
-
-        # Add tools if provided
-        if request.tools:
-            params["tools"] = request.tools
-            params["tool_choice"] = "auto"
-
-        # Add optional parameters
-        if request.temperature is not None:
-            params["temperature"] = request.temperature
-        if request.max_tokens is not None:
-            params["max_tokens"] = request.max_tokens
-
-        return params
-
-    def _get_base_url(self) -> str | None:
-        """Resolve the base URL for direct HTTP calls."""
-        if self.endpoint_url:
-            url = self.endpoint_url
-            if not url.startswith("http"):
-                url = f"http://{url}"
-            return url.rstrip("/")
-        return None
-
-    def _pins_endpoint(self) -> bool:
-        """Whether calls must go through the pinned client rather than LiteLLM.
-
-        LiteLLM connects with its own client and follows redirects, so a public
-        address answering 307 to an internal one would pass any check made before
-        the call. The pinned client vets every hop it connects to.
-        """
-        return self.endpoint_policy is not None and self._get_base_url() is not None
-
-    async def _check_endpoint(self) -> None:
-        """A pre-check for the LiteLLM path that has no pinned equivalent.
-
-        Resolves the name once and LiteLLM resolves it again and may follow a
-        redirect; every path the platform calls goes through the pinned client.
-        """
-        base_url = self._get_base_url()
-        if self.endpoint_policy is None or base_url is None:
-            return
-        from agentarea_common.utils.url_safety import UnsafeUrlError, validate_outbound_url
-
-        try:
-            await asyncio.to_thread(validate_outbound_url, base_url, policy=self.endpoint_policy)
-        except UnsafeUrlError as e:
-            logger.warning(f"Endpoint refused by the outbound policy: {e}")
-            raise UnsafeUrlError(ENDPOINT_REFUSED) from None
+    def _api_url(self, path: str) -> str:
+        url = self._profile.resolve_api_url(self.endpoint_url, path)
+        if url is None:
+            raise ValueError(
+                f"Provider {self.provider_type!r} has no public address and no "
+                "endpoint_url is configured"
+            )
+        return url
 
     async def _send(self, client: httpx.AsyncClient, request: httpx.Request) -> httpx.Response:
         from agentarea_common.utils.url_safety import UnsafeUrlError
@@ -449,40 +507,14 @@ class LLMModel:
 
         return safe_async_client(policy=self.endpoint_policy, timeout=timeout)
 
-    def _supports_direct_streaming(self) -> bool:
-        """Whether we can stream from the endpoint ourselves instead of via LiteLLM.
-
-        The only requirement is an explicit endpoint: a provider that gave us
-        a base URL is one we can speak OpenAI-compatible HTTP to directly,
-        which is how reasoning/thinking deltas survive — LiteLLM drops them
-        while streaming.
-
-        The provider's *name* says nothing about this. There used to be a
-        branch matching one vendor by substring, but ``_get_base_url()``
-        returns a URL only when ``endpoint_url`` is set, so reaching that
-        branch already implied the answer was yes; it could never change the
-        result.
-        """
-        return self._get_base_url() is not None
+    def _stream(self, request: LLMRequest) -> AsyncIterator[LLMResponse]:
+        if self._profile.transport is Transport.ANTHROPIC:
+            return self._stream_anthropic(request)
+        return self._stream_openai_compatible(request)
 
     async def _stream_openai_compatible(self, request: LLMRequest) -> AsyncIterator[LLMResponse]:
-        """Stream from an OpenAI-compatible API directly via httpx.
-
-        This bypasses LiteLLM's streaming to properly capture reasoning/thinking
-        content that LiteLLM drops. Works with any provider that exposes an
-        OpenAI-compatible /v1/chat/completions endpoint (Ollama, vLLM, etc.).
-        """
-        base_url = self._get_base_url()
-        if not base_url:
-            raise ValueError("No base URL configured for direct HTTP completion call")
-        # OpenAI-SDK convention is that the base URL ends in /v1 (e.g.
-        # https://api.openai.com/v1, http://localhost:1234/v1). Tolerate both
-        # forms — endpoint_url with or without a trailing /v1 — so users can
-        # paste either the proxy root or the standard /v1 base URL.
-        suffix = (
-            "/chat/completions" if base_url.rstrip("/").endswith("/v1") else "/v1/chat/completions"
-        )
-        url = f"{base_url.rstrip('/')}{suffix}"
+        """Stream from an OpenAI-compatible ``/chat/completions`` endpoint."""
+        url = self._api_url("/chat/completions")
 
         normalized_messages = self._normalize_messages(request.messages)
 
@@ -500,9 +532,10 @@ class LLMModel:
         if request.max_tokens is not None:
             payload["max_tokens"] = request.max_tokens
 
-        headers: dict[str, str] = {"Content-Type": "application/json"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+        headers: dict[str, str] = {
+            "Content-Type": "application/json",
+            **self._profile.build_headers(self.api_key),
+        }
 
         tool_calls_buffer: dict[int, dict[str, Any]] = {}
         final_usage: LLMUsage | None = None
@@ -570,10 +603,15 @@ class LLMModel:
                         or ""
                     )
 
-                    # Extract tool calls
+                    # Extract tool calls; some providers still stream the legacy function_call
                     delta_tool_calls = None
-                    if delta.get("tool_calls"):
-                        for tc_delta in delta["tool_calls"]:
+                    tool_call_deltas = delta.get("tool_calls") or (
+                        [{"index": 0, "function": delta["function_call"]}]
+                        if delta.get("function_call")
+                        else None
+                    )
+                    if tool_call_deltas:
+                        for tc_delta in tool_call_deltas:
                             idx = tc_delta.get("index", 0)
                             if idx not in tool_calls_buffer:
                                 tool_calls_buffer[idx] = {
@@ -607,96 +645,113 @@ class LLMModel:
             finally:
                 await resp.aclose()
 
-    def _parse_response(self, response: ModelResponse) -> LLMResponse:
-        """Parse litellm response into standardized format."""
-        message = response.choices[0].message
+    async def _stream_anthropic(self, request: LLMRequest) -> AsyncIterator[LLMResponse]:
+        """Stream from Anthropic's Messages API, yielding the same deltas as the OpenAI path."""
+        url = self._api_url("/messages")
+        system, turns = to_anthropic_messages(self._normalize_messages(request.messages))
 
-        # Handle tool calls
-        tool_calls = None
-        if hasattr(message, "tool_calls") and message.tool_calls:
-            # Narrowed on `type`: openai's union gained
-            # ChatCompletionMessageCustomToolCall, which carries no `function`.
-            # We never advertise custom tools, so one arriving means the provider
-            # invented it — say so rather than dropping it from the transcript,
-            # where it would look like the model simply never called anything.
-            for tool_call in message.tool_calls:
-                if tool_call.type != "function":
-                    logger.warning(
-                        "Ignoring unsupported tool call type %r from the model", tool_call.type
-                    )
-            tool_calls = [
-                {
-                    "id": tool_call.id,
-                    "type": tool_call.type,
-                    "function": {
-                        "name": tool_call.function.name,
-                        "arguments": tool_call.function.arguments,
-                    },
-                }
-                for tool_call in message.tool_calls
-                if tool_call.type == "function"
-            ]
-        elif hasattr(message, "function_call") and message.function_call:
-            # Fallback for providers that use function_call instead of tool_calls
-            fc = message.function_call
-            tool_calls = [
-                {
-                    "id": "",
-                    "type": "function",
-                    "function": {
-                        "name": getattr(fc, "name", ""),
-                        "arguments": getattr(fc, "arguments", "") or "",
-                    },
-                }
-            ]
+        payload: dict[str, Any] = {
+            "model": self.model_name,
+            "messages": turns,
+            "max_tokens": request.max_tokens or ANTHROPIC_DEFAULT_MAX_TOKENS,
+            "stream": True,
+        }
+        if system:
+            payload["system"] = system
+        if request.tools:
+            payload["tools"] = to_anthropic_tools(request.tools)
+            payload["tool_choice"] = {"type": "auto"}
+        if request.temperature is not None:
+            payload["temperature"] = request.temperature
 
-        # Calculate cost information
-        cost = Decimal(0)
-        usage = LLMUsage()
+        headers: dict[str, str] = {
+            "Content-Type": "application/json",
+            **self._profile.build_headers(self.api_key),
+        }
 
-        response_usage = getattr(response, "usage", None)
-        if response_usage:
-            # Update usage statistics
-            usage = usage_from_provider(response_usage)
+        usage_fields: dict[str, Any] = {}
+        tool_calls: list[dict[str, Any]] = []
+        tool_at_block: dict[int, dict[str, Any]] = {}
 
-            reported = provider_reported_cost(response_usage)
-            if reported is not None:
-                cost = reported
-            else:
-                # litellm includes cost calculation in some cases
-                if hasattr(response_usage, "completion_tokens_cost"):
-                    cost += Decimal(str(getattr(response_usage, "completion_tokens_cost", 0.0)))
-                if hasattr(response_usage, "prompt_tokens_cost"):
-                    cost += Decimal(str(getattr(response_usage, "prompt_tokens_cost", 0.0)))
-                if cost == 0.0:
-                    cost = self._configured_cost(usage)
+        async with self._http_client(httpx.Timeout(300.0)) as client:
+            resp = await self._send(
+                client, client.build_request("POST", url, json=payload, headers=headers)
+            )
+            if resp.status_code >= 400:
+                body = await resp.aread()
+                await resp.aclose()
+                raise LLMProviderHTTPError(resp.status_code, _error_body_message(body))
 
-        # Follow OpenAI standard: when tool_calls are present, content should be minimal
-        content = message.content or ""
+            try:
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    try:
+                        event = json.loads(line[5:].strip())
+                    except json.JSONDecodeError:
+                        continue
+                    kind = event.get("type")
 
-        return LLMResponse(
-            content=content,
-            role=message.role,
-            tool_calls=tool_calls,
-            cost=cost,
-            usage=usage,
-            reasoning_content=(
-                getattr(message, "reasoning_content", None)
-                or getattr(message, "reasoning", None)
-                or getattr(message, "thinking", None)
-                or ""
-            ),
-        )
+                    if kind == "message_start":
+                        usage_fields.update(event.get("message", {}).get("usage") or {})
+                    elif kind == "content_block_start":
+                        block = event.get("content_block") or {}
+                        if block.get("type") == "tool_use":
+                            call = {
+                                "id": block.get("id", ""),
+                                "type": "function",
+                                "function": {"name": block.get("name", ""), "arguments": ""},
+                            }
+                            tool_calls.append(call)
+                            tool_at_block[event.get("index", len(tool_calls) - 1)] = call
+                            yield LLMResponse(content="", role="assistant", tool_calls=tool_calls)
+                    elif kind == "content_block_delta":
+                        delta = event.get("delta") or {}
+                        delta_type = delta.get("type")
+                        if delta_type == "text_delta" and delta.get("text"):
+                            yield LLMResponse(content=delta["text"], role="assistant")
+                        elif delta_type == "thinking_delta" and delta.get("thinking"):
+                            yield LLMResponse(
+                                content="", role="assistant", reasoning_content=delta["thinking"]
+                            )
+                        elif delta_type == "input_json_delta" and delta.get("partial_json"):
+                            call = tool_at_block.get(event.get("index", -1))
+                            if call is not None:
+                                call["function"]["arguments"] += delta["partial_json"]
+                                yield LLMResponse(
+                                    content="", role="assistant", tool_calls=tool_calls
+                                )
+                    elif kind == "message_delta":
+                        usage_fields.update(event.get("usage") or {})
+                    elif kind == "error":
+                        error = event.get("error") or {}
+                        raise LLMProviderHTTPError(
+                            _ANTHROPIC_STREAM_ERROR_STATUS.get(error.get("type", ""), 500),
+                            str(error.get("message", "stream error")),
+                        )
+                    elif kind == "message_stop":
+                        break
+            finally:
+                await resp.aclose()
 
-    async def _complete_through_pinned_client(
-        self, request: LLMRequest, event_publisher: Any = None
+        if usage_fields:
+            usage = usage_from_provider(usage_fields)
+            yield LLMResponse(
+                content="",
+                role="assistant",
+                cost=self._configured_cost(usage),
+                usage=usage,
+            )
+
+    async def _complete_from_stream(
+        self, request: LLMRequest, event_publisher: ChunkPublisher | None = None
     ) -> LLMResponse:
         content: list[str] = []
         reasoning: list[str] = []
         tool_calls: list[dict[str, Any]] | None = None
         usage: LLMUsage | None = None
         cost = Decimal(0)
-        async for chunk in self._stream_openai_compatible(request):
+        async for chunk in self._stream(request):
             if event_publisher and chunk.content:
                 await event_publisher(chunk.content, len(content), False)
             content.append(chunk.content)
@@ -717,573 +772,55 @@ class LLMModel:
             reasoning_content="".join(reasoning),
         )
 
+    def _log_failure(self, error: Exception, *, streaming: bool) -> None:
+        error_context = {
+            "provider_type": self.provider_type,
+            "model_name": self.model_name,
+            "has_api_key": bool(self.api_key),
+            "endpoint_url": self.endpoint_url,
+            "error_type": type(error).__name__,
+            "error_message": str(error),
+            "streaming": streaming,
+        }
+        logger.exception(f"LLM call failed with context: {error_context}")
+
     async def complete(self, request: LLMRequest) -> LLMResponse:
         """Call LLM with the provided request."""
         try:
-            if self._pins_endpoint():
-                return await self._complete_through_pinned_client(request)
-
-            # Build parameters
-            params = self._build_litellm_params(request)
-
-            logger.info(f"Calling LLM with model {params['model']}")
-
-            # Make the LLM call
-            typed_response = cast(ModelResponse, await acompletion(**params))
-
-            # Parse and return response
-            result = self._parse_response(typed_response)
-            logger.info(f"LLM call completed successfully, cost: ${result.cost:.6f}")
-            return result
-
+            result = await self._complete_from_stream(request)
         except Exception as e:
-            # Enhanced error logging with context
-            error_context = {
-                "provider_type": self.provider_type,
-                "model_name": self.model_name,
-                "has_api_key": bool(self.api_key),
-                "endpoint_url": self.endpoint_url,
-                "error_type": type(e).__name__,
-                "error_message": str(e),
-            }
-
-            logger.exception(f"LLM call failed with context: {error_context}")
-
-            # Re-raise with original exception to preserve stack trace
+            self._log_failure(e, streaming=False)
             raise
+        logger.info(f"LLM call completed successfully, cost: ${result.cost:.6f}")
+        return result
 
     async def complete_with_streaming(
-        self, request: LLMRequest, task_id: str, agent_id: str, execution_id: str, event_publisher
+        self,
+        request: LLMRequest,
+        task_id: str,
+        agent_id: str,
+        execution_id: str,
+        event_publisher: ChunkPublisher | None,
     ) -> LLMResponse:
         """Call LLM with streaming and emit chunk events."""
         try:
-            if self._pins_endpoint():
-                return await self._complete_through_pinned_client(request, event_publisher)
-
-            # Build parameters for streaming
-            params = self._build_litellm_params(request)
-            params["stream"] = True
-            params["stream_options"] = {"include_usage": True}
-
-            logger.info(f"Calling LLM with streaming for model {params['model']}")
-            await self._check_endpoint()
-
-            # Make the streaming LLM call
-            # LiteLLM's stream overload does not describe its chunk shape.
-            response_stream = cast(AsyncIterator[Any], await acompletion(**params))
-
-            # Collect streaming response
-            complete_content = ""
-            chunk_index = 0
-            usage_info = None
-            cost = Decimal(0)
-            tool_calls = []
-            tool_calls_buffer = {}  # Buffer for streaming tool calls
-
-            async for chunk in response_stream:
-                # chunk: ModelResponse
-                if chunk.choices:
-                    delta = chunk.choices[0].delta
-
-                    # Handle content chunks
-                    if hasattr(delta, "content") and delta.content:
-                        complete_content += delta.content
-
-                        # Emit chunk event
-                        if event_publisher:
-                            await event_publisher(delta.content, chunk_index, False)
-                        chunk_index += 1
-
-                    # Handle tool calls in streaming - proper implementation
-                    if hasattr(delta, "tool_calls") and delta.tool_calls:
-                        for tool_call_delta in delta.tool_calls:
-                            index = getattr(tool_call_delta, "index", 0)
-
-                            # Initialize tool call buffer for this index if needed
-                            if index not in tool_calls_buffer:
-                                tool_calls_buffer[index] = {
-                                    "id": "",
-                                    "type": "function",
-                                    "function": {"name": "", "arguments": ""},
-                                }
-
-                            # Update tool call buffer with delta information
-                            if hasattr(tool_call_delta, "id") and tool_call_delta.id:
-                                tool_calls_buffer[index]["id"] = tool_call_delta.id
-
-                            if hasattr(tool_call_delta, "type") and tool_call_delta.type:
-                                tool_calls_buffer[index]["type"] = tool_call_delta.type
-
-                            if hasattr(tool_call_delta, "function") and tool_call_delta.function:
-                                function_delta = tool_call_delta.function
-
-                                if hasattr(function_delta, "name") and function_delta.name:
-                                    tool_calls_buffer[index]["function"]["name"] = (
-                                        function_delta.name
-                                    )
-
-                                if (
-                                    hasattr(function_delta, "arguments")
-                                    and function_delta.arguments
-                                ):
-                                    # Handle JSON arguments properly to avoid concatenation issues
-                                    current_args = tool_calls_buffer[index]["function"]["arguments"]
-                                    new_args = function_delta.arguments
-
-                                    # If current_args is empty, just use new_args
-                                    if not current_args:
-                                        tool_calls_buffer[index]["function"]["arguments"] = new_args
-                                    else:
-                                        # Try to parse and merge JSON properly
-                                        try:
-                                            # Check if current_args is valid JSON
-                                            current_json = json.loads(current_args)
-                                            # If new_args is also valid JSON, merge them
-                                            try:
-                                                new_json = json.loads(new_args)
-                                                # Merge the JSON objects
-                                                current_json.update(new_json)
-                                                tool_calls_buffer[index]["function"][
-                                                    "arguments"
-                                                ] = json.dumps(current_json)
-                                            except json.JSONDecodeError:
-                                                # If new_args is not valid JSON, append as string
-                                                tool_calls_buffer[index]["function"][
-                                                    "arguments"
-                                                ] = current_args + new_args
-                                        except json.JSONDecodeError:
-                                            # If current_args is not valid JSON, just concatenate
-                                            tool_calls_buffer[index]["function"]["arguments"] = (
-                                                current_args + new_args
-                                            )
-
-                    # Fallback: some providers stream legacy function_call instead of tool_calls
-                    if hasattr(delta, "function_call") and delta.function_call:
-                        fc = delta.function_call
-                        index = 0
-                        if index not in tool_calls_buffer:
-                            tool_calls_buffer[index] = {
-                                "id": "",
-                                "type": "function",
-                                "function": {"name": "", "arguments": ""},
-                            }
-                        if hasattr(fc, "name") and fc.name:
-                            tool_calls_buffer[index]["function"]["name"] = fc.name
-                        if hasattr(fc, "arguments") and fc.arguments:
-                            current_args = tool_calls_buffer[index]["function"]["arguments"]
-                            new_args = fc.arguments
-                            if not current_args:
-                                tool_calls_buffer[index]["function"]["arguments"] = new_args
-                            else:
-                                try:
-                                    current_json = json.loads(current_args)
-                                    try:
-                                        new_json = json.loads(new_args)
-                                        current_json.update(new_json)
-                                        tool_calls_buffer[index]["function"]["arguments"] = (
-                                            json.dumps(current_json)
-                                        )
-                                    except json.JSONDecodeError:
-                                        tool_calls_buffer[index]["function"]["arguments"] = (
-                                            current_args + new_args
-                                        )
-                                except json.JSONDecodeError:
-                                    tool_calls_buffer[index]["function"]["arguments"] = (
-                                        current_args + new_args
-                                    )
-                # Extract cost from _hidden_params (LiteLLM sets this per chunk)
-                if hasattr(chunk, "_hidden_params"):
-                    hidden = chunk._hidden_params
-                    rc = (
-                        hidden.get("response_cost", 0.0)
-                        if isinstance(hidden, dict)
-                        else getattr(hidden, "response_cost", 0.0)
-                    ) or 0.0
-                    if rc > 0.0:
-                        cost = Decimal(str(rc))
-
-                # Extract usage from final chunk if available
-                if hasattr(chunk, "usage") and chunk.usage:
-                    usage_info = chunk.usage
-                    reported = provider_reported_cost(usage_info)
-                    if reported is not None:
-                        cost = reported
-                    elif cost == 0.0:
-                        if hasattr(usage_info, "completion_tokens_cost"):
-                            cost += Decimal(str(getattr(usage_info, "completion_tokens_cost", 0.0)))
-                            if hasattr(usage_info, "prompt_tokens_cost"):
-                                cost += Decimal(str(getattr(usage_info, "prompt_tokens_cost", 0.0)))
-
-            # Convert tool calls buffer to final format
-            if tool_calls_buffer:
-                tool_calls = [tool_calls_buffer[i] for i in sorted(tool_calls_buffer.keys())]
-
-            # Emit final chunk event
-            if event_publisher:
-                await event_publisher("", chunk_index, True)
-
-            # Create usage object
-            usage = LLMUsage()
-            if usage_info:
-                usage = usage_from_provider(usage_info)
-                if cost == 0.0:
-                    cost = self._configured_cost(usage)
-
-            # Use litellm.completion_cost() for accurate cost calculation
-            if cost == 0.0 and (
-                self.input_cost_per_token is None or self.output_cost_per_token is None
-            ):
-                try:
-                    import litellm
-
-                    model_str = (
-                        f"{self.provider_type}/{self.model_name}"
-                        if self.provider_type
-                        else self.model_name
-                    )
-                    prompt_tokens = getattr(usage_info, "prompt_tokens", 0) if usage_info else 0
-                    completion_tokens = (
-                        getattr(usage_info, "completion_tokens", 0) if usage_info else 0
-                    )
-
-                    # If usage wasn't in chunks, estimate tokens from content
-                    if prompt_tokens == 0:
-                        prompt_tokens = litellm.token_counter(
-                            model=model_str,
-                            messages=request.messages,
-                        )
-                    if completion_tokens == 0 and complete_content:
-                        completion_tokens = litellm.token_counter(
-                            model=model_str, text=complete_content
-                        )
-
-                    if prompt_tokens > 0 or completion_tokens > 0:
-                        prompt_str = " ".join(
-                            m.get("content", "") if isinstance(m, dict) else str(m)
-                            for m in request.messages
-                        )
-                        cost = Decimal(
-                            str(
-                                litellm.completion_cost(
-                                    model=model_str,
-                                    prompt=prompt_str,
-                                    completion=complete_content or "",
-                                )
-                            )
-                        )
-                        # Update usage if it was estimated
-                        if usage_info is None:
-                            usage = LLMUsage(
-                                prompt_tokens=prompt_tokens,
-                                completion_tokens=completion_tokens,
-                                total_tokens=prompt_tokens + completion_tokens,
-                            )
-                except Exception as e:
-                    logger.warning(f"Failed to calculate cost via litellm: {e}", exc_info=True)
-
-            # Return complete response
-            result = LLMResponse(
-                content=complete_content,
-                role="assistant",
-                tool_calls=tool_calls,
-                cost=cost,
-                usage=usage,
-            )
-
-            logger.info(
-                f"Streaming LLM call completed successfully, "
-                f"cost: ${result.cost:.6f}, chunks: {chunk_index}"
-            )
-            return result
-
+            result = await self._complete_from_stream(request, event_publisher)
         except Exception as e:
-            # Enhanced error logging with context
-            error_context = {
-                "provider_type": self.provider_type,
-                "model_name": self.model_name,
-                "has_api_key": bool(self.api_key),
-                "endpoint_url": self.endpoint_url,
-                "error_type": type(e).__name__,
-                "error_message": str(e),
-                "streaming": True,
-            }
-
-            logger.exception(f"Streaming LLM call failed with context: {error_context}")
-
-            # Re-raise with original exception to preserve stack trace
+            self._log_failure(e, streaming=True)
             raise
+        logger.info(f"Streaming LLM call completed successfully, cost: ${result.cost:.6f}")
+        return result
 
     async def ainvoke_stream(self, request: LLMRequest) -> AsyncIterator[LLMResponse]:
         """Call LLM with streaming and yield responses as they arrive.
 
-        Uses direct OpenAI-compatible HTTP streaming when available (to properly
-        capture reasoning/thinking content). Falls back to LiteLLM for providers
-        without a known base URL.
-
-        Args:
-            request: The LLM request parameters
-
         Yields:
-            LLMResponse objects containing delta responses (only new content)
+            LLMResponse objects containing delta responses (only new content); the
+            last one carrying usage holds the call's cost.
         """
-        # Use direct streaming for OpenAI-compatible providers to capture thinking
-        if self._supports_direct_streaming():
-            logger.info(
-                f"Using direct OpenAI-compatible streaming for provider {self.provider_type}"
-            )
-            async for response in self._stream_openai_compatible(request):
-                yield response
-            return
-
         try:
-            # Build parameters for streaming
-            params = self._build_litellm_params(request)
-            params["stream"] = True
-            # OpenAI-compatible providers emit token usage in a trailing,
-            # choices-less chunk only when explicitly requested. Without it,
-            # governed workflows must fail closed because neither token nor
-            # cost limits can be enforced.
-            params["stream_options"] = {"include_usage": True}
-
-            logger.info(f"Starting streaming LLM call for model {params['model']}")
-
-            # Make the streaming LLM call
-            # LiteLLM's stream overload does not describe its chunk shape.
-            response_stream = cast(AsyncIterator[Any], await litellm.acompletion(**params))
-
-            # Process streaming response
-            complete_content = ""  # Keep track for tool calls and final usage
-            complete_reasoning = ""  # Track reasoning/thinking content
-            tool_calls_buffer = {}  # Buffer for streaming tool calls
-            usage = LLMUsage()
-            cost = Decimal(0)
-
-            async for chunk in response_stream:
-                # chunk: ModelResponse
-                delta_content = ""
-                delta_reasoning = ""
-                delta_tool_calls = None
-                tool_calls_updated = False
-
-                if chunk.choices:
-                    delta = chunk.choices[0].delta
-
-                    # Handle reasoning/thinking chunks (LiteLLM exposes as reasoning_content)
-                    if hasattr(delta, "reasoning_content") and delta.reasoning_content:
-                        delta_reasoning = delta.reasoning_content
-                        complete_reasoning += delta_reasoning
-
-                    # Handle content chunks
-                    if hasattr(delta, "content") and delta.content:
-                        delta_content = delta.content
-                        complete_content += delta_content
-
-                    # Handle tool calls in streaming
-                    if hasattr(delta, "tool_calls") and delta.tool_calls:
-                        for tool_call_delta in delta.tool_calls:
-                            index = getattr(tool_call_delta, "index", 0)
-
-                            # Initialize tool call buffer for this index if needed
-                            if index not in tool_calls_buffer:
-                                tool_calls_buffer[index] = {
-                                    "id": "",
-                                    "type": "function",
-                                    "function": {"name": "", "arguments": ""},
-                                }
-
-                            # Update tool call buffer with delta information
-                            if hasattr(tool_call_delta, "id") and tool_call_delta.id:
-                                tool_calls_buffer[index]["id"] = tool_call_delta.id
-                                tool_calls_updated = True
-
-                            if hasattr(tool_call_delta, "type") and tool_call_delta.type:
-                                tool_calls_buffer[index]["type"] = tool_call_delta.type
-                                tool_calls_updated = True
-
-                            if hasattr(tool_call_delta, "function") and tool_call_delta.function:
-                                function_delta = tool_call_delta.function
-
-                                if hasattr(function_delta, "name") and function_delta.name:
-                                    tool_calls_buffer[index]["function"]["name"] = (
-                                        function_delta.name
-                                    )
-                                    tool_calls_updated = True
-
-                                if (
-                                    hasattr(function_delta, "arguments")
-                                    and function_delta.arguments
-                                ):
-                                    # Handle JSON arguments properly to avoid concatenation issues
-                                    current_args = tool_calls_buffer[index]["function"]["arguments"]
-                                    new_args = function_delta.arguments
-
-                                    # If current_args is empty, just use new_args
-                                    if not current_args:
-                                        tool_calls_buffer[index]["function"]["arguments"] = new_args
-                                    else:
-                                        # Try to parse and merge JSON properly
-                                        try:
-                                            # Check if current_args is valid JSON
-                                            current_json = json.loads(current_args)
-                                            # If new_args is also valid JSON, merge them
-                                            try:
-                                                new_json = json.loads(new_args)
-                                                # Merge the JSON objects
-                                                current_json.update(new_json)
-                                                tool_calls_buffer[index]["function"][
-                                                    "arguments"
-                                                ] = json.dumps(current_json)
-                                            except json.JSONDecodeError:
-                                                # If new_args is not valid JSON, append as string
-                                                tool_calls_buffer[index]["function"][
-                                                    "arguments"
-                                                ] = current_args + new_args
-                                        except json.JSONDecodeError:
-                                            # If current_args is not valid JSON, just concatenate
-                                            tool_calls_buffer[index]["function"]["arguments"] = (
-                                                current_args + new_args
-                                            )
-                                    tool_calls_updated = True
-
-                    # Fallback: some providers stream legacy function_call instead of tool_calls
-                    if hasattr(delta, "function_call") and delta.function_call:
-                        fc = delta.function_call
-                        index = 0
-                        if index not in tool_calls_buffer:
-                            tool_calls_buffer[index] = {
-                                "id": "",
-                                "type": "function",
-                                "function": {"name": "", "arguments": ""},
-                            }
-                        if hasattr(fc, "name") and fc.name:
-                            tool_calls_buffer[index]["function"]["name"] = fc.name
-                            tool_calls_updated = True
-                        if hasattr(fc, "arguments") and fc.arguments:
-                            current_args = tool_calls_buffer[index]["function"]["arguments"]
-                            new_args = fc.arguments
-                            if not current_args:
-                                tool_calls_buffer[index]["function"]["arguments"] = new_args
-                            else:
-                                try:
-                                    current_json = json.loads(current_args)
-                                    try:
-                                        new_json = json.loads(new_args)
-                                        current_json.update(new_json)
-                                        tool_calls_buffer[index]["function"]["arguments"] = (
-                                            json.dumps(current_json)
-                                        )
-                                    except json.JSONDecodeError:
-                                        tool_calls_buffer[index]["function"]["arguments"] = (
-                                            current_args + new_args
-                                        )
-                                except json.JSONDecodeError:
-                                    tool_calls_buffer[index]["function"]["arguments"] = (
-                                        current_args + new_args
-                                    )
-                            tool_calls_updated = True
-
-                # Extract cost from _hidden_params (LiteLLM sets this per chunk)
-                if hasattr(chunk, "_hidden_params"):
-                    hidden = chunk._hidden_params
-                    rc = (
-                        hidden.get("response_cost", 0.0)
-                        if isinstance(hidden, dict)
-                        else getattr(hidden, "response_cost", 0.0)
-                    ) or 0.0
-                    if rc > 0.0:
-                        cost = Decimal(str(rc))
-
-                # Extract usage from final chunk if available
-                if hasattr(chunk, "usage") and chunk.usage:
-                    usage_info = chunk.usage
-                    reported = provider_reported_cost(usage_info)
-                    if reported is not None:
-                        cost = reported
-                    elif cost == 0.0:
-                        if hasattr(usage_info, "completion_tokens_cost"):
-                            cost += Decimal(str(getattr(usage_info, "completion_tokens_cost", 0.0)))
-                            if hasattr(usage_info, "prompt_tokens_cost"):
-                                cost += Decimal(str(getattr(usage_info, "prompt_tokens_cost", 0.0)))
-
-                # Provide current tool call state if updated this chunk
-                if tool_calls_updated:
-                    delta_tool_calls = [
-                        tool_calls_buffer[i] for i in sorted(tool_calls_buffer.keys())
-                    ]
-
-                # Yield delta response for each content, reasoning, or tool-calls update
-                if (
-                    delta_content
-                    or delta_reasoning
-                    or delta_tool_calls is not None
-                    or (hasattr(chunk, "usage") and chunk.usage)
-                ):
-                    # Build usage object only when present on this chunk
-                    usage_delta = None
-                    if hasattr(chunk, "usage") and chunk.usage:
-                        usage_delta = usage_from_provider(chunk.usage)
-                        usage = usage_delta
-                        if cost == 0.0:
-                            cost = self._configured_cost(usage_delta)
-                    yield LLMResponse(
-                        content=delta_content,
-                        role="assistant",
-                        tool_calls=delta_tool_calls,
-                        cost=cost,
-                        usage=usage_delta,
-                        reasoning_content=delta_reasoning,
-                    )
-
-            # Calculate cost after streaming ends using litellm.completion_cost()
-            # _hidden_params.response_cost is NOT available on streaming chunks
-            if cost == 0.0 and (
-                self.input_cost_per_token is None or self.output_cost_per_token is None
-            ):
-                try:
-                    model_str = (
-                        f"{self.provider_type}/{self.model_name}"
-                        if self.provider_type
-                        else self.model_name
-                    )
-                    prompt_str = "\n".join(
-                        m.get("content", "") if isinstance(m, dict) else str(m)
-                        for m in request.messages
-                    )
-                    cost = Decimal(
-                        str(
-                            litellm.completion_cost(
-                                model=model_str,
-                                prompt=prompt_str,
-                                completion=complete_content,
-                            )
-                        )
-                    )
-                    logger.info(f"Calculated streaming cost via litellm: ${cost:.6f}")
-                except Exception as e:
-                    logger.warning(f"Failed to calculate streaming cost: {e}", exc_info=True)
-
-            # Yield final cost/usage
-            if cost > 0.0:
-                yield LLMResponse(
-                    content="",
-                    role="assistant",
-                    cost=cost,
-                    usage=usage if usage and usage.total_tokens > 0 else None,
-                )
-
+            async for response in self._stream(request):
+                yield response
         except Exception as e:
-            # Enhanced error logging with context
-            error_context = {
-                "provider_type": self.provider_type,
-                "model_name": self.model_name,
-                "has_api_key": bool(self.api_key),
-                "endpoint_url": self.endpoint_url,
-                "error_type": type(e).__name__,
-                "error_message": str(e),
-                "streaming": True,
-            }
-
-            logger.exception(f"Streaming LLM call failed with context: {error_context}")
-
-            # Re-raise with original exception to preserve stack trace
+            self._log_failure(e, streaming=True)
             raise

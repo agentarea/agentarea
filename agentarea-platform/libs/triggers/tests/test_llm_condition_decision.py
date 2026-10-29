@@ -4,14 +4,15 @@ Either way the call is funded before its credential is read and written to the l
 (wiki ADR-0038).
 """
 
-from dataclasses import asdict
+from dataclasses import fields
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from litellm import ModelResponse
+from agentarea_agents_sdk.models.llm_model import LLMResponse, LLMUsage
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
 from agentarea_common.auth.context import UserContext
 from agentarea_common.extensions import tool_billing
 from agentarea_common.extensions.registry import ExtensionRegistry
@@ -102,6 +103,7 @@ class _Models:
         return ModelTarget(
             instance_id=str(instance_id),
             provider_type="openai",
+            provider=ProviderProfile(base_url="https://api.openai.com/v1"),
             model_name="gpt-4",
             endpoint_url=None,
             managed_by=self.managed_by,
@@ -112,7 +114,10 @@ class _Models:
 
     async def connect(self, target, funding):
         self.funded.append(funding)
-        return ModelEndpoint(**asdict(target), api_key="sk-resolved")  # pragma: allowlist secret
+        return ModelEndpoint(
+            **{f.name: getattr(target, f.name) for f in fields(target)},
+            api_key="sk-resolved",  # pragma: allowlist secret
+        )
 
     async def decision_model(self, target, funding):
         self.funded.append(funding)
@@ -152,17 +157,16 @@ def _evaluator(
     )
 
 
-def _verdict_response() -> ModelResponse:
-    return ModelResponse(
-        choices=[
-            {
-                "message": {
-                    "role": "assistant",
-                    "content": '{"verdict": "met", "score": 0.9, "reason": "refund"}',
-                }
-            }
-        ],
-        usage={"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120},
+COMPLETE = "agentarea_agents_sdk.models.llm_model.LLMModel.complete"
+
+
+async def _verdict(model, _request) -> LLMResponse:
+    usage = LLMUsage(prompt_tokens=100, completion_tokens=20, total_tokens=120)
+    return LLMResponse(
+        content='{"verdict": "met", "score": 0.9, "reason": "refund"}',
+        role="assistant",
+        usage=usage,
+        cost=model._configured_cost(usage),
     )
 
 
@@ -170,7 +174,7 @@ def _verdict_response() -> ModelResponse:
 async def test_a_decision_model_answers_the_condition(choice, expected):
     models = _Models(choice)
 
-    with patch("agentarea_agents_sdk.models.llm_model.acompletion") as chat:
+    with patch(COMPLETE, autospec=True) as chat:
         met = await _evaluator("decision", models).evaluate_condition(CONDITION, EVENT)
 
     assert met is expected
@@ -193,16 +197,14 @@ async def test_a_decision_model_answers_the_condition(choice, expected):
 async def test_a_chat_model_keeps_the_completion_path():
     models = _Models()
 
-    with patch(
-        "agentarea_agents_sdk.models.llm_model.acompletion",
-        new=AsyncMock(return_value=_verdict_response()),
-    ) as chat:
+    with patch(COMPLETE, autospec=True, side_effect=_verdict) as chat:
         met = await _evaluator("chat", models).evaluate_condition(CONDITION, EVENT)
 
     assert met is True
     chat.assert_awaited_once()
-    assert chat.await_args.kwargs["api_key"] == "sk-resolved"  # pragma: allowlist secret
-    assert chat.await_args.kwargs["model"] == "openai/gpt-4"
+    model = chat.await_args.args[0]
+    assert model.api_key == "sk-resolved"  # pragma: allowlist secret
+    assert (model.provider_type, model.model_name) == ("openai", "gpt-4")
     assert models.asked == []
 
 
@@ -239,10 +241,7 @@ async def test_a_chat_condition_on_the_platforms_key_is_held_before_the_call():
     models = _Models(managed_by="platform")
     ledger = _Ledger()
 
-    with patch(
-        "agentarea_agents_sdk.models.llm_model.acompletion",
-        new=AsyncMock(return_value=_verdict_response()),
-    ) as chat:
+    with patch(COMPLETE, autospec=True, side_effect=_verdict) as chat:
         met = await _evaluator("chat", models, ledger).evaluate_condition(
             CONDITION, EVENT, {"trigger_id": "trigger-1"}
         )
@@ -280,7 +279,7 @@ async def test_a_refused_hold_never_reaches_the_provider():
     ledger = _Ledger()
 
     with (
-        patch("agentarea_agents_sdk.models.llm_model.acompletion") as chat,
+        patch(COMPLETE, autospec=True) as chat,
         pytest.raises(LLMConditionEvaluationError) as refused,
     ):
         await _evaluator("chat", models, ledger).evaluate_condition(CONDITION, EVENT)
@@ -303,7 +302,7 @@ async def test_a_condition_past_a_monthly_llm_cap_never_reaches_the_model(kind):
     )
 
     with (
-        patch("agentarea_agents_sdk.models.llm_model.acompletion") as chat,
+        patch(COMPLETE, autospec=True) as chat,
         pytest.raises(LLMConditionEvaluationError) as refused,
     ):
         await _evaluator(kind, models, ledger, refuse).evaluate_condition(
@@ -363,10 +362,7 @@ async def test_a_provider_failure_voids_the_hold():
     ledger = _Ledger()
 
     with (
-        patch(
-            "agentarea_agents_sdk.models.llm_model.acompletion",
-            new=AsyncMock(side_effect=RuntimeError("provider down")),
-        ),
+        patch(COMPLETE, autospec=True, side_effect=RuntimeError("provider down")),
         pytest.raises(LLMConditionEvaluationError),
     ):
         await _evaluator("chat", models, ledger).evaluate_condition(CONDITION, EVENT)

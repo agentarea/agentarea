@@ -3,11 +3,11 @@ from dataclasses import dataclass, field, replace
 from decimal import Decimal, InvalidOperation
 
 import httpx
+from agentarea_agents_sdk.models.provider_profiles import ModelListShape, ProviderProfile
 from agentarea_common.utils.outbound_tls import outbound_ssl_context
 from agentarea_common.utils.url_safety import OutboundPolicy, UnsafeUrlError, safe_async_client
 
 from ..domain.model_kind import ModelKind
-from ..domain.provider_profiles import ModelListShape, profile_for
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,13 @@ def _kind_from_listing(entry: dict) -> ModelKind | None:
     return None
 
 
+def _reads_images(entry: dict) -> bool:
+    """Whether a listing entry declares image input (OpenRouter's ``architecture``)."""
+    architecture = entry.get("architecture")
+    inputs = architecture.get("input_modalities") if isinstance(architecture, dict) else None
+    return isinstance(inputs, list) and "image" in inputs
+
+
 @dataclass
 class DiscoveredModel:
     model_name: str
@@ -100,15 +107,15 @@ class ModelDiscoveryService:
         # through the SSRF-guarded client.
         self._transport = transport
 
-    def _build_url(self, provider_key: str, endpoint_url: str | None) -> str | None:
-        return profile_for(provider_key).resolve_models_url(endpoint_url)
+    def _build_url(self, provider: ProviderProfile, endpoint_url: str | None) -> str | None:
+        return provider.resolve_models_url(endpoint_url)
 
-    def _build_headers(self, provider_key: str, api_key: str | None) -> dict[str, str]:
-        return profile_for(provider_key).build_headers(api_key)
+    def _build_headers(self, provider: ProviderProfile, api_key: str | None) -> dict[str, str]:
+        return provider.build_headers(api_key)
 
-    def _parse_response(self, provider_key: str, data: dict) -> list[DiscoveredModel]:
+    def _parse_response(self, provider: ProviderProfile, data: dict) -> list[DiscoveredModel]:
         models: list[DiscoveredModel] = []
-        if profile_for(provider_key).list_shape is ModelListShape.MODELS_NAME:
+        if provider.list_shape is ModelListShape.MODELS_NAME:
             for m in data.get("models", []):
                 name = m.get("name", "")
                 models.append(
@@ -142,6 +149,7 @@ class ModelDiscoveryService:
                         pricing.get("input_cache_write")
                     ),
                     description=m.get("description", ""),
+                    supports_vision=_reads_images(m),
                     kind=_kind_from_listing(m),
                 )
             )
@@ -152,13 +160,15 @@ class ModelDiscoveryService:
         provider_key: str,
         api_key: str | None,
         endpoint_url: str | None = None,
+        *,
+        provider: ProviderProfile,
     ) -> list[DiscoveredModel]:
-        url = self._build_url(provider_key, endpoint_url)
+        url = self._build_url(provider, endpoint_url)
         if not url:
             logger.warning("No base URL for provider %s and no endpoint_url provided", provider_key)
             return []
 
-        headers = self._build_headers(provider_key, api_key)
+        headers = self._build_headers(provider, api_key)
 
         # Only the user-supplied endpoint_url is untrusted; built-in provider
         # base URLs (incl. ollama's localhost default) are trusted and skipped.
@@ -177,7 +187,7 @@ class ModelDiscoveryService:
                 resp = await client.get(url, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
-                models = self._parse_response(provider_key, data)
+                models = self._parse_response(provider, data)
                 logger.info("Discovered %d models for provider %s", len(models), provider_key)
                 return models
         except UnsafeUrlError:

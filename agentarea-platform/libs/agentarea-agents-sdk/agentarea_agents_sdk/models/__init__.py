@@ -1,8 +1,6 @@
 """Models for the AgentArea Agents SDK."""
 
 from .llm_model import LLMModel, LLMRequest, LLMResponse, LLMUsage
-
-# Removed LiteLLMModel; existing LLMModel already supports LiteLLM
 from .messages import (
     AssistantMessage,
     BaseMessage,

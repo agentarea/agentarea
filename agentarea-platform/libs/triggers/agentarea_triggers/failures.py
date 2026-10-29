@@ -7,11 +7,11 @@ transient even when it surfaces wrapped in one of those errors; it, and any
 failure nobody classified, is retried.
 """
 
-import sys
 from collections.abc import Iterator
 
 import httpx
 import redis.exceptions
+from agentarea_agents_sdk.models.llm_model import LLMProviderHTTPError
 from agentarea_common.rebac import OpenFGAUnavailableError
 from agentarea_llm.infrastructure.model_clients import ModelProviderUnavailableError
 from sqlalchemy import exc as sa_exc
@@ -46,14 +46,9 @@ _TRANSIENT_RPC_STATUSES = frozenset(
 # SQLSTATE classes: 08 connection exception, 40 transaction rollback (deadlock,
 # serialization failure), 53 insufficient resources, 57P operator intervention.
 _TRANSIENT_SQLSTATE_PREFIXES = ("08", "40", "53", "57P")
-_LITELLM_TRANSIENT_NAMES = (
-    "APIConnectionError",
-    "Timeout",
-    "RateLimitError",
-    "ServiceUnavailableError",
-    "InternalServerError",
-    "BadGatewayError",
-)
+# Provider statuses a later call may pass: request timeout, rate limit, any
+# 5xx (529 is Anthropic's overloaded).
+_TRANSIENT_PROVIDER_STATUSES = frozenset({408, 429})
 
 
 def _chain(error: BaseException) -> Iterator[BaseException]:
@@ -71,13 +66,8 @@ def _sqlstate(error: sa_exc.DBAPIError) -> str | None:
     return str(code) if code else None
 
 
-def _litellm_transient_types() -> tuple[type[BaseException], ...]:
-    # A litellm exception can only be in the chain once litellm is loaded;
-    # looking it up this way keeps the trigger library from importing it.
-    module = sys.modules.get("litellm.exceptions")
-    if module is None:
-        return ()
-    return tuple(getattr(module, name) for name in _LITELLM_TRANSIENT_NAMES)
+def _transient_provider_status(error: LLMProviderHTTPError) -> bool:
+    return error.status_code in _TRANSIENT_PROVIDER_STATUSES or error.status_code >= 500
 
 
 def _permanent_types() -> tuple[type[BaseException], ...]:
@@ -111,9 +101,10 @@ def is_permanent(error: BaseException) -> bool:
 
 def is_transient(error: BaseException) -> bool:
     """Whether ``error``, or anything that caused it, is infrastructure that may recover."""
-    litellm_types = _litellm_transient_types()
     for link in _chain(error):
-        if isinstance(link, _TRANSIENT_TYPES + litellm_types):
+        if isinstance(link, _TRANSIENT_TYPES):
+            return True
+        if isinstance(link, LLMProviderHTTPError) and _transient_provider_status(link):
             return True
         if isinstance(link, RPCError) and link.status in _TRANSIENT_RPC_STATUSES:
             return True

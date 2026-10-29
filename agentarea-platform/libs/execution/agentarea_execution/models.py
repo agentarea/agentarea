@@ -48,6 +48,9 @@ class ResolvedModelInfo(BaseModel):
     provider_display_name: str | None = None
     # The model spec says the model reads images; None in states resolved before.
     supports_vision: bool | None = None
+    # The provider spec's HTTP contract (ProviderProfile.as_mapping); None in states
+    # resolved before specs carried it, which read it from the spec again.
+    provider: dict[str, str | None] | None = None
     resolved_at: str | None = None  # ISO timestamp for staleness debugging
 
 

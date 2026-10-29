@@ -1,12 +1,13 @@
 """Tests for LLM condition evaluator."""
 
 import json
-from dataclasses import asdict
+from dataclasses import fields
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from litellm import ModelResponse
+from agentarea_agents_sdk.models.llm_model import LLMResponse
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
 from agentarea_common.auth.context import UserContext
 from agentarea_llm.infrastructure.model_clients import ModelEndpoint, ModelTarget
 from agentarea_triggers.llm_condition_evaluator import (
@@ -38,14 +39,15 @@ def mock_secret_manager():
     return AsyncMock()
 
 
-def _response(content: str) -> ModelResponse:
-    return ModelResponse(choices=[{"message": {"role": "assistant", "content": content}}])
+def _response(content: str) -> LLMResponse:
+    return LLMResponse(content=content, role="assistant")
 
 
 def _target(endpoint_url: str | None = None, managed_by: str | None = None) -> ModelTarget:
     return ModelTarget(
         instance_id=str(uuid4()),
         provider_type="openai",
+        provider=ProviderProfile(base_url="https://api.openai.com/v1"),
         model_name="gpt-4",
         endpoint_url=endpoint_url,
         managed_by=managed_by,
@@ -55,7 +57,7 @@ def _target(endpoint_url: str | None = None, managed_by: str | None = None) -> M
 
 
 async def _connect(target: ModelTarget, funding) -> ModelEndpoint:
-    return ModelEndpoint(**asdict(target), api_key="test-api-key")
+    return ModelEndpoint(**{f.name: getattr(target, f.name) for f in fields(target)}, api_key="test-api-key")
 
 
 @pytest.fixture
@@ -174,15 +176,15 @@ class TestLLMConditionEvaluator:
         assert result is True
 
     @pytest.mark.asyncio
-    @patch("agentarea_agents_sdk.models.llm_model.acompletion")
+    @patch("agentarea_agents_sdk.models.llm_model.LLMModel.complete", autospec=True)
     async def test_evaluate_llm_condition_true(self, mock_completion, llm_evaluator):
         """Test LLM condition evaluation returning true."""
         # Mock LLM response
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = (
-            '{"verdict": "met", "score": 0.9, "reason": "matches"}'
-        )
+        mock_response.choices[
+            0
+        ].message.content = '{"verdict": "met", "score": 0.9, "reason": "matches"}'
         mock_completion.return_value = _response(mock_response.choices[0].message.content)
 
         condition = {
@@ -205,15 +207,15 @@ class TestLLMConditionEvaluator:
         mock_completion.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("agentarea_agents_sdk.models.llm_model.acompletion")
+    @patch("agentarea_agents_sdk.models.llm_model.LLMModel.complete", autospec=True)
     async def test_evaluate_llm_condition_false(self, mock_completion, llm_evaluator):
         """Test LLM condition evaluation returning false."""
         # Mock LLM response
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = (
-            '{"verdict": "not_met", "score": 0.9, "reason": "does not match"}'
-        )
+        mock_response.choices[
+            0
+        ].message.content = '{"verdict": "not_met", "score": 0.9, "reason": "does not match"}'
         mock_completion.return_value = _response(mock_response.choices[0].message.content)
 
         condition = {
@@ -283,7 +285,7 @@ class TestLLMConditionEvaluator:
         assert result is True
 
     @pytest.mark.asyncio
-    @patch("agentarea_agents_sdk.models.llm_model.acompletion")
+    @patch("agentarea_agents_sdk.models.llm_model.LLMModel.complete", autospec=True)
     async def test_extract_task_parameters(self, mock_completion, llm_evaluator):
         """Test LLM-based task parameter extraction."""
         # Mock LLM response
@@ -308,7 +310,7 @@ class TestLLMConditionEvaluator:
         assert result["action"] == "analyze_document"
 
     @pytest.mark.asyncio
-    @patch("agentarea_agents_sdk.models.llm_model.acompletion")
+    @patch("agentarea_agents_sdk.models.llm_model.LLMModel.complete", autospec=True)
     async def test_extract_task_parameters_invalid_json(self, mock_completion, llm_evaluator):
         """Test parameter extraction with invalid JSON response."""
         # Mock LLM response with invalid JSON
@@ -442,20 +444,16 @@ class TestLLMConditionEvaluator:
 
 
 @pytest.mark.asyncio
-@patch("agentarea_agents_sdk.models.llm_model.acompletion")
-async def test_a_member_endpoint_on_a_private_address_is_refused(
-    mock_completion, llm_evaluator, model_service
-):
+async def test_a_member_endpoint_on_a_private_address_is_refused(llm_evaluator, model_service):
     # GHSA-pprc-x767-m6jg: a member-set endpoint must not reach what the platform can.
     model_service.describe.return_value = _target("http://10.0.0.5:8080/v1")
 
     with pytest.raises(LLMConditionEvaluationError):
         await llm_evaluator._call_llm("p", uuid4(), purpose="test", trigger_context=None)
-    mock_completion.assert_not_called()
 
 
 @pytest.mark.asyncio
-@patch("agentarea_agents_sdk.models.llm_model.acompletion")
+@patch("agentarea_agents_sdk.models.llm_model.LLMModel.complete", autospec=True)
 async def test_a_platform_endpoint_is_called_as_configured(
     mock_completion, llm_evaluator, model_service
 ):
@@ -463,4 +461,4 @@ async def test_a_platform_endpoint_is_called_as_configured(
     mock_completion.return_value = _response("ok")
 
     assert await llm_evaluator._call_llm("p", uuid4(), purpose="test", trigger_context=None) == "ok"
-    assert mock_completion.call_args.kwargs["base_url"] == "http://10.0.0.5:8080/v1"
+    assert mock_completion.call_args.args[0].endpoint_url == "http://10.0.0.5:8080/v1"

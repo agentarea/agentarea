@@ -9,6 +9,7 @@ from uuid import UUID
 import pytest
 from uuid import uuid4
 from agentarea_agents_sdk.models.llm_model import LLMResponse, LLMUsage
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
 from agentarea_common.auth.context import UserContext
 from agentarea_common.money import to_money
 from agentarea_execution import llm_execution_service
@@ -42,6 +43,7 @@ def _request(**overrides):
     cached = ResolvedModelInfo(
         model_id=MODEL_ID,
         provider_type="openai",
+        provider=ProviderProfile(base_url="https://api.openai.com/v1").as_mapping(),
         model_name="test-model",
         context_window=32000,
         max_output_tokens=2000,
@@ -121,7 +123,10 @@ def model_scope():
         id=UUID(MODEL_ID),
         workspace_id="ws-model",
         provider_config=SimpleNamespace(
-            provider_spec=SimpleNamespace(provider_type="openai"),
+            provider_spec=SimpleNamespace(
+                provider_type="openai",
+                profile=lambda: ProviderProfile(base_url="https://api.openai.com/v1"),
+            ),
             endpoint_url="http://localhost:8000/provider/v1",
             api_key=None,
             managed_by=None,
@@ -1031,3 +1036,8 @@ async def test_a_compaction_past_a_monthly_llm_cap_is_refused_as_a_spend_cap_sto
     assert llm_cap_reached == [([to_money("2")], CAPPED_AGENT)]
     assert billing.authorizations == []
     provider.constructor.assert_not_called()
+
+
+@pytest.mark.parametrize(("spec_flag", "reads"), [(True, True), (False, False), (None, False)])
+async def test_only_the_spec_flag_says_a_model_reads_images(spec_flag, reads):
+    assert llm_execution_service.model_reads_images(spec_flag) is reads

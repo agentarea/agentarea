@@ -58,6 +58,8 @@ CATALOG_SPEC = {
     "input_cost_per_token": "0.0000025",
     "output_cost_per_token": "0.00001",
     "supports_function_calling": True,
+    "supports_vision": True,
+    "supports_reasoning": True,
 }
 
 
@@ -194,6 +196,8 @@ async def test_a_catalog_spec_becomes_the_workspaces_own_spec(session_factory, r
     assert spec.input_cost_per_token == Decimal("0.0000025")
     assert spec.output_cost_per_token == Decimal("0.00001")
     assert spec.supports_function_calling is True
+    assert spec.supports_vision is True
+    assert spec.supports_reasoning is True
 
 
 async def test_a_second_instance_reuses_the_workspace_spec(session_factory, rows):

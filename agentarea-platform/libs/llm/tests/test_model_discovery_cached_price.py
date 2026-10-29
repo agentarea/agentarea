@@ -2,12 +2,13 @@
 
 from decimal import Decimal
 
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
 from agentarea_llm.application.model_discovery_service import ModelDiscoveryService
 
 
 def _discover(pricing: dict) -> list:
     return ModelDiscoveryService()._parse_response(
-        "openrouter",
+        ProviderProfile(),
         {"data": [{"id": "vendor/model", "context_length": 32_000, "pricing": pricing}]},
     )
 

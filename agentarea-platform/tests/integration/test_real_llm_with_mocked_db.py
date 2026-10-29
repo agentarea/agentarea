@@ -291,7 +291,7 @@ async def test_real_llm_with_mocked_database(mock_database_calls):
                     logger.warning("The issue is in the LLM infrastructure itself")
                     logger.warning("Check:")
                     logger.warning("- Model configuration")
-                    logger.warning("- LiteLLM setup")
+                    logger.warning("- Provider transport setup")
                     logger.warning("- Ollama model version")
                     logger.warning("- Tool definition format")
 
