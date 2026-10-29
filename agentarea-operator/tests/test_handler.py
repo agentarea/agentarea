@@ -448,3 +448,63 @@ def test_two_default_models_say_which_one_wins():
 
     assert warning is not None
     assert "new agents start on deepseek-v3" in warning
+
+
+def test_a_new_model_is_written_with_its_output_cap_and_capabilities():
+    conn = _RecordingConn()
+
+    handler._upsert_model_spec_and_instance(
+        conn,
+        "agentarea",
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+        {
+            "model_name": "claude-haiku-5.5",
+            "input_cost_per_token": 1e-6,
+            "output_cost_per_token": 5e-6,
+            "max_output_tokens": 64000,
+            "supports_vision": True,
+            "supports_reasoning": True,
+        },
+        handler.PLATFORM_WORKSPACE_ID,
+    )
+
+    inserted = conn.params_for("INSERT INTO model_specs")
+    assert (inserted["mot"], inserted["sv"], inserted["sr"]) == (64000, True, True)
+
+
+def test_an_omitted_output_cap_is_written_as_none_not_left_at_a_default():
+    """A column default of 4096 used to cap every reply of every model this created."""
+    conn = _ExistingInstanceConn()
+
+    handler._upsert_model_spec_and_instance(
+        conn,
+        "agentarea",
+        "spec",
+        "cfg",
+        {"model_name": "kimi-k3", "input_cost_per_token": 1e-6, "output_cost_per_token": 5e-6},
+        handler.PLATFORM_WORKSPACE_ID,
+    )
+
+    updated = conn.params_for("UPDATE model_specs SET display_name")
+    assert updated["mot"] is None
+    assert "max_output_tokens = :mot" in next(
+        sql for sql, _ in conn.calls if "UPDATE model_specs SET display_name" in sql
+    )
+
+
+def test_a_discovered_model_keeps_its_capability_flags():
+    """Discovery reads no flags, so it passes none and the stored ones stay."""
+    conn = _ExistingInstanceConn()
+
+    handler._upsert_model_spec_and_instance(
+        conn,
+        "openrouter",
+        "spec",
+        "cfg",
+        {"model_name": "vendor/model", "context_window": 32000},
+        handler.PLATFORM_WORKSPACE_ID,
+    )
+
+    updated = conn.params_for("UPDATE model_specs SET display_name")
+    assert (updated["sv"], updated["sr"]) == (None, None)

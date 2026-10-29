@@ -490,6 +490,11 @@ def sync_provider_config(
                         "display_name": em.get("displayName", em["modelName"]),
                         "description": em.get("description", ""),
                         "context_window": em.get("contextWindow", 4096),
+                        # Unset means the platform holds no output cap of its own
+                        # for the model; the policy's per-call ceiling still applies.
+                        "max_output_tokens": em.get("maxOutputTokens"),
+                        "supports_vision": em.get("supportsVision", False),
+                        "supports_reasoning": em.get("supportsReasoning", False),
                         "input_cost_per_token": em.get("inputCostPerToken"),
                         "output_cost_per_token": em.get("outputCostPerToken"),
                         "cached_input_cost_per_token": em.get("cachedInputCostPerToken"),
@@ -542,6 +547,9 @@ def _upsert_model_spec_and_instance(
             text(
                 "UPDATE model_specs SET display_name = :dn, "
                 "context_window = :cw, "
+                "max_output_tokens = :mot, "
+                "supports_vision = COALESCE(:sv, supports_vision), "
+                "supports_reasoning = COALESCE(:sr, supports_reasoning), "
                 "input_cost_per_token = COALESCE(:icpt, input_cost_per_token), "
                 "output_cost_per_token = COALESCE(:ocpt, output_cost_per_token), "
                 "cached_input_cost_per_token = COALESCE(:cicpt, cached_input_cost_per_token), "
@@ -553,6 +561,9 @@ def _upsert_model_spec_and_instance(
                 "id": model_spec_id,
                 "dn": model.get("display_name", model_name),
                 "cw": model.get("context_window", 4096),
+                "mot": model.get("max_output_tokens"),
+                "sv": model.get("supports_vision"),
+                "sr": model.get("supports_reasoning"),
                 "icpt": model.get("input_cost_per_token"),
                 "ocpt": model.get("output_cost_per_token"),
                 "cicpt": model.get("cached_input_cost_per_token"),
@@ -566,11 +577,13 @@ def _upsert_model_spec_and_instance(
             text(
                 "INSERT INTO model_specs "
                 "(id, provider_spec_id, model_name, display_name, description, "
-                "context_window, input_cost_per_token, output_cost_per_token, "
+                "context_window, max_output_tokens, supports_vision, supports_reasoning, "
+                "input_cost_per_token, output_cost_per_token, "
                 "cached_input_cost_per_token, cache_creation_input_cost_per_token, "
                 "is_active, workspace_id, created_by, "
                 "created_at, updated_at) "
-                "VALUES (:id, :spec_id, :mn, :dn, :desc, :cw, :icpt, :ocpt, :cicpt, :ccicpt, "
+                "VALUES (:id, :spec_id, :mn, :dn, :desc, :cw, :mot, "
+                "COALESCE(:sv, false), COALESCE(:sr, false), :icpt, :ocpt, :cicpt, :ccicpt, "
                 "true, :ws, :created_by, now(), now())"
             ),
             {
@@ -580,6 +593,9 @@ def _upsert_model_spec_and_instance(
                 "dn": model.get("display_name", model_name),
                 "desc": model.get("description", ""),
                 "cw": model.get("context_window", 4096),
+                "mot": model.get("max_output_tokens"),
+                "sv": model.get("supports_vision"),
+                "sr": model.get("supports_reasoning"),
                 "icpt": model.get("input_cost_per_token"),
                 "ocpt": model.get("output_cost_per_token"),
                 "cicpt": model.get("cached_input_cost_per_token"),

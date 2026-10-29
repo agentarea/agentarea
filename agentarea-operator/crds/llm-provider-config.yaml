@@ -83,6 +83,16 @@ spec:
                       contextWindow:
                         type: integer
                         description: "Maximum context in tokens"
+                      maxOutputTokens:
+                        type: integer
+                        minimum: 1
+                        description: "Most tokens one call may produce; unset leaves only the policy's per-call ceiling"
+                      supportsVision:
+                        type: boolean
+                        description: "The model reads images; tool and attachment images are sent to it"
+                      supportsReasoning:
+                        type: boolean
+                        description: "The model produces reasoning"
                       # The PROVIDER's price to us, per token, and the reason these
                       # are here rather than left to the catalog: the runtime refuses
                       # to run a model whose cost per token is unset, and anything we
