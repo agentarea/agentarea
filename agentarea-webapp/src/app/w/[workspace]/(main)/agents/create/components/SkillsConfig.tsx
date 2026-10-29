@@ -8,6 +8,7 @@ import FormLabel from "@/components/FormLabel/FormLabel";
 import { SkillPicker } from "@/components/ResourcePicker/SkillPicker";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { useAttachableResources } from "@/hooks/use-attachable-resources";
+import { deterministicHue } from "@/lib/avatar-hue";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { skillDisplay } from "@/lib/skill-display";
 import type { AgentSkill } from "../types";
@@ -49,6 +50,7 @@ const SkillsConfig = ({
           {t("title")}
         </FormLabel>
       }
+      noteInline
       note={t("note")}
       mainControl={
         <ConfigSheet
@@ -56,6 +58,7 @@ const SkillsConfig = ({
           description={t("sheetDescription")}
           triggerText={t("add")}
           className="ml-auto"
+          triggerVariant="primaryOutline"
           open={isSheetOpen}
           onOpenChange={setIsSheetOpen}
           panel
@@ -79,7 +82,7 @@ const SkillsConfig = ({
               key={skill.id}
               avatar={
                 <EntityAvatar
-                  variant="soft"
+                  hue={deterministicHue(skill.id)}
                   size={24}
                   iconScale={0.45}
                   icon={<SkillIcon strokeWidth={1.85} />}

@@ -28,6 +28,8 @@ type DropdownItem = {
 
 type DropdownControlProps = {
   addText?: string;
+  /** The add button's look; a quieter one where several sit on a page. */
+  addVariant?: React.ComponentProps<typeof Button>["variant"];
   onAdd: (id: string) => void;
   dropdownItems: DropdownItem[];
 };
@@ -48,6 +50,8 @@ type AccordionControlProps = {
   itemClassName?: string;
   /** How many items the section holds, read even while it is collapsed. */
   count?: number;
+  /** The note as a muted line under the title, instead of behind a "?". */
+  noteInline?: boolean;
 } & (DropdownControlProps | CustomControlProps);
 
 export default function AccordionControl({
@@ -61,6 +65,7 @@ export default function AccordionControl({
   chevron,
   itemClassName,
   count,
+  noteInline = false,
   ...props
 }: AccordionControlProps) {
   const isDropdown = "dropdownItems" in props;
@@ -80,7 +85,7 @@ export default function AccordionControl({
             chevron={chevron}
             controls={
               <div className="flex flex-row items-center gap-2">
-                {note && (
+                {note && !noteInline && (
                   <TooltipProvider>
                     <Tooltip delayDuration={300}>
                       <TooltipTrigger asChild>
@@ -100,6 +105,7 @@ export default function AccordionControl({
                         className="gap-1.5 focus-visible:ring-0"
                         type="button"
                         size="xs"
+                        variant={props.addVariant}
                       >
                         <Plus className="h-4 w-4" />
                         {isDropdown && props.addText ? props.addText : "Add"}
@@ -134,6 +140,10 @@ export default function AccordionControl({
               </span>
             )}
           </AccordionTrigger>
+          {note && noteInline && (
+            // Read even while the section is collapsed, like its count.
+            <div className="note mt-1 space-y-0.5">{note}</div>
+          )}
           <AccordionContent className="pt-4">{children}</AccordionContent>
         </AccordionItem>
       </Accordion>

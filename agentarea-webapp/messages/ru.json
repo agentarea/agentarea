@@ -667,7 +667,6 @@
       "trigger": "Триггер",
       "agentTools": "Инструменты",
       "agentToolsDescription": "Добавьте MCP серверы, чтобы включить инструменты для вашего агента.",
-      "agentToolsNote": "Вы можете добавить несколько серверов и настроить их индивидуально.",
       "agentName": "Имя",
       "agentNamePlaceholder": "Введите имя агента",
       "description": "Описание / Цель",
@@ -736,7 +735,8 @@
       "modelRequired": "Выберите модель, на которой работает агент.",
       "configureInstanceTitle": "Настройка {name}",
       "editInstanceTitle": "Изменение {name}",
-      "configureMcpServer": "Настройка MCP-сервера"
+      "configureMcpServer": "Настройка MCP-сервера",
+      "agentToolsLead": "Что агент может вызывать: наборы платформы, MCP-серверы и OpenAPI-подключения."
     },
     "browseCatalog": "Открыть каталог",
     "newTask": "Новая задача",

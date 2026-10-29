@@ -36,6 +36,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import Link from "@/components/WorkspaceLink";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
+import { deterministicHue } from "@/lib/avatar-hue";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { readAgentCardAction } from "../../shared/actions";
 import {
@@ -382,6 +383,7 @@ export default function DelegationConfig({
           {t("title")}
         </FormLabel>
       }
+      noteInline
       note={t("note")}
       mainControl={
         <ConfigSheet
@@ -389,6 +391,7 @@ export default function DelegationConfig({
           description={t("sheetDescription")}
           triggerText={t("add")}
           className="ml-auto"
+          triggerVariant="primaryOutline"
           open={isSheetOpen}
           onOpenChange={setIsSheetOpen}
           panel
@@ -496,7 +499,7 @@ export default function DelegationConfig({
               avatar={
                 remote ? (
                   <EntityAvatar
-                    variant="soft"
+                    hue={deterministicHue(delegate.name)}
                     size={24}
                     iconScale={0.45}
                     icon={<Globe strokeWidth={1.85} />}

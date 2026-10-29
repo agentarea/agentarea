@@ -22,6 +22,7 @@ import FormLabel from "@/components/FormLabel/FormLabel";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { deterministicHue } from "@/lib/avatar-hue";
 import type { AgentFormValues } from "../types";
 import { getNestedErrorMessage } from "../utils/formUtils";
 import { SelectedItemRow } from "./SelectedItemRow";
@@ -58,7 +59,7 @@ function BehaviorSwitch({
       stacked
       avatar={
         <EntityAvatar
-          variant="soft"
+          hue={deterministicHue(id)}
           size={24}
           iconScale={0.45}
           icon={<Icon strokeWidth={1.85} />}
@@ -109,6 +110,7 @@ const BehaviorConfig = ({ register, control, errors }: BehaviorConfigProps) => {
           {t("behavior.title")}
         </FormLabel>
       }
+      noteInline
       note={t("behavior.note")}
       mainControl={null}
     >

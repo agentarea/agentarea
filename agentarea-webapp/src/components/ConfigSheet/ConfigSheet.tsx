@@ -20,6 +20,8 @@ type ConfigSheetProps = {
   triggerIcon?: ReactNode;
   triggerComponent?: ReactNode;
   triggerClassName?: string;
+  /** The trigger button's look; a quieter one where several sit on a page. */
+  triggerVariant?: React.ComponentProps<typeof Button>["variant"];
   className?: string;
   open?: boolean; // External control of open state
   onOpenChange?: (open: boolean) => void; // Optional callback for parent component
@@ -34,6 +36,7 @@ const ConfigSheet = ({
   className,
   triggerComponent,
   triggerClassName,
+  triggerVariant,
   description,
   children,
   triggerText = "Add",
@@ -98,6 +101,7 @@ const ConfigSheet = ({
         ) : (
           <Button
             size="xs"
+            variant={triggerVariant}
             ref={triggerRef}
             className={cn("gap-1.5", triggerClassName)}
           >

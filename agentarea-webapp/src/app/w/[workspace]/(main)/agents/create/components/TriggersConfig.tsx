@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { deterministicHue } from "@/lib/avatar-hue";
 import { resolveSession } from "@/lib/sourceTypes";
 import { SelectedItemRow, SelectedItems } from "./SelectedItemRow";
 
@@ -139,8 +140,10 @@ const TriggersConfig = ({
       accordionValue={accordionValue}
       setAccordionValue={setAccordionValue}
       title={title}
+      noteInline
       note={<p>{t("agentTriggersNote")}</p>}
       addText={t("trigger")}
+      addVariant="primaryOutline"
       onAdd={addTrigger}
       dropdownItems={dropdownItems}
     >
@@ -169,7 +172,7 @@ const TriggersConfig = ({
                 onOpenChange={() => toggleOpen(key)}
                 avatar={
                   <EntityAvatar
-                    variant="soft"
+                    hue={deterministicHue(spec.trigger_type)}
                     size={24}
                     iconScale={0.45}
                     icon={renderTriggerIcon(spec)}

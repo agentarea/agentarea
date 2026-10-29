@@ -27,6 +27,7 @@ import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Switch } from "@/components/ui/switch";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
+import { deterministicHue } from "@/lib/avatar-hue";
 import { getMCPConnectionIconSrc } from "@/lib/entity-identity";
 import {
   McpAvailableTool,
@@ -688,15 +689,7 @@ const ToolConfig = ({
     }
   };
 
-  const note = useMemo(
-    () => (
-      <>
-        <p>{t("create.agentToolsDescription")}</p>
-        <p>{t("create.agentToolsNote")}</p>
-      </>
-    ),
-    [t]
-  );
+  const note = useMemo(() => <p>{t("create.agentToolsLead")}</p>, [t]);
 
   const title = useMemo(
     () => (
@@ -721,6 +714,7 @@ const ToolConfig = ({
         accordionValue={accordionValue}
         setAccordionValue={setAccordionValue}
         title={title}
+        noteInline
         note={note}
         mainControl={
           <ConfigSheet
@@ -728,6 +722,7 @@ const ToolConfig = ({
             description={t("create.toolsMcpDescription")}
             triggerText={t("create.tool")}
             className="ml-auto"
+            triggerVariant="primaryOutline"
             open={isSheetOpen}
             onOpenChange={setIsSheetOpen}
             panel
@@ -868,7 +863,7 @@ const ToolConfig = ({
                   key={group}
                   avatar={
                     <EntityAvatar
-                      variant="soft"
+                      hue={deterministicHue(group)}
                       size={24}
                       iconScale={0.45}
                       icon={<Wrench strokeWidth={1.85} />}
@@ -929,7 +924,7 @@ const ToolConfig = ({
                   onOpenChange={hasSettings ? () => toggleTool(key) : undefined}
                   avatar={
                     <EntityAvatar
-                      variant="soft"
+                      hue={deterministicHue(builtinTool.name)}
                       size={24}
                       iconScale={0.45}
                       icon={<IconComponent strokeWidth={1.85} />}
@@ -969,7 +964,10 @@ const ToolConfig = ({
                   onOpenChange={() => toggleTool(key)}
                   avatar={
                     <EntityAvatar
-                      variant="soft"
+                      // A server's own logo sits on a neutral plate; a glyph takes a hue.
+                      {...(trigger.iconSrc
+                        ? { variant: "soft" as const }
+                        : { hue: deterministicHue(item.mcp_server_id) })}
                       size={24}
                       iconScale={trigger.iconSrc ? 0.68 : 0.45}
                       src={trigger.iconSrc}
@@ -1048,7 +1046,7 @@ const ToolConfig = ({
                   onOpenChange={() => toggleTool(key)}
                   avatar={
                     <EntityAvatar
-                      variant="soft"
+                      hue={deterministicHue(item.openapi_connection_id)}
                       size={24}
                       iconScale={0.45}
                       icon={<Globe strokeWidth={1.85} />}

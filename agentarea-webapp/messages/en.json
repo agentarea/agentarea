@@ -667,7 +667,6 @@
       "trigger": "Trigger",
       "agentTools": "Tools",
       "agentToolsDescription": "Add MCP servers to enable tools for your agent.",
-      "agentToolsNote": "You can add multiple servers and configure them individually.",
       "agentName": "Name",
       "agentNamePlaceholder": "Enter agent name",
       "description": "Description / Goal",
@@ -736,7 +735,8 @@
       "modelRequired": "Pick the model the agent runs on.",
       "configureInstanceTitle": "Set up {name}",
       "editInstanceTitle": "Edit {name}",
-      "configureMcpServer": "Set up an MCP server"
+      "configureMcpServer": "Set up an MCP server",
+      "agentToolsLead": "What the agent can call: platform toolsets, MCP servers and OpenAPI connections."
     },
     "browseCatalog": "Browse the catalog",
     "newTask": "New task",
