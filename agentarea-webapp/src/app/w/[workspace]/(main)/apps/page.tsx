@@ -5,16 +5,22 @@ import { cookies } from "next/headers";
 import type { McpServerInstanceResponse } from "@/api/client/types.gen";
 import ContentBlock from "@/components/ContentBlock";
 import EmptyState from "@/components/EmptyState/EmptyState";
+import EntityMark from "@/components/EntityMark";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
 import { ViewModeTabs } from "@/components/HeaderTabs";
-import { CollectionSkeleton, type SkeletonColumn } from "@/components/Skeleton";
+import LinkedCard from "@/components/LinkedCard/LinkedCard";
+import {
+  CollectionSkeleton,
+  LinkedCardSkeleton,
+  type SkeletonColumn,
+} from "@/components/Skeleton";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
-import { Skeleton } from "@/components/ui/skeleton";
+import { getMCPServer, listMCPServerInstances } from "@/lib/api";
 import type { ApiResultLike } from "@/lib/api-errors";
-import { listMCPServerInstances } from "@/lib/api";
 import { mcpAppEntries, type McpAppEntry } from "@/lib/apps/mcp/tools";
-import { EntityIcon } from "@/lib/entity-icons";
-import { requireApiData } from "@/lib/server-resource";
+import { mcpIdentity, type EntityIdentity } from "@/lib/entity-identity";
+import { optionalApiData, requireApiData } from "@/lib/server-resource";
+import { getMCPConnectionTitle } from "../connections/utils";
 
 export const metadata: Metadata = {
   title: "Apps",
@@ -24,7 +30,11 @@ const APPS_GRID_CLASS =
   "grid grid-cols-1 gap-[12px] md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5";
 
 type AppSearchParams = { [key: string]: string | string[] | undefined };
-type AppListItem = McpAppEntry & { id: string };
+type AppListItem = McpAppEntry & {
+  id: string;
+  connectionTitle: string;
+  connectionIdentity: EntityIdentity;
+};
 type AppsInstancesResult = Promise<
   | { apiResult: ApiResultLike<McpServerInstanceResponse[]> }
   | { exception: unknown }
@@ -40,19 +50,7 @@ type AppsLabels = {
 };
 
 function AppCardSkeleton() {
-  return (
-    <div className="card card-shadow group flex min-h-[150px] flex-col gap-3 p-4">
-      <div className="flex items-start gap-2">
-        <Skeleton className="mt-0.5 h-5 w-5 shrink-0 rounded-full motion-reduce:animate-none" />
-        <div className="min-w-0 flex-1 space-y-2">
-          <Skeleton className="h-4 w-3/4 motion-reduce:animate-none" />
-          <Skeleton className="h-3 w-1/2 motion-reduce:animate-none" />
-        </div>
-      </div>
-      <Skeleton className="h-3 w-full motion-reduce:animate-none" />
-      <Skeleton className="h-3 w-4/5 motion-reduce:animate-none" />
-    </div>
-  );
+  return <LinkedCardSkeleton icon subtitle lines={2} />;
 }
 
 function AppsListSkeleton({
@@ -88,12 +86,40 @@ async function AppsList({
   const result = await instancesPromise;
   if ("exception" in result) throw result.exception;
   const instances = requireApiData(result.apiResult, "MCP connections");
-  const items: AppListItem[] = mcpAppEntries(instances)
-    .filter((app) => !app.requiresInput)
-    .map((app) => ({
+  const apps = mcpAppEntries(instances).filter((app) => !app.requiresInput);
+  const instanceById = new Map(instances.map((i) => [i.id, i]));
+  const specIds = [
+    ...new Set(
+      apps.flatMap(
+        (app) => instanceById.get(app.instanceId)?.server_spec_id ?? []
+      )
+    ),
+  ];
+  const specs = new Map(
+    await Promise.all(
+      specIds.map(
+        async (id) =>
+          [
+            id,
+            optionalApiData(await getMCPServer(id), `MCP server ${id}`),
+          ] as const
+      )
+    )
+  );
+  const items: AppListItem[] = apps.map((app) => {
+    const instance = instanceById.get(app.instanceId);
+    const spec = instance?.server_spec_id
+      ? specs.get(instance.server_spec_id)
+      : null;
+    return {
       ...app,
       id: `${app.instanceId}:${app.toolName}`,
-    }));
+      connectionTitle: instance
+        ? getMCPConnectionTitle(instance, spec)
+        : app.instanceName,
+      connectionIdentity: mcpIdentity(instance ?? {}, spec),
+    };
+  });
 
   const appLink = (app: AppListItem) =>
     `/apps/${encodeURIComponent(app.instanceId)}/${encodeURIComponent(app.toolName)}`;
@@ -104,7 +130,10 @@ async function AppsList({
       accessor: "title",
       render: (_value: unknown, app: AppListItem) => (
         <div className="flex items-start gap-2">
-          <EntityIcon kind="app" className="mt-0.5 shrink-0 text-primary" />
+          <EntityMark
+            identity={app.connectionIdentity}
+            className="mt-0.5 h-5 w-5 shrink-0 rounded-md"
+          />
           <div className="min-w-0">
             <div className="font-medium">{app.title || app.toolName}</div>
             <div className="mt-1 line-clamp-2 max-w-xl text-xs text-muted-foreground">
@@ -117,7 +146,7 @@ async function AppsList({
     },
     {
       header: labels.connection,
-      accessor: "instanceName",
+      accessor: "connectionTitle",
       render: (value: unknown) => (
         <span className="text-sm text-muted-foreground">{String(value)}</span>
       ),
@@ -131,6 +160,7 @@ async function AppsList({
       columns={columns}
       gridClassName={APPS_GRID_CLASS}
       itemLink={appLink}
+      wrapCardContent={false}
       emptyState={
         <EmptyState
           title={labels.emptyTitle}
@@ -140,22 +170,25 @@ async function AppsList({
         />
       }
       cardContent={(app) => (
-        <div className="flex min-h-[150px] flex-col gap-3">
-          <div className="flex items-start gap-2">
-            <EntityIcon kind="app" className="mt-0.5 shrink-0 text-primary" />
-            <div className="min-w-0">
-              <div className="truncate text-[16px] font-medium">
-                {app.title || app.toolName}
-              </div>
-              <div className="mt-1 truncate text-xs text-muted-foreground">
-                {app.instanceName}
-              </div>
-            </div>
-          </div>
-          <p className="line-clamp-4 text-sm text-muted-foreground">
-            {app.description}
-          </p>
-        </div>
+        <LinkedCard
+          href={appLink(app)}
+          title={app.title || app.toolName}
+          icon={
+            <EntityMark
+              identity={app.connectionIdentity}
+              className="h-6 w-6 rounded-md"
+            />
+          }
+          subtitle={
+            <span className="truncate text-xs">{app.connectionTitle}</span>
+          }
+        >
+          {app.description && (
+            <p className="line-clamp-3 text-sm text-muted-foreground">
+              {app.description}
+            </p>
+          )}
+        </LinkedCard>
       )}
     />
   );
