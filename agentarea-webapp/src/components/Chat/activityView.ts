@@ -1,3 +1,4 @@
+import { chatMcpApp } from "@/lib/apps/mcp/chat";
 import { stripA2UIFromStreamingContent } from "@/lib/events/a2ui";
 import type { Part } from "@/lib/events/contract";
 import type { CompletedRun } from "@/lib/events/reducer";
@@ -211,6 +212,14 @@ export function buildActivitySegments(
       ) {
         flush();
         segments.push({ kind: "visible", part });
+      } else if (chatMcpApp(part)) {
+        // The app stays on screen after the work above it folds away.
+        work.push(part);
+        flush();
+        segments.push({
+          kind: "visible",
+          part: { ...part, partId: `${part.partId}-app`, kind: "app" },
+        });
       } else {
         work.push(part);
       }

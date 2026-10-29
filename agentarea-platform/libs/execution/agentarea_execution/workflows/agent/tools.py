@@ -59,6 +59,11 @@ def structured_content_field(result: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def mcp_app_field(result: dict[str, Any]) -> dict[str, Any]:
+    """The tool.result key naming the MCP App a call opens, absent for other tools."""
+    return {"mcp_app_tool": result["mcp_app_tool"]} if result.get("mcp_app_tool") else {}
+
+
 def tool_images_field(result: dict[str, Any]) -> dict[str, Any]:
     """The tool.result key for images the tool returned: references, never bytes."""
     return {"images": result["images"]} if result.get("images") else {}
@@ -299,6 +304,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
                     **paid_call_fields,
                     **replay_fields,
                     **structured_content_field(result_dict),
+                    **mcp_app_field(result_dict),
                     **tool_images_field(result_dict),
                     "payment": result_dict.get("payment"),
                     "source": result_dict.get("source"),

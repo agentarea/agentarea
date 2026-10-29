@@ -7,6 +7,7 @@ import type { Part } from "../contract";
 import { A2uiPart } from "./A2uiPart";
 import { ArtifactPart } from "./ArtifactPart";
 import { FormPart } from "./FormPart";
+import { McpAppPart } from "./McpAppPart";
 import { MessagePart } from "./MessagePart";
 import { NoticePart } from "./NoticePart";
 import { TextPart } from "./TextPart";
@@ -59,6 +60,8 @@ export const PartRenderer: React.FC<PartRendererProps> = ({
       return <NoticePart part={part} />;
     case "message":
       return <MessagePart part={part} />;
+    case "app":
+      return <McpAppPart part={part} />;
     case "a2ui":
       return (
         <A2uiPart
