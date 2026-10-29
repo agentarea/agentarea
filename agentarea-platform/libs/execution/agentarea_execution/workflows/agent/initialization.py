@@ -10,6 +10,7 @@ with workflow.unsafe.imports_passed_through():
 
     from agentarea_agents_sdk.skills import SkillActivationTool, SkillCatalogBuilder, SkillEntry
     from agentarea_agents_sdk.tools.disclosure import DisclosureContext, NamedLookupPolicy
+    from agentarea_common.model_override import model_override_of
     from agentarea_common.money import ZERO, serialize_money
     from agentarea_governance.domain.tool_calls import WAIT_TOOL_NAME
 
@@ -204,6 +205,7 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
             execution_context=self._workflow_metadata,
             task_id=UUID(self.state.task_id),
             task_parameters=self.state.goal.context if self.state.goal else {},
+            override_model=model_override_of(self.state.goal.context if self.state.goal else {}),
         )
         agent_config_result: AgentConfigResult = await workflow.execute_activity(
             Activities.BUILD_AGENT_CONFIG,

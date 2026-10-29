@@ -169,7 +169,7 @@ async def test_sync_run_with_model_override_succeeds(async_client, wire):
 
     resp = await async_client.post(
         f"/v1/workspaces/acme/agents/{uuid4()}/tasks/sync",
-        json={"description": "do x", "parameters": {"model_override": "inst-1"}},
+        json={"description": "do x", "parameters": {"model_override": "aad7c8d9-756e-58e0-b42f-80ba341616df"}},
     )
 
     assert resp.status_code == 200

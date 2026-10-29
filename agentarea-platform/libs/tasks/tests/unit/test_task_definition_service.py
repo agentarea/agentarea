@@ -161,7 +161,7 @@ def _create(**overrides) -> TaskDefinitionCreate:
             "name": "Morning digest",
             "description": "Summarise yesterday's tickets",
             "agent_id": AGENT,
-            "parameters": {"model_override": "fast"},
+            "parameters": {"model_override": "aad7c8d9-756e-58e0-b42f-80ba341616df"},
             **overrides,
         }
     )
@@ -266,7 +266,7 @@ async def test_a_run_is_the_callers_run_of_the_saved_agent_and_text(permissions)
     payload = task_service.start_run.await_args.args[0]
     assert payload.agent_id == AGENT
     assert payload.description == "Summarise yesterday's tickets"
-    assert payload.parameters == {"model_override": "fast", "region": "eu"}
+    assert payload.parameters == {"model_override": "aad7c8d9-756e-58e0-b42f-80ba341616df", "region": "eu"}
     assert task.provenance.origin_type == "user"
     assert task.provenance.origin_id == CALLER.user_id
     assert task.provenance.source_identity == f"user:{CALLER.user_id}"

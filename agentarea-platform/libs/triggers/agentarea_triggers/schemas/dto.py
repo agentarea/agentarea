@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import Any, Literal
 from uuid import UUID
 
+from agentarea_common.model_override import check_model_override
 from agentarea_common.reserved_task_parameters import (
     drop_reserved_parameters,
     reject_reserved_parameters,
@@ -85,6 +86,7 @@ class TriggerSpec(BaseModel):
         ),
     )
     _reject_reserved_parameters = field_validator("task_parameters")(reject_reserved_parameters)
+    _check_model_override = field_validator("task_parameters")(check_model_override)
     enabled: bool = Field(
         default=True,
         description="Whether the trigger is active immediately on creation.",

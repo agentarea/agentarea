@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
+from agentarea_common.model_override import check_model_override
 from agentarea_common.reserved_task_parameters import (
     drop_reserved_parameters,
     reject_reserved_parameters,
@@ -279,6 +280,7 @@ class TriggerCreate(BaseModel):
     batch: TriggerBatchWindow | None = None
 
     _reject_reserved_parameters = field_validator("task_parameters")(reject_reserved_parameters)
+    _check_model_override = field_validator("task_parameters")(check_model_override)
 
     @model_validator(mode="after")
     def validate_trigger_type_fields(self) -> TriggerCreate:
