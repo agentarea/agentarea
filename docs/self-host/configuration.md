@@ -160,6 +160,7 @@ without them, and refuses them while RustFS is enabled.
 | `AGENTAREA_ENV` | `global.deploymentEnv` | `production` |
 | `AGENTAREA_ANALYTICS_ENABLED` | `global.analytics.enabled` | `true` |
 | `AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY` | Secret `global.analytics.signupHookSecret`, key `signup-hook-key` | unset (no sign-up hook) |
+| `AGENTAREA_ANALYTICS_OWN_DOMAINS` | `global.analytics.ownDomains` (a list) | empty (no own domains) |
 | `AGENTAREA_AUTH_ISSUER` | `kratos.jwt.issuer` | `https://agentarea.dev` |
 | `AGENTAREA_AUTH_AUDIENCE` | `kratos.jwt.audience` | `agentarea-api` |
 | `AGENTAREA_AUTH_JWKS_B64` | Secret `<release>-kratos-jwks` or `kratos.secretName`, key `jwks_b64` | generated |
@@ -182,6 +183,12 @@ web hook presents, as its `Authorization` header, to
 `POST /internal/analytics/signups`. The backend then records which channel brought
 each sign-up (see [usage analytics](/self-host/analytics)). Unset, the
 endpoint answers 404.
+
+`AGENTAREA_ANALYTICS_OWN_DOMAINS` lists the domains of your own sites, comma-separated,
+such as `example.com,example.org`. A sign-up referred from one of them or from a
+subdomain of one is not credited to a referrer. Empty, no site is your own. An
+entry that is not a domain name (a URL, a port, a wildcard, an IP address) stops
+the API and the worker at startup.
 
 `AGENTAREA_API_URL` is the URL the backend advertises for itself — provider icon URLs,
 OAuth protected-resource metadata, and the MCP `WWW-Authenticate` header. It must
