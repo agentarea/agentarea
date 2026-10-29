@@ -562,7 +562,7 @@ async def test_model_override_in_parameters_bypasses_model_guard():
         workspace_id="ws-abc",
         user_id="user-123",
         provenance=_STARTED,
-        parameters={"model_override": "inst-override"},
+        parameters={"model_override": "aad7c8d9-756e-58e0-b42f-80ba341616df"},
     )
 
     mocks["task_manager"].submit_task.assert_awaited_once()

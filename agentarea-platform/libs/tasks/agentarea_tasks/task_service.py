@@ -18,6 +18,7 @@ from agentarea_common.artifacts.workspace import WorkspaceValidationError, norma
 from agentarea_common.audit import audited
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.extensions.customer_pricing import get_customer_pricing
+from agentarea_common.model_override import model_override_of
 from agentarea_common.money import Money, serialize_money, to_money
 from agentarea_common.ports.policy_resolver import PolicyResolverPort
 from agentarea_common.reserved_task_parameters import (
@@ -385,7 +386,7 @@ class TaskService(BaseTaskService):
         """
         if agent is None:
             return
-        if (parameters or {}).get("model_override"):
+        if model_override_of(parameters):
             return
         if not getattr(agent, "model_id", None):
             raise AgentModelNotConfiguredError(agent_id)
