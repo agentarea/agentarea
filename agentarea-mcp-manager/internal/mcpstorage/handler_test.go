@@ -157,13 +157,37 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
-	store := newFakeStore()
+	return newHarnessOver(t, newFakeStore(), NativeConditionalWrites)
+}
+
+// noConditionalStore behaves as Timeweb S3 does: every If-Match is a failed
+// precondition, whatever the ETag, and If-None-Match is ignored.
+type noConditionalStore struct{ *fakeStore }
+
+func (n noConditionalStore) PutObject(ctx context.Context, in *s3.PutObjectInput, opts ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
+	if in.IfMatch != nil {
+		return nil, &smithy.GenericAPIError{Code: "PreconditionFailed"}
+	}
+	stripped := *in
+	stripped.IfNoneMatch = nil
+	return n.fakeStore.PutObject(ctx, &stripped, opts...)
+}
+
+func (n noConditionalStore) DeleteObject(ctx context.Context, in *s3.DeleteObjectInput, opts ...func(*s3.Options)) (*s3.DeleteObjectOutput, error) {
+	if in.IfMatch != nil {
+		return nil, &smithy.GenericAPIError{Code: "PreconditionFailed"}
+	}
+	return n.fakeStore.DeleteObject(ctx, in, opts...)
+}
+
+func newHarnessOver(t *testing.T, store ObjectStore, writes ConditionalWrites) *harness {
+	t.Helper()
 	instances := fakeInstances{
 		"inst-1": {InstanceID: "inst-1", WorkspaceID: "ws-1", JSONSpec: map[string]any{"storage": map[string]any{"enabled": true}}},
 		"inst-2": {InstanceID: "inst-2", WorkspaceID: "ws-1", JSONSpec: map[string]any{}},
 		"inst-3": {InstanceID: "inst-3", WorkspaceID: "ws-1", JSONSpec: map[string]any{"storage": map[string]any{"enabled": true}}},
 	}
-	handler, err := NewHandler(testSecret, "artifacts", store, instances, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	handler, err := NewHandler(testSecret, "artifacts", store, instances, writes, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
@@ -172,7 +196,11 @@ func newHarness(t *testing.T) *harness {
 	// the handler saw it.
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	return &harness{t: t, server: server, store: store, token: sign(t, testSecret, "ws-1", "inst-1")}
+	fake, _ := store.(*fakeStore)
+	if wrapped, ok := store.(noConditionalStore); ok {
+		fake = wrapped.fakeStore
+	}
+	return &harness{t: t, server: server, store: fake, token: sign(t, testSecret, "ws-1", "inst-1")}
 }
 
 func (h *harness) do(method, rawPath string, body []byte, headers map[string]string) *http.Response {
@@ -213,7 +241,66 @@ func expectStatus(t *testing.T, response *http.Response, want int) {
 }
 
 func TestCompareAndSwapLifecycle(t *testing.T) {
-	h := newHarness(t)
+	compareAndSwapLifecycle(t, newHarness(t))
+}
+
+func TestEmulatedWritesKeepCompareAndSwapOnAStoreWithoutConditionalWrites(t *testing.T) {
+	compareAndSwapLifecycle(t, newHarnessOver(t, noConditionalStore{newFakeStore()}, EmulatedConditionalWrites))
+}
+
+func TestNativeWritesOnAStoreWithoutConditionalWritesRefuseEveryUpdate(t *testing.T) {
+	h := newHarnessOver(t, noConditionalStore{newFakeStore()}, NativeConditionalWrites)
+	created := h.do(http.MethodPut, "/objects/app.sqlite", []byte("v1"), map[string]string{"If-None-Match": "*"})
+	expectStatus(t, created, http.StatusOK)
+	expectStatus(t, h.do(http.MethodPut, "/objects/app.sqlite", []byte("v2"), map[string]string{"If-Match": created.Header.Get("ETag")}), http.StatusPreconditionFailed)
+}
+
+func TestEmulatedWritesLetOneOfConcurrentUpdatesWin(t *testing.T) {
+	h := newHarnessOver(t, noConditionalStore{newFakeStore()}, EmulatedConditionalWrites)
+	created := h.do(http.MethodPut, "/objects/app.sqlite", []byte("v1"), map[string]string{"If-None-Match": "*"})
+	expectStatus(t, created, http.StatusOK)
+	etag := created.Header.Get("ETag")
+	const writers = 8
+	statuses := make(chan int, writers)
+	var wg sync.WaitGroup
+	for i := range writers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			response := h.do(http.MethodPut, "/objects/app.sqlite", []byte(fmt.Sprintf("w%d", i)), map[string]string{"If-Match": etag})
+			statuses <- response.StatusCode
+		}()
+	}
+	wg.Wait()
+	close(statuses)
+	won := 0
+	for status := range statuses {
+		if status == http.StatusOK {
+			won++
+		} else if status != http.StatusPreconditionFailed {
+			t.Fatalf("status = %d, want 200 or 412", status)
+		}
+	}
+	if won != 1 {
+		t.Fatalf("%d writers won from the same ETag, want exactly 1", won)
+	}
+}
+
+func TestConditionalWritesFromEnv(t *testing.T) {
+	for value, want := range map[string]ConditionalWrites{"": NativeConditionalWrites, "native": NativeConditionalWrites, "emulated": EmulatedConditionalWrites} {
+		t.Setenv(ConditionalWritesEnv, value)
+		if got, err := ConditionalWritesFromEnv(); err != nil || got != want {
+			t.Fatalf("%q: got %q, %v; want %q", value, got, err, want)
+		}
+	}
+	t.Setenv(ConditionalWritesEnv, "off")
+	if _, err := ConditionalWritesFromEnv(); err == nil {
+		t.Fatal("an unknown value was accepted")
+	}
+}
+
+func compareAndSwapLifecycle(t *testing.T, h *harness) {
+	t.Helper()
 
 	expectStatus(t, h.do(http.MethodPut, "/objects/db/app.sqlite", []byte("v1"), nil), http.StatusPreconditionRequired)
 

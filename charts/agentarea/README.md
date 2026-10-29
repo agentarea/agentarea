@@ -105,6 +105,7 @@ The following table lists configurable parameters of the chart and their default
 | global.storage.existingSecret | string | `""` |  |
 | global.storage.accessKeyKey | string | `"access-key-id"` |  |
 | global.storage.secretKeyKey | string | `"secret-access-key"` |  |
+| global.storage.conditionalWrites | string | `"native"` |  |
 | global.storage.publicEndpoint | string | `""` |  |
 | global.storage.bucket | string | `"agentarea-documents"` |  |
 | global.storage.region | string | `"us-east-1"` |  |

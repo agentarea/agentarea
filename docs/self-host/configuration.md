@@ -140,6 +140,7 @@ without them, and refuses them while RustFS is enabled.
 | `AGENTAREA_S3_BUCKET` | `global.storage.bucket` | `agentarea-documents` |
 | `AGENTAREA_S3_ARTIFACTS_BUCKET` | `global.storage.bucket` | `agentarea-documents` |
 | `AGENTAREA_S3_ENDPOINT` | `global.storage.endpoint`; with RustFS, the RustFS service, port 9000 | derived |
+| `AGENTAREA_S3_CONDITIONAL_WRITES` | `global.storage.conditionalWrites`: `native`, or `emulated` for a store that refuses or ignores `If-Match` / `If-None-Match` (Timeweb S3); mcp-manager then checks them under a per-object lock, which needs a single replica | `native` |
 | `AGENTAREA_S3_ACCESS_KEY` | Secret `global.storage.existingSecret`, key `global.storage.accessKeyKey`; with RustFS, Secret `global.secrets.rustfs`, key `root-user` | generated |
 | `AGENTAREA_S3_SECRET_KEY` | Secret `global.storage.existingSecret`, key `global.storage.secretKeyKey`; with RustFS, Secret `global.secrets.rustfs`, key `root-password` | generated |
 
