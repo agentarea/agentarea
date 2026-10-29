@@ -19,6 +19,7 @@ from temporalio.exceptions import ApplicationError
 
 from ...interfaces import ActivityDependencies
 from ...models import LogRow, RecordRequest, RecordResult
+from ...telemetry import record_run_transition
 from .events import ledger_lines, store_task_events
 from .task_state import task_outcome
 from .tool_audit import audit_line, tool_audit_entry
@@ -126,6 +127,12 @@ def make_record_activities(
                         type="TaskLogRejected",
                         non_retryable=True,
                     ) from refused
+            if request.status is not None:
+                record_run_transition(
+                    request.status.status,
+                    request.status.failure_reason,
+                    request.status.run_started_at,
+                )
             if stored:
                 # Kept only for the enterprise usage emitter, which reads
                 # llm.call.completed from the old task_events table.

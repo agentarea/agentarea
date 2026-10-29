@@ -34,7 +34,7 @@ class TracedEchoWorkflow:
 
 
 async def test_a_worker_with_tracing_on_runs_a_workflow_and_its_activity():
-    # What setup_otel installs in a worker process: an ordinary SDK provider.
+    # What setup_telemetry installs in a worker process: an ordinary SDK provider.
     if not isinstance(trace.get_tracer_provider(), TracerProvider):
         trace.set_tracer_provider(TracerProvider())
     plugins = get_temporal_plugins(ObservabilitySettings(ENABLED=True))

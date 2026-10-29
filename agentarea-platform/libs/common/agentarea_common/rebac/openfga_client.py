@@ -11,7 +11,7 @@ from typing import Any
 
 import httpx
 
-from ..observability.metrics import AUTHZ_DURATION
+from ..observability.authz import authz_timed
 from ..outbound import Destination, outbound_client
 from .models import CheckResult, RelationQuery, RelationTuple, SubjectSet
 
@@ -88,7 +88,7 @@ class OpenFGAClient:
         if query.page_token:
             body["continuation_token"] = query.page_token
         try:
-            with AUTHZ_DURATION.labels(operation="openfga_read").time():
+            with authz_timed("openfga_read"):
                 resp = await client.post(url, json=body, headers=self._headers())
         except httpx.HTTPError as exc:
             raise OpenFGAUnavailableError(f"OpenFGA read unreachable: {exc}") from exc
@@ -145,7 +145,7 @@ class OpenFGAClient:
         if self._authorization_model_id:
             body["authorization_model_id"] = self._authorization_model_id
         try:
-            with AUTHZ_DURATION.labels(operation="openfga_check").time():
+            with authz_timed("openfga_check"):
                 resp = await client.post(url, json=body, headers=self._headers())
         except httpx.HTTPError as exc:
             raise OpenFGAUnavailableError(f"OpenFGA check unreachable: {exc}") from exc
@@ -182,7 +182,7 @@ class OpenFGAClient:
         if self._authorization_model_id:
             body["authorization_model_id"] = self._authorization_model_id
         try:
-            with AUTHZ_DURATION.labels(operation="openfga_list_objects").time():
+            with authz_timed("openfga_list_objects"):
                 resp = await client.post(url, json=body, headers=self._headers())
         except httpx.HTTPError as exc:
             raise OpenFGAUnavailableError(f"OpenFGA list-objects unreachable: {exc}") from exc
@@ -198,7 +198,7 @@ class OpenFGAClient:
         client = await self._http()
         url = f"{self._api_url}/stores/{self._store_id}/write"
         try:
-            with AUTHZ_DURATION.labels(operation="openfga_write").time():
+            with authz_timed("openfga_write"):
                 resp = await client.post(url, json=body, headers=self._headers())
         except httpx.HTTPError as exc:
             raise OpenFGAUnavailableError(f"OpenFGA write unreachable: {exc}") from exc

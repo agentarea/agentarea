@@ -248,7 +248,6 @@ class MCPServerInstanceCreated(DomainEvent):
 - AGENTAREA_REDIS_URL=redis://redis:6379          # Same Redis cluster!
 - TEMPLATES_DIR=/app/templates
 - AGENTAREA_MCP_RUNTIME=podman              # Container management
-- METRICS_ENABLED=true                  # Performance monitoring
 ```
 
 **Critical:** Both services share the same Redis cluster for event communication with high availability and persistence.

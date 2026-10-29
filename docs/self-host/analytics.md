@@ -18,8 +18,7 @@ Every AgentArea installation sends anonymous usage statistics to AgentArea, and
 ## Synopsis
 
 Usage analytics is not telemetry and not OpenTelemetry. OpenTelemetry traces and
-Prometheus metrics (`AGENTAREA_OTEL_*`, `AGENTAREA_METRICS_*`) go to your own
-monitoring; see [observability](/self-host/observability). Usage analytics goes to
+metrics (`AGENTAREA_OTEL_ENABLED`, `OTEL_*`) go to your own monitoring; see [observability](/self-host/observability). Usage analytics goes to
 AgentArea, at `https://analytics.agentarea.ai`, and answers product questions:
 how many installations reach a first successful run, which connectors fail to
 connect, which features are used.

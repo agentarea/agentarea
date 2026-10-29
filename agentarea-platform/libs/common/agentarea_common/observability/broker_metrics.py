@@ -1,21 +1,21 @@
-"""Consumer-group health as Prometheus gauges, read from the broker on each scrape.
+"""Consumer-group health as observable gauges, read from the broker on each collection.
 
-The collector sits on the default registry next to the API's other metrics. A
-scrape runs on the metrics server's thread and reads the broker on the event
-loop that owns the broker connection, so there is no polling loop and the
-numbers are as fresh as the scrape.
+The exporter collects on its own thread and reads the broker on the event loop
+that owns the broker connection, so there is no polling loop and the numbers
+are as fresh as the collection. One read serves every gauge of a collection.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Iterator, Sequence
+import time
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from threading import Lock
 
-from prometheus_client import REGISTRY, CollectorRegistry
-from prometheus_client.core import GaugeMetricFamily
-from prometheus_client.registry import Collector
+from opentelemetry import metrics
+from opentelemetry.metrics import CallbackOptions, Observation
 
 from agentarea_common.broker.interface import BrokerClient, GroupInfo, PendingSummary
 from agentarea_common.broker.redis_streams import RedisStreamsBroker
@@ -25,9 +25,9 @@ from agentarea_common.config.settings import Settings
 
 logger = logging.getLogger(__name__)
 
-SCRAPE_TIMEOUT_SECONDS = 5.0
-
-_GROUP_LABELS = ["stream", "group"]
+READ_TIMEOUT_SECONDS = 5.0
+# The gauges of one collection are observed one after another; they share a read.
+_READ_REUSE_SECONDS = 1.0
 
 
 @dataclass(frozen=True)
@@ -61,36 +61,31 @@ async def read_broker_health(
     return BrokerHealth(groups=tuple(groups), dead_letters=dead_letters)
 
 
-def _families() -> tuple[GaugeMetricFamily, ...]:
-    return (
-        GaugeMetricFamily(
-            "agentarea_broker_group_lag",
-            "Entries in the stream not yet delivered to the consumer group.",
-            labels=_GROUP_LABELS,
-        ),
-        GaugeMetricFamily(
-            "agentarea_broker_group_pending",
-            "Entries delivered to the consumer group and not yet acknowledged.",
-            labels=_GROUP_LABELS,
-        ),
-        GaugeMetricFamily(
-            "agentarea_broker_group_oldest_pending_seconds",
-            "Age of the oldest entry the consumer group holds pending; a redelivery does not reset it.",
-            labels=_GROUP_LABELS,
-        ),
-        GaugeMetricFamily(
-            "agentarea_broker_dlq_length",
-            "Entries in the dead-letter stream.",
-            labels=["stream"],
-        ),
-        GaugeMetricFamily(
-            "agentarea_broker_health_up",
-            "1 when the last scrape read consumer-group health from the broker, else 0.",
-        ),
-    )
+def broker_observations(health: BrokerHealth | None) -> dict[str, list[Observation]]:
+    """What each gauge reports for one read; ``None`` is a read that failed."""
+    if health is None:
+        return {"agentarea.broker.health": [Observation(0)]}
+    lag, pending, oldest = [], [], []
+    for group in health.groups:
+        labels = {"stream": group.route.stream, "group": group.route.group}
+        lag.append(Observation(group.info.lag, labels))
+        pending.append(Observation(group.pending.count, labels))
+        oldest.append(Observation((group.pending.oldest_age_ms or 0) / 1000, labels))
+    return {
+        "agentarea.broker.group.lag": lag,
+        "agentarea.broker.group.pending": pending,
+        "agentarea.broker.group.oldest_pending": oldest,
+        "agentarea.broker.dlq.length": [
+            Observation(length, {"stream": stream})
+            for stream, length in health.dead_letters.items()
+        ],
+        "agentarea.broker.health": [Observation(1)],
+    }
 
 
-class BrokerHealthCollector(Collector):
+class BrokerHealthReader:
+    """Reads consumer-group health on the broker's loop from the exporter's thread."""
+
     def __init__(
         self,
         broker: BrokerClient,
@@ -103,75 +98,108 @@ class BrokerHealthCollector(Collector):
         self._routes = tuple(routes)
         self._loop = loop
         self._timeout = timeout_seconds
+        self._lock = Lock()
+        self._read_at: float | None = None
+        self._observations: dict[str, list[Observation]] = {}
 
-    def describe(self) -> Iterator[GaugeMetricFamily]:
-        return iter(_families())
+    def observations(self, name: str) -> list[Observation]:
+        with self._lock:
+            now = time.monotonic()
+            if self._read_at is None or now - self._read_at > _READ_REUSE_SECONDS:
+                self._observations = broker_observations(self._read())
+                self._read_at = now
+            return self._observations.get(name, [])
 
-    def collect(self) -> Iterator[GaugeMetricFamily]:
+    def _read(self) -> BrokerHealth | None:
         try:
             running = asyncio.get_running_loop()
         except RuntimeError:
             running = None
         if running is self._loop:
-            raise RuntimeError(
-                "BrokerHealthCollector reads on its event loop and cannot be collected from it"
-            )
-        lag, pending, oldest, dlq, up = _families()
+            logger.error("Broker health cannot be read from the broker's own event loop")
+            return None
         future = asyncio.run_coroutine_threadsafe(
             read_broker_health(self._broker, self._routes), self._loop
         )
         try:
-            health = future.result(self._timeout)
+            return future.result(self._timeout)
         except Exception:
             future.cancel()
             logger.exception("Reading consumer-group health from the broker failed")
-            up.add_metric([], 0)
-            yield up
-            return
-        for group in health.groups:
-            labels = [group.route.stream, group.route.group]
-            lag.add_metric(labels, group.info.lag)
-            pending.add_metric(labels, group.pending.count)
-            oldest.add_metric(labels, (group.pending.oldest_age_ms or 0) / 1000)
-        for stream, length in health.dead_letters.items():
-            dlq.add_metric([stream], length)
-        up.add_metric([], 1)
-        yield from (lag, pending, oldest, dlq, up)
+            return None
+
+
+_active: BrokerHealthReader | None = None
+
+
+def _gauge(name: str):
+    def observe(_options: CallbackOptions) -> Iterable[Observation]:
+        reader = _active
+        return reader.observations(name) if reader is not None else []
+
+    return observe
+
+
+_meter = metrics.get_meter("agentarea.broker")
+_meter.create_observable_gauge(
+    "agentarea.broker.group.lag",
+    callbacks=[_gauge("agentarea.broker.group.lag")],
+    unit="{entry}",
+    description="Entries in the stream not yet delivered to the consumer group.",
+)
+_meter.create_observable_gauge(
+    "agentarea.broker.group.pending",
+    callbacks=[_gauge("agentarea.broker.group.pending")],
+    unit="{entry}",
+    description="Entries delivered to the consumer group and not yet acknowledged.",
+)
+_meter.create_observable_gauge(
+    "agentarea.broker.group.oldest_pending",
+    callbacks=[_gauge("agentarea.broker.group.oldest_pending")],
+    unit="s",
+    description="Age of the oldest entry the consumer group holds pending; a redelivery does not reset it.",
+)
+_meter.create_observable_gauge(
+    "agentarea.broker.dlq.length",
+    callbacks=[_gauge("agentarea.broker.dlq.length")],
+    unit="{entry}",
+    description="Entries in the dead-letter stream.",
+)
+_meter.create_observable_gauge(
+    "agentarea.broker.health",
+    callbacks=[_gauge("agentarea.broker.health")],
+    description="1 when the last collection read consumer-group health from the broker, else 0.",
+)
 
 
 class BrokerHealthMetrics:
-    """The registered collector and the broker connection it reads through."""
+    """The active reader and the broker connection it reads through."""
 
-    def __init__(
-        self,
-        broker: RedisStreamsBroker,
-        collector: BrokerHealthCollector,
-        registry: CollectorRegistry,
-    ) -> None:
+    def __init__(self, broker: RedisStreamsBroker, reader: BrokerHealthReader) -> None:
         self._broker = broker
-        self._collector = collector
-        self._registry = registry
+        self._reader = reader
 
     async def aclose(self) -> None:
-        self._registry.unregister(self._collector)
+        global _active
+        if _active is self._reader:
+            _active = None
         await self._broker.aclose()
 
 
-def start_broker_health_metrics(
-    settings: Settings, registry: CollectorRegistry = REGISTRY
-) -> BrokerHealthMetrics:
-    """Register consumer-group health for every configured group. Call on the serving loop."""
+def start_broker_health_metrics(settings: Settings) -> BrokerHealthMetrics:
+    """Report consumer-group health for every configured group. Call on the serving loop."""
+    global _active
     if not isinstance(settings.broker, RedisSettings):
         current = settings.broker.BROKER
         raise RuntimeError(
             f"Broker health metrics need AGENTAREA_BROKER=redis (current: {current})"
         )
     broker = RedisStreamsBroker(settings.broker.REDIS_URL, namespace=settings.streams.NAMESPACE)
-    collector = BrokerHealthCollector(
+    reader = BrokerHealthReader(
         broker,
         configured_routes(settings.streams),
         asyncio.get_running_loop(),
-        timeout_seconds=SCRAPE_TIMEOUT_SECONDS,
+        timeout_seconds=READ_TIMEOUT_SECONDS,
     )
-    registry.register(collector)
-    return BrokerHealthMetrics(broker, collector, registry)
+    _active = reader
+    return BrokerHealthMetrics(broker, reader)

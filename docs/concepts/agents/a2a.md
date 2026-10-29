@@ -105,7 +105,7 @@ same artifacts as a task started from the UI.
 
 Every agent has an address of its own: a host, built from `AGENTAREA_A2A_AGENT_URL` with
 the agent id as the first label, such as
-`https://4f1c….a2a.agentarea.ru`. The agent API returns it as `a2a_url`. On
+`https://4f1c….a2a.example.com`. The agent API returns it as `a2a_url`. On
 that host the agent card is at the well-known path, and the JSON-RPC endpoint
 is the root:
 

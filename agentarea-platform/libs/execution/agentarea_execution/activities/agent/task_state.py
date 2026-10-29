@@ -26,6 +26,7 @@ from ...models import (
     UpdateTaskStatusRequest,
     UpdateTaskStatusResult,
 )
+from ...telemetry import record_run_transition
 
 if TYPE_CHECKING:
     from ..dependencies import ActivityServiceContainer
@@ -118,6 +119,9 @@ def make_task_state_activities(
                     _UUID(request.task_id), request.status, **additional_fields
                 )
                 if updated:
+                    record_run_transition(
+                        request.status, request.failure_reason, request.run_started_at
+                    )
                     return UpdateTaskStatusResult(success=True)
                 return UpdateTaskStatusResult(success=False, error="Task not found")
             except Exception as e:

@@ -12,7 +12,6 @@ from uuid import uuid4
 import agentarea_api.api.events.events_router as events_router
 import agentarea_api.main as api_main
 import agentarea_common.config.database as database
-import agentarea_common.observability.metrics as metrics
 import pytest
 from agentarea_mcp import dispatch_stamps
 from agentarea_mcp.dispatch_stamps import record_dispatch
@@ -50,7 +49,6 @@ def written(monkeypatch) -> list:
     monkeypatch.setattr(api_main, "cleanup_all_connections", AsyncMock())
     monkeypatch.setattr(events_router, "start_events_router", AsyncMock())
     monkeypatch.setattr(events_router, "stop_events_router", AsyncMock())
-    monkeypatch.setattr(metrics, "start_metrics_server", lambda port: MagicMock())
     return rows
 
 

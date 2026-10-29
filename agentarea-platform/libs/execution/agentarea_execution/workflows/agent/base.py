@@ -480,6 +480,7 @@ class AgentWorkflowBase:
 
     async def _persist_task_status(self, request: UpdateTaskStatusRequest) -> None:
         """Store the task's status: with the pending log rows on the task log, else alone."""
+        request = request.model_copy(update={"run_started_at": self.state.run_started_at})
         if self._task_log_on():
             await self._record(
                 status=request.model_copy(update={"conversation": None, "conversation_pending": []})

@@ -102,6 +102,7 @@ spec:
                   key: {{ include "agentarea.mcpGatewaySecretKey" . }}
             {{- include "agentarea.sandboxRuntime.envs" . | nindent 12 }}
             {{- include "agentarea.mcpManager.envs" . | nindent 12 }}
+            {{- include "agentarea.telemetry.envs" . | nindent 12 }}
             {{- include "agentarea.mcpManager.secrets.envs" . | nindent 12 }}
             {{- if $packageRegistrySecret }}
             - name: DOCKER_CONFIG

@@ -1,6 +1,6 @@
 """A source that stops publishing an item removes it, unless something uses it.
 
-Every reconcile used to keep what the source dropped forever: on RU prod 217k
+Every reconcile used to keep what the source dropped forever: in production 217k
 of 220k skill rows were items no source published any more, 1.2 GB of the 2.7 GB
 database. Only an item a workspace installed, forked or connected to has to
 stay. "Uses it" spans tables of other modules, so this runs on the migrated
@@ -220,7 +220,7 @@ async def enforced(engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
 async def test_the_reference_check_sees_every_workspace_under_an_enforced_scope(
     session: AsyncSession, enforced: AsyncSession
 ):
-    # RU runs AGENTAREA_DB_TENANT_SCOPE=enforce and every sync binds a workspace.
+    # Production runs AGENTAREA_DB_TENANT_SCOPE=enforce and every sync binds a workspace.
     # The DELETE names other modules' scoped tables; it must run, and it must
     # still see a fork made in a workspace other than the one bound.
     from agentarea_common.base.tenant_scope import workspace_scope

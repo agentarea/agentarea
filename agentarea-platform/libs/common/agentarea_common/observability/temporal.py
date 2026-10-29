@@ -15,5 +15,5 @@ def get_temporal_plugins(settings: ObservabilitySettings | None = None):
     # Not OpenTelemetryPlugin: it requires temporalio's replay-safe global
     # provider, whose tracer raises for any span started outside a workflow
     # (every request in the API, every activity's HTTP call). TracingInterceptor
-    # works with the ordinary provider setup_otel installs.
+    # works with the ordinary provider setup_telemetry installs.
     return [SimplePlugin("agentarea-tracing", interceptors=[TracingInterceptor()])]

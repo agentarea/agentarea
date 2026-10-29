@@ -32,7 +32,7 @@ from agentarea_mcp.application.oauth_client_service import (
 from agentarea_secrets.catalog_service import SecretCatalogService
 from fastapi import HTTPException
 
-_API = "https://api.agentarea.ru"
+_API = "https://api.example.com"
 _APP = "https://app.agentarea.ai"
 _CALLBACK = f"{_API}/v1/oauth/callback"
 
@@ -878,11 +878,11 @@ async def test_a_custom_app_overrides_the_platform_app(monkeypatch, platform_app
 # ---------------------------------------------------------------------------
 
 _YANDEX_APP = {
-    "issuer": "https://oauth.yandex.ru",
+    "issuer": "https://oauth.example.com",
     "client_id": "platform-client-id",
     "client_secret": "platform-client-secret",  # pragma: allowlist secret
-    "authorization_endpoint": "https://oauth.yandex.ru/authorize",
-    "token_endpoint": "https://oauth.yandex.ru/token",
+    "authorization_endpoint": "https://oauth.example.com/authorize",
+    "token_endpoint": "https://oauth.example.com/token",
     "resource_origins": ["https://api-metrika.yandex.net"],
 }
 
@@ -890,8 +890,8 @@ _YANDEX_APP = {
 def _metrica_oauth() -> dict:
     return {
         "provider_key": "yandex-metrica",
-        "authorization_url": "https://oauth.yandex.ru/authorize",
-        "token_url": "https://oauth.yandex.ru/token",
+        "authorization_url": "https://oauth.example.com/authorize",
+        "token_url": "https://oauth.example.com/token",
         "allowed_api_origins": ["https://api-metrika.yandex.net"],
         "scopes": ["metrika:read"],
         "authorization_scheme": "OAuth",
@@ -1095,7 +1095,7 @@ async def test_catalog_authorize_creates_the_connection_and_keeps_secrets_out_of
     assert connection_create.await_args.kwargs["registry_item_id"] == item_id
     assert connection_create.await_args.kwargs["status"] == "pending"
     query = _query(response.authorize_url)
-    assert response.authorize_url.startswith("https://oauth.yandex.ru/authorize?")
+    assert response.authorize_url.startswith("https://oauth.example.com/authorize?")
     assert query["client_id"] == [
         {
             "platform": "platform-client-id",
@@ -1119,7 +1119,7 @@ async def test_catalog_authorize_creates_the_connection_and_keeps_secrets_out_of
     if credential_source == "platform":
         assert auth_create.await_args.kwargs["credentials"] == {}
         assert config["credential_mode"] == "managed"
-        assert config["platform_oauth_issuer"] == "https://oauth.yandex.ru"
+        assert config["platform_oauth_issuer"] == "https://oauth.example.com"
         assert "client_id" not in config
         assert "platform-client-secret" not in json.dumps(config)
         secret_catalog.add_reference.assert_not_awaited()

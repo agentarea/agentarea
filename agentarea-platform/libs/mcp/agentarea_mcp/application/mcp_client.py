@@ -25,7 +25,9 @@ from mcp import Client, MCPError
 from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamable_http_client
 from mcp_types import INTERNAL_ERROR, DiscoverResult
+from opentelemetry.semconv.attributes.error_attributes import ERROR_TYPE
 
+from agentarea_mcp.telemetry import era_renegotiated, mcp_operation
 from agentarea_mcp.verification import mcp_transport_candidates
 
 logger = logging.getLogger(__name__)
@@ -542,6 +544,13 @@ class _ConnectedClient:
             return False
         if not self._cached or self._retried or exc.code not in NEGOTIATION_ERROR_CODES:
             return False
+        logger.warning(
+            "MCP server %s refused the cached protocol era (%s: %s); renegotiating",
+            self._url,
+            exc.code,
+            exc.message,
+        )
+        era_renegotiated.add(1, {ERROR_TYPE: str(exc.code)})
         if self._verdict_key and self._verdict_store is not None:
             await self._verdict_store.delete(self._verdict_key)
         self._retried = True
@@ -562,14 +571,17 @@ class _ConnectedClient:
         return await getattr(client, method)(*args, **kwargs)
 
     async def call_tool(self, *args: Any, **kwargs: Any) -> Any:
-        return await self._invoke("call_tool", *args, **kwargs)
+        with mcp_operation("tools/call") as operation:
+            return operation.result(await self._invoke("call_tool", *args, **kwargs))
 
     async def call_tool_once(self, *args: Any, **kwargs: Any) -> Any:
         """``call_tool`` without reconnecting: for a connection another task owns."""
-        return await self._invoke_once("call_tool", *args, **kwargs)
+        with mcp_operation("tools/call") as operation:
+            return operation.result(await self._invoke_once("call_tool", *args, **kwargs))
 
     async def list_tools(self, *args: Any, **kwargs: Any) -> Any:
-        return await self._invoke("list_tools", *args, **kwargs)
+        with mcp_operation("tools/list"):
+            return await self._invoke("list_tools", *args, **kwargs)
 
 
 ConnectedMCPClient = _ConnectedClient

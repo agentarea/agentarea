@@ -173,7 +173,6 @@ dependencies = [
     { name = "opentelemetry-instrumentation-fastapi" },
     { name = "opentelemetry-instrumentation-httpx" },
     { name = "opentelemetry-instrumentation-redis" },
-    { name = "prometheus-client" },
     { name = "pyjwt", extra = ["crypto"] },
     { name = "python-multipart" },
     { name = "uvicorn" },
@@ -207,7 +206,6 @@ requires-dist = [
     { name = "opentelemetry-instrumentation-fastapi", specifier = ">=0.51b0" },
     { name = "opentelemetry-instrumentation-httpx", specifier = ">=0.51b0" },
     { name = "opentelemetry-instrumentation-redis", specifier = ">=0.51b0" },
-    { name = "prometheus-client", specifier = ">=0.23.0" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.15.1" },
     { name = "python-multipart", specifier = ">=0.0.30" },
     { name = "uvicorn", specifier = ">=0.34.0" },
@@ -255,6 +253,7 @@ dependencies = [
     { name = "httpx" },
     { name = "infisicalsdk" },
     { name = "opentelemetry-exporter-otlp" },
+    { name = "opentelemetry-exporter-prometheus" },
     { name = "opentelemetry-sdk" },
     { name = "prometheus-client" },
     { name = "psycopg2-binary" },
@@ -278,6 +277,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "infisicalsdk", specifier = ">=1.0.8" },
     { name = "opentelemetry-exporter-otlp", specifier = ">=1.30.0" },
+    { name = "opentelemetry-exporter-prometheus", specifier = ">=0.66b1" },
     { name = "opentelemetry-sdk", specifier = ">=1.30.0" },
     { name = "prometheus-client", specifier = ">=0.23.0" },
     { name = "psycopg2-binary", specifier = ">=2.9.9" },
@@ -299,7 +299,6 @@ dependencies = [
     { name = "agentarea-payment" },
     { name = "agentarea-projects" },
     { name = "agentarea-wallet" },
-    { name = "prometheus-client" },
     { name = "pydantic" },
     { name = "temporalio" },
     { name = "tiktoken" },
@@ -319,7 +318,6 @@ requires-dist = [
     { name = "agentarea-payment", editable = "libs/payment" },
     { name = "agentarea-projects", editable = "libs/projects" },
     { name = "agentarea-wallet", editable = "libs/wallet" },
-    { name = "prometheus-client", specifier = ">=0.23.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
@@ -2536,6 +2534,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/1b/17/26487707ea4caa97b17e6e4b5fa72133a53512ffa2f5cf7a49ef284b29cb/opentelemetry_exporter_otlp_proto_http-1.45.1.tar.gz", hash = "sha256:45c218405ce3fd879596924b1874bf9a8f6880206d61065c5a912c8e5c297fb7", size = 28839, upload-time = "2026-10-06T17:33:05.713Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/aa/1f/517eaa0187ba106a9da97160ce2add3a371812681dc440930b267f714e42/opentelemetry_exporter_otlp_proto_http-1.45.1-py3-none-any.whl", hash = "sha256:24a97cf3753c7fb52fad44a696e452ff371686339e2acf3309e2eda3d0230700", size = 22180, upload-time = "2026-10-06T17:32:43.946Z" },
+]
+
+[[package]]
+name = "opentelemetry-exporter-prometheus"
+version = "0.66b1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-sdk" },
+    { name = "prometheus-client" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ed/58/e552853748c3a1478d3f0db31bb4e3bef2e45385f64d658148693183410e/opentelemetry_exporter_prometheus-0.66b1.tar.gz", hash = "sha256:1c702a0cc7a1b8c5e1f3f246aeb4273dbd707179af30dbb66182a75e16a06ed8", size = 16987, upload-time = "2026-10-06T17:33:06.358Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4d/8a/5e7262d970586a8d69dd159bebc68fbee7457088883b179599a562881a6f/opentelemetry_exporter_prometheus-0.66b1-py3-none-any.whl", hash = "sha256:a938e6af7295d5bacf82da9ca845cab9a9cb1c5f565abe39f54ef8bf511c05d9", size = 13222, upload-time = "2026-10-06T17:32:44.94Z" },
 ]
 
 [[package]]

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -218,21 +219,16 @@ async def app_lifespan(app: FastAPI):
 
     # NOTE: Don't override signal handlers - let uvicorn handle them for proper reload
 
-    # Startup. The metrics port first: failing to bind it must not leave the
-    # events router running with nothing to stop it.
-    from agentarea_common.config import MetricsSettings
-    from agentarea_common.observability.metrics import start_metrics_server
     from agentarea_common.utils.outbound_tls import install_outbound_trust
 
     install_outbound_trust()
 
-    metrics = MetricsSettings()
-    metrics_server = start_metrics_server(metrics.PORT) if metrics.ENABLED else None
-
-    from agentarea_common.config import get_settings
+    from agentarea_common.config import ObservabilitySettings, get_settings
     from agentarea_common.observability.broker_metrics import start_broker_health_metrics
 
-    broker_metrics = start_broker_health_metrics(get_settings()) if metrics.ENABLED else None
+    broker_metrics = (
+        start_broker_health_metrics(get_settings()) if ObservabilitySettings().ENABLED else None
+    )
 
     get_container()
     stream_bus = await initialize_services()
@@ -259,9 +255,6 @@ async def app_lifespan(app: FastAPI):
         await dispatch_stamps.stop()
         await stop_analytics()
 
-        if metrics_server is not None:
-            metrics_server.shutdown()
-            metrics_server.server_close()
         if broker_metrics is not None:
             await broker_metrics.aclose()
 
@@ -392,11 +385,11 @@ def create_app() -> FastAPI:
         ],
     )
 
-    from agentarea_common.config import ObservabilitySettings
-    from agentarea_common.observability import setup_otel
+    from agentarea_common.observability import setup_telemetry
 
-    observability_settings = ObservabilitySettings()
-    if setup_otel("agentarea-api", observability_settings):
+    # Before any Temporal client: it installs the runtime that exports the SDK's
+    # own metrics.
+    if setup_telemetry("agentarea-api"):
         _instrument_api(app)
 
     # Add audit context middleware (runs before route handlers)
@@ -432,11 +425,6 @@ def create_app() -> FastAPI:
         allow_headers=_cors.cors_allowed_headers,
         max_age=_cors.CORS_MAX_AGE,
     )
-
-    # Outermost, so it times everything the middleware above adds to a request.
-    from agentarea_api.api.http_metrics_middleware import HTTPMetricsMiddleware
-
-    app.add_middleware(HTTPMetricsMiddleware)
 
     # Mount static files - this serves all files from static/ at /static/
     static_path = Path(__file__).parent / "static"
@@ -698,6 +686,14 @@ def create_app() -> FastAPI:
 
 def _instrument_api(app: FastAPI) -> None:
     """Install OpenTelemetry instrumentation for API process dependencies."""
+    # Without the opt-in the instrumentation emits the old millisecond
+    # http.server.duration, which no View keeps: the API would export no RED.
+    opt_in = os.environ.get("OTEL_SEMCONV_STABILITY_OPT_IN", "")
+    if not any(token.strip().startswith("http") for token in opt_in.split(",")):
+        raise RuntimeError(
+            "AGENTAREA_OTEL_ENABLED needs OTEL_SEMCONV_STABILITY_OPT_IN=http for the "
+            "HTTP server and client metrics"
+        )
     from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor

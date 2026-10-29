@@ -27,6 +27,7 @@ dependencies = [
     "aiosmtplib>=3.0",
     "opentelemetry-sdk>=1.30.0",
     "opentelemetry-exporter-otlp>=1.30.0",
+    "opentelemetry-exporter-prometheus>=0.66b1",
     "prometheus-client>=0.23.0",
 ]
 

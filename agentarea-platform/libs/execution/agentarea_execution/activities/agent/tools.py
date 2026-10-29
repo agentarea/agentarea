@@ -35,11 +35,11 @@ from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
 from agentarea_tasks.model_spend_caps import current_budget
 from agentarea_tasks.spend_gate import spend_cap_refusal
 from agentarea_wallet.domain.enums import settlement_status
-from prometheus_client import Counter
 from temporalio import activity
 
 from ...interfaces import ActivityDependencies
 from ...models import MCPToolRequest, MCPToolResult, McpToolRoute
+from ...telemetry import ToolCall, ToolKind, ToolOutcome, ToolPath, tool_call
 from ...workflows.helpers import (
     mcp_tool_restricting_aliases,
     tool_config_aliases,
@@ -102,11 +102,13 @@ def _deny_tool_result(tool_name: str, reason: str) -> MCPToolResult:
     )
 
 
-_mcp_dispatch_failed_total = Counter(
-    "mcp_dispatch_failed_total",
-    "Number of MCP dispatch failures",
-    ["reason"],
-)
+def tool_kind(request: MCPToolRequest) -> ToolKind:
+    """What kind of tool a call runs, as the tool-call metrics count it."""
+    if request.mcp_route is not None:
+        return ToolKind.MCP
+    if any(request.tool_name in names for names in request.openapi_operation_tools.values()):
+        return ToolKind.OPENAPI
+    return ToolKind.BUILTIN
 
 
 def _payment_call_ref(request: MCPToolRequest) -> str:
@@ -372,9 +374,14 @@ def make_tools_activities(
         amount for the run's budget, and says the call was metered so the event is
         not read for a wallet payment's line again.
         """
+        with tool_call(tool_kind(request), ToolPath.WORKER) as metered:
+            return await _governed_call(request, metered)
+
+    async def _governed_call(request: MCPToolRequest, metered: ToolCall) -> MCPToolResult:
         try:
             connection = await _tool_connection(request)
         except ToolCostError as error:
+            metered.outcome = ToolOutcome.DENIED
             return await _audited_denial(
                 request, f"the tool's cost declaration is invalid: {error}"
             )
@@ -384,7 +391,7 @@ def make_tools_activities(
                 await _record_denial(request, decision.reason)
 
         async def invoke() -> ToolCallOutcome:
-            result = await _dispatch(request)
+            result = await _dispatch(request, metered)
             return ToolCallOutcome(
                 success=result.success,
                 value=result,
@@ -426,13 +433,16 @@ def make_tools_activities(
             call, invoke, audit=audit, ledger=ledger, spend_gate=spend_gate
         )
         if layered.verdict is Verdict.HELD:
+            metered.outcome = ToolOutcome.HELD
             return await _audited_denial(
                 request,
                 f"{layered.decision.reason}; approval must be resolved before activity execution",
             )
         if layered.verdict is Verdict.DENIED or layered.outcome is None:
+            metered.outcome = ToolOutcome.DENIED
             return _deny_tool_result(request.tool_name, layered.decision.reason)
         result: MCPToolResult = layered.outcome.value
+        metered.answered(result.success)
         result.cost = layered.cost
         result.cost_metered = layered.metered
         result.payer = connection.payer.value if connection else None
@@ -440,7 +450,7 @@ def make_tools_activities(
         result.attempt = _retry_attempt()
         return result
 
-    async def _dispatch(request: MCPToolRequest) -> MCPToolResult:
+    async def _dispatch(request: MCPToolRequest, metered: ToolCall) -> MCPToolResult:
         user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             mcp_server_instance_service = await ctx.get_mcp_server_instance_service()
@@ -893,6 +903,7 @@ def make_tools_activities(
             if route is not None:
                 denial = mcp_route_denial(request.tools, route)
                 if denial is not None:
+                    metered.outcome = ToolOutcome.DENIED
                     return _deny_tool_result(request.tool_name, denial)
                 instance = await mcp_server_instance_service.get(UUID(route.instance_id))
                 if instance is None:
@@ -972,7 +983,7 @@ def make_tools_activities(
                     )
                 except Exception as e:
                     logger.error("MCP tool execution failed: %s", e, exc_info=True)
-                    _mcp_dispatch_failed_total.labels(reason=type(e).__name__).inc()
+                    metered.failed(e)
                     return MCPToolResult(
                         success=False,
                         result=f"MCP tool error: {type(e).__name__}: {e}",
@@ -1070,7 +1081,7 @@ def make_tools_activities(
 
             except Exception as e:
                 logger.error("Tool execution failed: %s", e, exc_info=True)
-                _mcp_dispatch_failed_total.labels(reason=type(e).__name__).inc()
+                metered.failed(e)
                 return MCPToolResult(
                     success=False,
                     result=f"MCP tool error: {type(e).__name__}: {e}",

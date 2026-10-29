@@ -16,7 +16,7 @@ workspace-in-path move) and the script that hits it land in the same PR.
 
 ```bash
 # load prod credentials into this shell only
-set -a; . ~/.config/agentarea/ru.env; set +a
+set -a; . ~/.config/agentarea/perf.env; set +a
 
 cd perf/k6
 WORKSPACE=<slug> make smoke      # 1 VU, 1 iteration, every page once — correctness + single-request latency
@@ -32,13 +32,13 @@ Env vars, read from `__ENV`:
 | var | default | notes |
 |---|---|---|
 | `AGENTAREA_TOKEN` | none | required; the suite refuses to start without it |
-| `AGENTAREA_API_URL` | `https://api.agentarea.ru` | |
+| `AGENTAREA_API_URL` | none | required; the API base URL — no default, so a run never lands on a deployment by accident |
 | `WORKSPACE` | none | required; workspace slug the workspace-scoped routes hit — no default, so a stale/wrong slug fails loudly instead of quietly hitting the wrong workspace |
 
 `k6 run` forwards the whole process environment into `__ENV` on its own
 (`--include-system-env-vars`, on by default), so exporting `AGENTAREA_TOKEN`
 and `AGENTAREA_API_URL` is enough — running `k6 run scenarios/smoke.js`
-directly after sourcing `ru.env` works with no flags at all. **Don't** pass
+directly after sourcing `perf.env` works with no flags at all. **Don't** pass
 either through `-e`: that puts the value in the process's argv, which any
 local `ps`/`pgrep -fl` shows in plaintext to anyone with process-list access
 on the machine. `-e` is for `WORKSPACE` only, a non-secret but required knob
@@ -63,7 +63,7 @@ syntax/threshold check and never talks to a real API.)
 - **`stress` is opt-in and never for prod.** It ramps to 50 VUs and refuses to
   run at all unless `ALLOW_STRESS=1` is set. Only ever point it at a
   staging/local target.
-- **The token never touches disk, git, or argv.** Source `ru.env` into the
+- **The token never touches disk, git, or argv.** Source `perf.env` into the
   shell each time; nothing in this directory reads or writes that file, and
   nothing passes it through `-e` (see "Running it" above for why).
 
@@ -124,7 +124,7 @@ error instead of touching that workspace's data.
 |---|---|---|
 | smoke | `scenarios/journeys/smoke.js` | 1 VU, 1 iteration, every journey once (including one `task_run`) — CI-safe against a local stack, as long as that stack's `WORKSPACE` is literally `perf-k6` |
 | nightly | `scenarios/journeys/nightly.js` | two scenarios at once: `mixed` (ramping-vus, ≤5 VUs, ~7 min, weighted random pick — browse dominates, lifecycle journeys occasional) and `task_run` (`shared-iterations`, `TASK_RUN_LIMIT` runs total) |
-| stress | `scenarios/journeys/stress.js` | ramping-vus to 50 — gated on `ALLOW_STRESS=1` **and** refuses outright if `AGENTAREA_API_URL` is the real prod host, no override |
+| stress | `scenarios/journeys/stress.js` | ramping-vus to 50 — gated on `ALLOW_STRESS=1` **and** refuses outright if `AGENTAREA_API_URL` names a host in `PROD_HOSTS` (required, comma-separated), no override |
 
 ```bash
 set -a; . ~/.config/agentarea/perf.env; set +a   # AGENTAREA_TOKEN, AGENTAREA_API_URL, WORKSPACE=perf-k6
@@ -133,7 +133,7 @@ k6 run scenarios/journeys/smoke.js
 TASK_RUN_LIMIT=3 k6 run --tag testid=manual-$(date +%F) -e TESTID=manual-$(date +%F) scenarios/journeys/nightly.js
 ```
 
-Against any other workspace (e.g. `jamakase54`), the same commands run the
+Against any other workspace, the same commands run the
 browse + auth journeys read-only and skip every write journey and `task_run`
 with a log line, rather than failing the whole run.
 

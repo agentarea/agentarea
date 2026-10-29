@@ -518,3 +518,31 @@ the file AGENTAREA_HTTP_EXTRA_CA_CERTS names.
 {{- define "agentarea.extraCaCerts.path" -}}
 {{ include "agentarea.extraCaCerts.dir" . }}/ca-certificates.pem
 {{- end }}
+
+{{/*
+OpenTelemetry for a first-party process (ADR-0048): the AgentArea gate, the
+OTLP/HTTP endpoint, and the pod identity the collector matches resources by.
+Empty while telemetry.enabled is off.
+*/}}
+{{- define "agentarea.telemetry.envs" -}}
+{{- if .Values.telemetry.enabled }}
+- name: POD_NAME
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.name
+- name: POD_NAMESPACE
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.namespace
+- name: AGENTAREA_OTEL_ENABLED
+  value: "true"
+- name: OTEL_EXPORTER_OTLP_ENDPOINT
+  value: {{ required "telemetry.otlpEndpoint is required when telemetry.enabled is true" .Values.telemetry.otlpEndpoint | quote }}
+- name: OTEL_EXPORTER_OTLP_PROTOCOL
+  value: "http/protobuf"
+- name: OTEL_SEMCONV_STABILITY_OPT_IN
+  value: "http"
+- name: OTEL_RESOURCE_ATTRIBUTES
+  value: "k8s.pod.name=$(POD_NAME),k8s.namespace.name=$(POD_NAMESPACE)"
+{{- end }}
+{{- end }}

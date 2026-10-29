@@ -24,7 +24,7 @@ from .database import (
 from .duration import Duration, parse_duration
 from .http import HttpSettings
 from .mcp import MCPOAuthApp, MCPSettings
-from .observability import MetricsSettings, ObservabilitySettings
+from .observability import ObservabilitySettings
 from .openfga import OpenFGASettings
 from .sandbox import SandboxSettings
 from .secrets import SecretManagerSettings, get_secret_manager_settings
@@ -49,7 +49,6 @@ __all__ = [
     "KafkaSettings",
     "MCPOAuthApp",
     "MCPSettings",
-    "MetricsSettings",
     "ObservabilitySettings",
     "OpenFGASettings",
     "RedisSettings",

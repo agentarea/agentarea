@@ -2,7 +2,7 @@
 
 The list is tenant specs first, then read-only catalog projections. The catalog
 holds tens of thousands of items, so both halves are filtered and paged in SQL;
-the list used to project every catalog item per request (~2.6 s on RU prod).
+the list used to project every catalog item per request (~2.6 s in production).
 Filtering by id resolves tenant rows and catalog items in the same SQL, which
 is how a page that shows instances finds their specs.
 
