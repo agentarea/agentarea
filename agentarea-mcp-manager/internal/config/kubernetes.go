@@ -57,9 +57,6 @@ type KubernetesConfig struct {
 	// Operator-supplied customization applied to every spawned MCP instance pod.
 	InstancePod InstancePodConfig `json:"instance_pod"`
 
-	// Observability
-	Monitoring MonitoringConfig `json:"monitoring"`
-
 	// Timeouts
 	DeploymentTimeout time.Duration `json:"deployment_timeout"`
 	ReadinessTimeout  time.Duration `json:"readiness_timeout"`
@@ -154,29 +151,6 @@ type NetworkPolicyPort struct {
 	Port     int    `json:"port,omitempty"`
 }
 
-// MonitoringConfig defines monitoring and observability settings
-type MonitoringConfig struct {
-	Enabled           bool                 `json:"enabled"`
-	PrometheusEnabled bool                 `json:"prometheus_enabled"`
-	ServiceMonitor    ServiceMonitorConfig `json:"service_monitor"`
-	Metrics           MetricsConfig        `json:"metrics"`
-}
-
-// ServiceMonitorConfig defines Prometheus ServiceMonitor settings
-type ServiceMonitorConfig struct {
-	Enabled  bool              `json:"enabled"`
-	Labels   map[string]string `json:"labels,omitempty"`
-	Interval string            `json:"interval"`
-	Path     string            `json:"path"`
-	Port     string            `json:"port"`
-}
-
-// MetricsConfig defines metrics collection settings
-type MetricsConfig struct {
-	Path string `json:"path"`
-	Port int    `json:"port"`
-}
-
 // TLSConfig defines TLS and certificate management settings
 type TLSConfig struct {
 	Enabled     bool              `json:"enabled"`
@@ -235,21 +209,6 @@ func DefaultKubernetesConfig() KubernetesConfig {
 						{Protocol: "TCP", Port: 8000},
 					},
 				},
-			},
-		},
-
-		Monitoring: MonitoringConfig{
-			Enabled:           true,
-			PrometheusEnabled: true,
-			ServiceMonitor: ServiceMonitorConfig{
-				Enabled:  true,
-				Interval: "30s",
-				Path:     "/metrics",
-				Port:     "metrics",
-			},
-			Metrics: MetricsConfig{
-				Path: "/metrics",
-				Port: 9090,
 			},
 		},
 

@@ -483,16 +483,6 @@ func (k *KubernetesBackend) createService(ctx context.Context, instanceName stri
 		},
 	}
 
-	// Add metrics port if monitoring is enabled
-	if k.k8sConfig.Monitoring.Enabled {
-		service.Spec.Ports = append(service.Spec.Ports, corev1.ServicePort{
-			Name:       "metrics",
-			Port:       int32(k.k8sConfig.Monitoring.Metrics.Port),
-			TargetPort: intstr.FromInt(k.k8sConfig.Monitoring.Metrics.Port),
-			Protocol:   corev1.ProtocolTCP,
-		})
-	}
-
 	if err := k.client.Create(ctx, service); err != nil {
 		return fmt.Errorf("failed to create service: %w", err)
 	}

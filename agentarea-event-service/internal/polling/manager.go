@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -19,8 +20,8 @@ import (
 	"github.com/agentarea/event-service/internal/mcpevents"
 	"github.com/agentarea/event-service/internal/secrets"
 	"github.com/agentarea/event-service/internal/source"
+	"github.com/agentarea/event-service/internal/telemetry"
 	"github.com/agentarea/event-service/internal/template"
-	"github.com/agentarea/event-service/internal/tracing"
 	"github.com/agentarea/event-service/internal/transport"
 )
 
@@ -78,8 +79,13 @@ type Manager struct {
 	interval   time.Duration
 	maxPollers int
 
+	metrics pollMetrics
+
 	mu      sync.Mutex
 	pollers map[string]*runningPoller
+	// overCapacity counts the poll sources left without a poller because
+	// maxPollers was reached.
+	overCapacity int
 	// registered remembers how each source this replica registered was
 	// registered, so a deleted source can still be unregistered.
 	registered map[string]registration
@@ -115,7 +121,7 @@ type Deps struct {
 
 // NewManager builds a Manager.
 func NewManager(d Deps) *Manager {
-	return &Manager{
+	m := &Manager{
 		sources:    d.Sources,
 		secrets:    d.Secrets,
 		transports: d.Transports,
@@ -129,6 +135,8 @@ func NewManager(d Deps) *Manager {
 		pollers:    make(map[string]*runningPoller),
 		registered: make(map[string]registration),
 	}
+	m.metrics = newPollMetrics(m)
+	return m
 }
 
 // Run reconciles until ctx is cancelled.
@@ -442,6 +450,8 @@ type runningPoller struct {
 	cancel context.CancelFunc
 	src    source.Source
 	done   chan struct{}
+	// polling is set once the poller holds the source's claim.
+	polling atomic.Bool
 }
 
 // serves reports whether the poller still matches the source: a changed entry,
@@ -474,12 +484,14 @@ func (m *Manager) reconcilePollers(ctx context.Context, sources []source.Source)
 		p.cancel()
 		delete(m.pollers, id)
 	}
+	m.overCapacity = 0
 	for id, src := range desired {
 		if _, running := m.pollers[id]; running {
 			continue
 		}
 		if len(m.pollers) >= m.maxPollers {
 			slog.Warn("max pollers reached, skipping source", "source_id", id, "max", m.maxPollers)
+			m.overCapacity++
 			continue
 		}
 		m.startPoller(ctx, src, replaced[id])
@@ -526,6 +538,7 @@ func (m *Manager) startPoller(ctx context.Context, src source.Source, previous <
 			}
 		}()
 		go m.renew(pollerCtx, cancel, src.ID)
+		running.polling.Store(true)
 
 		slog.Info("starting poller", "source_id", src.ID, "slug", src.Slug, "transport", src.Entry.Poll.Transport)
 		m.runPoller(pollerCtx, src)
@@ -621,15 +634,18 @@ func (m *Manager) clearWebhook(ctx context.Context, src source.Source) {
 // pollOnce returns the cursor to poll from next and the wait the source asked
 // for (0: the entry's interval).
 func (m *Manager) pollOnce(ctx context.Context, src source.Source, tr transport.Transport, cursor string) (next string, wait time.Duration, err error) {
-	ctx, span := tracing.Tracer().Start(ctx, "poll "+src.Entry.Poll.Transport, trace.WithAttributes(
-		tracing.AttrSourceID.String(src.ID),
-		tracing.AttrSourceTransport.String(src.Entry.Poll.Transport),
+	name := src.Entry.Poll.Transport
+	ctx, span := telemetry.Tracer().Start(ctx, "poll "+name, trace.WithAttributes(
+		telemetry.AttrSourceID.String(src.ID),
+		telemetry.AttrSourceTransport.String(name),
 	))
+	began, step := time.Now(), stepCredentials
 	defer func() {
 		if err != nil {
-			tracing.RecordError(span, err)
+			telemetry.RecordError(span, err)
 		}
 		span.End()
+		m.metrics.poll(ctx, name, pollOutcome(step, err, ctx.Err() != nil), time.Since(began))
 	}()
 
 	values, err := m.values(ctx, src)
@@ -637,14 +653,16 @@ func (m *Manager) pollOnce(ctx context.Context, src source.Source, tr transport.
 		return cursor, 0, fmt.Errorf("credentials: %w", err)
 	}
 	values.Cursor = cursor
+	step = stepFetch
 	result, err := tr.Fetch(ctx, transport.Fetch{
 		SourceID: src.ID, Poll: *src.Entry.Poll, Values: values, MCPInstanceID: src.MCPInstanceID,
 	})
 	if err != nil {
 		return cursor, 0, err
 	}
-	span.SetAttributes(tracing.AttrItemsFetched.Int(len(result.Items)))
+	span.SetAttributes(telemetry.AttrItemsFetched.Int(len(result.Items)))
 
+	step = stepPublish
 	if result.Gap != "" {
 		if err := m.publisher.Gap(ctx, src.ID, result.Gap); err != nil {
 			return cursor, 0, err
@@ -654,10 +672,12 @@ func (m *Manager) pollOnce(ctx context.Context, src source.Source, tr transport.
 		if err := m.publisher.Item(ctx, src.ID, item); err != nil {
 			return cursor, 0, err
 		}
+		m.metrics.itemPublished(ctx, name)
 	}
 	if result.Cursor != "" {
 		cursor = result.Cursor
 	}
+	step = stepRecord
 	if err := m.sources.Polled(ctx, src.ID, result.Cursor); err != nil {
 		// The items are out; the next poll repeats them and ingest dedups.
 		return cursor, 0, err

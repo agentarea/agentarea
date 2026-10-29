@@ -174,6 +174,54 @@ a fixed attribute allowlist enforced by the SDK.
     fields.
   </Step>
 
+  <Step title="Enable MCP Manager and event service telemetry">
+    The two Go services read the same `AGENTAREA_OTEL_ENABLED` gate, and it turns
+    on traces and metrics together. In the chart, `telemetry.enabled` and
+    `telemetry.otlpEndpoint` wire them along with the API and the worker. Outside
+    the chart, set the variables on each service:
+
+    ```bash
+    AGENTAREA_OTEL_ENABLED=true
+    OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability:4318
+    ```
+
+    Their defaults differ from the API's and the worker's:
+
+    | Variable | Default | Meaning |
+    |---|---|---|
+    | `OTEL_EXPORTER_OTLP_ENDPOINT` | required | The service refuses to start while the gate is on and a signal exported over OTLP has neither this nor its own `OTEL_EXPORTER_OTLP_{TRACES,METRICS}_ENDPOINT`. |
+    | `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | The SDK default, port 4318. Set `grpc` for a collector on 4317. The event service defaulted to `grpc` before; see [Changed defaults](/self-host/env-migration#changed-defaults). |
+    | `OTEL_METRICS_EXPORTER` | `otlp` | `prometheus` or `none` hand metrics to the SDK's own exporter instead. |
+    | `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | Push interval in milliseconds. |
+
+    Both services export `agentarea.process.uptime`; a series that stops while
+    the pod runs means the exporter is failing, not that the service is idle.
+
+    MCP Manager:
+
+    - `agentarea.mcp.gateway.requests{mcp.method.name, status, cold}` and
+      `agentarea.mcp.gateway.request.duration` — requests through the gateway,
+      cold start included. `status` is the class (`2xx`, `4xx`, `5xx`), or
+      `503_starting`, `502_start_failed`, `503_start_failed`, `canceled`, or
+      `aborted` when the proxied stream broke mid-copy.
+    - `agentarea.mcp.gateway.in_flight` and `agentarea.mcp.gateway.oldest_in_flight`
+      — requests served now, and the age of the oldest. A `GET` is a standing
+      MCP stream, so it counts in flight but never ages the oldest.
+    - `agentarea.mcp.cold_starts{outcome, reason, plane}` and
+      `agentarea.mcp.cold_start.duration{phase, outcome, plane}`.
+    - `agentarea.mcp.upstream.responses{status}` and `agentarea.mcp.idle_reaps`.
+    - `agentarea.mcp.instances{state}` — instances by lifecycle state, counted
+      in the database. Every replica reports the same global count, so aggregate
+      it across replicas with `max`, never `sum`.
+    - `http.server.request.duration` for the HTTP API, plus the Go runtime
+      metrics.
+
+    Event service: `agentarea.event.polls{transport, outcome}`,
+    `agentarea.event.poll.duration{transport}`,
+    `agentarea.event.items_published{transport}`, `agentarea.event.pollers{state}`,
+    and the Go runtime metrics.
+  </Step>
+
   <Step title="Use the health endpoints">
     | Service | Path | Port |
     |---|---|---|
@@ -242,7 +290,7 @@ a fixed attribute allowlist enforced by the SDK.
   <Step title="What does not exist">
     State this plainly before building on it:
 
-    - **No metrics from the MCP Manager or the event service yet.** They read the same variables for traces.
+    - **No Prometheus endpoint by default.** Every service pushes OTLP; `OTEL_METRICS_EXPORTER=prometheus` serves `/metrics` for scraping instead.
     - **No bundled Grafana, Prometheus, Alertmanager, or Jaeger.** The chart deploys none of these and has no `monitoring.enabled` switch that does.
     - **No shipped dashboards or alert rules.**
 
@@ -310,7 +358,8 @@ curl -s http://localhost:8000/health | jq .
     failing: the endpoint comes from `OTEL_EXPORTER_OTLP_ENDPOINT` , which the
     SDK reads directly, and a mismatch between `OTEL_EXPORTER_OTLP_PROTOCOL` and
     your collector's port is the usual cause — 4317 for gRPC, 4318 for
-    `http/protobuf` .
+    `http/protobuf` . The API and the worker default to gRPC; the MCP Manager
+    and the event service default to `http/protobuf` .
   </Accordion>
   <Accordion title="Traces stop at the workflow boundary">
     The worker does not have `AGENTAREA_OTEL_ENABLED` set. Context propagation across

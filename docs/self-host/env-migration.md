@@ -72,6 +72,17 @@ configured. Delete them; there is no replacement.
 | `AGENTAREA_CHANNEL_OUT_STREAM`, `AGENTAREA_CHANNEL_OUT_GROUP`, `AGENTAREA_CHANNEL_OUT_DLQ` | The outbound stream is gone. Replies are sent by the `delivery` consumer group on `tasks.events`, whose names are fixed (`tasks.events`, `delivery`, `tasks.events.delivery.dlq`) like every other topic. |
 | `LITELLM_CALLBACKS`, `LITELLM_LOCAL_MODEL_COST_MAP` | The platform no longer uses the LiteLLM SDK; it calls models over its own OpenAI-compatible and Anthropic transports. |
 | `AGENTAREA_METRICS_ENABLED`, `AGENTAREA_METRICS_PORT` | The API no longer serves Prometheus metrics on a port of its own. Every process records OpenTelemetry metrics and pushes them over OTLP with its traces while `AGENTAREA_OTEL_ENABLED` is set; `OTEL_METRICS_EXPORTER=prometheus` serves them for scraping instead. In the chart, `global.monitoring.prometheus` and the backend's `metrics` port are gone: set `telemetry.enabled` and `telemetry.otlpEndpoint`. |
+| `AGENTAREA_K8S_MONITORING`, `AGENTAREA_K8S_PROMETHEUS`, `AGENTAREA_K8S_SERVICE_MONITOR` | They promised Prometheus metrics no MCP workload served; the first only added an unused `metrics` port to each instance Service. The mcp-manager pushes its own metrics over OTLP behind `AGENTAREA_OTEL_ENABLED`. |
+
+## Changed defaults
+
+Same name, different behaviour when the variable is unset. Set it explicitly to
+keep the old behaviour.
+
+| Variable | Service | Was | Is |
+|---|---|---|---|
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | event-service | `grpc` | `http/protobuf`, the OpenTelemetry SDK default (port 4318). An endpoint on the gRPC port 4317 with no protocol set now loses every span and metric without an error; set `grpc` to keep it. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | event-service | optional; the SDK fell back to `localhost` | required while `AGENTAREA_OTEL_ENABLED` is true, unless every OTLP signal has its own `OTEL_EXPORTER_OTLP_{TRACES,METRICS}_ENDPOINT`. The service refuses to start without one. The mcp-manager, which exports for the first time, applies the same rule. |
 
 ## Renamed
 
@@ -394,11 +405,11 @@ topic and broker key.
 | `KUBERNETES_INGRESS_CLASS` | `AGENTAREA_K8S_INGRESS_CLASS` |
 | `KUBERNETES_INSTANCE_POD` | `AGENTAREA_K8S_INSTANCE_POD` |
 | `KUBERNETES_KUBECONFIG` | `KUBECONFIG` |
-| `KUBERNETES_MONITORING_ENABLED` | `AGENTAREA_K8S_MONITORING` |
+| `KUBERNETES_MONITORING_ENABLED` | removed: see `AGENTAREA_K8S_MONITORING` under Removed |
 | `KUBERNETES_NAMESPACE` | `AGENTAREA_K8S_NAMESPACE` |
 | `KUBERNETES_NETWORK_POLICY_ENABLED` | `AGENTAREA_K8S_NETWORK_POLICY` |
 | `KUBERNETES_POD_SERVICE_ACCOUNT_NAME` | `AGENTAREA_K8S_SERVICE_ACCOUNT` |
-| `KUBERNETES_PROMETHEUS_ENABLED` | `AGENTAREA_K8S_PROMETHEUS` |
+| `KUBERNETES_PROMETHEUS_ENABLED` | removed: see `AGENTAREA_K8S_PROMETHEUS` under Removed |
 | `KUBERNETES_READINESS_TIMEOUT` | `AGENTAREA_K8S_READY_TIMEOUT` |
 | `KUBERNETES_READ_ONLY_ROOT_FS` | `AGENTAREA_K8S_READONLY_ROOT` |
 | `KUBERNETES_RUNTIME_CLASS` | `AGENTAREA_K8S_RUNTIME_CLASS` |
@@ -406,7 +417,7 @@ topic and broker key.
 | `KUBERNETES_RUN_AS_USER` | `AGENTAREA_K8S_RUN_AS_USER` |
 | `KUBERNETES_SECURITY_READ_ONLY_ROOT_FS` | `AGENTAREA_K8S_READONLY_ROOT` |
 | `KUBERNETES_SECURITY_RUN_AS_NON_ROOT` | `AGENTAREA_K8S_NON_ROOT` |
-| `KUBERNETES_SERVICE_MONITOR_ENABLED` | `AGENTAREA_K8S_SERVICE_MONITOR` |
+| `KUBERNETES_SERVICE_MONITOR_ENABLED` | removed: see `AGENTAREA_K8S_SERVICE_MONITOR` under Removed |
 | `KUBERNETES_STORAGE_CLASS` | `AGENTAREA_K8S_STORAGE_CLASS` |
 | `KUBERNETES_TLS_ENABLED` | `AGENTAREA_K8S_TLS` |
 | `KUBERNETES_TLS_SECRET_NAME` | `AGENTAREA_K8S_TLS_SECRET` |
