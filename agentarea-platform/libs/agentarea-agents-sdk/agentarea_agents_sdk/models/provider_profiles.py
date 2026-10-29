@@ -42,6 +42,15 @@ class Transport(StrEnum):
     """Anthropic's native Messages API, ``/messages``."""
 
 
+class ReasoningParam(StrEnum):
+    """How a request states the reasoning effort it wants."""
+
+    EFFORT = "reasoning_effort"
+    """Top-level ``reasoning_effort``: OpenAI and most compatible APIs."""
+    OBJECT = "reasoning"
+    """``reasoning: {"effort": ...}``: OpenRouter, and gateways in front of it."""
+
+
 class ModelListShape(StrEnum):
     """The payload shape a provider's model-list endpoint returns."""
 
@@ -77,6 +86,7 @@ class ProviderProfile:
         models_query: Query string for the model list. OpenRouter's lists only
             text models unless asked for every output modality, which is where
             its image, video and decision models are.
+        reasoning_param: How a request states its reasoning effort.
     """
 
     base_url: str | None = None
@@ -85,6 +95,7 @@ class ProviderProfile:
     models_path: str | None = None
     list_shape: ModelListShape = ModelListShape.DATA_ID
     models_query: str | None = None
+    reasoning_param: ReasoningParam = ReasoningParam.EFFORT
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any] | None) -> ProviderProfile:
@@ -97,6 +108,7 @@ class ProviderProfile:
             models_path=data.get("models_path") or None,
             list_shape=ModelListShape(data.get("list_shape") or ModelListShape.DATA_ID),
             models_query=data.get("models_query") or None,
+            reasoning_param=ReasoningParam(data.get("reasoning_param") or ReasoningParam.EFFORT),
         )
 
     def as_mapping(self) -> dict[str, Any]:
@@ -143,6 +155,14 @@ class ProviderProfile:
                 return None
             url = f"{root}/models"
         return f"{url}?{self.models_query}" if self.models_query else url
+
+    def reasoning_fields(self, effort: str | None) -> dict[str, object]:
+        """The request fields that ask for ``effort``, empty when none is set."""
+        if not effort:
+            return {}
+        if self.reasoning_param is ReasoningParam.OBJECT:
+            return {"reasoning": {"effort": effort}}
+        return {"reasoning_effort": effort}
 
     def build_headers(self, api_key: str | None) -> dict[str, str]:
         """Auth headers for this provider, empty when there is nothing to send."""

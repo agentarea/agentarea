@@ -86,6 +86,7 @@ PROVIDER_CONTRACT_FIELDS = (
     "models_path",
     "list_shape",
     "models_query",
+    "reasoning_param",
 )
 
 # Per-socket-operation timeout for fetching a catalog over HTTP. urllib applies

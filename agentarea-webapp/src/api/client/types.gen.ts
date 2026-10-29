@@ -293,6 +293,12 @@ export type AgentCreateRequest = {
    */
   planning?: boolean | null;
   /**
+   * Reasoning Effort
+   *
+   * How hard the model reasons before answering: minimal, low, medium or high; unset keeps the model's default.
+   */
+  reasoning_effort?: string | null;
+  /**
    * Skill Ids
    *
    * UUIDs of skills to attach to the agent.
@@ -444,6 +450,10 @@ export type AgentResponse = {
    */
   planning?: boolean | null;
   /**
+   * Reasoning Effort
+   */
+  reasoning_effort?: string | null;
+  /**
    * Registry Item Id
    */
   registry_item_id?: string | null;
@@ -557,6 +567,12 @@ export type AgentUpdate = {
    * Planning
    */
   planning?: boolean | null;
+  /**
+   * Reasoning Effort
+   *
+   * How hard the model reasons before answering: minimal, low, medium or high; unset keeps the model's default.
+   */
+  reasoning_effort?: string | null;
   /**
    * Skill Ids
    */

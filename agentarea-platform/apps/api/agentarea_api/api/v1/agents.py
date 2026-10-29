@@ -67,6 +67,7 @@ class AgentResponse(BaseModel):
     tools: list[ToolConfig] | None = None
     planning: bool | None = None
     a2ui_enabled: bool | None = None
+    reasoning_effort: str | None = None
     answer_check: AnswerCheckPolicy | None = None
     agent_type: str = "stateless"
     skills: list[dict] | None = None
@@ -121,6 +122,7 @@ class AgentResponse(BaseModel):
             tools=tools,
             planning=cast(bool | None, agent.planning),
             a2ui_enabled=cast(bool | None, agent.a2ui_enabled),
+            reasoning_effort=agent.reasoning_effort,
             answer_check=(
                 AnswerCheckPolicy.model_validate(agent.answer_check) if agent.answer_check else None
             ),

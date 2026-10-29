@@ -19,6 +19,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from agentarea_common.model_override import check_model_override
+from agentarea_common.reasoning_effort import check_reasoning_effort
 from agentarea_common.reserved_task_parameters import (
     drop_reserved_parameters,
     reject_reserved_parameters,
@@ -87,6 +88,7 @@ class TriggerSpec(BaseModel):
     )
     _reject_reserved_parameters = field_validator("task_parameters")(reject_reserved_parameters)
     _check_model_override = field_validator("task_parameters")(check_model_override)
+    _check_reasoning_effort = field_validator("task_parameters")(check_reasoning_effort)
     enabled: bool = Field(
         default=True,
         description="Whether the trigger is active immediately on creation.",

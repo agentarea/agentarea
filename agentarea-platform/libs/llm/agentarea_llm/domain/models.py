@@ -96,6 +96,9 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
         String(16), nullable=False, default="data_id", server_default="data_id"
     )
     models_query: Mapped[str | None] = mapped_column(String, nullable=True)
+    reasoning_param: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="reasoning_effort", server_default="reasoning_effort"
+    )
 
     def profile(self) -> ProviderProfile:
         return ProviderProfile.from_mapping(
@@ -106,6 +109,7 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
                 "models_path": self.models_path,
                 "list_shape": self.list_shape,
                 "models_query": self.models_query,
+                "reasoning_param": self.reasoning_param,
             }
         )
 

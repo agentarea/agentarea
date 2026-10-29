@@ -452,6 +452,7 @@ class AgentService(BaseCrudService[Agent]):
             tools=tools,
             planning=payload.planning,
             a2ui_enabled=payload.a2ui_enabled,
+            reasoning_effort=payload.reasoning_effort,
             answer_check=(
                 payload.answer_check.model_dump(exclude_none=True) if payload.answer_check else None
             ),
@@ -476,6 +477,7 @@ class AgentService(BaseCrudService[Agent]):
                 tools=agent.tools,
                 planning=agent.planning,
                 a2ui_enabled=agent.a2ui_enabled,
+                reasoning_effort=agent.reasoning_effort,
             )
         )
 
@@ -626,6 +628,8 @@ class AgentService(BaseCrudService[Agent]):
             agent.planning = patch["planning"]
         if "a2ui_enabled" in patch:
             agent.a2ui_enabled = patch["a2ui_enabled"]
+        if "reasoning_effort" in patch:
+            agent.reasoning_effort = patch["reasoning_effort"]
         if "answer_check" in patch:
             agent.answer_check = (
                 payload.answer_check.model_dump(exclude_none=True) if payload.answer_check else None
@@ -651,6 +655,7 @@ class AgentService(BaseCrudService[Agent]):
                 tools=agent.tools,
                 planning=agent.planning,
                 a2ui_enabled=agent.a2ui_enabled,
+                reasoning_effort=agent.reasoning_effort,
             )
         )
 

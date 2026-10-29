@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Annotated, Literal
 from uuid import UUID
 
+from agentarea_common.reasoning_effort import REASONING_EFFORTS, checked_reasoning_effort
 from agentarea_common.utils.types import NotNull
 from agentarea_governance.domain.policies import AnswerCheckPolicy
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -19,6 +20,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from agentarea_agents.schemas.import_export import ToolConfig
 
 AgentTypeLiteral = Literal["stateless", "stateful"]
+
+REASONING_EFFORT_DESCRIPTION = (
+    "How hard the model reasons before answering: "
+    f"{', '.join(REASONING_EFFORTS[:-1])} or {REASONING_EFFORTS[-1]}; "
+    "unset keeps the model's default."
+)
 
 
 class AgentCreate(BaseModel):
@@ -69,6 +76,10 @@ class AgentCreate(BaseModel):
         default=None,
         description="Expose this agent over the A2UI protocol.",
     )
+    reasoning_effort: str | None = Field(
+        default=None,
+        description=REASONING_EFFORT_DESCRIPTION,
+    )
     answer_check: AnswerCheckPolicy | None = Field(
         default=None,
         description=(
@@ -101,6 +112,11 @@ class AgentCreate(BaseModel):
             raise ValueError("name cannot be empty or whitespace")
         return v
 
+    @field_validator("reasoning_effort", mode="before")
+    @classmethod
+    def _check_reasoning_effort(cls, v: object) -> str | None:
+        return checked_reasoning_effort(v)
+
 
 class AgentUpdate(BaseModel):
     """Patch payload for an agent. All fields optional — unset = unchanged."""
@@ -115,9 +131,15 @@ class AgentUpdate(BaseModel):
     tools: list[ToolConfig] | None = None
     planning: bool | None = None
     a2ui_enabled: bool | None = None
+    reasoning_effort: str | None = Field(default=None, description=REASONING_EFFORT_DESCRIPTION)
     answer_check: AnswerCheckPolicy | None = None
     skill_ids: list[UUID] | None = None
     agent_type: Annotated[AgentTypeLiteral | None, NotNull] = None
+
+    @field_validator("reasoning_effort", mode="before")
+    @classmethod
+    def _check_reasoning_effort(cls, v: object) -> str | None:
+        return checked_reasoning_effort(v)
 
 
 class AgentSummary(BaseModel):

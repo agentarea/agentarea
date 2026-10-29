@@ -219,6 +219,7 @@ class LLMExecutionService:
                     model_cap=max_output_tokens,
                     effective_policy=request.effective_policy,
                 ),
+                reasoning_effort=request.reasoning_effort,
             )
 
             # Every call is funded before its credential is read: on the platform's
@@ -300,6 +301,7 @@ class LLMExecutionService:
         complete_tool_calls = None
         final_usage = None
         final_cost = 0.0
+        finish_reason: str | None = None
         chunk_index = 0
 
         interrupted = False
@@ -333,6 +335,8 @@ class LLMExecutionService:
                                 complete_tool_calls = response.tool_calls
                             if response.usage is not None:
                                 final_usage = response.usage
+                            if response.finish_reason:
+                                finish_reason = response.finish_reason
                             if response.cost and response.cost > 0:
                                 final_cost = max(final_cost, response.cost)
                 except asyncio.CancelledError:
@@ -351,6 +355,7 @@ class LLMExecutionService:
                 if response.tool_calls:
                     complete_tool_calls = response.tool_calls
                 final_usage = response.usage
+                finish_reason = response.finish_reason
                 if response.cost and response.cost > 0:
                     final_cost = response.cost
 
@@ -387,4 +392,5 @@ class LLMExecutionService:
             managed_by=managed_by,
             usage=usage,
             interrupted=interrupted,
+            finish_reason=finish_reason,
         )

@@ -222,6 +222,7 @@ async def test_trailing_metadata_and_cumulative_tools_produce_one_final_result(
             },
         },
         "interrupted": False,
+        "finish_reason": None,
     }
     assert result.cost == to_money("0.02")
     assert without_sink == result
@@ -498,6 +499,7 @@ async def test_cancellation_closes_iterator_and_next_call_has_no_partial_state(
                 },
             },
             "interrupted": False,
+            "finish_reason": None,
         }
         assert result.cost == to_money("0.02")
     finally:

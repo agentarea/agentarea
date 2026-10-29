@@ -143,3 +143,6 @@ CHILD_STOP_IS_NOT_PARENT_STOP_PATCH = "child-stop-is-not-parent-stop-v1"
 # Activating a skill reads its SKILL.md in an activity; before, the body rode in
 # the config activity's result and activation used that copy.
 SKILL_BODY_ON_ACTIVATION_PATCH = "skill-body-on-activation-v1"
+# A text reply cut off at the output limit (finish_reason "length") asks the model
+# to continue and joins the parts; before, the cut-off reply was the run's answer.
+LENGTH_CONTINUATION_PATCH = "length-continuation-v1"

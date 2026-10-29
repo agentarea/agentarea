@@ -2,6 +2,7 @@
 
 from typing import Annotated, Any, Literal
 
+from agentarea_common.reasoning_effort import checked_reasoning_effort
 from pydantic import BaseModel, Field, TypeAdapter, field_validator, model_validator
 
 
@@ -195,6 +196,7 @@ class AgentYAML(BaseModel):
     tools: list[ToolConfig] | None = None
     planning: bool | None = False
     a2ui_enabled: bool | None = False
+    reasoning_effort: str | None = None
     agent_type: str = Field(
         default="stateless",
         description="Agent type: 'stateful' (maintains conversation context) or 'stateless' (each request independent).",
@@ -211,6 +213,11 @@ class AgentYAML(BaseModel):
         if not v or not v.strip():
             raise ValueError("Agent name cannot be empty or whitespace")
         return v.strip()
+
+    @field_validator("reasoning_effort", mode="before")
+    @classmethod
+    def validate_reasoning_effort(cls, v: object) -> str | None:
+        return checked_reasoning_effort(v)
 
 
 class MCPInstanceYAML(BaseModel):

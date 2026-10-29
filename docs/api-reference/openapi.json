@@ -440,6 +440,18 @@
             "description": "Enable explicit planning step before execution.",
             "title": "Planning"
           },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How hard the model reasons before answering: minimal, low, medium or high; unset keeps the model's default.",
+            "title": "Reasoning Effort"
+          },
           "skill_ids": {
             "anyOf": [
               {
@@ -759,6 +771,17 @@
             ],
             "title": "Planning"
           },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Effort"
+          },
           "registry_item_id": {
             "anyOf": [
               {
@@ -1023,6 +1046,18 @@
               }
             ],
             "title": "Planning"
+          },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How hard the model reasons before answering: minimal, low, medium or high; unset keeps the model's default.",
+            "title": "Reasoning Effort"
           },
           "skill_ids": {
             "anyOf": [
