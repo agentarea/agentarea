@@ -108,6 +108,19 @@ async def test_a_later_task_started_reopens_a_closed_history():
     assert [e.seq for e in out] == [1, 2, 3, 4, 5]
 
 
+async def test_after_a_position_the_feed_tails_the_next_turn_past_a_finished_one():
+    # A message was just handed to a task whose last turn finished: its run has
+    # not reported yet, and the turn before must neither replay nor close the feed.
+    hub = _FakeHub([_env(2, "task.completed"), _env(3), _env(4, "task.completed")])
+    out = await _feed(
+        hub,
+        _snapshot(_env(1), _env(2, "task.completed")),
+        after_seq=2,
+        run_open=_returns(False),
+    )
+    assert [e.seq for e in out] == [3, 4]
+
+
 async def test_a_conversation_waiting_for_a_follow_up_stays_open():
     hub = _FakeHub([_env(3, "message.received"), _env(4, "task.completed")])
     out = await _feed(

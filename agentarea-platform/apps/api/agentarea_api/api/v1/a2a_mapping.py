@@ -25,10 +25,22 @@ from a2a.types import (
 from a2a.utils.proto_utils import make_dict_serializable
 from agentarea_api.api.v1.a2a_auth import A2AAuthContext
 from agentarea_common.events.contract import (
+    APPROVAL_REQUESTED,
+    CONTEXT_COMPACTED,
+    DELEGATION_COMPLETED,
+    DELEGATION_FAILED,
+    DELEGATION_STARTED,
+    INPUT_REQUEST,
     LLM_CHUNK,
+    TASK_AWAITING_CONTINUATION,
+    TASK_AWAITING_INFRASTRUCTURE,
     TASK_CANCELLED,
     TASK_COMPLETED,
     TASK_FAILED,
+    TOOL_CALL,
+    TOOL_PROGRESS,
+    TOOL_RESULT,
+    TURN_STARTED,
     canonical_type,
 )
 from agentarea_tasks.domain.models import AgentTask
@@ -234,21 +246,88 @@ def build_agent_task(
     )
 
 
+def _payload(event_data: dict[str, Any]) -> dict[str, Any]:
+    """The workflow payload, nested under ``original_data`` on the live channel."""
+    payload = event_data.get("original_data")
+    return payload if isinstance(payload, dict) else event_data
+
+
 def event_text(event_data: dict[str, Any]) -> str:
     """Text carried by a streamed workflow event.
 
-    The workflow payload is nested under ``original_data`` (see
-    ``publish_workflow_events_activity``); final answers live in
-    ``result``/``final_response``, incremental output in ``chunk``.
+    Final answers live in ``result``/``final_response``; an ``llm.call.chunk``
+    carries the call's whole reply so far in ``chunk``.
     """
-    payload = event_data.get("original_data")
-    if not isinstance(payload, dict):
-        payload = event_data
+    payload = _payload(event_data)
     for key in ("chunk", "content", "text", "result", "final_response", "delta"):
         value = payload.get(key)
         if isinstance(value, str) and value:
             return value
     return ""
+
+
+def _name(payload: dict[str, Any], key: str, fallback: str) -> str:
+    value = payload.get(key)
+    return value if isinstance(value, str) and value else fallback
+
+
+def _step(canonical: str, payload: dict[str, Any]) -> str | None:
+    """What the agent is doing, in a line a person can read, for a working status.
+
+    Names only: a tool's arguments and results stay out, since the caller may be
+    another party's agent.
+    """
+    tool = _name(payload, "tool_name", "a tool")
+    if canonical == TURN_STARTED:
+        iteration = payload.get("iteration")
+        return f"Step {iteration}" if isinstance(iteration, int) else "Thinking"
+    if canonical == TOOL_CALL:
+        return f"Calling {tool}"
+    if canonical == TOOL_RESULT:
+        failed = payload.get("error") or payload.get("success") is False
+        return f"{tool} failed" if failed else f"{tool} finished"
+    if canonical == TOOL_PROGRESS:
+        message = payload.get("message")
+        return f"{tool}: {message}" if isinstance(message, str) and message else None
+    if canonical == DELEGATION_STARTED:
+        return f"Asking {_name(payload, 'target_agent_name', 'another agent')}"
+    if canonical == DELEGATION_COMPLETED:
+        return f"{_name(payload, 'target_agent_name', 'The other agent')} answered"
+    if canonical == DELEGATION_FAILED:
+        return f"{_name(payload, 'target_agent_name', 'The other agent')} could not answer"
+    if canonical == CONTEXT_COMPACTED:
+        return "Summarising the earlier conversation"
+    if canonical == TASK_AWAITING_INFRASTRUCTURE:
+        return "Waiting for a service to come back"
+    return None
+
+
+def _interruption(canonical: str, payload: dict[str, Any]) -> str | None:
+    """Why the run stopped to wait on its caller, or None when it did not."""
+    if canonical == INPUT_REQUEST:
+        return _name(payload, "question", "The agent needs more information")
+    if canonical == APPROVAL_REQUESTED:
+        return f"Waiting for approval to run {_name(payload, 'tool_name', 'a tool')}"
+    if canonical == TASK_AWAITING_CONTINUATION:
+        return _name(payload, "message", "The run reached a limit and waits for a decision")
+    return None
+
+
+def _status_update(
+    state: TaskState,
+    *,
+    task_id: str,
+    context_id: str,
+    text: str | None = None,
+    event: str | None = None,
+) -> TaskStatusUpdateEvent:
+    status = TaskStatus(state=state, timestamp=_timestamp(None))
+    if text:
+        status.message.CopyFrom(_agent_message(uuid4().hex, text))
+    update = TaskStatusUpdateEvent(task_id=task_id, context_id=context_id, status=status)
+    if event:
+        update.metadata.CopyFrom(_struct({"agentarea_event": event}))
+    return update
 
 
 def workflow_event_to_a2a(
@@ -257,10 +336,15 @@ def workflow_event_to_a2a(
     """Map one task event to A2A stream events; the bool says the stream is over.
 
     A terminal event yields the full answer as a last-chunk artifact (on
-    success) and then the terminal status. LLM chunks append to the response
-    artifact. Anything else reports the task as working.
+    success) and then the terminal status. A run that stops to wait on its
+    caller (a question, an approval, a limit) reports input-required and ends
+    the stream too. LLM chunks replace the response artifact: each carries the
+    call's reply so far. A step the agent takes is a working status whose
+    message says what it does, with the event type in ``metadata``; anything
+    else is a bare working status.
     """
     canonical = canonical_type(event_type)
+    payload = _payload(event_data)
     state = _TERMINAL_EVENT_STATES.get(canonical)
     if state is not None:
         events: list[Event] = []
@@ -279,14 +363,20 @@ def workflow_event_to_a2a(
                     last_chunk=True,
                 )
             )
-        events.append(
-            TaskStatusUpdateEvent(
+        events.append(_status_update(state, task_id=task_id, context_id=context_id))
+        return events, True
+
+    reason = _interruption(canonical, payload)
+    if reason is not None:
+        return [
+            _status_update(
+                TaskState.TASK_STATE_INPUT_REQUIRED,
                 task_id=task_id,
                 context_id=context_id,
-                status=TaskStatus(state=state, timestamp=_timestamp(None)),
+                text=reason,
+                event=canonical,
             )
-        )
-        return events, True
+        ], True
 
     if canonical == LLM_CHUNK:
         text = event_text(event_data)
@@ -299,15 +389,18 @@ def workflow_event_to_a2a(
                 artifact=Artifact(
                     artifact_id=task_id, name=RESPONSE_ARTIFACT_NAME, parts=[Part(text=text)]
                 ),
-                append=True,
+                append=False,
                 last_chunk=False,
             )
         ], False
 
+    step = _step(canonical, payload)
     return [
-        TaskStatusUpdateEvent(
+        _status_update(
+            TaskState.TASK_STATE_WORKING,
             task_id=task_id,
             context_id=context_id,
-            status=TaskStatus(state=TaskState.TASK_STATE_WORKING, timestamp=_timestamp(None)),
+            text=step,
+            event=canonical if step else None,
         )
     ], False

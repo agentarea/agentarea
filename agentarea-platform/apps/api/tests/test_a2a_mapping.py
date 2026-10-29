@@ -6,7 +6,16 @@ from uuid import uuid4
 import pytest
 from a2a.types import Role, TaskArtifactUpdateEvent, TaskState, TaskStatusUpdateEvent
 from agentarea_api.api.v1.a2a_mapping import task_state, to_a2a_task, workflow_event_to_a2a
-from agentarea_common.events.contract import LLM_CHUNK, TASK_COMPLETED, TASK_FAILED
+from agentarea_common.events.contract import (
+    INPUT_REQUEST,
+    LLM_CHUNK,
+    LLM_COMPLETED,
+    TASK_AWAITING_CONTINUATION,
+    TASK_COMPLETED,
+    TASK_FAILED,
+    TOOL_RESULT,
+    TURN_STARTED,
+)
 from agentarea_tasks.domain.models import AgentTask
 
 
@@ -84,11 +93,64 @@ def test_empty_chunk_emits_nothing():
     )
 
 
-def test_chunk_appends_to_the_response_artifact():
+def test_chunk_replaces_the_response_artifact_with_the_reply_so_far():
+    # Each chunk carries the call's whole reply so far, not a delta.
     [event], terminal = workflow_event_to_a2a(
         LLM_CHUNK, {"chunk": "hel"}, task_id="t", context_id="c"
     )
 
     assert not terminal
     assert isinstance(event, TaskArtifactUpdateEvent)
-    assert (event.append, event.last_chunk, event.artifact.artifact_id) == (True, False, "t")
+    assert (event.append, event.last_chunk, event.artifact.artifact_id) == (False, False, "t")
+
+
+def _working(event_type, data):
+    [event], terminal = workflow_event_to_a2a(event_type, data, task_id="t", context_id="c")
+    assert not terminal
+    assert isinstance(event, TaskStatusUpdateEvent)
+    assert event.status.state == TaskState.TASK_STATE_WORKING
+    return event
+
+
+def test_a_step_says_what_the_agent_does_and_names_its_event():
+    event = _working(TURN_STARTED, {"iteration": 2})
+
+    assert event.status.message.role == Role.ROLE_AGENT
+    assert event.status.message.parts[0].text == "Step 2"
+    assert event.metadata["agentarea_event"] == TURN_STARTED
+
+
+def test_a_live_tool_result_reads_its_nested_payload_and_shows_no_output():
+    event = _working(
+        TOOL_RESULT,
+        {"original_data": {"tool_name": "search", "success": False, "result": "token=abc"}},
+    )
+
+    assert event.status.message.parts[0].text == "search failed"
+    assert "token=abc" not in str(event)
+
+
+def test_an_event_that_is_no_step_is_a_bare_working_status():
+    event = _working(LLM_COMPLETED, {"content": "the reply"})
+
+    assert not event.status.HasField("message")
+    assert "agentarea_event" not in event.metadata
+
+
+@pytest.mark.parametrize(
+    ("event_type", "data", "text"),
+    [
+        (INPUT_REQUEST, {"question": "Which contract?"}, "Which contract?"),
+        (
+            TASK_AWAITING_CONTINUATION,
+            {"message": "Iteration limit reached"},
+            "Iteration limit reached",
+        ),
+    ],
+)
+def test_a_run_waiting_on_its_caller_ends_the_stream_as_input_required(event_type, data, text):
+    [event], terminal = workflow_event_to_a2a(event_type, data, task_id="t", context_id="c")
+
+    assert terminal
+    assert event.status.state == TaskState.TASK_STATE_INPUT_REQUIRED
+    assert event.status.message.parts[0].text == text

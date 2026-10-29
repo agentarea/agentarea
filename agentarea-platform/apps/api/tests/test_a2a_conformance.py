@@ -36,6 +36,7 @@ from a2a.types import (
 )
 from a2a.utils.errors import (
     InternalError,
+    InvalidRequestError,
     TaskNotCancelableError,
     TaskNotFoundError,
     UnsupportedOperationError,
@@ -53,7 +54,13 @@ from agentarea_common.auth.dependencies import get_optional_principal
 from agentarea_common.auth.permission import PermissionService
 from agentarea_common.config import get_settings
 from agentarea_common.di.container import get_container
-from agentarea_common.events.contract import LLM_CHUNK, TASK_COMPLETED, TASK_STARTED
+from agentarea_common.events.contract import (
+    APPROVAL_REQUESTED,
+    LLM_CHUNK,
+    TASK_COMPLETED,
+    TASK_STARTED,
+    TOOL_CALL,
+)
 from agentarea_common.events.task_stream import TaskEventEnvelope
 from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
 from agentarea_tasks.domain.models import AgentTask
@@ -101,6 +108,9 @@ class FakeTaskService:
     def __init__(self) -> None:
         self.tasks: dict[UUID, AgentTask] = {}
         self.task_repository = FakeTaskRepository(self.tasks)
+        self.follow_ups: list[tuple[UUID, str]] = []
+        self.takes_follow_ups = True
+        self.log_ends: dict[UUID, int] = {}
 
     async def submit_task(self, task: AgentTask) -> AgentTask:
         self.tasks[task.id] = task
@@ -122,6 +132,23 @@ class FakeTaskService:
 
     async def count_agent_tasks(self, agent_id: UUID) -> int:
         return sum(1 for t in self.tasks.values() if t.agent_id == agent_id)
+
+    async def latest_in_a2a_context(self, agent_id: UUID, context_id: str) -> AgentTask | None:
+        in_context = [
+            t
+            for t in self.tasks.values()
+            if t.agent_id == agent_id and (t.metadata or {}).get("a2a_context_id") == context_id
+        ]
+        return in_context[-1] if in_context else None
+
+    async def log_end(self, task_id: UUID) -> int:
+        return self.log_ends.get(task_id, -1)
+
+    async def queue_follow_up(self, task_id: UUID, message: str) -> bool:
+        if not self.takes_follow_ups:
+            return False
+        self.follow_ups.append((task_id, message))
+        return True
 
 
 class FakeSecretManager:
@@ -499,7 +526,7 @@ async def test_streaming_send_follows_the_task_to_completion(streaming_client, s
     task_id = responses[0].task.id
     assert responses[1].status_update.status.state == TaskState.TASK_STATE_WORKING
     chunk, final = responses[2].artifact_update, responses[3].artifact_update
-    assert (chunk.append, chunk.artifact.parts[0].text) == (True, "The answer ")
+    assert (chunk.append, chunk.artifact.parts[0].text) == (False, "The answer ")
     assert (final.last_chunk, final.artifact.parts[0].text) == (True, "The answer is 42.")
     assert responses[4].status_update.task_id == task_id
     assert responses[4].status_update.status.state == TaskState.TASK_STATE_COMPLETED
@@ -518,6 +545,117 @@ async def test_subscribe_starts_with_the_task_and_refuses_terminal_ones(streamin
     services.tasks.tasks[UUID(task)].status = "completed"
     with pytest.raises(UnsupportedOperationError):
         [r async for r in streaming_client.subscribe(SubscribeToTaskRequest(id=task))]
+
+
+@pytest.mark.asyncio
+async def test_subscribe_follows_what_comes_after_the_task_as_it_stands(streaming_client, services):
+    task = _stored_task(services)
+    services.tasks.log_ends[task.id] = 41
+    services.feed.extend(_events((TASK_COMPLETED, {"result": "done"})))
+
+    [r async for r in streaming_client.subscribe(SubscribeToTaskRequest(id=str(task.id)))]
+
+    assert services.feed_calls[0]["after_seq"] == 41
+
+
+@pytest.mark.asyncio
+async def test_a_message_naming_a_task_carries_its_conversation_on(client, services):
+    task = _stored_task(services, status="completed")
+
+    got = await _send_one(client, _send("And the penalties?", task_id=str(task.id)))
+
+    assert got.id == str(task.id)
+    assert got.status.state == TaskState.TASK_STATE_WORKING
+    assert services.tasks.follow_ups == [(task.id, "And the penalties?")]
+    assert list(services.tasks.tasks) == [task.id]
+
+
+@pytest.mark.asyncio
+async def test_a_message_to_a_task_that_takes_none_is_refused(client, services):
+    task = _stored_task(services, status="completed")
+    services.tasks.takes_follow_ups = False
+
+    with pytest.raises(InvalidRequestError):
+        await _send_one(client, _send("more", task_id=str(task.id)))
+    assert list(services.tasks.tasks) == [task.id]
+
+
+@pytest.mark.asyncio
+async def test_a_message_in_a_known_context_carries_its_newest_task_on(client, services):
+    first = await _send_one(client, _send("Read the contract", context_id="ctx-chat"))
+    services.tasks.tasks[UUID(first.id)].status = "completed"
+
+    second = await _send_one(client, _send("Now list the deadlines", context_id="ctx-chat"))
+
+    assert second.id == first.id
+    assert services.tasks.follow_ups == [(UUID(first.id), "Now list the deadlines")]
+
+
+@pytest.mark.asyncio
+async def test_a_context_whose_task_takes_no_message_starts_a_new_task(client, services):
+    first = await _send_one(client, _send("Read the contract", context_id="ctx-chat"))
+    services.tasks.takes_follow_ups = False
+
+    second = await _send_one(client, _send("Again", context_id="ctx-chat"))
+
+    assert second.id != first.id
+    assert second.context_id == "ctx-chat"
+
+
+@pytest.mark.asyncio
+async def test_a_context_holding_a_task_the_caller_cannot_reach_starts_a_new_task(app, services):
+    theirs = _stored_task(services, status="completed")
+    theirs.metadata = {"a2a_context_id": "ctx-shared"}
+
+    async with await _agent_key_client(app) as sdk_client:
+        mine = await _send_one(sdk_client, _send("hi", context_id="ctx-shared"))
+
+    assert mine.id != str(theirs.id)
+    assert services.tasks.follow_ups == []
+
+
+@pytest.mark.asyncio
+async def test_a_streamed_follow_up_follows_only_the_turn_that_answers_it(
+    streaming_client, services
+):
+    task = _stored_task(services, status="completed")
+    services.tasks.log_ends[task.id] = 17
+    services.feed.extend(
+        _events(
+            (TOOL_CALL, {"tool_name": "read_contract", "arguments": {"path": "secret.pdf"}}),
+            (TASK_COMPLETED, {"result": "Twelve deadlines."}),
+        )
+    )
+
+    responses = [
+        r async for r in streaming_client.send_message(_send("Deadlines?", task_id=str(task.id)))
+    ]
+
+    assert services.feed_calls[0]["after_seq"] == 17
+    step = responses[1].status_update
+    assert step.status.state == TaskState.TASK_STATE_WORKING
+    assert step.status.message.parts[0].text == "Calling read_contract"
+    assert "secret.pdf" not in str(step)
+    assert responses[-1].status_update.status.state == TaskState.TASK_STATE_COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_a_run_waiting_for_approval_ends_the_stream_as_input_required(
+    streaming_client, services
+):
+    services.feed.extend(
+        _events(
+            (APPROVAL_REQUESTED, {"tool_name": "send_email"}),
+            (TASK_COMPLETED, {"result": "never reached"}),
+        )
+    )
+
+    responses = [r async for r in streaming_client.send_message(_send("email them"))]
+
+    last = responses[-1].status_update
+    assert last.status.state == TaskState.TASK_STATE_INPUT_REQUIRED
+    assert last.status.message.parts[0].text == "Waiting for approval to run send_email"
+    assert all(r.WhichOneof("payload") != "artifact_update" for r in responses)
 
 
 @pytest.mark.asyncio
@@ -556,7 +694,9 @@ async def test_list_tasks_refuses_a_page_token_we_never_issued(app, services, cu
 
 @pytest.mark.asyncio
 async def test_an_unexpected_failure_does_not_reach_the_caller(app, services):
-    leak = 'value out of int64 range [SQL: SELECT * FROM tasks OFFSET $1] [parameters: ("ws-acme",)]'
+    leak = (
+        'value out of int64 range [SQL: SELECT * FROM tasks OFFSET $1] [parameters: ("ws-acme",)]'
+    )
     services.tasks.get_agent_tasks = AsyncMock(side_effect=RuntimeError(leak))
 
     reply = await _rpc(app, "ListTasks", {})

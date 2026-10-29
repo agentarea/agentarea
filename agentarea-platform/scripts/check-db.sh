@@ -134,6 +134,8 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     the subscriptions that reacted. Its facet counts come from a rollup the
 #     recording transaction keeps and a partition drop cuts, backfilled by the
 #     migration, and equal a full count of the rows.
+#   A2A context: a contextId finds its agent's newest task by a JSON path on
+#     task metadata, which only the real column type answers.
 #   OpenAPI dispatch: a connection's last call is stamped by a bare UPDATE that
 #     stays in the caller's workspace and leaves updated_at alone.
 #   MCP dispatch stamps: the stamp writer runs with no workspace bound under the
@@ -188,6 +190,7 @@ PY_SUITES=(
   libs/tasks/tests/test_cost_settlement_db.py
   libs/tasks/tests/test_inbox_counts_db.py
   libs/tasks/tests/test_undispatched_tasks_db.py
+libs/tasks/tests/test_a2a_context_db.py
   libs/execution/tests/unit/test_publish_workflow_events_db.py
   libs/execution/tests/unit/test_record_activity_db.py
   apps/api/tests/test_task_event_feed_db.py
