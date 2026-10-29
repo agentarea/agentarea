@@ -107,7 +107,7 @@ class ProviderProfile:
         if self.models_path:
             url = f"{base}{self.models_path}"
         else:
-            url = f"{base}/models" if base.endswith("/v1") else f"{base}/v1/models"
+            url = f"{base}/models" if base.endswith("/v1") else f"{base}{self.api_prefix}/models"
         return f"{url}?{self.models_query}" if self.models_query else url
 
     def resolve_api_url(self, endpoint_url: str | None, path: str) -> str | None:
@@ -157,6 +157,37 @@ PROVIDER_PROFILES: dict[str, ProviderProfile] = {
     "zai": ProviderProfile(
         base_url="https://api.z.ai/api/paas/v4", models_path="/models", api_prefix=""
     ),
+    "ai21": ProviderProfile(base_url="https://api.ai21.com/studio/v1", aliases=("ai21_chat",)),
+    "baseten": ProviderProfile(base_url="https://inference.baseten.co/v1"),
+    "codestral": ProviderProfile(base_url="https://codestral.mistral.ai/v1"),
+    "cohere": ProviderProfile(
+        base_url="https://api.cohere.ai/compatibility/v1", aliases=("cohere_chat",)
+    ),
+    "crusoe": ProviderProfile(base_url="https://managed-inference-api-proxy.crusoecloud.com/v1"),
+    "dashscope": ProviderProfile(base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
+    "deepinfra": ProviderProfile(base_url="https://api.deepinfra.com/v1/openai", api_prefix=""),
+    "featherless_ai": ProviderProfile(base_url="https://api.featherless.ai/v1"),
+    "friendliai": ProviderProfile(base_url="https://api.friendli.ai/serverless/v1"),
+    "gemini": ProviderProfile(
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai", api_prefix=""
+    ),
+    "gmi": ProviderProfile(base_url="https://api.gmi-serving.com/v1"),
+    "gradient_ai": ProviderProfile(base_url="https://inference.do-ai.run/v1"),
+    "meta_llama": ProviderProfile(base_url="https://api.llama.com/compat/v1"),
+    "minimax": ProviderProfile(base_url="https://api.minimax.io/v1"),
+    "moonshot": ProviderProfile(base_url="https://api.moonshot.ai/v1"),
+    "morph": ProviderProfile(base_url="https://api.morphllm.com/v1"),
+    "nebius": ProviderProfile(base_url="https://api.studio.nebius.ai/v1"),
+    "novita": ProviderProfile(base_url="https://api.novita.ai/v3/openai", api_prefix=""),
+    "nscale": ProviderProfile(base_url="https://inference.api.nscale.com/v1"),
+    "publicai": ProviderProfile(base_url="https://api.publicai.co/v1"),
+    "sambanova": ProviderProfile(base_url="https://api.sambanova.ai/v1"),
+    "sarvam": ProviderProfile(base_url="https://api.sarvam.ai/v1"),
+    "vercel_ai_gateway": ProviderProfile(base_url="https://ai-gateway.vercel.sh/v1"),
+    "volcengine": ProviderProfile(
+        base_url="https://ark.cn-beijing.volces.com/api/v3", api_prefix=""
+    ),
+    "wandb": ProviderProfile(base_url="https://api.inference.wandb.ai/v1"),
     "ollama": ProviderProfile(
         base_url=None,
         models_path="/api/tags",
