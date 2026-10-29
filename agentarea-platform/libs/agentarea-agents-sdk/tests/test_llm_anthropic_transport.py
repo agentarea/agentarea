@@ -129,7 +129,7 @@ def _claude() -> LLMModel:
         provider_type="anthropic",
         provider=ANTHROPIC,
         model_name="claude-sonnet-4-5",
-        api_key="sk-ant",
+        api_key="sk-ant",  # pragma: allowlist secret
         input_cost_per_token=Decimal("0.000003"),
         output_cost_per_token=Decimal("0.000015"),
         cached_input_cost_per_token=Decimal("0.0000003"),
