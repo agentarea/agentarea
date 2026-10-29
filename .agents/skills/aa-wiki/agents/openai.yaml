@@ -1,0 +1,4 @@
+interface:
+  display_name: "AgentArea Wiki"
+  short_description: "Read and record decisions in the agentarea-wiki repo"
+  default_prompt: "Use $aa-wiki to find what was decided about this, and record the decision."
