@@ -7,6 +7,7 @@ import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { getValidTimestamp } from "@/utils/dateUtils";
+import { parseCronSchedule, type CronTime } from "./cronSchedule";
 
 export type EnrichedTrigger = TriggerResponse & {
   agent_name?: string;
@@ -38,7 +39,10 @@ export function getTriggerLane(trigger: TriggerLike): TriggerLane {
 }
 
 /** The glyph of what fires the trigger: the clock, or the stream it listens to. */
-export function renderTriggerIcon(trigger?: TriggerLike, className = "h-5 w-5") {
+export function renderTriggerIcon(
+  trigger?: TriggerLike,
+  className = "h-5 w-5"
+) {
   return createElement(
     trigger?.trigger_type === "cron" ? Clock : ENTITY_ICONS.stream,
     {
@@ -110,57 +114,34 @@ function ordinalSuffix(n: number): string {
  * confidently describe.
  */
 export function describeCronExpression(expr?: string | null): string {
-  if (!expr) return "Custom schedule";
-  let parts = expr.trim().split(/\s+/);
-  if (parts.length === 6) parts = parts.slice(1); // drop the seconds field
-  if (parts.length !== 5) return expr;
-
-  const [min, hour, dom, , dow] = parts;
-
-  // Every N minutes — */N * * * *
-  if (min.startsWith("*/") && hour === "*" && dom === "*" && dow === "*") {
-    const n = min.slice(2);
-    return n === "1" ? "Every minute" : `Every ${n} minutes`;
+  const schedule = parseCronSchedule(expr);
+  const at = (time: CronTime) => formatClock(time.hour, time.minute);
+  switch (schedule.kind) {
+    case "none":
+      return "Custom schedule";
+    case "everyMinute":
+      return "Every minute";
+    case "everyMinutes":
+      return `Every ${schedule.n} minutes`;
+    case "everyHour":
+      return "Every hour";
+    case "everyHourAt":
+      return `Every hour at :${String(schedule.minute).padStart(2, "0")}`;
+    case "everyHours":
+      return `Every ${schedule.n} hours`;
+    case "weekdays":
+      return `Weekdays at ${at(schedule.time)}`;
+    case "weekends":
+      return `Weekends at ${at(schedule.time)}`;
+    case "weekly":
+      return `Every ${CRON_DAY_NAMES[schedule.day]} at ${at(schedule.time)}`;
+    case "daily":
+      return `Every day at ${at(schedule.time)}`;
+    case "monthly":
+      return `Monthly on the ${schedule.day}${ordinalSuffix(schedule.day)} at ${at(schedule.time)}`;
+    case "raw":
+      return schedule.expr;
   }
-  if (min === "*" && hour === "*" && dom === "*" && dow === "*") {
-    return "Every minute";
-  }
-
-  // Hourly — M * * * *  or  M */N * * *
-  if (hour === "*" && dom === "*" && dow === "*" && /^\d+$/.test(min)) {
-    return min === "0"
-      ? "Every hour"
-      : `Every hour at :${min.padStart(2, "0")}`;
-  }
-  if (hour.startsWith("*/") && dom === "*" && dow === "*") {
-    return `Every ${hour.slice(2)} hours`;
-  }
-
-  const timeValid = /^\d+$/.test(min) && /^\d+$/.test(hour);
-  const time = timeValid
-    ? formatClock(parseInt(hour, 10), parseInt(min, 10))
-    : null;
-
-  if (timeValid && dom === "*") {
-    // Weekday / weekend ranges
-    if (dow === "1-5") return `Weekdays at ${time}`;
-    if (dow === "0,6" || dow === "6,0" || dow === "0,6,")
-      return `Weekends at ${time}`;
-    // A single day of the week
-    if (/^[0-6]$/.test(dow)) {
-      return `Every ${CRON_DAY_NAMES[parseInt(dow, 10)]} at ${time}`;
-    }
-    // Daily
-    if (dow === "*") return `Every day at ${time}`;
-  }
-
-  // Monthly — M H D * *
-  if (timeValid && /^\d+$/.test(dom) && dow === "*") {
-    const day = parseInt(dom, 10);
-    return `Monthly on the ${day}${ordinalSuffix(day)} at ${time}`;
-  }
-
-  return expr;
 }
 
 /** When a schedule fires, in words; a stream trigger's phrase is translated by its caller. */

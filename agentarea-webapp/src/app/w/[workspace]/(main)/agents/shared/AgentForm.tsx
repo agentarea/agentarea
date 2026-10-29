@@ -10,6 +10,7 @@ import React, {
 import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
 import { useFieldArray, useForm } from "react-hook-form";
+import type { ImperativePanelHandle } from "react-resizable-panels";
 import type {
   AgentPresetResponse,
   ApiKeyResponse,
@@ -20,6 +21,7 @@ import type {
 import type { StreamOptions } from "@/app/w/[workspace]/(main)/triggers/create/streamOptions";
 import FullChat from "@/components/Chat/FullChat";
 import FormError from "@/components/FormError";
+import { InfoPanelHeader } from "@/components/InfoPanel";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Button } from "@/components/ui/button";
 import Divider from "@/components/ui/divider";
@@ -34,6 +36,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import UnsavedChangesGuard from "@/components/UnsavedChangesGuard";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { formatApiError } from "@/lib/api-errors";
@@ -48,6 +51,7 @@ import type { AddAgentFormState } from "../create/actions";
 import {
   AgentTriggersLink,
   BasicInformation,
+  BehaviorConfig,
   DelegationConfig,
   PresetPicker,
   SkillsConfig,
@@ -103,6 +107,13 @@ interface AgentFormProps {
   welcomeComponent?: React.ReactNode;
 }
 
+/** Share of the width the test chat opens to, in percent. */
+const CHAT_PANEL_SIZE = 40;
+const CHAT_SLIDE_MS = 300;
+/** Panels ease to a new size, except while their handle is dragged. */
+const slideClassName =
+  "transition-[flex-grow] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none";
+
 export default function AgentForm({
   className,
   mcpServers,
@@ -127,6 +138,22 @@ export default function AgentForm({
   const formRef = useRef<HTMLFormElement>(null);
   const isMobile = useIsMobile();
   const { isChatOpen, setIsChatOpen } = useChat();
+  // The test chat slides in and out instead of popping: its panel stays in
+  // the group and grows from nothing; the chat itself mounts only while seen.
+  const chatPanelRef = useRef<ImperativePanelHandle>(null);
+  const [chatMounted, setChatMounted] = useState(isChatOpen);
+  const [isResizing, setIsResizing] = useState(false);
+  useEffect(() => {
+    const panel = chatPanelRef.current;
+    if (isChatOpen) {
+      setChatMounted(true);
+      panel?.resize(CHAT_PANEL_SIZE);
+      return;
+    }
+    panel?.collapse();
+    const timer = setTimeout(() => setChatMounted(false), CHAT_SLIDE_MS);
+    return () => clearTimeout(timer);
+  }, [isChatOpen]);
   const t = useTranslations("AgentsPage.form");
   const tCommon = useTranslations("Common");
   const [formError, setFormError] = useState<string | null>(null);
@@ -216,7 +243,47 @@ export default function AgentForm({
     toTriggerDrafts(initialData?.triggers ?? [])
   );
   const [showTriggerErrors, setShowTriggerErrors] = useState(false);
+  // Bumped when a save is refused, so the form brings the first problem into
+  // view once the sections holding it have opened.
+  const [revealRequest, setRevealRequest] = useState(0);
+  useEffect(() => {
+    if (!revealRequest) return;
+    const timer = setTimeout(() => {
+      const first = formRef.current?.querySelector<HTMLElement>(
+        '[aria-invalid="true"], .form-error, [role="alert"]'
+      );
+      if (!first) return;
+      first.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (first.matches("input, textarea"))
+        first.focus({ preventScroll: true });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [revealRequest]);
+  const revealFirstError = () => setRevealRequest((request) => request + 1);
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+
+  // What the form holds, fields, skills and triggers alike, to tell an edit
+  // from what was last saved when someone leaves the page.
+  const snapshot = () =>
+    JSON.stringify([
+      getValues(),
+      selectedSkills.map((skill) => skill.id),
+      triggerDrafts.map((draft) => draft.spec),
+    ]);
+  const snapshotRef = useRef(snapshot);
+  useEffect(() => {
+    snapshotRef.current = snapshot;
+  });
+  const savedSnapshot = useRef<string | null>(null);
+  useEffect(() => {
+    // After the first render's own setValue calls have settled.
+    const timer = setTimeout(() => {
+      savedSnapshot.current = snapshotRef.current();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+  const isDirty = () =>
+    savedSnapshot.current !== null && snapshot() !== savedSnapshot.current;
 
   const selectModel = (next: ModelSelection) => {
     modelSource.current = next.source;
@@ -285,6 +352,7 @@ export default function AgentForm({
 
     if (create && hasIncompleteTriggers(triggerDrafts)) {
       setShowTriggerErrors(true);
+      revealFirstError();
       return;
     }
 
@@ -311,6 +379,7 @@ export default function AgentForm({
 
         if (result.ok) {
           if (!create) setSaved(true);
+          savedSnapshot.current = snapshotRef.current();
 
           if (onSuccess) {
             // Check if this is a creation (has id in result) - keep submitting state until navigation
@@ -330,6 +399,7 @@ export default function AgentForm({
               ? formErrors.join(", ")
               : [result.message ?? "", ...fieldErrors].join(" ")
           );
+          revealFirstError();
 
           if (onError) {
             onError(result);
@@ -338,6 +408,7 @@ export default function AgentForm({
       } catch (error) {
         console.error("Agent save failed", error);
         setFormError(`${t("saveFailed")}: ${formatApiError(error)}`);
+        revealFirstError();
 
         if (onError) {
           onError(error);
@@ -360,32 +431,34 @@ export default function AgentForm({
   // Chat content component
   const chatContent = (
     <>
-      <div className="min-h-[40px] text-sm flex items-center gap-2 border-b border-zinc-200 bg-white px-4 dark:border-zinc-700 dark:bg-zinc-800">
-        Test{" "}
-        {agentName ? (
-          <span className="font-bold">{agentName}</span>
-        ) : (
-          "New Agent"
-        )}
-        {!isMobile && (
-          <Button
-            variant="ghost"
-            size="icon"
-            type="button"
-            className="ml-auto h-6 w-6"
-            aria-label={t("closeTest")}
-            onClick={() => setIsChatOpen(false)}
-          >
-            <X />
-          </Button>
-        )}
-      </div>
+      <InfoPanelHeader
+        className="border-b border-zinc-200 dark:border-zinc-700"
+        label={t("testAgent")}
+        title={agentName || t("newAgent")}
+        right={
+          !isMobile && (
+            <Button
+              variant="ghost"
+              size="icon"
+              type="button"
+              className="h-6 w-6"
+              aria-label={t("closeTest")}
+              onClick={() => setIsChatOpen(false)}
+            >
+              <X />
+            </Button>
+          )
+        }
+      />
       <div className="relative h-full py-5 px-3 flex-1 overflow-auto">
         <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-[size:450px_450px] bg-center bg-repeat opacity-20 pointer-events-none" />
         <div className="relative z-1 h-full">
           <FullChat
             agent={{ id: agentId || "new", name: agentName }}
-            placeholder={placeholder || `Write a new task for ${agentName}`}
+            placeholder={
+              placeholder ||
+              t("chatPlaceholder", { name: agentName || t("newAgent") })
+            }
             welcomeComponent={welcomeComponent}
           />
         </div>
@@ -395,6 +468,7 @@ export default function AgentForm({
 
   return (
     <>
+      <UnsavedChangesGuard isDirty={isDirty} />
       <ResizablePanelGroup
         direction="horizontal"
         className={cn("h-full w-full", className)}
@@ -402,13 +476,14 @@ export default function AgentForm({
         <ResizablePanel
           id="agent-form-panel"
           order={1}
-          defaultSize={isMobile || !isChatOpen ? 100 : 60}
+          defaultSize={isMobile || !isChatOpen ? 100 : 100 - CHAT_PANEL_SIZE}
           minSize={isMobile ? 100 : 30}
+          className={cn(!isResizing && slideClassName)}
         >
           <form
             ref={formRef}
             id="agent-form"
-            onSubmit={handleSubmit(handleFormSubmit)}
+            onSubmit={handleSubmit(handleFormSubmit, revealFirstError)}
             className="overflow-auto h-full py-5 pr-5"
           >
             {formError && <FormError className="mb-4">{formError}</FormError>}
@@ -436,6 +511,12 @@ export default function AgentForm({
               suggestedName={create ? initialData?.name : undefined}
               onOpenConfigSheet={() => {}}
               onRefreshModels={() => router.refresh()}
+            />
+            <Divider />
+            <BehaviorConfig
+              register={register}
+              control={control}
+              errors={errors}
             />
             <Divider />
             {create ? (
@@ -505,18 +586,30 @@ export default function AgentForm({
             {/* Submit button moved to header controls */}
           </form>
         </ResizablePanel>
-        {!isMobile && isChatOpen && (
+        {!isMobile && (
           <>
-            <ResizableHandle withHandle />
+            <ResizableHandle
+              withHandle
+              onDragging={setIsResizing}
+              className={cn(!isChatOpen && "hidden")}
+            />
             <ResizablePanel
+              ref={chatPanelRef}
               id="agent-test-chat-panel"
               order={2}
-              defaultSize={40}
+              defaultSize={isChatOpen ? CHAT_PANEL_SIZE : 0}
               minSize={20}
+              collapsible
+              collapsedSize={0}
+              // Dragging below the minimum closes the chat, like its X.
+              onCollapse={() => setIsChatOpen(false)}
+              className={cn(!isResizing && slideClassName)}
             >
-              <div className="overflow-hidden h-full flex flex-col border-l border-zinc-200 dark:border-zinc-700">
-                {chatContent}
-              </div>
+              {chatMounted && (
+                <div className="overflow-hidden h-full flex flex-col border-l border-zinc-200 dark:border-zinc-700">
+                  {chatContent}
+                </div>
+              )}
             </ResizablePanel>
           </>
         )}
@@ -529,7 +622,7 @@ export default function AgentForm({
           className="w-full sm:max-w-lg flex flex-col p-0"
         >
           <SheetHeader className="sr-only">
-            <SheetTitle>{agentName} Chat</SheetTitle>
+            <SheetTitle>{t("testAgent")}</SheetTitle>
           </SheetHeader>
           <div className="overflow-hidden h-full flex flex-col">
             {chatContent}

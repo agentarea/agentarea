@@ -1,4 +1,13 @@
 {
+  "MethodsList": {
+    "availableMethods": "Available methods",
+    "availableTools": "Available tools ({enabled}/{total})",
+    "selectAll": "Select all",
+    "approvalRequired": "Approval required",
+    "autoApproved": "Auto",
+    "approvalRequiredHint": "Requires human approval — click to auto-approve",
+    "autoApprovedHint": "Auto-approved — click to require approval"
+  },
   "404": {
     "title": "Page not found",
     "description": "The page you are looking for does not exist.",
@@ -139,7 +148,12 @@
     "hidePassword": "Hide password",
     "previousMonth": "Previous month",
     "nextMonth": "Next month",
-    "newValue": "new"
+    "newValue": "new",
+    "unsavedChanges": {
+      "title": "Leave without saving?",
+      "description": "The changes on this page are not saved yet. If you leave, they are lost.",
+      "leave": "Leave"
+    }
   },
   "admin": {
     "title": "Admin Dashboard",
@@ -611,6 +625,16 @@
       "remove": "Remove",
       "tool": "Tool",
       "activeMcpServers": "Active MCP Servers",
+      "toolsTabBuiltin": "Platform",
+      "noBuiltinTools": "No built-in tools available.",
+      "noOpenapiConnections": "No OpenAPI connections yet",
+      "noOpenapiConnectionsHint": "Connect an API by its OpenAPI spec, then give its operations to any agent.",
+      "connectOpenapi": "Add a connection",
+      "openapiOperations": "{count, plural, one {# operation} other {# operations}}",
+      "manageConnections": "Manage connections",
+      "openapiOperationsLabel": "Operations",
+      "configureMcp": "Configure",
+      "noMcpServers": "No MCP servers yet",
       "builtinTools": "Built-in Tools",
       "codeToolModels": {
         "placeholder": "Select a model",
@@ -643,21 +667,19 @@
       "trigger": "Trigger",
       "agentTools": "Tools",
       "agentToolsDescription": "Add MCP servers to enable tools for your agent.",
-      "agentToolsNote": "You can add multiple servers and configure them individually.",
       "agentName": "Name",
       "agentNamePlaceholder": "Enter agent name",
       "description": "Description / Goal",
       "descriptionPlaceholder": "Describe the agent's purpose, personality, and main goal...",
       "instruction": "Instruction",
       "instructionPlaceholder": "Provide specific instructions for this agent...",
+      "a2ui": "Interactive UI (A2UI)",
+      "a2uiDescription": "Let the agent show forms, buttons and cards in the web chat instead of plain text.",
       "answerCheck": "Check the final answer",
       "answerCheckDescription": "Before the answer is shown, look for tool names, codes, JSON, error texts and other scripts, and have the model rewrite it once. The reply then appears only after the check.",
       "answerCheckLanguage": "Answer language",
       "answerCheckLanguagePlaceholder": "ru, en, zh… (empty: any)",
       "answerCheckHint": "Models sometimes leak their internals into the reply: Chinese characters, tool names like web_search, internal codes, chunks of JSON, error texts, stray English words in a Russian answer. Chinese models do this more often.\n\nThe check looks for these traces in the final answer. If it finds any, the agent's model rewrites the answer once. The extra model call happens only when something is found.",
-      "loadMode": "How the model sees the tools",
-      "loadModeExplicit": "All at once",
-      "loadModeSearchable": "On demand",
       "loadModeHint": "All at once: on every step the model gets the full description of every tool of this connection. It never misses a tool, but each call spends more tokens.\n\nOn demand: the model sees only tool names with a short description and loads the full description of a tool when it needs it. Use it for connections with many tools.",
       "llmModel": "LLM Model",
       "selectModel": "Select a model",
@@ -665,24 +687,27 @@
       "createAndUseProviderConfiguration": "Create and use a provider configuration",
       "createConfiguration": "Create Configuration",
       "triggerEnabled": "Enabled",
+      "triggerOff": "Off",
       "removeTrigger": "Remove trigger",
       "noTriggers": "No triggers. The agent runs only when a task is started for it.",
       "triggersManagedElsewhere": "Schedules and channels of this agent are managed in Automation.",
       "openTriggers": "Open Automation",
       "presets": {
         "title": "Start from",
-        "empty": "Empty",
-        "emptyDescription": "No tools, skills or triggers",
         "loadFailed": "Could not load agent presets. Refresh the page or try again later.",
-        "unavailableSkills": "This preset expects skills the catalog does not have: {skills}"
-      },
-      "skills": {
-        "title": "Skills",
-        "description": "Add skills to enhance your agent's capabilities.",
-        "trigger": "Skill",
-        "note": "Skills extend agent capabilities with specialized behaviors and knowledge.",
-        "empty": "No skills assigned. Add skills to enhance this agent's capabilities.",
-        "remove": "Remove skill"
+        "unavailableSkills": "This preset expects skills the catalog does not have: {skills}",
+        "hint": "A preset fills in the instruction, tools, skills and triggers; you can change all of it.",
+        "filledInstruction": "the instruction",
+        "filled": {
+          "tools": "{count, plural, one {# tool} other {# tools}}",
+          "skills": "{count, plural, one {# skill} other {# skills}}",
+          "triggers": "{count, plural, one {# trigger} other {# triggers}}"
+        },
+        "reset": "Start from scratch",
+        "willFill": "Fills in {items}.",
+        "emptyDescription": "No tools, skills or triggers",
+        "showAll": "Show all ({count})",
+        "showLess": "Show less"
       },
       "toolGroups": {
         "sandbox": {
@@ -694,7 +719,26 @@
       "loadingOpenapiConnections": "Loading OpenAPI connections...",
       "loadInstanceFailed": "Couldn't load the MCP connection for editing",
       "updateInstanceFailed": "Couldn't update the MCP connection",
-      "triggerStreamRequired": "Pick the stream this trigger listens to"
+      "triggerStreamRequired": "Pick the stream this trigger listens to",
+      "removeTool": "Remove {name}",
+      "editTool": "Edit {name}",
+      "loadMode": {
+        "label": "How the agent sees operations",
+        "explicit": "Explicit",
+        "searchable": "Searchable",
+        "explicitHint": "Every operation's schema goes into every LLM call: simplest, but the context grows with the spec.",
+        "searchableHint": "Only names and descriptions go into the prompt; the agent loads the schemas it needs. Keeps cost flat for a large spec."
+      },
+      "behavior": {
+        "title": "Behavior",
+        "note": "How the agent answers: rich UI in the chat, and a check of its answer before it is sent."
+      },
+      "nameRequired": "Give the agent a name.",
+      "modelRequired": "Pick the model the agent runs on.",
+      "configureInstanceTitle": "Set up {name}",
+      "editInstanceTitle": "Edit {name}",
+      "configureMcpServer": "Set up an MCP server",
+      "agentToolsLead": "What the agent can call: platform toolsets, MCP servers and OpenAPI connections."
     },
     "browseCatalog": "Browse the catalog",
     "newTask": "New task",
@@ -704,7 +748,9 @@
       "validationFailed": "Some fields are invalid.",
       "createFailed": "Couldn't create the agent",
       "testAgent": "Test agent",
-      "closeTest": "Close test chat"
+      "closeTest": "Close test chat",
+      "newAgent": "New agent",
+      "chatPlaceholder": "Write a task for {name}"
     },
     "delegationConfig": {
       "title": "Delegation",
@@ -713,8 +759,9 @@
       "add": "Agent",
       "available": "Agents in this workspace",
       "noOtherAgents": "No other agents in this workspace to delegate to.",
+      "tabWorkspace": "Agents",
+      "tabExternal": "A2A",
       "createAgent": "Create an agent",
-      "external": "External agent (A2A)",
       "externalHint": "Any agent that speaks A2A, including one in another AgentArea workspace: enter its address, read its card, and pick the secret holding a key issued for that agent.",
       "name": "Name",
       "namePlaceholder": "e.g. docs-writer",
@@ -731,11 +778,18 @@
       "when": "When to delegate",
       "whenPlaceholder": "What this agent should hand over, and when",
       "whenHintLocal": "Leave empty to use the agent's own description.",
-      "addExternal": "Add external agent",
       "nameRequired": "Give the agent a name.",
       "nameTaken": "Another delegate already has this name.",
       "urlInvalid": "Enter an http(s) URL.",
       "empty": "No delegates. Add agents this agent can hand tasks to.",
+      "remove": "Remove {name}"
+    },
+    "skillsConfig": {
+      "title": "Skills",
+      "note": "Skills extend the agent with specialized behaviors and knowledge.",
+      "sheetDescription": "Add skills to extend what your agent can do",
+      "add": "Skill",
+      "empty": "No skills. Add skills to extend what this agent can do.",
       "remove": "Remove {name}"
     },
     "a2aAccess": {
@@ -2405,6 +2459,19 @@
       "enableFailed": "Failed to enable trigger",
       "disableFailed": "Failed to disable trigger",
       "runFailed": "Couldn't run the trigger"
+    },
+    "schedule": {
+      "custom": "Custom schedule",
+      "everyMinute": "Every minute",
+      "everyMinutes": "Every {n} minutes",
+      "everyHour": "Every hour",
+      "everyHourAt": "Every hour at :{minute}",
+      "everyHours": "Every {n} hours",
+      "weekdays": "Weekdays at {time}",
+      "weekends": "Weekends at {time}",
+      "weekly": "Every {day, select, 0 {Sunday} 1 {Monday} 2 {Tuesday} 3 {Wednesday} 4 {Thursday} 5 {Friday} 6 {Saturday} other {day}} at {time}",
+      "daily": "Every day at {time}",
+      "monthly": "Monthly on the {day, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} at {time}"
     }
   },
   "EventsPage": {

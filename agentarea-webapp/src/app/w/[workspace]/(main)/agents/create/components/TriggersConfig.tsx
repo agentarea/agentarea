@@ -1,13 +1,22 @@
-import React, { useMemo, useState } from "react";
+"use client";
+
+import React, { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Trash2, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
 import type { TriggerSpec } from "@/api/client/types.gen";
+import { SessionSetting } from "@/app/w/[workspace]/(main)/triggers/components/SessionSetting";
+import { renderTriggerIcon } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
+import { useScheduleText } from "@/app/w/[workspace]/(main)/triggers/components/useScheduleText";
+import { CronScheduler } from "@/app/w/[workspace]/(main)/triggers/create/CronScheduler";
+import type { StreamOptions } from "@/app/w/[workspace]/(main)/triggers/create/streamOptions";
+import { TIMEZONES } from "@/app/w/[workspace]/(main)/triggers/create/timezones";
+import { requiresTaskText } from "@/app/w/[workspace]/(main)/triggers/create/triggerShape";
 import AccordionControl from "@/components/AccordionControl";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import SectionLoadError from "@/components/SectionLoadError";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { Input } from "@/components/ui/input";
-import Note from "@/components/ui/note";
 import {
   Select,
   SelectContent,
@@ -17,13 +26,9 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { deterministicHue } from "@/lib/avatar-hue";
 import { resolveSession } from "@/lib/sourceTypes";
-import { SessionSetting } from "@/app/w/[workspace]/(main)/triggers/components/SessionSetting";
-import { renderTriggerIcon } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
-import { CronScheduler } from "@/app/w/[workspace]/(main)/triggers/create/CronScheduler";
-import type { StreamOptions } from "@/app/w/[workspace]/(main)/triggers/create/streamOptions";
-import { TIMEZONES } from "@/app/w/[workspace]/(main)/triggers/create/timezones";
-import { requiresTaskText } from "@/app/w/[workspace]/(main)/triggers/create/triggerShape";
+import { SelectedItemRow, SelectedItems } from "./SelectedItemRow";
 
 /** A trigger being authored; the key keeps its inputs attached across removals. */
 export type TriggerDraft = { key: string; spec: TriggerSpec };
@@ -73,6 +78,17 @@ const TriggersConfig = ({
   const t = useTranslations("AgentsPage.create");
   const tTrigger = useTranslations("TriggersPage.create");
   const tType = useTranslations("TriggersPage.type");
+  const scheduleText = useScheduleText();
+  // A refused save opens the section, so the trigger it points at is seen.
+  useEffect(() => {
+    if (showErrors) setAccordionValue("triggers");
+  }, [showErrors]);
+  // Triggers whose fields are shown under their row.
+  const [openKeys, setOpenKeys] = useState<string[]>([]);
+  const toggleOpen = (key: string) =>
+    setOpenKeys((keys) =>
+      keys.includes(key) ? keys.filter((open) => open !== key) : [...keys, key]
+    );
 
   // Returns the previous list when nothing changed: CronScheduler reports its
   // value on every render.
@@ -104,10 +120,10 @@ const TriggersConfig = ({
   const addTrigger = (type: string) => {
     const known = TRIGGER_TYPES.find((item) => item === type);
     if (!known) return;
-    onDraftsChange((previous) => [
-      ...previous,
-      ...toTriggerDrafts([specFor(known, tType(known))]),
-    ]);
+    const added = toTriggerDrafts([specFor(known, tType(known))]);
+    onDraftsChange((previous) => [...previous, ...added]);
+    // A new trigger has nothing set yet, so it opens on its fields.
+    setOpenKeys((keys) => [...keys, ...added.map((draft) => draft.key)]);
   };
 
   const title = (
@@ -119,11 +135,14 @@ const TriggersConfig = ({
   return (
     <AccordionControl
       id="triggers"
+      count={drafts.length}
       accordionValue={accordionValue}
       setAccordionValue={setAccordionValue}
       title={title}
+      noteInline
       note={<p>{t("agentTriggersNote")}</p>}
       addText={t("trigger")}
+      addVariant="primaryOutline"
       onAdd={addTrigger}
       dropdownItems={dropdownItems}
     >
@@ -132,26 +151,57 @@ const TriggersConfig = ({
           drafts.some(({ spec }) => spec.trigger_type === "stream") && (
             <SectionLoadError message={streams.error} />
           )}
-        {drafts.map(({ key, spec }) => {
-          const taskText = String(spec.task_parameters?.text ?? "");
-          const taskTextRequired = requiresTaskText(spec.trigger_type);
-          const stream = streams.items.find(
-            (item) => item.id === spec.stream_id
-          );
+        <SelectedItems count={drafts.length} empty={t("noTriggers")}>
+          {drafts.map(({ key, spec }) => {
+            const taskText = String(spec.task_parameters?.text ?? "");
+            const taskTextRequired = requiresTaskText(spec.trigger_type);
+            const stream = streams.items.find(
+              (item) => item.id === spec.stream_id
+            );
 
-          return (
-            <div
-              key={key}
-              className="space-y-4 rounded-md border bg-card p-3"
-            >
-              <div className="flex items-center gap-2">
-                <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground">
-                  {renderTriggerIcon(spec, "h-4 w-4")}
-                </span>
-                <span className="truncate text-sm font-medium">
-                  {tType(spec.trigger_type)}
-                </span>
-                <div className="ml-auto flex items-center gap-2">
+            return (
+              <SelectedItemRow
+                key={key}
+                open={
+                  openKeys.includes(key) ||
+                  (showErrors &&
+                    spec.trigger_type === "stream" &&
+                    !spec.stream_id)
+                }
+                onOpenChange={() => toggleOpen(key)}
+                avatar={
+                  <EntityAvatar
+                    hue={deterministicHue(spec.trigger_type)}
+                    size={24}
+                    iconScale={0.45}
+                    icon={renderTriggerIcon(spec)}
+                    aria-hidden
+                  />
+                }
+                title={spec.name || tType(spec.trigger_type)}
+                badge={
+                  spec.enabled === false && (
+                    <Badge variant="outline" className="shrink-0 self-center">
+                      {t("triggerOff")}
+                    </Badge>
+                  )
+                }
+                // When it fires: the schedule in words, or the stream it hears.
+                subtitle={
+                  spec.trigger_type === "cron"
+                    ? spec.cron_expression
+                      ? scheduleText(spec.cron_expression)
+                      : tType(spec.trigger_type)
+                    : (stream?.name ?? tType(spec.trigger_type))
+                }
+                removeLabel={t("removeTrigger")}
+                onRemove={() =>
+                  onDraftsChange((previous) =>
+                    previous.filter((d) => d.key !== key)
+                  )
+                }
+              >
+                <div className="flex items-center gap-2">
                   <Switch
                     id={`trigger-enabled-${key}`}
                     size="xs"
@@ -160,163 +210,144 @@ const TriggersConfig = ({
                   />
                   <label
                     htmlFor={`trigger-enabled-${key}`}
-                    className="cursor-pointer text-xs text-muted-foreground"
+                    className="cursor-pointer text-xs text-foreground"
                   >
                     {t("triggerEnabled")}
                   </label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() =>
-                      onDraftsChange((previous) =>
-                        previous.filter((d) => d.key !== key)
-                      )
-                    }
-                    className="h-4 w-4 flex-shrink-0 text-muted-foreground/60 hover:bg-transparent hover:text-red-500"
-                    aria-label={t("removeTrigger")}
-                  >
-                    <Trash2 />
-                  </Button>
                 </div>
-              </div>
-
-              <div className="grid gap-2">
-                <FormLabel htmlFor={`trigger-name-${key}`} required>
-                  {tTrigger("automationName")}
-                </FormLabel>
-                <Input
-                  id={`trigger-name-${key}`}
-                  value={spec.name}
-                  onChange={(event) => patch(key, { name: event.target.value })}
-                  placeholder={tTrigger("automationNamePlaceholder")}
-                  required
-                />
-              </div>
-
-              {spec.trigger_type === "cron" && (
-                <>
-                  <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
-                    <FormLabel required>{tTrigger("schedule")}</FormLabel>
-                    <CronScheduler
-                      name={`trigger-cron-${key}`}
-                      defaultValue={spec.cron_expression ?? ""}
-                      onChange={(cron_expression) =>
-                        patch(key, { cron_expression })
-                      }
-                    />
-                  </div>
-                  <div className="grid gap-2 md:max-w-sm">
-                    <FormLabel htmlFor={`trigger-timezone-${key}`}>
-                      {tTrigger("timezone")}
-                    </FormLabel>
-                    <Select
-                      value={spec.timezone ?? "UTC"}
-                      onValueChange={(timezone) => patch(key, { timezone })}
-                    >
-                      <SelectTrigger id={`trigger-timezone-${key}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from(
-                          new Set<string>([
-                            ...TIMEZONES,
-                            ...(spec.timezone ? [spec.timezone] : []),
-                          ])
-                        ).map((timezone) => (
-                          <SelectItem key={timezone} value={timezone}>
-                            {timezone}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </>
-              )}
-
-              {spec.trigger_type === "stream" && (
-                <>
-                  <div className="grid gap-2 md:max-w-sm">
-                    <FormLabel htmlFor={`trigger-stream-${key}`} required>
-                      {tTrigger("stream")}
-                    </FormLabel>
-                    <Select
-                      value={spec.stream_id ?? ""}
-                      onValueChange={(stream_id) => patch(key, { stream_id })}
-                      disabled={streams.error !== null}
-                    >
-                      <SelectTrigger id={`trigger-stream-${key}`}>
-                        <SelectValue
-                          placeholder={
-                            streams.items.length === 0
-                              ? tTrigger("noStreams")
-                              : undefined
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {streams.items.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
-                            {item.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {showErrors && !spec.stream_id && (
-                      <p role="alert" className="text-sm text-destructive">
-                        {t("triggerStreamRequired")}
-                      </p>
-                    )}
-                  </div>
-                  <SessionSetting
-                    id={`trigger-session-${key}`}
-                    value={resolveSession(
-                      spec.session,
-                      stream?.continuesSessions ?? false
-                    )}
-                    onChange={(session) => patch(key, { session })}
+                <div className="grid gap-2">
+                  <FormLabel htmlFor={`trigger-name-${key}`} required>
+                    {tTrigger("automationName")}
+                  </FormLabel>
+                  <Input
+                    id={`trigger-name-${key}`}
+                    value={spec.name}
+                    onChange={(event) =>
+                      patch(key, { name: event.target.value })
+                    }
+                    placeholder={tTrigger("automationNamePlaceholder")}
+                    required
                   />
-                </>
-              )}
+                </div>
 
-              <div className="grid gap-2">
-                <FormLabel
-                  htmlFor={`trigger-task-${key}`}
-                  required={taskTextRequired}
-                  optional={!taskTextRequired}
-                >
-                  {tTrigger("taskInstructions")}
-                </FormLabel>
-                {spec.trigger_type === "stream" && (
-                  <p className="text-xs text-muted-foreground">
-                    {tTrigger("taskTextFromStream")}
-                  </p>
+                {spec.trigger_type === "cron" && (
+                  <>
+                    <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+                      <FormLabel required>{tTrigger("schedule")}</FormLabel>
+                      <CronScheduler
+                        name={`trigger-cron-${key}`}
+                        defaultValue={spec.cron_expression ?? ""}
+                        onChange={(cron_expression) =>
+                          patch(key, { cron_expression })
+                        }
+                      />
+                    </div>
+                    <div className="grid gap-2 md:max-w-sm">
+                      <FormLabel htmlFor={`trigger-timezone-${key}`}>
+                        {tTrigger("timezone")}
+                      </FormLabel>
+                      <Select
+                        value={spec.timezone ?? "UTC"}
+                        onValueChange={(timezone) => patch(key, { timezone })}
+                      >
+                        <SelectTrigger id={`trigger-timezone-${key}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from(
+                            new Set<string>([
+                              ...TIMEZONES,
+                              ...(spec.timezone ? [spec.timezone] : []),
+                            ])
+                          ).map((timezone) => (
+                            <SelectItem key={timezone} value={timezone}>
+                              {timezone}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
                 )}
-                <Textarea
-                  id={`trigger-task-${key}`}
-                  value={taskText}
-                  onChange={(event) =>
-                    patch(key, {
-                      task_parameters: {
-                        ...spec.task_parameters,
-                        text: event.target.value,
-                      },
-                    })
-                  }
-                  placeholder={tTrigger("taskTextPlaceholder")}
-                  rows={3}
-                  required={taskTextRequired}
-                />
-              </div>
-            </div>
-          );
-        })}
 
-        {drafts.length === 0 && (
-          <Note className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground">
-            <p>{t("noTriggers")}</p>
-          </Note>
-        )}
+                {spec.trigger_type === "stream" && (
+                  <>
+                    <div className="grid gap-2 md:max-w-sm">
+                      <FormLabel htmlFor={`trigger-stream-${key}`} required>
+                        {tTrigger("stream")}
+                      </FormLabel>
+                      <Select
+                        value={spec.stream_id ?? ""}
+                        onValueChange={(stream_id) => patch(key, { stream_id })}
+                        disabled={streams.error !== null}
+                      >
+                        <SelectTrigger id={`trigger-stream-${key}`}>
+                          <SelectValue
+                            placeholder={
+                              streams.items.length === 0
+                                ? tTrigger("noStreams")
+                                : undefined
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {streams.items.map((item) => (
+                            <SelectItem key={item.id} value={item.id}>
+                              {item.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {showErrors && !spec.stream_id && (
+                        <p role="alert" className="text-sm text-destructive">
+                          {t("triggerStreamRequired")}
+                        </p>
+                      )}
+                    </div>
+                    <SessionSetting
+                      id={`trigger-session-${key}`}
+                      value={resolveSession(
+                        spec.session,
+                        stream?.continuesSessions ?? false
+                      )}
+                      onChange={(session) => patch(key, { session })}
+                    />
+                  </>
+                )}
+
+                <div className="grid gap-2">
+                  <FormLabel
+                    htmlFor={`trigger-task-${key}`}
+                    required={taskTextRequired}
+                    optional={!taskTextRequired}
+                  >
+                    {tTrigger("taskInstructions")}
+                  </FormLabel>
+                  {spec.trigger_type === "stream" && (
+                    <p className="text-xs text-muted-foreground">
+                      {tTrigger("taskTextFromStream")}
+                    </p>
+                  )}
+                  <Textarea
+                    id={`trigger-task-${key}`}
+                    value={taskText}
+                    onChange={(event) =>
+                      patch(key, {
+                        task_parameters: {
+                          ...spec.task_parameters,
+                          text: event.target.value,
+                        },
+                      })
+                    }
+                    placeholder={tTrigger("taskTextPlaceholder")}
+                    rows={3}
+                    required={taskTextRequired}
+                  />
+                </div>
+              </SelectedItemRow>
+            );
+          })}
+        </SelectedItems>
       </div>
     </AccordionControl>
   );

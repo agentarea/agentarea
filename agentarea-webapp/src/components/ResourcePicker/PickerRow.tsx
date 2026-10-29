@@ -30,15 +30,19 @@ export function PickerEmptyState(props: ComponentProps<typeof EmptyState>) {
  */
 export function PickerRow({
   icon,
+  avatar,
   iconScale = 0.45,
   title,
   subtitle,
   selected,
   pending = false,
   onToggle,
+  end,
 }: {
   /** What goes on the tile: a glyph, or a logo. */
-  icon: ReactNode;
+  icon?: ReactNode;
+  /** An entity's own avatar, in place of the tile — an agent is an AgentAvatar. */
+  avatar?: ReactNode;
   /** How much of the tile the icon fills; a logo wants more than a glyph. */
   iconScale?: number;
   title: ReactNode;
@@ -47,6 +51,8 @@ export function PickerRow({
   /** Ticking started something that has not finished; the box waits for it. */
   pending?: boolean;
   onToggle: () => void;
+  /** What the row does instead of ticking, e.g. "Configure →". */
+  end?: ReactNode;
 }) {
   return (
     <InteractiveListRow
@@ -56,17 +62,20 @@ export function PickerRow({
       dividerClassName=""
       className="px-5 py-2"
       start={
-        <EntityAvatar
-          variant="soft"
-          size={32}
-          color={selected ? SELECTED_TINT : undefined}
-          iconScale={iconScale}
-          icon={icon}
-          aria-hidden
-        />
+        avatar ?? (
+          <EntityAvatar
+            variant="soft"
+            size={32}
+            color={selected ? SELECTED_TINT : undefined}
+            iconScale={iconScale}
+            icon={icon}
+            aria-hidden
+          />
+        )
       }
       end={
-        pending ? (
+        end ??
+        (pending ? (
           <Loader2
             aria-hidden
             className="h-4 w-4 animate-spin text-muted-foreground"
@@ -79,7 +88,7 @@ export function PickerRow({
             aria-hidden
             className="pointer-events-none border-zinc-300 dark:border-zinc-600 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
           />
-        )
+        ))
       }
     >
       <div className="min-w-0 flex-1">

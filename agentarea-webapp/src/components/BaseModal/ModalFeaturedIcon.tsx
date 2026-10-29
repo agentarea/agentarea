@@ -1,7 +1,7 @@
 "use client";
 
 import { useId } from "react";
-import { CheckCircle, Trash2 } from "lucide-react";
+import { CheckCircle, Trash2, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ICON_BACKGROUND = {
@@ -19,11 +19,18 @@ const RING_RADII = [47.5, 71.5, 95.5, 119.5, 143.5, 167.5];
  * Round icon at the top of a modal, with concentric rings fading out behind
  * it. Put it first inside `DialogContent` (with `overflow-hidden`).
  */
-export function ModalFeaturedIcon({ type }: { type: "delete" | "success" }) {
+export function ModalFeaturedIcon({
+  type,
+  icon,
+}: {
+  type: "delete" | "success";
+  /** A glyph that says what is confirmed, in place of the type's own. */
+  icon?: LucideIcon;
+}) {
   const id = useId();
   const maskId = `${id}-mask`;
   const gradientId = `${id}-gradient`;
-  const Icon = ICON[type];
+  const Icon = icon ?? ICON[type];
 
   return (
     <div className="relative w-max">

@@ -1,15 +1,13 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import {
-  CreditCard,
-  Gauge,
-  List,
-  Play,
-  SlidersHorizontal,
-} from "lucide-react";
+import { CreditCard, Gauge, List, Play, SlidersHorizontal } from "lucide-react";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+import { guardNavigation } from "@/components/UnsavedChangesGuard";
+import {
+  useWorkspacePathname,
+  useWorkspaceRouter,
+} from "@/hooks/useWorkspaceNavigation";
 
 const TABS = [
   { key: "", icon: Gauge, labelKey: "overview" },
@@ -71,7 +69,8 @@ export default function AgentHeaderTabs({
           const href = next
             ? `/agents/${agentId}/${next}`
             : `/agents/${agentId}`;
-          router.push(href);
+          // The settings form may hold edits the person would lose.
+          guardNavigation(() => router.push(href));
         }}
         variant="solid"
         className="max-w-full"

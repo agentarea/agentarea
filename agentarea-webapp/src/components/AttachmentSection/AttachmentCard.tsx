@@ -152,7 +152,7 @@ export function AttachmentCard<T extends AttachmentItem>({
               start={renderTile(item)}
               // Keep the spinner on screen while the removal is in flight.
               forceHoverActionsVisible={pending}
-              hoverActionsClassName="bg-gradient-to-l from-muted/60 via-muted/60 to-transparent dark:from-zinc-800/50 dark:via-zinc-800/50"
+              hoverActionsWidth={76}
               hoverActions={
                 <Tooltip>
                   <TooltipTrigger asChild>

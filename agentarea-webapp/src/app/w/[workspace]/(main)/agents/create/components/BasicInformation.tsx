@@ -1,26 +1,24 @@
-import type { ModelInstanceResponse } from "@/api/client/types.gen";
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Bot, Cpu, FileText, MessageSquare } from "lucide-react";
-import { InfoHint } from "@/components/InfoHint";
 import {
   Control,
   Controller,
   FieldErrors,
   UseFormRegister,
   UseFormSetValue,
-  useWatch,
 } from "react-hook-form";
+import type { ModelInstanceResponse } from "@/api/client/types.gen";
+import ConfigSheet from "@/components/ConfigSheet";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MarkdownTextarea } from "@/components/ui/markdown-textarea";
 import { ProviderModelSelector } from "@/components/ui/provider-model-selector";
 import { Textarea } from "@/components/ui/textarea";
-import { MarkdownTextarea } from "@/components/ui/markdown-textarea";
 import type { AgentFormValues } from "../../create/types";
 import { getNestedErrorMessage } from "../utils/formUtils";
-import ConfigSheet from "@/components/ConfigSheet";
 
 type LLMModelInstance = ModelInstanceResponse;
 
@@ -47,7 +45,6 @@ const BasicInformation = ({
   const [configSheetOpen, setConfigSheetOpen] = useState(false);
   const configSheetTriggerRef = useRef<HTMLButtonElement>(null);
   const t = useTranslations("AgentsPage.create");
-  const answerCheckOn = useWatch({ control, name: "answer_check.enabled" });
   const [nameReady, setNameReady] = useState(!suggestedName);
   useEffect(() => {
     if (suggestedName) setNameReady(true);
@@ -85,74 +82,77 @@ const BasicInformation = ({
         <Sparkles className="h-5 w-5 text-accent" /> Basic Information
       </h2> */}
       <div className="form-content">
-        <div className="space-y-2">
-          <FormLabel htmlFor="name" icon={Bot} required>
-            {t("agentName")}
-          </FormLabel>
-          <Input
-            id="name"
-            {...register("name", { required: "Agent name is required" })}
-            readOnly={Boolean(suggestedName) && !nameReady}
-            defaultValue={suggestedName}
-            onFocus={
-              suggestedName
-                ? (event) => {
-                    if (event.currentTarget.value === suggestedName) {
-                      event.currentTarget.select();
+        {/* Name and model side by side where the form is wide enough. */}
+        <div className="grid gap-5 lg:grid-cols-2">
+          <div className="space-y-2">
+            <FormLabel htmlFor="name" icon={Bot} required>
+              {t("agentName")}
+            </FormLabel>
+            <Input
+              id="name"
+              {...register("name", { required: t("nameRequired") })}
+              readOnly={Boolean(suggestedName) && !nameReady}
+              defaultValue={suggestedName}
+              onFocus={
+                suggestedName
+                  ? (event) => {
+                      if (event.currentTarget.value === suggestedName) {
+                        event.currentTarget.select();
+                      }
                     }
-                  }
-                : undefined
-            }
-            placeholder={t("agentNamePlaceholder")}
-            // className="mt-2 text-lg px-4 py-3 border-2 border-slate-200 focus:border-blue-400 transition-colors"
-            aria-invalid={!!getNestedErrorMessage(errors, "name")}
-          />
-          {getNestedErrorMessage(errors, "name") && (
-            <p className="form-error">
-              {getNestedErrorMessage(errors, "name")}
-            </p>
-          )}
-        </div>
-        <div className="space-y-2">
-          <FormLabel htmlFor="model_id" icon={Cpu} required>
-            {t("llmModel")}
-          </FormLabel>
-          <Controller
-            name="model_id"
-            control={control}
-            rules={{ required: "Model is required" }}
-            render={({ field }) => (
-              <ProviderModelSelector
-                modelInstances={llmModelInstances}
-                value={field.value}
-                onValueChange={field.onChange}
-                placeholder={t("selectModel")}
-                open={searchableSelectOpen}
-                onOpenChange={setSearchableSelectOpen}
-                onAddProvider={handleCreateConfigClick}
-                emptyMessage={
-                  <div className="flex flex-col items-center gap-2 px-6">
-                    <div>{t("noConfigurationsYet")}</div>
-                    <div className="note">
-                      {t("createAndUseProviderConfiguration")}
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={handleCreateConfigClick}
-                      className="mt-2"
-                    >
-                      {t("createConfiguration")}
-                    </Button>
-                  </div>
-                }
-              />
+                  : undefined
+              }
+              placeholder={t("agentNamePlaceholder")}
+              // className="mt-2 text-lg px-4 py-3 border-2 border-slate-200 focus:border-blue-400 transition-colors"
+              aria-invalid={!!getNestedErrorMessage(errors, "name")}
+            />
+            {getNestedErrorMessage(errors, "name") && (
+              <p className="form-error">
+                {getNestedErrorMessage(errors, "name")}
+              </p>
             )}
-          />
-          {getNestedErrorMessage(errors, "model_id") && (
-            <p className="form-error">
-              {getNestedErrorMessage(errors, "model_id")}
-            </p>
-          )}
+          </div>
+          <div className="space-y-2">
+            <FormLabel htmlFor="model_id" icon={Cpu} required>
+              {t("llmModel")}
+            </FormLabel>
+            <Controller
+              name="model_id"
+              control={control}
+              rules={{ required: t("modelRequired") }}
+              render={({ field }) => (
+                <ProviderModelSelector
+                  modelInstances={llmModelInstances}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  placeholder={t("selectModel")}
+                  open={searchableSelectOpen}
+                  onOpenChange={setSearchableSelectOpen}
+                  onAddProvider={handleCreateConfigClick}
+                  emptyMessage={
+                    <div className="flex flex-col items-center gap-2 px-6">
+                      <div>{t("noConfigurationsYet")}</div>
+                      <div className="note">
+                        {t("createAndUseProviderConfiguration")}
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={handleCreateConfigClick}
+                        className="mt-2"
+                      >
+                        {t("createConfiguration")}
+                      </Button>
+                    </div>
+                  }
+                />
+              )}
+            />
+            {getNestedErrorMessage(errors, "model_id") && (
+              <p className="form-error">
+                {getNestedErrorMessage(errors, "model_id")}
+              </p>
+            )}
+          </div>
         </div>
         <div className="space-y-2">
           <FormLabel htmlFor="description" icon={FileText} optional>
@@ -162,8 +162,8 @@ const BasicInformation = ({
             id="description"
             {...register("description")}
             placeholder={t("descriptionPlaceholder")}
-            className="h-[100px] resize-none"
-            // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-blue-400 transition-colors h-32"
+            // Two lines to start, growing with the text up to 15rem.
+            className="min-h-[60px] max-h-60 resize-none [field-sizing:content]"
             aria-invalid={!!getNestedErrorMessage(errors, "description")}
           />
           {getNestedErrorMessage(errors, "description") && (
@@ -185,7 +185,8 @@ const BasicInformation = ({
                 value={field.value || ""}
                 onChange={field.onChange}
                 placeholder={t("instructionPlaceholder")}
-                className="h-[200px] resize-none"
+                // Grows with the instruction, scrolling only past half the screen.
+                className="min-h-[200px] max-h-[50vh] resize-none"
                 aria-invalid={!!getNestedErrorMessage(errors, "instruction")}
               />
             )}
@@ -194,55 +195,6 @@ const BasicInformation = ({
             <p className="form-error">
               {getNestedErrorMessage(errors, "instruction")}
             </p>
-          )}
-        </div>
-        <div className="flex items-center gap-3 pt-2">
-          <label className="flex cursor-pointer items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              {...register("a2ui_enabled")}
-              className="rounded"
-            />
-            <span className="text-muted-foreground">Enable A2UI</span>
-          </label>
-          <span className="text-xs text-muted-foreground">
-            Allow agent to render interactive UI surfaces
-          </span>
-        </div>
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                {...register("answer_check.enabled")}
-                className="rounded"
-              />
-              <span className="text-muted-foreground">{t("answerCheck")}</span>
-            </label>
-            <InfoHint label={t("answerCheck")}>{t("answerCheckHint")}</InfoHint>
-            <span className="text-xs text-muted-foreground">
-              {t("answerCheckDescription")}
-            </span>
-          </div>
-          {answerCheckOn && (
-            <div className="max-w-xs space-y-2">
-              <FormLabel htmlFor="answer_check_language">
-                {t("answerCheckLanguage")}
-              </FormLabel>
-              <Input
-                id="answer_check_language"
-                {...register("answer_check.language")}
-                placeholder={t("answerCheckLanguagePlaceholder")}
-                aria-invalid={
-                  !!getNestedErrorMessage(errors, "answer_check.language")
-                }
-              />
-              {getNestedErrorMessage(errors, "answer_check.language") && (
-                <p className="form-error">
-                  {getNestedErrorMessage(errors, "answer_check.language")}
-                </p>
-              )}
-            </div>
           )}
         </div>
       </div>

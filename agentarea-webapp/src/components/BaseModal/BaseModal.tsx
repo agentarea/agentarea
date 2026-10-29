@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Loader2 } from "lucide-react";
+import { Loader2, type LucideIcon } from "lucide-react";
+import FormError from "@/components/FormError";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,7 +14,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import FormError from "@/components/FormError";
 import { ModalFeaturedIcon } from "./ModalFeaturedIcon";
 
 interface BaseModalProps {
@@ -24,6 +24,8 @@ interface BaseModalProps {
   /** Return `false` to keep the dialog open, e.g. when the action failed. */
   onConfirm: () => void | boolean | Promise<void | boolean>;
   type: "delete" | "confirm";
+  /** A glyph for the round icon that says what is confirmed, e.g. leaving. */
+  icon?: LucideIcon;
   /** Overrides the default "Delete"/"Confirm" label on the confirm button. */
   confirmLabel?: React.ReactNode;
   /** Keeps the confirm button disabled, e.g. when the action would be refused. */
@@ -45,6 +47,7 @@ export default function BaseModal({
   children,
   onConfirm,
   type,
+  icon,
   confirmLabel,
   confirmDisabled,
   error,
@@ -77,7 +80,10 @@ export default function BaseModal({
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       {children ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
       <DialogContent className="max-w-[400px] overflow-hidden">
-        <ModalFeaturedIcon type={type === "delete" ? "delete" : "success"} />
+        <ModalFeaturedIcon
+          type={type === "delete" ? "delete" : "success"}
+          icon={icon}
+        />
         <DialogHeader className="relative z-10 mt-3">
           <DialogTitle className="pb-2">{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

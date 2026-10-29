@@ -14,7 +14,8 @@ const Checkbox = React.forwardRef<
   React.ElementRef<typeof CheckboxPrimitive.Root>,
   CheckboxProps
 >(({ className, indeterminate, checked, ...props }, ref) => {
-  const isChecked = indeterminate || checked;
+  // Radix renders a dash state and turns a click on it into "checked".
+  const state = indeterminate ? "indeterminate" : checked;
 
   return (
     <CheckboxPrimitive.Root
@@ -23,14 +24,14 @@ const Checkbox = React.forwardRef<
         "peer h-4 w-4 shrink-0 rounded-sm border border-primary shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
         className
       )}
-      checked={isChecked}
+      checked={state}
       {...props}
     >
       <CheckboxPrimitive.Indicator
         className={cn("flex items-center justify-center text-current")}
       >
         {/* Part of a group picked: a dash, so it reads apart from "all". */}
-        {indeterminate ? (
+        {state === "indeterminate" ? (
           <Minus className="h-3 w-3" />
         ) : (
           <Check className="h-3 w-3" />

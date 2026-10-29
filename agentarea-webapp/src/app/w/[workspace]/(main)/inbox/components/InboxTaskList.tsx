@@ -118,7 +118,6 @@ export function InboxTaskList({
                 </span>
               </>
             }
-            hoverActionsClassName="bg-gradient-to-l from-muted/60 via-muted/60 to-transparent dark:from-zinc-800/50 dark:via-zinc-800/50"
             hoverActions={
               pending ? (
                 <>
