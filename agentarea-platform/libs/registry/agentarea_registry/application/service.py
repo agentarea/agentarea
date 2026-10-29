@@ -96,7 +96,11 @@ PROVIDER_CONTRACT_FIELDS = (
 SOURCE_FETCH_TIMEOUT_SECONDS = 30
 # Part of the stored ETag: bump it when parsing or facets change, so the next
 # sync re-applies every source instead of skipping the unchanged ones.
-SYNC_FORMAT = "3"
+SYNC_FORMAT = "4"
+# The platform's own catalog rows: an item that changes in the source is applied
+# to its entity on sync. Other types install copies a workspace may have changed,
+# so a changed item only flags an update for someone to take.
+APPLY_ON_CHANGE_TYPES = frozenset({"llm_providers", "llm_models"})
 # A workspace's index is a member-supplied URL: read within these bounds, so a
 # hostile or broken one costs one bounded request and no more.
 MAX_SOURCE_BYTES = 5 * 1024 * 1024
@@ -979,6 +983,7 @@ class RegistryService:
             return {
                 "new_specs": 0,
                 "updates_flagged": 0,
+                "applied": 0,
                 "unchanged": registry.item_count,
                 "total": registry.item_count,
                 "skipped": 0,
@@ -1027,6 +1032,7 @@ class RegistryService:
 
         new_specs = 0
         updates_flagged = 0
+        applied = 0
         unchanged = 0
         skipped = 0
         skipped_items: list[dict[str, str]] = []
@@ -1051,6 +1057,7 @@ class RegistryService:
 
                 if existing:
                     previous_spec = dict(existing.spec or {})
+                    previous_text = (existing.name, existing.description)
                     for field in (
                         "name",
                         "description",
@@ -1079,7 +1086,18 @@ class RegistryService:
                         new_version = existing.version or new_version
                     existing.version = new_version
 
-                    if existing.installed_version and existing.installed_version != new_version:
+                    content_changed = previous_spec != (existing.spec or {}) or previous_text != (
+                        existing.name,
+                        existing.description,
+                    )
+                    apply_now = (
+                        registry.registry_type in APPLY_ON_CHANGE_TYPES
+                        and existing.installed_entity_id is not None
+                        and content_changed
+                    )
+                    if apply_now:
+                        applied += 1
+                    elif existing.installed_version and existing.installed_version != new_version:
                         existing.update_available = True
                         updates_flagged += 1
                     else:
@@ -1089,6 +1107,10 @@ class RegistryService:
                         await self._drop_platform_skill(existing)
 
                     await self.item_repo.session.commit()
+                    if apply_now:
+                        await self._update_entity(
+                            registry.registry_type, existing, registry_url=registry.source_url
+                        )
                     if registry.registry_type == "llm_models":
                         await self._resync_model_cache_prices(previous_spec, existing.spec)
 
@@ -1171,7 +1193,7 @@ class RegistryService:
                 deleted = await self.item_repo.delete_unreferenced_out_of_source(registry_id)
                 out_of_source -= deleted
 
-        total = new_specs + updates_flagged + unchanged
+        total = new_specs + updates_flagged + applied + unchanged
         await self.registry_repo.update(
             registry_id,
             last_synced_at=datetime.utcnow(),
@@ -1185,6 +1207,7 @@ class RegistryService:
         return {
             "new_specs": new_specs,
             "updates_flagged": updates_flagged,
+            "applied": applied,
             "unchanged": unchanged,
             "total": len(parsed_items),
             "skipped": skipped,
