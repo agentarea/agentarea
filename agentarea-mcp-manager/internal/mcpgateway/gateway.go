@@ -140,6 +140,7 @@ type Gateway struct {
 	logger       *slog.Logger
 	remote       *RemoteUpstream
 	requests     RequestObserver
+	telemetry    *Telemetry
 	urlSecrets   secrets.SecretResolver
 	urlTransport http.RoundTripper
 }
@@ -228,6 +229,8 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 
 	requestID := uuid.NewString()
 	var startedAt, endedAt time.Time
+	var answer GatewayAnswer
+	var coldStart *ColdStart
 	if g.requests != nil {
 		startedAt = time.Now()
 	}
@@ -261,6 +264,7 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 			completed := RequestCompleted{
 				RequestStarted: started, EndedAt: endedAt,
 				StatusCode: observed.status, Canceled: request.Context().Err() != nil,
+				Answer: answer, ColdStart: coldStart,
 			}
 			if err := g.requests.Completed(context.WithoutCancel(request.Context()), completed); err != nil {
 				g.logRequestObserverFailure("completed", started, err)
@@ -283,10 +287,12 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 	// probe cannot report ready before ~8s — every attempt created and deleted a
 	// workload and container-backed MCP could never come up at all.
 	// StartupTimeout is now the only bound on a cold start.
+	report := &ColdStart{}
 	startCtx, cancelStart := context.WithTimeout(
-		context.WithoutCancel(request.Context()), g.policy.StartupTimeout,
+		withColdStart(context.WithoutCancel(request.Context()), report), g.policy.StartupTimeout,
 	)
 	err = g.repository.WithInstanceLock(startCtx, instanceID, func(lockCtx context.Context) error {
+		defer func(began time.Time) { report.Total = time.Since(began) }(time.Now())
 		// The desired instance was resolved before waiting for the lifecycle
 		// lock so concurrent callers also retain an independent request fact.
 		if err := g.repository.MarkStarting(lockCtx, instanceID); err != nil {
@@ -308,6 +314,7 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		if err := g.repository.MarkReadyAndBeginRequest(
 			lockCtx, instanceID, requestID, g.policy.RequestLeaseTTL,
 		); err != nil {
+			report.fail(stepAdmission)
 			failureCtx, cancel := context.WithTimeout(context.WithoutCancel(lockCtx), 10*time.Second)
 			defer cancel()
 			cleanupErr := g.runtime.Delete(failureCtx, instance)
@@ -317,17 +324,20 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		return nil
 	})
 	cancelStart()
+	coldStart = report.settle(err)
 	if errors.Is(err, ErrStartInProgress) {
 		// Another caller holds the lifecycle and is bringing this workload up.
 		// Answering "unavailable" would be wrong twice over: nothing failed, and
 		// the start this caller wanted is already running. Ask it to come back
 		// instead — that retry is what completes the cold start.
+		answer = AnswerStarting
 		response.Header().Set("Retry-After", "1")
 		response.Header().Set(StartingHeader, "1")
 		http.Error(response, "MCP instance is starting", http.StatusServiceUnavailable)
 		return
 	}
 	if err != nil {
+		answer = AnswerStartFailed
 		g.writeDemandFailure(response, instanceID, err)
 		return
 	}
@@ -378,15 +388,46 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 			// by an MCP workload response.
 			upstreamResponse.Header.Del(StartingHeader)
 			upstreamResponse.Header.Del(StartFailureHeader)
+			g.observeUpstream(upstreamResponse, coldStart != nil, instanceID, requestID)
 			return nil
 		},
 		ErrorHandler: func(writer http.ResponseWriter, _ *http.Request, proxyErr error) {
+			g.telemetry.upstreamAnswered(request.Context(), 0)
 			g.logger.Warn("MCP upstream request failed", slog.String("instance_id", instanceID), slog.String("error", proxyErr.Error()))
 			http.Error(writer, "MCP upstream request failed", http.StatusBadGateway)
 		},
 	}
 	proxy.ServeHTTP(response, request.WithContext(proxyCtx))
 
+}
+
+// refusedBodyLimit bounds the response body a refused first request logs.
+const refusedBodyLimit = 2048
+
+// observeUpstream counts a workload response and warns when a workload
+// answers the request that started it with a 4xx, logging a bounded body
+// snippet: a fresh workload that refuses a request the previous one accepted
+// is otherwise invisible. The snippet is put back so the caller still
+// receives the whole body.
+func (g *Gateway) observeUpstream(response *http.Response, cold bool, instanceID, requestID string) {
+	g.telemetry.upstreamAnswered(response.Request.Context(), response.StatusCode)
+	if !cold || response.StatusCode < 400 || response.StatusCode > 499 {
+		return
+	}
+	snippet, err := io.ReadAll(io.LimitReader(response.Body, refusedBodyLimit))
+	response.Body = struct {
+		io.Reader
+		io.Closer
+	}{io.MultiReader(bytes.NewReader(snippet), response.Body), response.Body}
+	attrs := []any{
+		slog.String("instance_id", instanceID), slog.String("request_id", requestID),
+		slog.Int("status", response.StatusCode), slog.String("mcp_method", response.Request.Header.Get("Mcp-Method")),
+		slog.String("body", string(snippet)),
+	}
+	if err != nil {
+		attrs = append(attrs, slog.String("body_error", err.Error()))
+	}
+	g.logger.Warn("MCP workload refused the first request after its cold start", attrs...)
 }
 
 func (g *Gateway) writeDemandFailure(response http.ResponseWriter, instanceID string, err error) {
@@ -578,6 +619,7 @@ func (g *Gateway) Reap(ctx context.Context) (int, error) {
 		}
 		if removed {
 			reaped++
+			g.telemetry.reaped(ctx)
 		}
 	}
 	return reaped, nil

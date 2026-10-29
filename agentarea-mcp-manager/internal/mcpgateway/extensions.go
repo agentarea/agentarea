@@ -52,6 +52,44 @@ type RequestCompleted struct {
 	EndedAt    time.Time
 	StatusCode int
 	Canceled   bool
+	// Answer is set when the gateway answered instead of the workload.
+	Answer GatewayAnswer
+	// ColdStart is the activation this request drove, nil when the workload
+	// was already up or the request never reached the lifecycle.
+	ColdStart *ColdStart
+}
+
+// GatewayAnswer names a response the gateway wrote for a workload it could
+// not reach.
+type GatewayAnswer string
+
+const (
+	// AnswerStarting is the retryable 503 while another caller starts the workload.
+	AnswerStarting GatewayAnswer = "starting"
+	// AnswerStartFailed is a workload that could not be started or admitted.
+	AnswerStartFailed GatewayAnswer = "start_failed"
+)
+
+type ColdStartOutcome string
+
+const (
+	ColdStartReady   ColdStartOutcome = "ready"
+	ColdStartFailed  ColdStartOutcome = "failed"
+	ColdStartTimeout ColdStartOutcome = "timeout"
+)
+
+// ColdStart is one activation of a workload, timed from MarkStarting to
+// MarkReadyAndBeginRequest. A phase the activation never entered is zero;
+// Reason is a closed set, empty when the workload became ready.
+type ColdStart struct {
+	Outcome   ColdStartOutcome
+	Reason    string
+	Running   time.Duration
+	Listening time.Duration
+	Total     time.Duration
+
+	activated bool
+	failedIn  activationStep
 }
 
 // RequestObserver sees request boundaries without the request or response.

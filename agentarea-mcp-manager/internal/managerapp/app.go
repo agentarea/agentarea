@@ -18,6 +18,9 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/agentarea/mcp-manager/internal/api"
 	"github.com/agentarea/mcp-manager/internal/artifactstore"
@@ -41,6 +44,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/sandboxrunner"
 	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
 	"github.com/agentarea/mcp-manager/internal/secrets"
+	"github.com/agentarea/mcp-manager/internal/telemetry"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 	"github.com/agentarea/mcp-manager/internal/workspace"
 )
@@ -83,6 +87,18 @@ func Run(ctx context.Context, cfg *config.Config, logger *slog.Logger, options O
 		return failed(logger, "Refusing to start", err)
 	}
 	initFeatures(cfg, logger)
+
+	shutdownTelemetry, err := telemetry.Setup(ctx, cfg.OTelEnabled, Version)
+	if err != nil {
+		return failed(logger, "Failed to set up telemetry", err)
+	}
+	defer func() {
+		flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownTelemetry(flushCtx); err != nil {
+			logger.Error("Telemetry shutdown failed", slog.String("error", err.Error()))
+		}
+	}()
 
 	envType, backend, containerManager, remoteUpstream, err := initBackend(ctx, cfg, logger)
 	if err != nil {
@@ -209,6 +225,12 @@ func runControlPlane(
 			return failed(logger, "Failed to attach extension to MCP demand gateway", err)
 		}
 	}
+	gatewayTelemetry, err := mcpgateway.NewTelemetry(runtime.remoteUpstream != nil, gatewayRepository.CountByState)
+	if err != nil {
+		return failed(logger, "Failed to initialize MCP gateway telemetry", err)
+	}
+	mcpGateway.AttachTelemetry(gatewayTelemetry)
+	gatewayRuntime.AttachTelemetry(gatewayTelemetry)
 
 	sandboxRuntime, sandboxProviderName, err := initSandboxRuntime(ctx, backend, sandboxStore.RedisClient(), runtime.envType, sandboxPolicy, workspaceConfig, hooks, logger)
 	if err != nil {
@@ -266,8 +288,12 @@ func runControlPlane(
 	extension.start(sandboxStore.RedisClient())
 
 	server := &http.Server{
-		Addr:         net.JoinHostPort(cfg.Server.Host, strconv.Itoa(cfg.Server.Port)),
-		Handler:      router,
+		Addr: net.JoinHostPort(cfg.Server.Host, strconv.Itoa(cfg.Server.Port)),
+		// Continues the caller's traceparent; probes are left out.
+		Handler: otelhttp.NewHandler(router, "mcp-manager",
+			otelhttp.WithFilter(func(request *http.Request) bool { return request.URL.Path != "/health" }),
+			otelhttp.WithSpanNameFormatter(func(_ string, request *http.Request) string { return request.Method }),
+		),
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,
 	}
@@ -728,7 +754,7 @@ func setupRouter(cfg *config.Config, logger *slog.Logger) *gin.Engine {
 	router := gin.New()
 
 	// Add middleware
-	router.Use(gin.Recovery())
+	router.Use(gin.Recovery(), routeTelemetry)
 
 	// Add logging middleware
 	router.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
@@ -761,6 +787,21 @@ func setupRouter(cfg *config.Config, logger *slog.Logger) *gin.Engine {
 	}
 
 	return router
+}
+
+// routeTelemetry names the request's span and metric by the route template
+// gin matched, never by the path with its instance id.
+func routeTelemetry(c *gin.Context) {
+	if route := c.FullPath(); route != "" {
+		ctx := c.Request.Context()
+		span := trace.SpanFromContext(ctx)
+		span.SetName(c.Request.Method + " " + route)
+		span.SetAttributes(attribute.String("http.route", route))
+		if labeler, ok := otelhttp.LabelerFromContext(ctx); ok {
+			labeler.Add(attribute.String("http.route", route))
+		}
+	}
+	c.Next()
 }
 
 // getLogLevel converts string log level to slog.Level
