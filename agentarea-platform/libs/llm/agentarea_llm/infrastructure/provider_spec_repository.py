@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
@@ -101,17 +103,25 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
 
         return specs
 
-    async def upsert_by_provider_key(self, entity: ProviderSpec) -> ProviderSpec:
-        """Upsert provider spec by provider_key - used in bootstrap"""
+    async def upsert_by_provider_key(
+        self, entity: ProviderSpec, contract: Mapping[str, Any] | None = None
+    ) -> ProviderSpec:
+        """Upsert provider spec by provider_key - used in bootstrap.
+
+        ``contract`` holds the HTTP-contract columns (``base_url``, ``transport``,
+        ...) the source states; a column it leaves out keeps what is stored.
+        """
+        contract = dict(contract or {})
         existing = await self.get_by_provider_key(entity.provider_key)
         if existing:
-            # Update existing
             existing.name = entity.name
             existing.description = entity.description
             existing.provider_type = entity.provider_type
             existing.icon = entity.icon
             existing.is_builtin = entity.is_builtin
+            for column, value in contract.items():
+                setattr(existing, column, value)
             return await self.update(existing)
-        else:
-            # Create new
-            return await self.create(self._ensure_scope(entity))
+        for column, value in contract.items():
+            setattr(entity, column, value)
+        return await self.create(self._ensure_scope(entity))

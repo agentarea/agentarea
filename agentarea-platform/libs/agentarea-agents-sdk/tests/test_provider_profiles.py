@@ -1,63 +1,96 @@
-"""Each provider's chat and model-list URLs come from its profile, not from a branch per vendor."""
+"""A provider's chat and model-list URLs come from the values its spec carries."""
 
 import pytest
 
 from agentarea_agents_sdk.models.provider_profiles import (
-    PROVIDER_PROFILES,
+    DEFAULT_PROFILE,
+    AuthStyle,
+    ModelListShape,
+    ProviderProfile,
     Transport,
-    profile_for,
+)
+
+GEMINI = ProviderProfile(base_url="https://generativelanguage.googleapis.com/v1beta/openai")
+OLLAMA = ProviderProfile(
+    auth=AuthStyle.NONE, models_path="/api/tags", list_shape=ModelListShape.MODELS_NAME
 )
 
 
 @pytest.mark.parametrize(
-    "provider, chat_url",
+    "profile, chat_url",
     [
-        ("openai", "https://api.openai.com/v1/chat/completions"),
-        ("groq", "https://api.groq.com/openai/v1/chat/completions"),
-        ("perplexity", "https://api.perplexity.ai/chat/completions"),
-        ("zai", "https://api.z.ai/api/paas/v4/chat/completions"),
-        ("gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"),
-        ("deepinfra", "https://api.deepinfra.com/v1/openai/chat/completions"),
-        ("novita", "https://api.novita.ai/v3/openai/chat/completions"),
-        ("volcengine", "https://ark.cn-beijing.volces.com/api/v3/chat/completions"),
-        ("cohere_chat", "https://api.cohere.ai/compatibility/v1/chat/completions"),
-        ("together_ai", "https://api.together.xyz/v1/chat/completions"),
-        ("anthropic", "https://api.anthropic.com/v1/chat/completions"),
+        (ProviderProfile(base_url="https://api.openai.com/v1"), "https://api.openai.com/v1/chat/completions"),
+        (ProviderProfile(base_url="https://api.perplexity.ai"), "https://api.perplexity.ai/chat/completions"),
+        (GEMINI, "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"),
+        (ProviderProfile(base_url="https://api.z.ai/api/paas/v4/"), "https://api.z.ai/api/paas/v4/chat/completions"),
     ],
 )
-def test_a_public_provider_is_called_at_its_own_address(provider, chat_url):
-    assert profile_for(provider).resolve_api_url(None, "/chat/completions") == chat_url
+def test_the_catalog_base_url_is_the_api_root_as_given(profile, chat_url):
+    assert profile.resolve_api_url(None, "/chat/completions") == chat_url
 
 
-def test_the_model_list_follows_the_same_prefix_as_chat():
+@pytest.mark.parametrize(
+    "endpoint_url, chat_url",
+    [
+        ("https://gateway.example/v1", "https://gateway.example/v1/chat/completions"),
+        ("https://gateway.example", "https://gateway.example/v1/chat/completions"),
+        ("localhost:11434", "http://localhost:11434/v1/chat/completions"),
+    ],
+)
+def test_a_typed_endpoint_may_be_the_server_root_or_its_v1_base(endpoint_url, chat_url):
+    assert GEMINI.resolve_api_url(endpoint_url, "/chat/completions") == chat_url
+
+
+def test_the_model_list_sits_under_the_same_root_as_chat():
     assert (
-        profile_for("gemini").resolve_models_url(None)
+        GEMINI.resolve_models_url(None)
         == "https://generativelanguage.googleapis.com/v1beta/openai/models"
     )
 
 
-def test_an_endpoint_url_wins_over_the_public_address():
+def test_a_listing_outside_the_api_root_hangs_off_the_address_itself():
+    assert OLLAMA.resolve_models_url("http://localhost:11434") == "http://localhost:11434/api/tags"
+    assert OLLAMA.resolve_models_url(None) is None
+
+
+def test_a_model_list_query_is_kept():
+    profile = ProviderProfile(
+        base_url="https://openrouter.ai/api/v1", models_query="output_modalities=all"
+    )
     assert (
-        profile_for("openai").resolve_api_url("https://gateway.example/v1", "/chat/completions")
-        == "https://gateway.example/v1/chat/completions"
+        profile.resolve_models_url(None)
+        == "https://openrouter.ai/api/v1/models?output_modalities=all"
     )
 
 
-def test_an_unknown_provider_needs_its_own_endpoint():
-    profile = profile_for("bedrock")
-
-    assert profile.requires_endpoint_url
-    assert profile.transport is Transport.OPENAI
-    assert profile.resolve_api_url(None, "/chat/completions") is None
+def test_a_spec_without_values_is_openai_compatible_and_needs_an_endpoint():
+    assert DEFAULT_PROFILE.requires_endpoint_url
+    assert DEFAULT_PROFILE.transport is Transport.OPENAI
+    assert DEFAULT_PROFILE.resolve_api_url(None, "/chat/completions") is None
 
 
-@pytest.mark.parametrize("key", sorted(PROVIDER_PROFILES))
-def test_every_public_address_is_https(key):
-    base = PROVIDER_PROFILES[key].base_url
-    assert base is None or base.startswith("https://")
+def test_stored_values_round_trip():
+    profile = ProviderProfile(
+        base_url="https://api.anthropic.com/v1",
+        transport=Transport.ANTHROPIC,
+        auth=AuthStyle.API_KEY_HEADER,
+    )
+    assert ProviderProfile.from_mapping(profile.as_mapping()) == profile
+    assert ProviderProfile.from_mapping(None) == DEFAULT_PROFILE
 
 
-def test_only_anthropic_speaks_the_messages_api():
-    assert [k for k, p in PROVIDER_PROFILES.items() if p.transport is Transport.ANTHROPIC] == [
-        "anthropic"
-    ]
+def test_an_unknown_transport_is_refused():
+    with pytest.raises(ValueError, match="bedrock"):
+        ProviderProfile.from_mapping({"transport": "bedrock"})
+
+
+@pytest.mark.parametrize(
+    "auth, headers",
+    [
+        (AuthStyle.BEARER, {"Authorization": "Bearer k"}),
+        (AuthStyle.API_KEY_HEADER, {"x-api-key": "k", "anthropic-version": "2023-06-01"}),
+        (AuthStyle.NONE, {}),
+    ],
+)
+def test_the_key_is_presented_as_the_spec_says(auth, headers):
+    assert ProviderProfile(auth=auth).build_headers("k") == headers

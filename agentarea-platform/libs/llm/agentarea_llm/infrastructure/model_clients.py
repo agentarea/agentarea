@@ -17,7 +17,7 @@ from decimal import Decimal
 from typing import Any, NoReturn
 
 import httpx
-from agentarea_agents_sdk.models.provider_profiles import profile_for
+from agentarea_agents_sdk.models.provider_profiles import DEFAULT_PROFILE, ProviderProfile
 from agentarea_common.money import to_money
 from agentarea_common.outbound import Destination, outbound_client
 from agentarea_common.utils.url_safety import OutboundPolicy, UnsafeUrlError, endpoint_policy_for
@@ -75,6 +75,7 @@ class ModelTarget:
     max_output_tokens: int | None = None
     output_cost_per_image: Decimal | None = None
     output_cost_per_video_per_second: Decimal | None = None
+    provider: ProviderProfile = DEFAULT_PROFILE
 
 
 @dataclass(frozen=True)
@@ -84,7 +85,7 @@ class ModelEndpoint(ModelTarget):
     api_key: str | None = None
 
     def api_url(self, path: str) -> str:
-        url = profile_for(self.provider_type).resolve_api_url(self.endpoint_url, path)
+        url = self.provider.resolve_api_url(self.endpoint_url, path)
         if url is None:
             raise ModelCallError(
                 f"model instance {self.instance_id} uses provider {self.provider_type!r}, "
@@ -93,7 +94,7 @@ class ModelEndpoint(ModelTarget):
         return url
 
     def headers(self) -> dict[str, str]:
-        return profile_for(self.provider_type).build_headers(self.api_key)
+        return self.provider.build_headers(self.api_key)
 
 
 @dataclass(frozen=True)

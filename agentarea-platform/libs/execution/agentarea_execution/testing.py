@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import UUID, uuid4
 
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
 from agentarea_tasks.domain.models import ConversationEntry
 from agentarea_tasks.infrastructure.task_log import model_window
 from temporalio import activity
@@ -193,6 +194,7 @@ async def mock_resolve_model(request: ResolveModelRequest) -> dict[str, Any]:
         "model_name": "gpt-4o-mini",
         "api_key_secret": None,
         "endpoint_url": None,
+        "provider": ProviderProfile(base_url="https://api.openai.com/v1").as_mapping(),
         "context_window": 128000,
         "display_name": "GPT-4o Mini",
         "provider_display_name": "OpenAI",

@@ -1,12 +1,13 @@
 """Tests for LLM condition evaluator."""
 
 import json
-from dataclasses import asdict
+from dataclasses import fields
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 from agentarea_agents_sdk.models.llm_model import LLMResponse
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
 from agentarea_common.auth.context import UserContext
 from agentarea_llm.infrastructure.model_clients import ModelEndpoint, ModelTarget
 from agentarea_triggers.llm_condition_evaluator import (
@@ -46,6 +47,7 @@ def _target(endpoint_url: str | None = None, managed_by: str | None = None) -> M
     return ModelTarget(
         instance_id=str(uuid4()),
         provider_type="openai",
+        provider=ProviderProfile(base_url="https://api.openai.com/v1"),
         model_name="gpt-4",
         endpoint_url=endpoint_url,
         managed_by=managed_by,
@@ -55,7 +57,7 @@ def _target(endpoint_url: str | None = None, managed_by: str | None = None) -> M
 
 
 async def _connect(target: ModelTarget, funding) -> ModelEndpoint:
-    return ModelEndpoint(**asdict(target), api_key="test-api-key")
+    return ModelEndpoint(**{f.name: getattr(target, f.name) for f in fields(target)}, api_key="test-api-key")
 
 
 @pytest.fixture

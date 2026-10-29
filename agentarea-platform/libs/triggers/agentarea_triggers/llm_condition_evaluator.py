@@ -16,7 +16,6 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from agentarea_agents_sdk.models import LLMModel, LLMRequest
-from agentarea_agents_sdk.models.provider_profiles import profile_for
 from agentarea_common.auth.context import UserContext
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.model_charges import (
@@ -842,7 +841,7 @@ class LLMConditionEvaluator:
                 raise LLMConditionEvaluationError("No model instance named for this LLM call")
 
             target = await self.model_service.describe(model_id, ModelKind.CHAT)
-            if not target.endpoint_url and profile_for(target.provider_type).requires_endpoint_url:
+            if not target.endpoint_url and target.provider.requires_endpoint_url:
                 # Self-hosted provider: there is no public address to fall back
                 # to, so the call would go nowhere.
                 raise ValueError(
@@ -867,6 +866,7 @@ class LLMConditionEvaluator:
                     input_cost_per_token=endpoint.input_cost_per_token,
                     output_cost_per_token=endpoint.output_cost_per_token,
                     endpoint_policy=endpoint_policy_for(endpoint.managed_by),
+                    provider=endpoint.provider,
                 )
                 logger.debug(f"Calling LLM for {purpose} with model {endpoint.model_name}")
                 response = await model.complete(

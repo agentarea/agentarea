@@ -3,7 +3,6 @@ from typing import Literal
 from uuid import UUID
 
 from agentarea_agents_sdk.models import LLMModel, LLMRequest
-from agentarea_agents_sdk.models.provider_profiles import profile_for
 
 # Import LLM testing components
 from agentarea_api.api.deps.services import get_provider_service
@@ -343,7 +342,7 @@ async def validate_model_instance(
             api_key = await secret_manager.get_secret(api_key_secret_name)
 
         # What a provider needs is provider data, not a branch per vendor.
-        profile = profile_for(provider_type)
+        profile = provider_config.provider_spec.profile()
 
         if not api_key and profile.requires_api_key:
             return ModelInstanceTestResponse(
@@ -382,6 +381,7 @@ async def validate_model_instance(
             api_key=api_key,
             endpoint_url=resolved_endpoint_url,
             endpoint_policy=endpoint_policy_for(provider_config.managed_by),
+            provider=profile,
         )
 
         llm_request = LLMRequest(

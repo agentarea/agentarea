@@ -1,9 +1,10 @@
-from dataclasses import asdict
+from dataclasses import fields
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 from agentarea_agents_sdk.models.llm_model import LLMResponse
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
 from agentarea_common.auth.context import UserContext
 from agentarea_llm.infrastructure.model_clients import ModelEndpoint, ModelTarget
 from agentarea_triggers.domain.models import ConditionVerdict
@@ -24,6 +25,7 @@ def _evaluator() -> LLMConditionEvaluator:
     target = ModelTarget(
         instance_id=CONDITION["model_id"],
         provider_type="openai",
+        provider=ProviderProfile(base_url="https://api.openai.com/v1"),
         model_name="gpt-4",
         endpoint_url=None,
         managed_by=None,
@@ -31,7 +33,7 @@ def _evaluator() -> LLMConditionEvaluator:
         output_cost_per_token=None,
     )
     model_service.describe.return_value = target
-    model_service.connect.return_value = ModelEndpoint(**asdict(target))
+    model_service.connect.return_value = ModelEndpoint(**{f.name: getattr(target, f.name) for f in fields(target)})
     return LLMConditionEvaluator(
         model_instance_service=instances,
         secret_manager=AsyncMock(),

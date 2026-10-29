@@ -21,7 +21,7 @@ from .messages import (
 from .messages import (
     UserMessage as SDKUserMessage,
 )
-from .provider_profiles import Transport, profile_for
+from .provider_profiles import DEFAULT_PROFILE, ProviderProfile, Transport
 
 if TYPE_CHECKING:
     from agentarea_common.utils.url_safety import OutboundPolicy
@@ -314,6 +314,7 @@ class LLMModel:
         cached_input_cost_per_token: Decimal | None = None,
         endpoint_policy: OutboundPolicy | None = None,
         cache_creation_input_cost_per_token: Decimal | None = None,
+        provider: ProviderProfile = DEFAULT_PROFILE,
     ):
         """Initialize LLM model with explicit parameters.
 
@@ -331,6 +332,9 @@ class LLMModel:
             endpoint_policy: Set when ``endpoint_url`` came from someone other than
                 whoever runs this process (a workspace member): every call to it is
                 refused unless the address passes this policy. None calls it as given.
+            provider: The provider spec's HTTP contract: its public address,
+                transport and auth. The default is OpenAI-compatible with no
+                public address, so ``endpoint_url`` is required.
         """
         self.provider_type = provider_type
         self.model_name = model_name
@@ -341,7 +345,7 @@ class LLMModel:
         self.cached_input_cost_per_token = cached_input_cost_per_token
         self.cache_creation_input_cost_per_token = cache_creation_input_cost_per_token
         self.endpoint_policy = endpoint_policy
-        self._profile = profile_for(provider_type)
+        self._profile = provider
 
     def _configured_cost(self, usage: LLMUsage) -> Decimal:
         """Calculate cost from the persisted model spec.

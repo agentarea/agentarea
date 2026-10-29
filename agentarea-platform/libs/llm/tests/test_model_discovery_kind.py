@@ -1,6 +1,7 @@
 """Discovery decides each model's kind from what the provider says it outputs."""
 
 import httpx
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
 from agentarea_llm.application.model_discovery_service import ModelDiscoveryService
 from agentarea_llm.domain.models import ModelKind
 
@@ -20,7 +21,7 @@ def _openrouter_model(model_id: str, output_modalities: list[str]) -> dict:
 
 
 def _kinds(payload: dict) -> dict[str, ModelKind | None]:
-    models = ModelDiscoveryService()._parse_response("openrouter", payload)
+    models = ModelDiscoveryService()._parse_response(ProviderProfile(), payload)
     return {m.model_name: m.kind for m in models}
 
 
@@ -94,7 +95,7 @@ async def test_openrouter_discovery_lists_every_output_modality():
         )
 
     service = ModelDiscoveryService(transport=httpx.MockTransport(handler))
-    models = await service.discover("openrouter", "sk-test")
+    models = await service.discover("openrouter", "sk-test", provider=ProviderProfile(base_url="https://openrouter.ai/api/v1", models_query="output_modalities=all"))
 
     assert [(url.path, url.params.get("output_modalities")) for url in seen] == [
         ("/api/v1/models", "all")
@@ -117,7 +118,7 @@ async def test_other_providers_keep_their_plain_listing():
         seen.append(request.url)
         return httpx.Response(200, json={"data": [{"id": "gpt-4o"}]})
 
-    await ModelDiscoveryService(transport=httpx.MockTransport(handler)).discover("openai", "sk")
+    await ModelDiscoveryService(transport=httpx.MockTransport(handler)).discover("openai", "sk", provider=ProviderProfile(base_url="https://api.openai.com/v1"))
 
     assert [str(url) for url in seen] == ["https://api.openai.com/v1/models"]
 
@@ -126,7 +127,7 @@ def test_image_input_marks_the_model_as_reading_images():
     seeing = _openrouter_model("seeing", ["text"])
     seeing["architecture"]["input_modalities"] = ["text", "image"]
     models = ModelDiscoveryService()._parse_response(
-        "openrouter", {"data": [seeing, _openrouter_model("blind", ["text"]), {"id": "bare"}]}
+        ProviderProfile(), {"data": [seeing, _openrouter_model("blind", ["text"]), {"id": "bare"}]}
     )
 
     assert {m.model_name: m.supports_vision for m in models} == {

@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from agentarea_registry.application.service import (
+    PROVIDER_CONTRACT_FIELDS,
     TYPE_BY_TOPLEVEL_KEY,
     VALID_REGISTRY_TYPES,
     RegistryService,
@@ -423,6 +424,30 @@ class TestParseLLMProviders:
         assert item["spec"]["provider_key"] == "openai"
         assert item["spec"]["provider_type"] == "openai"
         assert item["spec"]["icon"] == "openai.svg"
+
+    def test_carries_the_http_contract_the_entry_states(self):
+        data = {
+            "providers": [
+                {
+                    "provider_key": "gemini",
+                    "name": "Gemini",
+                    "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+                    "transport": "openai",
+                },
+                {"provider_key": "legacy", "name": "Legacy"},
+            ]
+        }
+
+        gemini, legacy = (item["spec"] for item in RegistryService._parse_llm_providers(data))
+
+        assert gemini["base_url"] == "https://generativelanguage.googleapis.com/v1beta/openai"
+        assert gemini["transport"] == "openai"
+        assert "auth" not in gemini
+        assert not set(PROVIDER_CONTRACT_FIELDS) & set(legacy)
+
+    def test_a_contract_value_is_checked_before_it_is_stored(self):
+        with pytest.raises(ValueError, match="carrier-pigeon"):
+            RegistryService._provider_contract({"transport": "carrier-pigeon"})
 
     def test_skips_entries_without_provider_key(self):
         data = {"providers": [{"name": "Missing key"}, {"provider_key": "ok", "name": "OK"}]}

@@ -6,6 +6,9 @@ from decimal import Decimal
 import pytest
 
 from agentarea_agents_sdk.models.llm_model import LLMModel, LLMRequest
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
+
+OPENAI = ProviderProfile(base_url="https://api.openai.com/v1")
 
 
 class _Response:
@@ -112,6 +115,7 @@ def _serve_sse(monkeypatch, model, events, captured, status=200, body=None):
 async def test_a_provider_without_endpoint_url_is_called_at_its_public_address(monkeypatch):
     model = LLMModel(
         provider_type="openrouter",
+        provider=ProviderProfile(base_url="https://openrouter.ai/api/v1"),
         model_name="vendor/new-model",
         api_key="k",
         input_cost_per_token=0.001,
@@ -148,6 +152,7 @@ async def test_a_provider_without_endpoint_url_is_called_at_its_public_address(m
 async def test_completion_preserves_reasoning_tools_and_accounting(monkeypatch):
     model = LLMModel(
         provider_type="openai",
+        provider=OPENAI,
         model_name="test-model",
         input_cost_per_token=0.001,
         output_cost_per_token=0.002,
@@ -196,7 +201,7 @@ async def test_completion_preserves_reasoning_tools_and_accounting(monkeypatch):
 async def test_an_error_status_carries_the_provider_message(monkeypatch):
     from agentarea_agents_sdk.models.llm_model import LLMProviderHTTPError
 
-    model = LLMModel(provider_type="openai", model_name="m", api_key="k")
+    model = LLMModel(provider_type="openai", provider=OPENAI, model_name="m", api_key="k")
     _serve_sse(
         monkeypatch,
         model,

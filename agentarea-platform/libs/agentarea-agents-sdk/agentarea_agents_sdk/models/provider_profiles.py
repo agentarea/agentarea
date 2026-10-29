@@ -1,25 +1,21 @@
-"""How each LLM provider's HTTP API differs, as data.
+"""How a provider's HTTP API differs from the next one's, as data.
 
-Providers disagree on four things: where their API lives, what path lists
-models, how the key is presented, and what the model list looks like coming
-back. That is provider *data*, so it lives in one table instead of as
-``if provider == "..."`` branches spread across the discovery service, the
-model-test endpoint, and the trigger condition evaluator — each of which had
-grown its own copy of "ollama is special".
+Providers disagree on a handful of things: where their API lives, which wire
+protocol it speaks, how the key is presented, and where and in what shape the
+model list comes back. Each provider spec carries these values (``provider_specs``,
+fed from the registry catalog), so a provider that speaks a protocol the platform
+already has needs a catalog entry, not code.
 
 A self-hosted provider has no address to guess: its ``base_url`` is ``None``,
-which is what makes ``requires_endpoint_url`` true. Nothing here names a
-provider outside the table itself.
-
-The eventual home for this is ``provider_specs`` (fed from the registry
-catalog, ADR-003), so a new provider needs no code change at all. Until those
-columns exist, this table is the single source of truth.
+which is what makes ``requires_endpoint_url`` true.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass
 from enum import StrEnum
+from typing import Any
 
 
 class AuthStyle(StrEnum):
@@ -56,38 +52,57 @@ class ModelListShape(StrEnum):
     """``{"models": [{"name": ...}]}``."""
 
 
+_ANTHROPIC_API_VERSION = "2023-06-01"
+
+
+def _with_scheme(url: str) -> str:
+    url = url.rstrip("/")
+    return url if url.startswith(("http://", "https://")) else f"http://{url}"
+
+
 @dataclass(frozen=True)
 class ProviderProfile:
     """One provider's HTTP contract.
 
     Args:
-        base_url: Public API root, or ``None`` when only the operator knows it.
-        models_path: Path appended to ``base_url`` to list models. ``None``
-            selects the OpenAI-compatible rule: ``/models`` when the base
-            already ends in ``/v1``, otherwise ``/v1/models``.
-        auth: How to present the key.
-        list_shape: How to read the model list back.
+        base_url: The API root that ``/chat/completions`` (or ``/messages``) and
+            ``/models`` are appended to, e.g. ``https://api.openai.com/v1``, or
+            ``None`` when only the operator knows the address.
         transport: The protocol its chat API speaks.
-        api_prefix: Inserted between ``base_url`` and an API path such as
-            ``/chat/completions`` unless the base already ends in ``/v1``. Empty
-            for providers whose base is already the versioned API root.
-        aliases: Other identifiers the same provider answers to, such as a
-            ``provider_type`` (``ollama_chat``) next to the catalog's
-            ``provider_key`` (``ollama``). Callers hold one or the other
-            depending on where they sit, and neither should have to convert.
+        auth: How to present the key.
+        models_path: Path appended to the address itself (not the API root) to
+            list models, for providers whose listing is not ``/models`` under the
+            API root (Ollama's ``/api/tags``).
+        list_shape: How to read the model list back.
         models_query: Query string for the model list. OpenRouter's lists only
             text models unless asked for every output modality, which is where
             its image, video and decision models are.
     """
 
     base_url: str | None = None
-    models_path: str | None = None
-    auth: AuthStyle = AuthStyle.BEARER
-    list_shape: ModelListShape = ModelListShape.DATA_ID
     transport: Transport = Transport.OPENAI
-    api_prefix: str = "/v1"
-    aliases: tuple[str, ...] = field(default_factory=tuple)
+    auth: AuthStyle = AuthStyle.BEARER
+    models_path: str | None = None
+    list_shape: ModelListShape = ModelListShape.DATA_ID
     models_query: str | None = None
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any] | None) -> ProviderProfile:
+        """A profile from stored values (a provider spec row, a cached config)."""
+        data = data or {}
+        return cls(
+            base_url=data.get("base_url") or None,
+            transport=Transport(data.get("transport") or Transport.OPENAI),
+            auth=AuthStyle(data.get("auth") or AuthStyle.BEARER),
+            models_path=data.get("models_path") or None,
+            list_shape=ModelListShape(data.get("list_shape") or ModelListShape.DATA_ID),
+            models_query=data.get("models_query") or None,
+        )
+
+    def as_mapping(self) -> dict[str, Any]:
+        return {
+            key: str(value) if value is not None else None for key, value in asdict(self).items()
+        }
 
     @property
     def requires_endpoint_url(self) -> bool:
@@ -99,25 +114,35 @@ class ProviderProfile:
         """True when the provider authenticates callers at all."""
         return self.auth is not AuthStyle.NONE
 
-    def resolve_models_url(self, endpoint_url: str | None) -> str | None:
-        """Full model-list URL for this provider, or None when there is no base."""
-        base = (endpoint_url or self.base_url or "").rstrip("/")
-        if not base:
-            return None
-        if self.models_path:
-            url = f"{base}{self.models_path}"
-        else:
-            url = f"{base}/models" if base.endswith("/v1") else f"{base}{self.api_prefix}/models"
-        return f"{url}?{self.models_query}" if self.models_query else url
+    def api_root(self, endpoint_url: str | None) -> str | None:
+        """The API root a call goes to, or None when there is no address.
+
+        An ``endpoint_url`` someone typed may be the server root or the ``/v1``
+        base; both are accepted. The catalog's ``base_url`` is used exactly.
+        """
+        if endpoint_url:
+            root = _with_scheme(endpoint_url)
+            return root if root.endswith("/v1") else f"{root}/v1"
+        return self.base_url.rstrip("/") if self.base_url else None
 
     def resolve_api_url(self, endpoint_url: str | None, path: str) -> str | None:
         """Full URL of an API path such as ``/chat/completions``, or None when there is no base."""
-        base = (endpoint_url or self.base_url or "").rstrip("/")
-        if not base:
-            return None
-        if not base.startswith(("http://", "https://")):
-            base = f"http://{base}"
-        return f"{base}{path}" if base.endswith("/v1") else f"{base}{self.api_prefix}{path}"
+        root = self.api_root(endpoint_url)
+        return f"{root}{path}" if root else None
+
+    def resolve_models_url(self, endpoint_url: str | None) -> str | None:
+        """Full model-list URL for this provider, or None when there is no base."""
+        if self.models_path:
+            address = endpoint_url or self.base_url
+            if not address:
+                return None
+            url = f"{_with_scheme(address)}{self.models_path}"
+        else:
+            root = self.api_root(endpoint_url)
+            if root is None:
+                return None
+            url = f"{root}/models"
+        return f"{url}?{self.models_query}" if self.models_query else url
 
     def build_headers(self, api_key: str | None) -> dict[str, str]:
         """Auth headers for this provider, empty when there is nothing to send."""
@@ -128,89 +153,6 @@ class ProviderProfile:
         return {"Authorization": f"Bearer {api_key}"}
 
 
-_ANTHROPIC_API_VERSION = "2023-06-01"
-
-# Unknown providers get this: no address to guess, so the operator supplies the
-# endpoint, and we assume the OpenAI-compatible contract everyone else follows.
+# A provider spec that carries no values: OpenAI-compatible, address supplied by
+# whoever configures it.
 DEFAULT_PROFILE = ProviderProfile()
-
-PROVIDER_PROFILES: dict[str, ProviderProfile] = {
-    "openai": ProviderProfile(base_url="https://api.openai.com"),
-    "openrouter": ProviderProfile(
-        base_url="https://openrouter.ai/api", models_query="output_modalities=all"
-    ),
-    "anthropic": ProviderProfile(
-        base_url="https://api.anthropic.com",
-        auth=AuthStyle.API_KEY_HEADER,
-        transport=Transport.ANTHROPIC,
-    ),
-    "mistral": ProviderProfile(base_url="https://api.mistral.ai"),
-    "groq": ProviderProfile(base_url="https://api.groq.com/openai"),
-    "together": ProviderProfile(base_url="https://api.together.xyz", aliases=("together_ai",)),
-    "fireworks": ProviderProfile(
-        base_url="https://api.fireworks.ai/inference", aliases=("fireworks_ai",)
-    ),
-    "deepseek": ProviderProfile(base_url="https://api.deepseek.com"),
-    "perplexity": ProviderProfile(base_url="https://api.perplexity.ai", api_prefix=""),
-    "cerebras": ProviderProfile(base_url="https://api.cerebras.ai"),
-    "xai": ProviderProfile(base_url="https://api.x.ai"),
-    "zai": ProviderProfile(
-        base_url="https://api.z.ai/api/paas/v4", models_path="/models", api_prefix=""
-    ),
-    "ai21": ProviderProfile(base_url="https://api.ai21.com/studio/v1", aliases=("ai21_chat",)),
-    "baseten": ProviderProfile(base_url="https://inference.baseten.co/v1"),
-    "codestral": ProviderProfile(base_url="https://codestral.mistral.ai/v1"),
-    "cohere": ProviderProfile(
-        base_url="https://api.cohere.ai/compatibility/v1", aliases=("cohere_chat",)
-    ),
-    "crusoe": ProviderProfile(base_url="https://managed-inference-api-proxy.crusoecloud.com/v1"),
-    "dashscope": ProviderProfile(base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
-    "deepinfra": ProviderProfile(base_url="https://api.deepinfra.com/v1/openai", api_prefix=""),
-    "featherless_ai": ProviderProfile(base_url="https://api.featherless.ai/v1"),
-    "friendliai": ProviderProfile(base_url="https://api.friendli.ai/serverless/v1"),
-    "gemini": ProviderProfile(
-        base_url="https://generativelanguage.googleapis.com/v1beta/openai", api_prefix=""
-    ),
-    "gmi": ProviderProfile(base_url="https://api.gmi-serving.com/v1"),
-    "gradient_ai": ProviderProfile(base_url="https://inference.do-ai.run/v1"),
-    "meta_llama": ProviderProfile(base_url="https://api.llama.com/compat/v1"),
-    "minimax": ProviderProfile(base_url="https://api.minimax.io/v1"),
-    "moonshot": ProviderProfile(base_url="https://api.moonshot.ai/v1"),
-    "morph": ProviderProfile(base_url="https://api.morphllm.com/v1"),
-    "nebius": ProviderProfile(base_url="https://api.studio.nebius.ai/v1"),
-    "novita": ProviderProfile(base_url="https://api.novita.ai/v3/openai", api_prefix=""),
-    "nscale": ProviderProfile(base_url="https://inference.api.nscale.com/v1"),
-    "publicai": ProviderProfile(base_url="https://api.publicai.co/v1"),
-    "sambanova": ProviderProfile(base_url="https://api.sambanova.ai/v1"),
-    "sarvam": ProviderProfile(base_url="https://api.sarvam.ai/v1"),
-    "vercel_ai_gateway": ProviderProfile(base_url="https://ai-gateway.vercel.sh/v1"),
-    "volcengine": ProviderProfile(
-        base_url="https://ark.cn-beijing.volces.com/api/v3", api_prefix=""
-    ),
-    "wandb": ProviderProfile(base_url="https://api.inference.wandb.ai/v1"),
-    "ollama": ProviderProfile(
-        base_url=None,
-        models_path="/api/tags",
-        auth=AuthStyle.NONE,
-        list_shape=ModelListShape.MODELS_NAME,
-        aliases=("ollama_chat",),
-    ),
-}
-
-_BY_IDENTIFIER: dict[str, ProviderProfile] = {
-    identifier: profile
-    for key, profile in PROVIDER_PROFILES.items()
-    for identifier in (key, *profile.aliases)
-}
-
-
-def profile_for(provider: str | None) -> ProviderProfile:
-    """Profile for a ``provider_key`` or a ``provider_type``.
-
-    Unknown providers fall back to the OpenAI-compatible default rather than
-    raising: a provider added to the catalog before this table must still be
-    configurable, it just has to carry its own endpoint.
-    """
-    if not provider:
-        return DEFAULT_PROFILE
-    return _BY_IDENTIFIER.get(provider, DEFAULT_PROFILE)

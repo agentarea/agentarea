@@ -8,6 +8,7 @@ from typing import Any, Protocol, cast
 from uuid import UUID, uuid4
 
 from agentarea_agents_sdk import LLMModel, LLMRequest, LLMResponse
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
 from agentarea_common.auth.context import UserContext
 from agentarea_common.model_charges import (
     ModelFunding,
@@ -131,6 +132,7 @@ class LLMExecutionService:
             cache_creation_input_cost_per_token = None
 
             supports_vision: bool | None = None
+            provider_data: dict[str, Any] | None = None
             if request.resolved_model:
                 cached = request.resolved_model
                 supports_vision = cached.get("supports_vision")
@@ -146,6 +148,10 @@ class LLMExecutionService:
                 )
                 managed_by = cached.get("managed_by")
                 api_key_secret_name = cached.get("api_key_secret")
+                provider_data = cached.get("provider")
+                if provider_data is None:
+                    # Resolved before specs carried their HTTP contract: read the spec.
+                    provider_type = None
 
             if provider_type is None:
                 async with self._model_service_scope(user_context) as model_service:
@@ -162,6 +168,9 @@ class LLMExecutionService:
                         )
 
                     provider_type = model_instance.provider_config.provider_spec.provider_type
+                    provider_data = (
+                        model_instance.provider_config.provider_spec.profile().as_mapping()
+                    )
                     model_name = model_instance.model_spec.model_name
                     endpoint_url = getattr(
                         model_instance.provider_config, "endpoint_url", None
@@ -251,6 +260,7 @@ class LLMExecutionService:
                         cache_creation_input_cost_per_token
                     ),
                     endpoint_policy=endpoint_policy_for(managed_by),
+                    provider=ProviderProfile.from_mapping(provider_data),
                 )
                 return await self._call(
                     llm_model,

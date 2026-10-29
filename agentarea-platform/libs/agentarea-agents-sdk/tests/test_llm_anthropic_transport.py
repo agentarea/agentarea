@@ -13,6 +13,13 @@ from agentarea_agents_sdk.models.llm_model import (
     to_anthropic_messages,
     to_anthropic_tools,
 )
+from agentarea_agents_sdk.models.provider_profiles import AuthStyle, ProviderProfile, Transport
+
+ANTHROPIC = ProviderProfile(
+    base_url="https://api.anthropic.com/v1",
+    transport=Transport.ANTHROPIC,
+    auth=AuthStyle.API_KEY_HEADER,
+)
 
 
 def test_system_goes_apart_and_tool_turns_become_blocks():
@@ -120,6 +127,7 @@ def _serve(monkeypatch, model, events, captured, status=200, body=None):
 def _claude() -> LLMModel:
     return LLMModel(
         provider_type="anthropic",
+        provider=ANTHROPIC,
         model_name="claude-sonnet-4-5",
         api_key="sk-ant",
         input_cost_per_token=Decimal("0.000003"),

@@ -12,6 +12,7 @@ from decimal import Decimal
 
 import httpx
 import pytest
+from agentarea_agents_sdk.models.provider_profiles import DEFAULT_PROFILE, ProviderProfile
 from agentarea_llm.infrastructure.model_clients import (
     DecisionModel,
     ImageModel,
@@ -22,12 +23,14 @@ from agentarea_llm.infrastructure.model_clients import (
 )
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+OPENROUTER = ProviderProfile(base_url="https://openrouter.ai/api/v1")
 
 
 def _endpoint(**overrides) -> ModelEndpoint:
     base = {
         "instance_id": "11111111-1111-1111-1111-111111111111",
         "provider_type": "openrouter",
+        "provider": OPENROUTER,
         "model_name": "vendor/model",
         "api_key": "sk-or-test",  # pragma: allowlist secret
         "endpoint_url": None,
@@ -621,6 +624,7 @@ async def test_a_platform_gateway_decision_is_called_at_its_address():
     model = DecisionModel(
         _endpoint(
             provider_type="typesafe",
+            provider=DEFAULT_PROFILE,
             model_name="jev",
             endpoint_url="https://gateway.internal.example",
             managed_by="platform",
@@ -637,7 +641,7 @@ async def test_a_platform_gateway_decision_is_called_at_its_address():
 
 async def test_a_decision_provider_without_an_address_fails_loud():
     model = DecisionModel(
-        _endpoint(provider_type="typesafe", model_name="jev"),
+        _endpoint(provider_type="typesafe", provider=DEFAULT_PROFILE, model_name="jev"),
         http_client_factory=_client_factory(_never_vendor),
     )
 

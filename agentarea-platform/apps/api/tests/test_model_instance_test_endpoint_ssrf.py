@@ -11,6 +11,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_agents_sdk.models import LLMModel
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
 from agentarea_api.api.v1 import model_instances
 from agentarea_api.api.v1.model_instances import ModelInstanceTestRequest
 from agentarea_common.auth.context import UserContext
@@ -23,7 +24,10 @@ MEMBER = UserContext(user_id="user-member", workspace_id="ws-acme", admin_worksp
 
 def _service(endpoint_url: str, managed_by: str | None = None) -> SimpleNamespace:
     config = SimpleNamespace(
-        provider_spec=SimpleNamespace(provider_type="openai"),
+        provider_spec=SimpleNamespace(
+            provider_type="openai",
+            profile=lambda: ProviderProfile(base_url="https://api.openai.com/v1"),
+        ),
         endpoint_url=endpoint_url,
         api_key="provider_config_key",  # pragma: allowlist secret
         managed_by=managed_by,

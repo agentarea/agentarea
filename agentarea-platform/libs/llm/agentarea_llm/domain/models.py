@@ -2,6 +2,7 @@ from decimal import Decimal
 from importlib import import_module
 from uuid import UUID
 
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from agentarea_common.constants import MANAGED_BY_PLATFORM, PLATFORM_WORKSPACE_ID
 from sqlalchemy import (
@@ -81,6 +82,32 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
     # for a key there leaves the user with a required field they can only satisfy
     # by inventing a value.
     requires_api_key: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # How the provider's HTTP API is reached (see ProviderProfile). A null base_url
+    # means only whoever configures it knows the address.
+    base_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    transport: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="openai", server_default="openai"
+    )
+    auth: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="bearer", server_default="bearer"
+    )
+    models_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    list_shape: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="data_id", server_default="data_id"
+    )
+    models_query: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    def profile(self) -> ProviderProfile:
+        return ProviderProfile.from_mapping(
+            {
+                "base_url": self.base_url,
+                "transport": self.transport,
+                "auth": self.auth,
+                "models_path": self.models_path,
+                "list_shape": self.list_shape,
+                "models_query": self.models_query,
+            }
+        )
 
     @classmethod
     def workspace_visibility(cls, workspace_id: str) -> ColumnElement[bool]:

@@ -4,7 +4,7 @@ Either way the call is funded before its credential is read and written to the l
 (wiki ADR-0038).
 """
 
-from dataclasses import asdict
+from dataclasses import fields
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_agents_sdk.models.llm_model import LLMResponse, LLMUsage
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
 from agentarea_common.auth.context import UserContext
 from agentarea_common.extensions import tool_billing
 from agentarea_common.extensions.registry import ExtensionRegistry
@@ -102,6 +103,7 @@ class _Models:
         return ModelTarget(
             instance_id=str(instance_id),
             provider_type="openai",
+            provider=ProviderProfile(base_url="https://api.openai.com/v1"),
             model_name="gpt-4",
             endpoint_url=None,
             managed_by=self.managed_by,
@@ -112,7 +114,10 @@ class _Models:
 
     async def connect(self, target, funding):
         self.funded.append(funding)
-        return ModelEndpoint(**asdict(target), api_key="sk-resolved")  # pragma: allowlist secret
+        return ModelEndpoint(
+            **{f.name: getattr(target, f.name) for f in fields(target)},
+            api_key="sk-resolved",  # pragma: allowlist secret
+        )
 
     async def decision_model(self, target, funding):
         self.funded.append(funding)
