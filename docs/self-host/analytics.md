@@ -57,6 +57,7 @@ recovery once.
 |---|---|---|---|
 | `AGENTAREA_ANALYTICS_ENABLED` | `global.analytics.enabled` | `true` | `false` sends nothing from the API, the worker or the webapp |
 | `AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY` | Secret `global.analytics.signupHookSecret`, key `signup-hook-key` | unset | the key Kratos's after-registration hook presents; unset, no sign-up is recorded or sent |
+| `AGENTAREA_ANALYTICS_OWN_DOMAINS` | `global.analytics.ownDomains` | empty | comma-separated domains of your own sites; a referrer at one of them or a subdomain is not a channel |
 
 Set it on the backend and the worker. The chart and `docker-compose.yaml` set both
 from the one value. `docker-compose.dev.yaml` defaults it to `false`, and the CI
@@ -221,7 +222,9 @@ nothing.
 Each text value is cut to 64 characters, and a missing one is null. The channel is
 `campaign` when `utm_source` is present, `search`, `social` or `referral` by the
 referring host, `skills_catalog` for a visit with no referrer that entered on a
-skill page, and `direct` otherwise.
+skill page, and `direct` otherwise. A referring host in
+`AGENTAREA_ANALYTICS_OWN_DOMAINS`, or below one of its domains, counts as no
+referrer.
 
 ## Never sent
 

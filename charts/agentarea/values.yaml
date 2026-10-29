@@ -315,6 +315,10 @@ global:
     # hook presents to /internal/analytics/signups to record each sign-up's channel.
     # Empty, that endpoint answers 404.
     signupHookSecret: ""
+    # -- Domains of this installation's own sites, read by the backend as
+    # AGENTAREA_ANALYTICS_OWN_DOMAINS: a sign-up referred from one of them or a
+    # subdomain counts as no channel rather than a referral. Empty: none.
+    ownDomains: []
 
   # Outbound HTTP from the backend and worker
   http:

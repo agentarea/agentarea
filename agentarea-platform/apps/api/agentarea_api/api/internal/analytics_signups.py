@@ -52,7 +52,9 @@ async def record_signup(
 ) -> Response:
     """Store the sign-up's channel once per identity; the first store also sends ``sign_up``."""
     method = method if method in METHODS else None
-    attribution = attribution_from_request_url(hook.request_url)
+    attribution = attribution_from_request_url(
+        hook.request_url, own_domains=get_settings().analytics.OWN_DOMAINS
+    )
     created_at = hook.created_at.astimezone(UTC).replace(tzinfo=None)
     inserted = await upsert_signup_attribution(
         session,
