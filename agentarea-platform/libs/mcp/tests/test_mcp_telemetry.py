@@ -10,6 +10,11 @@ def test_an_mcp_error_is_its_json_rpc_code():
     assert mcp_error_type(MCPError(-32022, "unsupported protocol version")) == "-32022"
 
 
+def test_a_code_the_protocol_does_not_define_is_other():
+    assert mcp_error_type(MCPError(-31999, "custom")) == "_OTHER"
+    assert mcp_error_type(MCPError(42, "anything a server says")) == "_OTHER"
+
+
 def test_any_other_failure_is_its_class():
     assert mcp_error_type(TimeoutError()) == "TimeoutError"
 

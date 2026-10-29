@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import os
 import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -223,13 +222,6 @@ async def app_lifespan(app: FastAPI):
 
     install_outbound_trust()
 
-    from agentarea_common.config import ObservabilitySettings, get_settings
-    from agentarea_common.observability.broker_metrics import start_broker_health_metrics
-
-    broker_metrics = (
-        start_broker_health_metrics(get_settings()) if ObservabilitySettings().ENABLED else None
-    )
-
     get_container()
     stream_bus = await initialize_services()
 
@@ -246,6 +238,13 @@ async def app_lifespan(app: FastAPI):
     from agentarea_common.analytics import start_analytics, stop_analytics
 
     await start_analytics(get_database().async_session_factory)
+
+    from agentarea_common.config import ObservabilitySettings, get_settings
+    from agentarea_common.observability.broker_metrics import start_broker_health_metrics
+
+    broker_metrics = (
+        start_broker_health_metrics(get_settings()) if ObservabilitySettings().ENABLED else None
+    )
 
     logger.info("Application started successfully")
 
@@ -686,14 +685,6 @@ def create_app() -> FastAPI:
 
 def _instrument_api(app: FastAPI) -> None:
     """Install OpenTelemetry instrumentation for API process dependencies."""
-    # Without the opt-in the instrumentation emits the old millisecond
-    # http.server.duration, which no View keeps: the API would export no RED.
-    opt_in = os.environ.get("OTEL_SEMCONV_STABILITY_OPT_IN", "")
-    if not any(token.strip().startswith("http") for token in opt_in.split(",")):
-        raise RuntimeError(
-            "AGENTAREA_OTEL_ENABLED needs OTEL_SEMCONV_STABILITY_OPT_IN=http for the "
-            "HTTP server and client metrics"
-        )
     from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor

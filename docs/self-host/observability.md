@@ -22,12 +22,17 @@ With telemetry on, the API and the worker export, among others:
 - `agentarea.authz.duration{operation}` — time spent on authorization.
 - `agentarea.broker.group.lag`, `.pending`, `.oldest_pending`,
   `agentarea.broker.dlq.length`, `agentarea.broker.health` (API) — consumer-group health.
+  Read from Redis only: with `AGENTAREA_BROKER=kafka` the API starts without these
+  gauges and logs one warning saying so.
 - `agentarea.run.transitions{status, failure_reason}`, `agentarea.run.duration{status}`.
 - `gen_ai.client.operation.duration`, `gen_ai.client.token.usage`,
   `gen_ai.client.operation.time_to_first_chunk`, `agentarea.llm.in_flight` — model calls
   by provider, model spec, purpose and `error.type`.
 - `agentarea.tool.calls`, `agentarea.tool.call.duration`, `agentarea.tool.in_flight`,
-  `agentarea.tool.oldest_in_flight` — tool calls by kind, outcome and path (`worker` or `api`).
+  `agentarea.tool.oldest_in_flight` — tool calls by `agentarea.tool.kind` (`mcp`,
+  `builtin`, `openapi`, `platform`, `delegation`, `skill`), `outcome` (`ok`,
+  `tool_error`, `transport_error`, `timeout`, `denied`, `held`, `cancelled`) and
+  path (`worker` or `api`).
 - `mcp.client.operation.duration`, `agentarea.mcp.client.era_renegotiated`.
 - Temporal SDK metrics (`temporal_*`) from the worker and the API.
 - `agentarea.process.uptime` — a heartbeat from every process.
@@ -139,7 +144,8 @@ a fixed attribute allowlist enforced by the SDK.
 
     That sets `AGENTAREA_OTEL_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`,
     `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`, `OTEL_SEMCONV_STABILITY_OPT_IN=http`
-    and `OTEL_RESOURCE_ATTRIBUTES` with the pod's name and namespace.
+    and `OTEL_RESOURCE_ATTRIBUTES` with the pod's name and namespace and
+    `service.version` set to the Deployment's image tag.
 
     | Variable | Default | Meaning |
     |---|---|---|
@@ -148,11 +154,12 @@ a fixed attribute allowlist enforced by the SDK.
     | `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | Or `grpc`. |
     | `OTEL_METRICS_EXPORTER` | `otlp` | `otlp`, `prometheus` (a scrape endpoint on `OTEL_EXPORTER_PROMETHEUS_HOST`:`OTEL_EXPORTER_PROMETHEUS_PORT`, default `localhost:9464`, one process per pod), or `none`. |
     | `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | Push interval in milliseconds. |
-    | `OTEL_SEMCONV_STABILITY_OPT_IN` | unset | Must include `http` on the API: without it the HTTP instrumentation emits the old metric names, and the API refuses to start. |
+    | `OTEL_SEMCONV_STABILITY_OPT_IN` | unset | The process sets `http` itself when unset. A value without `http`, or with `http/dup`, stops it at startup. |
     | `OTEL_SERVICE_NAME` | `""` | Overrides the built-in name — `agentarea-api` or `agentarea-worker`. |
 
     Every process identifies itself with `service.name`, `service.namespace=agentarea`,
-    `service.version`, `service.instance.id` (`<pod>-<pid>`, so several uvicorn
+    `service.version` (from `OTEL_RESOURCE_ATTRIBUTES` when set there, else the package
+    version), `service.instance.id` (`<pod>-<pid>`, so several uvicorn
     workers in one pod never overwrite each other) and `deployment.environment.name`
     (`AGENTAREA_ENV`). Metrics are cumulative and flushed on exit.
 

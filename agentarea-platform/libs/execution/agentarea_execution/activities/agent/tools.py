@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from agentarea_agents_sdk import ToolExecutor
+from agentarea_agents_sdk.tools.a2a_agent_tool import delegate_tool_name
+from agentarea_agents_sdk.tools.code_tools_loader import get_code_tool_class
 from agentarea_agents_sdk.tools.invocation_context import ToolInvocationContext
 from agentarea_agents_sdk.tools.media_toolset import MEDIA_TOOLSET
 from agentarea_agents_sdk.tools.tool_builders import allowed_tool_names
@@ -108,6 +110,18 @@ def tool_kind(request: MCPToolRequest) -> ToolKind:
         return ToolKind.MCP
     if any(request.tool_name in names for names in request.openapi_operation_tools.values()):
         return ToolKind.OPENAPI
+    for config in request.tools or ():
+        name = config.get("name")
+        if not isinstance(name, str):
+            continue
+        if config.get("type") == "agent" and delegate_tool_name(name) == request.tool_name:
+            return ToolKind.DELEGATION
+        if config.get("type") == "code" and name.rsplit("/", 1)[-1] == request.tool_name:
+            toolset = get_code_tool_class(name)
+            meta = getattr(toolset, "__toolset_meta__", None)
+            if getattr(meta, "category", None) == "platform":
+                return ToolKind.PLATFORM
+            return ToolKind.BUILTIN
     return ToolKind.BUILTIN
 
 

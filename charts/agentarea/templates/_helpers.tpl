@@ -522,9 +522,12 @@ the file AGENTAREA_HTTP_EXTRA_CA_CERTS names.
 {{/*
 OpenTelemetry for a first-party process (ADR-0048): the AgentArea gate, the
 OTLP/HTTP endpoint, and the pod identity the collector matches resources by.
-Empty while telemetry.enabled is off.
+Called with (dict "root" $ "image" <component>.image); service.version is that
+image's tag. Empty while telemetry.enabled is off.
 */}}
 {{- define "agentarea.telemetry.envs" -}}
+{{- $root := .root -}}
+{{- with $root }}
 {{- if .Values.telemetry.enabled }}
 - name: POD_NAME
   valueFrom:
@@ -543,6 +546,7 @@ Empty while telemetry.enabled is off.
 - name: OTEL_SEMCONV_STABILITY_OPT_IN
   value: "http"
 - name: OTEL_RESOURCE_ATTRIBUTES
-  value: "k8s.pod.name=$(POD_NAME),k8s.namespace.name=$(POD_NAMESPACE)"
+  value: {{ printf "k8s.pod.name=$(POD_NAME),k8s.namespace.name=$(POD_NAMESPACE),service.version=%s" (default .Chart.AppVersion $.image.tag) | quote }}
+{{- end }}
 {{- end }}
 {{- end }}

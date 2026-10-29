@@ -8,12 +8,41 @@ from time import perf_counter
 from typing import Any
 
 from mcp import MCPError
+from mcp.types import (
+    CONNECTION_CLOSED,
+    HEADER_MISMATCH,
+    INTERNAL_ERROR,
+    INVALID_PARAMS,
+    INVALID_REQUEST,
+    METHOD_NOT_FOUND,
+    MISSING_REQUIRED_CLIENT_CAPABILITY,
+    PARSE_ERROR,
+    REQUEST_TIMEOUT,
+    UNSUPPORTED_PROTOCOL_VERSION,
+    URL_ELICITATION_REQUIRED,
+)
 from opentelemetry import metrics
 from opentelemetry.semconv._incubating.attributes.mcp_attributes import MCP_METHOD_NAME
 from opentelemetry.semconv._incubating.metrics.mcp_metrics import MCP_CLIENT_OPERATION_DURATION
 from opentelemetry.semconv.attributes.error_attributes import ERROR_TYPE
 
 TOOL_ERROR = "tool_error"
+OTHER_ERROR = "_OTHER"
+KNOWN_ERROR_CODES = frozenset(
+    {
+        PARSE_ERROR,
+        INVALID_REQUEST,
+        METHOD_NOT_FOUND,
+        INVALID_PARAMS,
+        INTERNAL_ERROR,
+        CONNECTION_CLOSED,
+        REQUEST_TIMEOUT,
+        HEADER_MISMATCH,
+        MISSING_REQUIRED_CLIENT_CAPABILITY,
+        UNSUPPORTED_PROTOCOL_VERSION,
+        URL_ELICITATION_REQUIRED,
+    }
+)
 
 _meter = metrics.get_meter("agentarea.mcp")
 
@@ -35,9 +64,12 @@ _operation_duration = _meter.create_histogram(
 
 
 def mcp_error_type(error: BaseException) -> str:
-    """``error.type`` of a failed request: the JSON-RPC code, else the exception's class."""
+    """``error.type`` of a failed request: a known JSON-RPC or MCP code, else the exception's class.
+
+    A code the protocol does not define is ``_OTHER``: a server may answer any integer.
+    """
     if isinstance(error, MCPError):
-        return str(error.code)
+        return str(error.code) if error.code in KNOWN_ERROR_CODES else OTHER_ERROR
     return type(error).__qualname__
 
 

@@ -16,6 +16,7 @@ from agentarea_common.config.broker import KafkaSettings, RedisSettings
 from agentarea_common.config.streams import EventStreamSettings
 from agentarea_common.observability import broker_metrics
 from agentarea_common.observability.broker_metrics import (
+    BrokerHealth,
     BrokerHealthReader,
     broker_observations,
     read_broker_health,
@@ -129,8 +130,60 @@ async def test_startup_activates_the_reader_and_close_retires_it():
     assert broker_metrics._active is None
 
 
-async def test_startup_refuses_a_broker_without_consumer_groups_to_read():
-    settings = SimpleNamespace(broker=KafkaSettings(), streams=EventStreamSettings())
+async def test_a_broker_without_consumer_groups_to_read_gets_no_gauges(caplog):
+    settings = SimpleNamespace(broker=KafkaSettings(BROKER="kafka"), streams=EventStreamSettings())
 
-    with pytest.raises(RuntimeError, match="AGENTAREA_BROKER=redis"):
-        start_broker_health_metrics(settings)  # type: ignore[arg-type]
+    assert start_broker_health_metrics(settings) is None  # type: ignore[arg-type]
+    assert broker_metrics._active is None
+    assert any("unavailable for AGENTAREA_BROKER=kafka" in r.getMessage() for r in caplog.records)
+
+
+_GAUGES = (
+    "agentarea.broker.group.lag",
+    "agentarea.broker.group.pending",
+    "agentarea.broker.group.oldest_pending",
+    "agentarea.broker.dlq.length",
+    "agentarea.broker.health",
+)
+
+
+async def test_a_read_slower_than_the_reuse_window_still_serves_its_whole_collection(
+    monkeypatch,
+):
+    reads: list[None] = []
+
+    async def slow_read(broker, routes):
+        reads.append(None)
+        await asyncio.sleep(0.1)
+        return BrokerHealth(groups=(), dead_letters={})
+
+    monkeypatch.setattr(broker_metrics, "read_broker_health", slow_read)
+    monkeypatch.setattr(broker_metrics, "_READ_REUSE_SECONDS", 0.05)
+    reader = BrokerHealthReader(
+        _DownBroker(),  # type: ignore[arg-type]
+        [],
+        asyncio.get_running_loop(),
+        timeout_seconds=5,
+    )
+
+    def collect() -> None:
+        for name in _GAUGES:
+            reader.observations(name)
+
+    await asyncio.to_thread(collect)
+
+    assert len(reads) == 1
+
+
+def test_a_closed_broker_loop_reports_down(caplog):
+    loop = asyncio.new_event_loop()
+    loop.close()
+    reader = BrokerHealthReader(
+        _DownBroker(),  # type: ignore[arg-type]
+        [_route()],
+        loop,
+        timeout_seconds=5,
+    )
+
+    assert [o.value for o in reader.observations("agentarea.broker.health")] == [0]
+    assert any(r.levelname == "WARNING" for r in caplog.records)

@@ -116,7 +116,7 @@ spec:
             {{- end }}
             {{- include "agentarea.temporal.envs" . | nindent 12 }}
             {{- include "agentarea.backend.envs" . | nindent 12 }}
-            {{- include "agentarea.telemetry.envs" . | nindent 12 }}
+            {{- include "agentarea.telemetry.envs" (dict "root" . "image" .Values.backend.image) | nindent 12 }}
             {{- include "agentarea.backend.secrets.envs" . | nindent 12 }}
             {{- if .Values.openfga.enabled }}
             - name: AGENTAREA_AUTHZ_BACKEND

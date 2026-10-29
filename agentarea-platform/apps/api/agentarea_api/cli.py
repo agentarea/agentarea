@@ -91,6 +91,21 @@ def cli():
 )
 def serve(host: str, port: int, reload: bool, log_level: str, workers: int, shutdown_timeout: int):
     """Start the API server."""
+    from agentarea_common.config import ObservabilitySettings
+    from agentarea_common.observability.telemetry import metrics_exporter
+
+    if (
+        ObservabilitySettings().ENABLED
+        and metrics_exporter(os.environ) == "prometheus"
+        and workers > 1
+        and not reload
+    ):
+        # Each worker process would bind the scrape port; the second one fails.
+        raise click.UsageError(
+            "OTEL_METRICS_EXPORTER=prometheus needs a single worker process per pod; "
+            "scale with replicas instead of AGENTAREA_API_WORKERS, or export over OTLP"
+        )
+
     click.echo(f"Starting AgentArea API server on {host}:{port}")
     click.echo(f"Reload: {reload}, Log Level: {log_level}, Workers: {workers}")
 

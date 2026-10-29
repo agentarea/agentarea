@@ -167,6 +167,20 @@ class LLMCall:
         self._attributes = attributes
         self.started = perf_counter()
         self._first_chunk_seen = False
+        self.outside_seconds = 0.0
+        self.outside_error: BaseException | None = None
+
+    @contextmanager
+    def outside(self) -> Iterator[None]:
+        """Our own work between chunks: not timed, and its failure is not the provider's."""
+        started = perf_counter()
+        try:
+            yield
+        except BaseException as error:
+            self.outside_error = error
+            raise
+        finally:
+            self.outside_seconds += perf_counter() - started
 
     def chunk(self) -> None:
         if not self._first_chunk_seen:
@@ -189,7 +203,10 @@ class LLMPurpose(StrEnum):
 
 @contextmanager
 def llm_call(provider: str, model: str, purpose: str) -> Iterator[LLMCall]:
-    """Time one model call; ``model`` is the model spec's name, never a free-form id."""
+    """Time one model call; ``model`` is the model spec's name, never a free-form id.
+
+    A call our own work broke (``LLMCall.outside``) records no duration.
+    """
     attributes = {
         GEN_AI_PROVIDER_NAME: provider,
         GEN_AI_REQUEST_MODEL: model,
@@ -198,18 +215,19 @@ def llm_call(provider: str, model: str, purpose: str) -> Iterator[LLMCall]:
     }
     call = LLMCall(attributes)
     _llm_in_flight.add(1, attributes)
-    error_type: str | None = None
+    failure: BaseException | None = None
     try:
         yield call
     except BaseException as error:
-        error_type = llm_error_type(error)
+        failure = error
         raise
     finally:
         _llm_in_flight.add(-1, attributes)
-        _llm_duration.record(
-            perf_counter() - call.started,
-            {**attributes, ERROR_TYPE: error_type} if error_type else attributes,
-        )
+        if failure is None or failure is not call.outside_error:
+            _llm_duration.record(
+                perf_counter() - call.started - call.outside_seconds,
+                {**attributes, ERROR_TYPE: llm_error_type(failure)} if failure else attributes,
+            )
 
 
 class ToolKind(StrEnum):
@@ -233,7 +251,6 @@ class ToolOutcome(StrEnum):
     TIMEOUT = "timeout"
     DENIED = "denied"
     HELD = "held"
-    STARTING = "starting"
     CANCELLED = "cancelled"
 
 

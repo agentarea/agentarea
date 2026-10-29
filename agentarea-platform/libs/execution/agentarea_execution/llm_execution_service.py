@@ -25,7 +25,7 @@ from agentarea_secrets.secret_manager_factory import SecretManagerFactory
 
 from .exceptions import ModelInstanceNotFoundError
 from .models import LLMCallRequest, LLMCallResult, LLMUsage
-from .telemetry import LLMCall, llm_call
+from .telemetry import llm_call
 from .tool_images import resolve_tool_images
 from .workflows.context_store import ContextStore
 
@@ -263,16 +263,15 @@ class LLMExecutionService:
                     endpoint_policy=endpoint_policy_for(managed_by),
                     provider=ProviderProfile.from_mapping(provider_data),
                 )
-                with llm_call(str(provider_type), str(model_name), request.purpose) as metered:
-                    return await self._call(
-                        llm_model,
-                        llm_request,
-                        model_uuid=model_uuid,
-                        managed_by=managed_by,
-                        funding=funding,
-                        on_chunk=on_chunk,
-                        metered=metered,
-                    )
+                return await self._call(
+                    llm_model,
+                    llm_request,
+                    model_uuid=model_uuid,
+                    managed_by=managed_by,
+                    funding=funding,
+                    on_chunk=on_chunk,
+                    metered_as=(str(provider_type), str(model_name), request.purpose),
+                )
             except BaseException:
                 await release_model_hold(funding, "the model call did not complete")
                 raise
@@ -293,7 +292,7 @@ class LLMExecutionService:
         managed_by: str | None,
         funding: ModelFunding,
         on_chunk: ChunkPublisher | None,
-        metered: LLMCall,
+        metered_as: tuple[str, str, str],
     ) -> LLMCallResult:
         """Make the call and write down what it cost, as billing says it."""
         content_parts: list[str] = []
@@ -304,59 +303,62 @@ class LLMExecutionService:
         chunk_index = 0
 
         interrupted = False
-        if self._stream:
-            # The SDK yields from an async generator but annotates it as AsyncIterator.
-            responses = cast(AsyncGenerator[LLMResponse], llm_model.ainvoke_stream(llm_request))
-            try:
-                async with aclosing(responses):
-                    async for response in responses:
-                        metered.chunk()
-                        if response.reasoning_content:
-                            thinking_parts.append(response.reasoning_content)
-                            if on_chunk is not None:
-                                await on_chunk(
-                                    response.reasoning_content,
-                                    chunk_index,
-                                    False,
-                                    chunk_type="thinking",
-                                )
-                                chunk_index += 1
-                        if response.content:
-                            content_parts.append(response.content)
-                            if on_chunk is not None:
-                                await on_chunk(response.content, chunk_index, False)
-                                chunk_index += 1
-                        # Tool calls are cumulative snapshots, not additional calls.
-                        if response.tool_calls:
-                            complete_tool_calls = response.tool_calls
-                        if response.usage is not None:
-                            final_usage = response.usage
-                        if response.cost and response.cost > 0:
-                            final_cost = max(final_cost, response.cost)
-            except asyncio.CancelledError:
-                # Stopped mid-reply. Usage the provider already reported is
-                # what it bills; without it nothing is known, and the stop
-                # stands as a cancellation.
-                if final_usage is None or final_usage.total_tokens <= 0:
-                    raise
-                interrupted = True
-        else:
-            response = await llm_model.complete(llm_request)
-            if response.content:
-                content_parts.append(response.content)
-            if response.reasoning_content:
-                thinking_parts.append(response.reasoning_content)
-            if response.tool_calls:
-                complete_tool_calls = response.tool_calls
-            final_usage = response.usage
-            if response.cost and response.cost > 0:
-                final_cost = response.cost
+        with llm_call(*metered_as) as metered:
+            if self._stream:
+                # The SDK yields from an async generator but annotates it as AsyncIterator.
+                responses = cast(AsyncGenerator[LLMResponse], llm_model.ainvoke_stream(llm_request))
+                try:
+                    async with aclosing(responses):
+                        async for response in responses:
+                            metered.chunk()
+                            if response.reasoning_content:
+                                thinking_parts.append(response.reasoning_content)
+                                if on_chunk is not None:
+                                    with metered.outside():
+                                        await on_chunk(
+                                            response.reasoning_content,
+                                            chunk_index,
+                                            False,
+                                            chunk_type="thinking",
+                                        )
+                                    chunk_index += 1
+                            if response.content:
+                                content_parts.append(response.content)
+                                if on_chunk is not None:
+                                    with metered.outside():
+                                        await on_chunk(response.content, chunk_index, False)
+                                    chunk_index += 1
+                            # Tool calls are cumulative snapshots, not additional calls.
+                            if response.tool_calls:
+                                complete_tool_calls = response.tool_calls
+                            if response.usage is not None:
+                                final_usage = response.usage
+                            if response.cost and response.cost > 0:
+                                final_cost = max(final_cost, response.cost)
+                except asyncio.CancelledError:
+                    # Stopped mid-reply. Usage the provider already reported is
+                    # what it bills; without it nothing is known, and the stop
+                    # stands as a cancellation.
+                    if final_usage is None or final_usage.total_tokens <= 0:
+                        raise
+                    interrupted = True
+            else:
+                response = await llm_model.complete(llm_request)
+                if response.content:
+                    content_parts.append(response.content)
+                if response.reasoning_content:
+                    thinking_parts.append(response.reasoning_content)
+                if response.tool_calls:
+                    complete_tool_calls = response.tool_calls
+                final_usage = response.usage
+                if response.cost and response.cost > 0:
+                    final_cost = response.cost
 
-        if final_usage is None or final_usage.total_tokens <= 0:
-            raise RuntimeError(
-                "LLM usage accounting unavailable; token and cost policy cannot be enforced"
-            )
-        metered.usage(final_usage.prompt_tokens, final_usage.completion_tokens)
+            if final_usage is None or final_usage.total_tokens <= 0:
+                raise RuntimeError(
+                    "LLM usage accounting unavailable; token and cost policy cannot be enforced"
+                )
+            metered.usage(final_usage.prompt_tokens, final_usage.completion_tokens)
 
         # What the provider charged (USD) becomes the line's amount as billing
         # says it. Events, task totals and budget enforcement carry it from here.

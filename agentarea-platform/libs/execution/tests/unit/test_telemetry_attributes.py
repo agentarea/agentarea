@@ -77,6 +77,21 @@ def test_tool_kind_follows_how_the_call_is_routed():
     assert tool_kind(_request()) is ToolKind.BUILTIN
 
 
+def test_tool_kind_reads_delegation_and_platform_toolsets_from_the_tool_config():
+    tools = [
+        {"type": "agent", "name": "Research Bot"},
+        {"type": "code", "name": "agentarea/skills"},
+        {"type": "code", "name": "agentarea/math"},
+    ]
+
+    def kind(name: str) -> ToolKind:
+        return tool_kind(MCPToolRequest(tool_name=name, tool_args={}, workspace_id="ws", tools=tools))
+
+    assert kind("delegate_to_Research_Bot") is ToolKind.DELEGATION
+    assert kind("skills") is ToolKind.PLATFORM
+    assert kind("math") is ToolKind.BUILTIN
+
+
 def test_oldest_in_flight_is_per_kind_and_falls_to_zero_when_done():
     calls = _InFlight()
     first = calls.begin(("mcp", "worker"))

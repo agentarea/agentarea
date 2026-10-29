@@ -74,7 +74,6 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
         workflow.logger.info(f"Initializing workflow for agent {request.agent_id}")
         self._interaction_contract_enabled = workflow.patched(INTERACTION_CONTRACT_PATCH)
         self._wait_tool_enabled = workflow.patched(WAIT_TOOL_PATCH)
-        self.state.run_started_at = workflow.info().workflow_start_time
 
         # Check if this is a continue-as-new restart
         if request.continued_state:
@@ -83,6 +82,7 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
 
         # A continued run reports its own start; the chain's timeout runs from this one.
         info = workflow.info()
+        self.state.run_started_at = info.workflow_start_time
         if info.execution_timeout:
             self.state.chain_expires_at = info.workflow_start_time + info.execution_timeout
 

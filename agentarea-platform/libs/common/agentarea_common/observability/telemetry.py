@@ -64,6 +64,7 @@ SERVICE_NAMESPACE_VALUE = "agentarea"
 METRICS_EXPORTERS = ("otlp", "prometheus", "none")
 OTLP_PROTOCOLS = ("http/protobuf", "grpc")
 DEFAULT_EXPORT_INTERVAL_MS = 15_000
+SEMCONV_OPT_IN = "OTEL_SEMCONV_STABILITY_OPT_IN"
 
 HTTP_BUCKETS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30)
 GEN_AI_BUCKETS = (0.25, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300, 600)
@@ -178,15 +179,38 @@ def missing_otlp_endpoint(env: Mapping[str, str], *, metrics_otlp: bool) -> str 
     """
     if env.get("OTEL_EXPORTER_OTLP_ENDPOINT", "").strip():
         return None
-    needed = ["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"]
-    if metrics_otlp:
-        needed.append("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT")
-    unset = [name for name in needed if not env.get(name, "").strip()]
-    if not unset:
+    traces = bool(env.get("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "").strip())
+    metrics = bool(env.get("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "").strip())
+    if traces and (metrics or not metrics_otlp):
         return None
+    if traces:
+        return (
+            "AGENTAREA_OTEL_ENABLED is true and OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is set, but "
+            "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT is not: set it too, or set "
+            "OTEL_EXPORTER_OTLP_ENDPOINT for every signal"
+        )
     return (
         "AGENTAREA_OTEL_ENABLED is true but OTEL_EXPORTER_OTLP_ENDPOINT is not set "
-        f"(nor {' and '.join(unset)})"
+        "(nor OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"
+        + (" and OTEL_EXPORTER_OTLP_METRICS_ENDPOINT)" if metrics_otlp else ")")
+    )
+
+
+def semconv_opt_in(env: Mapping[str, str]) -> str:
+    """The OTEL_SEMCONV_STABILITY_OPT_IN this process runs with; it must report stable HTTP.
+
+    Without ``http`` the HTTP instrumentation emits the old millisecond metric
+    names, which no View keeps. Any other value set is refused, not overridden.
+    """
+    value = env.get(SEMCONV_OPT_IN, "").strip()
+    if not value:
+        return "http"
+    tokens = {token.strip() for token in value.split(",")}
+    if "http" in tokens and "http/dup" not in tokens:
+        return value
+    raise RuntimeError(
+        f"{SEMCONV_OPT_IN}={value!r} conflicts with the stable HTTP metrics telemetry exports; "
+        "unset it or include 'http'"
     )
 
 
@@ -267,9 +291,15 @@ def setup_telemetry(service_name: str, settings: ObservabilitySettings | None = 
         problem = missing_otlp_endpoint(env, metrics_otlp=exporter == "otlp")
         if problem is not None:
             raise RuntimeError(problem)
+        traces_protocol = otlp_protocol(env, "TRACES")
+        if exporter == "otlp":
+            otlp_protocol(env, "METRICS")
+            export_interval_ms(env)
+        # Read by the instrumentations when they first instrument, after this.
+        env[SEMCONV_OPT_IN] = semconv_opt_in(env)
 
         resource = _resource(env.get("OTEL_SERVICE_NAME") or service_name)
-        _configure_tracing(resource, otlp_protocol(env, "TRACES"))
+        _configure_tracing(resource, traces_protocol)
         _configure_metrics(resource, exporter, env)
         if exporter == "otlp":
             _configure_temporal_metrics(resource, env)
@@ -292,7 +322,7 @@ def _resource(service_name: str) -> Resource:
         Resource(
             identity_attributes(
                 service_name,
-                version=__version__,
+                version=str(detected.attributes.get(SERVICE_VERSION) or __version__),
                 environment=get_app_settings().ENV,
                 pod_name=pod_name,
                 pid=os.getpid(),

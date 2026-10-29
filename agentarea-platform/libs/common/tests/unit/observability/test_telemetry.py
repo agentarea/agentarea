@@ -10,6 +10,7 @@ from agentarea_common.observability.telemetry import (
     metrics_exporter,
     missing_otlp_endpoint,
     otlp_protocol,
+    semconv_opt_in,
     setup_telemetry,
     temporal_metrics_url,
 )
@@ -53,6 +54,56 @@ def test_signal_endpoints_must_cover_every_exporting_signal():
     assert missing_otlp_endpoint(traces_only, metrics_otlp=False) is None
     problem = missing_otlp_endpoint(traces_only, metrics_otlp=True)
     assert problem is not None and "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT" in problem
+
+
+def test_both_signal_endpoints_serve_without_the_shared_one():
+    env = {
+        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://tempo:4318/v1/traces",
+        "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "http://gateway:4318/v1/metrics",
+    }
+
+    assert missing_otlp_endpoint(env, metrics_otlp=True) is None
+
+
+def test_a_traces_only_endpoint_names_the_missing_metrics_one():
+    traces_only = {"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://tempo:4318/v1/traces"}
+
+    problem = missing_otlp_endpoint(traces_only, metrics_otlp=True)
+
+    assert problem is not None
+    assert "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT is not" in problem
+
+
+def test_the_http_opt_in_is_pinned_unless_set():
+    assert semconv_opt_in({}) == "http"
+    assert semconv_opt_in({"OTEL_SEMCONV_STABILITY_OPT_IN": " "}) == "http"
+    assert semconv_opt_in({"OTEL_SEMCONV_STABILITY_OPT_IN": "http,database"}) == "http,database"
+
+
+def test_a_conflicting_opt_in_is_refused_by_name():
+    for value in ("http/dup", "database", "gen_ai_latest_experimental"):
+        with pytest.raises(RuntimeError, match="OTEL_SEMCONV_STABILITY_OPT_IN"):
+            semconv_opt_in({"OTEL_SEMCONV_STABILITY_OPT_IN": value})
+
+
+def test_a_conflicting_opt_in_stops_setup_before_any_provider(monkeypatch):
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://gateway:4318")
+    monkeypatch.setenv("OTEL_SEMCONV_STABILITY_OPT_IN", "http/dup")
+    monkeypatch.setattr(telemetry, "_CONFIGURED_SERVICE", None)
+    configured = []
+    monkeypatch.setattr(telemetry, "_configure_tracing", lambda *args: configured.append(args))
+
+    with pytest.raises(RuntimeError, match="http/dup"):
+        setup_telemetry("agentarea-test", ObservabilitySettings(ENABLED=True))
+    assert configured == []
+
+
+def test_an_operator_service_version_is_kept(monkeypatch):
+    monkeypatch.setenv("OTEL_RESOURCE_ATTRIBUTES", "service.version=2026.10.29-abc123")
+
+    resource = telemetry._resource("agentarea-test")
+
+    assert resource.attributes["service.version"] == "2026.10.29-abc123"
 
 
 def test_a_blank_endpoint_counts_as_unset():

@@ -475,7 +475,7 @@ Rendered into backend, worker, mcp-manager and event-service by the
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `telemetry.otlpEndpoint`, required when enabled | unset |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | fixed | `http/protobuf` |
 | `OTEL_SEMCONV_STABILITY_OPT_IN` | fixed | `http` |
-| `OTEL_RESOURCE_ATTRIBUTES` | fixed, from the Downward API `POD_NAME` and `POD_NAMESPACE` | `k8s.pod.name=$(POD_NAME),k8s.namespace.name=$(POD_NAMESPACE)` |
+| `OTEL_RESOURCE_ATTRIBUTES` | fixed, from the Downward API `POD_NAME` and `POD_NAMESPACE` and the Deployment's image tag | `k8s.pod.name=$(POD_NAME),k8s.namespace.name=$(POD_NAMESPACE),service.version=<tag>` |
 
 `AGENTAREA_OTEL_ENABLED=true` with no `OTEL_EXPORTER_OTLP_ENDPOINT` (or no
 per-signal endpoints) stops the process at startup. `OTEL_METRICS_EXPORTER`

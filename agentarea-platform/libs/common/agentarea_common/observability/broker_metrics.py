@@ -104,10 +104,9 @@ class BrokerHealthReader:
 
     def observations(self, name: str) -> list[Observation]:
         with self._lock:
-            now = time.monotonic()
-            if self._read_at is None or now - self._read_at > _READ_REUSE_SECONDS:
+            if self._read_at is None or time.monotonic() - self._read_at > _READ_REUSE_SECONDS:
                 self._observations = broker_observations(self._read())
-                self._read_at = now
+                self._read_at = time.monotonic()
             return self._observations.get(name, [])
 
     def _read(self) -> BrokerHealth | None:
@@ -118,14 +117,20 @@ class BrokerHealthReader:
         if running is self._loop:
             logger.error("Broker health cannot be read from the broker's own event loop")
             return None
-        future = asyncio.run_coroutine_threadsafe(
-            read_broker_health(self._broker, self._routes), self._loop
-        )
+        if self._loop.is_closed():
+            logger.warning("Broker health cannot be read: the broker's event loop is closed")
+            return None
+        read = read_broker_health(self._broker, self._routes)
+        future = None
         try:
+            future = asyncio.run_coroutine_threadsafe(read, self._loop)
             return future.result(self._timeout)
         except Exception:
-            future.cancel()
-            logger.exception("Reading consumer-group health from the broker failed")
+            if future is None:
+                read.close()
+            else:
+                future.cancel()
+            logger.warning("Reading consumer-group health from the broker failed", exc_info=True)
             return None
 
 
@@ -186,14 +191,19 @@ class BrokerHealthMetrics:
         await self._broker.aclose()
 
 
-def start_broker_health_metrics(settings: Settings) -> BrokerHealthMetrics:
-    """Report consumer-group health for every configured group. Call on the serving loop."""
+def start_broker_health_metrics(settings: Settings) -> BrokerHealthMetrics | None:
+    """Report consumer-group health for every configured group. Call on the serving loop.
+
+    None for a broker whose consumer groups these gauges cannot read (Kafka).
+    """
     global _active
     if not isinstance(settings.broker, RedisSettings):
-        current = settings.broker.BROKER
-        raise RuntimeError(
-            f"Broker health metrics need AGENTAREA_BROKER=redis (current: {current})"
+        logger.warning(
+            "Broker gauges are unavailable for AGENTAREA_BROKER=%s; "
+            "consumer-group health is reported for redis only",
+            settings.broker.BROKER,
         )
+        return None
     broker = RedisStreamsBroker(settings.broker.REDIS_URL, namespace=settings.streams.NAMESPACE)
     reader = BrokerHealthReader(
         broker,

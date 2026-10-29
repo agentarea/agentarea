@@ -106,7 +106,9 @@ def make_record_activities(
                 session = container._database.async_session_factory()
                 ctx._sessions.append(session)
                 try:
-                    await TaskLog(session, user_context, container.log_body_store()).append(
+                    status_changed = await TaskLog(
+                        session, user_context, container.log_body_store()
+                    ).append(
                         UUID(request.task_id),
                         entries,
                         execution_id=request.execution_id,
@@ -127,7 +129,7 @@ def make_record_activities(
                         type="TaskLogRejected",
                         non_retryable=True,
                     ) from refused
-            if request.status is not None:
+            if request.status is not None and status_changed:
                 record_run_transition(
                     request.status.status,
                     request.status.failure_reason,
