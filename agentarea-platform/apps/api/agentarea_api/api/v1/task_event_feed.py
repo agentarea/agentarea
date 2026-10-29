@@ -107,6 +107,7 @@ async def _iter_snapshot(
     user_context: UserContext,
     after: TaskEventEnvelope | None = None,
     *,
+    after_seq: int | None = None,
     batch_size: int = SNAPSHOT_BATCH_SIZE,
     revealed: bool = False,
 ) -> AsyncIterator[TaskEventEnvelope]:
@@ -117,6 +118,8 @@ async def _iter_snapshot(
     from agentarea_api.api.deps.database import get_db_session
 
     position = after.seq if after is not None and after.seq is not None else -1
+    if after_seq is not None:
+        position = max(position, after_seq)
     while True:
         async with get_db_session() as session:
             reader = TaskFeedReader(session, user_context)
@@ -170,6 +173,7 @@ async def open_task_event_feed(
     include_chunks: bool = True,
     follow_execution: bool = False,
     last_event_id: str | None = None,
+    after_seq: int | None = None,
     revealed: bool = False,
 ) -> AsyncIterator[TaskEventEnvelope]:
     """Yield a task's feed: its log, then live entries.
@@ -183,7 +187,8 @@ async def open_task_event_feed(
     add the chunk types to ``exclude_types``. ``last_event_id`` (the SSE
     ``Last-Event-ID``) is the ``seq`` of the last entry the client has; one
     this task's feed does not have replays the whole history, which the client
-    dedups by event id. ``revealed`` says the caller holds the task's authority:
+    dedups by event id. ``after_seq`` skips the log up to that position and
+    tails the run that comes after it. ``revealed`` says the caller holds the task's authority:
     tool calls, replayed and live, show their command and output with secrets
     masked; for anyone else they stay as the event log redacts them.
     """
@@ -202,11 +207,14 @@ async def open_task_event_feed(
     async for env in iter_task_event_feed(
         hub=task_events_hub(),
         task_id=tid,
-        snapshot=lambda: _iter_snapshot(tid, user_context, resume_after, revealed=revealed),
+        snapshot=lambda: _iter_snapshot(
+            tid, user_context, resume_after, after_seq=after_seq, revealed=revealed
+        ),
         terminal_types=terminal_types,
         exclude_types=exclude_types,
         follow_execution=follow_execution,
         resume_after=resume_after,
+        after_seq=after_seq,
         run_open=lambda: _run_open(tid, user_context),
         live_view=(lambda env: _revealed(tid, user_context, env)) if revealed else None,
     ):

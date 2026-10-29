@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"maps"
 
+	"github.com/agentarea/mcp-manager/internal/mcpcontext"
 	"github.com/agentarea/mcp-manager/internal/mcpstorage"
 	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/secrets"
@@ -16,6 +17,7 @@ type DockerProvider struct {
 	secretResolver   secrets.SecretResolver
 	containerManager ContainerManagerInterface
 	storage          *mcpstorage.Issuer
+	context          *mcpcontext.Issuer
 	logger           *slog.Logger
 	hook             InstanceSpecHook
 }
@@ -34,6 +36,11 @@ func NewDockerProvider(secretResolver secrets.SecretResolver, containerManager C
 		storage:          storage,
 		logger:           logger,
 	}
+}
+
+// SetContextIssuer installs the issuer of opted-in instances' caller-context key.
+func (p *DockerProvider) SetContextIssuer(issuer *mcpcontext.Issuer) {
+	p.context = issuer
 }
 
 // SetInstanceSpecHook installs the hook called on every assembled spec before
@@ -63,6 +70,14 @@ func (p *DockerProvider) CreateInstance(ctx context.Context, instance *models.MC
 		return err
 	}
 	resolvedSpec = withEnvironment(resolvedSpec, storageEnvironment)
+	contextEnvironment, err := p.context.Environment(instance)
+	if err != nil {
+		p.logger.Error("Failed to issue MCP caller-context key",
+			slog.String("instance_id", instance.InstanceID),
+			slog.String("error", err.Error()))
+		return err
+	}
+	resolvedSpec = withEnvironment(resolvedSpec, contextEnvironment)
 	if resolvedSpec, err = p.applyInstanceSpecHook(ctx, instance, resolvedSpec); err != nil {
 		return err
 	}

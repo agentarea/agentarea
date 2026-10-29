@@ -129,13 +129,17 @@ class MCPSettings(BaseAppSettings):
     def manager_retire_url(self, instance_id: UUID | str) -> str:
         return f"{self.MANAGER_URL.rstrip('/')}/mcp/{instance_id}"
 
-    def manager_gateway_headers(self) -> dict[str, str]:
+    def gateway_secret(self) -> str:
+        """The secret the platform and the manager share for container-backed MCP."""
         if self.GATEWAY_SECRET is None:
             raise RuntimeError("AGENTAREA_MCP_GATEWAY_SECRET is required for container-backed MCP")
         secret = self.GATEWAY_SECRET.get_secret_value()
         if len(secret) < 32:
             raise RuntimeError("AGENTAREA_MCP_GATEWAY_SECRET must contain at least 32 bytes")
-        return {MCP_MANAGER_AUTH_HEADER: f"Bearer {secret}"}
+        return secret
+
+    def manager_gateway_headers(self) -> dict[str, str]:
+        return {MCP_MANAGER_AUTH_HEADER: f"Bearer {self.gateway_secret()}"}
 
     def manager_inspection_headers(self) -> dict[str, str]:
         """Build the bearer header for internal manager inspection routes."""

@@ -117,6 +117,33 @@ async def test_one_priceless_model_is_skipped_and_the_rest_still_sync():
     assert "aws-bedrock/anthropic.claude-3-haiku" in created
 
 
+async def test_the_synced_spec_keeps_the_catalogs_capability_flags():
+    service, registry, _item_repo, _created = _service()
+    catalog = {
+        "models": [
+            {
+                "provider_key": "openai",
+                "model_name": "gpt-4o",
+                "context_window": 128_000,
+                "input_cost_per_token": 0.0000025,
+                "output_cost_per_token": 0.00001,
+                "supports_function_calling": True,
+                "supports_vision": True,
+                "supports_reasoning": True,
+            }
+        ]
+    }
+
+    with patch.object(RegistryService, "_fetch_source", return_value=catalog):
+        await service.sync_registry(registry.id)
+
+    upsert = service.model_spec_repo.upsert_by_provider_and_model_kwargs
+    kwargs = upsert.await_args.kwargs
+    assert kwargs["supports_function_calling"] is True
+    assert kwargs["supports_vision"] is True
+    assert kwargs["supports_reasoning"] is True
+
+
 async def test_skip_reason_names_the_rejected_model_and_the_missing_field():
     service, registry, _item_repo, _created = _service()
 

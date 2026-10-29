@@ -99,6 +99,9 @@ class _TaskService:
         self.cancelled = True
         return True
 
+    async def log_end(self, task_id):
+        return -1
+
 
 class _SecretManager:
     async def set_secret(self, name, value):

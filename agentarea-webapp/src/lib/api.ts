@@ -2188,6 +2188,17 @@ export const listPolicies = async (
   return withStatus(result);
 };
 
+export const getMCPInstanceToolPolicies = async (instanceId: string) => {
+  const result =
+    await sdk.getMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGet(
+      {
+        client: serverClient,
+        path: { instance_id: instanceId },
+      }
+    );
+  return withStatus(result);
+};
+
 export const createPolicy = async (body: PolicyRuleCreateRequest) => {
   const { data, error } = await sdk.createPolicyRuleV1PoliciesPost({
     client: serverClient,
@@ -2527,4 +2538,9 @@ export const unlinkExternalIdentity = async (identityId: string) => {
       path: { identity_id: identityId },
     });
   return { data, error };
+};
+
+export const getAnalyticsConfig = async () => {
+  const result = await sdk.getAnalyticsV1AnalyticsGet({ client: serverClient });
+  return withStatus(result);
 };

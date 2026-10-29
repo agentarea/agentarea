@@ -10,6 +10,7 @@ from collections.abc import Callable, Sequence
 from typing import Any
 from uuid import UUID
 
+from agentarea_common.analytics import count_run_refused
 from agentarea_execution.workflows.constants import Activities
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
@@ -232,6 +233,8 @@ class GovernanceActivityInterceptor(ActivityInboundInterceptor):
             if context:
                 result = await self._pipeline.run(pre_phase, context)
                 if result.action == InterceptorAction.DENY:
+                    if pre_phase is Phase.PRE_LLM_CALL:
+                        count_run_refused(result.metadata.get("entitlement_code"))
                     raise _verdict_failure(GovernanceDeniedError, result, pre_phase)
                 if result.action == InterceptorAction.ESCALATE:
                     raise _verdict_failure(EscalationRequiredError, result, pre_phase)

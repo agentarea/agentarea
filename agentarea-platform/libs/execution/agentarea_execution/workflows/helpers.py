@@ -37,9 +37,24 @@ def tool_policy_aliases(
     tool_name: str,
 ) -> tuple[str, ...]:
     """Canonical names of a routed model-facing tool; a rule naming any governs it."""
-    route = routes.get(tool_name) if isinstance(routes, Mapping) else routes
+    route = _route_of(routes, tool_name)
     aliases = route.policy_names(tool_name) if route else ()
     return tuple(dict.fromkeys(alias for alias in aliases if alias and alias != tool_name))
+
+
+def mcp_tool_restricting_aliases(
+    routes: Mapping[str, McpToolRoute] | McpToolRoute | None,
+    tool_name: str,
+) -> tuple[str, ...]:
+    """Names of a routed MCP tool that may deny it or hold it for approval, never allow it."""
+    route = _route_of(routes, tool_name)
+    return route.restricting_names(tool_name) if route else ()
+
+
+def _route_of(
+    routes: Mapping[str, McpToolRoute] | McpToolRoute | None, tool_name: str
+) -> McpToolRoute | None:
+    return routes.get(tool_name) if isinstance(routes, Mapping) else routes
 
 
 def _openapi_allowed_operations(settings: Mapping[str, Any]) -> list[str]:
@@ -298,7 +313,10 @@ def filter_disclosed_tools(
             effective_policy,
             name,
             tool_policy_aliases(mcp_tool_routes, name),
-            restricting_aliases=tool_config_aliases(name, tool_configs, openapi_operation_tools),
+            restricting_aliases=(
+                *mcp_tool_restricting_aliases(mcp_tool_routes, name),
+                *tool_config_aliases(name, tool_configs, openapi_operation_tools),
+            ),
         )
         if decision is not ToolAction.DENY:
             disclosed.append(tool)
@@ -829,47 +847,3 @@ class ToolCallExtractor:
                         )
 
         return result
-
-    @staticmethod
-    def extract_usage_info(response: Any) -> dict[str, Any]:
-        """Extract usage and cost information from LLM response."""
-        usage_info = {
-            "prompt_tokens": 0,
-            "completion_tokens": 0,
-            "total_tokens": 0,
-            "cost": None,
-        }
-
-        if not hasattr(response, "usage") or not response.usage:
-            return usage_info
-
-        usage = response.usage
-        usage_info.update(
-            {
-                "prompt_tokens": getattr(usage, "prompt_tokens", 0),
-                "completion_tokens": getattr(usage, "completion_tokens", 0),
-                "total_tokens": getattr(usage, "total_tokens", 0),
-            }
-        )
-
-        # Calculate cost — try multiple sources
-        cost: float | None = None
-
-        # LiteLLM stores cost in _hidden_params.response_cost
-        if hasattr(response, "_hidden_params"):
-            hidden = response._hidden_params
-            if isinstance(hidden, dict):
-                cost = hidden.get("response_cost")
-            elif hasattr(hidden, "response_cost"):
-                cost = hidden.response_cost
-
-        # Try usage-level cost attributes
-        if cost is None and (
-            hasattr(usage, "completion_tokens_cost") or hasattr(usage, "prompt_tokens_cost")
-        ):
-            cost = (getattr(usage, "completion_tokens_cost", 0.0) or 0.0) + (
-                getattr(usage, "prompt_tokens_cost", 0.0) or 0.0
-            )
-
-        usage_info["cost"] = cost
-        return usage_info

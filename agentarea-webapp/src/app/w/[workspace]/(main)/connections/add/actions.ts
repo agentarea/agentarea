@@ -210,12 +210,12 @@ function toServerConnectionCreate(
 
 function mapGeneratedErrors(
   input: MCPServerFormValues,
-  issues: Array<{ path: Array<string | number>; message: string }>
+  issues: ReadonlyArray<{ path: PropertyKey[]; message: string }>
 ): MCPServerFormState {
   const errors: MCPServerFormState["errors"] = {};
 
   for (const issue of issues) {
-    const path = issue.path.join(".");
+    const path = issue.path.map(String).join(".");
     if (path.includes("name")) errors.name = [issue.message];
     else if (path.includes("description")) errors.description = [issue.message];
     else if (path.includes("docker_image_url"))

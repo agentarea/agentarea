@@ -7,10 +7,15 @@ import type {
 } from "@/types/policies";
 import {
   GITHUB_IMPORT_REGISTRY_ID,
+  describeToolName,
   isToolTarget,
   parseInstallTarget,
   toolNameFromTarget,
 } from "@/types/policies";
+
+/** Connection id → name, so a rule naming a tool through its connection reads. */
+export type ConnectionNames = ReadonlyMap<string, string>;
+const NO_CONNECTIONS: ConnectionNames = new Map();
 
 // Enforcement-stage labels, grounded in the governance engine's phases
 // (PRE_LLM_CALL, POST_LLM_CALL, PRE_TOOL_CALL, TOOL_DISCOVERY, …). The phase is
@@ -298,7 +303,8 @@ function describeRule(
   policy: Policy,
   dimension: MatrixDimensionKey,
   currency: string | null,
-  locale: string
+  locale: string,
+  connectionNames: ConnectionNames
 ): {
   label: string;
   value: string;
@@ -331,7 +337,7 @@ function describeRule(
   }
 
   if (dimension === "tools") {
-    const name = toolNameFromTarget(policy.target);
+    const name = describeToolName(toolNameFromTarget(policy.target), connectionNames);
     const verb = policy.effect === "deny" ? "Deny" : "Allow";
     const base = name === "*" ? "all tools" : name;
     return {
@@ -348,7 +354,7 @@ function describeRule(
       approvers.length > 0 ? approvers.join(", ") : "any workspace member";
     if (policy.target === "*")
       return { label: "Approval for all actions", value: `by ${by}` };
-    const name = toolNameFromTarget(policy.target);
+    const name = describeToolName(toolNameFromTarget(policy.target), connectionNames);
     const value = policy.condition
       ? `by ${by} · when ${policy.condition}`
       : `by ${by}`;
@@ -396,10 +402,17 @@ function describeRule(
 export function policyToRule(
   policy: Policy,
   currency: string | null = null,
-  locale: string = "en"
+  locale: string = "en",
+  connectionNames: ConnectionNames = NO_CONNECTIONS
 ): PolicyRule {
   const dimension = ruleDimension(policy);
-  const { label, value } = describeRule(policy, dimension, currency, locale);
+  const { label, value } = describeRule(
+    policy,
+    dimension,
+    currency,
+    locale,
+    connectionNames
+  );
   return {
     id: policy.id,
     effect: policy.effect,
@@ -581,7 +594,8 @@ export function policiesToMatrix(
   policies: Policy[],
   agents: AgentLike[],
   currency: string | null = null,
-  locale: string = "en"
+  locale: string = "en",
+  connectionNames: ConnectionNames = NO_CONNECTIONS
 ): PolicyMatrix {
   const agentNameById = new Map(agents.map((a) => [a.id, a.name]));
 
@@ -638,7 +652,9 @@ export function policiesToMatrix(
       enabled: enabledRules.length > 0,
       dimensions,
       customCount,
-      rules: rules.map((rule) => policyToRule(rule, currency, locale)),
+      rules: rules.map((rule) =>
+        policyToRule(rule, currency, locale, connectionNames)
+      ),
       hasActiveRule: enabledRules.length > 0,
     };
   };

@@ -1,6 +1,7 @@
 """Activating a skill writes its SKILL.md into the task log, never into workflow history (ADR-0044)."""
 
 import json
+import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -144,6 +145,19 @@ async def test_the_result_is_the_same_few_bytes_whatever_the_body_size(activatio
     result = await activation.activate(_request(skill, max_tokens=1_000_000))
 
     assert len(result.model_dump_json()) < 200
+
+
+def test_a_2_mb_single_character_body_counts_in_seconds_not_minutes():
+    count_tokens("load the encoding")
+    started = time.perf_counter()
+    tokens = count_tokens("x" * 2 * 1024 * 1024)
+
+    assert tokens > 0
+    assert time.perf_counter() - started < 10.0
+
+
+def test_special_token_text_counts_as_plain_text():
+    assert count_tokens("<|endoftext|>") > 1
 
 
 async def test_a_body_over_the_cap_is_pointed_at_and_its_entry_fits_the_cap(activation):

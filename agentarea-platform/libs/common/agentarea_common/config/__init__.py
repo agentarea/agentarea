@@ -5,6 +5,7 @@ of concerns across different settings domains.
 """
 
 from .access_control import AccessControlSettings
+from .analytics import AnalyticsSettings
 from .app import AppSettings, get_app_settings
 from .auth import AuthSettings, get_auth_settings
 from .aws import AWSSettings, get_aws_settings, get_s3_client
@@ -35,6 +36,7 @@ from .triggers import TriggerSettings
 __all__ = [
     "AWSSettings",
     "AccessControlSettings",
+    "AnalyticsSettings",
     "AppSettings",
     "AuthSettings",
     "BaseAppSettings",

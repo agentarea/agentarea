@@ -146,18 +146,27 @@ jobs:
           PREV_TAG=$(git describe --tags --abbrev=0 --match='v*' "${TAG}^" 2>/dev/null || echo "")
 
           NOTES_FILE=$(mktemp)
+          # Highlights / Главное written in the release PR (see release-prepare.yaml)
+          # lead the notes; agentarea.ai/changelog shows them.
+          PR_BODY=$(gh pr list --state merged --head "release/${TAG}" --json body -q '.[0].body // ""' || true)
+          HIGHLIGHTS=$(printf '%s\n' "$PR_BODY" | python3 scripts/release_highlights.py)
+          if [ -n "$HIGHLIGHTS" ]; then
+            printf '%s\n\n' "$HIGHLIGHTS" > "$NOTES_FILE"
+          else
+            echo "::warning::No Highlights/Главное in the release/${TAG} PR; agentarea.ai/changelog will fall back to feat commits"
+          fi
           if [ -n "$PREV_TAG" ]; then
             {
               echo "## Changes since $PREV_TAG"
               echo ""
               git log "${PREV_TAG}..${TAG}" --pretty=format:'- %s (%an)' --no-merges
-            } > "$NOTES_FILE"
+            } >> "$NOTES_FILE"
           else
             {
               echo "## Changes"
               echo ""
               git log "${TAG}" --pretty=format:'- %s (%an)' --no-merges | head -n 50
-            } > "$NOTES_FILE"
+            } >> "$NOTES_FILE"
           fi
 
           gh release create "$TAG" \

@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..models.llm_model import LLMModel, LLMRequest
+from ..models.provider_profiles import DEFAULT_PROFILE, ProviderProfile
 from ..prompts import PromptBuilder, ToolInfo
 from ..tools.completion_tool import CompletionTool
 from ..tools.decorator_tool import ToolsetAdapter
@@ -61,6 +62,7 @@ class EventAgent:
         model_provider: str | None = None,
         model_name: str | None = None,
         endpoint_url: str | None = None,
+        provider: ProviderProfile = DEFAULT_PROFILE,
         # Tool execution
         tool_executor: ToolExecutor | None = None,
         tools: list[Any] | None = None,
@@ -102,6 +104,7 @@ class EventAgent:
                 provider_type=model_provider,
                 model_name=model_name,
                 endpoint_url=endpoint_url,
+                provider=provider,
             )
 
         # Configure Tool executor (DI)

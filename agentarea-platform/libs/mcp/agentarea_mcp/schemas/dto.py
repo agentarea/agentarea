@@ -24,7 +24,7 @@ from pydantic import (
     field_validator,
 )
 
-from ..tool_context import CONTEXT_SECRET_MIN_LENGTH
+from ..tool_context import CONTEXT_SECRET_MIN_LENGTH, CONTEXT_SPEC_KEY
 from .image_reference import validate_optional_image_reference, validate_spec_image
 
 
@@ -46,10 +46,31 @@ def validate_spec_storage(json_spec: dict[str, Any]) -> dict[str, Any]:
     return json_spec
 
 
+def validate_spec_context(json_spec: dict[str, Any]) -> dict[str, Any]:
+    """Refuse a ``context`` key the MCP manager would reject when starting the app.
+
+    ``{"enabled": true}`` opts a platform-run MCP app into caller context: the
+    platform signs every call to it and the manager hands it the key.
+    """
+    context = json_spec.get(CONTEXT_SPEC_KEY)
+    if context is None:
+        return json_spec
+    if (
+        not isinstance(context, dict)
+        or set(context) != {"enabled"}
+        or context["enabled"] is not True
+    ):
+        raise ValueError(f'json_spec.{CONTEXT_SPEC_KEY} must be exactly {{"enabled": true}}')
+    return json_spec
+
+
 # json_spec is read back in SQL (``json_spec->>'type'``); a NUL or unpaired
 # surrogate stored there broke every such query, so refuse it at the edge.
 JsonSpec = Annotated[
-    dict[str, Any], AfterValidator(require_pg_text), AfterValidator(validate_spec_storage)
+    dict[str, Any],
+    AfterValidator(require_pg_text),
+    AfterValidator(validate_spec_storage),
+    AfterValidator(validate_spec_context),
 ]
 # A spec or instance json_spec whose ``image`` reaches ``docker run``.
 ContainerJsonSpec = Annotated[JsonSpec, AfterValidator(validate_spec_image)]

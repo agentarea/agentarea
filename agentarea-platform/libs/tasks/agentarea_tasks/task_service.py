@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from agentarea_common.agent_status import AgentArchivedError, AgentStatus
+from agentarea_common.analytics import count
 from agentarea_common.artifacts.workspace import WorkspaceValidationError, normalize_workspace_path
 from agentarea_common.audit import audited
 from agentarea_common.events.broker import EventBroker
@@ -313,6 +314,7 @@ class TaskService(BaseTaskService):
             cap = to_money(cap_value)
             mtd = to_money(await self.task_repository.sum_spend_mtd())
             if mtd >= cap:
+                count("run_refused", reason="budget_cap")
                 raise BudgetCapExceededError(
                     workspace_id=workspace_id,
                     current_mtd_usd=mtd,
@@ -325,6 +327,7 @@ class TaskService(BaseTaskService):
             agent_cap = to_money(agent_cap_value)
             agent_mtd = to_money(await self.task_repository.sum_spend_mtd(agent_id=agent_id))
             if agent_mtd >= agent_cap:
+                count("run_refused", reason="budget_cap")
                 raise BudgetCapExceededError(
                     workspace_id=workspace_id,
                     current_mtd_usd=agent_mtd,
@@ -336,6 +339,7 @@ class TaskService(BaseTaskService):
         if budget and budget.spend_caps:
             reached = await self.task_repository.monthly_llm_cap_reached(budget, agent_id)
             if reached is not None:
+                count("run_refused", reason="budget_cap")
                 raise BudgetCapExceededError(
                     workspace_id=workspace_id,
                     current_mtd_usd=reached.spent,
@@ -1066,6 +1070,16 @@ class TaskService(BaseTaskService):
         if additional_budget_usd is not None:
             payload["additional_budget_usd"] = serialize_money(additional_budget_usd)
         return await self.workflow_service.continue_execution(task.execution_id, payload)
+
+    async def latest_in_a2a_context(self, agent_id: UUID, context_id: str) -> AgentTask | None:
+        """The newest task of ``agent_id`` an A2A client started in ``context_id``."""
+        task = await self.task_repository.latest_in_a2a_context(agent_id, context_id)
+        return self._task_to_agent_task(task) if task is not None else None
+
+    async def log_end(self, task_id: UUID) -> int:
+        """The last position of the task's log; -1 while it is empty."""
+        conversation = self.repository_factory.create_repository(TaskConversationRepository)
+        return await conversation.next_seq(task_id) - 1
 
     async def queue_follow_up(self, task_id: UUID, message: str) -> bool:
         """Deliver a user message to a task's conversation.

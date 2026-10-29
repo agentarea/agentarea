@@ -122,7 +122,7 @@ export function domainInitials(
 }
 
 export function getOpenApiConnectionInitials(connection?: {
-  base_url: string;
+  base_url: string | null;
   name: string;
 }): string {
   if (!connection) return "API";

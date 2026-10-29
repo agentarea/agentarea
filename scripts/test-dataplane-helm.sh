@@ -100,6 +100,9 @@ assert_contains "helm.sh/resource-policy: keep"
 assert_contains 'k8s_runtime_class = "gvisor"'
 assert_contains "automountServiceAccountToken: false"
 assert_contains "kind: CustomResourceDefinition"
+# The server watches sandbox.fast.io on the Kubernetes runtime; without the CRDs
+# it logs a 404 traceback on every informer retry.
+assert_contains "name: sandboxsnapshots.sandbox.fast.io$"
 assert_contains "name: opensandbox-controller-manager"
 # The server must not share the data plane's selector: it would sit behind the
 # data plane's Service and inside the MCP servers' ingress policy.

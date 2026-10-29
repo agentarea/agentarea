@@ -16,7 +16,7 @@ import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useCurrency } from "@/hooks/useCurrency";
 import { getPolicyStatusPresentation } from "@/lib/status";
 import type { Policy } from "@/types/policies";
-import { policyToRule } from "./policy-rules";
+import { policyToRule, type ConnectionNames } from "./policy-rules";
 
 interface AgentOption {
   id: string;
@@ -64,10 +64,12 @@ function subjectOf(
 export default function PoliciesList({
   policies,
   agents,
+  connectionNames,
   onEditRule,
 }: {
   policies: Policy[];
   agents: AgentOption[];
+  connectionNames: ConnectionNames;
   onEditRule: (ruleId: string) => void;
 }) {
   const agentNameById = useMemo(
@@ -81,7 +83,7 @@ export default function PoliciesList({
     const list = policies
       .filter((p): p is Policy & { id: string } => Boolean(p.id))
       .map((policy) => {
-        const rule = policyToRule(policy, currency, locale);
+        const rule = policyToRule(policy, currency, locale, connectionNames);
         const subject = subjectOf(policy, agentNameById);
         return {
           id: policy.id,
@@ -101,7 +103,7 @@ export default function PoliciesList({
         a.label.localeCompare(b.label)
     );
     return list;
-  }, [policies, agentNameById, currency, locale]);
+  }, [policies, agentNameById, currency, locale, connectionNames]);
 
   const columns = [
     {

@@ -7,9 +7,9 @@ still accounted, not mistaken for a provider that reported nothing.
 
 import json
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
-from litellm.types.utils import ModelResponse, Usage
 
 from agentarea_agents_sdk.models.llm_model import (
     LLMModel,
@@ -67,19 +67,6 @@ def test_deepseek_cache_hits_are_cached_tokens():
     )
 
     assert usage.cached_prompt_tokens == 300
-
-
-def test_litellm_usage_object_keeps_its_cached_tokens():
-    usage = usage_from_provider(
-        Usage(
-            prompt_tokens=400,
-            completion_tokens=40,
-            total_tokens=440,
-            prompt_tokens_details={"cached_tokens": 256},
-        )
-    )
-
-    assert (usage.prompt_tokens, usage.cached_prompt_tokens, usage.total_tokens) == (400, 256, 440)
 
 
 @pytest.mark.parametrize(
@@ -248,9 +235,7 @@ async def test_a_rejected_call_raises_with_the_providers_status_and_words(monkey
 
 def test_the_cost_the_provider_reports_is_read_as_is():
     assert provider_reported_cost({"prompt_tokens": 10, "cost": 0.0042}) == Decimal("0.0042")
-    assert provider_reported_cost(
-        Usage(prompt_tokens=10, completion_tokens=1, total_tokens=11, cost=0.5)
-    ) == Decimal("0.5")
+    assert provider_reported_cost(SimpleNamespace(prompt_tokens=10, cost=0.5)) == Decimal("0.5")
 
 
 @pytest.mark.parametrize("cost", [None, True, "n/a", -1, float("nan")])
@@ -258,31 +243,25 @@ def test_no_usable_reported_cost_is_none(cost):
     assert provider_reported_cost({"prompt_tokens": 10, "cost": cost}) is None
 
 
-def test_a_reported_cost_wins_over_the_declared_prices():
+@pytest.mark.asyncio
+async def test_a_reported_cost_wins_over_the_declared_prices(monkeypatch):
     """Declared prices are approximate (a provider may charge more at peak hours)."""
+    from agentarea_agents_sdk.models import llm_model as module
+
     model = LLMModel(
         provider_type="openai",
         model_name="m",
+        endpoint_url="https://gateway.example/v1",
         input_cost_per_token=Decimal("1.5e-7"),
         output_cost_per_token=Decimal("6e-7"),
     )
-    response = model._parse_response(
-        ModelResponse(
-            id="x",
-            choices=[
-                {
-                    "index": 0,
-                    "message": {"role": "assistant", "content": "hi"},
-                    "finish_reason": "stop",
-                }
-            ],
-            usage={
-                "prompt_tokens": 1000,
-                "completion_tokens": 100,
-                "total_tokens": 1100,
-                "cost": 0.00042,
-            },
-        )
-    )
+    usage = {"prompt_tokens": 1000, "completion_tokens": 100, "cost": 0.00042}
+    lines = [
+        "data: " + json.dumps({"choices": [{"delta": {"content": "hi"}}]}),
+        "data: " + json.dumps({"choices": [], "usage": usage}),
+        "data: [DONE]",
+    ]
+    monkeypatch.setattr(module.httpx, "AsyncClient", _client([_Response(200, lines)]))
+    response = await model.complete(LLMRequest(messages=[{"role": "user", "content": "hi"}]))
 
     assert response.cost == Decimal("0.00042")

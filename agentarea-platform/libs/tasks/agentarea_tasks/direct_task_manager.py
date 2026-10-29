@@ -15,6 +15,7 @@ from decimal import Decimal
 from typing import Any, cast
 from uuid import UUID, uuid4
 
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
 from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.model_charges import (
     ModelFunding,
@@ -53,6 +54,7 @@ class _DirectModel:
     output_cost_per_token: Decimal
     cached_input_cost_per_token: Decimal | None
     cache_creation_input_cost_per_token: Decimal | None
+    provider: ProviderProfile
 
     async def connect(self, funding: ModelFunding) -> Any:
         from agentarea_agents_sdk.models.llm_model import LLMModel
@@ -77,6 +79,7 @@ class _DirectModel:
             cached_input_cost_per_token=self.cached_input_cost_per_token,
             cache_creation_input_cost_per_token=self.cache_creation_input_cost_per_token,
             endpoint_policy=endpoint_policy_for(self.managed_by),
+            provider=self.provider,
         )
 
 
@@ -481,6 +484,7 @@ class DirectTaskManager(BaseTaskManager):
             cache_creation_input_cost_per_token=(
                 model_instance.model_spec.cache_creation_input_cost_per_token
             ),
+            provider=model_instance.provider_config.provider_spec.profile(),
         )
 
         logger.info(

@@ -134,6 +134,8 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     the subscriptions that reacted. Its facet counts come from a rollup the
 #     recording transaction keeps and a partition drop cuts, backfilled by the
 #     migration, and equal a full count of the rows.
+#   A2A context: a contextId finds its agent's newest task by a JSON path on
+#     task metadata, which only the real column type answers.
 #   OpenAPI dispatch: a connection's last call is stamped by a bare UPDATE that
 #     stays in the caller's workspace and leaves updated_at alone.
 #   MCP dispatch stamps: the stamp writer runs with no workspace bound under the
@@ -141,10 +143,16 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #   owned auth configs: an auth config a connect flow minted is deleted with its
 #     connection or instance by ON DELETE CASCADE, its credential and secret
 #     references first; a shared one survives, and the backfill names owners.
+#   installation: replicas creating the analytics installation row at once end
+#     up with one row, which only the single-row unique index decides.
+#     The daily pulse names other libraries' tables and columns by hand; only the
+#     migrated schema shows they exist. One replica sends it, by a real advisory lock.
+#   sign-up attributions: a replayed registration hook keeps the first row, which
+#     only the primary key on identity_id decides.
 #   catalog migration rerun: the ADR-0044 revisions run by the real alembic
 #     environment, refused a lock and killed mid index swap, then rerun to head.
 #     Last: it downgrades and upgrades the shared database.
-PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL STREAMS_TEST_DATABASE_URL OPENAPI_TEST_DATABASE_URL MCP_TEST_DATABASE_URL)
+PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL STREAMS_TEST_DATABASE_URL OPENAPI_TEST_DATABASE_URL MCP_TEST_DATABASE_URL ANALYTICS_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
   libs/llm/tests/test_provider_secret_lifecycle_db.py
@@ -182,6 +190,7 @@ PY_SUITES=(
   libs/tasks/tests/test_cost_settlement_db.py
   libs/tasks/tests/test_inbox_counts_db.py
   libs/tasks/tests/test_undispatched_tasks_db.py
+libs/tasks/tests/test_a2a_context_db.py
   libs/execution/tests/unit/test_publish_workflow_events_db.py
   libs/execution/tests/unit/test_record_activity_db.py
   apps/api/tests/test_task_event_feed_db.py
@@ -213,6 +222,9 @@ PY_SUITES=(
   libs/openapi/tests/test_platform_connection_db.py
   libs/mcp/tests/test_dispatch_stamps_db.py
   apps/api/tests/test_owned_auth_configs_db.py
+  libs/common/tests/test_analytics_installation_db.py
+  libs/common/tests/test_analytics_pulse_db.py
+  libs/common/tests/test_analytics_signups_db.py
   apps/api/tests/test_registry_migration_rerun_db.py
 )
 

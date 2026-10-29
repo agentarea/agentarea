@@ -24,7 +24,7 @@ MAX_SEGMENTS_AFTER_DOMAIN = 3
 DOMAINS = {
     "DB", "S3", "AUTH", "AUTHZ", "SECRET", "MCP", "SANDBOX", "TEMPORAL", "WORKER",
     "TASK", "TRIGGER", "CHANNEL", "EVENT", "CORS", "LOG", "REDIS", "KAFKA", "TOOL",
-    "K8S", "API", "HTTP", "OTEL", "BILLING", "METRICS", "A2A", "SPEND",
+    "K8S", "API", "HTTP", "OTEL", "BILLING", "METRICS", "A2A", "SPEND", "ANALYTICS",
 }
 
 # App-level names that carry no domain segment.
@@ -94,7 +94,9 @@ WHITELIST = {
     "OTEL_RESOURCE_ATTRIBUTES", "OTEL_TRACES_EXPORTER",
     # llm vendor sdks
     "OPENAI_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY",
-    "OLLAMA_API_BASE", "LITELLM_CALLBACKS", "LITELLM_LOCAL_MODEL_COST_MAP",
+    "OLLAMA_API_BASE",
+    # tiktoken reads its encoding cache dir itself; the worker image bakes it in
+    "TIKTOKEN_CACHE_DIR",
     # vendored @ory SDK reads these from the environment itself
     "ORY_SDK_URL", "NEXT_PUBLIC_ORY_SDK_URL", "ORY_PROJECT_API_TOKEN",
     # Deliberately not NEXT_PUBLIC_: Next inlines those at build time, and one
@@ -106,13 +108,15 @@ WHITELIST = {
     # next.js build contract
     "NODE_ENV", "NEXT_TELEMETRY_DISABLED", "NEXT_PUBLIC_APP_URL",
     "NEXT_PUBLIC_APP_VERSION", "NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_KRATOS_URL",
-    "NEXT_PUBLIC_NODE_ENV", "__NEXT_PRIVATE_ORIGIN", "NEXT_RUNTIME",
+    "NEXT_PUBLIC_NODE_ENV", "__NEXT_PRIVATE_ORIGIN", "NEXT_RUNTIME", "NEXT_PHASE",
     # proxy configuration, read by http clients themselves
     "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY",
     # platform / shell
     "PORT", "HOST", "PATH", "HOME", "USER", "CI", "VERSION", "TZ",
     "KUBERNETES_SERVICE_HOST", "KUBERNETES_SERVICE_PORT", "KUBECONFIG",
     "REGISTRIES_CONFIG",
+    # what the manager hands a platform-run MCP app container (mcp-apps-kit reads them)
+    "MCP_MANAGER_URL", "MCP_INSTANCE_ID", "MCP_STORAGE_TOKEN", "MCP_CONTEXT_KEY",
 }
 
 # Fixture and tooling paths hold throwaway names, not deployed configuration.

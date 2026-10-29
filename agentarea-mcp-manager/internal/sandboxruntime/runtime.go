@@ -60,14 +60,15 @@ type FileTransferRuntime interface {
 
 // WorkspaceHydrationCoordinator owns control-plane hydration state and
 // serialization for one live runtime binding. The agent-writable filesystem is
-// deliberately not authoritative for this state.
+// deliberately not authoritative for this state. hydrate materializes a fresh
+// binding; advance is called with the recorded revision when a live binding is
+// at a different one, and only its success may record the new revision.
 type WorkspaceHydrationCoordinator interface {
 	EnsureWorkspaceHydrated(
-		context.Context,
-		string,
-		string,
-		string,
-		func(context.Context) error,
+		ctx context.Context,
+		workspaceID, taskID, revision string,
+		hydrate func(context.Context) error,
+		advance func(context.Context, string) error,
 	) error
 }
 

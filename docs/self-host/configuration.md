@@ -42,7 +42,7 @@ Every variable AgentArea reads is `AGENTAREA_<DOMAIN>_<KEY>`, at most 40
 characters, with at most three segments after the domain. The domain comes from
 a closed list: `DB` `S3` `AUTH` `AUTHZ` `SECRET` `MCP` `SANDBOX` `TEMPORAL`
 `WORKER` `TASK` `TRIGGER` `CHANNEL` `EVENT` `CORS` `LOG` `REDIS` `KAFKA` `TOOL` `K8S`
-`API` `HTTP` `OTEL` `BILLING` `METRICS` `A2A` `SPEND`. Domains are whole words; only
+`API` `HTTP` `OTEL` `BILLING` `METRICS` `A2A` `SPEND` `ANALYTICS`. Domains are whole words; only
 established acronyms are abbreviated. A handful of
 app-level names carry no domain — `AGENTAREA_ENV`, `AGENTAREA_API_URL`,
 `AGENTAREA_APP_URL`, `AGENTAREA_EDITION`.
@@ -129,16 +129,19 @@ present in `values.yaml` but are not rendered into environment variables.
 
 ### Object storage (group `storage`)
 
-Rendered only when `rustfs.enabled` is true.
+The bundled RustFS by default. With `rustfs.enabled=false` the same variables
+name your own store, and `global.storage.endpoint` and
+`global.storage.existingSecret` are required; the chart refuses to render
+without them, and refuses them while RustFS is enabled.
 
 | Variable | Helm value | Default |
 |---|---|---|
 | `AGENTAREA_S3_REGION` | `global.storage.region` | `us-east-1` |
 | `AGENTAREA_S3_BUCKET` | `global.storage.bucket` | `agentarea-documents` |
 | `AGENTAREA_S3_ARTIFACTS_BUCKET` | `global.storage.bucket` | `agentarea-documents` |
-| `AGENTAREA_S3_ENDPOINT` | the RustFS service host, port 9000 | derived |
-| `AWS_ACCESS_KEY_ID` | Secret `global.secrets.rustfs`, key `root-user` | generated |
-| `AWS_SECRET_ACCESS_KEY` | Secret `global.secrets.rustfs`, key `root-password` | generated |
+| `AGENTAREA_S3_ENDPOINT` | `global.storage.endpoint`; with RustFS, the RustFS service, port 9000 | derived |
+| `AGENTAREA_S3_ACCESS_KEY` | Secret `global.storage.existingSecret`, key `global.storage.accessKeyKey`; with RustFS, Secret `global.secrets.rustfs`, key `root-user` | generated |
+| `AGENTAREA_S3_SECRET_KEY` | Secret `global.storage.existingSecret`, key `global.storage.secretKeyKey`; with RustFS, Secret `global.secrets.rustfs`, key `root-password` | generated |
 
 `global.storage.publicEndpoint` is rendered in the `backend` group as
 `AGENTAREA_S3_PUBLIC_ENDPOINT`, not here.
@@ -155,6 +158,8 @@ Rendered only when `rustfs.enabled` is true.
 | `AGENTAREA_S3_PUBLIC_ENDPOINT` | `global.storage.publicEndpoint` | `""` |
 | `AGENTAREA_METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `true` |
 | `AGENTAREA_METRICS_PORT` | `global.monitoring.prometheus.port` | `9090` |
+| `AGENTAREA_ANALYTICS_ENABLED` | `global.analytics.enabled` | `true` |
+| `AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY` | Secret `global.analytics.signupHookSecret`, key `signup-hook-key` | unset (no sign-up hook) |
 | `AGENTAREA_AUTH_ISSUER` | `kratos.jwt.issuer` | `https://agentarea.dev` |
 | `AGENTAREA_AUTH_AUDIENCE` | `kratos.jwt.audience` | `agentarea-api` |
 | `AGENTAREA_AUTH_JWKS_B64` | Secret `<release>-kratos-jwks` or `kratos.secretName`, key `jwks_b64` | generated |
@@ -167,6 +172,16 @@ Rendered only when `rustfs.enabled` is true.
 `AGENTAREA_METRICS_ENABLED` serves Prometheus metrics on `AGENTAREA_METRICS_PORT`, never on the API
 port. The API serves `/health` on its normal port unconditionally; see
 [observability](/self-host/observability).
+
+`AGENTAREA_ANALYTICS_ENABLED` sends anonymous usage statistics to AgentArea from the
+backend and the worker; `false` sends nothing. It is not OpenTelemetry. The fields
+sent are listed in [usage analytics](/self-host/analytics).
+
+`AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY` is the key an Ory Kratos after-registration
+web hook presents, as its `Authorization` header, to
+`POST /internal/analytics/signups`. The backend then records which channel brought
+each sign-up (see [usage analytics](/self-host/analytics)). Unset, the
+endpoint answers 404.
 
 `AGENTAREA_API_URL` is the URL the backend advertises for itself — provider icon URLs,
 OAuth protected-resource metadata, and the MCP `WWW-Authenticate` header. It must
@@ -211,6 +226,7 @@ it, the worker to refresh tokens.
 | `AGENTAREA_TASK_OUTAGE_WAIT_BACKOFF` | `worker.outageWait.backoff` | `1m,5m,10m` |
 | `AGENTAREA_TASK_OUTAGE_WAIT_DEADLINE` | `worker.outageWait.deadline` | `24h` |
 | `AGENTAREA_TASK_SKILLS_WINDOW_SHARE` | `worker.skillsWindowShare` | `0.3` |
+| `AGENTAREA_ANALYTICS_ENABLED` | `global.analytics.enabled` | `true` |
 
 The three `OUTAGE` durations decide how a run rides out a service it cannot
 reach (see [waiting for a service](/concepts/execution/tasks#waiting-for-a-service)):
@@ -464,8 +480,8 @@ this variable names. The file adds to the public roots and never replaces them.
 Set it when members connect services whose chain those roots leave out, such as
 hosts certified by the Russian Trusted Root CA, or a corporate CA. It covers
 OpenAPI spec fetches and tool calls, URL MCP servers, OAuth discovery and token
-endpoints, A2A delegates, model discovery, skill and registry imports, and
-channel webhooks. LLM calls made through LiteLLM are not covered.
+endpoints, A2A delegates, model discovery and model calls, skill and registry
+imports, and channel webhooks.
 
 On Kubernetes, put the PEM text of one or more certificates in
 `global.http.extraCaCerts`: the chart stores it in the ConfigMap
@@ -500,21 +516,6 @@ CIDR lets every member reach every in-cluster service, the platform's own
 included. `AGENTAREA_HTTP_ALLOW_PRIVATE=true` admits every private address and
 belongs only on a single-tenant install. `docker-compose.dev.yaml` allows
 `localhost,host.docker.internal`; `docker-compose.yaml` allows nothing.
-
-### LiteLLM price map (set in the images)
-
-Read by LiteLLM itself, in the backend and the worker.
-
-| Variable | Helm value | Default |
-|---|---|---|
-| `LITELLM_LOCAL_MODEL_COST_MAP` | none (set in the API and worker images) | `True` |
-
-Without it, LiteLLM downloads its model price map from GitHub every time it is
-imported: a request at every start, up to 5 s of delay when the network blocks
-it, and prices that change without a release. The images set it, so LiteLLM uses
-the map bundled in the version the image ships. The platform prices a call from
-the provider's reported cost or the model catalog first; this map is the last
-resort for a model the catalog has no price for.
 
 ### Spend currency (not in `config.yaml`)
 

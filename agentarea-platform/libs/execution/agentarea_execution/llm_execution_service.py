@@ -7,8 +7,8 @@ from contextlib import AbstractAsyncContextManager, aclosing
 from typing import Any, Protocol, cast
 from uuid import UUID, uuid4
 
-import litellm
 from agentarea_agents_sdk import LLMModel, LLMRequest, LLMResponse
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
 from agentarea_common.auth.context import UserContext
 from agentarea_common.model_charges import (
     ModelFunding,
@@ -67,15 +67,9 @@ def resolve_llm_max_tokens(
     return min(candidates)
 
 
-def model_reads_images(provider_type: str, model_name: str, spec_flag: bool | None) -> bool:
-    """The model spec's word when it says yes; otherwise litellm's model map.
-
-    Discovery leaves the spec flag unset for most models, so a ``False`` there
-    is no evidence the model is blind.
-    """
-    if spec_flag:
-        return True
-    return bool(litellm.supports_vision(model=f"{provider_type}/{model_name}"))
+def model_reads_images(spec_flag: bool | None) -> bool:
+    """The model spec's ``supports_vision``, which the catalog sets; unset reads as no."""
+    return spec_flag is True
 
 
 async def _with_tool_images(
@@ -138,6 +132,7 @@ class LLMExecutionService:
             cache_creation_input_cost_per_token = None
 
             supports_vision: bool | None = None
+            provider_data: dict[str, Any] | None = None
             if request.resolved_model:
                 cached = request.resolved_model
                 supports_vision = cached.get("supports_vision")
@@ -153,6 +148,10 @@ class LLMExecutionService:
                 )
                 managed_by = cached.get("managed_by")
                 api_key_secret_name = cached.get("api_key_secret")
+                provider_data = cached.get("provider")
+                if provider_data is None:
+                    # Resolved before specs carried their HTTP contract: read the spec.
+                    provider_type = None
 
             if provider_type is None:
                 async with self._model_service_scope(user_context) as model_service:
@@ -169,6 +168,9 @@ class LLMExecutionService:
                         )
 
                     provider_type = model_instance.provider_config.provider_spec.provider_type
+                    provider_data = (
+                        model_instance.provider_config.provider_spec.profile().as_mapping()
+                    )
                     model_name = model_instance.model_spec.model_name
                     endpoint_url = getattr(
                         model_instance.provider_config, "endpoint_url", None
@@ -207,7 +209,7 @@ class LLMExecutionService:
                 messages=await _with_tool_images(
                     request,
                     user_context,
-                    vision=model_reads_images(str(provider_type), str(model_name), supports_vision),
+                    vision=model_reads_images(supports_vision),
                 ),
                 tools=request.tools,
                 temperature=request.temperature,
@@ -258,6 +260,7 @@ class LLMExecutionService:
                         cache_creation_input_cost_per_token
                     ),
                     endpoint_policy=endpoint_policy_for(managed_by),
+                    provider=ProviderProfile.from_mapping(provider_data),
                 )
                 return await self._call(
                     llm_model,

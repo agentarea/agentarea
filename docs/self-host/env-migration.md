@@ -48,6 +48,7 @@ configured. Delete them; there is no replacement.
 |---|---|
 | `ENCRYPTION_KEY` | Never read. The live key is `AGENTAREA_SECRET_ENCRYPTION_KEY`. |
 | `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_REGION` | Kept "for local scripts"; no such script exists. |
+| `AGENTAREA_CORS_CREDENTIALS` | The API authenticates by bearer token, never by cookie, so browsers are never allowed to send credentials. `AGENTAREA_CORS_ORIGINS` now defaults to `*`. |
 | `MCP_MANAGER_BASE_URL`, `MCP_MANAGER_API_KEY`, `MCP_MANAGER_TIMEOUT`, `MCP_MANAGER_MAX_RETRIES` | A second, never-set channel for the address `AGENTAREA_MCP_MANAGER_URL` already carries. |
 | `RELOAD` | Was never wired to the `--reload` option. Reload stays a local flag. |
 | `LLM_DOCKER_HOST` | Set for the worker in compose; only integration tests read it. |
@@ -69,6 +70,7 @@ configured. Delete them; there is no replacement.
 | `AGENTAREA_CHANNEL_IN_STREAM`, `AGENTAREA_CHANNEL_IN_GROUP`, `AGENTAREA_CHANNEL_IN_DLQ`, `AGENTAREA_EVENT_STREAM` | The `channel.inbound` stream is gone. The event service publishes polled items to `streams.ingest`, read by the `ingest` consumer group (dead letters in `streams.ingest.ingest.dlq`); the names are fixed like every other topic. |
 | `AGENTAREA_EVENT_TELEGRAM_ENABLED` | Telegram is no longer polled by a switch on the event service. A Telegram source of kind `poll` (or `webhook`) is created through the streams source API; the event service polls every poll source the catalog describes. |
 | `AGENTAREA_CHANNEL_OUT_STREAM`, `AGENTAREA_CHANNEL_OUT_GROUP`, `AGENTAREA_CHANNEL_OUT_DLQ` | The outbound stream is gone. Replies are sent by the `delivery` consumer group on `tasks.events`, whose names are fixed (`tasks.events`, `delivery`, `tasks.events.delivery.dlq`) like every other topic. |
+| `LITELLM_CALLBACKS`, `LITELLM_LOCAL_MODEL_COST_MAP` | The platform no longer uses the LiteLLM SDK; it calls models over its own OpenAI-compatible and Anthropic transports. |
 
 ## Renamed
 

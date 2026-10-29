@@ -202,6 +202,7 @@
           "self-host/secrets-backends",
           "self-host/database-and-migrations",
           "self-host/observability",
+          "self-host/analytics",
           "self-host/backup-and-recovery",
           "self-host/upgrades",
           "self-host/troubleshooting"

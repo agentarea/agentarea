@@ -521,9 +521,10 @@ func (m *Manager) EnsureWorkspaceHydrated(
 	ctx context.Context,
 	workspaceID, taskID, revision string,
 	hydrate func(context.Context) error,
+	advance func(context.Context, string) error,
 ) error {
-	if hydrate == nil || !validSHA256(revision) {
-		return fmt.Errorf("workspace hydration requires a callback and a valid revision")
+	if hydrate == nil || advance == nil || !validSHA256(revision) {
+		return fmt.Errorf("workspace hydration requires hydrate and advance callbacks and a valid revision")
 	}
 	if workspaceID == "" || taskID == "" {
 		return fmt.Errorf("workspace_id and task_id are required")
@@ -558,9 +559,10 @@ func (m *Manager) EnsureWorkspaceHydrated(
 			if record.Revision == revision {
 				return nil
 			}
-			return fmt.Errorf("live sandbox is hydrated from revision %s and cannot be mutated to %s", record.Revision, revision)
-		}
-		if err := hydrate(lockCtx); err != nil {
+			if err := advance(lockCtx, record.Revision); err != nil {
+				return fmt.Errorf("live sandbox is hydrated from revision %s and cannot be mutated to %s: %w", record.Revision, revision, err)
+			}
+		} else if err := hydrate(lockCtx); err != nil {
 			return err
 		}
 		return m.store.putHydrationIfSession(lockCtx, session, hydrationRecord{

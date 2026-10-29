@@ -8,42 +8,48 @@
       "name": "Maya Chen",
       "handle": "maya",
       "kind": "human",
-      "title": "Engineering Manager"
+      "title": "Engineering Manager",
+      "platformId": null
     },
     {
       "id": "usr_02",
       "name": "Daniel Okafor",
       "handle": "daniel",
       "kind": "human",
-      "title": "Senior Frontend Engineer"
+      "title": "Senior Frontend Engineer",
+      "platformId": null
     },
     {
       "id": "usr_03",
       "name": "Priya Raman",
       "handle": "priya",
       "kind": "human",
-      "title": "Platform Engineer"
+      "title": "Platform Engineer",
+      "platformId": null
     },
     {
       "id": "usr_04",
       "name": "Lena Fischer",
       "handle": "lena",
       "kind": "human",
-      "title": "Growth Marketing Lead"
+      "title": "Growth Marketing Lead",
+      "platformId": null
     },
     {
       "id": "agt_01",
       "name": "Atlas",
       "handle": "atlas",
       "kind": "agent",
-      "title": "Triage and QA agent"
+      "title": "Triage and QA agent",
+      "platformId": null
     },
     {
       "id": "agt_02",
       "name": "Relay",
       "handle": "relay",
       "kind": "agent",
-      "title": "Release and operations agent"
+      "title": "Release and operations agent",
+      "platformId": null
     }
   ],
   "projects": [

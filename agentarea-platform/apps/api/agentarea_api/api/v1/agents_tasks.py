@@ -2346,6 +2346,7 @@ async def _resolve_model_info(
         # for and whose entitlement check would then quietly go back to failing open.
         "managed_by": provider_config.managed_by,
         "endpoint_url": provider_config.endpoint_url,
+        "provider": provider_spec.profile().as_mapping(),
         "context_window": model_spec.context_window,
         "max_output_tokens": model_spec.max_output_tokens,
         "input_cost_per_token": model_spec.input_cost_per_token,

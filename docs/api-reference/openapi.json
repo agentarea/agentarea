@@ -1079,6 +1079,55 @@
         "title": "AgentUpdate",
         "type": "object"
       },
+      "AnalyticsResponse": {
+        "properties": {
+          "collector_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collector Url"
+          },
+          "edition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edition"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "install_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Install Id"
+          }
+        },
+        "required": [
+          "enabled",
+          "install_id",
+          "collector_url",
+          "edition"
+        ],
+        "title": "AnalyticsResponse",
+        "type": "object"
+      },
       "AnalyzeRequest": {
         "description": "Analyze a bundle into an import preview.\n\nProvide exactly one of ``source`` (pasted text) or ``source_url`` (a URL the\nserver fetches behind the SSRF guard). ``source_url`` is what a landing-page\ndeep-link (`/bundles/import?src=<url>`) uses for one-click installs.",
         "properties": {
@@ -6226,6 +6275,67 @@
         "title": "MCPInstanceHealthResponse",
         "type": "object"
       },
+      "MCPInstanceToolPolicies": {
+        "properties": {
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/MCPInstanceToolPolicy"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tools"
+        ],
+        "title": "MCPInstanceToolPolicies",
+        "type": "object"
+      },
+      "MCPInstanceToolPolicy": {
+        "description": "One tool of a connection: its workspace default and the workspace's verdict on it.",
+        "properties": {
+          "default": {
+            "enum": [
+              "allow",
+              "approval",
+              "deny"
+            ],
+            "title": "Default",
+            "type": "string"
+          },
+          "effective": {
+            "enum": [
+              "allow",
+              "approval",
+              "deny"
+            ],
+            "title": "Effective",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "name",
+          "default",
+          "effective"
+        ],
+        "title": "MCPInstanceToolPolicy",
+        "type": "object"
+      },
       "MCPServerConnectionCreateRequest": {
         "properties": {
           "instance": {
@@ -8821,8 +8931,15 @@
             "type": "array"
           },
           "base_url": {
-            "title": "Base Url",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
           },
           "cost": {
             "anyOf": [
@@ -18966,7 +19083,7 @@
   "info": {
     "description": "Modular and extensible framework for building AI agents. This API requires JWT Bearer token authentication for most endpoints. Include your JWT token in the Authorization header. Public endpoints include /, /health, /docs, /redoc, and /openapi.json.",
     "title": "AgentArea API",
-    "version": "0.1.0"
+    "version": "0.1.2"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -19629,6 +19746,35 @@
         "tags": [
           "v1",
           "protected"
+        ]
+      }
+    },
+    "/v1/analytics": {
+      "get": {
+        "description": "Return whether analytics is on and, if so, where and as which installation to send.",
+        "operationId": "get_analytics_v1_analytics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Analytics",
+        "tags": [
+          "v1",
+          "protected",
+          "analytics"
         ]
       }
     },
@@ -28337,6 +28483,70 @@
           }
         ],
         "summary": "Run Test Auth",
+        "tags": [
+          "v1",
+          "protected",
+          "mcp-server-instances"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/tool-policies": {
+      "get": {
+        "description": "The workspace default and the workspace-layer verdict for each tool of this connection.",
+        "operationId": "get_mcp_server_instance_tool_policies_v1_mcp_server_instances__instance_id__tool_policies_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instance_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Instance Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPInstanceToolPolicies"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Mcp Server Instance Tool Policies",
         "tags": [
           "v1",
           "protected",

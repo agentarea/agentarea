@@ -55,7 +55,7 @@ func TestDockerBackendRehydratesAfterExecutorIncarnationChanges(t *testing.T) {
 	for index := 0; index < 2; index++ {
 		if err := backend.EnsureWorkspaceHydrated(
 			context.Background(), "workspace-1", "task-1",
-			revision, hydrate,
+			revision, hydrate, nil,
 		); err != nil {
 			t.Fatal(err)
 		}
@@ -69,7 +69,7 @@ func TestDockerBackendRehydratesAfterExecutorIncarnationChanges(t *testing.T) {
 	incarnationMu.Unlock()
 	if err := backend.EnsureWorkspaceHydrated(
 		context.Background(), "workspace-1", "task-1",
-		revision, hydrate,
+		revision, hydrate, nil,
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +210,7 @@ func TestDockerBackendSerializesConcurrentHydration(t *testing.T) {
 		go func() {
 			errorsByCaller <- backend.EnsureWorkspaceHydrated(
 				context.Background(), "workspace-1", "task-1",
-				revision, hydrate,
+				revision, hydrate, nil,
 			)
 		}()
 	}

@@ -18,7 +18,7 @@ COPY apps/ ./apps/
 
 # Use uv to install dependencies and project packages (exclude dev and test dependencies)
 # --all-packages ensures workspace packages and their dependencies are installed
-RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-group test --all-packages
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-group test --all-packages --compile-bytecode
 
 # Runtime stage
 FROM python:3.14.8-slim-trixie
@@ -49,14 +49,13 @@ COPY --chown=appuser:appuser pyproject.toml ./
 
 # Make entrypoint executable and ensure /tmp is writable for tiktoken cache
 RUN chmod 755 /app/docker-entrypoint.sh && \
+    python -m compileall -q -j0 /app/apps /app/libs && \
     chmod -R a+rX /app/apps /app/libs && \
     mkdir -p /tmp && chmod 1777 /tmp
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-# LiteLLM prices from the map in its own package, never fetched from GitHub at import.
-ENV LITELLM_LOCAL_MODEL_COST_MAP=True
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Switch to non-root user

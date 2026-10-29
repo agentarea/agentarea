@@ -430,6 +430,120 @@ async def test_the_upstream_receives_the_connections_stored_secret_header(monkey
     assert sent.headers["x-api-key"] == "canary"
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("opted_in", [True, False])
+async def test_a_platform_run_app_is_told_who_calls_it(monkeypatch, opted_in):
+    """A docker instance whose spec opts into caller context gets the caller signed
+    with its derived key; a spoofed X-AgentArea-Context from the caller never passes;
+    an instance that did not opt in gets no context at all."""
+    import json
+
+    import jwt
+    from agentarea_mcp.application import service as service_module
+    from agentarea_mcp.tool_context import derived_context_key
+
+    gateway_secret = "g" * 40  # pragma: allowlist secret
+    spec = {"type": "docker", "image": "agentarea/agentarea-mcp-apps-tasks:1"}
+    if opted_in:
+        spec["context"] = {"enabled": True}
+    server = SimpleNamespace(
+        remote_url=None, cmd=None, docker_image_url=spec["image"], json_spec=spec
+    )
+    instance = MCPServerInstance(
+        name="tasks", server_spec_id="spec", transport="docker", json_spec={}
+    )
+    instance.id = uuid4()
+
+    with patch("agentarea_mcp.application.service.get_database", MagicMock()):
+        service = MCPServerInstanceService(
+            repository_factory=MagicMock(),
+            event_broker=MagicMock(),
+            secret_manager=InMemorySecrets(),
+        )
+    service.mcp_server_repository = SimpleNamespace(get_server_by_id=AsyncMock(return_value=server))
+    settings = SimpleNamespace(
+        mcp=SimpleNamespace(
+            gateway_secret=lambda: gateway_secret,
+            manager_gateway_headers=lambda: {"X-AgentArea-Manager-Authorization": "Bearer x"},
+            manager_gateway_url=lambda iid: f"http://mcp-manager:8000/mcp/{iid}/mcp",
+        )
+    )
+    monkeypatch.setattr(service_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(mcp_proxy, "get_settings", lambda: settings)
+    monkeypatch.setattr(
+        mcp_proxy,
+        "MCPServerInstanceRepository",
+        lambda *_: SimpleNamespace(get_by_id=AsyncMock(return_value=instance)),
+    )
+    monkeypatch.setattr(
+        mcp_proxy,
+        "MCPServerRepository",
+        lambda *_: SimpleNamespace(get_server_by_id=AsyncMock(return_value=server)),
+    )
+    monkeypatch.setattr(mcp_proxy, "_authorize_mcp_tool_calls", AsyncMock())
+    monkeypatch.setattr(
+        mcp_proxy, "_wait_out_gateway_start", AsyncMock(side_effect=lambda _c, _q, resp, _r: resp)
+    )
+    received: list[httpx.Request] = []
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        received.append(request)
+        return httpx.Response(200, stream=httpx.ByteStream(b"{}"))
+
+    monkeypatch.setattr(
+        mcp_proxy,
+        "outbound_client",
+        lambda _destination, *, policy=None, **kwargs: httpx.AsyncClient(
+            transport=httpx.MockTransport(upstream), **kwargs
+        ),
+    )
+    body = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "create_task", "arguments": {}},
+        }
+    ).encode()
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": f"/v1/mcp/{instance.id}/mcp",
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"x-agentarea-context", b"spoofed"),
+            ],
+            "query_string": b"",
+        }
+    )
+
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    request._receive = receive
+    caller = SimpleNamespace(user_id="u1", workspace_id="ws1", email="maya@acme.ru", client_id=None)
+    response = await mcp_proxy.proxy_instance(
+        instance.id, request, caller, MagicMock(), InMemorySecrets(), service
+    )
+    async for _ in response.body_iterator:
+        pass
+
+    (sent,) = received
+    if not opted_in:
+        assert "x-agentarea-context" not in sent.headers
+        return
+    key = derived_context_key(gateway_secret, str(instance.id))
+    claims = jwt.decode(
+        sent.headers["x-agentarea-context"], key, algorithms=["HS256"], audience=str(instance.id)
+    )
+    assert (claims["user_id"], claims["user_email"], claims["tool"]) == (
+        "u1",
+        "maya@acme.ru",
+        "create_task",
+    )
+
+
 # ----- MCP Events through the proxy -----
 
 
@@ -511,3 +625,31 @@ async def test_an_events_poll_name_header_is_held_to_the_body():
             instance_id=_INSTANCE,
             headers={"Mcp-Method": "events/poll", "Mcp-Name": "other.event"},
         )
+
+
+@pytest.mark.asyncio
+async def test_an_allowlist_naming_the_bare_tool_does_not_admit_it_at_the_proxy(monkeypatch):
+    # The server picks its tools' names, so a bare name in an allowlist would
+    # admit every server that advertises a tool by that name.
+    _install_policy(monkeypatch, EffectivePolicy(tools=ToolsPolicy(allowed=["github.create_issue"])))
+
+    with pytest.raises(HTTPException) as exc:
+        await _authorize_mcp_tool_calls(
+            _CALL,
+            SimpleNamespace(user_id="u1", workspace_id="ws1"),
+            object(),
+            instance_id=_INSTANCE,
+        )
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_an_allowlist_naming_the_tool_through_its_server_admits_it_at_the_proxy(
+    monkeypatch,
+):
+    target = f"mcp:{_INSTANCE}:github.create_issue"
+    _install_policy(monkeypatch, EffectivePolicy(tools=ToolsPolicy(allowed=[target])))
+
+    await _authorize_mcp_tool_calls(
+        _CALL, SimpleNamespace(user_id="u1", workspace_id="ws1"), object(), instance_id=_INSTANCE
+    )

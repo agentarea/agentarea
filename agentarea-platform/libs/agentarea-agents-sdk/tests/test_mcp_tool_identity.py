@@ -13,6 +13,7 @@ import pytest
 from agentarea_agents_sdk.tools.mcp_tool_identity import (
     MAX_TOOL_NAME_LENGTH,
     McpToolIdentity,
+    mcp_tool_rule_target,
     qualify_mcp_tool_name,
     server_label,
 )
@@ -91,12 +92,18 @@ class TestIdentity:
         instance_id = str(uuid4())
         identity = McpToolIdentity("mcp__github__search", instance_id, "search", instance_id)
         assert identity.canonical == f"mcp:{instance_id}:search"
-        assert identity.policy_names == (identity.canonical, "search")
+        assert identity.policy_names == (identity.canonical,)
 
     def test_attachment_by_name_is_also_a_policy_name(self):
         instance_id = str(uuid4())
         identity = McpToolIdentity("mcp__github__search", instance_id, "search", "github")
-        assert identity.policy_names == (f"mcp:{instance_id}:search", "mcp:github:search", "search")
+        assert identity.policy_names == (f"mcp:{instance_id}:search", "mcp:github:search")
+
+    def test_the_raw_name_the_server_chose_only_narrows(self):
+        instance_id = str(uuid4())
+        identity = McpToolIdentity("mcp__github__search", instance_id, "search", instance_id)
+        assert "search" not in identity.policy_names
+        assert identity.restricting_names == ("search",)
 
 
 class TestDiscovery:
@@ -181,3 +188,18 @@ class TestExecution:
 
         assert tool.name == "mcp__github__search"
         assert service.calls == [(server.id, "search", {"q": "agentarea"})]
+
+
+class TestRuleTarget:
+    def test_names_exactly_one_tool_even_with_glob_characters(self):
+        from fnmatch import fnmatch
+
+        target = mcp_tool_rule_target("inst", "get*[v1]?")
+        pattern = target.removeprefix("tool:")
+
+        assert target == "tool:mcp:inst:get[*][[]v1][?]"
+        assert fnmatch("mcp:inst:get*[v1]?", pattern)
+        assert not fnmatch("mcp:inst:get_all[v1]x", pattern)
+
+    def test_plain_name_is_unchanged(self):
+        assert mcp_tool_rule_target("inst", "search") == "tool:mcp:inst:search"

@@ -23,3 +23,8 @@ reason = "braces <=3.0.3 stack exhaustion on deeply nested brace patterns; no fi
 id = "GHSA-hp3w-g68c-fv3c"
 ignoreUntil = 2027-01-06
 reason = "sprintf-js <=1.1.3 DoS via unbounded precision specifiers; no fixed release exists. agentarea-cli dev dependency only (argparse@1 -> js-yaml@3 -> supertap, pulled by ava); never shipped in the CLI bundle and never formats untrusted strings. Re-check for a fixed release or ava dropping js-yaml@3."
+
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+ignoreUntil = 2027-01-28
+reason = "deepmerge <=4.3.1 prototype poisoning in mergeObject(); no fixed release. In agentarea-webapp only through @svgr/plugin-svgo, a build-time SVG-to-component step that merges the repo's own svgo config; no runtime path merges untrusted objects with it. Re-check for a fixed deepmerge or an svgr release that drops it."

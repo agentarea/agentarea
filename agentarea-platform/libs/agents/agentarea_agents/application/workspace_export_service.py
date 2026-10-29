@@ -28,6 +28,7 @@ from urllib.parse import parse_qsl, urlsplit
 import yaml
 from agentarea_common.auth.authorization import assert_workspace_admin
 from agentarea_common.base import RepositoryFactory, is_builtin
+from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.workspaces.lookup import load_workspace
 
 from agentarea_agents.application.agent_service import AgentService
@@ -268,7 +269,9 @@ class WorkspaceExportService:
         builtin_refs: set[str] = set()
         setup_fields: list[Any] = []
         for instance in await self.mcp_instance_service.list():
-            if is_builtin(instance):
+            # A platform-managed connection is in every workspace already, and its
+            # address is the deployment's, not something a bundle may carry.
+            if is_builtin(instance) or getattr(instance, "managed_by", None) == MANAGED_BY_PLATFORM:
                 builtin_refs.update({str(instance.id), instance.name})
                 continue
 

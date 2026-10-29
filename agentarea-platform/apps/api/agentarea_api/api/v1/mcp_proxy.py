@@ -59,6 +59,7 @@ from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
+from agentarea_mcp.tool_context import CallerContext
 from agentarea_mcp.transport_spec import instance_transport_spec
 from agentarea_openapi.application.url_validator import validate_url
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -217,6 +218,17 @@ def _jsonrpc_methods(payload: Any) -> list[str]:
     ]
 
 
+def _single_tool_call(body: bytes | None) -> str | None:
+    """The tool a request body calls when it is exactly one tools/call, else None."""
+    if not body:
+        return None
+    try:
+        calls = _iter_jsonrpc_tool_calls(json.loads(body))
+    except ValueError:
+        return None
+    return calls[0][0] if len(calls) == 1 else None
+
+
 def _iter_jsonrpc_tool_calls(payload: Any) -> list[tuple[str, dict[str, Any]]]:
     """Extract MCP JSON-RPC tool calls from a request payload."""
     messages = payload if isinstance(payload, list) else [payload]
@@ -246,8 +258,9 @@ async def authorize_mcp_tool_call(
 ) -> None:
     """Deny one MCP tool call when the workspace policy does not permit it.
 
-    ``tool_name`` is the raw name the server advertises; a rule may also name the
-    tool through its server as ``mcp:<instance id>:<tool>``.
+    ``tool_name`` is the raw name the server advertises. Only the tool named
+    through its server, ``mcp:<instance id>:<tool>``, may satisfy an allowlist;
+    the raw name still reaches it through a deny or approval rule.
     """
     if policy is None:
         resolver = GovernancePolicyResolver(RepositoryFactory(session, user_context))
@@ -258,7 +271,9 @@ async def authorize_mcp_tool_call(
         policy = snapshot.to_json_dict()
 
     decision = decide_tool_policy(
-        policy, tool_name, aliases=(mcp_tool_target(str(instance_id), tool_name),)
+        policy,
+        mcp_tool_target(str(instance_id), tool_name),
+        restricting_aliases=(tool_name,),
     )
     if not decision.allowed:
         raise HTTPException(
@@ -493,6 +508,22 @@ async def proxy_instance(
             )
         except _MCPHeaderMismatchError as exc:
             return JSONResponse(status_code=400, content=exc.body)
+    # Who this request is for, signed for an instance that takes caller context.
+    # The caller's own X-AgentArea-Context never passes _filter_inbound_headers.
+    caller = CallerContext(
+        workspace_id=str(user_context.workspace_id),
+        user_id=str(user_context.user_id),
+        user_email=user_context.email,
+        client_id=user_context.client_id,
+    )
+    try:
+        outbound_headers.update(
+            await instance_service.call_context_headers(
+                instance, caller, tool=_single_tool_call(body)
+            )
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="MCP demand gateway is not configured") from exc
     params = dict(request.query_params)
 
     client = _upstream_client(instance_type, policy=policy)

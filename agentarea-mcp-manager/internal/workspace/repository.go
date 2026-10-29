@@ -230,11 +230,11 @@ func (r *Repository) PrepareCurrentHydration(ctx context.Context, workspaceID, t
 	}
 	ref, err := r.loadCurrentRef(ctx, workspaceID, taskID)
 	if errors.Is(err, ErrWorkspaceNotFound) {
-		revision, revisionErr := hydrationRevisionSHA256(prefix, nil)
+		view, revision, revisionErr := hydrationView(prefix, nil)
 		if revisionErr != nil {
 			return Hydration{}, revisionErr
 		}
-		if pinErr := r.pinHydrationRevision(ctx, workspaceID, taskID, prefix, revision); pinErr != nil {
+		if pinErr := r.pinHydrationRevision(ctx, workspaceID, taskID, prefix, nil, view, revision); pinErr != nil {
 			return Hydration{}, pinErr
 		}
 		return Hydration{RevisionSHA256: revision}, nil
@@ -247,11 +247,11 @@ func (r *Repository) PrepareCurrentHydration(ctx context.Context, workspaceID, t
 		return Hydration{}, err
 	}
 	entries := selectHydrationEntries(manifest.Entries, prefix)
-	revision, err := hydrationRevisionSHA256(prefix, entries)
+	view, revision, err := hydrationView(prefix, entries)
 	if err != nil {
 		return Hydration{}, err
 	}
-	if err := r.pinHydrationRevision(ctx, workspaceID, taskID, prefix, revision); err != nil {
+	if err := r.pinHydrationRevision(ctx, workspaceID, taskID, prefix, entries, view, revision); err != nil {
 		return Hydration{}, err
 	}
 	downloads, err := r.signHydrationEntries(ctx, ref, entries)
@@ -269,8 +269,9 @@ func (r *Repository) PrepareCurrentHydration(ctx context.Context, workspaceID, t
 
 // pinHydrationRevision makes the selected input view immutable across live
 // volume deletion and manager restarts. Conditional create is the arbitration
-// point when multiple managers observe first demand concurrently.
-func (r *Repository) pinHydrationRevision(ctx context.Context, workspaceID, taskID, prefix, revision string) error {
+// point when multiple managers observe first demand concurrently. The only
+// change a pin accepts afterwards is a pure addition of attachment files.
+func (r *Repository) pinHydrationRevision(ctx context.Context, workspaceID, taskID, prefix string, entries []Entry, view []byte, revision string) error {
 	record := hydrationRevisionRecord{
 		SchemaVersion: SchemaVersion, WorkspaceID: workspaceID, TaskID: taskID,
 		Prefix: prefix, RevisionSHA256: revision,
@@ -279,8 +280,7 @@ func (r *Repository) pinHydrationRevision(ctx context.Context, workspaceID, task
 	if err != nil {
 		return fmt.Errorf("encode hydration revision pin: %w", err)
 	}
-	prefixDigest := sha256.Sum256([]byte(prefix))
-	key := path.Join(r.taskPrefix(workspaceID, taskID), "hydration-revisions", hex.EncodeToString(prefixDigest[:])+".json")
+	key := r.hydrationPinKey(workspaceID, taskID, prefix)
 	bodyDigest := sha256.Sum256(body)
 	_, putErr := r.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:         aws.String(r.cfg.Bucket),
@@ -292,36 +292,17 @@ func (r *Repository) pinHydrationRevision(ctx context.Context, workspaceID, task
 		IfNoneMatch:    aws.String("*"),
 	})
 	if putErr == nil {
-		return nil
+		return r.storeHydrationView(ctx, workspaceID, taskID, revision, view)
 	}
 
-	object, getErr := r.client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(r.cfg.Bucket), Key: aws.String(key)})
-	if getErr != nil {
-		return fmt.Errorf("pin hydration revision: create failed: %v; read existing pin: %w", putErr, getErr)
+	existing, etag, err := r.readHydrationPin(ctx, key, workspaceID, taskID, prefix)
+	if errors.Is(err, ErrWorkspaceConflict) {
+		return err
 	}
-	defer object.Body.Close()
-	existingBody, readErr := io.ReadAll(io.LimitReader(object.Body, 64*1024+1))
-	if readErr != nil || len(existingBody) > 64*1024 {
-		return fmt.Errorf("read hydration revision pin: invalid size or body: %w", readErr)
+	if err != nil {
+		return fmt.Errorf("pin hydration revision: create failed: %v; read existing pin: %w", putErr, err)
 	}
-	var existing hydrationRevisionRecord
-	decoder := json.NewDecoder(bytes.NewReader(existingBody))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&existing); err != nil {
-		return fmt.Errorf("decode hydration revision pin: %w", err)
-	}
-	if existing.SchemaVersion != SchemaVersion || existing.WorkspaceID != workspaceID || existing.TaskID != taskID || existing.Prefix != prefix {
-		return fmt.Errorf("%w: hydration revision pin identity mismatch", ErrWorkspaceConflict)
-	}
-	if existing.RevisionSHA256 != revision {
-		return fmt.Errorf(
-			"%w: immutable task input revision changed from %s to %s",
-			ErrWorkspaceConflict,
-			existing.RevisionSHA256,
-			revision,
-		)
-	}
-	return nil
+	return r.advanceHydrationPin(ctx, key, existing, etag, entries, view, revision, body)
 }
 
 func selectHydrationEntries(entries []Entry, prefix string) []Entry {
@@ -342,19 +323,8 @@ func selectHydrationEntries(entries []Entry, prefix string) []Entry {
 // sandbox. It intentionally excludes the containing manifest generation:
 // execution stdout/stderr may advance that manifest without changing inputs.
 func hydrationRevisionSHA256(prefix string, entries []Entry) (string, error) {
-	if entries == nil {
-		entries = []Entry{}
-	}
-	canonical, err := json.Marshal(struct {
-		SchemaVersion int     `json:"schema_version"`
-		Prefix        string  `json:"prefix"`
-		Entries       []Entry `json:"entries"`
-	}{SchemaVersion: SchemaVersion, Prefix: prefix, Entries: entries})
-	if err != nil {
-		return "", fmt.Errorf("encode workspace hydration revision: %w", err)
-	}
-	digest := sha256.Sum256(canonical)
-	return hex.EncodeToString(digest[:]), nil
+	_, revision, err := hydrationView(prefix, entries)
+	return revision, err
 }
 
 func (r *Repository) signHydrationEntries(ctx context.Context, ref ManifestRef, entries []Entry) ([]Download, error) {

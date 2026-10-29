@@ -1487,7 +1487,7 @@ func (c *Client) EnsurePodHydratedBinding(
 			return pod, nil
 		}
 		if currentRevision != "" {
-			return nil, fmt.Errorf("live sandbox is hydrated from revision %s and cannot be mutated to %s", currentRevision, revision)
+			return nil, fmt.Errorf("live sandbox is hydrated from revision %s and cannot be mutated to %s: Kubernetes warm-pool operation leases pin one input revision per pod, so adding inputs to a live pod is unsupported", currentRevision, revision)
 		}
 		claimUntil, _ := time.Parse(time.RFC3339Nano, pod.Annotations[annotationHydrationUntil])
 		if pod.Annotations[annotationHydrationClaim] != "" && time.Now().UTC().Before(claimUntil) {

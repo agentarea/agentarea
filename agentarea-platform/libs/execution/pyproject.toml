@@ -1,6 +1,6 @@
 [project]
 name = "agentarea-execution"
-version = "0.1.1"
+version = "0.1.2"
 description = "AgentArea execution library"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.14"
@@ -8,6 +8,7 @@ dependencies = [
     "temporalio>=1.18.2",
     "pydantic>=2.0.0",
     "prometheus-client>=0.23.0",
+    "tiktoken>=0.12.0",
     "agentarea-agents-sdk",
     "agentarea-governance",
     "agentarea-wallet",

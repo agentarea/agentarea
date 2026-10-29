@@ -86,6 +86,7 @@ from agentarea_common.utils.url_safety import UnsafeUrlError, validate_outbound_
 from agentarea_tasks.domain.exceptions import (
     AgentModelNotConfiguredError,
     BudgetCapExceededError,
+    RunStillClosingError,
 )
 from agentarea_tasks.domain.models import AgentTask, TaskProvenance, TaskUpdate
 from agentarea_tasks.task_service import TaskService
@@ -103,6 +104,14 @@ _AVAILABLE_AGENT_STATUSES = frozenset({"active", "available", "ready"})
 _PAGE_OFFSET = re.compile(r"[0-9]{1,18}")
 
 TaskEventFeed = Callable[..., AsyncIterator[TaskEventEnvelope]]
+
+
+@dataclass(frozen=True)
+class _Submitted:
+    """The task a message went to, and the log position its answer follows."""
+
+    task: AgentTask
+    after_seq: int | None = None
 
 
 @dataclass(frozen=True)
@@ -368,7 +377,7 @@ class AgentAreaRequestHandler(RequestHandler):
 
     async def _submit(
         self, params: SendMessageRequest, context: ServerCallContext, op: _Operation
-    ) -> AgentTask:
+    ) -> _Submitted:
         scope = op.scope
         user = _user_context(scope)
         await self._require_available_agent(scope.agent_id)
@@ -380,6 +389,18 @@ class AgentAreaRequestHandler(RequestHandler):
         text = message_text(params.message)
         if not text.strip():
             raise InvalidParamsError(message="Message must contain non-empty text content")
+
+        continued = await self._continue(params.message, text, scope, user)
+        if continued is not None:
+            op.task_id = continued.task.id
+            op.extra.update(
+                {
+                    "continued": True,
+                    "task_status": continued.task.status,
+                    "message_length": len(text),
+                }
+            )
+            return continued
 
         task = build_agent_task(
             message=params.message,
@@ -429,16 +450,64 @@ class AgentAreaRequestHandler(RequestHandler):
                     created.id,
                     exc_info=True,
                 )
-        return created
+        return _Submitted(created)
 
-    async def _follow(self, task: AgentTask, user: UserContext) -> AsyncGenerator[Event]:
-        """Stream the task's events (catch-up, then live) until it is terminal."""
+    async def _continue(
+        self, message: Message, text: str, scope: A2ACallScope, user: UserContext
+    ) -> _Submitted | None:
+        """Hand the message to the task it carries on, if any; None starts a new task.
+
+        A ``taskId`` names the task: it must be one the caller may act on and
+        able to take a message. A ``contextId`` alone carries on the newest task
+        of that context when the caller may act on it and it can take a
+        message; otherwise the message starts a new task in the context.
+        """
+        if message.task_id:
+            task = await self._task_to_act_on(message.task_id, scope, user, live=False)
+        elif message.context_id:
+            found = await self._tasks.latest_in_a2a_context(scope.agent_id, message.context_id)
+            if found is None:
+                return None
+            try:
+                task = await self._task_to_act_on(str(found.id), scope, user, live=False)
+            except TaskNotFoundError, HTTPException:
+                return None
+        else:
+            return None
+
+        after_seq = await self._tasks.log_end(task.id)
+        try:
+            delivered = await self._tasks.queue_follow_up(task.id, text)
+        except RunStillClosingError as e:
+            raise InvalidRequestError(
+                message=f"Task {task.id} is still stopping; send the message again shortly"
+            ) from e
+        if not delivered:
+            if message.task_id:
+                raise InvalidRequestError(
+                    message=f"Task {task.id} cannot take a message (status: {task.status})"
+                )
+            return None
+        # The run that answers sets the row's status; until it does, the task
+        # reads as working rather than as the turn it already finished.
+        task.status = "running"
+        return _Submitted(task, after_seq=after_seq)
+
+    async def _follow(
+        self, task: AgentTask, user: UserContext, *, after_seq: int | None = None
+    ) -> AsyncGenerator[Event]:
+        """Stream the task's events (catch-up, then live) until it ends or waits on its caller.
+
+        ``after_seq`` follows only what comes after that log position: the turn
+        answering a message just handed to the task.
+        """
         task_id = str(task.id)
         context_id = context_id_for(task)
         async for env in self._event_feed(
             task.id,
             user_context=user,
             terminal_types=TERMINAL_EVENT_TYPES,
+            after_seq=after_seq,
         ):
             events, terminal = workflow_event_to_a2a(
                 env.event_type, env.data, task_id=task_id, context_id=context_id
@@ -458,7 +527,7 @@ class AgentAreaRequestHandler(RequestHandler):
         # outlast any proxy timeout, so the result is read by GetTask, a
         # stream, or a push notification.
         with _Operation("message_send", _scope(context), context) as op:
-            return to_a2a_task(await self._submit(params, context, op))
+            return to_a2a_task((await self._submit(params, context, op)).task)
 
     @validate_request_params
     async def on_message_send_stream(
@@ -466,9 +535,11 @@ class AgentAreaRequestHandler(RequestHandler):
     ) -> AsyncGenerator[Event]:
         scope = _scope(context)
         with _Operation("message_stream", scope, context) as op:
-            created = await self._submit(params, context, op)
-            yield to_a2a_task(created)
-            async for event in self._follow(created, _user_context(scope)):
+            submitted = await self._submit(params, context, op)
+            yield to_a2a_task(submitted.task)
+            async for event in self._follow(
+                submitted.task, _user_context(scope), after_seq=submitted.after_seq
+            ):
                 yield event
 
     # -- tasks -------------------------------------------------------------
@@ -553,8 +624,11 @@ class AgentAreaRequestHandler(RequestHandler):
                 raise UnsupportedOperationError(
                     message=f"Task {task.id} is in terminal state {TaskState.Name(state)}"
                 )
+            # The task as it stands, then what happens next: a conversation's
+            # earlier turns are in the task already and would end the stream.
+            after_seq = await self._tasks.log_end(task.id)
             yield to_a2a_task(task)
-            async for event in self._follow(task, user):
+            async for event in self._follow(task, user, after_seq=after_seq):
                 yield event
 
     # -- push notification configs ----------------------------------------

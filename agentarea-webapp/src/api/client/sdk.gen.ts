@@ -325,6 +325,8 @@ import type {
   GetAllToolsV1AgentsToolsGetData,
   GetAllToolsV1AgentsToolsGetErrors,
   GetAllToolsV1AgentsToolsGetResponses,
+  GetAnalyticsV1AnalyticsGetData,
+  GetAnalyticsV1AnalyticsGetResponses,
   GetApiKeyV1ApiKeysTokenIdGetData,
   GetApiKeyV1ApiKeysTokenIdGetErrors,
   GetApiKeyV1ApiKeysTokenIdGetResponses,
@@ -379,6 +381,9 @@ import type {
   GetMcpAuthConfigV1McpAuthConfigsConfigIdGetData,
   GetMcpAuthConfigV1McpAuthConfigsConfigIdGetErrors,
   GetMcpAuthConfigV1McpAuthConfigsConfigIdGetResponses,
+  GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetData,
+  GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetErrors,
+  GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetResponses,
   GetMcpServerInstanceV1McpServerInstancesInstanceIdGetData,
   GetMcpServerInstanceV1McpServerInstancesInstanceIdGetErrors,
   GetMcpServerInstanceV1McpServerInstancesInstanceIdGetResponses,
@@ -1529,6 +1534,32 @@ export const getAgentWellKnownV1AgentsAgentIdA2aWellKnownGet = <
       },
     ],
     url: "/v1/agents/{agent_id}/a2a/well-known",
+    ...options,
+  });
+
+/**
+ * Get Analytics
+ *
+ * Return whether analytics is on and, if so, where and as which installation to send.
+ */
+export const getAnalyticsV1AnalyticsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<GetAnalyticsV1AnalyticsGetData, ThrowOnError>
+): RequestResult<GetAnalyticsV1AnalyticsGetResponses, unknown, ThrowOnError> =>
+  (options?.client ?? client).get<
+    GetAnalyticsV1AnalyticsGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/analytics",
     ...options,
   });
 
@@ -5934,6 +5965,38 @@ export const runTestAuthV1McpServerInstancesInstanceIdTestAuthPost = <
     url: "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/test-auth",
     ...options,
   });
+
+/**
+ * Get Mcp Server Instance Tool Policies
+ *
+ * The workspace default and the workspace-layer verdict for each tool of this connection.
+ */
+export const getMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGet =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetResponses,
+    GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).get<
+      GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetResponses,
+      GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/tool-policies",
+      ...options,
+    });
 
 /**
  * Verify Mcp Server Instance

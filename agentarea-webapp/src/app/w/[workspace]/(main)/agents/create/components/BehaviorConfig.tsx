@@ -19,6 +19,7 @@ import {
 } from "react-hook-form";
 import AccordionControl from "@/components/AccordionControl";
 import FormLabel from "@/components/FormLabel/FormLabel";
+import { InfoHint } from "@/components/InfoHint";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -41,6 +42,7 @@ function BehaviorSwitch({
   icon: Icon,
   title,
   description,
+  hint,
   children,
 }: {
   control: Control<AgentFormValues>;
@@ -49,6 +51,8 @@ function BehaviorSwitch({
   icon: LucideIcon;
   title: ReactNode;
   description: ReactNode;
+  /** The longer why, behind an info mark after the title. */
+  hint?: ReactNode;
   /** Shown under the row while the switch is on. */
   children?: ReactNode;
 }) {
@@ -67,9 +71,16 @@ function BehaviorSwitch({
         />
       }
       title={
-        <label htmlFor={id} className="cursor-pointer">
-          {title}
-        </label>
+        <span className="inline-flex items-center gap-1.5">
+          <label htmlFor={id} className="cursor-pointer">
+            {title}
+          </label>
+          {hint && (
+            <InfoHint label={typeof title === "string" ? title : id}>
+              {hint}
+            </InfoHint>
+          )}
+        </span>
       }
       subtitle={description}
       end={
@@ -130,6 +141,7 @@ const BehaviorConfig = ({ register, control, errors }: BehaviorConfigProps) => {
           icon={ShieldCheck}
           title={t("answerCheck")}
           description={t("answerCheckDescription")}
+          hint={t("answerCheckHint")}
         >
           <div className="space-y-2 md:max-w-sm">
             <FormLabel htmlFor="answer_check_language" icon={Languages}>

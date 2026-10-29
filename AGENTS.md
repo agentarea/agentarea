@@ -18,6 +18,7 @@ Polyglot monorepo for building governed agentic networks with VPC-inspired archi
 | MCP Manager (Go) | `agentarea-mcp-manager/` |
 | Shared Utilities | `agentarea-platform/libs/common/agentarea_common/` |
 | Release process | `docs/VERSIONING.md` + `scripts/release.sh` |
+| Decisions (`ADR-NNNN` in code and commits) | The team's private wiki, not in this repo. If you have access it is checked out next to this repo at `../agentarea-wiki`; start at its `AGENTS.md` |
 
 ## STRUCTURE
 

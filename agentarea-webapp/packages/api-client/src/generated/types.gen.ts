@@ -562,6 +562,28 @@ export type AgentUpdate = {
 };
 
 /**
+ * AnalyticsResponse
+ */
+export type AnalyticsResponse = {
+    /**
+     * Collector Url
+     */
+    collector_url: string | null;
+    /**
+     * Edition
+     */
+    edition: string | null;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Install Id
+     */
+    install_id: string | null;
+};
+
+/**
  * AnalyzeRequest
  *
  * Analyze a bundle into an import preview.
@@ -3590,6 +3612,40 @@ export type McpInstanceHealthResponse = {
 };
 
 /**
+ * MCPInstanceToolPolicies
+ */
+export type McpInstanceToolPolicies = {
+    /**
+     * Tools
+     */
+    tools: Array<McpInstanceToolPolicy>;
+};
+
+/**
+ * MCPInstanceToolPolicy
+ *
+ * One tool of a connection: its workspace default and the workspace's verdict on it.
+ */
+export type McpInstanceToolPolicy = {
+    /**
+     * Default
+     */
+    default: 'allow' | 'approval' | 'deny';
+    /**
+     * Effective
+     */
+    effective: 'allow' | 'approval' | 'deny';
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Reason
+     */
+    reason?: string | null;
+};
+
+/**
  * MCPServerConnectionCreateRequest
  */
 export type McpServerConnectionCreateRequest = {
@@ -5009,7 +5065,7 @@ export type OpenApiConnectionResponse = {
     /**
      * Base Url
      */
-    base_url: string;
+    base_url: string | null;
     /**
      * Cost
      */
@@ -11085,6 +11141,22 @@ export type GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetResponses = {
     200: unknown;
 };
 
+export type GetAnalyticsV1AnalyticsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/analytics';
+};
+
+export type GetAnalyticsV1AnalyticsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: AnalyticsResponse;
+};
+
+export type GetAnalyticsV1AnalyticsGetResponse = GetAnalyticsV1AnalyticsGetResponses[keyof GetAnalyticsV1AnalyticsGetResponses];
+
 export type AcceptInvitationV1InvitationsAcceptPostData = {
     body: AcceptInvitationBody;
     path?: never;
@@ -15004,6 +15076,36 @@ export type RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses = {
      */
     200: unknown;
 };
+
+export type GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetData = {
+    body?: never;
+    path: {
+        /**
+         * Instance Id
+         */
+        instance_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/tool-policies';
+};
+
+export type GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetError = GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetErrors[keyof GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetErrors];
+
+export type GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: McpInstanceToolPolicies;
+};
+
+export type GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetResponse = GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetResponses[keyof GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetResponses];
 
 export type VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostData = {
     body?: never;

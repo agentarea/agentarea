@@ -127,6 +127,31 @@ def main():
                 go_file.write_text(updated)
                 print(f"✅ Updated {go_file.relative_to(root_dir)}")
 
+    # The committed OpenAPI specs carry the app version in info.version, and
+    # CI's openapi-drift check compares them with what the backend serves.
+    openapi_specs = [
+        root_dir / 'agentarea-webapp' / 'src' / 'api' / 'openapi.json',
+        root_dir / 'docs' / 'api-reference' / 'openapi.json',
+    ]
+
+    for spec in openapi_specs:
+        if spec.exists():
+            content = spec.read_text()
+            info = content.find('"info"')
+            if info == -1:
+                continue
+            head, tail = content[:info], content[info:]
+            updated = head + re.sub(
+                r'"version":\s*"[^"]*"',
+                f'"version": "{new_version}"',
+                tail,
+                count=1
+            )
+
+            if updated != content:
+                spec.write_text(updated)
+                print(f"✅ Updated {spec.relative_to(root_dir)}")
+
     # Refresh uv.lock: the workspace members are editable entries carrying their
     # own version, so bumping the pyproject files alone leaves the lock behind.
     # CI runs `uv sync` without --frozen and silently rewrites it, which hides
@@ -143,9 +168,9 @@ def main():
             )
             print("✅ Updated agentarea-platform/uv.lock")
         except FileNotFoundError:
-            print("⚠️  Warning: uv not found; uv.lock left stale")
+            sys.exit("❌ uv not found: agentarea-platform/uv.lock cannot follow the bump")
         except subprocess.CalledProcessError as e:
-            print(f"⚠️  Warning: Failed to refresh uv.lock: {e.stderr}")
+            sys.exit(f"❌ Failed to refresh agentarea-platform/uv.lock: {e.stderr}")
 
     print(f"\n✅ All versions bumped to {new_version}")
 

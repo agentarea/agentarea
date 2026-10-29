@@ -1,5 +1,7 @@
 """AgentArea Common Library."""
 
+from importlib.metadata import version
+
 from . import (
     auth,
     base,
@@ -15,7 +17,7 @@ from . import (
     workflow,
 )
 
-__version__ = "0.1.0"
+__version__ = version("agentarea-common")
 
 __all__ = [
     "auth",

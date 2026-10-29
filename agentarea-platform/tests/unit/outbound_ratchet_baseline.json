@@ -11,10 +11,6 @@
     "libs/mcp/agentarea_mcp/application/mcp_client.py": 2,
     "libs/registry/agentarea_registry/application/service.py": 2
   },
-  "litellm": {
-    "libs/agentarea-agents-sdk/agentarea_agents_sdk/models/llm_model.py": 3,
-    "libs/llm/agentarea_llm/infrastructure/model_clients.py": 2
-  },
   "mail": {
     "libs/triggers/agentarea_triggers/channels/email.py": 1
   }

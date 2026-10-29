@@ -48,6 +48,9 @@ class ResolvedModelInfo(BaseModel):
     provider_display_name: str | None = None
     # The model spec says the model reads images; None in states resolved before.
     supports_vision: bool | None = None
+    # The provider spec's HTTP contract (ProviderProfile.as_mapping); None in states
+    # resolved before specs carried it, which read it from the spec again.
+    provider: dict[str, str | None] | None = None
     resolved_at: str | None = None  # ISO timestamp for staleness debugging
 
 
@@ -535,9 +538,14 @@ class McpToolRoute(BaseModel):
 
     def policy_names(self, model_name: str) -> tuple[str, ...]:
         """The names besides ``model_name`` a policy rule may use for this tool."""
-        return McpToolIdentity(
-            model_name, self.instance_id, self.raw_name, self.attachment_ref
-        ).policy_names
+        return self._identity(model_name).policy_names
+
+    def restricting_names(self, model_name: str) -> tuple[str, ...]:
+        """The names that may deny this tool or hold it for approval, never allow it."""
+        return self._identity(model_name).restricting_names
+
+    def _identity(self, model_name: str) -> McpToolIdentity:
+        return McpToolIdentity(model_name, self.instance_id, self.raw_name, self.attachment_ref)
 
 
 class ToolDiscoveryResult(BaseModel):

@@ -9,7 +9,7 @@ related:
   - /guides/mcp/connect-a-remote-server
   - /concepts/execution/events
   - /reference/limits
-last_updated: 2026-10-13
+last_updated: 2026-10-27
 ---
 
 The conventions AgentArea adds to a standard MCP `tools/call` so a remote MCP
@@ -48,9 +48,10 @@ Content-Type: application/json
 |---|---|
 | URL MCP server instance with a `context_secret` set | Sent on every `tools/call` an agent makes |
 | URL instance without `context_secret` | Not sent. The call is a plain MCP call |
-| Managed instance (`docker`, `command`) | Not sent. `context_secret` is refused (422) |
+| Managed instance (`docker`, `command`) whose spec has `"context": {"enabled": true}` | Token sent on every call: an agent's, and a person's or client's (see [Direct callers](#direct-callers)) |
+| Other managed instances | Not sent. `context_secret` is refused (422) |
 | Bundle | The member instance's own setting applies; `aud` is the member's id |
-| `tools/list`, verification, the `/v1/mcp/{instance_id}/mcp` proxy | Not sent |
+| `tools/list`, verification | Not sent |
 
 AgentArea never sends `agentarea/*` keys without a token, so a server never has
 to trust `_meta` on its own.
@@ -101,6 +102,34 @@ The key is the instance's `context_secret` as UTF-8 bytes.
 
 Every `agentarea/*` key in `_meta` has an equal claim, and the token has no
 context claim that `_meta` lacks.
+
+### Direct callers
+
+A person working in an MCP App's view (the `/v1/mcp/{instance_id}/mcp` proxy)
+or a client calling a connection (`tools_call`, a registered client's
+endpoint) makes a call outside any task. For an instance that takes context,
+that call carries the token with these claims instead of the task's, and no
+`_meta` keys:
+
+| Claim | Value |
+|---|---|
+| `protocol`, `workspace_id` | As above |
+| `user_id` | The person making the call |
+| `user_email` | Their email, when known |
+| `client_id` | The client the call came through, when it came through one |
+| `tool` | Present only when the request is exactly one `tools/call` |
+
+A server tells the two apart by `task_id`: present on an agent's call, absent
+on a direct one.
+
+### Managed instances: the key
+
+A managed instance never has a `context_secret`. Its key is
+`hex(HMAC-SHA256(AGENTAREA_MCP_GATEWAY_SECRET, "agentarea/mcp-context/v1:" + instance_id))`,
+derived by both the platform and the mcp-manager, which hands it to the
+container as `MCP_CONTEXT_KEY` at every start. The spec opts in with
+`"context": {"enabled": true}`; any other value is refused when the spec is
+saved, and a manager without a gateway secret refuses to start the instance.
 
 ### Verification a server performs
 

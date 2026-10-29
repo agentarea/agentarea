@@ -2,12 +2,13 @@
 
 from decimal import Decimal
 
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
 from agentarea_llm.application.model_discovery_service import ModelDiscoveryService
 
 
 def test_discovery_does_not_invent_context_or_output_limits():
     models = ModelDiscoveryService()._parse_response(
-        "openai",
+        ProviderProfile(),
         {"data": [{"id": "vendor-model"}]},
     )
 
@@ -20,7 +21,7 @@ def test_discovery_does_not_invent_context_or_output_limits():
 
 def test_discovery_parses_explicit_runtime_metadata():
     models = ModelDiscoveryService()._parse_response(
-        "openrouter",
+        ProviderProfile(),
         {
             "data": [
                 {
@@ -42,7 +43,7 @@ def test_discovery_parses_explicit_runtime_metadata():
 
 async def test_a_member_endpoint_at_the_metadata_address_is_never_fetched(caplog):
     models = await ModelDiscoveryService().discover(
-        "openai", "sk-test", endpoint_url="http://169.254.169.254/latest"
+        "openai", "sk-test", endpoint_url="http://169.254.169.254/latest", provider=ProviderProfile()
     )
 
     assert models == []

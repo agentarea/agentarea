@@ -4,7 +4,7 @@ The tool activity stores each image with the task's offloaded context and puts
 only a reference on the tool message (``attachments``). When the model is
 called, the references become image parts of a user message placed right after
 the tool results: no provider accepts an image inside a tool message in the
-OpenAI format litellm speaks, and every vision model accepts one there.
+OpenAI chat format, and every vision model accepts one there.
 """
 
 from __future__ import annotations

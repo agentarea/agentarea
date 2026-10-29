@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -57,6 +58,10 @@ func (e staticWorkspaceEnsurer) Ensure(context.Context, string, string) (*sandbo
 	return e.mount, nil
 }
 
+func (staticWorkspaceEnsurer) HydrationAdditions(_ context.Context, _, _, from, to string) ([]workspace.Entry, error) {
+	return nil, fmt.Errorf("static workspace has no additions from %s to %s", from, to)
+}
+
 func TestKubernetesBackendRejectsReplacementPodAfterHydration(t *testing.T) {
 	startExecutorHealthFixture(t)
 	const (
@@ -103,7 +108,7 @@ func TestKubernetesBackendRejectsReplacementPodAfterHydration(t *testing.T) {
 	revision := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	if err := backend.EnsureWorkspaceHydrated(
 		ctx, workspaceID, taskID, revision,
-		func(context.Context) error { return nil },
+		func(context.Context) error { return nil }, nil,
 	); err != nil {
 		t.Fatalf("EnsureWorkspaceHydrated() error = %v", err)
 	}

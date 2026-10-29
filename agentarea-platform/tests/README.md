@@ -60,7 +60,7 @@ PYTHONPATH=/Users/jamakase/Projects/startup/agentarea/core python tests/integrat
 
 ### ✅ Работающие тесты
 - **Unit tests**: `test_basic.py` - базовые математические операции
-- **Integration**: Ollama успешно отвечает на запросы через LiteLLM
+- **Integration**: Ollama успешно отвечает на запросы через OpenAI-совместимый транспорт
 
 ### 🔧 Нужно исправить
 - **Integration response parsing**: Ответы получаются, но парсятся как пустые
@@ -115,7 +115,7 @@ pytest --durations=10
 **Успешно создана структура тестов:**
 - ✅ Unit тесты работают (2/2 passed)
 - ✅ Integration тесты подключаются к Ollama  
-- ✅ LiteLLM успешно интегрирован
+- ✅ Модели вызываются через собственные транспорты SDK (OpenAI-совместимый и Anthropic)
 - ✅ Система готова для расширения тестов
 
 **Следующий шаг:** Исправить парсинг ответов в интеграционных тестах. 

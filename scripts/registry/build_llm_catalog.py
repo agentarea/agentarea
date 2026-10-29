@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
 """Regenerate the published llm-models.json catalog from LiteLLM's price table.
 
+LiteLLM's table is a build-time input only: the default source is the upstream
+model_prices_and_context_window.json pinned to a release tag (ADR-0049), and
+nothing at runtime reads it.
+
 The catalog on S3 was originally produced by a throwaway local script whose only
 surviving trace is the ``metadata`` block it wrote. This rebuilds it from that
 recorded spec so the catalog stops being reproducible on exactly one laptop:
 
-  source          LiteLLM model_prices_and_context_window_backup.json
+  source          LiteLLM model_prices_and_context_window.json at LITELLM_TAG
   allowed_modes   chat, completion, embedding, responses
   context_window  <- max_input_tokens
   cached_input_cost_per_token <- cache_read_input_token_cost (null when unpriced)
   cache_creation_input_cost_per_token <- cache_creation_input_token_cost (null when unpriced)
+  supports_function_calling, supports_vision, supports_reasoning <- same-named flags
   model_name      the LiteLLM key with its leading "<provider>/" stripped, because
-                  the SDK calls LiteLLM as provider_type/model_name
+                  the provider's API takes the bare model name
   plus the AgentArea bootstrap models, carried over from the current catalog
 
 Models whose provider is absent from llm-providers.json are dropped: the sync
@@ -39,10 +44,10 @@ S3_BASE = "https://agentarea-mcp-registry.s3.amazonaws.com/registry/system"
 DEFAULT_PROVIDERS = f"{S3_BASE}/llm-providers.json"
 DEFAULT_CURRENT = f"{S3_BASE}/llm-models.json"
 
+LITELLM_TAG = "v1.105.1"
 DEFAULT_LITELLM = (
-    Path(__file__).resolve().parents[2]
-    / "agentarea-platform/.venv/lib/python3.14/site-packages/litellm"
-    / "model_prices_and_context_window_backup.json"
+    f"https://raw.githubusercontent.com/BerriAI/litellm/{LITELLM_TAG}"
+    "/model_prices_and_context_window.json"
 )
 
 # Provider keys whose display name does not survive a naive title-case.
@@ -177,6 +182,8 @@ def build_models(
                 "cached_input_cost_per_token": entry.get("cache_read_input_token_cost"),
                 "cache_creation_input_cost_per_token": entry.get("cache_creation_input_token_cost"),
                 "supports_function_calling": bool(entry.get("supports_function_calling")),
+                "supports_vision": bool(entry.get("supports_vision")),
+                "supports_reasoning": bool(entry.get("supports_reasoning")),
                 "is_active": True,
                 "tags": [f"mode:{mode}", f"provider:{provider_key}", "source:litellm"],
             }
@@ -196,7 +203,7 @@ def bootstrap_models(current: dict[str, Any]) -> list[dict[str, Any]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--litellm-json", default=str(DEFAULT_LITELLM))
+    parser.add_argument("--litellm-json", default=DEFAULT_LITELLM)
     parser.add_argument("--providers-json", default=DEFAULT_PROVIDERS)
     parser.add_argument("--current-json", default=DEFAULT_CURRENT)
     parser.add_argument("-o", "--output", required=True)
@@ -218,14 +225,14 @@ def main() -> int:
     catalog = {
         "metadata": {
             "generated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-            "source": "LiteLLM model_prices_and_context_window_backup.json "
+            "source": f"LiteLLM model_prices_and_context_window.json at {LITELLM_TAG} "
             "plus AgentArea bootstrap models",
             "litellm_source_file": str(args.litellm_json),
             "provider_count": len({m["provider_key"] for m in models}),
             "model_count": len(models),
             "allowed_modes": list(ALLOWED_MODES),
-            "note": "Model names strip a leading provider prefix because AgentArea SDK "
-            "calls LiteLLM as provider_type/model_name.",
+            "note": "Model names strip a leading provider prefix because the provider's "
+            "API takes the bare model name.",
             "description_format": "provider/mode/capabilities/pricing summary generated "
             "from registry fields",
         },

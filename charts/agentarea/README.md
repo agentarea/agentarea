@@ -99,18 +99,13 @@ The following table lists configurable parameters of the chart and their default
 | global.redis.connectionTimeout | string | `"5s"` |  |
 | global.events.namespace | string | `"agentarea"` |  |
 | global.events.partitions | int | `16` |  |
-| global.storage.type | string | `"rustfs"` |  |
 | global.storage.endpoint | string | `""` |  |
+| global.storage.existingSecret | string | `""` |  |
+| global.storage.accessKeyKey | string | `"access-key-id"` |  |
+| global.storage.secretKeyKey | string | `"secret-access-key"` |  |
 | global.storage.publicEndpoint | string | `""` |  |
 | global.storage.bucket | string | `"agentarea-documents"` |  |
 | global.storage.region | string | `"us-east-1"` |  |
-| global.storage.s3.accessKeyId | string | `""` |  |
-| global.storage.s3.secretAccessKey | string | `""` |  |
-| global.storage.s3.sessionToken | string | `""` |  |
-| global.storage.gcs.projectId | string | `""` |  |
-| global.storage.gcs.credentials | string | `""` |  |
-| global.storage.rustfs.accessKey | string | `""` |  |
-| global.storage.rustfs.secretKey | string | `""` |  |
 | global.storage.cors.allowedOrigins | list | `[]` |  |
 | global.temporal.host | string | `""` |  |
 | global.temporal.port | int | `7233` |  |
@@ -161,6 +156,8 @@ The following table lists configurable parameters of the chart and their default
 | global.monitoring.health.enabled | bool | `true` |  |
 | global.monitoring.health.port | int | `8001` |  |
 | global.monitoring.health.path | string | `"/health"` |  |
+| global.analytics.enabled | bool | `true` | Send AgentArea anonymous usage statistics from the backend and worker: a daily count of agents, runs and connectors, never names, prompts, output or secrets. Not OpenTelemetry. false sends nothing. Field list: https://docs.agentarea.ai/self-host/analytics |
+| global.analytics.signupHookSecret | string | `""` | Existing Secret whose key `signup-hook-key` the backend reads as AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY: the key an Ory Kratos after-registration hook presents to /internal/analytics/signups to record each sign-up's channel. Empty, that endpoint answers 404. |
 | global.http.extraCaCerts | string | `""` | PEM text of CA certificates to trust on outbound TLS in addition to the public roots, for hosts whose chain those roots leave out (the Russian Trusted Root CA, a corporate CA). Rendered into a ConfigMap, mounted into the backend and worker, and named by AGENTAREA_HTTP_EXTRA_CA_CERTS. Empty: public roots only. |
 | global.security.podSecurityContext.fsGroup | int | `1000` |  |
 | global.security.podSecurityContext.runAsUser | int | `1000` |  |

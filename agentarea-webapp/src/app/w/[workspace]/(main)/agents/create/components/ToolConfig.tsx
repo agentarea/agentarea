@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Globe, Pencil, Wrench } from "lucide-react";
+import { Pencil, Wrench } from "lucide-react";
 import {
   Control,
   FieldErrors,
@@ -12,11 +12,13 @@ import {
   useWatch,
 } from "react-hook-form";
 import type { McpServerResponse, ToolResponse } from "@/api/client/types.gen";
+import { OpenAPIConnectionMark } from "@/app/w/[workspace]/(main)/connections/components/MCPCard";
 import type { OpenAPIConnection } from "@/app/w/[workspace]/(main)/connections/types";
 import AccordionControl from "@/components/AccordionControl";
 import ConfigSheet from "@/components/ConfigSheet";
 import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
+import { InfoHint } from "@/components/InfoHint";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import { PickerPanel } from "@/components/ResourcePicker/PickerPanel";
 import { ResourcePickerList } from "@/components/ResourcePicker/ResourcePicker";
@@ -815,7 +817,12 @@ const ToolConfig = ({
                       .filter(Boolean)
                       .join(" · ")
                   }
-                  extractIcon={() => <Globe strokeWidth={1.85} />}
+                  renderAvatar={(connection) => (
+                    <OpenAPIConnectionMark
+                      connection={connection}
+                      className="h-8 w-8 rounded-[9px] text-[10px]"
+                    />
+                  )}
                   loading={loadingOpenapiConnections}
                   failed={Boolean(openapiLoadError)}
                   onRefresh={loadOpenapiConnections}
@@ -1043,12 +1050,10 @@ const ToolConfig = ({
                   open={openTools.includes(key)}
                   onOpenChange={() => toggleTool(key)}
                   avatar={
-                    <EntityAvatar
-                      hue={deterministicHue(item.openapi_connection_id)}
-                      size={24}
-                      iconScale={0.45}
-                      icon={<Globe strokeWidth={1.85} />}
-                      aria-hidden
+                    <OpenAPIConnectionMark
+                      connection={
+                        connection ?? { base_url: null, name: displayName }
+                      }
                     />
                   }
                   title={displayName}
@@ -1066,8 +1071,11 @@ const ToolConfig = ({
                   onRemove={() => removeOpenapiTool?.(index)}
                 >
                   <div className="space-y-2">
-                    <p className="text-xs font-medium text-foreground">
+                    <p className="flex items-center gap-1.5 text-xs font-medium text-foreground">
                       {t("create.loadMode.label")}
+                      <InfoHint label={t("create.loadMode.label")}>
+                        {t("create.loadModeHint")}
+                      </InfoHint>
                     </p>
                     <SegmentedControl
                       layoutId={`${key}-load-mode`}

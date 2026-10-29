@@ -9,7 +9,9 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from agentarea_agents_sdk import GoalProgressEvaluator, LLMModel, LLMRequest
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
 from agentarea_agents_sdk.skills import SkillContextGuard
+from agentarea_common.analytics import count_run_refused
 from agentarea_common.auth.context import UserContext
 from agentarea_common.model_charges import (
     ModelCallRefusedError,
@@ -81,6 +83,7 @@ def _model_call_failure(message: str, error: Exception) -> ApplicationError:
             non_retryable=True,
         )
     if isinstance(error, ModelCallRefusedError):
+        count_run_refused(error.code)
         return ApplicationError(
             f"billing: {error.reason}",
             {
@@ -207,6 +210,7 @@ def make_llm_activities(
             provider_display_name = getattr(
                 model_instance.provider_config.provider_spec, "display_name", None
             )
+            provider = model_instance.provider_config.provider_spec.profile().as_mapping()
 
         resolved = ResolvedModelInfo(
             model_id=request.model_id,
@@ -224,6 +228,7 @@ def make_llm_activities(
             display_name=display_name,
             supports_vision=supports_vision,
             provider_display_name=provider_display_name,
+            provider=provider,
             resolved_at=datetime.now(UTC).isoformat(),
         )
         return resolved.model_dump()
@@ -381,6 +386,7 @@ def make_llm_activities(
             cached_input_cost_per_token = None
             cache_creation_input_cost_per_token = None
 
+            provider_data: dict[str, Any] | None = None
             if request.resolved_model:
                 cached = request.resolved_model
                 provider_type = cached.get("provider_type")
@@ -395,6 +401,10 @@ def make_llm_activities(
                 )
                 managed_by = cached.get("managed_by")
                 api_key_secret_name = cached.get("api_key_secret")
+                provider_data = cached.get("provider")
+                if provider_data is None:
+                    # Resolved before specs carried their HTTP contract: read the spec.
+                    provider_type = None
 
             if provider_type is None:
                 async with ActivityContext(container, user_context) as ctx:
@@ -406,6 +416,9 @@ def make_llm_activities(
                         )
 
                     provider_type = model_instance.provider_config.provider_spec.provider_type
+                    provider_data = (
+                        model_instance.provider_config.provider_spec.profile().as_mapping()
+                    )
                     model_name = model_instance.model_spec.model_name
                     # endpoint_url lives on provider_config (ollama, self-hosted, etc.), not model_spec.
                     endpoint_url = getattr(
@@ -506,6 +519,7 @@ def make_llm_activities(
                         cache_creation_input_cost_per_token
                     ),
                     endpoint_policy=endpoint_policy_for(managed_by),
+                    provider=ProviderProfile.from_mapping(provider_data),
                 )
                 async for chunk in llm_model.ainvoke_stream(summary_request):
                     if chunk.content:

@@ -6,6 +6,7 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from ..models.llm_model import LLMModel, LLMRequest
+from ..models.provider_profiles import DEFAULT_PROFILE, ProviderProfile
 from ..prompts import PromptBuilder, ToolInfo
 from ..tools.completion_tool import CompletionTool
 from ..tools.decorator_tool import ToolsetAdapter
@@ -24,6 +25,7 @@ class Agent:
         model_provider: str,
         model_name: str,
         endpoint_url: str | None = None,
+        provider: ProviderProfile = DEFAULT_PROFILE,
         temperature: float = 0.3,
         max_tokens: int | None = None,
         max_iterations: int | None = None,
@@ -38,6 +40,7 @@ class Agent:
             model_provider: LLM provider type (e.g., "ollama_chat", "openai")
             model_name: Model name (e.g., "qwen2.5", "gpt-4")
             endpoint_url: Optional custom endpoint URL
+            provider: The provider's HTTP contract (public address, transport, auth)
             temperature: LLM temperature (0.0-1.0)
             max_tokens: Maximum tokens per response
             max_iterations: Maximum conversation iterations
@@ -59,6 +62,7 @@ class Agent:
             provider_type=model_provider,
             model_name=model_name,
             endpoint_url=endpoint_url,
+            provider=provider,
         )
 
         # Initialize tool executor

@@ -142,6 +142,31 @@ async def test_a_policy_denied_tool_is_refused_and_audited(
 
 
 @pytest.mark.asyncio
+async def test_an_allowlist_naming_the_bare_tool_admits_no_server(
+    client, audit_events, upstream_calls
+):
+    client({"tools": {"allowed": ["ask_question"]}})
+
+    result = await _call("deepwiki__ask_question", question="q")
+
+    assert result.is_error is True
+    assert "allowlist" in _text(result)
+    assert upstream_calls == []
+
+
+@pytest.mark.asyncio
+async def test_an_allowlist_naming_the_servers_tool_admits_it(
+    client, audit_events, upstream_calls
+):
+    client({"tools": {"allowed": [f"mcp:{INSTANCE_ID}:ask_question"]}})
+
+    result = await _call("deepwiki__ask_question", question="q")
+
+    assert result.is_error is not True
+    assert upstream_calls == [("ask_question", {"question": "q"})]
+
+
+@pytest.mark.asyncio
 async def test_a_denied_tool_is_not_offered(client):
     client({"tools": {"denied": ["ask_question"]}})
 

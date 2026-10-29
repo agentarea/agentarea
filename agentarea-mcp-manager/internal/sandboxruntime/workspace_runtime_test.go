@@ -23,13 +23,23 @@ import (
 )
 
 type fakeWorkspaceProvider struct {
-	mount       *sandboxworkspace.Mount
-	ensureCalls int
+	mount         *sandboxworkspace.Mount
+	ensureCalls   int
+	additions     map[string][]workspace.Entry
+	additionCalls []string
 }
 
 func (p *fakeWorkspaceProvider) Ensure(context.Context, string, string) (*sandboxworkspace.Mount, error) {
 	p.ensureCalls++
 	return p.mount, nil
+}
+
+func (p *fakeWorkspaceProvider) HydrationAdditions(_ context.Context, _, _, fromRevision, toRevision string) ([]workspace.Entry, error) {
+	p.additionCalls = append(p.additionCalls, fromRevision+"->"+toRevision)
+	if entries, ok := p.additions[fromRevision+"->"+toRevision]; ok {
+		return entries, nil
+	}
+	return nil, fmt.Errorf("%w: hydration view %s is not an additive attachment change from %s", workspace.ErrWorkspaceConflict, toRevision, fromRevision)
 }
 
 type fakeWorkspaceRuntime struct {
@@ -141,6 +151,7 @@ func (r *fakeWorkspaceRuntime) EnsureWorkspaceHydrated(
 	ctx context.Context,
 	workspaceID, taskID, revision string,
 	hydrate func(context.Context) error,
+	advance func(context.Context, string) error,
 ) error {
 	key := workspaceID + "\x00" + taskID
 	if r.hydrated == nil {
@@ -150,7 +161,11 @@ func (r *fakeWorkspaceRuntime) EnsureWorkspaceHydrated(
 		return nil
 	}
 	if r.hydrated[key] != "" {
-		return errors.New("live sandbox input manifest changed")
+		if err := advance(ctx, r.hydrated[key]); err != nil {
+			return fmt.Errorf("live sandbox input manifest changed: %w", err)
+		}
+		r.hydrated[key] = revision
+		return nil
 	}
 	if err := hydrate(ctx); err != nil {
 		return err
@@ -555,5 +570,152 @@ func TestWorkspaceRuntimeStreamsInputLargerThanLegacyInlineLimit(t *testing.T) {
 	}
 	if got := len(dataPlane.files["inputs/large.bin"]); got != len(content) {
 		t.Fatalf("materialized bytes = %d, want %d", got, len(content))
+	}
+}
+
+type attachmentFixture struct {
+	path    string
+	content []byte
+}
+
+func (f attachmentFixture) digest() string {
+	digest := sha256.Sum256(f.content)
+	return hex.EncodeToString(digest[:])
+}
+
+func (f attachmentFixture) entry() workspace.Entry {
+	return workspace.Entry{RelativePath: f.path, SHA256: f.digest(), Size: int64(len(f.content)), Mode: 0o600}
+}
+
+func inputMount(t *testing.T, server *httptest.Server, revision string, inputs ...attachmentFixture) *sandboxworkspace.Mount {
+	t.Helper()
+	downloads := make([]workspace.Download, 0, len(inputs))
+	for _, input := range inputs {
+		downloads = append(downloads, workspace.Download{
+			RelativePath: input.path, URL: server.URL + "/" + input.path,
+			SHA256: input.digest(), Size: int64(len(input.content)), Mode: 0o600,
+		})
+	}
+	return &sandboxworkspace.Mount{
+		WorkspaceID: "workspace-1", TaskID: "task-1", Root: WorkspaceRoot,
+		Generation: 1, ManifestSHA256: strings.Repeat("c", 64), RevisionSHA256: revision,
+		Hydration: workspace.Hydration{
+			Generation: 1, ManifestSHA256: strings.Repeat("c", 64), RevisionSHA256: revision,
+			Downloads: downloads,
+		},
+	}
+}
+
+func inputServer(t *testing.T, inputs ...attachmentFixture) *httptest.Server {
+	t.Helper()
+	bodies := make(map[string][]byte, len(inputs))
+	for _, input := range inputs {
+		bodies["/"+input.path] = input.content
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		body, ok := bodies[request.URL.Path]
+		if !ok {
+			response.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = response.Write(body)
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+func TestEnsureWorkspaceHydrated_AdditiveAttachmentsHydrateInPlace(t *testing.T) {
+	brief := attachmentFixture{path: "inputs/brief.txt", content: []byte("brief")}
+	added := attachmentFixture{path: "inputs/attachments/contract.pdf", content: []byte("%PDF follow-up")}
+	server := inputServer(t, brief, added)
+	revisionX, revisionY := strings.Repeat("a", 64), strings.Repeat("b", 64)
+	workspaces := &fakeWorkspaceProvider{mount: inputMount(t, server, revisionX, brief)}
+	manager, provider := newTestManager(t)
+	runtime, err := NewWorkspaceRuntime(manager, workspaces)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.EnsureWorkspace(context.Background(), "workspace-1", "task-1"); err != nil {
+		t.Fatal(err)
+	}
+
+	workspaces.mount = inputMount(t, server, revisionY, brief, added)
+	workspaces.additions = map[string][]workspace.Entry{revisionX + "->" + revisionY: {added.entry()}}
+	if err := runtime.EnsureWorkspace(context.Background(), "workspace-1", "task-1"); err != nil {
+		t.Fatalf("EnsureWorkspace() after an added attachment error = %v", err)
+	}
+	if err := runtime.EnsureWorkspace(context.Background(), "workspace-1", "task-1"); err != nil {
+		t.Fatalf("EnsureWorkspace() at the recorded revision error = %v", err)
+	}
+
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
+	if provider.creates != 1 {
+		t.Fatalf("sandbox creates = %d, want the live sandbox reused", provider.creates)
+	}
+	if provider.puts != 2 {
+		t.Fatalf("uploads = %d, want the original input once plus only the added attachment", provider.puts)
+	}
+	if got := string(provider.files[WorkspaceRoot+"/"+added.path]); got != string(added.content) {
+		t.Fatalf("added attachment on sandbox disk = %q", got)
+	}
+	if fmt.Sprint(workspaces.additionCalls) != fmt.Sprint([]string{revisionX + "->" + revisionY}) {
+		t.Fatalf("addition lookups = %v, want one X->Y lookup and revision Y recorded", workspaces.additionCalls)
+	}
+}
+
+func TestEnsureWorkspaceHydrated_NonAdditiveDiffStillRefused(t *testing.T) {
+	brief := attachmentFixture{path: "inputs/brief.txt", content: []byte("brief")}
+	rewritten := attachmentFixture{path: "inputs/brief.txt", content: []byte("rewritten brief")}
+	outside := attachmentFixture{path: "inputs/extra.txt", content: []byte("extra")}
+	added := attachmentFixture{path: "inputs/attachments/contract.pdf", content: []byte("%PDF follow-up")}
+	forged := attachmentFixture{path: added.path, content: []byte("not what was downloaded")}
+	revisionX, revisionY := strings.Repeat("a", 64), strings.Repeat("b", 64)
+	cases := []struct {
+		name      string
+		inputs    []attachmentFixture
+		additions []workspace.Entry
+	}{
+		{name: "changed input refused by the data plane", inputs: []attachmentFixture{rewritten}},
+		{name: "path outside attachments", inputs: []attachmentFixture{brief, outside}, additions: []workspace.Entry{outside.entry()}},
+		{name: "nested attachment path", inputs: []attachmentFixture{brief, {path: "inputs/attachments/dir/c.pdf", content: []byte("c")}},
+			additions: []workspace.Entry{{RelativePath: "inputs/attachments/dir/c.pdf", SHA256: attachmentFixture{content: []byte("c")}.digest(), Size: 1}}},
+		{name: "addition absent from the hydration plan", inputs: []attachmentFixture{brief}, additions: []workspace.Entry{added.entry()}},
+		{name: "addition digest differs from the plan", inputs: []attachmentFixture{brief, added}, additions: []workspace.Entry{forged.entry()}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			initial := inputServer(t, brief)
+			next := inputServer(t, tc.inputs...)
+			workspaces := &fakeWorkspaceProvider{mount: inputMount(t, initial, revisionX, brief)}
+			manager, provider := newTestManager(t)
+			runtime, err := NewWorkspaceRuntime(manager, workspaces)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := runtime.EnsureWorkspace(context.Background(), "workspace-1", "task-1"); err != nil {
+				t.Fatal(err)
+			}
+
+			workspaces.mount = inputMount(t, next, revisionY, tc.inputs...)
+			if tc.additions != nil {
+				workspaces.additions = map[string][]workspace.Entry{revisionX + "->" + revisionY: tc.additions}
+			}
+			err = runtime.EnsureWorkspace(context.Background(), "workspace-1", "task-1")
+			want := fmt.Sprintf("live sandbox is hydrated from revision %s and cannot be mutated to %s", revisionX, revisionY)
+			if err == nil || !strings.HasPrefix(err.Error(), want) {
+				t.Fatalf("EnsureWorkspace() error = %v, want refusal %q", err, want)
+			}
+
+			workspaces.mount = inputMount(t, initial, revisionX, brief)
+			if err := runtime.EnsureWorkspace(context.Background(), "workspace-1", "task-1"); err != nil {
+				t.Fatalf("refusal moved the recorded revision: %v", err)
+			}
+			provider.mu.Lock()
+			defer provider.mu.Unlock()
+			if provider.puts != 1 {
+				t.Fatalf("uploads = %d, want only the original hydration", provider.puts)
+			}
+		})
 	}
 }

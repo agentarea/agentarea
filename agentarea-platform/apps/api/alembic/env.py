@@ -2,6 +2,8 @@ import re
 from datetime import datetime
 from logging.config import fileConfig
 
+import agentarea_common.analytics.models  # registers the table
+import agentarea_common.analytics.signup_models  # registers the table
 import agentarea_common.identity.models  # noqa: F401  (registers the table)
 import agentarea_streams.infrastructure.orm  # noqa: F401
 from agentarea_common.artifacts import ArtifactEvent  # noqa: F401

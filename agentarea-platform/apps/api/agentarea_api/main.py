@@ -8,9 +8,10 @@ from datetime import datetime
 from pathlib import Path
 
 # Suppress noisy third-party loggers before any imports trigger them
-for _noisy_logger in ("LiteLLM", "LiteLLM Proxy", "LiteLLM Router", "httpcore", "httpx"):
+for _noisy_logger in ("httpcore", "httpx"):
     logging.getLogger(_noisy_logger).setLevel(logging.WARNING)
 
+from agentarea_common import __version__
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.di.container import get_container, register_factory, register_singleton
 from agentarea_common.events.broker import EventBroker
@@ -77,6 +78,11 @@ async def initialize_services():
         from agentarea_common.config import get_settings
 
         settings = get_settings()
+
+        if settings.analytics.ENABLED:
+            from agentarea_common.analytics import NOTICE
+
+            logger.info(NOTICE)
 
         # Shared graph client (used by the rebac API + PermissionService).
         openfga_client = None
@@ -241,12 +247,17 @@ async def app_lifespan(app: FastAPI):
     dispatch_stamps = DispatchStampWriter(get_database().async_session_factory)
     await dispatch_stamps.start()
 
+    from agentarea_common.analytics import start_analytics, stop_analytics
+
+    await start_analytics(get_database().async_session_factory)
+
     logger.info("Application started successfully")
 
     try:
         yield
     finally:
         await dispatch_stamps.stop()
+        await stop_analytics()
 
         if metrics_server is not None:
             metrics_server.shutdown()
@@ -369,7 +380,7 @@ def create_app() -> FastAPI:
             "Public endpoints include /, /health, /docs, /redoc, and "
             "/openapi.json."
         ),
-        version="0.1.0",
+        version=__version__,
         lifespan=_lifespan,
         openapi_tags=[
             {"name": "agents", "description": "Operations with AI agents"},
@@ -407,9 +418,8 @@ def create_app() -> FastAPI:
         max_bytes=_get_settings().app.API_MAX_BODY,
     )
 
-    # Add CORS middleware. Origins are an explicit allowlist (never "*"): with
-    # allow_credentials=True a wildcard would reflect any origin for credentialed
-    # cross-site reads. Configure via AGENTAREA_CORS_ORIGINS.
+    # The API authenticates by bearer token only and never by cookie, so browsers
+    # are not allowed to send credentials and any origin may call it.
     from agentarea_common.config import get_settings
 
     _cors = get_settings().app
@@ -417,7 +427,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=_cors.cors_allowed_origins,
         allow_origin_regex=_cors.CORS_ORIGIN_REGEX,
-        allow_credentials=_cors.CORS_CREDENTIALS,
+        allow_credentials=False,
         allow_methods=_cors.cors_allowed_methods,
         allow_headers=_cors.cors_allowed_headers,
         max_age=_cors.CORS_MAX_AGE,
@@ -442,6 +452,11 @@ def create_app() -> FastAPI:
     from agentarea_api.api.v1 import webhooks as webhooks_module
 
     app.include_router(webhooks_module.router, tags=["webhooks"])
+
+    # Kratos's after-registration hook, keyed by AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY
+    from agentarea_api.api.internal import analytics_signups
+
+    app.include_router(analytics_signups.router)
 
     # Each agent's own A2A host, matched before any path so that host serves
     # nothing but the agent.
@@ -631,6 +646,7 @@ def create_app() -> FastAPI:
         """Health check endpoint."""
         return {
             "status": "healthy",
+            "version": __version__,
             "timestamp": datetime.now().isoformat(),
         }
 
@@ -712,7 +728,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "agentarea-api",
-        "version": "0.1.0",
+        "version": __version__,
         "connections": connection_health,
         "timestamp": datetime.now().isoformat(),
     }

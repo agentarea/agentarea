@@ -31,6 +31,7 @@ from . import (
     agents_a2a,
     agents_tasks,
     agents_well_known,
+    analytics,
     api_keys,
     audit,
     bundles,
@@ -106,6 +107,8 @@ principal_v1_router.include_router(external_identities.router)
 principal_v1_router.include_router(pricing.router)
 # Finishing an OAuth sign-in: the flow names its workspace, the caller must have started it.
 principal_v1_router.include_router(oauth_connect.principal_router)
+# Whether this installation reports usage analytics; deployment-wide, like pricing.
+principal_v1_router.include_router(analytics.router)
 
 
 # ============================================================================
