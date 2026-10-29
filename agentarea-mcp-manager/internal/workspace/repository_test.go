@@ -17,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
 )
 
 func TestRepositoryRejectsCrossTaskObjectBeforeSigning(t *testing.T) {
@@ -556,6 +557,8 @@ type fakeS3 struct {
 	lastPointerIfMatch    string
 	conditionalRaceKey    string
 	conditionalRaceObject fakeObject
+	ifMatchRaceKey        string
+	ifMatchRaceObject     fakeObject
 }
 
 func newFakeS3() *fakeS3 { return &fakeS3{objects: map[string]fakeObject{}} }
@@ -586,7 +589,7 @@ func (f *fakeS3) GetObject(_ context.Context, input *s3.GetObjectInput, _ ...fun
 	defer f.mu.Unlock()
 	object, ok := f.objects[aws.ToString(input.Key)]
 	if !ok {
-		return nil, fmt.Errorf("not found")
+		return nil, &smithy.GenericAPIError{Code: "NoSuchKey", Message: "not found"}
 	}
 	return &s3.GetObjectOutput{Body: io.NopCloser(bytes.NewReader(object.body)), ETag: aws.String(object.etag), Metadata: object.metadata, VersionId: aws.String(object.version)}, nil
 }
@@ -609,6 +612,11 @@ func (f *fakeS3) PutObject(_ context.Context, input *s3.PutObjectInput, _ ...fun
 		f.objects[key] = f.conditionalRaceObject
 		f.conditionalRaceKey = ""
 		f.conditionalRaceObject = fakeObject{}
+	}
+	if key == f.ifMatchRaceKey && input.IfMatch != nil {
+		f.objects[key] = f.ifMatchRaceObject
+		f.ifMatchRaceKey = ""
+		f.ifMatchRaceObject = fakeObject{}
 	}
 	current, exists := f.objects[key]
 	if input.IfNoneMatch != nil && aws.ToString(input.IfNoneMatch) == "*" && exists {

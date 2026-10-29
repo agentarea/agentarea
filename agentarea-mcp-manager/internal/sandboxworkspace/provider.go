@@ -30,6 +30,10 @@ type Mount struct {
 // not have to implement operations the control plane never calls.
 type Ensurer interface {
 	Ensure(context.Context, string, string) (*Mount, error)
+	// HydrationAdditions returns the input entries a live binding hydrated
+	// from the first revision lacks under the second. Any change other than a
+	// pure addition of inputs/attachments/<name> files is refused.
+	HydrationAdditions(context.Context, string, string, string, string) ([]workspace.Entry, error)
 }
 
 type Archiver interface {

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"slices"
 	"strings"
@@ -951,11 +952,11 @@ func TestWorkspaceHydrationIsSerializedAcrossManagerReplicas(t *testing.T) {
 	}
 	errorsByReplica := make(chan error, 2)
 	go func() {
-		errorsByReplica <- first.EnsureWorkspaceHydrated(ctx, "workspace-1", "task-1", strings.Repeat("a", 64), hydrate)
+		errorsByReplica <- first.EnsureWorkspaceHydrated(ctx, "workspace-1", "task-1", strings.Repeat("a", 64), hydrate, refuseAdvance)
 	}()
 	<-entered
 	go func() {
-		errorsByReplica <- second.EnsureWorkspaceHydrated(ctx, "workspace-1", "task-1", strings.Repeat("a", 64), hydrate)
+		errorsByReplica <- second.EnsureWorkspaceHydrated(ctx, "workspace-1", "task-1", strings.Repeat("a", 64), hydrate, refuseAdvance)
 	}()
 	time.Sleep(100 * time.Millisecond)
 	mu.Lock()
@@ -1088,4 +1089,8 @@ func testManifest() *runtimeinfo.Manifest {
 		},
 		ExecutionSupervisor: testSupervisorAttestation(),
 	}
+}
+
+func refuseAdvance(_ context.Context, from string) error {
+	return fmt.Errorf("test does not advance from %s", from)
 }

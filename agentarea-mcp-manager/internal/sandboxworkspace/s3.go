@@ -11,6 +11,7 @@ const inputPrefix = "inputs"
 
 type hydrationRepository interface {
 	PrepareCurrentHydration(context.Context, string, string, string) (workspace.Hydration, error)
+	HydrationAdditions(context.Context, string, string, string, string, string) ([]workspace.Entry, error)
 }
 
 // S3Provider resolves the immutable Task Input Manifest maintained in object
@@ -49,6 +50,10 @@ func (p *S3Provider) Ensure(ctx context.Context, workspaceID, taskID string) (*M
 		RevisionSHA256: hydration.RevisionSHA256,
 		Hydration:      hydration,
 	}, nil
+}
+
+func (p *S3Provider) HydrationAdditions(ctx context.Context, workspaceID, taskID, fromRevision, toRevision string) ([]workspace.Entry, error) {
+	return p.repository.HydrationAdditions(ctx, workspaceID, taskID, inputPrefix, fromRevision, toRevision)
 }
 
 // The first implementation uses ephemeral live files plus immutable S3
