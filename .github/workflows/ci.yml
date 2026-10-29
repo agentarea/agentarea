@@ -993,6 +993,49 @@ jobs:
       - name: Migrations + schema-backed suites
         run: make -C agentarea-platform check-db
 
+  # Tells agentarea-enterprise which images this run published. It pins them in its
+  # oss-base.json and builds the enterprise overlay from exactly these tags.
+  notify-enterprise:
+    runs-on: ubuntu-latest
+    needs: [docker-api, docker-worker, docker-agentarea-mcp-manager]
+    if: |
+      always() && github.ref == 'refs/heads/main' && !inputs.skip-docker &&
+      contains(needs.*.result, 'success')
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: VERSION
+          sparse-checkout-cone-mode: false
+
+      - name: Generate GitHub App token
+        id: token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.HELM_GH_APP_ID }}
+          private-key: ${{ secrets.HELM_GH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: agentarea-enterprise
+
+      - name: Dispatch oss-images-published
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          API: ${{ needs.docker-api.result }}
+          WORKER: ${{ needs.docker-worker.result }}
+          MCP_MANAGER: ${{ needs.docker-agentarea-mcp-manager.result }}
+        run: |
+          set -euo pipefail
+          components=""
+          [ "$API" != "success" ] || components="$components api"
+          [ "$WORKER" != "success" ] || components="$components worker"
+          [ "$MCP_MANAGER" != "success" ] || components="$components mcp-manager"
+          version="$(tr -d '\n' < VERSION)"
+          echo "dispatching ${version}-${GITHUB_SHA:0:7}:${components}"
+          gh api "repos/${{ github.repository_owner }}/agentarea-enterprise/dispatches" \
+            -f event_type=oss-images-published \
+            -f "client_payload[version]=${version}" \
+            -f "client_payload[sha]=${GITHUB_SHA:0:7}" \
+            -f "client_payload[components]=${components# }"
+
   # Single required status check for branch protection. Monorepo path filters
   # skip irrelevant jobs (they report "skipped", not "failure"), so a per-job
   # required check is unworkable; this aggregator is the one check to require.
