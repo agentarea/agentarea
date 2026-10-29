@@ -703,7 +703,10 @@
           "triggers": "{count, plural, one {# trigger} other {# triggers}}"
         },
         "reset": "Start from scratch",
-        "willFill": "Fills in {items}."
+        "willFill": "Fills in {items}.",
+        "emptyDescription": "No tools, skills or triggers",
+        "showAll": "Show all ({count})",
+        "showLess": "Show less"
       },
       "toolGroups": {
         "sandbox": {

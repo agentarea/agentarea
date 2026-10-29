@@ -1,8 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   AlertTriangle,
   Check,
+  ChevronDown,
+  ChevronUp,
   FilePlus2,
   LayoutTemplate,
   type LucideIcon,
@@ -10,6 +12,7 @@ import {
 import type { AgentPresetResponse } from "@/api/client/types.gen";
 import { ChoiceTile } from "@/components/ChoiceTile";
 import FormLabel from "@/components/FormLabel/FormLabel";
+import { Button } from "@/components/ui/button";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import {
   Tooltip,
@@ -36,6 +39,20 @@ const CONTENTS: { key: "tools" | "skills" | "triggers"; icon: LucideIcon }[] = [
   { key: "triggers", icon: ENTITY_ICONS.trigger },
 ];
 
+/**
+ * Two rows of tiles before "show all": four while the grid is one or two
+ * columns wide, six at three. The Empty tile counts as one.
+ */
+const SHOWN_NARROW = 4;
+const SHOWN_WIDE = 6;
+
+/** Which tiles wait behind "show all", by their place in the grid. */
+function hiddenUntilExpanded(index: number) {
+  if (index >= SHOWN_WIDE) return "hidden";
+  if (index >= SHOWN_NARROW) return "hidden lg:block";
+  return undefined;
+}
+
 /** A preset's contents as glyphs with counts, e.g. 🔧 2 ✨ 1 ⚡ 1. */
 function PresetContents({ preset }: { preset: AgentPresetResponse }) {
   const parts = CONTENTS.filter(({ key }) => preset[key].length > 0);
@@ -54,6 +71,7 @@ function PresetContents({ preset }: { preset: AgentPresetResponse }) {
 
 const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
   const t = useTranslations("AgentsPage.create.presets");
+  const [expanded, setExpanded] = useState(false);
 
   if (presets === null) {
     return (
@@ -82,14 +100,21 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
     icon: React.ReactNode,
     description: string | null | undefined,
     contents: React.ReactNode,
-    fills: (string | null)[]
+    fills: (string | null)[],
+    index: number
   ) => {
     const isSelected = id === selectedId;
     return (
       <Tooltip key={id} delayDuration={300}>
         <TooltipTrigger asChild>
-          {/* The tile keeps its button; the wrapper only anchors the tooltip. */}
-          <div className="min-w-0">
+          {/* The tile keeps its button; the wrapper only anchors the tooltip.
+              The picked preset stays in sight even past the fold. */}
+          <div
+            className={cn(
+              "min-w-0",
+              !expanded && !isSelected && hiddenUntilExpanded(index)
+            )}
+          >
             <ChoiceTile
               className="w-full items-center py-2"
               title={
@@ -134,58 +159,73 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
         <span className="note">{t("hint")}</span>
       </div>
       <TooltipProvider>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          {/* Empty is no preset at all: a square at the head of the row,
-            picked while nothing else is; named in full on a phone, where the
-            tiles stack, and on hover elsewhere. */}
-          <Tooltip delayDuration={300}>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-pressed={!selected}
-                aria-label={t("reset")}
-                onClick={() => onSelect(null)}
-                className={cn(
-                  // One tile tall however many rows the presets wrap to.
-                  "flex items-center gap-2.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-[54px] sm:w-12 sm:shrink-0 sm:self-start sm:justify-center sm:px-0 sm:py-0",
-                  !selected
-                    ? "border-primary bg-primary/5"
-                    : "hover:bg-muted/50"
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Empty is no preset at all: the first tile, picked while nothing
+              else is. */}
+          <ChoiceTile
+            className="items-center py-2"
+            icon={
+              <EntityAvatar
+                variant="soft"
+                size={24}
+                iconScale={0.5}
+                icon={<FilePlus2 strokeWidth={1.85} />}
+                aria-hidden
+              />
+            }
+            title={
+              <span className="flex items-center gap-1.5">
+                <span className="truncate">{t("reset")}</span>
+                {!selected && (
+                  <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
                 )}
-              >
-                <EntityAvatar
-                  variant="soft"
-                  size={24}
-                  iconScale={0.5}
-                  color={!selected ? "hsl(var(--primary))" : undefined}
-                  icon={<FilePlus2 strokeWidth={1.85} />}
-                  aria-hidden
-                />
-                <span className="sm:hidden">{t("reset")}</span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>{t("reset")}</TooltipContent>
-          </Tooltip>
-          <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {presets.map((preset) =>
-              tile(
-                preset.id,
-                preset.name,
-                <EntityAvatar
-                  hue={deterministicHue(preset.id)}
-                  size={24}
-                  iconScale={0.5}
-                  icon={<LayoutTemplate strokeWidth={1.85} />}
-                  aria-hidden
-                />,
-                preset.description,
-                <PresetContents preset={preset} />,
-                fillsOf(preset)
-              )
-            )}
-          </div>
+              </span>
+            }
+            description={
+              <span className="block truncate">{t("emptyDescription")}</span>
+            }
+            selected={!selected}
+            onClick={() => onSelect(null)}
+          />
+          {presets.map((preset, index) =>
+            tile(
+              preset.id,
+              preset.name,
+              <EntityAvatar
+                hue={deterministicHue(preset.id)}
+                size={24}
+                iconScale={0.5}
+                icon={<LayoutTemplate strokeWidth={1.85} />}
+                aria-hidden
+              />,
+              preset.description,
+              <PresetContents preset={preset} />,
+              fillsOf(preset),
+              index + 1
+            )
+          )}
         </div>
       </TooltipProvider>
+      {presets.length + 1 > SHOWN_NARROW && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          // Three columns fit six tiles in two rows; below that, four.
+          className={cn(
+            "px-2 text-muted-foreground hover:text-foreground",
+            presets.length + 1 <= SHOWN_WIDE && "lg:hidden"
+          )}
+          onClick={() => setExpanded((open) => !open)}
+        >
+          {expanded ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )}
+          {expanded ? t("showLess") : t("showAll", { count: presets.length })}
+        </Button>
+      )}
       {!!selected?.unavailable_skills?.length && (
         <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-500">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />

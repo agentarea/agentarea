@@ -703,7 +703,10 @@
           "triggers": "{count, plural, one {# триггер} few {# триггера} many {# триггеров} other {# триггера}}"
         },
         "reset": "С чистого листа",
-        "willFill": "Заполнит: {items}."
+        "willFill": "Заполнит: {items}.",
+        "emptyDescription": "Без инструментов, навыков и триггеров",
+        "showAll": "Показать все ({count})",
+        "showLess": "Свернуть"
       },
       "toolGroups": {
         "sandbox": {
