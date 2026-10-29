@@ -2441,6 +2441,19 @@
       "enableFailed": "Failed to enable trigger",
       "disableFailed": "Failed to disable trigger",
       "runFailed": "Couldn't run the trigger"
+    },
+    "schedule": {
+      "custom": "Custom schedule",
+      "everyMinute": "Every minute",
+      "everyMinutes": "Every {n} minutes",
+      "everyHour": "Every hour",
+      "everyHourAt": "Every hour at :{minute}",
+      "everyHours": "Every {n} hours",
+      "weekdays": "Weekdays at {time}",
+      "weekends": "Weekends at {time}",
+      "weekly": "Every {day, select, 0 {Sunday} 1 {Monday} 2 {Tuesday} 3 {Wednesday} 4 {Thursday} 5 {Friday} 6 {Saturday} other {day}} at {time}",
+      "daily": "Every day at {time}",
+      "monthly": "Monthly on the {day, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} at {time}"
     }
   },
   "EventsPage": {

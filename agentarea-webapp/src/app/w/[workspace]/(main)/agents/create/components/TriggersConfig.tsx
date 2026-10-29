@@ -5,10 +5,8 @@ import { useTranslations } from "next-intl";
 import { Zap } from "lucide-react";
 import type { TriggerSpec } from "@/api/client/types.gen";
 import { SessionSetting } from "@/app/w/[workspace]/(main)/triggers/components/SessionSetting";
-import {
-  describeCronExpression,
-  renderTriggerIcon,
-} from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
+import { renderTriggerIcon } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
+import { useScheduleText } from "@/app/w/[workspace]/(main)/triggers/components/useScheduleText";
 import { CronScheduler } from "@/app/w/[workspace]/(main)/triggers/create/CronScheduler";
 import type { StreamOptions } from "@/app/w/[workspace]/(main)/triggers/create/streamOptions";
 import { TIMEZONES } from "@/app/w/[workspace]/(main)/triggers/create/timezones";
@@ -80,6 +78,7 @@ const TriggersConfig = ({
   const t = useTranslations("AgentsPage.create");
   const tTrigger = useTranslations("TriggersPage.create");
   const tType = useTranslations("TriggersPage.type");
+  const scheduleText = useScheduleText();
   // A refused save opens the section, so the trigger it points at is seen.
   useEffect(() => {
     if (showErrors) setAccordionValue("triggers");
@@ -191,7 +190,7 @@ const TriggersConfig = ({
                 subtitle={
                   spec.trigger_type === "cron"
                     ? spec.cron_expression
-                      ? describeCronExpression(spec.cron_expression)
+                      ? scheduleText(spec.cron_expression)
                       : tType(spec.trigger_type)
                     : (stream?.name ?? tType(spec.trigger_type))
                 }
