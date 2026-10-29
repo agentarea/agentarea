@@ -856,51 +856,49 @@ const ToolConfig = ({
         }
       >
         <div className="space-y-2">
-          {toolGroups.length > 0 && (
-            <div className="overflow-hidden rounded-md border">
-              {toolGroups.map(([group, members]) => (
-                <SelectedItemRow
-                  key={group}
-                  avatar={
-                    <EntityAvatar
-                      hue={deterministicHue(group)}
-                      size={24}
-                      iconScale={0.45}
-                      icon={<Wrench strokeWidth={1.85} />}
-                      aria-hidden
-                    />
-                  }
-                  title={
-                    <label
-                      htmlFor={`tool-group-${group}`}
-                      className="cursor-pointer"
-                    >
-                      {t(TOOL_GROUP_MESSAGES[group].label)}
-                    </label>
-                  }
-                  subtitle={t(TOOL_GROUP_MESSAGES[group].description)}
-                  end={
-                    <Switch
-                      id={`tool-group-${group}`}
-                      checked={isToolGroupEnabled(members)}
-                      onCheckedChange={(enabled) =>
-                        setToolGroupEnabled(members, enabled)
-                      }
-                    />
-                  }
-                />
-              ))}
-            </div>
-          )}
-
           <SelectedItems
             count={
+              toolGroups.length +
               visibleBuiltinToolFields.length +
               toolFields.length +
               (openapiFields?.length ?? 0)
             }
             empty={t("create.agentToolsDescription")}
           >
+            {/* A toolset group is one switch, first in the list; on or off it
+                stays, so it has no bin. */}
+            {toolGroups.map(([group, members]) => (
+              <SelectedItemRow
+                key={group}
+                avatar={
+                  <EntityAvatar
+                    hue={deterministicHue(group)}
+                    size={24}
+                    iconScale={0.45}
+                    icon={<Wrench strokeWidth={1.85} />}
+                    aria-hidden
+                  />
+                }
+                title={
+                  <label
+                    htmlFor={`tool-group-${group}`}
+                    className="cursor-pointer"
+                  >
+                    {t(TOOL_GROUP_MESSAGES[group].label)}
+                  </label>
+                }
+                subtitle={t(TOOL_GROUP_MESSAGES[group].description)}
+                end={
+                  <Switch
+                    id={`tool-group-${group}`}
+                    checked={isToolGroupEnabled(members)}
+                    onCheckedChange={(enabled) =>
+                      setToolGroupEnabled(members, enabled)
+                    }
+                  />
+                }
+              />
+            ))}
             {(builtinToolFields ?? []).map((item, index) => {
               const builtinTool = builtinTools.find(
                 (tool) => tool.name === item.tool_name

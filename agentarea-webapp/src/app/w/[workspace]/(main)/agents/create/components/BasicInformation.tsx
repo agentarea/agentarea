@@ -82,74 +82,77 @@ const BasicInformation = ({
         <Sparkles className="h-5 w-5 text-accent" /> Basic Information
       </h2> */}
       <div className="form-content">
-        <div className="space-y-2">
-          <FormLabel htmlFor="name" icon={Bot} required>
-            {t("agentName")}
-          </FormLabel>
-          <Input
-            id="name"
-            {...register("name", { required: t("nameRequired") })}
-            readOnly={Boolean(suggestedName) && !nameReady}
-            defaultValue={suggestedName}
-            onFocus={
-              suggestedName
-                ? (event) => {
-                    if (event.currentTarget.value === suggestedName) {
-                      event.currentTarget.select();
+        {/* Name and model side by side where the form is wide enough. */}
+        <div className="grid gap-5 lg:grid-cols-2">
+          <div className="space-y-2">
+            <FormLabel htmlFor="name" icon={Bot} required>
+              {t("agentName")}
+            </FormLabel>
+            <Input
+              id="name"
+              {...register("name", { required: t("nameRequired") })}
+              readOnly={Boolean(suggestedName) && !nameReady}
+              defaultValue={suggestedName}
+              onFocus={
+                suggestedName
+                  ? (event) => {
+                      if (event.currentTarget.value === suggestedName) {
+                        event.currentTarget.select();
+                      }
                     }
-                  }
-                : undefined
-            }
-            placeholder={t("agentNamePlaceholder")}
-            // className="mt-2 text-lg px-4 py-3 border-2 border-slate-200 focus:border-blue-400 transition-colors"
-            aria-invalid={!!getNestedErrorMessage(errors, "name")}
-          />
-          {getNestedErrorMessage(errors, "name") && (
-            <p className="form-error">
-              {getNestedErrorMessage(errors, "name")}
-            </p>
-          )}
-        </div>
-        <div className="space-y-2">
-          <FormLabel htmlFor="model_id" icon={Cpu} required>
-            {t("llmModel")}
-          </FormLabel>
-          <Controller
-            name="model_id"
-            control={control}
-            rules={{ required: t("modelRequired") }}
-            render={({ field }) => (
-              <ProviderModelSelector
-                modelInstances={llmModelInstances}
-                value={field.value}
-                onValueChange={field.onChange}
-                placeholder={t("selectModel")}
-                open={searchableSelectOpen}
-                onOpenChange={setSearchableSelectOpen}
-                onAddProvider={handleCreateConfigClick}
-                emptyMessage={
-                  <div className="flex flex-col items-center gap-2 px-6">
-                    <div>{t("noConfigurationsYet")}</div>
-                    <div className="note">
-                      {t("createAndUseProviderConfiguration")}
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={handleCreateConfigClick}
-                      className="mt-2"
-                    >
-                      {t("createConfiguration")}
-                    </Button>
-                  </div>
-                }
-              />
+                  : undefined
+              }
+              placeholder={t("agentNamePlaceholder")}
+              // className="mt-2 text-lg px-4 py-3 border-2 border-slate-200 focus:border-blue-400 transition-colors"
+              aria-invalid={!!getNestedErrorMessage(errors, "name")}
+            />
+            {getNestedErrorMessage(errors, "name") && (
+              <p className="form-error">
+                {getNestedErrorMessage(errors, "name")}
+              </p>
             )}
-          />
-          {getNestedErrorMessage(errors, "model_id") && (
-            <p className="form-error">
-              {getNestedErrorMessage(errors, "model_id")}
-            </p>
-          )}
+          </div>
+          <div className="space-y-2">
+            <FormLabel htmlFor="model_id" icon={Cpu} required>
+              {t("llmModel")}
+            </FormLabel>
+            <Controller
+              name="model_id"
+              control={control}
+              rules={{ required: t("modelRequired") }}
+              render={({ field }) => (
+                <ProviderModelSelector
+                  modelInstances={llmModelInstances}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  placeholder={t("selectModel")}
+                  open={searchableSelectOpen}
+                  onOpenChange={setSearchableSelectOpen}
+                  onAddProvider={handleCreateConfigClick}
+                  emptyMessage={
+                    <div className="flex flex-col items-center gap-2 px-6">
+                      <div>{t("noConfigurationsYet")}</div>
+                      <div className="note">
+                        {t("createAndUseProviderConfiguration")}
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={handleCreateConfigClick}
+                        className="mt-2"
+                      >
+                        {t("createConfiguration")}
+                      </Button>
+                    </div>
+                  }
+                />
+              )}
+            />
+            {getNestedErrorMessage(errors, "model_id") && (
+              <p className="form-error">
+                {getNestedErrorMessage(errors, "model_id")}
+              </p>
+            )}
+          </div>
         </div>
         <div className="space-y-2">
           <FormLabel htmlFor="description" icon={FileText} optional>
@@ -159,7 +162,8 @@ const BasicInformation = ({
             id="description"
             {...register("description")}
             placeholder={t("descriptionPlaceholder")}
-            className="h-[100px] resize-none"
+            // Two lines to start, growing with the text up to 15rem.
+            className="min-h-[60px] max-h-60 resize-none [field-sizing:content]"
             aria-invalid={!!getNestedErrorMessage(errors, "description")}
           />
           {getNestedErrorMessage(errors, "description") && (
