@@ -12,7 +12,12 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
-from agentarea_agents.schemas.dto import AgentCreate, AgentTypeLiteral, AgentUpdate
+from agentarea_agents.schemas.dto import (
+    REASONING_EFFORT_DESCRIPTION,
+    AgentCreate,
+    AgentTypeLiteral,
+    AgentUpdate,
+)
 from agentarea_agents.schemas.import_export import ToolConfig
 from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
@@ -50,6 +55,7 @@ class AgentDetailOutput(AgentSummaryOutput):
     )
     instruction: str | None = Field(default=None, description="The agent's system prompt.")
     agent_type: str = Field(description="stateless or stateful.")
+    reasoning_effort: str | None = Field(default=None, description=REASONING_EFFORT_DESCRIPTION)
 
 
 class AgentRefOutput(BaseModel):
@@ -122,6 +128,7 @@ class AgentsToolset(Toolset):
                     "model_id": agent.model_id,
                     "instruction": agent.instruction,
                     "agent_type": agent.agent_type,
+                    "reasoning_effort": agent.reasoning_effort,
                 },
                 default=str,
             )
@@ -155,6 +162,9 @@ class AgentsToolset(Toolset):
                 "stateless treats each run independently."
             ),
         ] = "stateless",
+        reasoning_effort: Annotated[
+            str | None, Field(description=REASONING_EFFORT_DESCRIPTION)
+        ] = None,
     ) -> str:
         """Create a new agent.
 
@@ -169,6 +179,7 @@ class AgentsToolset(Toolset):
             model_id=model_id,
             tools=_TOOL_LIST.validate_python(tools),
             agent_type=agent_type,
+            reasoning_effort=reasoning_effort,
         )
         try:
             validate_code_tool_names(payload.tools)
@@ -205,6 +216,13 @@ class AgentsToolset(Toolset):
             builtins.list[dict[str, Any]] | None,
             Field(description=f"{_TOOLS} Replaces the whole list; omit to keep the current tools."),
         ] = None,
+        reasoning_effort: Annotated[
+            str | None,
+            Field(
+                description=f"{REASONING_EFFORT_DESCRIPTION} Omit to keep the current setting; "
+                'pass "" to go back to the model\'s default.'
+            ),
+        ] = None,
     ) -> str:
         """Update an existing agent.
 
@@ -222,6 +240,8 @@ class AgentsToolset(Toolset):
             patch["model_id"] = model_id
         if tools is not None:
             patch["tools"] = _TOOL_LIST.validate_python(tools)
+        if reasoning_effort is not None:
+            patch["reasoning_effort"] = reasoning_effort
         payload = AgentUpdate.model_validate(patch)
         try:
             validate_code_tool_names(payload.tools)

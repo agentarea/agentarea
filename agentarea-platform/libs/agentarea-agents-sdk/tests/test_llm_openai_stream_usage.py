@@ -222,3 +222,52 @@ def test_a_provider_with_no_address_and_no_endpoint_is_refused():
 
     with pytest.raises(ValueError, match="no public address"):
         model._api_url("/chat/completions")
+
+
+@pytest.mark.asyncio
+async def test_a_reply_cut_off_at_the_output_limit_says_so(monkeypatch):
+    model = LLMModel(provider_type="openai", model_name="m", endpoint_url="https://x.example/v1")
+    captured: dict = {}
+    _serve_sse(
+        monkeypatch,
+        model,
+        [
+            {"choices": [{"delta": {"content": "part"}}]},
+            {"choices": [{"delta": {}, "finish_reason": "length"}]},
+        ],
+        captured,
+    )
+
+    response = await model.complete(LLMRequest(messages=[{"role": "user", "content": "hi"}]))
+
+    assert (response.content, response.finish_reason) == ("part", "length")
+    assert "think" not in captured["json"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("reasoning_param", "fields"),
+    [
+        ("reasoning_effort", {"reasoning_effort": "low"}),
+        ("reasoning", {"reasoning": {"effort": "low"}}),
+    ],
+)
+async def test_the_reasoning_effort_is_asked_for_in_the_providers_form(
+    monkeypatch, reasoning_param, fields
+):
+    from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
+
+    model = LLMModel(
+        provider_type="x",
+        model_name="m",
+        endpoint_url="https://x.example/v1",
+        provider=ProviderProfile.from_mapping({"reasoning_param": reasoning_param}),
+    )
+    captured: dict = {}
+    _serve_sse(monkeypatch, model, [{"choices": [{"delta": {"content": "ok"}}]}], captured)
+
+    await model.complete(
+        LLMRequest(messages=[{"role": "user", "content": "hi"}], reasoning_effort="low")
+    )
+
+    assert {k: captured["json"][k] for k in fields} == fields

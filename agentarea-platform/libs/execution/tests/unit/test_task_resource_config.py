@@ -36,7 +36,7 @@ def skill(name="Research"):
     )
 
 
-def agent(*, tools=None, skills=None, status="active"):
+def agent(*, tools=None, skills=None, status="active", reasoning_effort=None):
     return SimpleNamespace(
         id=uuid4(),
         status=status,
@@ -48,6 +48,7 @@ def agent(*, tools=None, skills=None, status="active"):
         skills=skills or [],
         planning=False,
         a2ui_enabled=False,
+        reasoning_effort=reasoning_effort,
         answer_check=None,
         agent_type="stateful",
     )
@@ -228,6 +229,27 @@ async def test_config_activity_uses_selected_skills_and_mcp_in_run_hash(activity
     assert result.config_hash != inherited.config_hash
     assert saved.skills == []
     assert saved.tools == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("effort", [None, "high"])
+async def test_config_activity_carries_the_agent_reasoning_effort(activity_context, effort):
+    ctx, functions = activity_context
+    saved = agent(reasoning_effort=effort)
+    ctx.get_agent_service.return_value.get_with_skills.return_value = saved
+    ctx.get_model_instance_service.return_value.get.return_value = SimpleNamespace(
+        model_spec=SimpleNamespace(
+            kind="chat", context_window=64000, default_context_strategy="static"
+        )
+    )
+    request = AgentConfigRequest(
+        agent_id=saved.id,
+        user_context_data={"user_id": "user", "workspace_id": "workspace", "agent_id": "agent-1"},
+    )
+
+    result = await functions["build_agent_config_activity"](request)
+
+    assert result.reasoning_effort == effort
 
 
 @pytest.mark.asyncio

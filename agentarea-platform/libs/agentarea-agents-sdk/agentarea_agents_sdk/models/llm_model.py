@@ -48,6 +48,15 @@ _ANTHROPIC_STREAM_ERROR_STATUS = {
     "overloaded_error": 529,
 }
 
+# Anthropic's stop_reason in OpenAI's finish_reason vocabulary.
+_ANTHROPIC_FINISH_REASON = {
+    "end_turn": "stop",
+    "stop_sequence": "stop",
+    "max_tokens": "length",
+    "tool_use": "tool_calls",
+    "refusal": "content_filter",
+}
+
 ChunkPublisher = Callable[[str, int, bool], Awaitable[Any]]
 
 
@@ -85,6 +94,8 @@ class LLMRequest:
     tools: list[dict[str, Any]] | None = None
     temperature: float | None = None
     max_tokens: int | None = None
+    # How hard the model reasons first (minimal|low|medium|high); unset = its default.
+    reasoning_effort: str | None = None
 
 
 @dataclass
@@ -175,6 +186,9 @@ class LLMResponse:
     cost: Decimal = Decimal(0)
     usage: LLMUsage | None = None
     reasoning_content: str = ""
+    # Why the model stopped, in OpenAI's words: "stop", "length", "tool_calls", ...
+    # "length" means the reply was cut off at the output limit.
+    finish_reason: str | None = None
 
 
 def _text_of(content: Any) -> str:
@@ -531,6 +545,7 @@ class LLMModel:
             payload["temperature"] = request.temperature
         if request.max_tokens is not None:
             payload["max_tokens"] = request.max_tokens
+        payload.update(self._profile.reasoning_fields(request.reasoning_effort))
 
         headers: dict[str, str] = {
             "Content-Type": "application/json",
@@ -542,21 +557,13 @@ class LLMModel:
         final_cost = Decimal(0)
 
         async with self._http_client(httpx.Timeout(300.0)) as client:
-            # Try with thinking enabled first; fall back without if provider rejects it
-            use_payload = {**payload, "think": True}
             resp = await self._send(
-                client, client.build_request("POST", url, json=use_payload, headers=headers)
+                client, client.build_request("POST", url, json=payload, headers=headers)
             )
             if resp.status_code >= 400:
+                body = await resp.aread()
                 await resp.aclose()
-                logger.info("Provider rejected 'think' param, retrying without it")
-                resp = await self._send(
-                    client, client.build_request("POST", url, json=payload, headers=headers)
-                )
-                if resp.status_code >= 400:
-                    body = await resp.aread()
-                    await resp.aclose()
-                    raise LLMProviderHTTPError(resp.status_code, _error_body_message(body))
+                raise LLMProviderHTTPError(resp.status_code, _error_body_message(body))
 
             try:
                 async for line in resp.aiter_lines():
@@ -591,6 +598,7 @@ class LLMModel:
                         continue
 
                     delta = choices[0].get("delta", {})
+                    finish_reason = choices[0].get("finish_reason") or None
 
                     # Extract content
                     delta_content = delta.get("content") or ""
@@ -633,7 +641,13 @@ class LLMModel:
 
                     usage_delta = final_usage if usage_data else None
 
-                    if delta_content or delta_reasoning or delta_tool_calls or usage_delta:
+                    if (
+                        delta_content
+                        or delta_reasoning
+                        or delta_tool_calls
+                        or usage_delta
+                        or finish_reason
+                    ):
                         yield LLMResponse(
                             content=delta_content,
                             role="assistant",
@@ -641,6 +655,7 @@ class LLMModel:
                             reasoning_content=delta_reasoning,
                             cost=final_cost if usage_delta is not None else Decimal(0),
                             usage=usage_delta,
+                            finish_reason=finish_reason,
                         )
             finally:
                 await resp.aclose()
@@ -670,6 +685,7 @@ class LLMModel:
         }
 
         usage_fields: dict[str, Any] = {}
+        finish_reason: str | None = None
         tool_calls: list[dict[str, Any]] = []
         tool_at_block: dict[int, dict[str, Any]] = {}
 
@@ -723,6 +739,9 @@ class LLMModel:
                                 )
                     elif kind == "message_delta":
                         usage_fields.update(event.get("usage") or {})
+                        stop_reason = (event.get("delta") or {}).get("stop_reason")
+                        if stop_reason:
+                            finish_reason = _ANTHROPIC_FINISH_REASON.get(stop_reason, stop_reason)
                     elif kind == "error":
                         error = event.get("error") or {}
                         raise LLMProviderHTTPError(
@@ -734,13 +753,14 @@ class LLMModel:
             finally:
                 await resp.aclose()
 
-        if usage_fields:
-            usage = usage_from_provider(usage_fields)
+        if usage_fields or finish_reason:
+            usage = usage_from_provider(usage_fields) if usage_fields else None
             yield LLMResponse(
                 content="",
                 role="assistant",
-                cost=self._configured_cost(usage),
+                cost=self._configured_cost(usage) if usage else Decimal(0),
                 usage=usage,
+                finish_reason=finish_reason,
             )
 
     async def _complete_from_stream(
@@ -751,6 +771,7 @@ class LLMModel:
         tool_calls: list[dict[str, Any]] | None = None
         usage: LLMUsage | None = None
         cost = Decimal(0)
+        finish_reason: str | None = None
         async for chunk in self._stream(request):
             if event_publisher and chunk.content:
                 await event_publisher(chunk.content, len(content), False)
@@ -761,6 +782,8 @@ class LLMModel:
             if chunk.usage is not None:
                 usage = chunk.usage
                 cost = chunk.cost
+            if chunk.finish_reason:
+                finish_reason = chunk.finish_reason
         if event_publisher:
             await event_publisher("", len(content), True)
         return LLMResponse(
@@ -770,6 +793,7 @@ class LLMModel:
             cost=cost,
             usage=usage,
             reasoning_content="".join(reasoning),
+            finish_reason=finish_reason,
         )
 
     def _log_failure(self, error: Exception, *, streaming: bool) -> None:

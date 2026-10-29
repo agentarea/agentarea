@@ -18,6 +18,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.model_override import check_model_override
+from agentarea_common.reasoning_effort import check_reasoning_effort
 from agentarea_common.reserved_task_parameters import reject_reserved_parameters
 from agentarea_governance.domain.policies import PolicyDocument
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -110,6 +111,7 @@ class RunCreate(BaseModel):
     _validate_scheduled_at = field_validator("scheduled_at")(require_future_instant)
     _reject_reserved_parameters = field_validator("parameters")(reject_reserved_parameters)
     _check_model_override = field_validator("parameters")(check_model_override)
+    _check_reasoning_effort = field_validator("parameters")(check_reasoning_effort)
 
 
 def _require_text(value: str | None) -> str | None:
@@ -138,6 +140,7 @@ class TaskDefinitionCreate(BaseModel):
     _require_text = field_validator("name", "description")(_require_text)
     _reject_reserved_parameters = field_validator("parameters")(reject_reserved_parameters)
     _check_model_override = field_validator("parameters")(check_model_override)
+    _check_reasoning_effort = field_validator("parameters")(check_reasoning_effort)
 
 
 class TaskDefinitionUpdate(BaseModel):
@@ -153,6 +156,7 @@ class TaskDefinitionUpdate(BaseModel):
     _require_text = field_validator("name", "description")(_require_text)
     _reject_reserved_parameters = field_validator("parameters")(reject_reserved_parameters)
     _check_model_override = field_validator("parameters")(check_model_override)
+    _check_reasoning_effort = field_validator("parameters")(check_reasoning_effort)
 
 
 class TaskDefinitionRun(BaseModel):
@@ -167,3 +171,4 @@ class TaskDefinitionRun(BaseModel):
 
     _reject_reserved_parameters = field_validator("parameters")(reject_reserved_parameters)
     _check_model_override = field_validator("parameters")(check_model_override)
+    _check_reasoning_effort = field_validator("parameters")(check_reasoning_effort)

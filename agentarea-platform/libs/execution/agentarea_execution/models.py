@@ -457,6 +457,8 @@ class AgentConfigResult(BaseModel):
     default_context_strategy: str | None = None  # From ModelSpec: "static", "hybrid", "dynamic"
     tools: list[dict[str, Any]] = Field(default_factory=list)
     planning: bool = False
+    # How hard the model reasons first; None keeps the model's default.
+    reasoning_effort: str | None = None
     a2ui_enabled: bool = False
     # The agent's own answer check setting; a governance rule overrides it.
     answer_check: dict[str, Any] | None = None
@@ -592,6 +594,7 @@ class LLMCallRequest(BaseModel):
     user_context_data: dict[str, Any] | None = None
     temperature: float | None = None
     max_tokens: int | None = None
+    reasoning_effort: str | None = None
     task_id: str | None = None
     agent_id: str | None = None
     execution_id: str | None = None
@@ -649,6 +652,9 @@ class LLMCallResult(BaseModel):
     # A stop cut the reply short after the provider had reported its usage: the
     # result is what was billed for, not a reply the run acts on.
     interrupted: bool = False
+    # Why the model stopped ("stop", "length", "tool_calls", ...); "length" is a
+    # reply cut off at the output limit. None on results recorded before the field.
+    finish_reason: str | None = None
 
 
 class MCPToolRequest(BaseModel):

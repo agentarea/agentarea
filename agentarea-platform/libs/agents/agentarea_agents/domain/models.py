@@ -50,6 +50,8 @@ class Agent(BaseModel, WorkspaceScopedMixin):
     tools: Mapped[list[dict[str, Any]] | dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     planning: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     a2ui_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
+    # One of agentarea_common.reasoning_effort.REASONING_EFFORTS; None keeps the model's default.
+    reasoning_effort: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # The final-answer check (an AnswerCheckPolicy). A governance safety rule
     # that sets answer_check overrides it; see answer_check.effective_answer_check.
     answer_check: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
