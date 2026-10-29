@@ -28,7 +28,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..observability.metrics import AUTHZ_DURATION
+from ..observability.authz import authz_timed
 from .authorization import AuthorizationService
 from .context import (
     UserContext,
@@ -177,7 +177,7 @@ async def _resolve_access(
     or ``workspace_id`` names, looked up in the same query as ownership,
     whether or not it is reachable -- the caller decides.
     """
-    with AUTHZ_DURATION.labels(operation="resolve_access").time():
+    with authz_timed("resolve_access"):
         return await _resolve_access_unobserved(principal, slug=slug, workspace_id=workspace_id)
 
 

@@ -135,6 +135,8 @@ class ContinueAsNewState(BaseModel):
     skill_tokens_used: int = 0
     # When the continue-as-new chain's execution timeout ends it, set by its first run.
     chain_expires_at: datetime | None = None
+    # When the continue-as-new chain started, set by its first run.
+    run_started_at: datetime | None = None
     # Dynamic context discovery
     context_strategy: str = "hybrid"
     history_chunk_counter: int = 0
@@ -238,6 +240,8 @@ class AgentExecutionState(BaseModel):
     skill_tokens_used: int = 0
     # When the continue-as-new chain's execution timeout ends it, set by its first run.
     chain_expires_at: datetime | None = None
+    # When the run's continue-as-new chain started, for the run duration metric.
+    run_started_at: datetime | None = None
     # Dynamic context discovery
     context_strategy: str = "hybrid"
     history_chunk_counter: int = 0

@@ -2,7 +2,7 @@
 
 /explore ordered by `registries.recommendation_priority` through a join, so no
 index on `registry_items` could produce the page order: every page, total and
-facet count was a seq scan of the whole table. On RU prod that table is 1.4 GB
+facet count was a seq scan of the whole table. In production that table is 1.4 GB
 (~300k rows, ~1 KB of spec each); a skills page cost ~12 s against the
 webapp's 8 s budget, and the scans starved every other query of IO.
 

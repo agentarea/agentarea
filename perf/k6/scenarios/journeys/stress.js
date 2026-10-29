@@ -1,15 +1,25 @@
 // Heavier mixed load, for local/staging only. Double-gated: needs
-// ALLOW_STRESS=1, AND refuses outright when AGENTAREA_API_URL is the real
-// prod host — unlike the rest of this suite, that check is NOT just the
-// workspace guard, because stress-level volume against prod is the one
-// mistake this suite should make structurally impossible, not just
-// discouraged.
+// ALLOW_STRESS=1, AND refuses outright when AGENTAREA_API_URL names one of the
+// production hosts listed in PROD_HOSTS — unlike the rest of this suite, that
+// check is NOT just the workspace guard, because stress-level volume against
+// prod is the one mistake this suite should make structurally impossible, not
+// just discouraged. PROD_HOSTS has no default: the run refuses to start without it.
 import { sleep } from "k6";
 import { BASE_URL } from "../../lib/config.js";
 import { weightedPool, IS_PERF_WORKSPACE, runJanitor } from "../../lib/journeys/index.js";
 import { buildJourneyThresholds } from "../../lib/journeys/thresholds.js";
 
-const PROD_HOSTS = ["api.agentarea.ru"];
+const PROD_HOSTS = (__ENV.PROD_HOSTS || "")
+  .split(",")
+  .map((host) => host.trim())
+  .filter(Boolean);
+
+if (PROD_HOSTS.length === 0) {
+  throw new Error(
+    "PROD_HOSTS is not set. List the production API hosts stress.js must never hit, " +
+      "comma-separated:\n  PROD_HOSTS=api.example.com make journey-stress"
+  );
+}
 
 if (__ENV.ALLOW_STRESS !== "1") {
   throw new Error(

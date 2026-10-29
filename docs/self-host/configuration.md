@@ -156,8 +156,7 @@ without them, and refuses them while RustFS is enabled.
 | `AGENTAREA_MCP_MANAGER_URL` | the MCP Manager service and `mcpManager.service.port` | derived |
 | `AGENTAREA_MCP_TIMEOUT` | fixed | `30` |
 | `AGENTAREA_S3_PUBLIC_ENDPOINT` | `global.storage.publicEndpoint` | `""` |
-| `AGENTAREA_METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `true` |
-| `AGENTAREA_METRICS_PORT` | `global.monitoring.prometheus.port` | `9090` |
+| `AGENTAREA_ENV` | `global.deploymentEnv` | `production` |
 | `AGENTAREA_ANALYTICS_ENABLED` | `global.analytics.enabled` | `true` |
 | `AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY` | Secret `global.analytics.signupHookSecret`, key `signup-hook-key` | unset (no sign-up hook) |
 | `AGENTAREA_AUTH_ISSUER` | `kratos.jwt.issuer` | `https://agentarea.dev` |
@@ -169,8 +168,8 @@ without them, and refuses them while RustFS is enabled.
 | `SMTP_CONNECTION_URI` / `SMTP_FROM_EMAIL` / `SMTP_FROM_NAME` | `kratos.smtp.*` | empty (invitations are link-only) |
 | `AGENTAREA_MCP_OAUTH_APPS` | Secret `global.mcpOAuthApps.existingSecret`, key `global.mcpOAuthApps.existingSecretKey` | unset (no platform OAuth apps) |
 
-`AGENTAREA_METRICS_ENABLED` serves Prometheus metrics on `AGENTAREA_METRICS_PORT`, never on the API
-port. The API serves `/health` on its normal port unconditionally; see
+The API serves `/health` on its normal port unconditionally. Metrics and traces
+are pushed over OTLP; see [Telemetry](#telemetry-every-first-party-deployment) and
 [observability](/self-host/observability).
 
 `AGENTAREA_ANALYTICS_ENABLED` sends anonymous usage statistics to AgentArea from the
@@ -219,7 +218,7 @@ it, the worker to refresh tokens.
 | `AGENTAREA_TEMPORAL_MAX_ACTIVITIES` | fixed in `config.yaml` | `10` |
 | `AGENTAREA_TEMPORAL_MAX_WORKFLOWS` | fixed in `config.yaml` | `5` |
 | `AGENTAREA_DEBUG` | fixed | `false` |
-| `AGENTAREA_ENV` | fixed | `production` |
+| `AGENTAREA_ENV` | `global.deploymentEnv` | `production` |
 | `AGENTAREA_MCP_MANAGER_URL` | derived | — |
 | `AGENTAREA_MCP_OAUTH_APPS` | same Secret as the backend | unset |
 | `AGENTAREA_TASK_OUTAGE_RETRY_WINDOW` | `worker.outageWait.retryWindow` | `5m` |
@@ -342,7 +341,6 @@ be weakened from these values.
 | `ORY_SDK_URL` | `kratos.urls.public`, else the internal service | derived |
 | `ORY_BROWSER_URL` | `kratos.urls.publicBrowser`, else `kratos.urls.public` | derived |
 | `AGENTAREA_AUTH_KRATOS_ADMIN_URL` | `kratos.urls.admin`, else the internal service | derived |
-| `AGENTAREA_METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `true` |
 | `AGENTAREA_MCP_APPS_ORIGIN` | `global.webapp.appsSandboxUrl` | empty |
 | `AGENTAREA_APP_ORIGIN` | `global.webapp.url`, else the internal frontend service URL | derived |
 
@@ -465,6 +463,26 @@ The runner consumes sandbox execution requests from Redis Streams. In Docker
 Compose there is no separate runner: the manager runs it in-process
 (`AGENTAREA_SANDBOX_EMBEDDED_RUNNER=true`) and delegates execution to the
 `sandbox-executor` container over `AGENTAREA_SANDBOX_EXECUTOR_URL`.
+
+### Telemetry (every first-party Deployment)
+
+Rendered into backend, worker, mcp-manager and event-service by the
+`agentarea.telemetry.envs` helper, only while `telemetry.enabled` is true.
+
+| Variable | Helm value | Default |
+|---|---|---|
+| `AGENTAREA_OTEL_ENABLED` | `telemetry.enabled` | unset (off) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `telemetry.otlpEndpoint`, required when enabled | unset |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | fixed | `http/protobuf` |
+| `OTEL_SEMCONV_STABILITY_OPT_IN` | fixed | `http` |
+| `OTEL_RESOURCE_ATTRIBUTES` | fixed, from the Downward API `POD_NAME` and `POD_NAMESPACE` and the Deployment's image tag | `k8s.pod.name=$(POD_NAME),k8s.namespace.name=$(POD_NAMESPACE),service.version=<tag>` |
+
+`AGENTAREA_OTEL_ENABLED=true` with no `OTEL_EXPORTER_OTLP_ENDPOINT` (or no
+per-signal endpoints) stops the process at startup. `OTEL_METRICS_EXPORTER`
+picks `otlp` (the default), `prometheus` (a scrape endpoint on
+`OTEL_EXPORTER_PROMETHEUS_HOST`:`OTEL_EXPORTER_PROMETHEUS_PORT`, default
+`localhost:9464`) or `none`; `OTEL_METRIC_EXPORT_INTERVAL` sets the push interval
+in milliseconds (default `15000`). See [observability](/self-host/observability).
 
 ### Outbound TLS (not in `config.yaml`)
 

@@ -288,6 +288,7 @@ class CompletionMixin(BudgetMixin):
                         cost_used=self.budget_tracker.cost if self.budget_tracker else None,
                         tokens_used=self.state.tokens_used,
                         service_cost_used=self.state.service_cost_used,
+                        purpose="answer_check",
                     )
                 ],
                 result_type=LLMCallResult,

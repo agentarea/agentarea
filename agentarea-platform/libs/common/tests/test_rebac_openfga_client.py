@@ -321,19 +321,8 @@ async def test_a_members_workspaces_are_one_read_however_large_the_store():
         {"user": "User:u1", "relation": "owner", "object": "resource:r1"},
     ]
     calls: list[dict] = []
-    reads_before = _observed_reads()
 
     workspace_ids = await list_workspace_ids_for_member(_client(_fake_store(store, calls)), "u1")
 
     assert workspace_ids == ["mine", "shared"]
     assert len(calls) == 1
-    assert _observed_reads() == reads_before + 1
-
-
-def _observed_reads() -> float:
-    from prometheus_client import REGISTRY
-
-    count = REGISTRY.get_sample_value(
-        "agentarea_authz_duration_seconds_count", {"operation": "openfga_read"}
-    )
-    return count or 0.0

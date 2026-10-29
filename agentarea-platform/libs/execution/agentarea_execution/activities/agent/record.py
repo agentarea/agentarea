@@ -19,6 +19,7 @@ from temporalio.exceptions import ApplicationError
 
 from ...interfaces import ActivityDependencies
 from ...models import LogRow, RecordRequest, RecordResult
+from ...telemetry import record_run_transition
 from .events import ledger_lines, store_task_events
 from .task_state import task_outcome
 from .tool_audit import audit_line, tool_audit_entry
@@ -105,7 +106,9 @@ def make_record_activities(
                 session = container._database.async_session_factory()
                 ctx._sessions.append(session)
                 try:
-                    await TaskLog(session, user_context, container.log_body_store()).append(
+                    status_changed = await TaskLog(
+                        session, user_context, container.log_body_store()
+                    ).append(
                         UUID(request.task_id),
                         entries,
                         execution_id=request.execution_id,
@@ -126,6 +129,12 @@ def make_record_activities(
                         type="TaskLogRejected",
                         non_retryable=True,
                     ) from refused
+            if request.status is not None and status_changed:
+                record_run_transition(
+                    request.status.status,
+                    request.status.failure_reason,
+                    request.status.run_started_at,
+                )
             if stored:
                 # Kept only for the enterprise usage emitter, which reads
                 # llm.call.completed from the old task_events table.

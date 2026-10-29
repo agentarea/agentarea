@@ -50,6 +50,7 @@ from agentarea_common.auth.tool_authorization import (
 )
 from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.tool_cost import ToolConnection, ToolCostError
+from agentarea_execution.telemetry import ToolCall, ToolKind, ToolOutcome, ToolPath, tool_call
 from agentarea_execution.workflows.helpers import approvers_for_tool
 from agentarea_governance.domain.tool_call_approvals import GateVerdict, ToolCallRequest
 from agentarea_governance.tool_calls import (
@@ -784,6 +785,7 @@ async def _governed_call(
     resource_id: str,
     restricting_aliases: Sequence[str] = (),
     connection: ToolConnection | None = None,
+    kind: ToolKind,
 ) -> CallToolResult | ApprovalRequired:
     """Run one call through the tool-call layer, as a run's tool activity does.
 
@@ -791,6 +793,35 @@ async def _governed_call(
     balance, runs it and writes its cost lines, with this client and no task. A held
     call is passed to its approval here and, once approved, through the layer again.
     """
+    with tool_call(kind, ToolPath.API) as metered:
+        result = await _layered_call(
+            scope,
+            tool_name,
+            arguments,
+            invoke,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            restricting_aliases=restricting_aliases,
+            connection=connection,
+            metered=metered,
+        )
+        if isinstance(result, CallToolResult):
+            metered.answered(not result.is_error)
+        return result
+
+
+async def _layered_call(
+    scope: ClientScope,
+    tool_name: str,
+    arguments: dict,
+    invoke: Callable[[], Awaitable[ToolCallOutcome]],
+    *,
+    resource_type: str,
+    resource_id: str,
+    restricting_aliases: Sequence[str],
+    connection: ToolConnection | None,
+    metered: ToolCall,
+) -> CallToolResult | ApprovalRequired:
     user_ctx = scope.user_context
     call = GovernedToolCall(
         authorization=ToolAuthorizationRequest(
@@ -843,6 +874,9 @@ async def _governed_call(
             resource_id=resource_id,
         )
         if held is not None:
+            metered.outcome = (
+                ToolOutcome.HELD if isinstance(held, ApprovalRequired) else ToolOutcome.DENIED
+            )
             return held
         # The approval is already on record; only a later refusal is new.
         layered = await run_tool_call(
@@ -853,6 +887,7 @@ async def _governed_call(
             spend_gate=spend_gate,
         )
     if layered.verdict is not Verdict.RAN or layered.outcome is None:
+        metered.outcome = ToolOutcome.DENIED
         return _refusal(layered.decision.reason)
     return layered.outcome.value
 
@@ -909,6 +944,7 @@ async def call_instance_tool(
         resource_type="mcp_instance",
         resource_id=str(instance.id),
         connection=connection,
+        kind=ToolKind.MCP,
     )
 
 
@@ -971,6 +1007,7 @@ async def _run_openapi_operation(
         resource_id=resource_id,
         restricting_aliases=(operation, connection.name, str(connection.id)),
         connection=tool_connection,
+        kind=ToolKind.OPENAPI,
     )
 
 
@@ -1158,6 +1195,7 @@ async def _call_tool(_ctx: object, params: CallToolRequestParams) -> CallToolRes
         resource_type="client",
         resource_id=client_id,
         connection=connection,
+        kind=ToolKind.PLATFORM if is_platform_tool else ToolKind.MCP,
     )
     return _answer(result)
 

@@ -23,7 +23,7 @@ from agentarea_llm.domain.models import ModelInstance, ModelSpec, ProviderConfig
 from agentarea_secrets.models import EncryptedSecret
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-URL = "https://x.a2a.agentarea.ru"
+URL = "https://x.a2a.example.com"
 
 
 @pytest.fixture(autouse=True)
@@ -161,7 +161,7 @@ async def test_a_managed_secret_is_refused(session):
         await _service(session, admin=True).create_agent(_create([_remote(secret="oauth-token")]))
 
 
-@pytest.mark.parametrize("url", ["", "ftp://host/rpc", "agentarea.ru/rpc", "https://"])
+@pytest.mark.parametrize("url", ["", "ftp://host/rpc", "example.com/rpc", "https://"])
 async def test_a_remote_delegate_needs_an_http_url(session, url):
     with pytest.raises(InvalidDelegateError, match="a2a_url"):
         await _service(session, admin=True).create_agent(_create([_remote(url=url, secret=None)]))

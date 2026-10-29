@@ -3,7 +3,7 @@
 Integrates with existing AgentArea domain models and uses proper UUID types.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Any, Literal
@@ -604,6 +604,8 @@ class LLMCallRequest(BaseModel):
     cost_used: Money | None = None
     tokens_used: int | None = None
     service_cost_used: Money | None = None
+    # What the call is for, as the model-call metrics count it.
+    purpose: Literal["turn", "answer_check"] = "turn"
 
 
 class LLMUsage(BaseModel):
@@ -823,6 +825,8 @@ class UpdateTaskStatusRequest(BaseModel):
     conversation_pending: list[dict[str, Any]] = Field(default_factory=list)
     # Set when a conversation ends completed, so a later message can continue it.
     conversation_resume: ConversationResumeSnapshot | None = None
+    # When the run's continue-as-new chain started, for the run duration metric.
+    run_started_at: datetime | None = None
 
 
 class LogRow(BaseModel):

@@ -82,6 +82,7 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
 
         # A continued run reports its own start; the chain's timeout runs from this one.
         info = workflow.info()
+        self.state.run_started_at = info.workflow_start_time
         if info.execution_timeout:
             self.state.chain_expires_at = info.workflow_start_time + info.execution_timeout
 

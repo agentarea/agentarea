@@ -74,6 +74,7 @@ class ContinueAsNewMixin(CompactionMixin):
         self.state.activated_skills = state.activated_skills
         self.state.skill_tokens_used = state.skill_tokens_used
         self.state.chain_expires_at = state.chain_expires_at
+        self.state.run_started_at = state.run_started_at
         self.state.context_strategy = state.context_strategy
         self.state.history_chunk_counter = state.history_chunk_counter
         self.state.activated_tool_sources = state.activated_tool_sources
@@ -274,6 +275,7 @@ class ContinueAsNewMixin(CompactionMixin):
             activated_skills=self.state.activated_skills,
             skill_tokens_used=self.state.skill_tokens_used,
             chain_expires_at=self.state.chain_expires_at,
+            run_started_at=self.state.run_started_at,
             context_strategy=self.state.context_strategy,
             history_chunk_counter=self.state.history_chunk_counter,
             activated_tool_sources=self.state.activated_tool_sources,

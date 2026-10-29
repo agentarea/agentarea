@@ -52,6 +52,7 @@ from ...models import (
     ResolvedModelInfo,
     ResolveModelRequest,
 )
+from ...telemetry import LLMPurpose, llm_call
 from ...workflows.context_manager import (
     COMPACTION_SUMMARY_HEADER,
     compactable_prefix,
@@ -521,18 +522,23 @@ def make_llm_activities(
                     endpoint_policy=endpoint_policy_for(managed_by),
                     provider=ProviderProfile.from_mapping(provider_data),
                 )
-                async for chunk in llm_model.ainvoke_stream(summary_request):
-                    if chunk.content:
-                        complete_content += chunk.content
-                    if chunk.usage is not None:
-                        final_usage = chunk.usage
-                    if chunk.cost and chunk.cost > final_cost:
-                        final_cost = to_money(chunk.cost)
+                with llm_call(
+                    str(provider_type), str(model_name), LLMPurpose.COMPACTION
+                ) as metered:
+                    async for chunk in llm_model.ainvoke_stream(summary_request):
+                        metered.chunk()
+                        if chunk.content:
+                            complete_content += chunk.content
+                        if chunk.usage is not None:
+                            final_usage = chunk.usage
+                        if chunk.cost and chunk.cost > final_cost:
+                            final_cost = to_money(chunk.cost)
 
-                if final_usage is None or final_usage.total_tokens <= 0:
-                    raise RuntimeError(
-                        "compaction usage accounting unavailable; budget cannot be enforced"
-                    )
+                    if final_usage is None or final_usage.total_tokens <= 0:
+                        raise RuntimeError(
+                            "compaction usage accounting unavailable; budget cannot be enforced"
+                        )
+                    metered.usage(final_usage.prompt_tokens, final_usage.completion_tokens)
             except BaseException:
                 await release_model_hold(funding, "the compaction call did not complete")
                 raise

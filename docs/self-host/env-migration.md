@@ -71,6 +71,7 @@ configured. Delete them; there is no replacement.
 | `AGENTAREA_EVENT_TELEGRAM_ENABLED` | Telegram is no longer polled by a switch on the event service. A Telegram source of kind `poll` (or `webhook`) is created through the streams source API; the event service polls every poll source the catalog describes. |
 | `AGENTAREA_CHANNEL_OUT_STREAM`, `AGENTAREA_CHANNEL_OUT_GROUP`, `AGENTAREA_CHANNEL_OUT_DLQ` | The outbound stream is gone. Replies are sent by the `delivery` consumer group on `tasks.events`, whose names are fixed (`tasks.events`, `delivery`, `tasks.events.delivery.dlq`) like every other topic. |
 | `LITELLM_CALLBACKS`, `LITELLM_LOCAL_MODEL_COST_MAP` | The platform no longer uses the LiteLLM SDK; it calls models over its own OpenAI-compatible and Anthropic transports. |
+| `AGENTAREA_METRICS_ENABLED`, `AGENTAREA_METRICS_PORT` | The API no longer serves Prometheus metrics on a port of its own. Every process records OpenTelemetry metrics and pushes them over OTLP with its traces while `AGENTAREA_OTEL_ENABLED` is set; `OTEL_METRICS_EXPORTER=prometheus` serves them for scraping instead. In the chart, `global.monitoring.prometheus` and the backend's `metrics` port are gone: set `telemetry.enabled` and `telemetry.otlpEndpoint`. |
 | `AGENTAREA_K8S_MONITORING`, `AGENTAREA_K8S_PROMETHEUS`, `AGENTAREA_K8S_SERVICE_MONITOR` | They promised Prometheus metrics no MCP workload served; the first only added an unused `metrics` port to each instance Service. The mcp-manager pushes its own metrics over OTLP behind `AGENTAREA_OTEL_ENABLED`. |
 
 ## Changed defaults
@@ -367,8 +368,8 @@ topic and broker key.
 
 | Was | Is |
 |---|---|
-| `METRICS_ENABLED` | `AGENTAREA_METRICS_ENABLED` |
-| `METRICS_PORT` | `AGENTAREA_METRICS_PORT` |
+| `METRICS_ENABLED` | removed: see `AGENTAREA_METRICS_ENABLED` under Removed |
+| `METRICS_PORT` | removed: see `AGENTAREA_METRICS_PORT` under Removed |
 
 ### Logging
 

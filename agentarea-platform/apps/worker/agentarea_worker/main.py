@@ -26,7 +26,7 @@ from agentarea_common.config import (
 )
 from agentarea_common.events.factory import create_event_broker
 from agentarea_common.logging import setup_logging
-from agentarea_common.observability import get_temporal_plugins, setup_otel
+from agentarea_common.observability import get_temporal_plugins, setup_telemetry
 from agentarea_common.utils.outbound_tls import install_outbound_trust
 from agentarea_common.workflow.sandbox import create_workflow_runner
 from agentarea_execution import create_activities_for_worker
@@ -154,7 +154,9 @@ class AgentAreaWorker:
     async def connect(self) -> None:
         """Connect to Temporal server."""
         settings = get_settings()
-        setup_otel("agentarea-worker", settings.observability)
+        # Before the first Temporal client: it installs the runtime that exports
+        # the SDK's own metrics.
+        setup_telemetry("agentarea-worker", settings.observability)
         self.client = await Client.connect(
             **temporal_connect_config(),
             data_converter=pydantic_data_converter,

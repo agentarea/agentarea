@@ -67,12 +67,11 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         if self._client is None:
             try:
                 from agentarea_common.config import ObservabilitySettings, temporal_connect_config
-                from agentarea_common.observability import get_temporal_plugins, setup_otel
+                from agentarea_common.observability import get_temporal_plugins
                 from temporalio.client import Client
                 from temporalio.contrib.pydantic import pydantic_data_converter
 
                 observability_settings = ObservabilitySettings()
-                setup_otel("agentarea-agents", observability_settings)
                 connect_config = temporal_connect_config()
                 self._client = await Client.connect(
                     **connect_config,

@@ -55,6 +55,8 @@ The following table lists configurable parameters of the chart and their default
 | serviceAccount.name | string | `"agentarea"` |  |
 | nameOverride | string | `""` |  |
 | fullnameOverride | string | `""` |  |
+| telemetry.enabled | bool | `false` | Install tracing and metrics in every first-party process (AGENTAREA_OTEL_ENABLED). Off, nothing is emitted and nothing is required. |
+| telemetry.otlpEndpoint | string | `""` | OTLP/HTTP base URL of the collector, without a /v1/... path, e.g. http://otel-gateway.monitoring:4318. Required when telemetry.enabled. |
 | global.edition | string | `"community"` |  |
 | global.version | string | `"0.0.3"` |  |
 | global.cluster.type | string | `"kubernetes"` |  |
@@ -150,9 +152,6 @@ The following table lists configurable parameters of the chart and their default
 | global.workloads.resources.sidecarContainer.memory.limit | string | `"256Mi"` |  |
 | global.serviceMesh.enabled | bool | `false` |  |
 | global.serviceMesh.type | string | `"istio"` |  |
-| global.monitoring.prometheus.enabled | bool | `true` |  |
-| global.monitoring.prometheus.port | int | `9090` |  |
-| global.monitoring.prometheus.path | string | `"/metrics"` |  |
 | global.monitoring.health.enabled | bool | `true` |  |
 | global.monitoring.health.port | int | `8001` |  |
 | global.monitoring.health.path | string | `"/health"` |  |

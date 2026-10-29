@@ -3,7 +3,7 @@
 The catalog holds ~150k skills in production. The list, its total and the
 update check on forked skills used to join ``registries`` and compare
 ``ri.id::text``, which no index serves: three parallel seq scans of the whole
-catalog per request (0.7-4 s on RU prod), and items of inactive registries were
+catalog per request (0.7-4 s in production), and items of inactive registries were
 listed. Plans are checked with the planner's alternatives switched off, as in
 ``test_catalog_browse_plans_db.py``: if a seq scan or sort survives, no index
 can serve the query.

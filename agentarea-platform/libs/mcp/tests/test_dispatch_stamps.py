@@ -101,7 +101,9 @@ async def test_stopping_writes_what_was_queued(writes):
 def test_a_full_queue_drops_the_stamp_without_blocking_the_call(pending, monkeypatch):
     dropped = SimpleNamespace(count=0)
     monkeypatch.setattr(
-        dispatch_stamps._dropped_total, "inc", lambda: setattr(dropped, "count", dropped.count + 1)
+        dispatch_stamps,
+        "dispatch_stamp_dropped",
+        SimpleNamespace(add=lambda n: setattr(dropped, "count", dropped.count + n)),
     )
     for _ in range(4):
         record_dispatch(uuid4())

@@ -10,7 +10,11 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.extensions.customer_pricing import get_customer_pricing
 from agentarea_common.money import to_money
-from agentarea_tasks.infrastructure.task_log import ERROR_CLEARING_STATUSES, TaskOutcome
+from agentarea_tasks.infrastructure.task_log import (
+    ERROR_CLEARING_STATUSES,
+    TaskOutcome,
+    changes_status,
+)
 from temporalio import activity
 
 from ...interfaces import ActivityDependencies
@@ -26,6 +30,7 @@ from ...models import (
     UpdateTaskStatusRequest,
     UpdateTaskStatusResult,
 )
+from ...telemetry import record_run_transition
 
 if TYPE_CHECKING:
     from ..dependencies import ActivityServiceContainer
@@ -90,6 +95,7 @@ def make_task_state_activities(
         from .conversation import pending_entries
 
         user_context = create_user_context(request.user_context_data)
+        status_changed = False
         async with ActivityContext(container, user_context) as ctx:
             session = container._database.async_session_factory()
             ctx._sessions.append(session)
@@ -101,14 +107,14 @@ def make_task_state_activities(
                 )
             try:
                 outcome = task_outcome(request)
+                task = await task_repo.get_task(_UUID(request.task_id))
+                if task is None:
+                    return UpdateTaskStatusResult(success=False, error="Task not found")
                 additional_fields: dict[str, Any] = {}
                 if outcome.result is not None:
                     additional_fields["result"] = outcome.result
                 additional_fields.update(outcome.error_fields())
                 if outcome.metadata_patch is not None:
-                    task = await task_repo.get_task(_UUID(request.task_id))
-                    if task is None:
-                        return UpdateTaskStatusResult(success=False, error="Task not found")
                     additional_fields["metadata"] = {
                         **(task.metadata or {}),
                         **outcome.metadata_patch,
@@ -117,14 +123,17 @@ def make_task_state_activities(
                 updated = await task_repo.update_status(
                     _UUID(request.task_id), request.status, **additional_fields
                 )
-                if updated:
-                    return UpdateTaskStatusResult(success=True)
-                return UpdateTaskStatusResult(success=False, error="Task not found")
+                if not updated:
+                    return UpdateTaskStatusResult(success=False, error="Task not found")
+                status_changed = changes_status(task.status, outcome)
             except Exception as e:
                 # Raised, not returned: the workflow does not read the result, and
                 # only a raised error gets the retries that ride out an outage.
                 logger.error(f"Failed to update task status: {e}", exc_info=True)
                 raise
+        if status_changed:
+            record_run_transition(request.status, request.failure_reason, request.run_started_at)
+        return UpdateTaskStatusResult(success=True)
 
     @activity.defn
     async def update_task_governance_snapshot_activity(
