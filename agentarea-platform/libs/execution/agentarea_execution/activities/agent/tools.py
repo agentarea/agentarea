@@ -13,6 +13,7 @@ from agentarea_agents_sdk import ToolExecutor
 from agentarea_agents_sdk.tools.a2a_agent_tool import delegate_tool_name
 from agentarea_agents_sdk.tools.code_tools_loader import get_code_tool_class
 from agentarea_agents_sdk.tools.invocation_context import ToolInvocationContext
+from agentarea_agents_sdk.tools.mcp_app_ui import opens_app
 from agentarea_agents_sdk.tools.media_toolset import MEDIA_TOOLSET
 from agentarea_agents_sdk.tools.tool_builders import allowed_tool_names
 from agentarea_common.auth.tool_authorization import (
@@ -31,6 +32,7 @@ from agentarea_governance.tool_calls import (
     run_tool_call,
 )
 from agentarea_mcp.domain.metering import mcp_tool_connection
+from agentarea_mcp.domain.transport import MCPTransport
 from agentarea_mcp.tool_context import call_context_from_task
 from agentarea_tasks.domain.costs import tool_call_entry
 from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
@@ -141,6 +143,25 @@ def _activity_output_id(prefix: str) -> str:
         raw = prefix
     safe = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in raw)
     return f"{prefix}_{safe}"
+
+
+def _mcp_app_tool(instance: Any, raw_name: str) -> str | None:
+    """``raw_name`` when the instance's stored tool of that name opens an MCP App.
+
+    Bundles proxy member tool calls but not the members' ``ui://`` resources.
+    """
+    if getattr(instance, "transport", None) == MCPTransport.BUNDLE:
+        return None
+    json_spec = getattr(instance, "json_spec", None)
+    tools = getattr(instance, "tools", None) or (
+        json_spec.get("available_tools") if isinstance(json_spec, dict) else None
+    )
+    if not isinstance(tools, list):
+        return None
+    for tool in tools:
+        if isinstance(tool, dict) and tool.get("name") == raw_name:
+            return raw_name if opens_app(tool) else None
+    return None
 
 
 def _server_icon_from_instance(instance: Any) -> str | None:
@@ -1044,6 +1065,7 @@ def make_tools_activities(
                     server_icon=_server_icon_from_instance(instance),
                     structured_content=mcp_result.get("structured_content"),
                     structured_content_dropped=bool(mcp_result.get("structured_content_dropped")),
+                    mcp_app_tool=_mcp_app_tool(instance, route.raw_name),
                     images=image_refs,
                 )
 

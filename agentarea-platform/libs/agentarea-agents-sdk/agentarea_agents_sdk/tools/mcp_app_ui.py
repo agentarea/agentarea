@@ -53,3 +53,8 @@ def is_visible_to_model(tool: Mapping[str, Any]) -> bool:
 
 def is_callable_from_app(tool: Mapping[str, Any]) -> bool:
     return "app" in tool_visibility(tool)
+
+
+def opens_app(tool: Mapping[str, Any]) -> bool:
+    """Whether a call to ``tool`` opens an MCP App: a model-visible tool with a UI resource."""
+    return is_visible_to_model(tool) and tool_ui_resource_uri(tool) is not None

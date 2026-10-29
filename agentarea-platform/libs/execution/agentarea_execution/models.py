@@ -730,6 +730,9 @@ class MCPToolResult(BaseModel):
     # ``structured_content_dropped`` then says.
     structured_content: Any = None
     structured_content_dropped: bool = False
+    # The raw name of an MCP tool whose call opens an MCP App: the UI renders the
+    # app's view over this result. None for any other tool.
+    mcp_app_tool: str | None = None
     # Images the tool returned, stored with the task's offloaded context:
     # ``{"id", "mime_type", "size"}`` each, never the bytes.
     images: list[dict[str, Any]] = Field(default_factory=list)

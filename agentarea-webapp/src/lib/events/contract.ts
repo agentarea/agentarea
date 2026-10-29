@@ -143,7 +143,9 @@ export function canonicalType(eventType: string): string {
 
 /**
  * A notice marks a moment in the run (a context compaction), not output; a
- * message is a person's message entering the conversation.
+ * message is a person's message entering the conversation. An app is the MCP
+ * App view a tool result opens: no event has that kind, the transcript adds it
+ * after the result's tool row.
  */
 export type PartKind =
   | "llm"
@@ -152,7 +154,8 @@ export type PartKind =
   | "artifact"
   | "a2ui"
   | "notice"
-  | "message";
+  | "message"
+  | "app";
 
 const KIND_BY_TYPE: Record<string, PartKind> = {
   [LLM_STARTED]: "llm",

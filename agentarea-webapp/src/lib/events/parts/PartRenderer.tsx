@@ -1,4 +1,4 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import type {
   A2UIActionHandler,
   HumanInputSecretValue,
@@ -11,6 +11,9 @@ import { MessagePart } from "./MessagePart";
 import { NoticePart } from "./NoticePart";
 import { TextPart } from "./TextPart";
 import { ToolPart } from "./ToolPart";
+
+// The MCP Apps host (AppBridge, server actions) loads only for a transcript that opens an app.
+const McpAppPart = lazy(() => import("./McpAppPart"));
 
 interface PartRendererProps {
   part: Part;
@@ -59,6 +62,12 @@ export const PartRenderer: React.FC<PartRendererProps> = ({
       return <NoticePart part={part} />;
     case "message":
       return <MessagePart part={part} />;
+    case "app":
+      return (
+        <Suspense fallback={null}>
+          <McpAppPart part={part} />
+        </Suspense>
+      );
     case "a2ui":
       return (
         <A2uiPart

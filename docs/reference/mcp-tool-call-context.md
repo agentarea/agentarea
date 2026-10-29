@@ -197,6 +197,7 @@ instance `json_spec`), progress notifications included, then fails as
 | Embedded text resource | The model, as `[resource <uri>]` followed by its text |
 | `structuredContent` | The `tool.result` event as `structured_content`. The model does not read it. Over 16000 characters of JSON it is left out and the event carries `structured_content_dropped: true` |
 | `isError: true` | A failed `tool.result`; `content` is the error the model reads |
+| The tool's `_meta.ui.resourceUri` (an MCP App entry tool) | The successful `tool.result` event as `mcp_app_tool`, the raw tool name. The task conversation then renders the app's view under the call, fed this call's arguments, `content` and `structuredContent`; the tool is not called again. Bundle connections carry no `mcp_app_tool` |
 | `_meta["agentarea/replayed"]: true` | The `tool.result` event as `replayed: true`: the server answered from what it stored for this idempotency key rather than running the tool again |
 
 When `content` is empty, the model reads `structuredContent` as text instead.

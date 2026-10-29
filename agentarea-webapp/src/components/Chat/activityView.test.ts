@@ -240,6 +240,30 @@ describe("activity view", () => {
       )
     ).toEqual(["work", "visible", "work", "visible", "answer"]);
   });
+
+  it("shows an MCP App after the tool row that opened it", () => {
+    const opensApp: Part = {
+      partId: "t2",
+      kind: "tool",
+      eventType: "tool.result",
+      data: {
+        tool_name: "mcp__charts__show_chart",
+        success: true,
+        server_instance_id: "inst-1",
+        mcp_app_tool: "show_chart",
+      },
+    };
+    const parts = [tool("t1"), opensApp, tool("t3"), llm("a", "Done")];
+    const segments = buildActivitySegments(parts, [completed("run-1", parts)]);
+
+    expect(
+      segments.map((s) =>
+        s.kind === "work"
+          ? s.run.parts.map((p) => p.partId)
+          : `${s.part.kind}:${s.part.partId}`
+      )
+    ).toEqual([["t1", "t2"], "app:t2-app", ["t3"], "llm:a"]);
+  });
   it("uses late results and tolerates removed parts without hiding new work", () => {
     const segments = buildActivitySegments(
       [tool("t1", false), tool("t2")],

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import type { CallToolResult } from "@modelcontextprotocol/client";
 import {
   AppBridge,
   PostMessageTransport,
@@ -28,6 +29,10 @@ const PROXY_READY_TIMEOUT_MS = 15_000;
 // An app that throws before connecting (a blocked script, a bad bundle) never
 // initializes; without a bound the page would say "Loading" forever.
 const APP_INITIALIZE_TIMEOUT_MS = 30_000;
+// An inline frame takes the height its app reports, within these bounds.
+const INLINE_MIN_HEIGHT = 160;
+const INLINE_MAX_HEIGHT = 640;
+const INLINE_INITIAL_HEIGHT = 360;
 
 type McpAppFrameProps = {
   instanceId: string;
@@ -36,8 +41,16 @@ type McpAppFrameProps = {
   resource: McpAppUiResource;
   /** Must keep its identity between renders: a new object restarts the app. */
   entryArguments: Record<string, unknown>;
-  /** Receives the app's links to other UIs of its connection. */
-  onOpenApp: (link: McpAppLink) => void;
+  /**
+   * The entry tool's result when the call already ran, as an agent's call in a
+   * conversation did; the frame then shows it instead of calling the tool.
+   * Must keep its identity between renders, like `entryArguments`.
+   */
+  toolResult?: CallToolResult;
+  /** "inline" sizes the frame to its app, for a frame inside a conversation. */
+  displayMode?: "inline" | "fullscreen";
+  /** Receives the app's links to other UIs of its connection; without it they are refused. */
+  onOpenApp?: (link: McpAppLink) => void;
 };
 
 type RuntimeConfig = {
@@ -72,6 +85,8 @@ export default function McpAppFrame({
   title,
   resource,
   entryArguments,
+  toolResult,
+  displayMode = "fullscreen",
   onOpenApp,
 }: McpAppFrameProps) {
   const t = useTranslations("AppsPage");
@@ -82,6 +97,7 @@ export default function McpAppFrame({
   const [status, setStatus] = useState<"loading" | "running" | "error">(
     "loading"
   );
+  const [inlineHeight, setInlineHeight] = useState(INLINE_INITIAL_HEIGHT);
   const [failure, setFailure] = useState<{
     title: "configurationError" | "resourceError" | "toolError";
     message: string;
@@ -175,8 +191,16 @@ export default function McpAppFrame({
       const hostContext: McpUiHostContext = {
         ...readHostAppearance(),
         platform: "web",
-        displayMode: "fullscreen",
-        availableDisplayModes: ["fullscreen"],
+        displayMode,
+        availableDisplayModes: [displayMode],
+        ...(displayMode === "inline"
+          ? {
+              containerDimensions: {
+                width: iframe.clientWidth,
+                maxHeight: INLINE_MAX_HEIGHT,
+              },
+            }
+          : {}),
       };
       const bridge = new AppBridge(
         null,
@@ -190,12 +214,21 @@ export default function McpAppFrame({
       // for its own request, and the app keeps running.
       bridge.oncalltool = async (params) =>
         callMcpAppToolAction(instanceId, params.name, params.arguments ?? {});
-      // The host offers only fullscreen: the frame fills the page and the app
-      // scrolls inside it. Applying reported content heights here stretched
-      // the frame past its clipped container and cut tall apps off.
+      // Fullscreen: the frame fills the page and the app scrolls inside it.
+      // Applying reported content heights there stretched the frame past its
+      // clipped container and cut tall apps off. Inline, the frame follows them.
+      if (displayMode === "inline") {
+        bridge.addEventListener("sizechange", ({ height }) => {
+          if (disposed || height == null) return;
+          setInlineHeight(
+            Math.min(INLINE_MAX_HEIGHT, Math.max(INLINE_MIN_HEIGHT, height))
+          );
+        });
+      }
       bridge.onopenlink = async ({ url }) => {
         const appLink = parseMcpAppLink(url);
         if (appLink) {
+          if (!onOpenAppRef.current) return { isError: true };
           onOpenAppRef.current(appLink);
           return {};
         }
@@ -246,6 +279,10 @@ export default function McpAppFrame({
       await bridge.sendToolInput({ arguments: entryArguments });
       setStatus("running");
 
+      if (toolResult) {
+        await bridge.sendToolResult(toolResult);
+        return;
+      }
       const started = await startMcpAppAction(
         instanceId,
         toolName,
@@ -289,7 +326,7 @@ export default function McpAppFrame({
         }
       })();
     };
-  }, [entryArguments, instanceId, resource, toolName]);
+  }, [displayMode, entryArguments, instanceId, resource, toolName, toolResult]);
 
   useEffect(() => {
     const bridge = bridgeRef.current;
@@ -305,7 +342,10 @@ export default function McpAppFrame({
   }, [status]);
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div
+      className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background"
+      style={displayMode === "inline" ? { height: inlineHeight } : undefined}
+    >
       <iframe
         sandbox="allow-scripts allow-same-origin allow-forms"
         ref={iframeRef}
