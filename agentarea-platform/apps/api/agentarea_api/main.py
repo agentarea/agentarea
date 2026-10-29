@@ -418,9 +418,8 @@ def create_app() -> FastAPI:
         max_bytes=_get_settings().app.API_MAX_BODY,
     )
 
-    # Add CORS middleware. Origins are an explicit allowlist (never "*"): with
-    # allow_credentials=True a wildcard would reflect any origin for credentialed
-    # cross-site reads. Configure via AGENTAREA_CORS_ORIGINS.
+    # The API authenticates by bearer token only and never by cookie, so browsers
+    # are not allowed to send credentials and any origin may call it.
     from agentarea_common.config import get_settings
 
     _cors = get_settings().app
@@ -428,7 +427,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=_cors.cors_allowed_origins,
         allow_origin_regex=_cors.CORS_ORIGIN_REGEX,
-        allow_credentials=_cors.CORS_CREDENTIALS,
+        allow_credentials=False,
         allow_methods=_cors.cors_allowed_methods,
         allow_headers=_cors.cors_allowed_headers,
         max_age=_cors.CORS_MAX_AGE,
