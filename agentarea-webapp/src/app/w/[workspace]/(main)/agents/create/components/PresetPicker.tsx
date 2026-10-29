@@ -65,55 +65,65 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
   if (presets.length === 0) return null;
 
   const selected = presets.find((preset) => preset.id === selectedId);
-  // What picking the preset put into the form, said once under the tiles.
-  const filled = selected
-    ? [
-        selected.instruction ? t("filledInstruction") : null,
-        ...CONTENTS.map(({ key }) =>
-          selected[key].length
-            ? t(`filled.${key}`, { count: selected[key].length })
-            : null
-        ),
-      ].filter(Boolean)
-    : [];
+  // What picking a preset puts into the form, in words, for its tooltip.
+  const fillsOf = (preset: AgentPresetResponse) =>
+    [
+      preset.instruction ? t("filledInstruction") : null,
+      ...CONTENTS.map(({ key }) =>
+        preset[key].length
+          ? t(`filled.${key}`, { count: preset[key].length })
+          : null
+      ),
+    ].filter(Boolean);
 
   const tile = (
     id: string,
     title: string,
     icon: React.ReactNode,
     description: string | null | undefined,
-    contents?: React.ReactNode
+    contents: React.ReactNode,
+    fills: (string | null)[]
   ) => {
     const isSelected = id === selectedId;
     return (
-      <ChoiceTile
-        key={id}
-        className="items-center py-2"
-        title={
-          <span className="flex items-center gap-1.5">
-            <span className="truncate">{title}</span>
-            {isSelected && (
-              <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
-            )}
-          </span>
-        }
-        // One line under the name: the description, whole on hover, and what
-        // the preset brings at its end.
-        description={
-          <span className="flex items-center gap-2">
-            <span
-              className="min-w-0 flex-1 truncate"
-              title={description ?? undefined}
-            >
-              {description}
-            </span>
-            {contents && <span className="shrink-0">{contents}</span>}
-          </span>
-        }
-        icon={icon}
-        selected={isSelected}
-        onClick={() => onSelect(presets.find((p) => p.id === id) ?? null)}
-      />
+      <Tooltip key={id} delayDuration={300}>
+        <TooltipTrigger asChild>
+          {/* The tile keeps its button; the wrapper only anchors the tooltip. */}
+          <div className="min-w-0">
+            <ChoiceTile
+              className="w-full items-center py-2"
+              title={
+                <span className="flex items-center gap-1.5">
+                  <span className="truncate">{title}</span>
+                  {isSelected && (
+                    <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
+                  )}
+                </span>
+              }
+              // One line under the name: the description, whole on hover, and what
+              // the preset brings at its end.
+              description={
+                <span className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate">{description}</span>
+                  {contents && <span className="shrink-0">{contents}</span>}
+                </span>
+              }
+              icon={icon}
+              selected={isSelected}
+              onClick={() => onSelect(presets.find((p) => p.id === id) ?? null)}
+            />
+          </div>
+        </TooltipTrigger>
+        {/* The whole description, and what picking it puts in the form. */}
+        <TooltipContent className="max-w-xs space-y-1">
+          {description && <p>{description}</p>}
+          {fills.length > 0 && (
+            <p className="opacity-70">
+              {t("willFill", { items: fills.join(", ") })}
+            </p>
+          )}
+        </TooltipContent>
+      </Tooltip>
     );
   };
 
@@ -123,11 +133,11 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
         <FormLabel icon={LayoutTemplate}>{t("title")}</FormLabel>
         <span className="note">{t("hint")}</span>
       </div>
-      <div className="flex flex-col gap-2 sm:flex-row">
-        {/* Empty is no preset at all: a square at the head of the row,
+      <TooltipProvider>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {/* Empty is no preset at all: a square at the head of the row,
             picked while nothing else is; named in full on a phone, where the
             tiles stack, and on hover elsewhere. */}
-        <TooltipProvider>
           <Tooltip delayDuration={300}>
             <TooltipTrigger asChild>
               <button
@@ -155,49 +165,33 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
             </TooltipTrigger>
             <TooltipContent>{t("reset")}</TooltipContent>
           </Tooltip>
-        </TooltipProvider>
-        <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {presets.map((preset) =>
-            tile(
-              preset.id,
-              preset.name,
-              <EntityAvatar
-                hue={deterministicHue(preset.id)}
-                size={24}
-                iconScale={0.5}
-                icon={<LayoutTemplate strokeWidth={1.85} />}
-                aria-hidden
-              />,
-              preset.description,
-              <PresetContents preset={preset} />
-            )
-          )}
+          <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {presets.map((preset) =>
+              tile(
+                preset.id,
+                preset.name,
+                <EntityAvatar
+                  hue={deterministicHue(preset.id)}
+                  size={24}
+                  iconScale={0.5}
+                  icon={<LayoutTemplate strokeWidth={1.85} />}
+                  aria-hidden
+                />,
+                preset.description,
+                <PresetContents preset={preset} />,
+                fillsOf(preset)
+              )
+            )}
+          </div>
         </div>
-      </div>
-      {selected && (
-        // The picked preset on a quiet plate under the tiles: what it is for,
-        // what it put in, and any skill the catalog lacks, a line each.
-        <div
-          className="space-y-0.5 rounded-md bg-muted/50 px-3 py-2 text-xs leading-5 dark:bg-zinc-800/50"
-          role="status"
-        >
-          {selected.description && (
-            <p className="text-foreground/80">{selected.description}</p>
-          )}
-          {filled.length > 0 && (
-            <p className="text-muted-foreground">
-              {t("filledLine", { items: filled.join(", ") })}
-            </p>
-          )}
-          {!!selected.unavailable_skills?.length && (
-            <p className="flex items-center gap-1 text-amber-600 dark:text-amber-500">
-              <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
-              {t("unavailableSkills", {
-                skills: selected.unavailable_skills.join(", "),
-              })}
-            </p>
-          )}
-        </div>
+      </TooltipProvider>
+      {!!selected?.unavailable_skills?.length && (
+        <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-500">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          {t("unavailableSkills", {
+            skills: selected.unavailable_skills.join(", "),
+          })}
+        </p>
       )}
     </div>
   );

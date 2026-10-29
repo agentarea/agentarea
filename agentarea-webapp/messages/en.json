@@ -694,7 +694,7 @@
       "presets": {
         "title": "Start from",
         "loadFailed": "Could not load agent presets. Refresh the page or try again later.",
-        "unavailableSkills": "Not in the catalog: {skills}",
+        "unavailableSkills": "This preset expects skills the catalog does not have: {skills}",
         "hint": "A preset fills in the instruction, tools, skills and triggers; you can change all of it.",
         "filledInstruction": "the instruction",
         "filled": {
@@ -702,8 +702,8 @@
           "skills": "{count, plural, one {# skill} other {# skills}}",
           "triggers": "{count, plural, one {# trigger} other {# triggers}}"
         },
-        "filledLine": "The preset filled in {items}.",
-        "reset": "Start from scratch"
+        "reset": "Start from scratch",
+        "willFill": "Fills in {items}."
       },
       "toolGroups": {
         "sandbox": {
