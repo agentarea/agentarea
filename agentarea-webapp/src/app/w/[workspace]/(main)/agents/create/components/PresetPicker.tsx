@@ -175,23 +175,29 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
         </div>
       </div>
       {selected && (
-        // The picked preset in one run of text: what it is for, what it put
-        // in, and any skill the catalog lacks.
-        <p className="text-xs leading-5 text-muted-foreground" role="status">
+        // The picked preset on a quiet plate under the tiles: what it is for,
+        // what it put in, and any skill the catalog lacks, a line each.
+        <div
+          className="space-y-0.5 rounded-md bg-muted/50 px-3 py-2 text-xs leading-5 dark:bg-zinc-800/50"
+          role="status"
+        >
           {selected.description && (
-            <span className="text-foreground/80">{selected.description}</span>
+            <p className="text-foreground/80">{selected.description}</p>
           )}
-          {selected.description && filled.length > 0 && " · "}
-          {filled.length > 0 && t("filledLine", { items: filled.join(", ") })}
+          {filled.length > 0 && (
+            <p className="text-muted-foreground">
+              {t("filledLine", { items: filled.join(", ") })}
+            </p>
+          )}
           {!!selected.unavailable_skills?.length && (
-            <span className="ml-2 inline-flex items-center gap-1 text-amber-600 dark:text-amber-500">
+            <p className="flex items-center gap-1 text-amber-600 dark:text-amber-500">
               <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
               {t("unavailableSkills", {
                 skills: selected.unavailable_skills.join(", "),
               })}
-            </span>
+            </p>
           )}
-        </p>
+        </div>
       )}
     </div>
   );
