@@ -146,7 +146,8 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
                 aria-label={t("reset")}
                 onClick={() => onSelect(null)}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:shrink-0 sm:justify-center sm:px-0 sm:py-0 sm:w-12",
+                  // One tile tall however many rows the presets wrap to.
+                  "flex items-center gap-2.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-[54px] sm:w-12 sm:shrink-0 sm:self-start sm:justify-center sm:px-0 sm:py-0",
                   !selected
                     ? "border-primary bg-primary/5"
                     : "hover:bg-muted/50"
