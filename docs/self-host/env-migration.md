@@ -48,6 +48,7 @@ configured. Delete them; there is no replacement.
 |---|---|
 | `ENCRYPTION_KEY` | Never read. The live key is `AGENTAREA_SECRET_ENCRYPTION_KEY`. |
 | `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_REGION` | Kept "for local scripts"; no such script exists. |
+| `AGENTAREA_CORS_CREDENTIALS` | The API authenticates by bearer token, never by cookie, so browsers are never allowed to send credentials. `AGENTAREA_CORS_ORIGINS` now defaults to `*`. |
 | `MCP_MANAGER_BASE_URL`, `MCP_MANAGER_API_KEY`, `MCP_MANAGER_TIMEOUT`, `MCP_MANAGER_MAX_RETRIES` | A second, never-set channel for the address `AGENTAREA_MCP_MANAGER_URL` already carries. |
 | `RELOAD` | Was never wired to the `--reload` option. Reload stays a local flag. |
 | `LLM_DOCKER_HOST` | Set for the worker in compose; only integration tests read it. |

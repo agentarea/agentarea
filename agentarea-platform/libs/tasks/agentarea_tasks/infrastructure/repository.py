@@ -353,6 +353,21 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         result = await self.session.execute(stmt)
         return [self._orm_to_domain(t) for t in result.scalars().all()]
 
+    async def latest_in_a2a_context(self, agent_id: UUID, context_id: str) -> Task | None:
+        """The newest task of ``agent_id`` an A2A client started in ``context_id``."""
+        stmt = (
+            select(TaskORM)
+            .where(
+                self._get_workspace_filter(),
+                TaskORM.agent_id == agent_id,
+                TaskORM.task_metadata["a2a_context_id"].as_string() == context_id,
+            )
+            .order_by(TaskORM.created_at.desc())
+            .limit(1)
+        )
+        task_orm = (await self.session.execute(stmt)).scalars().first()
+        return self._orm_to_domain(task_orm) if task_orm is not None else None
+
     async def unfinished_runs_from(
         self, origin_type: str, origin_id: str
     ) -> list[tuple[UUID, str | None]]:

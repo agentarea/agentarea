@@ -31,20 +31,18 @@ groups:
         key: "redis-password"
 
   storage:
-    # Only include storage config when RustFS is enabled
-    conditional: '{{ .Values.rustfs.enabled }}'
     configVars:
       AGENTAREA_S3_REGION: '{{ .Values.global.storage.region }}'
       AGENTAREA_S3_BUCKET: '{{ .Values.global.storage.bucket }}'
       AGENTAREA_S3_ARTIFACTS_BUCKET: '{{ .Values.global.storage.bucket }}'
-      AGENTAREA_S3_ENDPOINT: 'http://{{ include "agentarea.rustfs.host" . }}:9000'
+      AGENTAREA_S3_ENDPOINT: '{{ include "agentarea.storage.endpoint" . }}'
     secrets:
       - name: AGENTAREA_S3_ACCESS_KEY
-        secretName: "{{ .Values.global.secrets.rustfs }}"
-        key: "root-user"
+        secretName: '{{ include "agentarea.storage.credentialsSecret" . }}'
+        key: '{{ include "agentarea.storage.accessKeyKey" . }}'
       - name: AGENTAREA_S3_SECRET_KEY
-        secretName: "{{ .Values.global.secrets.rustfs }}"
-        key: "root-password"
+        secretName: '{{ include "agentarea.storage.credentialsSecret" . }}'
+        key: '{{ include "agentarea.storage.secretKeyKey" . }}'
 
   temporal:
     configVars:

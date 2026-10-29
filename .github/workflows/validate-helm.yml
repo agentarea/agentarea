@@ -142,6 +142,14 @@ jobs:
       - name: Verify no container declares a duplicate env name
         run: scripts/test-no-duplicate-env-helm.sh
 
+      - name: Render chart against an external object store
+        run: |  # pragma: allowlist secret
+          helm template release-name charts/agentarea \
+            --set rustfs.enabled=false \
+            --set global.storage.endpoint=https://s3.example.com \
+            --set global.storage.existingSecret=object-store \
+            | grep -F 'AGENTAREA_S3_ENDPOINT: "https://s3.example.com"' >/dev/null
+
       - name: Lint data-plane chart
         run: helm lint charts/agentarea-dataplane --set dataPlane.id=ci --set dataPlane.auth.existingSecret=ci  # pragma: allowlist secret
 
