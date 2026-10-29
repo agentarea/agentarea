@@ -165,7 +165,7 @@ export function GroupedSelect({
           // Bordered and filled like an Input beside it, not like an outline
           // button: the same line in both themes, no tint on hover.
           className={cn(
-            "w-full justify-between rounded-md border-input bg-white px-3 text-foreground shadow-none hover:border-input hover:bg-white hover:text-foreground focus:border-primary focus-visible:border-primary focus-visible:ring-0 aria-[invalid=true]:border-destructive dark:border-input dark:bg-zinc-900 dark:hover:border-input dark:hover:bg-zinc-900 dark:focus:border-accent-foreground dark:focus-visible:border-accent-foreground",
+            "w-full justify-between rounded-md border-input bg-white px-3 text-foreground shadow-none hover:border-input hover:bg-white hover:text-foreground focus:border-primary focus-visible:border-primary focus-visible:ring-0 aria-[invalid=true]:border-destructive dark:border-zinc-700 dark:bg-zinc-900/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/60 dark:focus:border-accent-foreground dark:focus-visible:border-accent-foreground",
             className
           )}
           disabled={disabled}
