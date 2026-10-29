@@ -40,13 +40,14 @@ const CONTENTS: { key: "tools" | "skills" | "triggers"; icon: LucideIcon }[] = [
 ];
 
 /**
- * Two rows of tiles before "show all": four while the grid is one or two
- * columns wide, six at three. The Empty tile counts as one.
+ * Presets shown before "show all", two rows of them: three below `lg`, where
+ * the Empty tile takes the grid's first cell, six at `lg`, where Empty is the
+ * small square beside the grid.
  */
-const SHOWN_NARROW = 4;
+const SHOWN_NARROW = 3;
 const SHOWN_WIDE = 6;
 
-/** Which tiles wait behind "show all", by their place in the grid. */
+/** Whether a preset waits behind "show all", by its place in the list. */
 function hiddenUntilExpanded(index: number) {
   if (index >= SHOWN_WIDE) return "hidden";
   if (index >= SHOWN_NARROW) return "hidden lg:block";
@@ -159,62 +160,90 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
         <span className="note">{t("hint")}</span>
       </div>
       <TooltipProvider>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Empty is no preset at all: the first tile, picked while nothing
-              else is. */}
-          <ChoiceTile
-            className="items-center py-2"
-            icon={
-              <EntityAvatar
-                variant="soft"
-                size={24}
-                iconScale={0.5}
-                icon={<FilePlus2 strokeWidth={1.85} />}
-                aria-hidden
-              />
-            }
-            title={
-              <span className="flex items-center gap-1.5">
-                <span className="truncate">{t("reset")}</span>
-                {!selected && (
-                  <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
+        <div className="flex gap-2">
+          {/* Empty is no preset at all, picked while nothing else is. On a
+              desktop it is a square one tile tall beside the grid; narrower,
+              it is the grid's first tile. */}
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-pressed={!selected}
+                aria-label={t("reset")}
+                onClick={() => onSelect(null)}
+                className={cn(
+                  "hidden h-[54px] w-12 shrink-0 items-center justify-center self-start rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:flex",
+                  !selected
+                    ? "border-primary bg-primary/5"
+                    : "hover:bg-muted/50"
                 )}
-              </span>
-            }
-            description={
-              <span className="block truncate">{t("emptyDescription")}</span>
-            }
-            selected={!selected}
-            onClick={() => onSelect(null)}
-          />
-          {presets.map((preset, index) =>
-            tile(
-              preset.id,
-              preset.name,
-              <EntityAvatar
-                hue={deterministicHue(preset.id)}
-                size={24}
-                iconScale={0.5}
-                icon={<LayoutTemplate strokeWidth={1.85} />}
-                aria-hidden
-              />,
-              preset.description,
-              <PresetContents preset={preset} />,
-              fillsOf(preset),
-              index + 1
-            )
-          )}
+              >
+                <EntityAvatar
+                  variant="soft"
+                  size={24}
+                  iconScale={0.5}
+                  color={!selected ? "hsl(var(--primary))" : undefined}
+                  icon={<FilePlus2 strokeWidth={1.85} />}
+                  aria-hidden
+                />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{t("reset")}</TooltipContent>
+          </Tooltip>
+          <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <ChoiceTile
+              className="items-center py-2 lg:hidden"
+              icon={
+                <EntityAvatar
+                  variant="soft"
+                  size={24}
+                  iconScale={0.5}
+                  icon={<FilePlus2 strokeWidth={1.85} />}
+                  aria-hidden
+                />
+              }
+              title={
+                <span className="flex items-center gap-1.5">
+                  <span className="truncate">{t("reset")}</span>
+                  {!selected && (
+                    <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
+                  )}
+                </span>
+              }
+              description={
+                <span className="block truncate">{t("emptyDescription")}</span>
+              }
+              selected={!selected}
+              onClick={() => onSelect(null)}
+            />
+            {presets.map((preset, index) =>
+              tile(
+                preset.id,
+                preset.name,
+                <EntityAvatar
+                  hue={deterministicHue(preset.id)}
+                  size={24}
+                  iconScale={0.5}
+                  icon={<LayoutTemplate strokeWidth={1.85} />}
+                  aria-hidden
+                />,
+                preset.description,
+                <PresetContents preset={preset} />,
+                fillsOf(preset),
+                index
+              )
+            )}
+          </div>
         </div>
       </TooltipProvider>
-      {presets.length + 1 > SHOWN_NARROW && (
+      {presets.length > SHOWN_NARROW && (
         <Button
           type="button"
           variant="ghost"
           size="xs"
-          // Three columns fit six tiles in two rows; below that, four.
           className={cn(
             "px-2 text-muted-foreground hover:text-foreground",
-            presets.length + 1 <= SHOWN_WIDE && "lg:hidden"
+            presets.length <= SHOWN_WIDE && "lg:hidden"
           )}
           onClick={() => setExpanded((open) => !open)}
         >
