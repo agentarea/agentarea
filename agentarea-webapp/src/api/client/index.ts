@@ -397,6 +397,7 @@ export type {
   AgentOverviewResponse,
   AgentPresetResponse,
   AgentResponse,
+  AgentSpend,
   AgentToolConfig,
   AgentToolSettings,
   AgentUpdate,

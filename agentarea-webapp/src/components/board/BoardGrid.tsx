@@ -71,12 +71,15 @@ export function BoardGrid({
   topRight,
   bottomLeft,
   bottomRight,
+  topLeftPadded = true,
   topRightPadded = true,
   leftFraction = 0.6,
   className,
 }: {
   topLeft: ReactNode;
   topRight: ReactNode;
+  /** Off for a full-bleed list that draws its own padding. */
+  topLeftPadded?: boolean;
   /** Off for a full-bleed list that draws its own padding. */
   topRightPadded?: boolean;
   bottomLeft: ReactNode;
@@ -95,7 +98,7 @@ export function BoardGrid({
       <div className="flex flex-col lg:grid" style={gridStyle}>
         {/* top-left */}
         <BoardCell
-          padded
+          padded={topLeftPadded}
           className={cn("border-b", dashed, "lg:border-r")}
           markers={
             <>

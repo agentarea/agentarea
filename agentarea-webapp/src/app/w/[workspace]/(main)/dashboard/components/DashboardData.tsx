@@ -35,18 +35,20 @@ export async function DashboardData() {
 
   return (
     <BoardGrid
-      topLeft={
-        <SpendCard
-          spend={data.spend}
-          trend={data.daily_spend}
-          currency={currency}
-          compact
-        />
-      }
+      topLeft={<BlockersPanel blockers={data.blockers} currency={currency} />}
+      topLeftPadded={false}
       topRight={
         <>
           <BalanceSection />
-          <BlockersPanel blockers={data.blockers} currency={currency} />
+          <div className="flex min-h-0 flex-1 flex-col px-6 pb-4 pt-3.5">
+            <SpendCard
+              spend={data.spend}
+              trend={data.daily_spend}
+              topAgents={data.top_agents}
+              currency={currency}
+              compact
+            />
+          </div>
         </>
       }
       topRightPadded={false}

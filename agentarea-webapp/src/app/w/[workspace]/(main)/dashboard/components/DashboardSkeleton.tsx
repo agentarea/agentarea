@@ -24,7 +24,7 @@ function SpendSkeleton() {
           <Skeleton className="mt-1 h-[5px] w-[150px] rounded-full" />
         </div>
       </div>
-      <Skeleton className="-mx-6 mt-1 h-[188px] rounded-none" />
+      <Skeleton className="-mx-6 mt-1 h-[150px] rounded-none" />
     </div>
   );
 }
@@ -84,14 +84,19 @@ export default function DashboardSkeleton() {
   return (
     <div aria-hidden="true">
       <BoardGrid
-        topLeft={<SpendSkeleton />}
-        topRight={
+        topLeft={
           <ListSkeleton
             icon={<Shield />}
             color="hsl(var(--foreground))"
             title={t("blockers")}
             rows={3}
           />
+        }
+        topLeftPadded={false}
+        topRight={
+          <div className="flex min-h-0 flex-1 flex-col px-6 pb-4 pt-3.5">
+            <SpendSkeleton />
+          </div>
         }
         topRightPadded={false}
         bottomLeft={<CalendarSkeleton />}

@@ -890,6 +890,36 @@
         "title": "AgentResponse",
         "type": "object"
       },
+      "AgentSpend": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
+          "usd": {
+            "title": "Usd",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_id",
+          "usd"
+        ],
+        "title": "AgentSpend",
+        "type": "object"
+      },
       "AgentToolConfig": {
         "properties": {
           "name": {
@@ -3935,6 +3965,13 @@
           },
           "spend": {
             "$ref": "#/components/schemas/SpendCard"
+          },
+          "top_agents": {
+            "items": {
+              "$ref": "#/components/schemas/AgentSpend"
+            },
+            "title": "Top Agents",
+            "type": "array"
           }
         },
         "required": [
@@ -3943,7 +3980,8 @@
           "active_tasks",
           "recent_tasks",
           "schedule",
-          "daily_spend"
+          "daily_spend",
+          "top_agents"
         ],
         "title": "DashboardResponse",
         "type": "object"

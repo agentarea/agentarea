@@ -105,6 +105,15 @@ export const zAgentCardSummary = z.object({
 });
 
 /**
+ * AgentSpend
+ */
+export const zAgentSpend = z.object({
+  agent_id: z.uuid(),
+  agent_name: z.string().nullish(),
+  usd: z.string(),
+});
+
+/**
  * AgentToolSettings
  *
  * Settings for an agent-to-agent (delegation) tool.
@@ -4409,6 +4418,7 @@ export const zDashboardResponse = z.object({
   recent_tasks: z.array(zDashboardTask),
   schedule: zSchedule,
   spend: zSpendCard,
+  top_agents: z.array(zAgentSpend),
 });
 
 /**

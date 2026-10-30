@@ -1,7 +1,7 @@
 """Workspace dashboard endpoint.
 
 Single round-trip aggregate that powers the post-login `/dashboard` page:
-spend (today / MTD / cap / projection), org blockers (HITL, runs waiting to
+spend (today / MTD / cap / projection, the top agents), org blockers (HITL, runs waiting to
 continue, blocked and failed runs in the last 24h, exhausted wallets),
 running and recently finished tasks, and the schedule for the weeks ahead
 (cron triggers and tasks booked for a later moment).
@@ -95,6 +95,7 @@ FINISHED_TASK_STATUSES = _statuses("finished", "blocked")
 SCHEDULED_TASK_STATUSES = _statuses("schedule")
 TASK_LIST_LIMIT = 10
 BLOCKER_LIST_LIMIT = 20
+TOP_AGENTS_LIMIT = 3
 
 DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session, scope="function")]
 
@@ -211,6 +212,13 @@ class DailySpendPoint(BaseModel):
     usd: Money
 
 
+class AgentSpend(BaseModel):
+    agent_id: UUID
+    # None when the agent no longer resolves — never a fabricated placeholder.
+    agent_name: str | None = None
+    usd: Money
+
+
 class DashboardResponse(BaseModel):
     spend: SpendCard
     blockers: Blockers
@@ -218,6 +226,8 @@ class DashboardResponse(BaseModel):
     recent_tasks: list[DashboardTask]
     schedule: Schedule
     daily_spend: list[DailySpendPoint]
+    # The agents that spent the most this month, highest first.
+    top_agents: list[AgentSpend]
 
 
 _MONEY = TypeAdapter(Money)
@@ -454,6 +464,12 @@ async def get_dashboard(
     agents_q = select(Agent.id, Agent.name).where(Agent.workspace_id == workspace_id)
     agent_rows = (await db_session.execute(agents_q)).all()
     agent_name_by_id: dict[UUID, str] = {row.id: row.name for row in agent_rows}
+    top_agents = [
+        AgentSpend(agent_id=agent_id, agent_name=agent_name_by_id.get(agent_id), usd=amount)
+        for agent_id, amount in await cost_lines.top_agents_since(
+            month_start, currency=billing_currency, limit=TOP_AGENTS_LIMIT
+        )
+    ]
 
     # ----- blockers: waiting on a person (one query, split by status) -----
     waiting_q = (
@@ -581,6 +597,7 @@ async def get_dashboard(
         recent_tasks=recent_tasks,
         schedule=schedule,
         daily_spend=daily_spend,
+        top_agents=top_agents,
     )
 
 

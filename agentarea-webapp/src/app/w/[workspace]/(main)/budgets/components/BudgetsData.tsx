@@ -53,6 +53,7 @@ export async function BudgetsData() {
         <SpendCard
           spend={data.spend}
           trend={data.daily_spend}
+          topAgents={data.top_agents}
           currency={currency}
           compact
         />

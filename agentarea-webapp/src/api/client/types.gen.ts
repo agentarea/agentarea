@@ -494,6 +494,24 @@ export type AgentResponse = {
 };
 
 /**
+ * AgentSpend
+ */
+export type AgentSpend = {
+  /**
+   * Agent Id
+   */
+  agent_id: string;
+  /**
+   * Agent Name
+   */
+  agent_name?: string | null;
+  /**
+   * Usd
+   */
+  usd: string;
+};
+
+/**
  * AgentToolConfig
  */
 export type AgentToolConfig = {
@@ -2226,6 +2244,10 @@ export type DashboardResponse = {
   recent_tasks: Array<DashboardTask>;
   schedule: Schedule;
   spend: SpendCard;
+  /**
+   * Top Agents
+   */
+  top_agents: Array<AgentSpend>;
 };
 
 /**
