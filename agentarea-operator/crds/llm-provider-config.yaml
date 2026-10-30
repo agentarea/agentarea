@@ -93,6 +93,11 @@ spec:
                       supportsReasoning:
                         type: boolean
                         description: "The model produces reasoning"
+                      reasoningEfforts:
+                        type: array
+                        items:
+                          type: string
+                        description: "The reasoning levels the model takes (reasoning_effort); unset defers to the provider"
                       # The PROVIDER's price to us, per token, and the reason these
                       # are here rather than left to the catalog: the runtime refuses
                       # to run a model whose cost per token is unset, and anything we

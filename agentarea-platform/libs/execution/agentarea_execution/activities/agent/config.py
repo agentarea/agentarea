@@ -509,6 +509,7 @@ def make_config_activities(
                 planning=agent.planning if agent.planning is not None else False,
                 a2ui_enabled=agent.a2ui_enabled if agent.a2ui_enabled is not None else False,
                 reasoning_effort=agent.reasoning_effort,
+                reasoning_max_tokens=agent.reasoning_max_tokens,
                 answer_check=agent.answer_check,
                 execution_context=execution_context,
                 step_type=request.step_type,

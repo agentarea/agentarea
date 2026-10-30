@@ -67,6 +67,13 @@ class InvalidDelegateError(ValueError):
     """Raised when an agent tool names a delegate the runtime could not use."""
 
 
+class ReasoningConflictError(ValueError):
+    """Raised when an edit leaves an agent with both a reasoning level and a token budget."""
+
+    def __init__(self) -> None:
+        super().__init__("set reasoning_effort or reasoning_max_tokens, not both")
+
+
 def _credential_bindings(tools: list[dict] | None) -> set[tuple[str, str, str]]:
     """Each ``(delegate, a2a_url, secret)`` a tool config sends a secret to."""
     bindings = set()
@@ -453,6 +460,7 @@ class AgentService(BaseCrudService[Agent]):
             planning=payload.planning,
             a2ui_enabled=payload.a2ui_enabled,
             reasoning_effort=payload.reasoning_effort,
+            reasoning_max_tokens=payload.reasoning_max_tokens,
             answer_check=(
                 payload.answer_check.model_dump(exclude_none=True) if payload.answer_check else None
             ),
@@ -478,6 +486,7 @@ class AgentService(BaseCrudService[Agent]):
                 planning=agent.planning,
                 a2ui_enabled=agent.a2ui_enabled,
                 reasoning_effort=agent.reasoning_effort,
+                reasoning_max_tokens=agent.reasoning_max_tokens,
             )
         )
 
@@ -596,6 +605,11 @@ class AgentService(BaseCrudService[Agent]):
             raise AgentArchivedError(agent.id)
 
         patch = payload.model_dump(exclude_unset=True)
+        if {"reasoning_effort", "reasoning_max_tokens"} & patch.keys() and (
+            patch.get("reasoning_effort", agent.reasoning_effort)
+            and patch.get("reasoning_max_tokens", agent.reasoning_max_tokens)
+        ):
+            raise ReasoningConflictError()
         tools_edited = "tools" in patch and payload.tools is not None
         edited_tools = [t.model_dump(exclude_none=True) for t in (payload.tools or [])]
         if tools_edited:
@@ -630,6 +644,8 @@ class AgentService(BaseCrudService[Agent]):
             agent.a2ui_enabled = patch["a2ui_enabled"]
         if "reasoning_effort" in patch:
             agent.reasoning_effort = patch["reasoning_effort"]
+        if "reasoning_max_tokens" in patch:
+            agent.reasoning_max_tokens = patch["reasoning_max_tokens"]
         if "answer_check" in patch:
             agent.answer_check = (
                 payload.answer_check.model_dump(exclude_none=True) if payload.answer_check else None
@@ -656,6 +672,7 @@ class AgentService(BaseCrudService[Agent]):
                 planning=agent.planning,
                 a2ui_enabled=agent.a2ui_enabled,
                 reasoning_effort=agent.reasoning_effort,
+                reasoning_max_tokens=agent.reasoning_max_tokens,
             )
         )
 

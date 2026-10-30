@@ -7,7 +7,7 @@ from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from agentarea_common.model_override import check_model_override
-from agentarea_common.reasoning_effort import check_reasoning_effort
+from agentarea_common.reasoning_effort import check_reasoning
 from agentarea_common.reserved_task_parameters import (
     drop_reserved_parameters,
     reject_reserved_parameters,
@@ -282,7 +282,7 @@ class TriggerCreate(BaseModel):
 
     _reject_reserved_parameters = field_validator("task_parameters")(reject_reserved_parameters)
     _check_model_override = field_validator("task_parameters")(check_model_override)
-    _check_reasoning_effort = field_validator("task_parameters")(check_reasoning_effort)
+    _check_reasoning = field_validator("task_parameters")(check_reasoning)
 
     @model_validator(mode="after")
     def validate_trigger_type_fields(self) -> TriggerCreate:

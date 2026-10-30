@@ -208,6 +208,7 @@ def make_llm_activities(
             managed_by = getattr(model_instance.provider_config, "managed_by", None)
             display_name = getattr(model_instance.model_spec, "display_name", None)
             supports_vision = getattr(model_instance.model_spec, "supports_vision", None)
+            reasoning_efforts = getattr(model_instance.model_spec, "reasoning_efforts", None)
             provider_display_name = getattr(
                 model_instance.provider_config.provider_spec, "display_name", None
             )
@@ -228,6 +229,7 @@ def make_llm_activities(
             cache_creation_input_cost_per_token=cache_creation_input_cost_per_token,
             display_name=display_name,
             supports_vision=supports_vision,
+            reasoning_efforts=reasoning_efforts,
             provider_display_name=provider_display_name,
             provider=provider,
             resolved_at=datetime.now(UTC).isoformat(),

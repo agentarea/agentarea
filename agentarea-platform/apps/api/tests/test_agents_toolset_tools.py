@@ -15,6 +15,7 @@ from uuid import uuid4
 
 import agentarea_common.auth.permission as permission
 import pytest
+from agentarea_agents.application.agent_service import ReasoningConflictError
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
 from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.tools import agents_toolset
@@ -111,6 +112,41 @@ async def test_update_sets_or_clears_the_reasoning_effort_and_omitting_it_keeps_
 
 
 @pytest.mark.asyncio
+async def test_create_passes_the_reasoning_token_budget(service):
+    await AgentsToolset().create(
+        name="Ops", model_id=str(uuid4()), tools=[], reasoning_max_tokens=2048
+    )
+
+    assert service.create_agent.await_args.args[0].reasoning_max_tokens == 2048
+
+
+@pytest.mark.asyncio
+async def test_update_sets_or_clears_the_token_budget_and_omitting_it_keeps_it(service):
+    await AgentsToolset().update(str(uuid4()), reasoning_max_tokens=2048)
+    assert service.update_agent.await_args.args[1].model_dump(exclude_unset=True) == {
+        "reasoning_max_tokens": 2048
+    }
+
+    await AgentsToolset().update(str(uuid4()), reasoning_max_tokens=None)
+    assert service.update_agent.await_args.args[1].model_dump(exclude_unset=True) == {
+        "reasoning_max_tokens": None
+    }
+
+    await AgentsToolset().update(str(uuid4()), name="Ops")
+    assert "reasoning_max_tokens" not in service.update_agent.await_args.args[1].model_dump(
+        exclude_unset=True
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_reports_a_level_and_budget_conflict_as_a_tool_error(service):
+    service.update_agent.side_effect = ReasoningConflictError()
+
+    with pytest.raises(ToolError, match="not both"):
+        await AgentsToolset().update(str(uuid4()), reasoning_max_tokens=2048)
+
+
+@pytest.mark.asyncio
 async def test_get_returns_the_reasoning_effort(monkeypatch):
     @asynccontextmanager
     async def _read_ctx():
@@ -124,6 +160,7 @@ async def test_get_returns_the_reasoning_effort(monkeypatch):
         instruction=None,
         agent_type="stateless",
         reasoning_effort="low",
+        reasoning_max_tokens=None,
     )
     service = MagicMock(get=AsyncMock(return_value=agent))
     monkeypatch.setattr(agents_toolset, "platform_read_context", _read_ctx)
@@ -134,3 +171,4 @@ async def test_get_returns_the_reasoning_effort(monkeypatch):
         result = json.loads(await AgentsToolset().get(str(agent.id)))
 
     assert result["reasoning_effort"] == "low"
+    assert result["reasoning_max_tokens"] is None

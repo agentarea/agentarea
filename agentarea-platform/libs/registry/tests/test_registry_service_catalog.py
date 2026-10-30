@@ -445,6 +445,17 @@ class TestParseLLMProviders:
         assert "auth" not in gemini
         assert not set(PROVIDER_CONTRACT_FIELDS) & set(legacy)
 
+    def test_carries_the_reasoning_levels_the_entry_states(self):
+        data = {"providers": [{"provider_key": "openrouter", "reasoning_efforts": ["low", "xhigh"]}]}
+
+        spec = RegistryService._parse_llm_providers(data)[0]["spec"]
+
+        assert RegistryService._provider_contract(spec)["reasoning_efforts"] == ["low", "xhigh"]
+
+    def test_malformed_reasoning_levels_are_refused(self):
+        with pytest.raises(ValueError, match="list of level names"):
+            RegistryService._provider_contract({"reasoning_efforts": "low"})
+
     def test_a_contract_value_is_checked_before_it_is_stored(self):
         with pytest.raises(ValueError, match="carrier-pigeon"):
             RegistryService._provider_contract({"transport": "carrier-pigeon"})
@@ -538,6 +549,20 @@ class TestParseLLMModels:
         spec = RegistryService._parse_llm_models(data)[0]["spec"]
         assert spec["supports_vision"] is True
         assert spec["supports_reasoning"] is True
+
+    def test_a_models_reasoning_levels_are_carried_and_unset_when_absent(self):
+        listed, unlisted = (
+            item["spec"]
+            for item in RegistryService._parse_llm_models(
+                {
+                    "models": [
+                        {"provider_key": "p", "model_name": "a", "reasoning_efforts": ["high"]},
+                        {"provider_key": "p", "model_name": "b"},
+                    ]
+                }
+            )
+        )
+        assert (listed["reasoning_efforts"], unlisted["reasoning_efforts"]) == (["high"], None)
 
     def test_capability_flags_default_to_false(self):
         spec = RegistryService._parse_llm_models(

@@ -18,6 +18,7 @@ from agentarea_common.model_charges import (
     release_model_hold,
 )
 from agentarea_common.money import to_money, to_optional_money
+from agentarea_common.reasoning_effort import check_effort_supported
 from agentarea_common.utils.url_safety import endpoint_policy_for
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.application.provider_credentials import resolve_provider_api_key
@@ -133,10 +134,12 @@ class LLMExecutionService:
             cache_creation_input_cost_per_token = None
 
             supports_vision: bool | None = None
+            reasoning_efforts: list[str] | None = None
             provider_data: dict[str, Any] | None = None
             if request.resolved_model:
                 cached = request.resolved_model
                 supports_vision = cached.get("supports_vision")
+                reasoning_efforts = cached.get("reasoning_efforts")
                 provider_type = cached.get("provider_type")
                 model_name = cached.get("model_name")
                 endpoint_url = cached.get("endpoint_url")
@@ -193,6 +196,9 @@ class LLMExecutionService:
                     )
                     managed_by = getattr(model_instance.provider_config, "managed_by", None)
                     supports_vision = getattr(model_instance.model_spec, "supports_vision", None)
+                    reasoning_efforts = getattr(
+                        model_instance.model_spec, "reasoning_efforts", None
+                    )
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
                     if not api_key_secret_name:
                         logger.warning(f"No API key found for model instance {model_instance.id}")
@@ -206,6 +212,11 @@ class LLMExecutionService:
                     "127.0.0.1", self._local_host
                 )
 
+            check_effort_supported(
+                request.reasoning_effort,
+                reasoning_efforts or ProviderProfile.from_mapping(provider_data).reasoning_efforts,
+                model_name=str(model_name),
+            )
             llm_request = LLMRequest(
                 messages=await _with_tool_images(
                     request,
@@ -220,6 +231,7 @@ class LLMExecutionService:
                     effective_policy=request.effective_policy,
                 ),
                 reasoning_effort=request.reasoning_effort,
+                reasoning_max_tokens=request.reasoning_max_tokens,
             )
 
             # Every call is funded before its credential is read: on the platform's

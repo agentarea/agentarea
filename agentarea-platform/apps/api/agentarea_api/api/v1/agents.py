@@ -5,7 +5,7 @@ from contextlib import suppress
 from typing import Annotated, Any, Literal, cast
 from uuid import UUID
 
-from agentarea_agents.application.agent_service import AgentService
+from agentarea_agents.application.agent_service import AgentService, ReasoningConflictError
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.schemas.dto import (
     AgentCreate,
@@ -68,6 +68,7 @@ class AgentResponse(BaseModel):
     planning: bool | None = None
     a2ui_enabled: bool | None = None
     reasoning_effort: str | None = None
+    reasoning_max_tokens: int | None = None
     answer_check: AnswerCheckPolicy | None = None
     agent_type: str = "stateless"
     skills: list[dict] | None = None
@@ -123,6 +124,7 @@ class AgentResponse(BaseModel):
             planning=cast(bool | None, agent.planning),
             a2ui_enabled=cast(bool | None, agent.a2ui_enabled),
             reasoning_effort=agent.reasoning_effort,
+            reasoning_max_tokens=agent.reasoning_max_tokens,
             answer_check=(
                 AnswerCheckPolicy.model_validate(agent.answer_check) if agent.answer_check else None
             ),
@@ -599,6 +601,8 @@ async def update_agent(
         agent = await agent_service.update_agent(id=resolved_id, payload=data)
     except AgentArchivedError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ReasoningConflictError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     await _reassert_creator_ownership(agent, user_context)

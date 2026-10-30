@@ -8,12 +8,13 @@ in ``agentarea_agents.schemas.dto``. The contract test in
 
 import builtins
 import json
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 from uuid import UUID
 
-from agentarea_agents.application.agent_service import AgentService
+from agentarea_agents.application.agent_service import AgentService, ReasoningConflictError
 from agentarea_agents.schemas.dto import (
     REASONING_EFFORT_DESCRIPTION,
+    REASONING_MAX_TOKENS_DESCRIPTION,
     AgentCreate,
     AgentTypeLiteral,
     AgentUpdate,
@@ -29,6 +30,7 @@ from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.di.container import resolve
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, TypeAdapter
+from pydantic.experimental.missing_sentinel import MISSING
 
 from ..api.v1._agent_tools import validate_code_tool_names
 from .base import platform_context, platform_read_context
@@ -56,6 +58,9 @@ class AgentDetailOutput(AgentSummaryOutput):
     instruction: str | None = Field(default=None, description="The agent's system prompt.")
     agent_type: str = Field(description="stateless or stateful.")
     reasoning_effort: str | None = Field(default=None, description=REASONING_EFFORT_DESCRIPTION)
+    reasoning_max_tokens: int | None = Field(
+        default=None, description=REASONING_MAX_TOKENS_DESCRIPTION
+    )
 
 
 class AgentRefOutput(BaseModel):
@@ -129,6 +134,7 @@ class AgentsToolset(Toolset):
                     "instruction": agent.instruction,
                     "agent_type": agent.agent_type,
                     "reasoning_effort": agent.reasoning_effort,
+                    "reasoning_max_tokens": agent.reasoning_max_tokens,
                 },
                 default=str,
             )
@@ -165,6 +171,9 @@ class AgentsToolset(Toolset):
         reasoning_effort: Annotated[
             str | None, Field(description=REASONING_EFFORT_DESCRIPTION)
         ] = None,
+        reasoning_max_tokens: Annotated[
+            int | None, Field(description=REASONING_MAX_TOKENS_DESCRIPTION)
+        ] = None,
     ) -> str:
         """Create a new agent.
 
@@ -180,6 +189,7 @@ class AgentsToolset(Toolset):
             tools=_TOOL_LIST.validate_python(tools),
             agent_type=agent_type,
             reasoning_effort=reasoning_effort,
+            reasoning_max_tokens=reasoning_max_tokens,
         )
         try:
             validate_code_tool_names(payload.tools)
@@ -223,6 +233,13 @@ class AgentsToolset(Toolset):
                 'pass "" to go back to the model\'s default.'
             ),
         ] = None,
+        reasoning_max_tokens: Annotated[
+            int | None,
+            Field(
+                description=f"{REASONING_MAX_TOKENS_DESCRIPTION} Omit to keep the current "
+                "setting; pass null to go back to the model's default."
+            ),
+        ] = cast(Any, MISSING),
     ) -> str:
         """Update an existing agent.
 
@@ -242,6 +259,8 @@ class AgentsToolset(Toolset):
             patch["tools"] = _TOOL_LIST.validate_python(tools)
         if reasoning_effort is not None:
             patch["reasoning_effort"] = reasoning_effort
+        if reasoning_max_tokens is not MISSING:
+            patch["reasoning_max_tokens"] = reasoning_max_tokens
         payload = AgentUpdate.model_validate(patch)
         try:
             validate_code_tool_names(payload.tools)
@@ -252,7 +271,7 @@ class AgentsToolset(Toolset):
             service = _build_service(repo_factory, event_broker)
             try:
                 agent = await service.update_agent(UUID(agent_id), payload)
-            except AgentArchivedError as exc:
+            except (AgentArchivedError, ReasoningConflictError) as exc:
                 raise ToolError(str(exc)) from exc
             if not agent:
                 raise ToolError("Agent not found")

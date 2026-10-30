@@ -63,6 +63,7 @@ def _project_catalog_model_spec(item: CatalogModelSpecItem) -> ModelSpec:
         supports_function_calling=spec.get("supports_function_calling", False),
         supports_vision=spec.get("supports_vision", False),
         supports_reasoning=spec.get("supports_reasoning", False),
+        reasoning_efforts=spec.get("reasoning_efforts"),
         is_active=spec.get("is_active", True),
     )
     model.id = UUID(item.id)
@@ -306,6 +307,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
                 supports_function_calling=preferred.supports_function_calling,
                 supports_vision=preferred.supports_vision,
                 supports_reasoning=preferred.supports_reasoning,
+                reasoning_efforts=preferred.reasoning_efforts,
                 is_active=preferred.is_active,
             )
             .on_conflict_do_nothing(constraint="uq_model_specs_workspace_provider_model")

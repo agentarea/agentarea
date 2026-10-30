@@ -11,7 +11,7 @@ with workflow.unsafe.imports_passed_through():
     from agentarea_agents_sdk.skills import SkillCatalogBuilder
     from agentarea_agents_sdk.tools.disclosure import DisclosureContext, ToolCandidate
     from agentarea_common.money import serialize_money
-    from agentarea_common.reasoning_effort import reasoning_effort_of
+    from agentarea_common.reasoning_effort import reasoning_settings
 
     from ..context_manager import estimate_tokens_for_messages, messages_payload_bytes
     from ..helpers import MessageBuilder, ToolCallExtractor
@@ -467,6 +467,11 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 ]
 
             # Create Pydantic request model
+            reasoning_effort, reasoning_max_tokens = reasoning_settings(
+                self.state.goal.context if self.state.goal else {},
+                self.state.agent_config.get("reasoning_effort"),
+                self.state.agent_config.get("reasoning_max_tokens"),
+            )
             llm_request = LLMCallRequest(
                 messages=self._conversation_payload(),
                 conversation=self._conversation_window(),
@@ -476,10 +481,8 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 user_context_data=self.state.user_context_data,
                 temperature=None,
                 max_tokens=None,
-                reasoning_effort=(
-                    reasoning_effort_of(self.state.goal.context if self.state.goal else {})
-                    or self.state.agent_config.get("reasoning_effort")
-                ),
+                reasoning_effort=reasoning_effort,
+                reasoning_max_tokens=reasoning_max_tokens,
                 task_id=self.state.task_id,
                 agent_id=self.state.agent_id,
                 execution_id=self.state.execution_id,

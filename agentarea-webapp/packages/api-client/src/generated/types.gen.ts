@@ -295,9 +295,15 @@ export type AgentCreateRequest = {
     /**
      * Reasoning Effort
      *
-     * How hard the model reasons before answering: minimal, low, medium or high; unset keeps the model's default.
+     * A reasoning level the model takes, e.g. low or high; the catalog lists each model's levels. Unset keeps the model's default. Not together with reasoning_max_tokens.
      */
     reasoning_effort?: string | null;
+    /**
+     * Reasoning Max Tokens
+     *
+     * A token budget for the model's reasoning, a positive integer. Unset keeps the model's default. Not together with reasoning_effort.
+     */
+    reasoning_max_tokens?: number | null;
     /**
      * Skill Ids
      *
@@ -450,6 +456,10 @@ export type AgentResponse = {
      */
     reasoning_effort?: string | null;
     /**
+     * Reasoning Max Tokens
+     */
+    reasoning_max_tokens?: number | null;
+    /**
      * Registry Item Id
      */
     registry_item_id?: string | null;
@@ -564,9 +574,15 @@ export type AgentUpdate = {
     /**
      * Reasoning Effort
      *
-     * How hard the model reasons before answering: minimal, low, medium or high; unset keeps the model's default.
+     * A reasoning level the model takes, e.g. low or high; the catalog lists each model's levels. Unset keeps the model's default. Not together with reasoning_max_tokens.
      */
     reasoning_effort?: string | null;
+    /**
+     * Reasoning Max Tokens
+     *
+     * A token budget for the model's reasoning, a positive integer. Unset keeps the model's default. Not together with reasoning_effort.
+     */
+    reasoning_max_tokens?: number | null;
     /**
      * Skill Ids
      */
