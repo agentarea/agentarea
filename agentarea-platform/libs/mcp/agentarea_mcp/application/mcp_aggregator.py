@@ -5,17 +5,24 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
 from uuid import UUID
 
-from agentarea_agents_sdk.tools.mcp_app_ui import is_visible_to_model
+from agentarea_agents_sdk.tools.mcp_app_ui import (
+    is_callable_from_app,
+    is_visible_to_model,
+    opens_app,
+    tool_ui_resource_uri,
+)
 from agentarea_agents_sdk.tools.mcp_tool_identity import server_label
 from mcp.server.mcpserver import MCPServer
-from mcp.types import CallToolResult
+from mcp.types import CallToolResult, ReadResourceResult, Resource
 
 from agentarea_mcp.application.mcp_client import (
+    ConnectedMCPClient,
     connected_mcp_client,
     mcp_verdict_key,
     pinned_client_factory,
@@ -30,6 +37,7 @@ from agentarea_mcp.verification import mcp_transport_candidates
 logger = logging.getLogger(__name__)
 
 NS_SEP = "__"
+UI_SCHEME = "ui://"
 
 _T = TypeVar("_T")
 
@@ -41,6 +49,21 @@ _JSON_TO_PY = {
     "array": list,
     "object": dict,
 }
+
+
+def namespaced_resource_uri(namespace: str, uri: str) -> str | None:
+    """``ui://{namespace}/{rest}`` for a member's ``ui://{rest}``; None for any other scheme."""
+    if not uri.startswith(UI_SCHEME):
+        return None
+    return f"{UI_SCHEME}{namespace}/{uri[len(UI_SCHEME) :]}"
+
+
+def _listed(name: str, tool: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": name,
+        "description": tool.get("description", ""),
+        "inputSchema": tool.get("inputSchema") or {"type": "object"},
+    }
 
 
 def _error_text(result: CallToolResult) -> str:
@@ -95,6 +118,9 @@ class MCPAggregatorProxy:
         )
         self._discovery_locks: dict[str, asyncio.Lock] = {}
         self._discovered_ttls: dict[str, int | None] = {}
+        # The app-only tools of each member whose app the aggregate carries, as
+        # last discovered in the app view; owner_of serves them beside allowed_tools.
+        self._app_only: dict[str, frozenset[str]] = {}
         self._server: MCPServer | None = None
 
     @staticmethod
@@ -201,13 +227,72 @@ class MCPAggregatorProxy:
         if ttl_ms is not None and not isinstance(ttl_ms, int):
             ttl_ms = None
         self._discovered_ttls[cache_key] = ttl_ms
-        serialized = [serialize_mcp_tool(tool) for tool in result.tools]
-        # A bundle proxies tool calls only, not member ui:// resources.
+        return [serialize_mcp_tool(tool) for tool in result.tools]
+
+    @staticmethod
+    def _model_view(member: AggregatedMember, tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """The tools an agent sees: the model-visible ones the member serves, without ``_meta``."""
         return [
             {key: value for key, value in tool.items() if key != "_meta"}
-            for tool in serialized
-            if is_visible_to_model(tool)
+            for tool in tools
+            if is_visible_to_model(tool) and member.serves(tool["name"])
         ]
+
+    def _note_app(self, member: AggregatedMember, tools: list[dict[str, Any]]) -> frozenset[str]:
+        """Record whether the aggregate carries *member*'s app; the app's app-only tools.
+
+        The app is carried once a model-visible tool the member serves opens it.
+        Its app-only tools are the ones the app calls, so they follow the app
+        rather than ``allowed_tools``.
+        """
+        instance_id = str(member.mcp_instance_id)
+        if not any(opens_app(tool) and member.serves(tool["name"]) for tool in tools):
+            self._app_only.pop(instance_id, None)
+            return frozenset()
+        app_only = frozenset(
+            tool["name"]
+            for tool in tools
+            if not is_visible_to_model(tool) and is_callable_from_app(tool)
+        )
+        self._app_only[instance_id] = app_only
+        return app_only
+
+    def _app_view(
+        self, member: AggregatedMember, tools: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """The tools a host that renders apps sees: the model's, plus carried apps' app-only tools."""
+        app_only = self._note_app(member, tools)
+        return [
+            tool
+            for tool in tools
+            if (is_visible_to_model(tool) and member.serves(tool["name"]))
+            or tool["name"] in app_only
+        ]
+
+    def _serves(self, member: AggregatedMember, tool_name: str) -> bool:
+        return member.serves(tool_name) or tool_name in self._app_only.get(
+            str(member.mcp_instance_id), frozenset()
+        )
+
+    @asynccontextmanager
+    async def _dial(
+        self, member: AggregatedMember, timeout: float
+    ) -> AsyncIterator[ConnectedMCPClient]:
+        instance_id = str(member.mcp_instance_id)
+        mcp_url = self.instance_urls.get(instance_id)
+        if not mcp_url:
+            raise ValueError(f"No URL for member instance {instance_id}")
+        headers = self.instance_headers.get(instance_id) or {}
+        async with connected_mcp_client(
+            mcp_url,
+            headers,
+            timeout,
+            transport=member.transport,
+            verdict_key=self._cache_key(member, mcp_url, headers),
+            verdict_store=self._era_verdict_store,
+            httpx_client_factory=self._client_factory(member),
+        ) as client:
+            yield client
 
     async def _call_member_tool_result(
         self, member: AggregatedMember, tool_name: str, arguments: dict[str, Any]
@@ -284,11 +369,9 @@ class MCPAggregatorProxy:
         server = MCPServer(name=self.name, instructions=self.description)
         for member in self.members:
             namespace = self._get_namespace(member)
-            tools = await self._discover_member_tools(member)
+            tools = self._model_view(member, await self._discover_member_tools(member))
             instance_name = self.instance_names.get(str(member.mcp_instance_id), "unknown")
             for tool in tools:
-                if not member.serves(tool["name"]):
-                    continue
                 namespaced_name = f"{namespace}{NS_SEP}{tool['name']}"
                 handler = self._make_proxy_handler(
                     member, tool["name"], tool.get("inputSchema", {})
@@ -306,26 +389,70 @@ class MCPAggregatorProxy:
             raise RuntimeError("Call build_server() first")
         return self._server.streamable_http_app(streamable_http_path="/", stateless_http=True)
 
-    async def list_namespaced_tools(self) -> list[dict[str, Any]]:
-        """Discover every member's tools and return them namespaced."""
-        discovered = await asyncio.gather(
+    async def _discover_all(self) -> list[list[dict[str, Any]]]:
+        return await asyncio.gather(
             *(self._discover_member_tools(member) for member in self.members)
         )
 
-        aggregated: list[dict[str, Any]] = []
-        for member, tools in zip(self.members, discovered, strict=True):
-            namespace = self._get_namespace(member)
-            for tool in tools:
-                if not member.serves(tool["name"]):
-                    continue
-                aggregated.append(
-                    {
-                        "name": f"{namespace}{NS_SEP}{tool['name']}",
-                        "description": tool.get("description", ""),
-                        "inputSchema": tool.get("inputSchema") or {"type": "object"},
-                    }
-                )
-        return aggregated
+    async def list_namespaced_tools(self) -> list[dict[str, Any]]:
+        """Discover every member's tools and return the model's view of them, namespaced."""
+        discovered = await self._discover_all()
+        return [
+            _listed(self.qualified_name(member, tool["name"]), tool)
+            for member, tools in zip(self.members, discovered, strict=True)
+            for tool in self._model_view(member, tools)
+        ]
+
+    async def _app_tools(self) -> list[tuple[AggregatedMember, dict[str, Any]]]:
+        discovered = await self._discover_all()
+        return [
+            (member, tool)
+            for member, tools in zip(self.members, discovered, strict=True)
+            for tool in self._app_view(member, tools)
+        ]
+
+    async def list_app_tools(self) -> list[dict[str, Any]]:
+        """The app view of every member's tools, namespaced.
+
+        Each tool keeps its ``_meta.ui``, its ``ui://`` resource URI namespaced
+        so ``read_app_resource`` can route it back.
+        """
+        listed: list[dict[str, Any]] = []
+        for member, tool in await self._app_tools():
+            entry = _listed(self.qualified_name(member, tool["name"]), tool)
+            ui = dict((tool.get("_meta") or {}).get("ui") or {})
+            ui.pop("resourceUri", None)
+            if (uri := tool_ui_resource_uri(tool)) is not None:
+                ui["resourceUri"] = namespaced_resource_uri(self._get_namespace(member), uri)
+            if ui:
+                entry["_meta"] = {"ui": ui}
+            listed.append(entry)
+        return listed
+
+    async def resolve_tool(self, name: str) -> str:
+        """The namespaced name a call of ``name`` runs.
+
+        ``name`` itself when a member serves it; otherwise, as an app calls its
+        own tools, the one served tool whose raw name it is. Raises ValueError
+        when no served tool, or more than one, answers to it.
+        """
+        if self.owner_of(name) is not None:
+            return name
+        served = await self._app_tools()
+        if self.owner_of(name) is not None:
+            return name
+        matches = sorted(
+            self.qualified_name(member, tool["name"])
+            for member, tool in served
+            if tool["name"] == name
+        )
+        if len(matches) > 1:
+            raise ValueError(
+                f"Tool {name} is served by more than one connection; call one of {', '.join(matches)}"
+            )
+        if not matches:
+            raise ValueError(f"No member owns tool {name}")
+        return matches[0]
 
     def owner_of(self, namespaced_name: str) -> tuple[AggregatedMember, str] | None:
         """The member serving ``namespaced_name`` and the raw name it advertises.
@@ -337,8 +464,66 @@ class MCPAggregatorProxy:
             prefix = f"{self._get_namespace(member)}{NS_SEP}"
             if namespaced_name.startswith(prefix):
                 tool_name = namespaced_name[len(prefix) :]
-                return (member, tool_name) if member.serves(tool_name) else None
+                return (member, tool_name) if self._serves(member, tool_name) else None
         return None
+
+    def resource_owner(self, uri: str) -> tuple[AggregatedMember, str] | None:
+        """The member a namespaced ``ui://`` URI belongs to, and the URI it serves it under."""
+        for member in self.members:
+            prefix = f"{UI_SCHEME}{self._get_namespace(member)}/"
+            if uri.startswith(prefix):
+                return member, f"{UI_SCHEME}{uri[len(prefix) :]}"
+        return None
+
+    async def list_app_resources(self) -> list[Resource]:
+        """The ``ui://`` resources of every app the aggregate carries, namespaced."""
+        await self._app_tools()
+        with_apps = [m for m in self.members if str(m.mcp_instance_id) in self._app_only]
+        listed = await asyncio.gather(*(self._member_resources(m) for m in with_apps))
+        return [
+            resource.model_copy(update={"uri": uri})
+            for member, resources in zip(with_apps, listed, strict=True)
+            for resource in resources
+            if (uri := namespaced_resource_uri(self._get_namespace(member), resource.uri))
+        ]
+
+    async def _member_resources(self, member: AggregatedMember) -> list[Resource]:
+        try:
+            async with self._dial(member, 10.0) as client:
+                return (await client.list_resources()).resources
+        except Exception as exc:
+            logger.warning(
+                "Failed to list resources of member %s: %s",
+                member.mcp_instance_id,
+                exc,
+                exc_info=True,
+            )
+            return []
+
+    async def read_app_resource(self, uri: str) -> ReadResourceResult | None:
+        """Read a namespaced ``ui://`` resource from its member; None when no carried app owns it."""
+        owner = self.resource_owner(uri)
+        if owner is None:
+            return None
+        member, member_uri = owner
+        self._note_app(member, await self._discover_member_tools(member))
+        if str(member.mcp_instance_id) not in self._app_only:
+            return None
+        async with self._dial(member, 30.0) as client:
+            result = await client.read_resource(member_uri)
+        namespace = self._get_namespace(member)
+        return result.model_copy(
+            update={
+                "contents": [
+                    content.model_copy(
+                        update={
+                            "uri": namespaced_resource_uri(namespace, content.uri) or content.uri
+                        }
+                    )
+                    for content in result.contents
+                ]
+            }
+        )
 
     def qualified_name(self, member: AggregatedMember, tool_name: str) -> str:
         """The name the aggregate serves *member*'s ``tool_name`` under."""

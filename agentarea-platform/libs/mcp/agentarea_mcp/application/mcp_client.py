@@ -583,6 +583,14 @@ class _ConnectedClient:
         with mcp_operation("tools/list"):
             return await self._invoke("list_tools", *args, **kwargs)
 
+    async def list_resources(self, *args: Any, **kwargs: Any) -> Any:
+        with mcp_operation("resources/list"):
+            return await self._invoke("list_resources", *args, **kwargs)
+
+    async def read_resource(self, *args: Any, **kwargs: Any) -> Any:
+        with mcp_operation("resources/read"):
+            return await self._invoke("read_resource", *args, **kwargs)
+
 
 ConnectedMCPClient = _ConnectedClient
 
