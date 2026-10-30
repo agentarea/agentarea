@@ -87,6 +87,7 @@ PROVIDER_CONTRACT_FIELDS = (
     "list_shape",
     "models_query",
     "reasoning_param",
+    "reasoning_efforts",
 )
 
 # Per-socket-operation timeout for fetching a catalog over HTTP. urllib applies
@@ -97,7 +98,7 @@ PROVIDER_CONTRACT_FIELDS = (
 SOURCE_FETCH_TIMEOUT_SECONDS = 30
 # Part of the stored ETag: bump it when parsing or facets change, so the next
 # sync re-applies every source instead of skipping the unchanged ones.
-SYNC_FORMAT = "4"
+SYNC_FORMAT = "5"
 # The platform's own catalog rows: an item that changes in the source is applied
 # to its entity on sync. Other types install copies a workspace may have changed,
 # so a changed item only flags an update for someone to take.
@@ -1683,6 +1684,7 @@ class RegistryService:
             supports_function_calling=spec.get("supports_function_calling", False),
             supports_vision=spec.get("supports_vision", False),
             supports_reasoning=spec.get("supports_reasoning", False),
+            reasoning_efforts=spec.get("reasoning_efforts"),
             is_active=spec.get("is_active", True),
         )
         return str(model.id)
@@ -2242,6 +2244,7 @@ class RegistryService:
                         "supports_function_calling": entry.get("supports_function_calling", False),
                         "supports_vision": entry.get("supports_vision", False),
                         "supports_reasoning": entry.get("supports_reasoning", False),
+                        "reasoning_efforts": entry.get("reasoning_efforts"),
                         "is_active": entry.get("is_active", True),
                     },
                     "tags": entry.get("tags", []),

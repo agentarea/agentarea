@@ -257,3 +257,17 @@ async def test_a_reply_stopped_at_max_tokens_reads_as_length(monkeypatch):
     response = await model.complete(LLMRequest(messages=[{"role": "user", "content": "hi"}]))
 
     assert (response.content, response.finish_reason) == ("pa", "length")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fields", [{"reasoning_effort": "low"}, {"reasoning_max_tokens": 2048}])
+async def test_reasoning_settings_are_refused_not_dropped(fields):
+    model = LLMModel(
+        provider_type="anthropic",
+        model_name="claude",
+        endpoint_url="https://api.anthropic.com/v1",
+        provider=ProviderProfile.from_mapping({"transport": "anthropic", "auth": "api_key_header"}),
+    )
+
+    with pytest.raises(ValueError, match="does not take reasoning settings"):
+        await model.complete(LLMRequest(messages=[{"role": "user", "content": "hi"}], **fields))

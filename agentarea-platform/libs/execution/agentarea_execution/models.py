@@ -48,9 +48,11 @@ class ResolvedModelInfo(BaseModel):
     provider_display_name: str | None = None
     # The model spec says the model reads images; None in states resolved before.
     supports_vision: bool | None = None
+    # The reasoning levels the model spec lists; None defers to the provider's.
+    reasoning_efforts: list[str] | None = None
     # The provider spec's HTTP contract (ProviderProfile.as_mapping); None in states
     # resolved before specs carried it, which read it from the spec again.
-    provider: dict[str, str | None] | None = None
+    provider: dict[str, Any] | None = None
     resolved_at: str | None = None  # ISO timestamp for staleness debugging
 
 
@@ -457,8 +459,9 @@ class AgentConfigResult(BaseModel):
     default_context_strategy: str | None = None  # From ModelSpec: "static", "hybrid", "dynamic"
     tools: list[dict[str, Any]] = Field(default_factory=list)
     planning: bool = False
-    # How hard the model reasons first; None keeps the model's default.
+    # How hard the model reasons first, a level or a token budget; None keeps the model's default.
     reasoning_effort: str | None = None
+    reasoning_max_tokens: int | None = None
     a2ui_enabled: bool = False
     # The agent's own answer check setting; a governance rule overrides it.
     answer_check: dict[str, Any] | None = None
@@ -595,6 +598,7 @@ class LLMCallRequest(BaseModel):
     temperature: float | None = None
     max_tokens: int | None = None
     reasoning_effort: str | None = None
+    reasoning_max_tokens: int | None = None
     task_id: str | None = None
     agent_id: str | None = None
     execution_id: str | None = None

@@ -94,8 +94,9 @@ class LLMRequest:
     tools: list[dict[str, Any]] | None = None
     temperature: float | None = None
     max_tokens: int | None = None
-    # How hard the model reasons first (minimal|low|medium|high); unset = its default.
+    # How hard the model reasons first: a level or a token budget; unset = its default.
     reasoning_effort: str | None = None
+    reasoning_max_tokens: int | None = None
 
 
 @dataclass
@@ -545,7 +546,9 @@ class LLMModel:
             payload["temperature"] = request.temperature
         if request.max_tokens is not None:
             payload["max_tokens"] = request.max_tokens
-        payload.update(self._profile.reasoning_fields(request.reasoning_effort))
+        payload.update(
+            self._profile.reasoning_fields(request.reasoning_effort, request.reasoning_max_tokens)
+        )
 
         headers: dict[str, str] = {
             "Content-Type": "application/json",
@@ -662,6 +665,10 @@ class LLMModel:
 
     async def _stream_anthropic(self, request: LLMRequest) -> AsyncIterator[LLMResponse]:
         """Stream from Anthropic's Messages API, yielding the same deltas as the OpenAI path."""
+        if request.reasoning_effort or request.reasoning_max_tokens:
+            # Extended thinking needs each thinking block, signed, sent back with the
+            # tool results that follow it, which the conversation does not keep.
+            raise ValueError("the Anthropic transport does not take reasoning settings yet")
         url = self._api_url("/messages")
         system, turns = to_anthropic_messages(self._normalize_messages(request.messages))
 

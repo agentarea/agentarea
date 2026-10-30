@@ -300,6 +300,38 @@ async def test_unknown_pricing_rejects_before_provider_io(
     provider.complete.assert_not_awaited()
 
 
+@pytest.mark.parametrize(
+    ("model_levels", "provider_levels"), [(["low", "high"], None), (None, ["low", "high"])]
+)
+async def test_a_level_the_catalog_does_not_list_is_refused_before_provider_io(
+    provider, make_service, user_context, model_levels, provider_levels
+):
+    request = _request(reasoning_effort="xhigh")
+    request.resolved_model["reasoning_efforts"] = model_levels
+    request.resolved_model["provider"]["reasoning_efforts"] = provider_levels
+
+    with pytest.raises(ValueError, match="takes reasoning_effort low, high, not xhigh"):
+        await make_service().execute(request, user_context=user_context)
+
+    provider.ainvoke_stream.assert_not_called()
+
+
+async def test_the_models_levels_win_over_the_providers(provider, make_service, user_context):
+    request = _request(reasoning_effort="xhigh")
+    request.resolved_model["reasoning_efforts"] = ["xhigh"]
+    request.resolved_model["provider"]["reasoning_efforts"] = ["low"]
+
+    await make_service().execute(request, user_context=user_context)
+
+    assert provider.ainvoke_stream.call_args.args[0].reasoning_effort == "xhigh"
+
+
+async def test_a_reasoning_budget_reaches_the_request(provider, make_service, user_context):
+    await make_service().execute(_request(reasoning_max_tokens=2048), user_context=user_context)
+
+    assert provider.ainvoke_stream.call_args.args[0].reasoning_max_tokens == 2048
+
+
 @pytest.mark.parametrize("stream", [True, False], ids=["streamed", "completed"])
 async def test_priced_free_tool_only_response_succeeds(
     provider, make_service, user_context, stream

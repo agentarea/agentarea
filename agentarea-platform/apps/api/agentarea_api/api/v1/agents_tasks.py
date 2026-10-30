@@ -2356,6 +2356,7 @@ async def _resolve_model_info(
         "display_name": model_spec.display_name,
         "provider_display_name": provider_spec.name,
         "supports_vision": model_spec.supports_vision,
+        "reasoning_efforts": model_spec.reasoning_efforts,
         "resolved_at": datetime.now(UTC).isoformat(),
     }
 

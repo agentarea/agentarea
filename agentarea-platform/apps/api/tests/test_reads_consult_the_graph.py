@@ -46,6 +46,7 @@ def _agent(name: str) -> SimpleNamespace:
         planning=False,
         a2ui_enabled=False,
         reasoning_effort=None,
+        reasoning_max_tokens=None,
         answer_check=None,
         agent_type="stateless",
         skills=[],

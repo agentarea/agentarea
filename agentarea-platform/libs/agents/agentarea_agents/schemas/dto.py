@@ -12,19 +12,25 @@ from __future__ import annotations
 from typing import Annotated, Literal
 from uuid import UUID
 
-from agentarea_common.reasoning_effort import REASONING_EFFORTS, checked_reasoning_effort
+from agentarea_common.reasoning_effort import (
+    checked_reasoning_effort,
+    checked_reasoning_max_tokens,
+)
 from agentarea_common.utils.types import NotNull
 from agentarea_governance.domain.policies import AnswerCheckPolicy
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from agentarea_agents.schemas.import_export import ToolConfig
 
 AgentTypeLiteral = Literal["stateless", "stateful"]
 
 REASONING_EFFORT_DESCRIPTION = (
-    "How hard the model reasons before answering: "
-    f"{', '.join(REASONING_EFFORTS[:-1])} or {REASONING_EFFORTS[-1]}; "
-    "unset keeps the model's default."
+    "A reasoning level the model takes, e.g. low or high; the catalog lists each "
+    "model's levels. Unset keeps the model's default. Not together with reasoning_max_tokens."
+)
+REASONING_MAX_TOKENS_DESCRIPTION = (
+    "A token budget for the model's reasoning, a positive integer. Unset keeps the "
+    "model's default. Not together with reasoning_effort."
 )
 
 
@@ -80,6 +86,10 @@ class AgentCreate(BaseModel):
         default=None,
         description=REASONING_EFFORT_DESCRIPTION,
     )
+    reasoning_max_tokens: int | None = Field(
+        default=None,
+        description=REASONING_MAX_TOKENS_DESCRIPTION,
+    )
     answer_check: AnswerCheckPolicy | None = Field(
         default=None,
         description=(
@@ -117,6 +127,17 @@ class AgentCreate(BaseModel):
     def _check_reasoning_effort(cls, v: object) -> str | None:
         return checked_reasoning_effort(v)
 
+    @field_validator("reasoning_max_tokens", mode="before")
+    @classmethod
+    def _check_reasoning_max_tokens(cls, v: object) -> int | None:
+        return checked_reasoning_max_tokens(v)
+
+    @model_validator(mode="after")
+    def _one_reasoning_form(self) -> AgentCreate:
+        if self.reasoning_effort and self.reasoning_max_tokens:
+            raise ValueError("set reasoning_effort or reasoning_max_tokens, not both")
+        return self
+
 
 class AgentUpdate(BaseModel):
     """Patch payload for an agent. All fields optional — unset = unchanged."""
@@ -132,6 +153,9 @@ class AgentUpdate(BaseModel):
     planning: bool | None = None
     a2ui_enabled: bool | None = None
     reasoning_effort: str | None = Field(default=None, description=REASONING_EFFORT_DESCRIPTION)
+    reasoning_max_tokens: int | None = Field(
+        default=None, description=REASONING_MAX_TOKENS_DESCRIPTION
+    )
     answer_check: AnswerCheckPolicy | None = None
     skill_ids: list[UUID] | None = None
     agent_type: Annotated[AgentTypeLiteral | None, NotNull] = None
@@ -140,6 +164,11 @@ class AgentUpdate(BaseModel):
     @classmethod
     def _check_reasoning_effort(cls, v: object) -> str | None:
         return checked_reasoning_effort(v)
+
+    @field_validator("reasoning_max_tokens", mode="before")
+    @classmethod
+    def _check_reasoning_max_tokens(cls, v: object) -> int | None:
+        return checked_reasoning_max_tokens(v)
 
 
 class AgentSummary(BaseModel):

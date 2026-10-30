@@ -94,3 +94,37 @@ def test_an_unknown_transport_is_refused():
 )
 def test_the_key_is_presented_as_the_spec_says(auth, headers):
     assert ProviderProfile(auth=auth).build_headers("k") == headers
+
+
+@pytest.mark.parametrize(
+    ("reasoning_param", "effort", "budget", "fields"),
+    [
+        ("reasoning", "xhigh", None, {"reasoning": {"effort": "xhigh"}}),
+        ("reasoning", None, 2048, {"reasoning": {"max_tokens": 2048}}),
+        ("reasoning_effort", "none", None, {"reasoning_effort": "none"}),
+        ("reasoning_effort", None, None, {}),
+    ],
+)
+def test_reasoning_goes_in_the_providers_form(reasoning_param, effort, budget, fields):
+    profile = ProviderProfile.from_mapping({"reasoning_param": reasoning_param})
+
+    assert profile.reasoning_fields(effort, budget) == fields
+
+
+def test_a_budget_is_refused_where_the_provider_takes_only_a_level():
+    with pytest.raises(ValueError, match="not a token budget"):
+        ProviderProfile.from_mapping({}).reasoning_fields(None, 2048)
+
+
+def test_a_level_and_a_budget_together_are_refused():
+    profile = ProviderProfile.from_mapping({"reasoning_param": "reasoning"})
+
+    with pytest.raises(ValueError, match="not both"):
+        profile.reasoning_fields("low", 2048)
+
+
+def test_the_levels_a_provider_takes_round_trip_through_its_mapping():
+    profile = ProviderProfile.from_mapping({"reasoning_efforts": ["low", "high"]})
+
+    assert profile.reasoning_efforts == ("low", "high")
+    assert ProviderProfile.from_mapping(profile.as_mapping()) == profile

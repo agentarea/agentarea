@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Any
 from agentarea_common.agent_status import AgentStatus
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from agentarea_common.rebac.ownership import INVOKER_RELATION, OWNER_RELATIONS
-from sqlalchemy import JSON, Boolean, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
@@ -50,8 +50,9 @@ class Agent(BaseModel, WorkspaceScopedMixin):
     tools: Mapped[list[dict[str, Any]] | dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     planning: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     a2ui_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
-    # One of agentarea_common.reasoning_effort.REASONING_EFFORTS; None keeps the model's default.
+    # A reasoning level or a reasoning token budget, at most one; None keeps the model's default.
     reasoning_effort: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    reasoning_max_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # The final-answer check (an AnswerCheckPolicy). A governance safety rule
     # that sets answer_check overrides it; see answer_check.effective_answer_check.
     answer_check: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)

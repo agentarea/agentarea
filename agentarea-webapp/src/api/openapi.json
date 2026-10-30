@@ -449,8 +449,20 @@
                 "type": "null"
               }
             ],
-            "description": "How hard the model reasons before answering: minimal, low, medium or high; unset keeps the model's default.",
+            "description": "A reasoning level the model takes, e.g. low or high; the catalog lists each model's levels. Unset keeps the model's default. Not together with reasoning_max_tokens.",
             "title": "Reasoning Effort"
+          },
+          "reasoning_max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A token budget for the model's reasoning, a positive integer. Unset keeps the model's default. Not together with reasoning_effort.",
+            "title": "Reasoning Max Tokens"
           },
           "skill_ids": {
             "anyOf": [
@@ -782,6 +794,17 @@
             ],
             "title": "Reasoning Effort"
           },
+          "reasoning_max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Max Tokens"
+          },
           "registry_item_id": {
             "anyOf": [
               {
@@ -1056,8 +1079,20 @@
                 "type": "null"
               }
             ],
-            "description": "How hard the model reasons before answering: minimal, low, medium or high; unset keeps the model's default.",
+            "description": "A reasoning level the model takes, e.g. low or high; the catalog lists each model's levels. Unset keeps the model's default. Not together with reasoning_max_tokens.",
             "title": "Reasoning Effort"
+          },
+          "reasoning_max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A token budget for the model's reasoning, a positive integer. Unset keeps the model's default. Not together with reasoning_effort.",
+            "title": "Reasoning Max Tokens"
           },
           "skill_ids": {
             "anyOf": [

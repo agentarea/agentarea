@@ -91,14 +91,21 @@ async def test_a_reply_that_finished_is_the_answer_at_once():
 
 
 @pytest.mark.asyncio
-async def test_a_runs_reasoning_effort_reaches_the_model_call():
+@pytest.mark.parametrize(
+    ("parameters", "sent"),
+    [
+        ({"reasoning_effort": "low"}, ("low", None)),
+        ({"reasoning_max_tokens": 2048}, (None, 2048)),
+    ],
+)
+async def test_a_runs_reasoning_reaches_the_model_call(parameters, sent):
     seen: list = []
 
     @activity.defn(name="call_llm_activity")
     async def call_llm(request: LLMCallRequest):
-        seen.append(request.reasoning_effort)
+        seen.append((request.reasoning_effort, request.reasoning_max_tokens))
         return llm_response_text("Done.")
 
-    await _run([], llm_activity=call_llm, task_parameters={"reasoning_effort": "low"})
+    await _run([], llm_activity=call_llm, task_parameters=parameters)
 
-    assert seen == ["low"]
+    assert seen == [sent]

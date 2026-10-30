@@ -465,12 +465,14 @@ def test_a_new_model_is_written_with_its_output_cap_and_capabilities():
             "max_output_tokens": 64000,
             "supports_vision": True,
             "supports_reasoning": True,
+            "reasoning_efforts": ["low", "high"],
         },
         handler.PLATFORM_WORKSPACE_ID,
     )
 
     inserted = conn.params_for("INSERT INTO model_specs")
     assert (inserted["mot"], inserted["sv"], inserted["sr"]) == (64000, True, True)
+    assert inserted["re"] == '["low", "high"]'
 
 
 def test_an_omitted_output_cap_is_written_as_none_not_left_at_a_default():
@@ -507,4 +509,4 @@ def test_a_discovered_model_keeps_its_capability_flags():
     )
 
     updated = conn.params_for("UPDATE model_specs SET display_name")
-    assert (updated["sv"], updated["sr"]) == (None, None)
+    assert (updated["sv"], updated["sr"], updated["re"]) == (None, None, None)

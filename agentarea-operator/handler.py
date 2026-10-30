@@ -495,6 +495,7 @@ def sync_provider_config(
                         "max_output_tokens": em.get("maxOutputTokens"),
                         "supports_vision": em.get("supportsVision", False),
                         "supports_reasoning": em.get("supportsReasoning", False),
+                        "reasoning_efforts": em.get("reasoningEfforts"),
                         "input_cost_per_token": em.get("inputCostPerToken"),
                         "output_cost_per_token": em.get("outputCostPerToken"),
                         "cached_input_cost_per_token": em.get("cachedInputCostPerToken"),
@@ -511,6 +512,10 @@ def sync_provider_config(
                 model_count += 1
 
     return config_id, model_count
+
+
+def _json_or_none(value: object) -> str | None:
+    return None if value is None else json.dumps(value)
 
 
 def _upsert_model_spec_and_instance(
@@ -550,6 +555,7 @@ def _upsert_model_spec_and_instance(
                 "max_output_tokens = :mot, "
                 "supports_vision = COALESCE(:sv, supports_vision), "
                 "supports_reasoning = COALESCE(:sr, supports_reasoning), "
+                "reasoning_efforts = COALESCE(CAST(:re AS jsonb), reasoning_efforts), "
                 "input_cost_per_token = COALESCE(:icpt, input_cost_per_token), "
                 "output_cost_per_token = COALESCE(:ocpt, output_cost_per_token), "
                 "cached_input_cost_per_token = COALESCE(:cicpt, cached_input_cost_per_token), "
@@ -564,6 +570,7 @@ def _upsert_model_spec_and_instance(
                 "mot": model.get("max_output_tokens"),
                 "sv": model.get("supports_vision"),
                 "sr": model.get("supports_reasoning"),
+                "re": _json_or_none(model.get("reasoning_efforts")),
                 "icpt": model.get("input_cost_per_token"),
                 "ocpt": model.get("output_cost_per_token"),
                 "cicpt": model.get("cached_input_cost_per_token"),
@@ -578,12 +585,12 @@ def _upsert_model_spec_and_instance(
                 "INSERT INTO model_specs "
                 "(id, provider_spec_id, model_name, display_name, description, "
                 "context_window, max_output_tokens, supports_vision, supports_reasoning, "
-                "input_cost_per_token, output_cost_per_token, "
+                "reasoning_efforts, input_cost_per_token, output_cost_per_token, "
                 "cached_input_cost_per_token, cache_creation_input_cost_per_token, "
                 "is_active, workspace_id, created_by, "
                 "created_at, updated_at) "
                 "VALUES (:id, :spec_id, :mn, :dn, :desc, :cw, :mot, "
-                "COALESCE(:sv, false), COALESCE(:sr, false), :icpt, :ocpt, :cicpt, :ccicpt, "
+                "COALESCE(:sv, false), COALESCE(:sr, false), CAST(:re AS jsonb), :icpt, :ocpt, :cicpt, :ccicpt, "
                 "true, :ws, :created_by, now(), now())"
             ),
             {
@@ -596,6 +603,7 @@ def _upsert_model_spec_and_instance(
                 "mot": model.get("max_output_tokens"),
                 "sv": model.get("supports_vision"),
                 "sr": model.get("supports_reasoning"),
+                "re": _json_or_none(model.get("reasoning_efforts")),
                 "icpt": model.get("input_cost_per_token"),
                 "ocpt": model.get("output_cost_per_token"),
                 "cicpt": model.get("cached_input_cost_per_token"),

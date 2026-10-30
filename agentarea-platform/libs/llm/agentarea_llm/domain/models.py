@@ -99,6 +99,7 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
     reasoning_param: Mapped[str] = mapped_column(
         String(16), nullable=False, default="reasoning_effort", server_default="reasoning_effort"
     )
+    reasoning_efforts: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
 
     def profile(self) -> ProviderProfile:
         return ProviderProfile.from_mapping(
@@ -110,6 +111,7 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
                 "list_shape": self.list_shape,
                 "models_query": self.models_query,
                 "reasoning_param": self.reasoning_param,
+                "reasoning_efforts": self.reasoning_efforts,
             }
         )
 
@@ -255,6 +257,8 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
     )
     supports_vision: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
     supports_reasoning: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
+    # The reasoning levels this model takes; None defers to its provider's list.
+    reasoning_efforts: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     default_context_strategy: Mapped[str | None] = mapped_column(
         String, nullable=True, default=None
     )  # "static", "hybrid", "dynamic" — resolved per agent execution

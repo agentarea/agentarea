@@ -1939,6 +1939,7 @@ export const zAgentResponse = z.object({
   name: z.string(),
   planning: z.boolean().nullish(),
   reasoning_effort: z.string().nullish(),
+  reasoning_max_tokens: z.int().nullish(),
   registry_item_id: z.string().nullish(),
   skills: z.array(z.record(z.string(), z.unknown())).nullish(),
   slug: z.string(),
@@ -1972,6 +1973,7 @@ export const zAgentUpdate = z.object({
   name: z.string().min(1).max(255).optional(),
   planning: z.boolean().nullish(),
   reasoning_effort: z.string().nullish(),
+  reasoning_max_tokens: z.int().nullish(),
   skill_ids: z.array(z.uuid()).nullish(),
   tools: z
     .array(
@@ -4143,6 +4145,7 @@ export const zAgentCreateRequest = z.object({
   name: z.string().min(1).max(255),
   planning: z.boolean().nullish(),
   reasoning_effort: z.string().nullish(),
+  reasoning_max_tokens: z.int().nullish(),
   skill_ids: z.array(z.uuid()).nullish(),
   tools: z.array(
     z.union([

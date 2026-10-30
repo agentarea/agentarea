@@ -64,6 +64,14 @@ class ModelListShape(StrEnum):
 _ANTHROPIC_API_VERSION = "2023-06-01"
 
 
+def _levels(value: Any) -> tuple[str, ...] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list | tuple) or not all(isinstance(v, str) and v for v in value):
+        raise ValueError("reasoning_efforts must be a list of level names")
+    return tuple(value)
+
+
 def _with_scheme(url: str) -> str:
     url = url.rstrip("/")
     return url if url.startswith(("http://", "https://")) else f"http://{url}"
@@ -87,6 +95,8 @@ class ProviderProfile:
             text models unless asked for every output modality, which is where
             its image, video and decision models are.
         reasoning_param: How a request states its reasoning effort.
+        reasoning_efforts: The reasoning levels its models take, unless a model
+            states its own; ``None`` when the catalog does not say.
     """
 
     base_url: str | None = None
@@ -96,6 +106,7 @@ class ProviderProfile:
     list_shape: ModelListShape = ModelListShape.DATA_ID
     models_query: str | None = None
     reasoning_param: ReasoningParam = ReasoningParam.EFFORT
+    reasoning_efforts: tuple[str, ...] | None = None
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any] | None) -> ProviderProfile:
@@ -109,12 +120,17 @@ class ProviderProfile:
             list_shape=ModelListShape(data.get("list_shape") or ModelListShape.DATA_ID),
             models_query=data.get("models_query") or None,
             reasoning_param=ReasoningParam(data.get("reasoning_param") or ReasoningParam.EFFORT),
+            reasoning_efforts=_levels(data.get("reasoning_efforts")),
         )
 
     def as_mapping(self) -> dict[str, Any]:
-        return {
+        mapping: dict[str, Any] = {
             key: str(value) if value is not None else None for key, value in asdict(self).items()
         }
+        mapping["reasoning_efforts"] = (
+            list(self.reasoning_efforts) if self.reasoning_efforts is not None else None
+        )
+        return mapping
 
     @property
     def requires_endpoint_url(self) -> bool:
@@ -156,13 +172,21 @@ class ProviderProfile:
             url = f"{root}/models"
         return f"{url}?{self.models_query}" if self.models_query else url
 
-    def reasoning_fields(self, effort: str | None) -> dict[str, object]:
-        """The request fields that ask for ``effort``, empty when none is set."""
-        if not effort:
-            return {}
+    def reasoning_fields(self, effort: str | None, max_tokens: int | None) -> dict[str, object]:
+        """The request fields that ask for a reasoning level or budget, empty when neither is set."""
+        if effort and max_tokens:
+            raise ValueError("set reasoning_effort or reasoning_max_tokens, not both")
         if self.reasoning_param is ReasoningParam.OBJECT:
-            return {"reasoning": {"effort": effort}}
-        return {"reasoning_effort": effort}
+            if effort:
+                return {"reasoning": {"effort": effort}}
+            if max_tokens:
+                return {"reasoning": {"max_tokens": max_tokens}}
+            return {}
+        if max_tokens:
+            raise ValueError(
+                "this provider takes a reasoning level (reasoning_effort), not a token budget"
+            )
+        return {"reasoning_effort": effort} if effort else {}
 
     def build_headers(self, api_key: str | None) -> dict[str, str]:
         """Auth headers for this provider, empty when there is nothing to send."""
