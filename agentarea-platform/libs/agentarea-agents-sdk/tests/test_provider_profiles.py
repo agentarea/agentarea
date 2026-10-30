@@ -4,6 +4,8 @@ import pytest
 
 from agentarea_agents_sdk.models.provider_profiles import (
     DEFAULT_PROFILE,
+    ReasoningSettingError,
+    check_effort_supported,
     AuthStyle,
     ModelListShape,
     ProviderProfile,
@@ -128,3 +130,13 @@ def test_the_levels_a_provider_takes_round_trip_through_its_mapping():
 
     assert profile.reasoning_efforts == ("low", "high")
     assert ProviderProfile.from_mapping(profile.as_mapping()) == profile
+
+
+def test_a_level_the_catalog_does_not_list_is_refused():
+    with pytest.raises(ReasoningSettingError, match="takes reasoning_effort low, high, not xhigh"):
+        check_effort_supported("xhigh", ["low", "high"], model_name="m")
+
+
+@pytest.mark.parametrize("levels", [None, []])
+def test_with_no_listed_levels_any_level_passes(levels):
+    check_effort_supported("xhigh", levels, model_name="m")

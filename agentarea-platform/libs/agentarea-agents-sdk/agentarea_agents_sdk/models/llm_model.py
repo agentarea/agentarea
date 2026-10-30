@@ -21,7 +21,7 @@ from .messages import (
 from .messages import (
     UserMessage as SDKUserMessage,
 )
-from .provider_profiles import DEFAULT_PROFILE, ProviderProfile, Transport
+from .provider_profiles import DEFAULT_PROFILE, ProviderProfile, ReasoningSettingError, Transport
 
 if TYPE_CHECKING:
     from agentarea_common.utils.url_safety import OutboundPolicy
@@ -668,7 +668,9 @@ class LLMModel:
         if request.reasoning_effort or request.reasoning_max_tokens:
             # Extended thinking needs each thinking block, signed, sent back with the
             # tool results that follow it, which the conversation does not keep.
-            raise ValueError("the Anthropic transport does not take reasoning settings yet")
+            raise ReasoningSettingError(
+                "the Anthropic transport does not take reasoning settings yet"
+            )
         url = self._api_url("/messages")
         system, turns = to_anthropic_messages(self._normalize_messages(request.messages))
 

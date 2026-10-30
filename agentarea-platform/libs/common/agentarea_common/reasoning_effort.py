@@ -7,7 +7,6 @@ value goes to the provider as given. Unset leaves the model at its own default.
 """
 
 import re
-from collections.abc import Sequence
 from typing import Any
 
 REASONING_EFFORT_PARAMETER = "reasoning_effort"
@@ -48,16 +47,6 @@ def check_reasoning(parameters: dict[str, Any] | None) -> dict[str, Any] | None:
     if reasoning_effort_of(parameters) and reasoning_max_tokens_of(parameters):
         raise ValueError("set reasoning_effort or reasoning_max_tokens, not both")
     return parameters
-
-
-def check_effort_supported(
-    effort: str | None, levels: Sequence[str] | None, *, model_name: str
-) -> None:
-    """Refuse a level the catalog says this model does not take; no stated levels, no check."""
-    if effort and levels and effort not in levels:
-        raise ValueError(
-            f"model {model_name} takes reasoning_effort {', '.join(levels)}, not {effort}"
-        )
 
 
 def reasoning_settings(

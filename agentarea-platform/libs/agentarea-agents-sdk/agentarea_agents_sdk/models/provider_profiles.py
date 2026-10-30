@@ -12,7 +12,7 @@ which is what makes ``requires_endpoint_url`` true.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import Any
@@ -62,6 +62,20 @@ class ModelListShape(StrEnum):
 
 
 _ANTHROPIC_API_VERSION = "2023-06-01"
+
+
+class ReasoningSettingError(ValueError):
+    """A reasoning level or budget this model or provider cannot take; retrying cannot help."""
+
+
+def check_effort_supported(
+    effort: str | None, levels: Sequence[str] | None, *, model_name: str
+) -> None:
+    """Refuse a level the catalog says this model does not take; no stated levels, no check."""
+    if effort and levels and effort not in levels:
+        raise ReasoningSettingError(
+            f"model {model_name} takes reasoning_effort {', '.join(levels)}, not {effort}"
+        )
 
 
 def _levels(value: Any) -> tuple[str, ...] | None:
@@ -175,7 +189,7 @@ class ProviderProfile:
     def reasoning_fields(self, effort: str | None, max_tokens: int | None) -> dict[str, object]:
         """The request fields that ask for a reasoning level or budget, empty when neither is set."""
         if effort and max_tokens:
-            raise ValueError("set reasoning_effort or reasoning_max_tokens, not both")
+            raise ReasoningSettingError("set reasoning_effort or reasoning_max_tokens, not both")
         if self.reasoning_param is ReasoningParam.OBJECT:
             if effort:
                 return {"reasoning": {"effort": effort}}
@@ -183,7 +197,7 @@ class ProviderProfile:
                 return {"reasoning": {"max_tokens": max_tokens}}
             return {}
         if max_tokens:
-            raise ValueError(
+            raise ReasoningSettingError(
                 "this provider takes a reasoning level (reasoning_effort), not a token budget"
             )
         return {"reasoning_effort": effort} if effort else {}

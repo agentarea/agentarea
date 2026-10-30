@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from agentarea_agents_sdk import GoalProgressEvaluator, LLMModel, LLMRequest
-from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile, ReasoningSettingError
 from agentarea_agents_sdk.skills import SkillContextGuard
 from agentarea_common.analytics import count_run_refused
 from agentarea_common.auth.context import UserContext
@@ -96,6 +96,8 @@ def _model_call_failure(message: str, error: Exception) -> ApplicationError:
             type=GovernanceDeniedError.__name__,
             non_retryable=True,
         )
+    if isinstance(error, ReasoningSettingError):
+        return ApplicationError(message, type=type(error).__name__, non_retryable=True)
     failure = classify_llm_failure(error)
     return ApplicationError(
         message,
