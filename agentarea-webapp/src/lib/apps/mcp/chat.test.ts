@@ -50,6 +50,13 @@ describe("chatMcpApp", () => {
     expect(app?.arguments).toEqual({});
   });
 
+  it("opens the app from the part the transcript hands the app slot", () => {
+    // activityView re-kinds the tool result to "app" for its own row.
+    expect(chatMcpApp({ ...toolResult({}), kind: "app" })?.toolName).toBe(
+      "show_chart"
+    );
+  });
+
   it("opens nothing for a call that names no app, failed, or is still running", () => {
     expect(chatMcpApp(toolResult({ mcp_app_tool: undefined }))).toBeNull();
     expect(chatMcpApp(toolResult({ server_instance_id: "" }))).toBeNull();
