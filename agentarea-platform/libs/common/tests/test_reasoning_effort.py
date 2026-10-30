@@ -2,7 +2,6 @@
 
 import pytest
 from agentarea_common.reasoning_effort import (
-    check_effort_supported,
     check_reasoning,
     reasoning_effort_of,
     reasoning_max_tokens_of,
@@ -42,13 +41,3 @@ def test_a_level_and_a_budget_together_are_refused():
 def test_a_run_that_sets_reasoning_replaces_the_agents_pair():
     assert reasoning_settings({"reasoning_max_tokens": 2048}, "high", None) == (None, 2048)
     assert reasoning_settings({"topic": "x"}, "high", None) == ("high", None)
-
-
-def test_a_level_the_catalog_does_not_list_is_refused():
-    with pytest.raises(ValueError, match="takes reasoning_effort low, high, not xhigh"):
-        check_effort_supported("xhigh", ["low", "high"], model_name="m")
-
-
-@pytest.mark.parametrize("levels", [None, []])
-def test_with_no_listed_levels_any_level_passes(levels):
-    check_effort_supported("xhigh", levels, model_name="m")

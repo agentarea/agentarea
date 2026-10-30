@@ -844,6 +844,20 @@ async def test_activity_maps_missing_usage_to_nonretryable_error_once(provider, 
     assert isinstance(raised.value.__cause__, RuntimeError)
 
 
+async def test_activity_refuses_a_reasoning_setting_once_without_retry(
+    provider, activity_boundary
+):
+    request = _activity_request(reasoning_effort="ultra")
+    request.resolved_model["provider"]["reasoning_efforts"] = ["low", "high"]
+
+    with pytest.raises(ApplicationError) as raised:
+        await ActivityEnvironment().run(activity_boundary.call, request)
+
+    assert raised.value.non_retryable is True
+    assert raised.value.type == "ReasoningSettingError"
+    provider.ainvoke_stream.assert_not_called()
+
+
 async def test_activity_preserves_retryable_rate_limit(provider, activity_boundary):
     original = RuntimeError("rate limit exceeded")
     provider.ainvoke_stream.side_effect = original
