@@ -8,6 +8,11 @@ the fly: its MCP instances' tools (aggregated, each narrowed to the tools the
 client allows), its OpenAPI connections' operations (likewise), its platform toolsets (minus their disabled methods, run in the
 client's workspace), and ``activate_skill`` over its skills.
 
+The MCP Apps its instances carry pass through to the host: tools keep their
+``_meta.ui`` with the ``ui://`` resource namespaced, ``resources/read`` routes
+that URI back to its instance, and an app's calls by raw tool name resolve to
+the one instance serving it.
+
 Every tool the client carries is still governed by the workspace policy: the
 caller's workspace+user policy is resolved with the resolver task snapshots use
 and judged by the one tool PDP (``decide_tool_policy``). A tool the policy denies
@@ -70,11 +75,18 @@ from agentarea_mcp.domain.transport import MCPTransport
 from agentarea_mcp.tool_context import CallerContext, context_header
 from agentarea_openapi.application.metering import openapi_tool_connection
 from mcp.server import Server
+from mcp.server.apps import EXTENSION_ID as APPS_EXTENSION_ID
+from mcp.shared.exceptions import MCPError
 from mcp.types import (
+    INVALID_PARAMS,
     CallToolRequestParams,
     CallToolResult,
+    ListResourcesResult,
+    ListResourceTemplatesResult,
     ListToolsResult,
     PaginatedRequestParams,
+    ReadResourceRequestParams,
+    ReadResourceResult,
     TextContent,
     Tool,
 )
@@ -1121,8 +1133,9 @@ async def _list_tools(_ctx: object, _params: PaginatedRequestParams | None) -> L
             name=t["name"],
             description=t["description"],
             input_schema=t.get("input_schema") or t["inputSchema"],
+            _meta=t.get("_meta"),
         )
-        for t in await scope.proxy.list_namespaced_tools()
+        for t in await scope.proxy.list_app_tools()
     )
     tools.extend(
         Tool(name=name, description=operation.description, input_schema=operation.input_schema)
@@ -1166,9 +1179,9 @@ async def _call_tool(_ctx: object, params: CallToolRequestParams) -> CallToolRes
         return _answer(await _call_client_openapi(scope, params.name, operation, arguments))
 
     is_platform_tool = params.name in scope.platform_tools
-    if not is_platform_tool and scope.proxy.owner_of(params.name) is None:
-        # Not a tool of this client: nothing to judge, nothing ran.
-        raise ValueError(f"No member owns tool {params.name}")
+    # An MCP App calls its own tools by their raw names. A name no tool of this
+    # client answers to raises: nothing to judge, nothing ran.
+    name = params.name if is_platform_tool else await scope.proxy.resolve_tool(params.name)
 
     async def invoke() -> ToolCallOutcome:
         if is_platform_tool:
@@ -1176,20 +1189,18 @@ async def _call_tool(_ctx: object, params: CallToolRequestParams) -> CallToolRes
             # authorization checks apply exactly as on /mcp/w/{workspace}.
             with use_mcp_user_context(scope.user_context), selected_tools(scope.platform_tools):
                 return _call_outcome(
-                    await client_platform_server().call_tool_result(params.name, arguments)
+                    await client_platform_server().call_tool_result(name, arguments)
                 )
-        with call_headers(_caller_headers(scope, params.name)):
-            return _call_outcome(
-                await scope.proxy.call_namespaced_tool_result(params.name, arguments)
-            )
+        with call_headers(_caller_headers(scope, name)):
+            return _call_outcome(await scope.proxy.call_namespaced_tool_result(name, arguments))
 
     try:
-        connection = await _scope_tool_connection(scope, params.name)
+        connection = await _scope_tool_connection(scope, name)
     except ToolCostError as error:
         return _refusal(f"the tool's cost declaration is invalid: {error}")
     result = await _governed_call(
         scope,
-        params.name,
+        name,
         arguments,
         invoke,
         resource_type="client",
@@ -1198,6 +1209,43 @@ async def _call_tool(_ctx: object, params: CallToolRequestParams) -> CallToolRes
         kind=ToolKind.PLATFORM if is_platform_tool else ToolKind.MCP,
     )
     return _answer(result)
+
+
+async def _request_scope() -> ClientScope:
+    client_id = _client_id_var.get()
+    if not client_id:
+        raise ValueError("No client scope on request")
+    try:
+        scope = await _resolve_client_scope(client_id)
+    except ClientAccessDeniedError:
+        raise ValueError("Not authorized for this client") from None
+    if scope is None:
+        raise ValueError("Client not found")
+    return scope
+
+
+async def _list_resources(
+    _ctx: object, _params: PaginatedRequestParams | None
+) -> ListResourcesResult:
+    """The ``ui://`` resources of the MCP Apps the client carries, namespaced."""
+    scope = await _request_scope()
+    return ListResourcesResult(resources=await scope.proxy.list_app_resources())
+
+
+async def _list_resource_templates(
+    _ctx: object, _params: PaginatedRequestParams | None
+) -> ListResourceTemplatesResult:
+    return ListResourceTemplatesResult(resource_templates=[])
+
+
+async def _read_resource(_ctx: object, params: ReadResourceRequestParams) -> ReadResourceResult:
+    scope = await _request_scope()
+    result = await scope.proxy.read_app_resource(params.uri)
+    if result is None:
+        raise MCPError(
+            code=INVALID_PARAMS, message=f"Unknown resource: {params.uri}", data={"uri": params.uri}
+        )
+    return result
 
 
 def _answer(result: CallToolResult | ApprovalRequired) -> CallToolResult:
@@ -1216,7 +1264,11 @@ client_mcp_server = Server(
     **server_identity(),
     on_list_tools=_list_tools,
     on_call_tool=_call_tool,
+    on_list_resources=_list_resources,
+    on_list_resource_templates=_list_resource_templates,
+    on_read_resource=_read_resource,
 )
+client_mcp_server.extensions[APPS_EXTENSION_ID] = {}
 install_mcp_events(client_mcp_server, EventsClientScope(client_events_context))
 
 
