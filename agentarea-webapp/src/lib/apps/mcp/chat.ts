@@ -30,10 +30,11 @@ function nonEmpty(value: unknown): string | null {
 /**
  * The app a `tool.result` part opens, or null. The platform names the raw
  * tool in `mcp_app_tool` only when the call opens an app; a failed call opens
- * none.
+ * none. The transcript hands the app's own row the same part as kind "app".
  */
 export function chatMcpApp(part: Part): ChatMcpApp | null {
-  if (part.kind !== "tool" || part.eventType !== TOOL_RESULT) return null;
+  if (part.kind !== "tool" && part.kind !== "app") return null;
+  if (part.eventType !== TOOL_RESULT) return null;
   const { data } = part;
   const toolName = nonEmpty(data.mcp_app_tool);
   const instanceId = nonEmpty(data.server_instance_id);
