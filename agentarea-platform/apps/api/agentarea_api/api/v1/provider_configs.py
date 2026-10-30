@@ -320,8 +320,7 @@ class SkippedModelResponse(BaseModel):
 def _missing_runtime_metadata(model: DiscoveredModel) -> list[str]:
     """Names of the runtime fields a model must carry before it can be run.
 
-    Only chat and embedding runs are billed from per-token prices over a context
-    window; the other kinds are billed at the cost the provider reports per call.
+    Only chat and embedding runs need a context window; a price is optional.
     """
     if model.kind is None:
         return ["kind"]
@@ -334,10 +333,6 @@ def _missing_runtime_metadata(model: DiscoveredModel) -> list[str]:
         or model.context_window <= 0
     ):
         missing.append("context_window")
-    if model.input_cost_per_token is None:
-        missing.append("input_cost_per_token")
-    if model.output_cost_per_token is None:
-        missing.append("output_cost_per_token")
     return missing
 
 

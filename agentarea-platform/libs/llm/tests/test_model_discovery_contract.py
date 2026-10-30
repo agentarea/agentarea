@@ -41,6 +41,15 @@ def test_discovery_parses_explicit_runtime_metadata():
     assert model.output_cost_per_token == Decimal("0.000002")
 
 
+def test_a_vllm_listing_gives_its_context_window_as_max_model_len():
+    models = ModelDiscoveryService()._parse_response(
+        ProviderProfile(),
+        {"data": [{"id": "Qwen/Qwen3-32B", "object": "model", "max_model_len": 40960}]},
+    )
+
+    assert models[0].context_window == 40960
+
+
 async def test_a_member_endpoint_at_the_metadata_address_is_never_fetched(caplog):
     models = await ModelDiscoveryService().discover(
         "openai", "sk-test", endpoint_url="http://169.254.169.254/latest", provider=ProviderProfile()

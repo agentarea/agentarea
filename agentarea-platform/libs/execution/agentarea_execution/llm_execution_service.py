@@ -203,9 +203,6 @@ class LLMExecutionService:
                         logger.warning(f"No API key found for model instance {model_instance.id}")
                 del model_instance, model_service
 
-            if input_cost_per_token is None or output_cost_per_token is None:
-                raise ValueError("model pricing is not configured; run budget cannot be enforced")
-
             if endpoint_url:
                 endpoint_url = endpoint_url.replace("localhost", self._local_host).replace(
                     "127.0.0.1", self._local_host

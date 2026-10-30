@@ -13,6 +13,7 @@ import {
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { ModelSpec, ProviderSpec } from "@/types/provider";
 import type { SkippedModelResponse } from "@/api/client";
+import AddModelSpec from "./AddModelSpec";
 import { filterModelsByDiscovery } from "./modelDiscovery";
 
 interface SelectedModel {
@@ -193,6 +194,35 @@ export default function ModelInstances({
     }
   };
 
+  const handleModelAdded = async (spec: {
+    id: string;
+    model_name: string;
+    display_name: string;
+  }) => {
+    // Before a discovery in create mode the list shows only what was pulled or
+    // added here, never the provider's whole catalog.
+    setDiscoveredModelNames((names) =>
+      names
+        ? new Set([...names, spec.model_name])
+        : isEdit
+          ? names
+          : new Set([spec.model_name])
+    );
+    setHasDiscovered(true);
+    if (!selectedModels.some((m) => m.modelSpecId === spec.id)) {
+      setSelectedModels([
+        ...selectedModels,
+        {
+          modelSpecId: spec.id,
+          instanceName: `${selectedProvider?.name} ${spec.display_name}`,
+          description: "",
+          isPublic: false,
+        },
+      ]);
+    }
+    await onModelsDiscovered?.();
+  };
+
   const toRow = (model: ModelSpec): SelectedModel => ({
     modelSpecId: model.id,
     instanceName: `${selectedProvider?.name} ${model.display_name}`,
@@ -259,6 +289,10 @@ export default function ModelInstances({
             providerName: selectedProvider.name,
           })}
         </p>
+        <AddModelSpec
+          providerSpecId={selectedProvider.id}
+          onAdded={handleModelAdded}
+        />
       </div>
 
       <div className="space-y-2">

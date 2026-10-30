@@ -136,7 +136,9 @@ class ModelDiscoveryService:
                 DiscoveredModel(
                     model_name=model_id,
                     display_name=m.get("name", model_id),
-                    context_window=_positive_int_or_none(m.get("context_length")),
+                    context_window=_positive_int_or_none(
+                        m.get("context_length") or m.get("max_model_len")
+                    ),
                     max_output_tokens=_positive_int_or_none(
                         m.get("max_output_tokens") or top_provider.get("max_completion_tokens")
                     ),

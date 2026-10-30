@@ -43,8 +43,13 @@ def estimate_vendor_cost(
     max_tokens: int | None,
     input_cost_per_token: Any,
     output_cost_per_token: Any,
-) -> Money:
-    """The most a call can cost the payer: its prompt, roughly, and every output token."""
+) -> Money | None:
+    """The most a call can cost the payer: its prompt, roughly, and every output token.
+
+    None when the model declares no price: unknown, not free.
+    """
+    if input_cost_per_token is None or output_cost_per_token is None:
+        return None
     prompt_tokens = len(json.dumps(messages, default=str)) // 4
     return to_money(
         prompt_tokens * to_money(input_cost_per_token)

@@ -448,11 +448,6 @@ def make_llm_activities(
                     managed_by = getattr(model_instance.provider_config, "managed_by", None)
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
 
-            if input_cost_per_token is None or output_cost_per_token is None:
-                raise ValueError(
-                    "model pricing is not configured; compaction budget cannot be enforced"
-                )
-
             if endpoint_url:
                 local_host = dependencies.settings.app.local_host
                 endpoint_url = endpoint_url.replace("localhost", local_host).replace(

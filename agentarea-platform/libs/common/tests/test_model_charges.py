@@ -20,6 +20,7 @@ from agentarea_common.model_charges import (
     ModelChargeUnavailableError,
     ModelFunding,
     charge_model_call,
+    estimate_vendor_cost,
     hold_model_call,
     release_model_hold,
 )
@@ -122,6 +123,16 @@ async def test_a_platform_call_with_no_price_to_estimate_is_refused_unasked():
 
     assert refused.value.code == "model_unpriced"
     assert billing.authorizations == []
+
+
+@pytest.mark.parametrize(("inp", "out"), [(None, "0.000002"), ("0.000001", None), (None, None)])
+def test_a_model_without_a_price_has_no_estimate_not_a_free_one(inp, out):
+    """A $0 estimate would let an unpriced call through billing's hold for free."""
+    assert estimate_vendor_cost([{"role": "user", "content": "hi"}], 100, inp, out) is None
+
+
+def test_an_explicitly_free_model_is_estimated_at_zero():
+    assert estimate_vendor_cost([{"role": "user", "content": "hi"}], 100, "0", "0") == Decimal(0)
 
 
 async def test_a_refused_or_unanswered_hold_refuses_the_call(monkeypatch):

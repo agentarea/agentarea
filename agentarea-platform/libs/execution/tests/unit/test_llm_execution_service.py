@@ -287,17 +287,17 @@ async def test_unaccounted_response_fails_without_success_marker_or_retry(
 
 
 @pytest.mark.parametrize("missing_rate", ["input_cost_per_token", "output_cost_per_token"])
-async def test_unknown_pricing_rejects_before_provider_io(
+async def test_a_model_without_a_price_runs_on_the_members_own_key(
     provider, make_service, user_context, missing_rate
 ):
     request = _request()
     request.resolved_model[missing_rate] = None
 
-    with pytest.raises(ValueError, match="model pricing is not configured"):
-        await make_service().execute(request, user_context=user_context)
+    result = await make_service().execute(request, user_context=user_context)
 
-    provider.ainvoke_stream.assert_not_called()
-    provider.complete.assert_not_awaited()
+    assert result.content == "hello"
+    assert result.provider_cost_usd == to_money("0.02")
+    provider.ainvoke_stream.assert_called_once()
 
 
 @pytest.mark.parametrize(
