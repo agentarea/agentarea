@@ -10,6 +10,7 @@ import type {
   McpServerInstanceUpdate,
   ModelInstanceBulkCreateRequest,
   ModelKind,
+  ModelSpecCreate,
   OAuthAuthorizeRequest,
   OAuthPreflightResponse,
   PaginatedResponseSkillResponse,
@@ -30,6 +31,7 @@ import {
   zOAuthFinishResponse,
   zOAuthPreflightResponse,
   zProjectCreate,
+  zModelSpecCreate,
   zProjectUpdate,
   zProviderConfigCreate,
   zProviderConfigUpdate,
@@ -135,6 +137,7 @@ import {
   updateProject,
   updateProviderConfig,
   updateSkill,
+  upsertModelSpec,
   workspaceFileHistory,
 } from "@/lib/api";
 import {
@@ -371,6 +374,21 @@ export async function bulkCreateModelInstancesAction(
 
 export async function deleteModelInstanceAction(instanceId: string) {
   return await deleteModelInstance(instanceId);
+}
+
+export async function upsertModelSpecAction(spec: ModelSpecCreate) {
+  const parsed = zModelSpecCreate.safeParse(spec);
+  if (!parsed.success) {
+    return {
+      data: undefined,
+      error: {
+        detail: parsed.error.issues.map((issue) => ({
+          msg: `${issue.path.join(".")}: ${issue.message}`,
+        })),
+      },
+    };
+  }
+  return await upsertModelSpec(parsed.data as ModelSpecCreate);
 }
 
 export async function discoverModelsAction(configId: string) {

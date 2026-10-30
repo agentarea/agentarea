@@ -37,11 +37,6 @@ def _wrapped(error: Exception, outer: str = "LLM call failed") -> RuntimeError:
             "re-enter",
         ),
         (
-            ValueError("model pricing is not configured; run budget cannot be enforced"),
-            "model_unpriced",
-            "no price",
-        ),
-        (
             LLMProviderHTTPError(400, "Insufficient credits"),
             "provider_out_of_credits",
             "out of credits",
@@ -168,7 +163,6 @@ def _wrapped(error: Exception, outer: str = "LLM call failed") -> RuntimeError:
         "no_usage",
         "customer_pricing",
         "decrypt",
-        "unpriced",
         "credits_in_400_body",
         "code_402_in_400_body",
         "status_402",

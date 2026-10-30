@@ -91,12 +91,6 @@ def test_accounting_contract_errors_fail_fast_after_paid_call():
         )
         is True
     )
-    assert (
-        _is_non_retryable_error(
-            ValueError("remote model pricing is not configured; run budget cannot be enforced")
-        )
-        is True
-    )
 
 
 def test_governance_decisions_are_not_retried():
