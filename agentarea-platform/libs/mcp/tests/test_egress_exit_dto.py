@@ -11,6 +11,8 @@ from agentarea_mcp.schemas.dto import (
 from agentarea_mcp.schemas.egress_exit_dto import EgressExitCreate, EgressExitUpdate
 from pydantic import ValidationError
 
+WITH_USERINFO = "http://user:pass@proxy.example.com:3128"  # pragma: allowlist secret
+
 
 def _exit(**fields) -> EgressExitCreate:
     return EgressExitCreate.model_validate({"name": "office", **fields})
@@ -29,7 +31,7 @@ def test_an_upstream_is_scheme_host_and_port(url):
     [
         "ftp://proxy.example.com:21",
         "http://proxy.example.com",
-        "http://user:pass@proxy.example.com:3128",
+        WITH_USERINFO,
         "http://proxy.example.com:3128/path",
         "http://proxy.example.com:3128?x=1",
         "proxy.example.com:3128",
@@ -62,12 +64,16 @@ def test_a_password_needs_a_username():
 
 def test_an_exit_carries_no_password_value():
     with pytest.raises(ValidationError):
-        _exit(upstream_url="https://p.example.com:443", username="u", password="hunter2")
+        _exit(
+            upstream_url="https://p.example.com:443",
+            username="u",
+            password="hunter2",  # pragma: allowlist secret
+        )
 
 
 def test_an_update_checks_a_new_upstream_the_same_way():
     with pytest.raises(ValidationError, match="upstream_url"):
-        EgressExitUpdate(upstream_url="http://user:pass@p.example.com:3128")
+        EgressExitUpdate(upstream_url=WITH_USERINFO)
     assert EgressExitUpdate(description="x").model_dump(exclude_unset=True) == {"description": "x"}
 
 
@@ -83,9 +89,7 @@ def test_an_instance_binds_an_exit_by_id():
 @pytest.mark.parametrize("value", ["aeza-se", "", 123, {"id": "x"}])
 def test_an_instance_naming_an_exit_any_other_way_is_refused(value):
     with pytest.raises(ValidationError, match="egress exit id"):
-        MCPServerInstanceCreate(
-            name="i", server_spec_id=uuid4(), json_spec={"egress_exit": value}
-        )
+        MCPServerInstanceCreate(name="i", server_spec_id=uuid4(), json_spec={"egress_exit": value})
 
 
 def test_a_server_spec_cannot_bind_every_instance_to_an_exit():
