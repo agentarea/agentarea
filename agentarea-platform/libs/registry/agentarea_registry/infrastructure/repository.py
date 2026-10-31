@@ -361,12 +361,16 @@ class RegistryItemRepository:
     ) -> int:
         """Point every use of the registry's items at the same item of a replacement.
 
-        "The same item" is the one with the same ``external_id`` that a
-        replacement registry still publishes (the first by registry weight).
-        Installs, forks, agents and connections move, in every workspace, except
-        where a workspace already holds the replacement item: one fork and one
-        install per item and workspace. Not committed, so the caller deletes
-        what is left unused in the same transaction. Returns how many moved.
+        Only items the registry no longer publishes move. "The same item" is
+        the one with the same ``external_id`` that a replacement registry still
+        publishes (the first by registry weight). Installs, forks, agents,
+        servers and connections move, in every workspace, except where a
+        workspace already holds the replacement item: one fork and one install
+        per item and workspace. The platform's own copy of an MCP server
+        (``installed_entity_id``) stays, since the replacement has its own, and
+        the instances run from it move to the replacement's copy. Not committed,
+        so the caller deletes what is left unused in the same transaction.
+        Returns how many moved.
         """
         if not replacements:
             return 0
@@ -376,12 +380,15 @@ class RegistryItemRepository:
             text(
                 """
                 WITH moves AS (
-                    SELECT DISTINCT ON (old.id) old.id AS old_id, new.id AS new_id
+                    SELECT DISTINCT ON (old.id) old.id AS old_id, new.id AS new_id,
+                           old.installed_entity_id AS old_copy,
+                           new.installed_entity_id AS new_copy
                     FROM registry_items old
                     JOIN registry_items new
                       ON new.external_id = old.external_id
                      AND new.registry_type = old.registry_type
                     WHERE old.registry_id = :registry_id
+                      AND NOT old.in_source
                       AND new.registry_id = ANY(:replacements)
                       AND new.in_source
                     ORDER BY old.id, new.registry_priority, new.registry_id
@@ -415,7 +422,16 @@ class RegistryItemRepository:
                 ),
                 servers AS (
                     UPDATE mcp_servers t SET registry_item_id = m.new_id
-                    FROM moves m WHERE t.registry_item_id = m.old_id
+                    FROM moves m
+                    WHERE t.registry_item_id = m.old_id
+                      AND t.id IS DISTINCT FROM m.old_copy
+                    RETURNING 1
+                ),
+                instances AS (
+                    UPDATE mcp_server_instances i SET server_spec_id = m.new_copy::text
+                    FROM moves m
+                    WHERE m.old_copy IS NOT NULL AND m.new_copy IS NOT NULL
+                      AND i.server_spec_id = m.old_copy::text
                     RETURNING 1
                 ),
                 connections AS (
@@ -425,7 +441,7 @@ class RegistryItemRepository:
                 )
                 SELECT (SELECT count(*) FROM forks) + (SELECT count(*) FROM installs)
                      + (SELECT count(*) FROM agents_moved) + (SELECT count(*) FROM servers)
-                     + (SELECT count(*) FROM connections)
+                     + (SELECT count(*) FROM instances) + (SELECT count(*) FROM connections)
                 """
             ),
             {
@@ -434,6 +450,38 @@ class RegistryItemRepository:
             },
         )
         return int(result.scalar_one())
+
+    async def replaced_copies(
+        self, registry_id: UUID | str, replacements: Collection[UUID | str]
+    ) -> list[tuple[UUID, str]]:
+        """``(item id, entity id)`` of the platform copies of items the registry
+        dropped whose replacement item has a copy of its own: left unused once
+        ``move_references`` ran, they are the caller's to delete.
+        """
+        if not replacements:
+            return []
+        result = await self.session.execute(
+            text(
+                """
+                SELECT DISTINCT old.id, old.installed_entity_id
+                FROM registry_items old
+                JOIN registry_items new
+                  ON new.external_id = old.external_id
+                 AND new.registry_type = old.registry_type
+                WHERE old.registry_id = :registry_id
+                  AND NOT old.in_source
+                  AND old.installed_entity_id IS NOT NULL
+                  AND new.registry_id = ANY(:replacements)
+                  AND new.in_source
+                  AND new.installed_entity_id IS NOT NULL
+                """
+            ),
+            {
+                "registry_id": UUID(str(registry_id)),
+                "replacements": [UUID(str(r)) for r in replacements],
+            },
+        )
+        return [(row[0], str(row[1])) for row in result.all()]
 
     async def delete_unreferenced_out_of_source(self, registry_id: UUID | str) -> int:
         """Delete the registry's items its source dropped that nothing uses.
