@@ -56,7 +56,6 @@ export async function DashboardData() {
               spend={data.spend}
               trend={data.daily_spend}
               topAgents={data.top_agents}
-              usage={data.usage}
               currency={currency}
               compact
             />

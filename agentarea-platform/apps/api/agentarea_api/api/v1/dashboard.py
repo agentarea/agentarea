@@ -405,7 +405,8 @@ async def _runtime_usage(workspace_id: str, since: datetime) -> RuntimeUsage | N
     return RuntimeUsage(
         cpu_core_hours=usage.cpu_core_hours.quantize(_CENT),
         memory_gib_hours=usage.memory_gib_hours.quantize(_CENT),
-        storage_gib=usage.storage_gib.quantize(_CENT),
+        # A workspace often keeps megabytes: to the KiB, not the hundredth of a GiB.
+        storage_gib=usage.storage_gib.quantize(Decimal("0.000001")),
     )
 
 

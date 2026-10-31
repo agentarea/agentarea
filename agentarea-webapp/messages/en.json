@@ -3267,7 +3267,6 @@
       "needs_owner": "Needs a new owner"
     },
     "projectedEom": "≈ {amount} by month end",
-    "runtimeUsage": "Runtime: {cpu} vCPU·h · {memory} GiB·h memory · {storage} GiB stored",
     "attention": "Needs your attention",
     "allClearTitle": "Nothing needs you right now",
     "allClearHint": "Approvals, stopped runs and broken connections will show up here.",
@@ -3311,7 +3310,21 @@
     "capUpdated": "Workspace monthly cap updated.",
     "capInvalid": "Enter a positive number, or leave it empty to remove the cap.",
     "capUpdateFailed": "Failed to update workspace cap",
-    "settingsLoadFailed": "Couldn't load workspace settings"
+    "settingsLoadFailed": "Couldn't load workspace settings",
+    "runtime": {
+      "title": "Workspace resources",
+      "hint": "What runs and files of this workspace use; billed from the balance",
+      "compute": "Compute",
+      "memory": "Memory",
+      "storage": "Storage",
+      "monthToDate": "This month",
+      "now": "Now",
+      "cpuUnit": "vCPU·h",
+      "memoryUnit": "GiB·h",
+      "computeSub": "CPU reserved for sandboxes and MCP servers",
+      "memorySub": "Memory reserved for sandboxes and MCP servers",
+      "storageSub": "Files and artifacts the workspace keeps"
+    }
   },
   "AgentOverviewPage": {
     "showMore": "Show more",
