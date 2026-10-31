@@ -18,6 +18,7 @@ import {
   MCP_UI_STYLE_TOKEN_NAMES,
   mcpUiStyleVariablesFromTokens,
 } from "@/lib/apps/styles";
+import { cn } from "@/lib/utils";
 
 const HOST_INFO = {
   name: "AgentArea MCP Apps",
@@ -343,7 +344,10 @@ export default function McpAppFrame({
 
   return (
     <div
-      className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background"
+      className={cn(
+        "relative flex flex-col overflow-hidden bg-background",
+        displayMode === "inline" ? "shrink-0" : "min-h-0 flex-1"
+      )}
       style={displayMode === "inline" ? { height: inlineHeight } : undefined}
     >
       <iframe
