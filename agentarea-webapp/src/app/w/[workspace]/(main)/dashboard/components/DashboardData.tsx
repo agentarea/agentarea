@@ -1,13 +1,14 @@
 import { getTranslations } from "next-intl/server";
 import { BalanceSection } from "@/components/BalanceSection";
-import { BoardGrid } from "@/components/board";
+import { BoardColumns } from "@/components/board";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import { getDashboard, getPricingCurrency } from "@/lib/api-dashboard";
 import { apiErrorMessage } from "@/lib/api-errors";
-import { BlockersPanel } from "./BlockersPanel";
+import { ActivityPanel } from "./ActivityPanel";
+import { AttentionPanel } from "./AttentionPanel";
 import { ScheduleCalendar } from "./ScheduleCalendar";
 import { SpendCard } from "./SpendCard";
-import { TasksPanel } from "./TasksPanel";
+import { WalletAlerts } from "./WalletAlerts";
 
 export async function DashboardData() {
   const [result, pricing] = await Promise.all([
@@ -34,32 +35,40 @@ export async function DashboardData() {
   }
 
   return (
-    <BoardGrid
-      topLeft={<BlockersPanel blockers={data.blockers} currency={currency} />}
-      topLeftPadded={false}
-      topRight={
-        <>
+    <BoardColumns
+      left={[
+        <AttentionPanel
+          key="attention"
+          blockers={data.blockers}
+          health={data.health}
+        />,
+        <ScheduleCalendar key="schedule" schedule={data.schedule} />,
+      ]}
+      right={[
+        <div key="money">
+          <WalletAlerts
+            wallets={data.blockers.wallet_exhausted}
+            currency={currency}
+          />
           <BalanceSection />
-          <div className="flex min-h-0 flex-1 flex-col px-6 pb-4 pt-3.5">
+          <div className="flex flex-col px-6 pb-4 pt-3.5">
             <SpendCard
               spend={data.spend}
               trend={data.daily_spend}
               topAgents={data.top_agents}
+              usage={data.usage}
               currency={currency}
               compact
             />
           </div>
-        </>
-      }
-      topRightPadded={false}
-      bottomLeft={<ScheduleCalendar schedule={data.schedule} />}
-      bottomRight={
-        <TasksPanel
+        </div>,
+        <ActivityPanel
+          key="activity"
           active={data.active_tasks}
           recent={data.recent_tasks}
           currency={currency}
-        />
-      }
+        />,
+      ]}
     />
   );
 }

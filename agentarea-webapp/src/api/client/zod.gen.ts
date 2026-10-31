@@ -289,6 +289,11 @@ export const zBalanceResponse = z.object({
   amount: z.string().nullable(),
   currency: z.string(),
   exhausted: z.boolean(),
+  runway_days: z
+    .string()
+    .regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)
+    .nullish(),
+  spend_per_day: z.string().nullish(),
   viewer_is_payer: z.boolean(),
 });
 
@@ -316,6 +321,31 @@ export const zBodyUploadSkillV1SkillsUploadPost = z.object({
  */
 export const zBodyUploadWorkspaceLogoV1LogoPut = z.object({
   file: z.string(),
+});
+
+/**
+ * BrokenConnection
+ */
+export const zBrokenConnection = z.object({
+  at: z.string().nullable(),
+  error: z.string().nullable(),
+  instance_id: z.uuid(),
+  name: z.string(),
+  reason: z.enum(["verification_failed", "last_call_failed"]),
+});
+
+/**
+ * BrokenTrigger
+ */
+export const zBrokenTrigger = z.object({
+  agent_id: z.uuid(),
+  agent_name: z.string().nullish(),
+  consecutive_failures: z.int(),
+  failure_threshold: z.int(),
+  last_execution_at: z.iso.datetime().nullable(),
+  name: z.string(),
+  reason: z.enum(["failing", "stopped_after_failures", "needs_owner"]),
+  trigger_id: z.uuid(),
 });
 
 /**
@@ -1051,6 +1081,14 @@ export const zHeaderOutput = z.object({
 });
 
 /**
+ * Health
+ */
+export const zHealth = z.object({
+  connections: z.array(zBrokenConnection),
+  triggers: z.array(zBrokenTrigger),
+});
+
+/**
  * HitlBlocker
  */
 export const zHitlBlocker = z.object({
@@ -1058,6 +1096,7 @@ export const zHitlBlocker = z.object({
   agent_name: z.string().nullish(),
   created_at: z.iso.datetime(),
   description: z.string(),
+  status: z.string(),
   task_id: z.uuid(),
 });
 
@@ -2732,6 +2771,17 @@ export const zRunExecutionConfig = z.object({
 });
 
 /**
+ * RuntimeUsage
+ *
+ * What the workspace's runtime used this month; quantities, never a price.
+ */
+export const zRuntimeUsage = z.object({
+  cpu_core_hours: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  memory_gib_hours: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  storage_gib: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+});
+
+/**
  * SandboxFileItem
  */
 export const zSandboxFileItem = z.object({
@@ -3390,7 +3440,7 @@ export const zSpendCard = z.object({
   not_covered: z.array(zCurrencySpend).optional(),
   pct_of_cap: z.number().nullable(),
   projected_eom_usd: z.string().nullable(),
-  projection_method: z.string().optional().default("linear-mtd"),
+  projection_method: z.string().optional().default("trailing-7d"),
   today_usd: z.string(),
 });
 
@@ -4415,10 +4465,12 @@ export const zDashboardResponse = z.object({
   active_tasks: z.array(zDashboardTask),
   blockers: zBlockers,
   daily_spend: z.array(zDailySpendPoint),
+  health: zHealth,
   recent_tasks: z.array(zDashboardTask),
   schedule: zSchedule,
   spend: zSpendCard,
   top_agents: z.array(zAgentSpend),
+  usage: zRuntimeUsage.nullable(),
 });
 
 /**

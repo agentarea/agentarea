@@ -1744,6 +1744,29 @@
             "title": "Exhausted",
             "type": "boolean"
           },
+          "runway_days": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runway Days"
+          },
+          "spend_per_day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spend Per Day"
+          },
           "viewer_is_payer": {
             "title": "Viewer Is Payer",
             "type": "boolean"
@@ -1888,6 +1911,127 @@
           "file"
         ],
         "title": "Body_upload_workspace_logo_v1_logo_put",
+        "type": "object"
+      },
+      "BrokenConnection": {
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "instance_id": {
+            "format": "uuid",
+            "title": "Instance Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "verification_failed",
+              "last_call_failed"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instance_id",
+          "name",
+          "reason",
+          "error",
+          "at"
+        ],
+        "title": "BrokenConnection",
+        "type": "object"
+      },
+      "BrokenTrigger": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
+          "consecutive_failures": {
+            "title": "Consecutive Failures",
+            "type": "integer"
+          },
+          "failure_threshold": {
+            "title": "Failure Threshold",
+            "type": "integer"
+          },
+          "last_execution_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Execution At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "failing",
+              "stopped_after_failures",
+              "needs_owner"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "trigger_id": {
+            "format": "uuid",
+            "title": "Trigger Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trigger_id",
+          "name",
+          "agent_id",
+          "reason",
+          "consecutive_failures",
+          "failure_threshold",
+          "last_execution_at"
+        ],
+        "title": "BrokenTrigger",
         "type": "object"
       },
       "BudgetPeriod": {
@@ -3953,6 +4097,9 @@
             "title": "Daily Spend",
             "type": "array"
           },
+          "health": {
+            "$ref": "#/components/schemas/Health"
+          },
           "recent_tasks": {
             "items": {
               "$ref": "#/components/schemas/DashboardTask"
@@ -3972,6 +4119,16 @@
             },
             "title": "Top Agents",
             "type": "array"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuntimeUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -3981,7 +4138,9 @@
           "recent_tasks",
           "schedule",
           "daily_spend",
-          "top_agents"
+          "top_agents",
+          "health",
+          "usage"
         ],
         "title": "DashboardResponse",
         "type": "object"
@@ -5604,6 +5763,30 @@
         "title": "HeaderOutput",
         "type": "object"
       },
+      "Health": {
+        "properties": {
+          "connections": {
+            "items": {
+              "$ref": "#/components/schemas/BrokenConnection"
+            },
+            "title": "Connections",
+            "type": "array"
+          },
+          "triggers": {
+            "items": {
+              "$ref": "#/components/schemas/BrokenTrigger"
+            },
+            "title": "Triggers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "connections",
+          "triggers"
+        ],
+        "title": "Health",
+        "type": "object"
+      },
       "HitlBlocker": {
         "properties": {
           "agent_id": {
@@ -5631,6 +5814,10 @@
             "title": "Description",
             "type": "string"
           },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
           "task_id": {
             "format": "uuid",
             "title": "Task Id",
@@ -5640,6 +5827,7 @@
         "required": [
           "task_id",
           "agent_id",
+          "status",
           "description",
           "created_at"
         ],
@@ -12360,6 +12548,33 @@
         "title": "RunExecutionConfig",
         "type": "object"
       },
+      "RuntimeUsage": {
+        "description": "What the workspace's runtime used this month; quantities, never a price.",
+        "properties": {
+          "cpu_core_hours": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cpu Core Hours",
+            "type": "string"
+          },
+          "memory_gib_hours": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Memory Gib Hours",
+            "type": "string"
+          },
+          "storage_gib": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Storage Gib",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cpu_core_hours",
+          "memory_gib_hours",
+          "storage_gib"
+        ],
+        "title": "RuntimeUsage",
+        "type": "object"
+      },
       "SandboxFileItem": {
         "properties": {
           "path": {
@@ -14392,7 +14607,7 @@
             "title": "Projected Eom Usd"
           },
           "projection_method": {
-            "default": "linear-mtd",
+            "default": "trailing-7d",
             "title": "Projection Method",
             "type": "string"
           },
