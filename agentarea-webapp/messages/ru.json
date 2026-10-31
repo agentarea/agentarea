@@ -855,7 +855,9 @@
       "breadcrumb": "Подключение",
       "breadcrumbWithName": "Подключить {name}",
       "back": "Назад в каталог",
-      "loadFailed": "Не удалось загрузить подключение из каталога"
+      "loadFailed": "Не удалось загрузить подключение из каталога",
+      "keysTitle": "Добавьте {count, plural, one {ключ} other {ключи}} {provider}",
+      "keysDetail": "{count, plural, one {Его} other {Их}} можно скопировать в личном кабинете {provider}. Каждое подключение создаётся отдельно."
     },
     "createInstance": {
       "breadcrumb": "Создать инстанс",

@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { getCatalogItem } from "@/lib/api";
+import { getCatalogConnectForm, getCatalogItem } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 import {
   catalogServerSetupHref,
   isCatalogApi,
 } from "@/lib/catalog-connections";
 import { workspacePath } from "@/lib/workspace-routes";
+import { CatalogKeyConnect } from "../../components/CatalogKeyConnect";
 import { OAuthConnectPanel } from "../../OAuthConnectPanel";
 
 export const metadata: Metadata = {
@@ -23,11 +24,15 @@ export default async function CatalogConnectPage({
   const { workspace, itemId } = await params;
   const t = await getTranslations("MCPServersPage");
 
-  const result = await getCatalogItem(itemId);
+  const [result, formResult] = await Promise.all([
+    getCatalogItem(itemId),
+    getCatalogConnectForm(itemId),
+  ]);
   const item = result.data;
   if (item && !isCatalogApi(item.spec)) {
     redirect(workspacePath(workspace, catalogServerSetupHref(itemId)));
   }
+  const form = formResult.data;
 
   return (
     <ContentBlock
@@ -56,7 +61,15 @@ export default async function CatalogConnectPage({
         </div>
       ) : (
         <div className="mx-auto w-full max-w-[600px] px-2 py-10">
-          <OAuthConnectPanel target={{ kind: "catalog", itemId }} isUrlType />
+          {form?.auth === "api_key" ? (
+            <CatalogKeyConnect
+              itemId={itemId}
+              provider={item.name}
+              fields={form.fields ?? []}
+            />
+          ) : (
+            <OAuthConnectPanel target={{ kind: "catalog", itemId }} isUrlType />
+          )}
         </div>
       )}
     </ContentBlock>

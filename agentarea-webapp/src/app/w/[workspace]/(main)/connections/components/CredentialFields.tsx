@@ -47,7 +47,7 @@ export function CredentialFields({
               icon={field.isSecret ? Key : undefined}
               required={field.isRequired !== false}
             >
-              {field.name}
+              {field.label ?? field.name}
             </FormLabel>
             {field.description && (
               <p className="text-xs text-muted-foreground">

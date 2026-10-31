@@ -855,7 +855,9 @@
       "breadcrumb": "Connect",
       "breadcrumbWithName": "Connect {name}",
       "back": "Back to catalog",
-      "loadFailed": "Could not load this catalog connection"
+      "loadFailed": "Could not load this catalog connection",
+      "keysTitle": "Add your {provider} {count, plural, one {key} other {keys}}",
+      "keysDetail": "Copy {count, plural, one {it} other {them}} from your {provider} account. Each time you connect, a separate connection is made."
     },
     "createInstance": {
       "breadcrumb": "Create instance",

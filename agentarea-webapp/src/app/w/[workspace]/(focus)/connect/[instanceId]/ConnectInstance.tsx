@@ -4,13 +4,10 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import { useForm, useWatch } from "react-hook-form";
 import type { McpTransport } from "@/api/client/types.gen";
 import { verifyInstance } from "@/app/w/[workspace]/(main)/connections/[id]/actions";
-import {
-  CredentialEncryptionNote,
-  CredentialFields,
-} from "@/app/w/[workspace]/(main)/connections/components/CredentialFields";
+import { ConnectKeyForm } from "@/app/w/[workspace]/(main)/connections/components/ConnectKeyForm";
+import { CredentialEncryptionNote } from "@/app/w/[workspace]/(main)/connections/components/CredentialFields";
 import {
   credentialUpdateSpec,
   type CredentialFieldSpec,
@@ -178,11 +175,15 @@ export default function ConnectInstance({
     );
   } else if (step.kind === "needs_key") {
     body = (
-      <KeyForm
+      <ConnectKeyForm
         key={`${step.replace}-${keyAttempt}`}
         fields={step.fields}
-        replace={step.replace}
-        detail={signInRefused ? t("signInRefused", { provider }) : undefined}
+        title={t(step.replace ? "replaceKeyTitle" : "keyTitle")}
+        detail={
+          signInRefused
+            ? t("signInRefused", { provider })
+            : t(step.replace ? "replaceKeyDetail" : "keyDetail")
+        }
         pending={pending}
         onSave={saveKeys}
       />
@@ -260,60 +261,4 @@ async function verifyConnection(
     console.error("Failed to verify MCP instance", err);
     return `${fallback}: ${formatApiError(err)}`;
   }
-}
-
-function KeyForm({
-  fields,
-  replace,
-  detail,
-  pending,
-  onSave,
-}: {
-  fields: CredentialFieldSpec[];
-  replace: boolean;
-  /** Why a key is asked for, over the default line. */
-  detail?: string;
-  pending: boolean;
-  onSave: (values: Record<string, string>) => void;
-}) {
-  const t = useTranslations("MCPServersPage.connectLink");
-  // Keyed by position: a header name like "X-Api.Key" is not a form path.
-  const { register, handleSubmit, control } = useForm<{ fields: string[] }>({
-    defaultValues: { fields: fields.map(() => "") },
-  });
-  const values = useWatch({ control, name: "fields" });
-  const complete = fields.every((_, index) => values?.[index]?.trim());
-
-  return (
-    <form
-      onSubmit={handleSubmit((data) =>
-        onSave(
-          Object.fromEntries(
-            fields.map((field, index) => [field.name, data.fields[index] ?? ""])
-          )
-        )
-      )}
-      className="space-y-4"
-    >
-      <FocusStep
-        kind="attention"
-        title={t(replace ? "replaceKeyTitle" : "keyTitle")}
-        detail={detail ?? t(replace ? "replaceKeyDetail" : "keyDetail")}
-      />
-      <CredentialFields
-        idPrefix="connect"
-        fields={fields}
-        bind={(_, index) => register(`fields.${index}`)}
-      />
-      <Button
-        type="submit"
-        size="lg"
-        className="w-full"
-        isLoading={pending}
-        disabled={pending || !complete}
-      >
-        {t("saveAndConnect")}
-      </Button>
-    </form>
-  );
 }

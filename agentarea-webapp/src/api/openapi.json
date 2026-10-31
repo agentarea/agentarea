@@ -2952,6 +2952,73 @@
         "title": "CatalogComputeEstimate",
         "type": "object"
       },
+      "CatalogConnectFormResponse": {
+        "description": "How a catalog API is connected: by signing in, or by entering its keys.",
+        "properties": {
+          "auth": {
+            "enum": [
+              "oauth",
+              "api_key"
+            ],
+            "title": "Auth",
+            "type": "string"
+          },
+          "catalog_item_id": {
+            "format": "uuid",
+            "title": "Catalog Item Id",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogKeyFieldResponse"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "catalog_item_id",
+          "name",
+          "auth"
+        ],
+        "title": "CatalogConnectFormResponse",
+        "type": "object"
+      },
+      "CatalogConnectRequest": {
+        "additionalProperties": false,
+        "description": "The keys a catalog API asks for, one per field of its connect form.",
+        "properties": {
+          "credentials": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogKeyValue"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Credentials",
+            "type": "array"
+          }
+        },
+        "required": [
+          "credentials"
+        ],
+        "title": "CatalogConnectRequest",
+        "type": "object"
+      },
       "CatalogConnection": {
         "description": "One existing connection made from a catalog item.",
         "properties": {
@@ -3187,6 +3254,68 @@
           }
         },
         "title": "CatalogItemUpdate",
+        "type": "object"
+      },
+      "CatalogKeyFieldResponse": {
+        "description": "One value a catalog API needs before it can be called.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "label": {
+            "description": "What the vendor calls it, for the form.",
+            "title": "Label",
+            "type": "string"
+          },
+          "location": {
+            "enum": [
+              "header",
+              "query"
+            ],
+            "title": "Location",
+            "type": "string"
+          },
+          "name": {
+            "description": "Header or query parameter the value is sent in.",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "location",
+          "label"
+        ],
+        "title": "CatalogKeyFieldResponse",
+        "type": "object"
+      },
+      "CatalogKeyValue": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 256,
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "maxLength": 8192,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "CatalogKeyValue",
         "type": "object"
       },
       "CatalogToolPrice": {
@@ -31013,6 +31142,142 @@
           }
         ],
         "summary": "Create Connection",
+        "tags": [
+          "v1",
+          "protected",
+          "openapi-connections"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/openapi-connections/from-catalog/{catalog_item_id}": {
+      "get": {
+        "description": "What connecting this catalog API asks for: a sign-in, or the keys listed in ``fields``.",
+        "operationId": "get_catalog_connect_form_v1_openapi_connections_from_catalog__catalog_item_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "catalog_item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Catalog Item Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogConnectFormResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Catalog Connect Form",
+        "tags": [
+          "v1",
+          "protected",
+          "openapi-connections"
+        ]
+      },
+      "post": {
+        "description": "Connect a catalog API with its keys; each call makes another connection.",
+        "operationId": "connect_catalog_api_v1_openapi_connections_from_catalog__catalog_item_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "catalog_item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Catalog Item Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogConnectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAPIConnectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Connect Catalog Api",
         "tags": [
           "v1",
           "protected",
