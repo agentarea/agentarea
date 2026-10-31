@@ -1192,6 +1192,11 @@ class RegistryService:
                         if item.external_id not in published:
                             await self._drop_platform_skill(item)
                     await self.item_repo.session.commit()
+                moved = await self.item_repo.move_references(
+                    registry_id, await self._sibling_registries(registry)
+                )
+                if moved:
+                    logger.info("Moved %d uses of items registry %s dropped", moved, registry_id)
                 deleted = await self.item_repo.delete_unreferenced_out_of_source(registry_id)
                 out_of_source -= deleted
 
@@ -1290,6 +1295,20 @@ class RegistryService:
         if moved:
             logger.info("Moved %d uses of retired registry %s's items", moved, registry_id)
         return await self.item_repo.delete_unreferenced_out_of_source(registry_id)
+
+    async def _sibling_registries(self, registry: Registry) -> list[UUID]:
+        """The other active platform registries of the same type.
+
+        An item one of them publishes under the same id is where the uses of an
+        item this registry dropped go: an entry moved to another catalog file.
+        """
+        if registry.scope != "platform":
+            return []
+        return [
+            other.id
+            for other in await self.registry_repo.list_active(registry.registry_type)
+            if other.scope == "platform" and other.id != registry.id
+        ]
 
     async def _items_by_external_id(self, registry_id: UUID) -> dict[str, RegistryItem]:
         # One read for the whole registry: a lookup per item was a query per

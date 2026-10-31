@@ -379,3 +379,59 @@ async def test_retiring_a_registry_moves_its_uses_onto_the_replacements_items(
     assert sorted(installs.tuples().all()) == sorted(
         [(WORKSPACE, new.id), (other_ws, clash.id), (other_ws, new_clash.id)]
     )
+
+
+async def test_an_item_another_platform_registry_now_publishes_takes_its_uses_along(
+    session: AsyncSession, monkeypatch
+):
+    # A regional entry leaves the global catalog for its region's file: the same
+    # id, published by a second registry. What a workspace connected moves with it,
+    # and the global copy, now unused, goes.
+    payloads = {
+        "global": {"bundles": [{"name": n, "schema_version": "0.1.0"} for n in ("moved", "kept")]},
+        "region": {"bundles": []},
+    }
+    monkeypatch.setattr(RegistryService, "_fetch_source", staticmethod(lambda url: payloads[url]))
+    monkeypatch.setattr(RegistryService, "_source_etag", staticmethod(lambda _url: None))
+    glob = Registry(name=f"{PREFIX}global", registry_type="bundles", source_type="url", source_url="global")
+    region = Registry(name=f"{PREFIX}region", registry_type="bundles", source_type="url", source_url="region")
+    session.add_all([glob, region])
+    await session.commit()
+    repo = RegistryItemRepository(session)
+    service = RegistryService(RegistryRepository(session), repo, server_repo=None)  # type: ignore[arg-type]
+    await service.sync_registry(glob.id)
+    old = (
+        await session.execute(
+            text("SELECT id FROM registry_items WHERE registry_id = :r AND external_id = 'moved'"),
+            {"r": glob.id},
+        )
+    ).scalar_one()
+    await session.execute(
+        text(
+            "INSERT INTO registry_item_installs (id, workspace_id, registry_item_id, installed_entity_id) "
+            "VALUES (:id, :w, :item, :entity)"
+        ),
+        {"id": uuid.uuid4(), "w": WORKSPACE, "item": old, "entity": uuid.uuid4()},
+    )
+    await session.commit()
+
+    payloads["global"] = {"bundles": [{"name": "kept", "schema_version": "0.1.0"}]}
+    payloads["region"] = {"bundles": [{"name": "moved", "schema_version": "0.1.0"}]}
+    await service.sync_registry(region.id)
+    await service.sync_registry(glob.id)
+
+    new = (
+        await session.execute(
+            text("SELECT id FROM registry_items WHERE registry_id = :r AND external_id = 'moved'"),
+            {"r": region.id},
+        )
+    ).scalar_one()
+    install = await session.execute(
+        text("SELECT registry_item_id FROM registry_item_installs WHERE workspace_id = :w"),
+        {"w": WORKSPACE},
+    )
+    assert install.scalars().all() == [new]
+    left = await session.execute(
+        text("SELECT external_id FROM registry_items WHERE registry_id = :r"), {"r": glob.id}
+    )
+    assert left.scalars().all() == ["kept"]
