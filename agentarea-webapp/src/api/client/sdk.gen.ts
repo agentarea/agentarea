@@ -85,6 +85,9 @@ import type {
   CreateConnectionV1OpenapiConnectionsPostData,
   CreateConnectionV1OpenapiConnectionsPostErrors,
   CreateConnectionV1OpenapiConnectionsPostResponses,
+  CreateEgressExitV1EgressExitsPostData,
+  CreateEgressExitV1EgressExitsPostErrors,
+  CreateEgressExitV1EgressExitsPostResponses,
   CreateForwardV1StreamsStreamIdForwardsPostData,
   CreateForwardV1StreamsStreamIdForwardsPostErrors,
   CreateForwardV1StreamsStreamIdForwardsPostResponses,
@@ -187,6 +190,9 @@ import type {
   DeleteConnectionV1OpenapiConnectionsConnectionIdDeleteData,
   DeleteConnectionV1OpenapiConnectionsConnectionIdDeleteErrors,
   DeleteConnectionV1OpenapiConnectionsConnectionIdDeleteResponses,
+  DeleteEgressExitV1EgressExitsExitIdDeleteData,
+  DeleteEgressExitV1EgressExitsExitIdDeleteErrors,
+  DeleteEgressExitV1EgressExitsExitIdDeleteResponses,
   DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteData,
   DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteErrors,
   DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponses,
@@ -357,6 +363,9 @@ import type {
   GetDashboardV1DashboardGetData,
   GetDashboardV1DashboardGetErrors,
   GetDashboardV1DashboardGetResponses,
+  GetEgressExitV1EgressExitsExitIdGetData,
+  GetEgressExitV1EgressExitsExitIdGetErrors,
+  GetEgressExitV1EgressExitsExitIdGetResponses,
   GetEventByIdV1StreamsEventsEventIdGetData,
   GetEventByIdV1StreamsEventsEventIdGetErrors,
   GetEventByIdV1StreamsEventsEventIdGetResponses,
@@ -559,6 +568,9 @@ import type {
   ListConnectionsV1OpenapiConnectionsGetData,
   ListConnectionsV1OpenapiConnectionsGetErrors,
   ListConnectionsV1OpenapiConnectionsGetResponses,
+  ListEgressExitsV1EgressExitsGetData,
+  ListEgressExitsV1EgressExitsGetErrors,
+  ListEgressExitsV1EgressExitsGetResponses,
   ListEventsV1StreamsStreamIdEventsGetData,
   ListEventsV1StreamsStreamIdEventsGetErrors,
   ListEventsV1StreamsStreamIdEventsGetResponses,
@@ -894,6 +906,9 @@ import type {
   UpdateConnectionV1OpenapiConnectionsConnectionIdPatchData,
   UpdateConnectionV1OpenapiConnectionsConnectionIdPatchErrors,
   UpdateConnectionV1OpenapiConnectionsConnectionIdPatchResponses,
+  UpdateEgressExitV1EgressExitsExitIdPatchData,
+  UpdateEgressExitV1EgressExitsExitIdPatchErrors,
+  UpdateEgressExitV1EgressExitsExitIdPatchResponses,
   UpdateInstalledSkillV1SkillsSkillIdUpdatePostData,
   UpdateInstalledSkillV1SkillsSkillIdUpdatePostErrors,
   UpdateInstalledSkillV1SkillsSkillIdUpdatePostResponses,
@@ -4389,6 +4404,166 @@ export const getDashboardV1DashboardGet = <
     ],
     url: "/v1/workspaces/{workspace}/dashboard",
     ...options,
+  });
+
+/**
+ * List Egress Exits
+ *
+ * List the workspace's own exits and the platform's.
+ */
+export const listEgressExitsV1EgressExitsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListEgressExitsV1EgressExitsGetData, ThrowOnError>
+): RequestResult<
+  ListEgressExitsV1EgressExitsGetResponses,
+  ListEgressExitsV1EgressExitsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListEgressExitsV1EgressExitsGetResponses,
+    ListEgressExitsV1EgressExitsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/egress-exits/",
+    ...options,
+  });
+
+/**
+ * Create Egress Exit
+ *
+ * Define a proxy the workspace's MCP instances may leave through.
+ */
+export const createEgressExitV1EgressExitsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<CreateEgressExitV1EgressExitsPostData, ThrowOnError>
+): RequestResult<
+  CreateEgressExitV1EgressExitsPostResponses,
+  CreateEgressExitV1EgressExitsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateEgressExitV1EgressExitsPostResponses,
+    CreateEgressExitV1EgressExitsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/egress-exits/",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Egress Exit
+ *
+ * Delete an exit no MCP instance leaves through.
+ */
+export const deleteEgressExitV1EgressExitsExitIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<DeleteEgressExitV1EgressExitsExitIdDeleteData, ThrowOnError>
+): RequestResult<
+  DeleteEgressExitV1EgressExitsExitIdDeleteResponses,
+  DeleteEgressExitV1EgressExitsExitIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteEgressExitV1EgressExitsExitIdDeleteResponses,
+    DeleteEgressExitV1EgressExitsExitIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/egress-exits/{exit_id}",
+    ...options,
+  });
+
+/**
+ * Get Egress Exit
+ *
+ * Get an exit of the workspace or the platform.
+ */
+export const getEgressExitV1EgressExitsExitIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetEgressExitV1EgressExitsExitIdGetData, ThrowOnError>
+): RequestResult<
+  GetEgressExitV1EgressExitsExitIdGetResponses,
+  GetEgressExitV1EgressExitsExitIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetEgressExitV1EgressExitsExitIdGetResponses,
+    GetEgressExitV1EgressExitsExitIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/egress-exits/{exit_id}",
+    ...options,
+  });
+
+/**
+ * Update Egress Exit
+ *
+ * Change an exit; only the fields sent change.
+ *
+ * Changing where it leads or its credentials restarts the running instances bound to it.
+ */
+export const updateEgressExitV1EgressExitsExitIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<UpdateEgressExitV1EgressExitsExitIdPatchData, ThrowOnError>
+): RequestResult<
+  UpdateEgressExitV1EgressExitsExitIdPatchResponses,
+  UpdateEgressExitV1EgressExitsExitIdPatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).patch<
+    UpdateEgressExitV1EgressExitsExitIdPatchResponses,
+    UpdateEgressExitV1EgressExitsExitIdPatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/egress-exits/{exit_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**

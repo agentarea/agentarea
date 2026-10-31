@@ -12,6 +12,7 @@ from agentarea_agents.domain.skill_models import Skill
 from agentarea_common.base.models import WorkspaceScopedMixin
 from agentarea_common.rebac.ownership import graph_governed_models
 from agentarea_mcp.domain.client_models import Client
+from agentarea_mcp.domain.egress_exit_model import EgressExit
 from agentarea_mcp.domain.models import MCPServer
 
 # `Client` relates to MCPServerInstance and Skill by name, and imports both only
@@ -40,6 +41,7 @@ def test_the_governed_models_are_the_ones_the_pdp_knows_about() -> None:
     assert set(graph_governed_models()) == {
         Agent,
         Client,
+        EgressExit,
         MCPServer,
         MCPServerInstance,
         OpenAPIConnection,

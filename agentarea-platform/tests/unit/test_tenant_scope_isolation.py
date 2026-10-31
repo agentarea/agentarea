@@ -37,7 +37,7 @@ from sqlalchemy.orm import RelationshipProperty, selectinload
 from sqlalchemy.pool import StaticPool
 
 PLATFORM_ROOT = Path(__file__).resolve().parents[2]
-EXPECTED_MODEL_COUNT = 36
+EXPECTED_MODEL_COUNT = 37
 
 WS_A = "tenant-scope-a"
 WS_B = "tenant-scope-b"
@@ -135,7 +135,10 @@ def _value(column: Column, unique: str) -> Any:
 
 
 # Columns a CHECK constraint holds to a closed set: any other sample is refused.
-CHECKED_COLUMN_SAMPLES = {("task_conversation_entries", "kind"): "message"}
+CHECKED_COLUMN_SAMPLES = {
+    ("task_conversation_entries", "kind"): "message",
+    ("egress_exits", "upstream_url"): "https://proxy.example.com:443",
+}
 
 
 def _row(table: Table, **given: Any) -> dict[str, Any]:
@@ -341,9 +344,19 @@ async def test_relationship_load_stays_in_its_workspace(
 
 async def test_platform_rows_are_read_from_every_workspace(backend: Backend) -> None:
     from agentarea_llm.domain.models import ModelInstance, ModelSpec, ProviderConfig
+    from agentarea_mcp.domain.egress_exit_model import EgressExit
     from agentarea_mcp.domain.models import MCPServer
     from agentarea_registry.domain.models import Registry, RegistryItem
 
+    platform_exit = await backend.write(
+        EgressExit.__table__,
+        workspace_id=PLATFORM_WORKSPACE_ID,
+        created_by="operator",
+        managed_by=MANAGED_BY_PLATFORM,
+        upstream_url=None,
+        via="aeza",
+    )
+    tenant_exit = await backend.write(EgressExit.__table__, workspace_id=WS_A, created_by="owner")
     config = await backend.write(
         ProviderConfig.__table__,
         workspace_id=PLATFORM_WORKSPACE_ID,
@@ -406,6 +419,15 @@ async def test_platform_rows_are_read_from_every_workspace(backend: Backend) -> 
             assert mirror["id"] in await ids(session, MCPServer)
             assert stale_mirror["id"] not in await ids(session, MCPServer)
             assert tenant_copy["id"] not in await ids(session, MCPServer)
+            assert platform_exit["id"] in await ids(session, EgressExit)
+            assert tenant_exit["id"] not in await ids(session, EgressExit)
+
+            refused_exit = await session.execute(
+                update(EgressExit)
+                .where(EgressExit.id == platform_exit["id"])
+                .values(upstream_url="http://attacker.example.com:3128")
+            )
+            assert refused_exit.rowcount == 0
 
             refused = await session.execute(
                 update(ProviderConfig)

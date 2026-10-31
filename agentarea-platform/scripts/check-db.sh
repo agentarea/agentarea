@@ -221,6 +221,7 @@ libs/tasks/tests/test_a2a_context_db.py
   libs/openapi/tests/test_record_dispatch_db.py
   libs/openapi/tests/test_platform_connection_db.py
   libs/mcp/tests/test_dispatch_stamps_db.py
+  libs/mcp/tests/test_egress_exits_db.py
   apps/api/tests/test_owned_auth_configs_db.py
   libs/common/tests/test_analytics_installation_db.py
   libs/common/tests/test_analytics_pulse_db.py
@@ -235,7 +236,7 @@ GO_PACKAGES=(./internal/mcpgateway/... ./internal/secrets/...)
 
 # The operator's hand-written provider-config SQL; its unit tests mock the
 # connection away, which is how it once named a column no migration created.
-OPERATOR_SUITES=(tests/test_provider_config_sql_db.py)
+OPERATOR_SUITES=(tests/test_provider_config_sql_db.py tests/test_platform_egress_exit_sql_db.py)
 
 echo "==> alembic upgrade head, then downgrade -1 / upgrade head roundtrip"
 (

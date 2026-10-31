@@ -37,6 +37,7 @@ from . import (
     bundles,
     clients,
     dashboard,
+    egress_exits,
     external_identities,
     files,
     governance,
@@ -157,6 +158,8 @@ workspace_v1_router.include_router(agents_tasks.global_tasks_router)
 # MCP server management
 workspace_v1_router.include_router(mcp_servers_specifications.router)
 workspace_v1_router.include_router(mcp_server_instances.router)
+# Proxies MCP instances may leave through
+workspace_v1_router.include_router(egress_exits.router)
 
 # LLM architecture routers (4-entity system)
 workspace_v1_router.include_router(provider_specs.router)

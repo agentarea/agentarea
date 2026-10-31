@@ -46,6 +46,7 @@ from agentarea_mcp.application.mcp_client import (
 )
 from agentarea_mcp.application.mcp_session_pool import session_key, session_pool
 from agentarea_mcp.dispatch_stamps import record_dispatch
+from agentarea_mcp.domain.egress_exit_model import EGRESS_EXIT_SPEC_KEY
 from agentarea_mcp.domain.env_schema import normalize_env_schema
 from agentarea_mcp.domain.events import (
     MCPServerCreated,
@@ -632,6 +633,29 @@ class MCPServerInstanceService:
         config_id = auth_config_id if isinstance(auth_config_id, UUID) else UUID(auth_config_id)
         await auth_service.get_for_use(config_id)
 
+    async def _assert_may_bind_egress_exit(
+        self, spec: dict[str, Any], transport: MCPTransport
+    ) -> None:
+        """An instance leaves through an exit of its workspace, or the platform's."""
+        from agentarea_mcp.application.egress_exit_service import (
+            EgressExitNotFoundError,
+            EgressExitService,
+        )
+
+        exit_id = spec.get(EGRESS_EXIT_SPEC_KEY)
+        if exit_id is None:
+            return
+        if transport not in CONTAINER_TRANSPORTS:
+            raise MCPValidationError(
+                [f"{EGRESS_EXIT_SPEC_KEY} applies to docker and command instances only"]
+            )
+        try:
+            await EgressExitService(self.repository_factory, self.secret_manager).require_bindable(
+                exit_id
+            )
+        except EgressExitNotFoundError as e:
+            raise MCPValidationError([str(e)]) from e
+
     @audited("mcp_instance.create", resource_type="mcp_instance")
     async def _grant_creator_ownership(self, resource_id: UUID | str) -> None:
         """Record the caller as owner of a row this service committed itself.
@@ -693,6 +717,7 @@ class MCPServerInstanceService:
             context_secret = getattr(payload, "context_secret", None)
             if context_secret and instance_type != MCPTransport.URL:
                 raise MCPValidationError(["context_secret applies to URL instances only"])
+            await self._assert_may_bind_egress_exit(submitted_spec, instance_type)
 
             instance_spec = _instance_owned_spec(submitted_spec)
             instance_spec.pop(CONTEXT_SIGNING_FLAG, None)
@@ -857,6 +882,10 @@ class MCPServerInstanceService:
                 raise MCPValidationError([timeout_error])
             instance = await self.repository.get_by_id(id)
             if instance:
+                if json_spec.get(EGRESS_EXIT_SPEC_KEY) != (instance.json_spec or {}).get(
+                    EGRESS_EXIT_SPEC_KEY
+                ):
+                    await self._assert_may_bind_egress_exit(json_spec, instance.transport)
                 cleaned_spec, secret_env_vars = await self._extract_secrets_from_spec(
                     json_spec, instance.server_spec_id, instance.json_spec
                 )

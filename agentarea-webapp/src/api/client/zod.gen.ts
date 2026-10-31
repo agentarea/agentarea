@@ -861,6 +861,52 @@ export const zDiscoverPreviewRequest = z.object({
 });
 
 /**
+ * EgressExitCreate
+ *
+ * A proxy of the workspace's own that its MCP instances may leave through.
+ */
+export const zEgressExitCreate = z.object({
+  allow_plaintext_credentials: z.boolean().optional().default(false),
+  description: z.string().nullish(),
+  name: z.string().min(1).max(255),
+  password_secret_id: z.uuid().nullish(),
+  upstream_url: z.string().max(512),
+  username: z.string().max(255).nullish(),
+});
+
+/**
+ * EgressExitResponse
+ */
+export const zEgressExitResponse = z.object({
+  allow_plaintext_credentials: z.boolean(),
+  created_at: z.iso.datetime(),
+  created_by: z.string(),
+  description: z.string().nullable(),
+  id: z.uuid(),
+  managed_by: z.string().nullable(),
+  name: z.string(),
+  password_secret_id: z.uuid().nullable(),
+  updated_at: z.iso.datetime(),
+  upstream_url: z.string().nullable(),
+  username: z.string().nullable(),
+  via: z.string().nullable(),
+});
+
+/**
+ * EgressExitUpdate
+ *
+ * Patch an exit: only the fields sent change; null clears an optional one.
+ */
+export const zEgressExitUpdate = z.object({
+  allow_plaintext_credentials: z.boolean().nullish(),
+  description: z.string().nullish(),
+  name: z.string().min(1).max(255).nullish(),
+  password_secret_id: z.uuid().nullish(),
+  upstream_url: z.string().max(512).nullish(),
+  username: z.string().max(255).nullish(),
+});
+
+/**
  * EntityKind
  */
 export const zEntityKind = z.enum([
@@ -5664,6 +5710,51 @@ export const zRemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponse 
  * Successful Response
  */
 export const zGetDashboardV1DashboardGetResponse = zDashboardResponse;
+
+/**
+ * Response List Egress Exits V1 Egress Exits  Get
+ *
+ * Successful Response
+ */
+export const zListEgressExitsV1EgressExitsGetResponse =
+  z.array(zEgressExitResponse);
+
+export const zCreateEgressExitV1EgressExitsPostBody = zEgressExitCreate;
+
+/**
+ * Successful Response
+ */
+export const zCreateEgressExitV1EgressExitsPostResponse = zEgressExitResponse;
+
+export const zDeleteEgressExitV1EgressExitsExitIdDeletePath = z.object({
+  exit_id: z.uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zDeleteEgressExitV1EgressExitsExitIdDeleteResponse = z.void();
+
+export const zGetEgressExitV1EgressExitsExitIdGetPath = z.object({
+  exit_id: z.uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zGetEgressExitV1EgressExitsExitIdGetResponse = zEgressExitResponse;
+
+export const zUpdateEgressExitV1EgressExitsExitIdPatchBody = zEgressExitUpdate;
+
+export const zUpdateEgressExitV1EgressExitsExitIdPatchPath = z.object({
+  exit_id: z.uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zUpdateEgressExitV1EgressExitsExitIdPatchResponse =
+  zEgressExitResponse;
 
 /**
  * Successful Response
