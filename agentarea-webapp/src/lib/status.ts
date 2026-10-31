@@ -251,6 +251,37 @@ export function getTriggerStatusPresentation(
   }
 }
 
+/** Why the dashboard lists a trigger as broken. A stopped trigger reads as off,
+ * as it does in the trigger list. */
+export function getBrokenTriggerStatusPresentation(
+  reason: string
+): StatusPresentation {
+  switch (normalizeStatus(reason)) {
+    case "failing":
+      return { label: "Failing", kind: "failed" };
+    case "stopped_after_failures":
+      return { label: "Stopped after failures", kind: "off" };
+    case "needs_owner":
+      return { label: "Needs a new owner", kind: "attention" };
+    default:
+      return fallbackStatusPresentation(reason);
+  }
+}
+
+/** Why the dashboard lists a connection as broken. */
+export function getBrokenConnectionStatusPresentation(
+  reason: string
+): StatusPresentation {
+  switch (normalizeStatus(reason)) {
+    case "verification_failed":
+      return { label: "Verification failed", kind: "failed" };
+    case "last_call_failed":
+      return { label: "Last call failed", kind: "failed" };
+    default:
+      return fallbackStatusPresentation(reason);
+  }
+}
+
 /**
  * A stream subscriber's verdict on one event, or none at all. A verdict this
  * build does not know reads as "unknown" and asks for a look, never as a

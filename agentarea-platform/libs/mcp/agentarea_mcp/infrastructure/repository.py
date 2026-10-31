@@ -352,6 +352,22 @@ class MCPServerInstanceRepository(WorkspaceScopedRepository[MCPServerInstance]):
     def _strict_workspace_filter(self):
         return super()._get_workspace_filter()
 
+    async def list_failing(self, limit: int) -> list[MCPServerInstance]:
+        """The workspace's own connections whose verification or last call failed."""
+        result = await self.session.execute(
+            select(MCPServerInstance)
+            .where(
+                self._strict_workspace_filter(),
+                or_(
+                    MCPServerInstance.verification["status"].as_string() == "failed",
+                    MCPServerInstance.last_dispatch["status"].as_string() == "failed",
+                ),
+            )
+            .order_by(MCPServerInstance.name)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
     async def update(self, id, creator_scoped: bool = False, **kwargs):
         return await self._scoped_write(super().update, id, creator_scoped=creator_scoped, **kwargs)
 

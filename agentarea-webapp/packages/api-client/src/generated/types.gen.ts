@@ -488,6 +488,24 @@ export type AgentResponse = {
 };
 
 /**
+ * AgentSpend
+ */
+export type AgentSpend = {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Agent Name
+     */
+    agent_name?: string | null;
+    /**
+     * Usd
+     */
+    usd: string;
+};
+
+/**
  * AgentToolConfig
  */
 export type AgentToolConfig = {
@@ -923,6 +941,14 @@ export type BalanceResponse = {
      */
     exhausted: boolean;
     /**
+     * Runway Days
+     */
+    runway_days?: string | null;
+    /**
+     * Spend Per Day
+     */
+    spend_per_day?: string | null;
+    /**
      * Viewer Is Payer
      */
     viewer_is_payer: boolean;
@@ -1006,6 +1032,70 @@ export type BodyUploadWorkspaceLogoV1LogoPut = {
      * PNG, JPEG or WebP image, at most 1 MB
      */
     file: Blob | File;
+};
+
+/**
+ * BrokenConnection
+ */
+export type BrokenConnection = {
+    /**
+     * At
+     */
+    at: string | null;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Instance Id
+     */
+    instance_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Reason
+     */
+    reason: 'verification_failed' | 'last_call_failed';
+};
+
+/**
+ * BrokenTrigger
+ */
+export type BrokenTrigger = {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Agent Name
+     */
+    agent_name?: string | null;
+    /**
+     * Consecutive Failures
+     */
+    consecutive_failures: number;
+    /**
+     * Failure Threshold
+     */
+    failure_threshold: number;
+    /**
+     * Last Execution At
+     */
+    last_execution_at: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Reason
+     */
+    reason: 'failing' | 'stopped_after_failures' | 'needs_owner';
+    /**
+     * Trigger Id
+     */
+    trigger_id: string;
 };
 
 /**
@@ -2212,12 +2302,18 @@ export type DashboardResponse = {
      * Daily Spend
      */
     daily_spend: Array<DailySpendPoint>;
+    health: Health;
     /**
      * Recent Tasks
      */
     recent_tasks: Array<DashboardTask>;
     schedule: Schedule;
     spend: SpendCard;
+    /**
+     * Top Agents
+     */
+    top_agents: Array<AgentSpend>;
+    usage: RuntimeUsage | null;
 };
 
 /**
@@ -3164,6 +3260,20 @@ export type HeaderOutput = {
 };
 
 /**
+ * Health
+ */
+export type Health = {
+    /**
+     * Connections
+     */
+    connections: Array<BrokenConnection>;
+    /**
+     * Triggers
+     */
+    triggers: Array<BrokenTrigger>;
+};
+
+/**
  * HitlBlocker
  */
 export type HitlBlocker = {
@@ -3183,6 +3293,10 @@ export type HitlBlocker = {
      * Description
      */
     description: string;
+    /**
+     * Status
+     */
+    status: string;
     /**
      * Task Id
      */
@@ -6939,6 +7053,26 @@ export type RunExecutionConfig = {
      * Maximum LLM/model turns requested for this run.
      */
     max_model_turns: number;
+};
+
+/**
+ * RuntimeUsage
+ *
+ * What the workspace's runtime used this month; quantities, never a price.
+ */
+export type RuntimeUsage = {
+    /**
+     * Cpu Core Hours
+     */
+    cpu_core_hours: string;
+    /**
+     * Memory Gib Hours
+     */
+    memory_gib_hours: string;
+    /**
+     * Storage Gib
+     */
+    storage_gib: string;
 };
 
 /**

@@ -3228,27 +3228,19 @@
     "couldntLoadTitle": "Couldn't load dashboard",
     "spend": "Spend",
     "monthToDate": "Month to date",
-    "cumulative": "cumulative",
     "today": "Today",
+    "topAgents": "Top spenders this month",
+    "deletedAgent": "Deleted agent",
     "vsPrevDay": "vs prev day",
     "budgetUsage": "{pct}% of {cap} budget",
-    "blockers": "Blockers",
-    "nothingBlocking": "Nothing blocking work right now.",
-    "allClearHint": "Every agent is running smoothly.",
-    "awaitingInput": "Awaiting input",
-    "awaitingContinuation": "Waiting to continue",
     "blocked": "Blocked",
-    "walletExhausted": "Wallet exhausted",
-    "failed24h": "Failed (24h)",
-    "budgetExhausted": "Budget exhausted — {amount} / {period}",
+    "budgetExhausted": "Budget exhausted — {amount} / {period, select, daily {day} monthly {month} execution {run} other {{period}}}",
     "taskFailed": "Task failed",
     "taskBlocked": "Task is blocked",
-    "timeAgo": "{time} ago",
     "relJustNow": "just now",
     "relMinutes": "{count}m",
     "relHours": "{count}h",
     "relDays": "{count}d",
-    "tasks": "Tasks",
     "allTasks": "All tasks",
     "runningNow": "Running now",
     "recentlyFinished": "Recently finished",
@@ -3256,14 +3248,40 @@
     "noTasks": "No tasks yet.",
     "noTasksHint": "Start a task or set up a trigger and it shows up here.",
     "schedule": "Schedule",
-    "scheduleMeta": "Next {days} days",
     "nothingScheduled": "Nothing scheduled — add a trigger",
     "throughoutTheDay": "All day:",
     "perDay": "×{count}/day",
     "fromDate": "from {date}",
     "moreRuns": "+{count} more",
     "runCount": "Scheduled runs: {count}",
-    "estimatePart": "incl. ≈ {amount} estimated"
+    "estimatePart": "incl. ≈ {amount} estimated",
+    "broken": "Broken",
+    "failed": "Failed",
+    "connectionReason": {
+      "verification_failed": "Verification failed",
+      "last_call_failed": "Last call failed"
+    },
+    "triggerReason": {
+      "failing": "Failed {count, plural, one {# time} other {# times}} in a row (stops at {threshold})",
+      "stopped_after_failures": "Stopped after {count, plural, one {# failure} other {# failures}}",
+      "needs_owner": "Needs a new owner"
+    },
+    "projectedEom": "≈ {amount} by month end",
+    "runtimeUsage": "Runtime: {cpu} vCPU·h · {memory} GiB·h memory · {storage} GiB stored",
+    "attention": "Needs your attention",
+    "allClearTitle": "Nothing needs you right now",
+    "allClearHint": "Approvals, stopped runs and broken connections will show up here.",
+    "waitingForDecision": "Waiting for your decision",
+    "waitingFor": "{status, select, waiting_for_approval {Waiting for approval} waiting_for_continuation {Waiting to continue} other {Waiting for an answer}}",
+    "stopped": "Stopped",
+    "activity": "Activity",
+    "scheduleView": {
+      "today": "Today",
+      "week": "Week",
+      "month": "Month"
+    },
+    "nextRun": "Next run: {title}, {when}",
+    "nothingInView": "{view, select, today {Nothing scheduled today} week {Nothing scheduled this week} other {Nothing scheduled this month}}"
   },
   "BudgetsPage": {
     "couldntLoadTitle": "Couldn't load budget data",
@@ -4236,6 +4254,8 @@
     "unavailable": "Unavailable",
     "topUp": "Top up",
     "bannerPayer": "Agents on AgentArea models do not start. Top up to get them running again.",
-    "bannerMember": "Agents on AgentArea models do not start. Ask the workspace owner to top up."
+    "bannerMember": "Agents on AgentArea models do not start. Ask the workspace owner to top up.",
+    "runway": "Enough for ~{days, plural, one {# day} other {# days}} at {perDay}/day",
+    "runwayUnderDay": "Enough for less than a day at {perDay}/day"
   }
 }

@@ -1,9 +1,16 @@
 import { useLocale, useTranslations } from "next-intl";
 import { Wallet } from "lucide-react";
-import type { DailySpendPoint, SpendCard as SpendCardData } from "@/api/client";
+import type {
+  AgentSpend,
+  DailySpendPoint,
+  RuntimeUsage,
+  SpendCard as SpendCardData,
+} from "@/api/client";
+import { AgentAvatar } from "@/components/AgentAvatar";
 import { BoardSectionHeader } from "@/components/board";
 import { computeDelta, DeltaBadge } from "@/components/charts/Sparkline";
 import { SpendTrendChart } from "@/components/charts/SpendTrendChart";
+import Link from "@/components/WorkspaceLink";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
@@ -22,11 +29,16 @@ function pctTone(pct: number) {
 export function SpendCard({
   spend,
   trend,
+  topAgents,
+  usage = null,
   currency,
   compact = false,
 }: {
   spend: SpendCardData;
   trend: DailySpendPoint[];
+  topAgents: AgentSpend[];
+  /** Runtime quantities this month; null where the deployment meters none. */
+  usage?: RuntimeUsage | null;
   currency: string | null;
   compact?: boolean;
 }) {
@@ -34,6 +46,10 @@ export function SpendCard({
   const locale = useLocale();
   // Money arrives as decimal strings; numbers are only for display and charts.
   const fmt = (v: string) => formatMoney(Number(v), currency, locale);
+  const qty = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
   const hasCap = spend.cap_usd !== null;
   const pct = spend.pct_of_cap ?? 0;
 
@@ -80,6 +96,11 @@ export function SpendCard({
             />
             <span>{t("vsPrevDay")}</span>
           </div>
+          {spend.projected_eom_usd !== null && (
+            <div className="mt-1 text-[12.5px] tabular-nums text-muted-foreground">
+              {t("projectedEom", { amount: fmt(spend.projected_eom_usd) })}
+            </div>
+          )}
           {spend.mtd_estimate_usd && Number(spend.mtd_estimate_usd) > 0 && (
             <div className="mt-1 text-[11.5px] tabular-nums text-muted-foreground">
               {t("estimatePart", { amount: fmt(spend.mtd_estimate_usd) })}
@@ -127,18 +148,73 @@ export function SpendCard({
       <div
         className={cn(
           "-mx-6",
-          compact ? "mt-1 h-[188px]" : "mt-2.5 min-h-[96px] flex-1"
+          compact ? "mt-1 h-[150px]" : "mt-2.5 min-h-[96px] flex-1"
         )}
       >
         <SpendTrendChart
           data={trendPoints}
-          height={compact ? 188 : 190}
+          height={compact ? 150 : 190}
           locale={locale}
           currency={currency}
           seriesLabel={t("spend")}
-          cumulativeLabel={t("cumulative")}
         />
       </div>
+
+      {usage && (
+        <div className="mt-2 text-[11.5px] tabular-nums text-muted-foreground">
+          {t("runtimeUsage", {
+            cpu: qty.format(Number(usage.cpu_core_hours)),
+            memory: qty.format(Number(usage.memory_gib_hours)),
+            storage: qty.format(Number(usage.storage_gib)),
+          })}
+        </div>
+      )}
+
+      {topAgents.length > 0 && (
+        <div className="mt-3">
+          <div className="text-[11.5px] text-muted-foreground">
+            {t("topAgents")}
+          </div>
+          <ul className="mt-1.5 flex flex-col gap-1.5">
+            {topAgents.map((a) => {
+              const share =
+                Number(spend.mtd_usd) > 0
+                  ? (Number(a.usd) / Number(spend.mtd_usd)) * 100
+                  : 0;
+              const name = a.agent_name ? (
+                <Link
+                  href={`/agents/${a.agent_id}`}
+                  className="truncate font-medium hover:underline"
+                >
+                  {a.agent_name}
+                </Link>
+              ) : (
+                <span className="truncate text-muted-foreground">
+                  {t("deletedAgent")}
+                </span>
+              );
+              return (
+                <li
+                  key={a.agent_id}
+                  className="flex min-w-0 items-center gap-2 text-[13px]"
+                >
+                  <AgentAvatar
+                    agent={{ id: a.agent_id, name: a.agent_name }}
+                    size="xs"
+                  />
+                  {name}
+                  <span className="ml-auto shrink-0 text-[11.5px] tabular-nums text-muted-foreground">
+                    {share.toFixed(0)}%
+                  </span>
+                  <span className="w-[72px] shrink-0 text-right font-semibold tabular-nums">
+                    {fmt(a.usd)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

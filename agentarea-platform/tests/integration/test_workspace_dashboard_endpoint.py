@@ -18,11 +18,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from agentarea_agents.domain.models import Agent
-from agentarea_api.api.v1.dashboard import get_dashboard
+from agentarea_api.api.v1.dashboard import get_dashboard, project_month_end
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
 from agentarea_common.money import to_money
 from agentarea_governance.infrastructure.orm import PolicyRuleORM
+from agentarea_mcp.domain.auth_models import MCPAuthConfig
+from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_tasks.infrastructure.orm import CostEntryORM, TaskORM
 from agentarea_triggers.infrastructure.orm import TriggerORM
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -67,6 +69,8 @@ async def engine():
         CostEntryORM.__table__,
         PolicyRuleORM.__table__,
         TriggerORM.__table__,
+        MCPAuthConfig.__table__,
+        MCPServerInstance.__table__,
     ]
 
     async with _engine.begin() as conn:
@@ -105,6 +109,11 @@ async def seeded(session_factory):
 
     Cron triggers: daily 09:00 UTC → schedule.runs; every 5 minutes →
     schedule.frequent; inactive, unparseable, and other-workspace ones → none.
+
+    Health: a connection that failed verification and one whose last call
+    failed are broken, a verified one and another workspace's are not. A
+    trigger failing in a row, one stopped at its failure threshold and one
+    left without an owner are broken; one paused by hand is not.
     """
     agent_id = uuid.uuid4()
     other_workspace_agent_id = uuid.uuid4()
@@ -169,7 +178,9 @@ async def seeded(session_factory):
                 # Never in the future: today + 2h is ahead of now until 02:00 UTC,
                 # which put t1 at the head of recent_tasks.
                 started_at=today,
-                completed_at=max(today, min(today + timedelta(hours=2), now - timedelta(minutes=5))),
+                completed_at=max(
+                    today, min(today + timedelta(hours=2), now - timedelta(minutes=5))
+                ),
                 result={"total_cost": 10.0, "output": "done"},
             )
         )
@@ -372,9 +383,7 @@ async def seeded(session_factory):
             )
 
         session.add(scheduled_task(t16_id, "Monthly accounting report", t16_fires_at))
-        session.add(
-            scheduled_task(uuid.uuid4(), "Next quarter review", now + timedelta(days=60))
-        )
+        session.add(scheduled_task(uuid.uuid4(), "Next quarter review", now + timedelta(days=60)))
         session.add(
             scheduled_task(t18_id, "Called off", now + timedelta(days=1), status="cancelled")
         )
@@ -414,6 +423,92 @@ async def seeded(session_factory):
         session.add(cron_trigger("Broken schedule", "not a cron"))
         session.add(cron_trigger("Elsewhere", "0 11 * * *", workspace_id="other-workspace-999"))
 
+        def stream_trigger(name: str, *, active: bool = True, failures: int = 0, **extra):
+            return TriggerORM(
+                id=uuid.uuid4(),
+                name=name,
+                agent_id=agent_id,
+                trigger_type="stream",
+                is_active=active,
+                failure_threshold=5,
+                consecutive_failures=failures,
+                last_execution_at=now - timedelta(minutes=20),
+                workspace_id=extra.pop("workspace_id", WORKSPACE_ID),
+                created_by=USER_ID,
+                **extra,
+            )
+
+        failing_trigger = stream_trigger("Lead intake", failures=2)
+        stopped_trigger = stream_trigger("Invoice sync", active=False, failures=5)
+        orphan_trigger = stream_trigger("Weekly digest", needs_new_owner_at=now)
+        session.add_all(
+            [
+                failing_trigger,
+                stopped_trigger,
+                orphan_trigger,
+                stream_trigger("Paused by hand", active=False),
+                stream_trigger("Healthy", failures=0),
+                stream_trigger("Elsewhere failing", failures=3, workspace_id="other-workspace-999"),
+            ]
+        )
+
+        def connection(name: str, *, workspace_id: str = WORKSPACE_ID, **state):
+            instance = MCPServerInstance(
+                name=name,
+                server_spec_id="io.example/server",
+                transport="url",
+                verification=state.get("verification"),
+                workspace_id=workspace_id,
+                created_by=USER_ID,
+            )
+            instance.last_dispatch = state.get("last_dispatch")
+            return instance
+
+        unverified = connection(
+            "Google Analytics",
+            verification={
+                "schema_version": 1,
+                "status": "failed",
+                "at": now.isoformat(),
+                "error": {"code": "auth", "message": "refresh token missing", "detail": None},
+            },
+        )
+        failing_calls = connection(
+            "Notion",
+            verification={"schema_version": 1, "status": "succeeded", "at": None, "error": None},
+            last_dispatch={
+                "schema_version": 1,
+                "status": "failed",
+                "at": now.isoformat(),
+                "error": "401 Unauthorized",
+            },
+        )
+        session.add_all(
+            [
+                unverified,
+                failing_calls,
+                connection(
+                    "Healthy MCP",
+                    verification={
+                        "schema_version": 1,
+                        "status": "succeeded",
+                        "at": None,
+                        "error": None,
+                    },
+                ),
+                connection(
+                    "Elsewhere MCP",
+                    workspace_id="other-workspace-999",
+                    verification={
+                        "schema_version": 1,
+                        "status": "failed",
+                        "at": None,
+                        "error": None,
+                    },
+                ),
+            ]
+        )
+
         session.add(
             PolicyRuleORM(
                 workspace_id=WORKSPACE_ID,
@@ -429,6 +524,11 @@ async def seeded(session_factory):
         await session.commit()
 
     return {
+        "failing_trigger_id": failing_trigger.id,
+        "stopped_trigger_id": stopped_trigger.id,
+        "orphan_trigger_id": orphan_trigger.id,
+        "unverified_connection_id": unverified.id,
+        "failing_calls_connection_id": failing_calls.id,
         "agent_id": agent_id,
         "other_workspace_agent_id": other_workspace_agent_id,
         "t1_id": t1_id,
@@ -574,7 +674,6 @@ class TestSpendCard:
         result = await _call_dashboard(session_factory, policy_context, mtd_usd=50.0)
         assert result.spend.cap_usd is None
         assert result.spend.pct_of_cap is None
-        assert result.spend.projected_eom_usd is None
 
     async def test_pct_of_cap_is_computed_correctly(self, session_factory, user_context, seeded):
         mtd = 100.0
@@ -597,7 +696,12 @@ class TestSpendCard:
         result = await _call_dashboard(session_factory, other_context, mtd_usd=50.0)
         assert result.spend.cap_usd is None
         assert result.spend.pct_of_cap is None
-        assert result.spend.projected_eom_usd is None
+
+    async def test_month_end_is_projected_without_a_cap(self, session_factory, seeded):
+        other_context = UserContext(user_id="no-policy-user", workspace_id="workspace-no-cap")
+        result = await _call_dashboard(session_factory, other_context, mtd_usd=50.0)
+        assert result.spend.projected_eom_usd is not None
+        assert result.spend.projection_method == "trailing-7d"
 
 
 class TestBlockersHitl:
@@ -607,6 +711,16 @@ class TestBlockersHitl:
         result = await _call_dashboard(session_factory, user_context)
         hitl_ids = {b.task_id for b in result.blockers.hitl}
         assert hitl_ids == {seeded["t5_id"], seeded["t6_id"]}
+
+    async def test_a_waiter_says_whether_it_wants_an_answer_or_an_approval(
+        self, session_factory, user_context, seeded
+    ):
+        result = await _call_dashboard(session_factory, user_context)
+        statuses = {b.task_id: b.status for b in result.blockers.hitl}
+        assert statuses == {
+            seeded["t5_id"]: "waiting_for_input",
+            seeded["t6_id"]: "waiting_for_approval",
+        }
 
     async def test_runs_waiting_to_continue_are_blockers(
         self, session_factory, user_context, seeded
@@ -725,22 +839,21 @@ class TestTasks:
         assert running.title == "Running right now"
         assert running.status == "running"
 
-    async def test_recent_tasks_include_blocked_tasks(self, session_factory, user_context, seeded):
+    async def test_recent_tasks_leave_out_what_blockers_already_show(
+        self, session_factory, user_context, seeded
+    ):
         result = await _call_dashboard(session_factory, user_context)
         ids = [t.task_id for t in result.recent_tasks]
+        # t3 (failed) and t13 (blocked) ended in the last 24h: they are blockers.
+        # t4 and t14 ended earlier, so they are only history.
         assert set(ids) == {
             seeded["t1_id"],
             seeded["t2_id"],
-            seeded["t3_id"],
             seeded["t4_id"],
-            seeded["t13_id"],
             seeded["t14_id"],
             seeded["t15_id"],
             seeded["t18_id"],
         }
-        # t3 finished now, t13 3 minutes ago; the rest depends on the hour the
-        # suite runs, so pin only the head.
-        assert ids[:2] == [seeded["t3_id"], seeded["t13_id"]]
 
     async def test_blocked_in_the_last_24h_are_blockers(
         self, session_factory, user_context, seeded
@@ -755,7 +868,7 @@ class TestTasks:
         result = await _call_dashboard(session_factory, user_context)
         done = next(t for t in result.recent_tasks if t.task_id == seeded["t1_id"])
         assert done.cost_usd == Decimal("10")
-        failed = next(t for t in result.recent_tasks if t.task_id == seeded["t3_id"])
+        failed = next(t for t in result.recent_tasks if t.task_id == seeded["t4_id"])
         assert failed.cost_usd is None
 
     async def test_an_unreadable_cost_is_unknown_not_a_failed_dashboard(
@@ -848,3 +961,52 @@ class TestWalletExhaustedBlockers:
         assert exhausted.agent_name == "Dashboard Test Agent"
         assert exhausted.budget_usd == Decimal("100")
         assert exhausted.period == "monthly"
+
+
+class TestProjection:
+    NOW = datetime(2026, 10, 30, 12, tzinfo=UTC)
+
+    def test_the_rest_of_the_month_runs_at_the_last_seven_full_days_pace(self):
+        days = {
+            (self.NOW.date() - timedelta(days=i)).isoformat(): Decimal("1") for i in range(1, 8)
+        }
+        days[self.NOW.date().isoformat()] = Decimal("100")
+
+        # 1 a day for the half of today left and the 31st; today's own spend is
+        # already in month-to-date and does not set the pace.
+        assert project_month_end(Decimal("40"), days, self.NOW) == Decimal("41.50")
+
+    def test_nothing_spent_lately_projects_what_is_spent(self):
+        assert project_month_end(Decimal("40"), {}, self.NOW) == Decimal("40.00")
+
+
+class TestHealth:
+    async def test_a_connection_that_failed_verification_or_its_last_call_is_broken(
+        self, session_factory, user_context, seeded
+    ):
+        result = await _call_dashboard(session_factory, user_context)
+        broken = {c.instance_id: c for c in result.health.connections}
+        assert set(broken) == {
+            seeded["unverified_connection_id"],
+            seeded["failing_calls_connection_id"],
+        }
+        unverified = broken[seeded["unverified_connection_id"]]
+        assert unverified.reason == "verification_failed"
+        assert unverified.error == "refresh token missing"
+        failing = broken[seeded["failing_calls_connection_id"]]
+        assert failing.reason == "last_call_failed"
+        assert failing.error == "401 Unauthorized"
+
+    async def test_failing_stopped_and_ownerless_triggers_are_broken(
+        self, session_factory, user_context, seeded
+    ):
+        result = await _call_dashboard(session_factory, user_context)
+        reasons = {t.trigger_id: t.reason for t in result.health.triggers}
+        assert reasons == {
+            seeded["failing_trigger_id"]: "failing",
+            seeded["stopped_trigger_id"]: "stopped_after_failures",
+            seeded["orphan_trigger_id"]: "needs_owner",
+        }
+        failing = next(t for t in result.health.triggers if t.reason == "failing")
+        assert (failing.consecutive_failures, failing.failure_threshold) == (2, 5)
+        assert failing.agent_name is not None

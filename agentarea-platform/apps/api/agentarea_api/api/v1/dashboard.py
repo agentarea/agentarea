@@ -1,10 +1,11 @@
 """Workspace dashboard endpoint.
 
 Single round-trip aggregate that powers the post-login `/dashboard` page:
-spend (today / MTD / cap / projection), org blockers (HITL, runs waiting to
-continue, blocked and failed runs in the last 24h, exhausted wallets),
-running and recently finished tasks, and the schedule for the weeks ahead
-(cron triggers and tasks booked for a later moment).
+spend (today / MTD / cap / projection, the top agents, runtime usage), org
+blockers (HITL, runs waiting to continue, blocked and failed runs in the last
+24h, exhausted wallets), what is broken (connections, triggers), running and
+recently finished tasks, and the schedule for the weeks ahead (cron triggers
+and tasks booked for a later moment).
 
 All data is workspace-scoped via UserContext. Live computation against
 existing `tasks` and `wallets` tables — no rollup tables in v1. Money fields
@@ -13,6 +14,7 @@ are `Money` (Decimal, serialized as a string), as in the wallet API.
 
 import asyncio
 import logging
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated, Literal
@@ -26,6 +28,7 @@ from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config.database import get_db_session
 from agentarea_common.extensions.account_balance import get_account_balance_source
 from agentarea_common.extensions.customer_pricing import get_customer_pricing
+from agentarea_common.extensions.workspace_usage import get_workspace_usage_source
 from agentarea_common.money import ZERO, Money, to_money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_governance.domain.rules import (
@@ -36,12 +39,14 @@ from agentarea_governance.domain.rules import (
     is_scoped_spend_cap,
 )
 from agentarea_governance.infrastructure.repository import PolicyRuleRepository
+from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
 from agentarea_tasks.domain.statuses import TASK_STATUSES, TaskStatus
 from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository, SpendScope
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.spend_gate import spend_not_covered, workspace_cap_currencies
 from agentarea_triggers.infrastructure.orm import TriggerORM
+from agentarea_triggers.infrastructure.repository import TriggerRepository
 from agentarea_wallet.infrastructure.repository import WalletRepository
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
@@ -52,7 +57,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["dashboard"])
 
-SCHEDULE_HORIZON_DAYS = 21
+# Long enough for a month view: from any day to the end of the week after month end.
+SCHEDULE_HORIZON_DAYS = 42
 # A schedule firing more often than this per day is summarised, not listed.
 MAX_LISTED_RUNS_PER_DAY = 3
 
@@ -95,6 +101,10 @@ FINISHED_TASK_STATUSES = _statuses("finished", "blocked")
 SCHEDULED_TASK_STATUSES = _statuses("schedule")
 TASK_LIST_LIMIT = 10
 BLOCKER_LIST_LIMIT = 20
+TOP_AGENTS_LIMIT = 3
+HEALTH_LIST_LIMIT = 20
+# Days of spend whose average pace carries the month to its end.
+PROJECTION_WINDOW_DAYS = 7
 
 DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session, scope="function")]
 
@@ -109,8 +119,9 @@ class SpendCard(BaseModel):
     mtd_usd: Money
     cap_usd: Money | None
     pct_of_cap: float | None
+    # Month-to-date plus the rest of the month at the pace of the last full days.
     projected_eom_usd: Money | None
-    projection_method: str = "linear-mtd"
+    projection_method: str = "trailing-7d"
     # Month-to-date spend in a currency no workspace monthly cap is in: never
     # converted, never blocked. Empty when the workspace has no such cap.
     not_covered: list[CurrencySpend] = Field(default_factory=list)
@@ -124,6 +135,8 @@ class HitlBlocker(BaseModel):
     agent_id: UUID
     # None when the agent no longer resolves — never a fabricated placeholder.
     agent_name: str | None = None
+    # What the run waits for: an answer, an approval, or to be continued.
+    status: str
     description: str
     created_at: UtcDatetime
 
@@ -211,6 +224,50 @@ class DailySpendPoint(BaseModel):
     usd: Money
 
 
+class AgentSpend(BaseModel):
+    agent_id: UUID
+    # None when the agent no longer resolves — never a fabricated placeholder.
+    agent_name: str | None = None
+    usd: Money
+
+
+class RuntimeUsage(BaseModel):
+    """What the workspace's runtime used this month; quantities, never a price."""
+
+    cpu_core_hours: Decimal
+    memory_gib_hours: Decimal
+    # Stored now, not integrated over the month.
+    storage_gib: Decimal
+
+
+class BrokenConnection(BaseModel):
+    instance_id: UUID
+    name: str
+    reason: Literal["verification_failed", "last_call_failed"]
+    error: str | None
+    at: str | None
+
+
+class BrokenTrigger(BaseModel):
+    trigger_id: UUID
+    name: str
+    agent_id: UUID
+    # None when the agent no longer resolves — never a fabricated placeholder.
+    agent_name: str | None = None
+    # failing: its last runs failed in a row and it is still on; stopped_after_failures:
+    # it turned itself off at its failure threshold; needs_owner: whoever set it up can
+    # no longer run its agent.
+    reason: Literal["failing", "stopped_after_failures", "needs_owner"]
+    consecutive_failures: int
+    failure_threshold: int
+    last_execution_at: UtcDatetime | None
+
+
+class Health(BaseModel):
+    connections: list[BrokenConnection]
+    triggers: list[BrokenTrigger]
+
+
 class DashboardResponse(BaseModel):
     spend: SpendCard
     blockers: Blockers
@@ -218,23 +275,36 @@ class DashboardResponse(BaseModel):
     recent_tasks: list[DashboardTask]
     schedule: Schedule
     daily_spend: list[DailySpendPoint]
+    # The agents that spent the most this month, highest first.
+    top_agents: list[AgentSpend]
+    health: Health
+    # None when this deployment meters no runtime.
+    usage: RuntimeUsage | None
 
 
 _MONEY = TypeAdapter(Money)
 _CENT = Decimal("0.01")
 
 
-def _project_eom(mtd_usd: Decimal, now: datetime) -> Decimal:
-    """Linear extrapolation of MTD spend to the end of the calendar month."""
-    if mtd_usd <= ZERO:
-        return ZERO
-    days_elapsed = max(now.day, 1)
+def project_month_end(
+    mtd_usd: Decimal, spend_by_day: Mapping[str, Decimal], now: datetime
+) -> Decimal:
+    """Month-to-date spend plus the rest of the month at the recent daily pace.
+
+    The pace is the average of the last ``PROJECTION_WINDOW_DAYS`` full UTC days
+    (``spend_by_day`` is keyed by ISO date), so the first days of a month are
+    projected from last month's pace rather than from a day or two of this one.
+    Today is still running, so its own spend sets no pace.
+    """
+    today = now.date()
+    window = [today - timedelta(days=i) for i in range(1, PROJECTION_WINDOW_DAYS + 1)]
+    pace = sum((spend_by_day.get(day.isoformat(), ZERO) for day in window), ZERO) / len(window)
     if now.month == 12:
         next_month = datetime(now.year + 1, 1, 1, tzinfo=UTC)
     else:
         next_month = datetime(now.year, now.month + 1, 1, tzinfo=UTC)
-    days_in_month = (next_month - datetime(now.year, now.month, 1, tzinfo=UTC)).days
-    return (mtd_usd / days_elapsed * days_in_month).quantize(_CENT)
+    days_left = Decimal((next_month - now).total_seconds()) / Decimal(86400)
+    return (mtd_usd + pace * days_left).quantize(_CENT)
 
 
 def _is_monthly_spend_cap(rule: PolicyRule) -> bool:
@@ -271,6 +341,71 @@ def _dashboard_task(task: TaskORM, agent_names: dict[UUID, str]) -> DashboardTas
         started_at=task.started_at or task.created_at,
         finished_at=finished,
         cost_usd=_task_cost(task),
+    )
+
+
+def _connection_error(error: object) -> str | None:
+    if isinstance(error, dict):
+        message = error.get("message")
+        return message if isinstance(message, str) else None
+    return error if isinstance(error, str) else None
+
+
+async def _build_health(factory: RepositoryFactory, agent_names: dict[UUID, str]) -> Health:
+    """The workspace's own connections and triggers that stopped working."""
+    connections = []
+    for instance in await factory.create_repository(MCPServerInstanceRepository).list_failing(
+        HEALTH_LIST_LIMIT
+    ):
+        verification = instance.verification or {}
+        if verification.get("status") == "failed":
+            reason, state = "verification_failed", verification
+        else:
+            reason, state = "last_call_failed", instance.last_dispatch or {}
+        connections.append(
+            BrokenConnection(
+                instance_id=instance.id,
+                name=instance.name,
+                reason=reason,
+                error=_connection_error(state.get("error")),
+                at=state.get("at"),
+            )
+        )
+
+    triggers = []
+    for trigger in await factory.create_repository(TriggerRepository).list_broken(
+        HEALTH_LIST_LIMIT
+    ):
+        if trigger.needs_new_owner_at is not None:
+            trigger_reason = "needs_owner"
+        elif trigger.is_active:
+            trigger_reason = "failing"
+        else:
+            trigger_reason = "stopped_after_failures"
+        triggers.append(
+            BrokenTrigger(
+                trigger_id=trigger.id,
+                name=trigger.name,
+                agent_id=trigger.agent_id,
+                agent_name=agent_names.get(trigger.agent_id),
+                reason=trigger_reason,
+                consecutive_failures=trigger.consecutive_failures,
+                failure_threshold=trigger.failure_threshold,
+                last_execution_at=trigger.last_execution_at,
+            )
+        )
+    return Health(connections=connections, triggers=triggers)
+
+
+async def _runtime_usage(workspace_id: str, since: datetime) -> RuntimeUsage | None:
+    source = get_workspace_usage_source()
+    if source is None:
+        return None
+    usage = await source.usage_since(workspace_id, since)
+    return RuntimeUsage(
+        cpu_core_hours=usage.cpu_core_hours.quantize(_CENT),
+        memory_gib_hours=usage.memory_gib_hours.quantize(_CENT),
+        storage_gib=usage.storage_gib.quantize(_CENT),
     )
 
 
@@ -427,7 +562,6 @@ async def get_dashboard(
     today_usd = to_money(await task_repo.sum_spend_today())
     mtd_usd = to_money(await task_repo.sum_spend_mtd())
     pct = float(round(mtd_usd / cap_usd * 100, 2)) if cap_usd else None
-    projected = _project_eom(mtd_usd, datetime.now(UTC)) if cap_usd is not None else None
     billing_currency = get_customer_pricing().currency()
     covered = await _workspace_cap_currencies(factory, workspace_id, billing_currency)
     now = datetime.now(UTC)
@@ -442,7 +576,7 @@ async def get_dashboard(
         mtd_usd=mtd_usd,
         cap_usd=cap_usd,
         pct_of_cap=pct,
-        projected_eom_usd=projected,
+        projected_eom_usd=None,
         not_covered=[
             CurrencySpend(currency=currency, amount=amount)
             for currency, amount in spend_not_covered(by_currency, covered).items()
@@ -454,6 +588,12 @@ async def get_dashboard(
     agents_q = select(Agent.id, Agent.name).where(Agent.workspace_id == workspace_id)
     agent_rows = (await db_session.execute(agents_q)).all()
     agent_name_by_id: dict[UUID, str] = {row.id: row.name for row in agent_rows}
+    top_agents = [
+        AgentSpend(agent_id=agent_id, agent_name=agent_name_by_id.get(agent_id), usd=amount)
+        for agent_id, amount in await cost_lines.top_agents_since(
+            month_start, currency=billing_currency, limit=TOP_AGENTS_LIMIT
+        )
+    ]
 
     # ----- blockers: waiting on a person (one query, split by status) -----
     waiting_q = (
@@ -471,6 +611,7 @@ async def get_dashboard(
                 task_id=t.id,
                 agent_id=t.agent_id,
                 agent_name=agent_name_by_id.get(t.agent_id),
+                status=t.status,
                 description=t.description,
                 created_at=t.created_at,
             )
@@ -548,17 +689,23 @@ async def get_dashboard(
         _dashboard_task(t, agent_name_by_id)
         for t in (await db_session.execute(active_q)).scalars().all()
     ]
+    # A run already listed as a blocker is not repeated as history.
+    shown_as_blockers = {b.task_id for b in (*blocked_24h, *failed_24h)}
     recent_q = (
         select(TaskORM)
         .where(TaskORM.workspace_id == workspace_id)
         .where(TaskORM.status.in_(FINISHED_TASK_STATUSES))
         .order_by(desc(ended_at))
-        .limit(TASK_LIST_LIMIT)
+        .limit(TASK_LIST_LIMIT + len(shown_as_blockers))
     )
     recent_tasks = [
         _dashboard_task(t, agent_name_by_id)
         for t in (await db_session.execute(recent_q)).scalars().all()
-    ]
+        if t.id not in shown_as_blockers
+    ][:TASK_LIST_LIMIT]
+
+    health = await _build_health(factory, agent_name_by_id)
+    usage = await _runtime_usage(workspace_id, month_start)
 
     schedule = await _build_schedule(db_session, task_repo, workspace_id, agent_name_by_id)
 
@@ -573,6 +720,7 @@ async def get_dashboard(
         DailySpendPoint(date=day, usd=spend_by_day.get(day, ZERO))
         for day in ((spend_since.date() + timedelta(days=i)).isoformat() for i in range(30))
     ]
+    spend.projected_eom_usd = project_month_end(mtd_usd, spend_by_day, datetime.now(UTC))
 
     return DashboardResponse(
         spend=spend,
@@ -581,6 +729,9 @@ async def get_dashboard(
         recent_tasks=recent_tasks,
         schedule=schedule,
         daily_spend=daily_spend,
+        top_agents=top_agents,
+        health=health,
+        usage=usage,
     )
 
 
@@ -589,8 +740,12 @@ class BalanceResponse(BaseModel):
     # True once billing refuses runs on platform-paid models for want of money.
     exhausted: bool
     viewer_is_payer: bool
-    # Only the payer is told the amount.
+    # Only the payer is told the amount, and the pace at which it is spent.
     amount: Money | None
+    # Everything billing debited per day on average over its recent window.
+    spend_per_day: Money | None = None
+    # Days the balance covers at that pace; None when nothing was debited lately.
+    runway_days: Decimal | None = None
 
 
 @router.get(
@@ -619,6 +774,10 @@ async def get_balance(user_context: UserContextDep) -> BalanceResponse | None:
         exhausted=balance.exhausted,
         viewer_is_payer=balance.viewer_is_payer,
         amount=to_money(balance.amount) if balance.amount is not None else None,
+        spend_per_day=to_money(balance.spend_per_day)
+        if balance.spend_per_day is not None
+        else None,
+        runway_days=balance.runway_days,
     )
 
 
