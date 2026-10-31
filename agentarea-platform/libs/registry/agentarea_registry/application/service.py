@@ -1192,11 +1192,7 @@ class RegistryService:
                         if item.external_id not in published:
                             await self._drop_platform_skill(item)
                     await self.item_repo.session.commit()
-                moved = await self.item_repo.move_references(
-                    registry_id, await self._sibling_registries(registry)
-                )
-                if moved:
-                    logger.info("Moved %d uses of items registry %s dropped", moved, registry_id)
+                await self._move_uses(registry, await self._sibling_registries(registry))
                 deleted = await self.item_repo.delete_unreferenced_out_of_source(registry_id)
                 out_of_source -= deleted
 
@@ -1291,10 +1287,23 @@ class RegistryService:
             for item in (await self._items_by_external_id(registry_id)).values():
                 await self._drop_platform_skill(item)
             await self.item_repo.session.commit()
-        moved = await self.item_repo.move_references(registry_id, replacements)
-        if moved:
-            logger.info("Moved %d uses of retired registry %s's items", moved, registry_id)
+        await self._move_uses(registry, replacements)
         return await self.item_repo.delete_unreferenced_out_of_source(registry_id)
+
+    async def _move_uses(self, registry: Registry, replacements: Collection[UUID]) -> None:
+        """Move what uses the registry's dropped items onto their replacements.
+
+        The platform's own copy of a dropped MCP server goes once its instances
+        run from the replacement's copy, so the item can be deleted with the rest.
+        """
+        moved = await self.item_repo.move_references(registry.id, replacements)
+        if moved:
+            logger.info("Moved %d uses of items registry %s dropped", moved, registry.id)
+        if registry.registry_type != "mcp_servers" or self.server_repo is None:
+            return
+        for item_id, server_id in await self.item_repo.replaced_copies(registry.id, replacements):
+            await self.server_repo.delete(server_id)
+            await self.item_repo.update(item_id, installed_entity_id=None, installed_version=None)
 
     async def _sibling_registries(self, registry: Registry) -> list[UUID]:
         """The other active platform registries of the same type.

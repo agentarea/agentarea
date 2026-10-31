@@ -39,7 +39,14 @@ async def engine() -> AsyncGenerator[AsyncEngine, None]:
     eng = create_async_engine(TEST_DATABASE_URL, echo=False)
     yield eng
     async with eng.begin() as conn:
-        for table in ("skills", "agents", "openapi_connections", "registry_item_installs"):
+        for table in (
+            "skills",
+            "agents",
+            "openapi_connections",
+            "registry_item_installs",
+            "mcp_server_instances",
+            "mcp_servers",
+        ):
             await conn.execute(
                 text(f"DELETE FROM {table} WHERE workspace_id LIKE :w"), {"w": f"{WORKSPACE}%"}
             )
@@ -435,3 +442,80 @@ async def test_an_item_another_platform_registry_now_publishes_takes_its_uses_al
         text("SELECT external_id FROM registry_items WHERE registry_id = :r"), {"r": glob.id}
     )
     assert left.scalars().all() == ["kept"]
+
+
+async def _mcp_copy(session: AsyncSession, item_id: uuid.UUID, workspace: str = WORKSPACE) -> uuid.UUID:
+    server = uuid.uuid4()
+    await session.execute(
+        text(
+            "INSERT INTO mcp_servers (id, workspace_id, created_by, name, slug, description, "
+            "version, tags, is_public, status, registry_item_id) VALUES (:id, :w, 'u', 'srv', "
+            ":slug, '', '1', '[]', false, 'active', :item)"
+        ),
+        {"id": server, "w": workspace, "slug": f"srv-{server.hex[:8]}", "item": item_id},
+    )
+    return server
+
+
+async def test_a_moved_mcp_server_keeps_one_platform_copy_and_its_instances_follow(
+    session: AsyncSession,
+):
+    # Both registries mirror the server: each item has the platform's own copy.
+    # The dropped item's copy must not move onto the new item (two copies of one
+    # server); its instances move to the new copy and the old copy goes.
+    repo = RegistryItemRepository(session)
+    glob = Registry(
+        name=f"{PREFIX}mcp-global", registry_type="mcp_servers", source_type="url", source_url="g"
+    )
+    region = Registry(
+        name=f"{PREFIX}mcp-region", registry_type="mcp_servers", source_type="url", source_url="r"
+    )
+    session.add_all([glob, region])
+    await session.commit()
+    old = await repo.create(registry_id=glob.id, external_id="srv", name="srv")
+    still = await repo.create(registry_id=glob.id, external_id="both", name="both")
+    new = await repo.create(registry_id=region.id, external_id="srv", name="srv")
+    await repo.create(registry_id=region.id, external_id="both", name="both")
+    old_copy = await _mcp_copy(session, old.id)
+    new_copy = await _mcp_copy(session, new.id)
+    still_copy = await _mcp_copy(session, still.id)
+    user_server = await _mcp_copy(session, old.id, workspace=f"{WORKSPACE}-b")
+    for item, copy in ((old, old_copy), (new, new_copy), (still, still_copy)):
+        await repo.update(item.id, installed_entity_id=copy)
+    instance = uuid.uuid4()
+    await session.execute(
+        text(
+            "INSERT INTO mcp_server_instances (id, name, server_spec_id, transport, workspace_id, "
+            "created_by) VALUES (:id, 'i', :spec, 'docker', :w, 'u')"
+        ),
+        {"id": instance, "spec": str(old_copy), "w": WORKSPACE},
+    )
+    await session.commit()
+    await repo.mark_in_source(glob.id, {"both"})
+
+    deleted: list[str] = []
+
+    class Servers:
+        async def delete(self, server_id: str) -> bool:
+            deleted.append(server_id)
+            await session.execute(text("DELETE FROM mcp_servers WHERE id = :id"), {"id": server_id})
+            return True
+
+    service = RegistryService(RegistryRepository(session), repo, server_repo=Servers())  # type: ignore[arg-type]
+    await service._move_uses(glob, [region.id])
+    assert await repo.delete_unreferenced_out_of_source(glob.id) == 1
+
+    assert deleted == [str(old_copy)]
+    spec = await session.execute(
+        text("SELECT server_spec_id FROM mcp_server_instances WHERE id = :id"), {"id": instance}
+    )
+    assert spec.scalar_one() == str(new_copy)
+    owners = await session.execute(
+        text("SELECT id, registry_item_id FROM mcp_servers WHERE id IN (:a, :b, :c)"),
+        {"a": new_copy, "b": still_copy, "c": user_server},
+    )
+    assert dict(owners.tuples().all()) == {new_copy: new.id, still_copy: still.id, user_server: new.id}
+    left = await session.execute(
+        text("SELECT external_id FROM registry_items WHERE registry_id = :r"), {"r": glob.id}
+    )
+    assert left.scalars().all() == ["both"]
