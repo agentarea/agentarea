@@ -7,6 +7,8 @@ from typing import Any
 from agentarea_common.tool_cost import connector_payers, parse_cost_model
 from agentarea_governance.domain.tool_calls import CONTROL_FLOW_TOOL_NAMES
 
+_ERROR_PATH = re.compile(r"\$(?:\.[A-Za-z_][A-Za-z0-9_\-]*|\[\d+\])+")
+
 
 def parse_openapi_operations(
     spec: dict[str, Any], configured_query_params: Collection[str] = ()
@@ -36,6 +38,7 @@ def parse_openapi_operations(
     connector_payers(spec.get("x-agentarea-payers"))
     default_cost = spec.get("x-agentarea-cost")
     parse_cost_model(default_cost)
+    default_error_path = _error_path(spec, "spec")
 
     for path, path_item in paths.items():
         if not isinstance(path, str):
@@ -110,6 +113,7 @@ def parse_openapi_operations(
             response_transform = operation.get("x-agentarea-response-transform") or []
             if not isinstance(response_transform, list):
                 raise ValueError(f"{op_where}.x-agentarea-response-transform must be a list")
+            error_path = _error_path(operation, op_where) or default_error_path
 
             operations.append(
                 {
@@ -122,10 +126,26 @@ def parse_openapi_operations(
                     "input_schema": input_schema,
                     "cost": own_cost if own_cost is not None else default_cost,
                     "response_transform": response_transform,
+                    "error_path": error_path,
                 }
             )
 
     return operations
+
+
+def _error_path(node: dict[str, Any], where: str) -> str | None:
+    """Where a vendor puts the error it answers with a 200, if it does.
+
+    The call fails when the transformed body carries a value there.
+    """
+    path = node.get("x-agentarea-error-path")
+    if path is None:
+        return None
+    if not isinstance(path, str) or not _ERROR_PATH.fullmatch(path):
+        raise ValueError(
+            f"{where}.x-agentarea-error-path must be a path like $.field, got {path!r}"
+        )
+    return path
 
 
 def parse_openapi_spec(

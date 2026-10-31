@@ -961,3 +961,70 @@ class TestOpenAPIToolResponseTransform:
 
         assert result["success"] is False
         assert "$.rawData" in result["error"]
+
+    async def _call(self, response: httpx.Response, **operation: object) -> dict:
+        op = _make_operation() | operation
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=_build_mock_client(response)),
+        ):
+            tool = mod.OpenAPITool(
+                op, _CONNECTION_ID, _CONNECTION_NAME, _make_service(_make_connection())
+            )
+            return await tool.execute()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("content_type", ["application/xml", "text/xml; charset=utf-8"])
+    async def test_an_xml_body_is_parsed_for_the_agent_and_the_meter(self, content_type):
+        response = httpx.Response(
+            200,
+            content=b'<serp><item pos="1">a</item></serp>',
+            headers={"content-type": content_type},
+        )
+
+        result = await self._call(response, response_transform=[{"parse": "xml", "at": "$"}])
+
+        parsed = {"serp": {"item": {"@pos": "1", "#text": "a"}}}
+        assert result["success"] is True
+        assert json.loads(result["result"]) == parsed
+        assert result["body"] == parsed
+
+    @pytest.mark.asyncio
+    async def test_an_xml_body_without_a_transform_reaches_the_agent_as_text(self):
+        xml = "<serp><item>a</item></serp>"
+        response = httpx.Response(
+            200, content=xml.encode(), headers={"content-type": "application/xml"}
+        )
+
+        result = await self._call(response)
+
+        assert result["success"] is True
+        assert result["result"] == xml
+
+    @pytest.mark.asyncio
+    async def test_an_error_inside_a_200_body_is_a_failed_call(self):
+        response = httpx.Response(
+            200,
+            content=b'<serp><error code="15">No results</error></serp>',
+            headers={"content-type": "text/xml"},
+        )
+
+        result = await self._call(
+            response,
+            response_transform=[{"parse": "xml", "at": "$"}],
+            error_path="$.serp.error",
+        )
+
+        assert result["success"] is False
+        assert result["status_code"] == 200
+        assert "No results" in result["error"]
+        assert '"15"' in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_a_body_without_the_error_is_a_success(self):
+        response = httpx.Response(200, json={"items": [1]})
+
+        result = await self._call(response, error_path="$.error")
+
+        assert result["success"] is True
+        assert result["body"] == {"items": [1]}

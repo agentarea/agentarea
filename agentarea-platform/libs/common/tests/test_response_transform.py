@@ -29,6 +29,14 @@ def test_base64_xml_becomes_json():
     assert body["rawData"]["yandexsearch"]["@version"] == "1.0"
 
 
+def test_an_xml_body_is_parsed_at_the_root():
+    body = apply_response_transform(
+        [{"parse": "xml", "at": "$"}], '<serp><item pos="1">a</item><item pos="2">b</item></serp>'
+    )
+
+    assert body == {"serp": {"item": [{"@pos": "1", "#text": "a"}, {"@pos": "2", "#text": "b"}]}}
+
+
 def test_no_steps_leave_the_body_alone():
     body = {"a": 1}
     assert apply_response_transform([], body) is body
