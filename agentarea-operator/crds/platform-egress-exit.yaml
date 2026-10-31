@@ -1,0 +1,74 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: platformegressexits.agentarea.io
+spec:
+  group: agentarea.io
+  names:
+    kind: PlatformEgressExit
+    listKind: PlatformEgressExitList
+    plural: platformegressexits
+    singular: platformegressexit
+    shortNames:
+      - pexit
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - name
+                - via
+              properties:
+                # The exit's id is derived from this, and MCP instances bind that
+                # id: renaming it is a new exit, not a rename of this one.
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 255
+                  description: "Name shown in every workspace. Also the key the exit's id is derived from."
+                description:
+                  type: string
+                via:
+                  type: string
+                  pattern: "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
+                  description: "The hop in the egress proxy's own configuration this exit leaves through (e.g. aeza)."
+                remoteDns:
+                  type: boolean
+                  default: false
+                  description: "Pass host names to the hop unresolved, so they are resolved where the traffic leaves."
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: [Pending, Synced, Error]
+                message:
+                  type: string
+                exitId:
+                  type: string
+                  description: "UUID of the synced exit; what an MCP instance binds in json_spec.egress_exit"
+                lastSyncedAt:
+                  type: string
+                  format: date-time
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Via
+          type: string
+          jsonPath: .spec.via
+        - name: Status
+          type: string
+          jsonPath: .status.phase
+        - name: Exit
+          type: string
+          jsonPath: .status.exitId
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
