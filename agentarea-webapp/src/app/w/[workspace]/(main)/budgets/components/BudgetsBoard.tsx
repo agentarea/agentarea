@@ -18,10 +18,13 @@ const LEFT_FRACTION = 1.55 / 2.55;
 export function BudgetsBoard({
   spend,
   outlook,
+  usage,
   capCard,
 }: {
   spend: ReactNode;
   outlook: ReactNode;
+  /** Full-width row under the top pair; nothing when null. */
+  usage?: ReactNode;
   capCard: ReactNode;
 }) {
   const gridStyle: CSSProperties = {
@@ -48,6 +51,12 @@ export function BudgetsBoard({
         <BoardCell padded className={cn("border-b", dashed)}>
           {outlook}
         </BoardCell>
+
+        {usage && (
+          <BoardCell padded className={cn("border-b lg:col-span-2", dashed)}>
+            {usage}
+          </BoardCell>
+        )}
 
         {/* bottom — full-width cap card */}
         <BoardCell padded className="lg:col-span-2">

@@ -20,6 +20,7 @@ import pytest
 from agentarea_agents.domain.models import Agent
 from agentarea_api.api.v1.dashboard import get_dashboard, project_month_end
 from agentarea_common.auth.context import UserContext
+from agentarea_common.extensions.workspace_usage import WorkspaceUsage
 from agentarea_common.base.models import BaseModel
 from agentarea_common.money import to_money
 from agentarea_governance.infrastructure.orm import PolicyRuleORM
@@ -1010,3 +1011,28 @@ class TestHealth:
         failing = next(t for t in result.health.triggers if t.reason == "failing")
         assert (failing.consecutive_failures, failing.failure_threshold) == (2, 5)
         assert failing.agent_name is not None
+
+
+class TestRuntimeUsage:
+    async def test_no_metering_reads_as_no_usage(self, session_factory, user_context, seeded):
+        result = await _call_dashboard(session_factory, user_context)
+        assert result.usage is None
+
+    async def test_a_tenth_of_a_mebibyte_stored_is_not_rounded_away(
+        self, session_factory, user_context, seeded
+    ):
+        source = MagicMock()
+        source.usage_since = AsyncMock(
+            return_value=WorkspaceUsage(
+                cpu_core_hours=Decimal("21.84321"),
+                memory_gib_hours=Decimal("27.1"),
+                storage_gib=Decimal("0.1") / 1024,
+            )
+        )
+        with patch(
+            "agentarea_api.api.v1.dashboard.get_workspace_usage_source", return_value=source
+        ):
+            result = await _call_dashboard(session_factory, user_context)
+        assert result.usage is not None
+        assert result.usage.cpu_core_hours == Decimal("21.84")
+        assert result.usage.storage_gib == Decimal("0.000098")

@@ -220,17 +220,26 @@ export function FactRow({
 
 const STAT_MARKER_COLOR = "hsl(var(--foreground) / 0.78)";
 
-export function StatStrip({ children }: { children: ReactNode }) {
+export function StatStrip({
+  children,
+  columns = 4,
+}: {
+  children: ReactNode;
+  /** Stats per row on a large screen. */
+  columns?: 3 | 4;
+}) {
+  const dividers = columns === 3 ? [100 / 3, 200 / 3] : [25, 50, 75];
   return (
     <div className="mb-4">
       <div
         className={cn(
           OVERVIEW_SURFACE_CLASS,
-          "relative grid grid-cols-2 lg:grid-cols-4"
+          "relative grid grid-cols-2",
+          columns === 3 ? "lg:grid-cols-3" : "lg:grid-cols-4"
         )}
       >
         {children}
-        {[25, 50, 75].map((left) => (
+        {dividers.map((left) => (
           <BoardCrossMark
             key={`top-${left}`}
             className="top-0 -translate-x-1/2 -translate-y-1/2"
@@ -238,7 +247,7 @@ export function StatStrip({ children }: { children: ReactNode }) {
             style={{ left: `${left}%` }}
           />
         ))}
-        {[25, 50, 75].map((left) => (
+        {dividers.map((left) => (
           <BoardCrossMark
             key={`bottom-${left}`}
             className="bottom-0 -translate-x-1/2 translate-y-1/2"

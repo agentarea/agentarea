@@ -3,7 +3,6 @@ import { Wallet } from "lucide-react";
 import type {
   AgentSpend,
   DailySpendPoint,
-  RuntimeUsage,
   SpendCard as SpendCardData,
 } from "@/api/client";
 import { AgentAvatar } from "@/components/AgentAvatar";
@@ -30,15 +29,12 @@ export function SpendCard({
   spend,
   trend,
   topAgents,
-  usage = null,
   currency,
   compact = false,
 }: {
   spend: SpendCardData;
   trend: DailySpendPoint[];
   topAgents: AgentSpend[];
-  /** Runtime quantities this month; null where the deployment meters none. */
-  usage?: RuntimeUsage | null;
   currency: string | null;
   compact?: boolean;
 }) {
@@ -46,10 +42,6 @@ export function SpendCard({
   const locale = useLocale();
   // Money arrives as decimal strings; numbers are only for display and charts.
   const fmt = (v: string) => formatMoney(Number(v), currency, locale);
-  const qty = new Intl.NumberFormat(locale, {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  });
   const hasCap = spend.cap_usd !== null;
   const pct = spend.pct_of_cap ?? 0;
 
@@ -159,16 +151,6 @@ export function SpendCard({
           seriesLabel={t("spend")}
         />
       </div>
-
-      {usage && (
-        <div className="mt-2 text-[11.5px] tabular-nums text-muted-foreground">
-          {t("runtimeUsage", {
-            cpu: qty.format(Number(usage.cpu_core_hours)),
-            memory: qty.format(Number(usage.memory_gib_hours)),
-            storage: qty.format(Number(usage.storage_gib)),
-          })}
-        </div>
-      )}
 
       {topAgents.length > 0 && (
         <div className="mt-3">
