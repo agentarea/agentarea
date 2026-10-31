@@ -155,6 +155,24 @@ async def test_an_allowlist_naming_the_bare_tool_admits_no_server(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "rule", ["mcp:DeepWiki:ask_question", "mcp__deepwiki__ask_question", "deepwiki__ask_question"]
+)
+async def test_an_allowlist_naming_the_tool_through_the_connections_name_admits_no_server(
+    client, audit_events, upstream_calls, rule
+):
+    # Connection names are not unique: any member's connection called DeepWiki
+    # would match a rule written for this one.
+    client({"tools": {"allowed": [rule]}})
+
+    result = await _call("deepwiki__ask_question", question="q")
+
+    assert result.is_error is True
+    assert "allowlist" in _text(result)
+    assert upstream_calls == []
+
+
+@pytest.mark.asyncio
 async def test_an_allowlist_naming_the_servers_tool_admits_it(
     client, audit_events, upstream_calls
 ):
@@ -536,3 +554,29 @@ async def test_a_client_openapi_call_the_policy_denies_never_reaches_the_vendor(
     assert result.is_error is True
     assert "denied by policy" in _text(result)
     assert state.executed == [] and state.ledger.entries == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("rule", ["search", "example_search__search"])
+async def test_an_allowlist_naming_the_operation_admits_no_connection(
+    openapi_client, audit_events, rule
+):
+    state = openapi_client(policy={"tools": {"allowed": [rule]}})
+
+    result = await _call("example_search__search", query="agentarea")
+
+    assert result.is_error is True
+    assert "allowlist" in _text(result)
+    assert state.executed == []
+
+
+@pytest.mark.asyncio
+async def test_an_allowlist_naming_the_operation_through_its_connection_admits_it(
+    openapi_client, audit_events
+):
+    state = openapi_client(policy={"tools": {"allowed": [f"openapi:{CONNECTION_ID}:search"]}})
+
+    result = await _call("example_search__search", query="agentarea")
+
+    assert result.is_error is not True
+    assert state.executed == [("search", {"query": "agentarea"})]

@@ -44,11 +44,7 @@ from temporalio import activity
 from ...interfaces import ActivityDependencies
 from ...models import MCPToolRequest, MCPToolResult, McpToolRoute
 from ...telemetry import ToolCall, ToolKind, ToolOutcome, ToolPath, tool_call
-from ...workflows.helpers import (
-    mcp_tool_restricting_aliases,
-    tool_config_aliases,
-    tool_policy_aliases,
-)
+from ...workflows.helpers import tool_policy_names
 from ..heartbeat import auto_heartbeater
 from .sandbox import agent_artifact_actor, sandbox_control_auth_secret, sandbox_file_auth_secret
 from .tool_audit import TOOL_CALL_DENIED, argument_keys
@@ -439,6 +435,9 @@ def make_tools_activities(
         async def ledger(usages: list[ToolUsage]) -> int:
             return await _ledger(request, usages)
 
+        names = tool_policy_names(
+            request.tool_name, request.mcp_route, request.tools, request.openapi_operation_tools
+        )
         call = GovernedToolCall(
             authorization=ToolAuthorizationRequest(
                 tool_name=request.tool_name,
@@ -446,13 +445,9 @@ def make_tools_activities(
                 user_id=request.user_id,
                 workspace_id=request.workspace_id,
                 effective_policy=request.effective_policy,
-                aliases=tool_policy_aliases(request.mcp_route, request.tool_name),
-                restricting_aliases=(
-                    *mcp_tool_restricting_aliases(request.mcp_route, request.tool_name),
-                    *tool_config_aliases(
-                        request.tool_name, request.tools, request.openapi_operation_tools
-                    ),
-                ),
+                aliases=names.aliases,
+                restricting_aliases=names.restricting,
+                name_allows=names.name_allows,
             ),
             call_id=_payment_call_ref(request),
             agent_id=request.agent_id,

@@ -146,3 +146,9 @@ SKILL_BODY_ON_ACTIVATION_PATCH = "skill-body-on-activation-v1"
 # A text reply cut off at the output limit (finish_reason "length") asks the model
 # to continue and joins the parts; before, the cut-off reply was the run's answer.
 LENGTH_CONTINUATION_PATCH = "length-continuation-v1"
+# A connection's tool is allowed only by its connection's id: its model-facing
+# name and the names its connection's author or server chose (the connection's
+# name, the raw tool name, an OpenAPI operationId) only deny or require approval.
+# Before, an allowlist naming a connection by name admitted any connection a
+# member gave that name.
+CONNECTION_NAMES_NARROW_PATCH = "connection-names-only-narrow-v1"

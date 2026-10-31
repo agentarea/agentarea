@@ -47,13 +47,12 @@ from agentarea_execution.models import (
 )
 from agentarea_execution.testing import TaskLogFake, make_record_activity
 from agentarea_execution.workflows.agent.approval import ToolApprovalMixin
-from agentarea_execution.workflows.agent.patches import TOOL_CONFIG_ALIASES_PATCH
-from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
-from agentarea_execution.workflows.helpers import (
-    mcp_tool_restricting_aliases,
-    tool_config_aliases,
-    tool_policy_aliases,
+from agentarea_execution.workflows.agent.patches import (
+    CONNECTION_NAMES_NARROW_PATCH,
+    TOOL_CONFIG_ALIASES_PATCH,
 )
+from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
+from agentarea_execution.workflows.helpers import tool_policy_names
 from agentarea_governance.domain.policies import EffectivePolicy, PolicyDocument, PolicyResolver
 from agentarea_tasks.domain.models import TaskProvenance
 from agentarea_tasks.schemas.dto import RunCreate
@@ -230,6 +229,9 @@ async def _mock_call_llm(request: LLMCallRequest) -> dict[str, Any]:
 @activity.defn(name="execute_mcp_tool_activity")
 async def _mock_execute_mcp(request: MCPToolRequest) -> dict[str, Any]:
     _tool_requests.append(request)
+    names = tool_policy_names(
+        request.tool_name, request.mcp_route, request.tools, request.openapi_operation_tools
+    )
     decision = await authorize_tool_invocation(
         ToolAuthorizationRequest(
             tool_name=request.tool_name,
@@ -237,13 +239,9 @@ async def _mock_execute_mcp(request: MCPToolRequest) -> dict[str, Any]:
             user_id=request.user_id,
             workspace_id=request.workspace_id,
             effective_policy=request.effective_policy,
-            aliases=tool_policy_aliases(request.mcp_route, request.tool_name),
-            restricting_aliases=(
-                *mcp_tool_restricting_aliases(request.mcp_route, request.tool_name),
-                *tool_config_aliases(
-                    request.tool_name, request.tools, request.openapi_operation_tools
-                ),
-            ),
+            aliases=names.aliases,
+            restricting_aliases=names.restricting,
+            name_allows=names.name_allows,
         )
     )
     if decision.action is ToolAuthorizationAction.DENY or (
@@ -572,6 +570,61 @@ async def test_a_run_recorded_before_config_aliases_replays_and_fails_closed_in_
                 data_converter=pydantic_data_converter,
                 workflow_runner=UnsandboxedWorkflowRunner(),
             ).replay_workflow(history)
+
+
+@pytest.mark.asyncio
+async def test_an_allowlist_naming_an_openapi_operation_admits_it_only_through_its_connection():
+    _llm_script.extend(["openapi", "complete"])
+    by_name = _policy()
+    by_name["tools"] = {"allowed": [_OPENAPI_TOOL]}
+
+    result = await _run(_request(by_name))
+
+    assert result.success is True
+    assert _tool_requests == []
+    assert _executed_tools == []
+
+    _llm_script.extend(["openapi", "complete"])
+    by_id = _policy()
+    by_id["tools"] = {"allowed": [f"openapi:{_OPENAPI_CONNECTION}:{_OPENAPI_TOOL}"]}
+
+    result = await _run(_request(by_id))
+
+    assert result.success is True
+    assert _executed_tools == [_OPENAPI_TOOL]
+
+
+@pytest.mark.asyncio
+async def test_a_run_recorded_before_connection_names_narrowed_replays_and_fails_closed(
+    monkeypatch,
+):
+    """In-flight runs an allowlist admitted by an operation's own name keep replaying.
+
+    The history is recorded the way the worker decided before: no patch marker,
+    the gate letting ``list_items`` through on an allowlist naming it. Replaying
+    it on the current code must reach the same commands, and the tool activity,
+    which judges by the connection's id regardless, refuses the call.
+    """
+    _llm_script.extend(["openapi", "complete"])
+    policy = _policy()
+    policy["tools"] = {"allowed": [_OPENAPI_TOOL]}
+
+    patched = workflow.patched
+    with monkeypatch.context() as before_the_patch:
+        before_the_patch.setattr(
+            workflow,
+            "patched",
+            lambda patch_id: patch_id != CONNECTION_NAMES_NARROW_PATCH and patched(patch_id),
+        )
+        result, history = await _execute(
+            _request(policy), workflow_runner=UnsandboxedWorkflowRunner()
+        )
+
+    assert result.success is True
+    assert [request.tool_name for request in _tool_requests] == [_OPENAPI_TOOL]
+    assert _executed_tools == []
+
+    await _replay(history)
 
 
 async def _effective_policy_of_a_run_started_with_the_approval_flag() -> dict[str, Any]:

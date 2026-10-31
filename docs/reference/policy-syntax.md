@@ -99,7 +99,26 @@ at parse time.
 | `registry_trust` | `registry_trust:<level>`, level one of `official`, `verified`, `community`, `private` | Yes, with `allow` or `deny` on a `workspace` or `user` subject only | **No.** Decided on catalog install |
 
 Tool names are matched with `fnmatch` glob semantics against the LLM-facing tool
-name.
+name and the tool's other names below.
+
+A tool that comes from a connection is allowed only by its connection's id.
+Every other name it has only denies it or holds it for approval: an `allow`
+naming one of those does not admit it, and in a workspace with any `allow` on
+tools the tool is then denied.
+
+| Tool | Names an `allow` matches | Names that only `deny` or require `approval` |
+|---|---|---|
+| MCP | `mcp:<instance id>:<tool>` | The LLM-facing `mcp__<server>__<tool>`, `mcp:<instance name>:<tool>`, the raw `<tool>` the server advertises |
+| OpenAPI operation | `openapi:<connection id>:<tool>` | The LLM-facing operation name, the spec's `operationId`, the connection's name and its id alone |
+| Built-in, platform or delegate tool | The LLM-facing name | Its config name (a code toolset's namespace, a delegate's agent name) |
+
+Connection names are not unique, and any workspace member can add a connection
+and choose its name, its server's tool names and its OpenAPI `operationId`s. An
+`allow` that matched those names would admit every connection that reused them.
+To allow a connection tool, name it as `tool:mcp:<instance id>:<tool>` or
+`tool:openapi:<connection id>:<tool>`; the connection's page shows the id.
+A delegate tool is still allowed by its name, which comes from the delegated
+agent's name.
 
 ### Params by effect
 

@@ -200,3 +200,18 @@ async def test_a_bare_name_allow_does_not_admit_this_servers_tool(session_factor
 
     assert tools["send"]["effective"] == "deny"
     assert "allowlist" in tools["send"]["reason"]
+
+
+async def test_an_allow_naming_the_connection_by_name_does_not_admit_its_tool(session_factory):
+    # Another connection may carry the same name; only the id names this one.
+    async with session_factory() as session:
+        await _seed(
+            session,
+            (f"tool:mcp:{INSTANCE_NAME}:send", PolicyEffect.ALLOW, {}),
+            ("tool:mcp__mailer__send", PolicyEffect.ALLOW, {}),
+            (f"tool:mcp:{INSTANCE_ID}:read", PolicyEffect.ALLOW, {}),
+        )
+        tools = _by_name(await _tool_policies(session))
+
+    assert tools["send"]["effective"] == "deny"
+    assert tools["read"]["effective"] == "allow"
