@@ -17,6 +17,7 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import unscoped
 from sqlalchemy import (
     String,
+    and_,
     case,
     cast,
     column,
@@ -32,6 +33,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
 
 from agentarea_registry.application.catalog_facets import (
@@ -460,26 +462,25 @@ class RegistryItemRepository:
         """
         if not replacements:
             return []
+        old, new = aliased(RegistryItem), aliased(RegistryItem)
         result = await self.session.execute(
-            text(
-                """
-                SELECT DISTINCT old.id, old.installed_entity_id
-                FROM registry_items old
-                JOIN registry_items new
-                  ON new.external_id = old.external_id
-                 AND new.registry_type = old.registry_type
-                WHERE old.registry_id = :registry_id
-                  AND NOT old.in_source
-                  AND old.installed_entity_id IS NOT NULL
-                  AND new.registry_id = ANY(:replacements)
-                  AND new.in_source
-                  AND new.installed_entity_id IS NOT NULL
-                """
-            ),
-            {
-                "registry_id": UUID(str(registry_id)),
-                "replacements": [UUID(str(r)) for r in replacements],
-            },
+            select(old.id, old.installed_entity_id)
+            .join(
+                new,
+                and_(
+                    new.external_id == old.external_id,
+                    new.registry_type == old.registry_type,
+                ),
+            )
+            .where(
+                old.registry_id == registry_id,
+                old.in_source.is_(False),
+                old.installed_entity_id.is_not(None),
+                new.registry_id.in_([UUID(str(r)) for r in replacements]),
+                new.in_source.is_(True),
+                new.installed_entity_id.is_not(None),
+            )
+            .distinct()
         )
         return [(row[0], str(row[1])) for row in result.all()]
 
