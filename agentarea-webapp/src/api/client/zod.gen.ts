@@ -530,6 +530,48 @@ export const zCatalogItemUpdate = z.object({
 });
 
 /**
+ * CatalogKeyFieldResponse
+ *
+ * One value a catalog API needs before it can be called.
+ */
+export const zCatalogKeyFieldResponse = z.object({
+  description: z.string().nullish(),
+  label: z.string(),
+  location: z.enum(["header", "query"]),
+  name: z.string(),
+});
+
+/**
+ * CatalogConnectFormResponse
+ *
+ * How a catalog API is connected: by signing in, or by entering its keys.
+ */
+export const zCatalogConnectFormResponse = z.object({
+  auth: z.enum(["oauth", "api_key"]),
+  catalog_item_id: z.uuid(),
+  description: z.string().nullish(),
+  fields: z.array(zCatalogKeyFieldResponse).optional(),
+  name: z.string(),
+});
+
+/**
+ * CatalogKeyValue
+ */
+export const zCatalogKeyValue = z.object({
+  name: z.string().max(256),
+  value: z.string().max(8192),
+});
+
+/**
+ * CatalogConnectRequest
+ *
+ * The keys a catalog API asks for, one per field of its connect form.
+ */
+export const zCatalogConnectRequest = z.object({
+  credentials: z.array(zCatalogKeyValue).min(1).max(16),
+});
+
+/**
  * CatalogToolPrice
  *
  * What one unit of a tool's calls costs; ``tool`` null is the connector's default.
@@ -6296,6 +6338,31 @@ export const zCreateConnectionV1OpenapiConnectionsPostBody =
  * Successful Response
  */
 export const zCreateConnectionV1OpenapiConnectionsPostResponse =
+  zOpenApiConnectionResponse;
+
+export const zGetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetPath =
+  z.object({
+    catalog_item_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zGetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetResponse =
+  zCatalogConnectFormResponse;
+
+export const zConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostBody =
+  zCatalogConnectRequest;
+
+export const zConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostPath =
+  z.object({
+    catalog_item_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponse =
   zOpenApiConnectionResponse;
 
 export const zPreviewSpecV1OpenapiConnectionsPreviewSpecPostBody =

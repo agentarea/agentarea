@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { ZodError } from "zod";
 import type {
+  CatalogConnectRequest,
   ContinueTaskPayload,
   CreateWalletRequest,
   CreateWorkspaceDirectoryRequest,
@@ -13,6 +14,7 @@ import type {
   ModelSpecCreate,
   OAuthAuthorizeRequest,
   OAuthPreflightResponse,
+  OpenApiConnectionResponse,
   PaginatedResponseSkillResponse,
   ProjectCreate,
   ProjectUpdate,
@@ -25,6 +27,7 @@ import type {
   UploadPlanEntry,
 } from "@/api/client/types.gen";
 import {
+  zCatalogConnectRequest,
   zCreateWorkspaceDirectoryRequest,
   zListSecretsV1SecretsGetResponse,
   zOAuthAuthorizeResponse,
@@ -49,6 +52,7 @@ import {
   bulkCreateModelInstances,
   cancelAgentTask,
   checkMCPServerInstanceConfiguration,
+  connectCatalogApi,
   continueAgentTask,
   createAgentWallet,
   createClient,
@@ -588,6 +592,27 @@ export async function createOpenAPIConnectionAction(
     revalidatePath(await requestWorkspacePath("/connections"));
   }
   return result;
+}
+
+/** Connect a catalog API with the keys its form asks for; each call is another connection. */
+export async function connectCatalogApiAction(
+  itemId: string,
+  body: CatalogConnectRequest
+): Promise<{ data: OpenApiConnectionResponse | null; error: string | null }> {
+  if (!isUUID(itemId)) return { data: null, error: "Invalid ID" };
+  const parsed = zCatalogConnectRequest.safeParse(body);
+  if (!parsed.success) {
+    return { data: null, error: parsed.error.issues[0]?.message ?? "Invalid keys" };
+  }
+  const result = await connectCatalogApi(itemId, parsed.data);
+  if (!result.data) {
+    return {
+      data: null,
+      error: apiErrorMessage(result, "Could not connect"),
+    };
+  }
+  revalidatePath(await requestWorkspacePath("/connections"));
+  return { data: result.data, error: null };
 }
 
 export async function updateOpenAPIConnectionAction(

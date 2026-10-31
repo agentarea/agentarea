@@ -40,11 +40,11 @@ from agentarea_openapi.application.service import OpenAPIConnectionService
 from agentarea_openapi.application.url_validator import validate_url
 from agentarea_openapi.infrastructure.repository import OpenAPIConnectionRepository
 from agentarea_openapi.schemas.dto import OpenAPIConnectionCreate
-from agentarea_registry.infrastructure.repository import RegistryItemRepository, RegistryRepository
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_api.api.deps.services import get_real_secret_manager
+from agentarea_api.catalog_api import load_catalog_api_item
 from agentarea_api.oauth_connect.pages import (
     mcp_instance_landing_url,
     openapi_connection_landing_url,
@@ -296,20 +296,8 @@ class CatalogItemTarget:
     async def load(
         cls, item_id: UUID, user_context: UserContext, session: AsyncSession
     ) -> CatalogItemTarget:
-        item = await RegistryItemRepository(session, user_context).get_by_id(item_id)
-        if item is None:
-            raise HTTPException(status_code=404, detail="Catalog connection not found")
-        registry = await RegistryRepository(session, user_context).get_by_id(item.registry_id)
-        spec = item.spec or {}
-        if (
-            registry is None
-            or not registry.is_active
-            or registry.registry_type != "mcp_servers"
-            or spec.get("connection_type") != "openapi"
-        ):
-            raise HTTPException(
-                status_code=400, detail="Catalog item is not a one-click API connection"
-            )
+        catalog = await load_catalog_api_item(item_id, user_context, session)
+        item, spec = catalog.item, catalog.spec
         oauth = catalog_oauth_profile(spec)
         base_url = str(spec.get("base_url") or "")
         base_origin = _origin(base_url)

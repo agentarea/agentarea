@@ -58,6 +58,9 @@ import type {
   CheckPermissionV1AccessControlCheckPostData,
   CheckPermissionV1AccessControlCheckPostErrors,
   CheckPermissionV1AccessControlCheckPostResponses,
+  ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostData,
+  ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostErrors,
+  ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponses,
   ContinueTaskExecutionV1TasksTaskIdContinuePostData,
   ContinueTaskExecutionV1TasksTaskIdContinuePostErrors,
   ContinueTaskExecutionV1TasksTaskIdContinuePostResponses,
@@ -333,6 +336,9 @@ import type {
   GetBalanceV1BalanceGetData,
   GetBalanceV1BalanceGetErrors,
   GetBalanceV1BalanceGetResponses,
+  GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetData,
+  GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetErrors,
+  GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetResponses,
   GetCatalogItemV1RegistriesCatalogItemsItemIdGetData,
   GetCatalogItemV1RegistriesCatalogItemsItemIdGetErrors,
   GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses,
@@ -6954,6 +6960,74 @@ export const createConnectionV1OpenapiConnectionsPost = <
       ...options.headers,
     },
   });
+
+/**
+ * Get Catalog Connect Form
+ *
+ * What connecting this catalog API asks for: a sign-in, or the keys listed in ``fields``.
+ */
+export const getCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGet =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetResponses,
+    GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).get<
+      GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetResponses,
+      GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/openapi-connections/from-catalog/{catalog_item_id}",
+      ...options,
+    });
+
+/**
+ * Connect Catalog Api
+ *
+ * Connect a catalog API with its keys; each call makes another connection.
+ */
+export const connectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPost =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponses,
+    ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).post<
+      ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponses,
+      ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/openapi-connections/from-catalog/{catalog_item_id}",
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
 
 /**
  * Preview Spec

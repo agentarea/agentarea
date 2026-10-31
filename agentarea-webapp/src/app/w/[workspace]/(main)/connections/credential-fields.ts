@@ -7,6 +7,8 @@ import type { McpTransport } from "@/api/client/types.gen";
 
 export interface CredentialFieldSpec {
   name: string;
+  /** What the person sees instead of `name`, e.g. "API key" for `Authorization`. */
+  label?: string;
   description?: string;
   isRequired?: boolean;
   /** Older spelling of `isRequired`, read only when that is absent. */

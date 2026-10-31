@@ -1667,6 +1667,46 @@ export type CatalogComputeEstimate = {
 };
 
 /**
+ * CatalogConnectFormResponse
+ *
+ * How a catalog API is connected: by signing in, or by entering its keys.
+ */
+export type CatalogConnectFormResponse = {
+    /**
+     * Auth
+     */
+    auth: 'oauth' | 'api_key';
+    /**
+     * Catalog Item Id
+     */
+    catalog_item_id: string;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Fields
+     */
+    fields?: Array<CatalogKeyFieldResponse>;
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
+ * CatalogConnectRequest
+ *
+ * The keys a catalog API asks for, one per field of its connect form.
+ */
+export type CatalogConnectRequest = {
+    /**
+     * Credentials
+     */
+    credentials: Array<CatalogKeyValue>;
+};
+
+/**
  * CatalogConnection
  *
  * One existing connection made from a catalog item.
@@ -1784,6 +1824,48 @@ export type CatalogItemUpdate = {
      * Version
      */
     version?: string | null;
+};
+
+/**
+ * CatalogKeyFieldResponse
+ *
+ * One value a catalog API needs before it can be called.
+ */
+export type CatalogKeyFieldResponse = {
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Label
+     *
+     * What the vendor calls it, for the form.
+     */
+    label: string;
+    /**
+     * Location
+     */
+    location: 'header' | 'query';
+    /**
+     * Name
+     *
+     * Header or query parameter the value is sent in.
+     */
+    name: string;
+};
+
+/**
+ * CatalogKeyValue
+ */
+export type CatalogKeyValue = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Value
+     */
+    value: string;
 };
 
 /**
@@ -16172,6 +16254,66 @@ export type CreateConnectionV1OpenapiConnectionsPostResponses = {
 };
 
 export type CreateConnectionV1OpenapiConnectionsPostResponse = CreateConnectionV1OpenapiConnectionsPostResponses[keyof CreateConnectionV1OpenapiConnectionsPostResponses];
+
+export type GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Catalog Item Id
+         */
+        catalog_item_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/openapi-connections/from-catalog/{catalog_item_id}';
+};
+
+export type GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetError = GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetErrors[keyof GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetErrors];
+
+export type GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogConnectFormResponse;
+};
+
+export type GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetResponse = GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetResponses[keyof GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetResponses];
+
+export type ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostData = {
+    body: CatalogConnectRequest;
+    path: {
+        /**
+         * Catalog Item Id
+         */
+        catalog_item_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/openapi-connections/from-catalog/{catalog_item_id}';
+};
+
+export type ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostError = ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostErrors[keyof ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostErrors];
+
+export type ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: OpenApiConnectionResponse;
+};
+
+export type ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponse = ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponses[keyof ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponses];
 
 export type PreviewSpecV1OpenapiConnectionsPreviewSpecPostData = {
     body: SpecPreviewRequest;

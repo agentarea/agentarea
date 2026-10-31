@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from agentarea_api import catalog_api
 from agentarea_api.api.v1 import oauth_connect as routes
 from agentarea_api.api.v1.oauth_connect import OAuthAuthorizeRequest, OAuthFinishRequest
 from agentarea_api.oauth_connect import pages, service, targets
@@ -932,8 +933,8 @@ def _patch_catalog(monkeypatch, item, registry=None):
         async def get_by_id(self, _requested_id):
             return registry
 
-    monkeypatch.setattr(targets, "RegistryItemRepository", _ItemRepository)
-    monkeypatch.setattr(targets, "RegistryRepository", _RegistryRepository)
+    monkeypatch.setattr(catalog_api, "RegistryItemRepository", _ItemRepository)
+    monkeypatch.setattr(catalog_api, "RegistryRepository", _RegistryRepository)
     monkeypatch.setattr(targets, "validate_url", lambda *_args, **_kwargs: None)
 
 

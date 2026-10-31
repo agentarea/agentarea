@@ -8,6 +8,7 @@ import type {
   AgentUpdate,
   AnalyzeRequest,
   TaskResponse as ApiTaskResponse,
+  CatalogConnectRequest,
   ContinueTaskPayload,
   CreateInvitationBody,
   CreateWalletRequest,
@@ -1676,6 +1677,27 @@ export const createOpenAPIConnection = async (
     body,
   });
   return { data, error };
+};
+
+export const getCatalogConnectForm = async (itemId: string) => {
+  const result =
+    await sdk.getCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGet(
+      { client: serverClient, path: { catalog_item_id: itemId } }
+    );
+  return withStatus(result);
+};
+
+export const connectCatalogApi = async (
+  itemId: string,
+  body: CatalogConnectRequest
+) => {
+  const result =
+    await sdk.connectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPost({
+      client: serverClient,
+      path: { catalog_item_id: itemId },
+      body,
+    });
+  return withStatus(result);
 };
 
 export const deleteOpenAPIConnection = async (connectionId: string) => {
