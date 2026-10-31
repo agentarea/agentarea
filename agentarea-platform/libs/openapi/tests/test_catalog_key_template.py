@@ -68,7 +68,7 @@ def test_a_header_value_carries_its_scheme_and_a_query_value_is_secret():
     assert template is not None
 
     headers, params = catalog_key_credentials(
-        template, {"Authorization": "abc", "X-Secret": "s3cr3t", "key": "k"}
+        template, {"Authorization": "abc", "X-Secret": "s3cr3t", "key": "k"}  # pragma: allowlist secret
     )
 
     assert [(h.name, h.value) for h in headers] == [

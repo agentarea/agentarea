@@ -123,7 +123,7 @@ async def test_connecting_stores_every_key_as_a_secret_of_a_new_connection(monke
 
     result = await routes.connect_catalog_api(
         item_id,
-        _request(Authorization="tok", **{"X-Secret": "sec"}, key="acct"),
+        _request(Authorization="tok", **{"X-Secret": "sec"}, key="acct"),  # pragma: allowlist secret
         _user(),
         object(),
         service,
@@ -149,7 +149,7 @@ async def test_connecting_stores_every_key_as_a_secret_of_a_new_connection(monke
     ("values", "detail"),
     [
         ({"Authorization": "tok", "key": "acct"}, "Secret key is required"),
-        ({"Authorization": "tok", "X-Secret": "sec", "key": "acct", "X-Other": "x"}, "X-Other"),
+        ({"Authorization": "tok", "X-Secret": "sec", "key": "acct", "X-Other": "x"}, "X-Other"),  # pragma: allowlist secret
     ],
     ids=["missing", "unknown"],
 )
