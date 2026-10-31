@@ -24,7 +24,9 @@ from pydantic import (
     field_validator,
 )
 
+from ..domain.egress_exit_model import EGRESS_EXIT_SPEC_KEY
 from ..tool_context import CONTEXT_SECRET_MIN_LENGTH, CONTEXT_SPEC_KEY
+from .egress_exit_dto import validate_spec_egress_exit
 from .image_reference import validate_optional_image_reference, validate_spec_image
 
 
@@ -64,6 +66,20 @@ def validate_spec_context(json_spec: dict[str, Any]) -> dict[str, Any]:
     return json_spec
 
 
+def validate_spec_egress_exit_key(json_spec: dict[str, Any]) -> dict[str, Any]:
+    validate_spec_egress_exit(json_spec.get(EGRESS_EXIT_SPEC_KEY))
+    return json_spec
+
+
+def refuse_spec_egress_exit(json_spec: dict[str, Any] | None) -> dict[str, Any] | None:
+    """An exit is chosen per instance; a server spec binding one would bind them all."""
+    if json_spec is not None and EGRESS_EXIT_SPEC_KEY in json_spec:
+        raise ValueError(
+            f"json_spec.{EGRESS_EXIT_SPEC_KEY} is set on an instance, not a server spec"
+        )
+    return json_spec
+
+
 # json_spec is read back in SQL (``json_spec->>'type'``); a NUL or unpaired
 # surrogate stored there broke every such query, so refuse it at the edge.
 JsonSpec = Annotated[
@@ -71,9 +87,11 @@ JsonSpec = Annotated[
     AfterValidator(require_pg_text),
     AfterValidator(validate_spec_storage),
     AfterValidator(validate_spec_context),
+    AfterValidator(validate_spec_egress_exit_key),
 ]
 # A spec or instance json_spec whose ``image`` reaches ``docker run``.
 ContainerJsonSpec = Annotated[JsonSpec, AfterValidator(validate_spec_image)]
+ServerJsonSpec = Annotated[ContainerJsonSpec, AfterValidator(refuse_spec_egress_exit)]
 ImageReference = Annotated[str | None, AfterValidator(validate_optional_image_reference)]
 
 # Write-only key that signs the per-call context sent to a URL instance
@@ -153,7 +171,7 @@ class MCPServerCreate(BaseModel):
             "between stdio and HTTP modes)."
         ),
     )
-    json_spec: ContainerJsonSpec | None = Field(
+    json_spec: ServerJsonSpec | None = Field(
         default=None,
         description="Raw ServerJSON spec as published by the MCP registry.",
     )
@@ -189,7 +207,7 @@ class MCPServerUpdate(BaseModel):
     )
     env_schema: Annotated[list[dict[str, Any]] | None, NotNull] = None
     cmd: list[str] | None = None
-    json_spec: ContainerJsonSpec | None = None
+    json_spec: ServerJsonSpec | None = None
     registry_url: str | None = None
 
 

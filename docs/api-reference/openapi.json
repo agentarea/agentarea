@@ -4823,6 +4823,270 @@
         "title": "EffectivePolicyResponse",
         "type": "object"
       },
+      "EgressExitCreate": {
+        "additionalProperties": false,
+        "description": "A proxy of the workspace's own that its MCP instances may leave through.",
+        "properties": {
+          "allow_plaintext_credentials": {
+            "default": false,
+            "description": "Send the credentials to an http or socks5 proxy, where they are unencrypted.",
+            "title": "Allow Plaintext Credentials",
+            "type": "boolean"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What this exit is for.",
+            "title": "Description"
+          },
+          "name": {
+            "description": "Name, unique in the workspace.",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "password_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The proxy password as a workspace secret (id from the secrets catalog). It is read when an instance starts; changing the secret's value takes effect at the instance's next start.",
+            "title": "Password Secret Id"
+          },
+          "upstream_url": {
+            "description": "The proxy as scheme://host:port: http, https or socks5, no credentials.",
+            "maxLength": 512,
+            "title": "Upstream Url",
+            "type": "string"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Proxy username, if it needs one.",
+            "title": "Username"
+          }
+        },
+        "required": [
+          "name",
+          "upstream_url"
+        ],
+        "title": "EgressExitCreate",
+        "type": "object"
+      },
+      "EgressExitResponse": {
+        "properties": {
+          "allow_plaintext_credentials": {
+            "title": "Allow Plaintext Credentials",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "managed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "\"platform\" for an exit the deployment supplies; null for the workspace's own.",
+            "title": "Managed By"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "password_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password Secret Id"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "upstream_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upstream Url"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The platform hop this exit leaves through, if any.",
+            "title": "Via"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "upstream_url",
+          "username",
+          "password_secret_id",
+          "via",
+          "allow_plaintext_credentials",
+          "managed_by",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "EgressExitResponse",
+        "type": "object"
+      },
+      "EgressExitUpdate": {
+        "additionalProperties": false,
+        "description": "Patch an exit: only the fields sent change; null clears an optional one.",
+        "properties": {
+          "allow_plaintext_credentials": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow Plaintext Credentials"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "password_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password Secret Id"
+          },
+          "upstream_url": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upstream Url"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "title": "EgressExitUpdate",
+        "type": "object"
+      },
       "EntityKind": {
         "enum": [
           "mcp",
@@ -26014,6 +26278,317 @@
           "v1",
           "protected",
           "dashboard"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/egress-exits/": {
+      "get": {
+        "description": "List the workspace's own exits and the platform's.",
+        "operationId": "list_egress_exits_v1_egress_exits__get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EgressExitResponse"
+                  },
+                  "title": "Response List Egress Exits V1 Egress Exits  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Egress Exits",
+        "tags": [
+          "v1",
+          "protected",
+          "egress-exits"
+        ]
+      },
+      "post": {
+        "description": "Define a proxy the workspace's MCP instances may leave through.",
+        "operationId": "create_egress_exit_v1_egress_exits__post",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EgressExitCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EgressExitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Egress Exit",
+        "tags": [
+          "v1",
+          "protected",
+          "egress-exits"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/egress-exits/{exit_id}": {
+      "delete": {
+        "description": "Delete an exit no MCP instance leaves through.",
+        "operationId": "delete_egress_exit_v1_egress_exits__exit_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "exit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Exit Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Egress Exit",
+        "tags": [
+          "v1",
+          "protected",
+          "egress-exits"
+        ]
+      },
+      "get": {
+        "description": "Get an exit of the workspace or the platform.",
+        "operationId": "get_egress_exit_v1_egress_exits__exit_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "exit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Exit Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EgressExitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Egress Exit",
+        "tags": [
+          "v1",
+          "protected",
+          "egress-exits"
+        ]
+      },
+      "patch": {
+        "description": "Change an exit; only the fields sent change.\n\nChanging where it leads or its credentials restarts the running instances bound to it.",
+        "operationId": "update_egress_exit_v1_egress_exits__exit_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "exit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Exit Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EgressExitUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EgressExitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Egress Exit",
+        "tags": [
+          "v1",
+          "protected",
+          "egress-exits"
         ]
       }
     },

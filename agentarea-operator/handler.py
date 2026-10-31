@@ -104,6 +104,12 @@ def platform_openapi_connection_id(name: str) -> str:
     return str(uuid.uuid5(PLATFORM_ID_NAMESPACE, f"openapi_connection:{name}"))
 
 
+# MCP instances bind an exit by id in json_spec.egress_exit, so it is derived from
+# the name like a connection's.
+def platform_egress_exit_id(name: str) -> str:
+    return str(uuid.uuid5(PLATFORM_ID_NAMESPACE, f"egress_exit:{name}"))
+
+
 # Workspace-scoped resources (``spec.workspaceId`` set) get derived ids too, for
 # the same reason as platform ones: every reconcile — create, update, the hourly
 # rediscovery timer, an operator restart — has to land on the rows the previous
@@ -1366,3 +1372,65 @@ def periodic_platform_connection_resync(spec, meta, namespace, patch, **_):
         patch.status["message"] = f"Resync failed: {e}"
         return
     _record_connection_sync(patch, connection_id, server_id, "Re-synced")
+
+
+def sync_platform_egress_exit(spec: dict) -> str:
+    """Upsert the platform exit every workspace may bind. Returns its id.
+
+    A platform exit leaves through a hop of the egress proxy's own configuration;
+    it holds no credentials. Re-running against an unchanged spec changes no row.
+    """
+    exit_id = platform_egress_exit_id(spec["name"])
+    params = {
+        "id": exit_id,
+        "name": spec["name"],
+        "desc": spec.get("description"),
+        "via": spec["via"],
+        "remote_dns": bool(spec.get("remoteDns", False)),
+        "managed_by": MANAGED_BY_PLATFORM,
+        "ws": PLATFORM_WORKSPACE_ID,
+        "created_by": PLATFORM_PRINCIPAL_ID,
+    }
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO egress_exits (id, name, description, via, remote_dns, "
+                "allow_plaintext_credentials, managed_by, workspace_id, created_by, "
+                "created_at, updated_at) "
+                "VALUES (:id, :name, :desc, :via, :remote_dns, false, :managed_by, :ws, "
+                ":created_by, now(), now()) "
+                "ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, "
+                "description = EXCLUDED.description, via = EXCLUDED.via, "
+                "remote_dns = EXCLUDED.remote_dns, updated_at = now() "
+                "WHERE egress_exits.workspace_id = EXCLUDED.workspace_id AND ("
+                "egress_exits.name, egress_exits.description, egress_exits.via, "
+                "egress_exits.remote_dns"
+                ") IS DISTINCT FROM (EXCLUDED.name, EXCLUDED.description, EXCLUDED.via, "
+                "EXCLUDED.remote_dns)"
+            ),
+            params,
+        )
+    return exit_id
+
+
+@kopf.on.create("agentarea.io", "v1alpha1", "platformegressexits")
+@kopf.on.update("agentarea.io", "v1alpha1", "platformegressexits")
+def on_platform_egress_exit_change(spec, meta, namespace, patch, **_):
+    cr_name = meta["name"]
+    logger.info("Syncing PlatformEgressExit %s/%s (via=%s)", namespace, cr_name, spec.get("via"))
+    try:
+        exit_id = sync_platform_egress_exit(spec)
+    except Exception as e:
+        logger.exception("PlatformEgressExit sync failed for %s/%s", namespace, cr_name)
+        patch.status["phase"] = "Error"
+        patch.status["message"] = str(e)
+        raise kopf.TemporaryError(str(e), delay=60) from e
+    patch.status["phase"] = "Synced"
+    patch.status["exitId"] = exit_id
+    patch.status["lastSyncedAt"] = datetime.now(timezone.utc).isoformat()
+    patch.status["message"] = "Synced"
+    logger.info("Synced PlatformEgressExit %s/%s -> exit=%s", namespace, cr_name, exit_id)
+
+
+# No delete handler, for the connection path's reasons: instances bind the exit,
+# and a resource vanishing from git is not a decision to cut them off.

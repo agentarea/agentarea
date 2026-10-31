@@ -2663,6 +2663,140 @@ export type EffectivePolicyResponse = {
 };
 
 /**
+ * EgressExitCreate
+ *
+ * A proxy of the workspace's own that its MCP instances may leave through.
+ */
+export type EgressExitCreate = {
+    /**
+     * Allow Plaintext Credentials
+     *
+     * Send the credentials to an http or socks5 proxy, where they are unencrypted.
+     */
+    allow_plaintext_credentials?: boolean;
+    /**
+     * Description
+     *
+     * What this exit is for.
+     */
+    description?: string | null;
+    /**
+     * Name
+     *
+     * Name, unique in the workspace.
+     */
+    name: string;
+    /**
+     * Password Secret Id
+     *
+     * The proxy password as a workspace secret (id from the secrets catalog). It is read when an instance starts; changing the secret's value takes effect at the instance's next start.
+     */
+    password_secret_id?: string | null;
+    /**
+     * Upstream Url
+     *
+     * The proxy as scheme://host:port: http, https or socks5, no credentials.
+     */
+    upstream_url: string;
+    /**
+     * Username
+     *
+     * Proxy username, if it needs one.
+     */
+    username?: string | null;
+};
+
+/**
+ * EgressExitResponse
+ */
+export type EgressExitResponse = {
+    /**
+     * Allow Plaintext Credentials
+     */
+    allow_plaintext_credentials: boolean;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Created By
+     */
+    created_by: string;
+    /**
+     * Description
+     */
+    description: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Managed By
+     *
+     * "platform" for an exit the deployment supplies; null for the workspace's own.
+     */
+    managed_by: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Password Secret Id
+     */
+    password_secret_id: string | null;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Upstream Url
+     */
+    upstream_url: string | null;
+    /**
+     * Username
+     */
+    username: string | null;
+    /**
+     * Via
+     *
+     * The platform hop this exit leaves through, if any.
+     */
+    via: string | null;
+};
+
+/**
+ * EgressExitUpdate
+ *
+ * Patch an exit: only the fields sent change; null clears an optional one.
+ */
+export type EgressExitUpdate = {
+    /**
+     * Allow Plaintext Credentials
+     */
+    allow_plaintext_credentials?: boolean | null;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Password Secret Id
+     */
+    password_secret_id?: string | null;
+    /**
+     * Upstream Url
+     */
+    upstream_url?: string | null;
+    /**
+     * Username
+     */
+    username?: string | null;
+};
+
+/**
  * EntityKind
  */
 export type EntityKind = 'mcp' | 'skill' | 'agent' | 'channel' | 'automation' | 'policy';
@@ -14022,6 +14156,148 @@ export type GetDashboardV1DashboardGetResponses = {
 };
 
 export type GetDashboardV1DashboardGetResponse = GetDashboardV1DashboardGetResponses[keyof GetDashboardV1DashboardGetResponses];
+
+export type ListEgressExitsV1EgressExitsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/egress-exits/';
+};
+
+export type ListEgressExitsV1EgressExitsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListEgressExitsV1EgressExitsGetError = ListEgressExitsV1EgressExitsGetErrors[keyof ListEgressExitsV1EgressExitsGetErrors];
+
+export type ListEgressExitsV1EgressExitsGetResponses = {
+    /**
+     * Response List Egress Exits V1 Egress Exits  Get
+     *
+     * Successful Response
+     */
+    200: Array<EgressExitResponse>;
+};
+
+export type ListEgressExitsV1EgressExitsGetResponse = ListEgressExitsV1EgressExitsGetResponses[keyof ListEgressExitsV1EgressExitsGetResponses];
+
+export type CreateEgressExitV1EgressExitsPostData = {
+    body: EgressExitCreate;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/egress-exits/';
+};
+
+export type CreateEgressExitV1EgressExitsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateEgressExitV1EgressExitsPostError = CreateEgressExitV1EgressExitsPostErrors[keyof CreateEgressExitV1EgressExitsPostErrors];
+
+export type CreateEgressExitV1EgressExitsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: EgressExitResponse;
+};
+
+export type CreateEgressExitV1EgressExitsPostResponse = CreateEgressExitV1EgressExitsPostResponses[keyof CreateEgressExitV1EgressExitsPostResponses];
+
+export type DeleteEgressExitV1EgressExitsExitIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Exit Id
+         */
+        exit_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/egress-exits/{exit_id}';
+};
+
+export type DeleteEgressExitV1EgressExitsExitIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteEgressExitV1EgressExitsExitIdDeleteError = DeleteEgressExitV1EgressExitsExitIdDeleteErrors[keyof DeleteEgressExitV1EgressExitsExitIdDeleteErrors];
+
+export type DeleteEgressExitV1EgressExitsExitIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteEgressExitV1EgressExitsExitIdDeleteResponse = DeleteEgressExitV1EgressExitsExitIdDeleteResponses[keyof DeleteEgressExitV1EgressExitsExitIdDeleteResponses];
+
+export type GetEgressExitV1EgressExitsExitIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Exit Id
+         */
+        exit_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/egress-exits/{exit_id}';
+};
+
+export type GetEgressExitV1EgressExitsExitIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetEgressExitV1EgressExitsExitIdGetError = GetEgressExitV1EgressExitsExitIdGetErrors[keyof GetEgressExitV1EgressExitsExitIdGetErrors];
+
+export type GetEgressExitV1EgressExitsExitIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: EgressExitResponse;
+};
+
+export type GetEgressExitV1EgressExitsExitIdGetResponse = GetEgressExitV1EgressExitsExitIdGetResponses[keyof GetEgressExitV1EgressExitsExitIdGetResponses];
+
+export type UpdateEgressExitV1EgressExitsExitIdPatchData = {
+    body: EgressExitUpdate;
+    path: {
+        /**
+         * Exit Id
+         */
+        exit_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/egress-exits/{exit_id}';
+};
+
+export type UpdateEgressExitV1EgressExitsExitIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UpdateEgressExitV1EgressExitsExitIdPatchError = UpdateEgressExitV1EgressExitsExitIdPatchErrors[keyof UpdateEgressExitV1EgressExitsExitIdPatchErrors];
+
+export type UpdateEgressExitV1EgressExitsExitIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: EgressExitResponse;
+};
+
+export type UpdateEgressExitV1EgressExitsExitIdPatchResponse = UpdateEgressExitV1EgressExitsExitIdPatchResponses[keyof UpdateEgressExitV1EgressExitsExitIdPatchResponses];
 
 export type ExportWorkspaceConfigV1ExportGetData = {
     body?: never;
