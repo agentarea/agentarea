@@ -9,15 +9,14 @@ from temporalio import workflow
 with workflow.unsafe.imports_passed_through():
     from ..helpers import (
         ToolAction,
+        ToolPolicyNames,
         approvers_for_tool,
         comparable_url,
         decide_tool_action,
         external_urls,
-        mcp_tool_restricting_aliases,
         sanitize_tool_event_value,
-        tool_config_aliases,
         tool_definition_name,
-        tool_policy_aliases,
+        tool_policy_names,
         web_fetch_url,
     )
     from ..models import Message, PendingEscalation, ToolCall
@@ -30,6 +29,7 @@ from ..constants import (
 from .budget import BudgetMixin
 from .patches import (
     APPROVAL_RESPONSE_ONCE_PATCH,
+    CONNECTION_NAMES_NARROW_PATCH,
     REFUSED_TOOL_CALL_ANNOUNCED_PATCH,
     TOOL_CONFIG_ALIASES_PATCH,
     WEB_FETCH_SEEN_URL_PATCH,
@@ -57,11 +57,21 @@ class ToolApprovalMixin(BudgetMixin):
             self.state.agent_config.get("openapi_operation_tools"),
         )
 
-    def _restricting_tool_aliases(self, tool_name: str) -> tuple[str, ...]:
-        """Names that may deny this tool or put it behind approval, never allow it."""
-        return (
-            *mcp_tool_restricting_aliases(self.state.mcp_tool_routes, tool_name),
-            *tool_config_aliases(tool_name, *self._policy_tool_configs()),
+    def _connection_names_narrow(self) -> bool:
+        """Whether a connection's names only narrow in this run (CONNECTION_NAMES_NARROW_PATCH).
+
+        A history recorded before it replays with the names it was decided by;
+        ``workflow.patched`` is memoized, so every decision of one run agrees.
+        """
+        return workflow.patched(CONNECTION_NAMES_NARROW_PATCH)
+
+    def _tool_policy_names(self, tool_name: str) -> ToolPolicyNames:
+        """Every name a rule may give this tool, and which of them may allow it."""
+        return tool_policy_names(
+            tool_name,
+            self.state.mcp_tool_routes,
+            *self._policy_tool_configs(),
+            connection_names_narrow=self._connection_names_narrow(),
         )
 
     def _announce_tool_call(self, tool_call: ToolCall) -> None:
@@ -141,6 +151,7 @@ class ToolApprovalMixin(BudgetMixin):
             )
             return False
         escalation_id = str(workflow.uuid4())
+        names = self._tool_policy_names(tool_name)
         escalation = PendingEscalation(
             escalation_id=escalation_id,
             tool_call_id=tool_call.id,
@@ -149,10 +160,7 @@ class ToolApprovalMixin(BudgetMixin):
             approvers=approvers_for_tool(
                 self.state.effective_policy,
                 tool_name,
-                (
-                    *tool_policy_aliases(self.state.mcp_tool_routes, tool_name),
-                    *self._restricting_tool_aliases(tool_name),
-                ),
+                (*names.aliases, *names.restricting),
             ),
         )
         self._pending_escalations[escalation_id] = escalation
@@ -335,11 +343,13 @@ class ToolApprovalMixin(BudgetMixin):
                 )
                 return False, False
 
+        names = self._tool_policy_names(tool_name)
         decision = decide_tool_action(
             self.state.effective_policy,
             tool_name,
-            tool_policy_aliases(self.state.mcp_tool_routes, tool_name),
-            restricting_aliases=self._restricting_tool_aliases(tool_name),
+            names.aliases,
+            restricting_aliases=names.restricting,
+            name_allows=names.name_allows,
         )
         workflow.logger.info(f"Tool '{tool_name}' policy decision: {decision.value}")
 

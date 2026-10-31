@@ -35,10 +35,11 @@ from agentarea_agents_sdk.mcp_server.auth import (
     use_mcp_user_context,
 )
 from agentarea_agents_sdk.tools.mcp_tool_identity import (
+    mcp_tool_narrowing_names,
     mcp_tool_policy_aliases,
     server_label,
 )
-from agentarea_agents_sdk.tools.openapi_tool import _slugify_name
+from agentarea_agents_sdk.tools.openapi_tool import _slugify_name, openapi_tool_target
 from agentarea_api.mcp_events import ClientScope as EventsClientScope
 from agentarea_api.mcp_events import install_mcp_events
 from agentarea_api.platform_mcp import client_platform_server, server_identity
@@ -484,43 +485,51 @@ async def _aggregate_instances(
 
 
 def _policy_aliases(scope: ClientScope, tool_name: str) -> tuple[str, ...]:
-    """The other names a policy rule may give one of the client's instance tools.
+    """The names that may allow one of the client's connection tools: its connection's id.
 
-    The same names an agent's call to that tool answers to (see
-    ``McpToolIdentity.policy_names``): the canonical ``mcp:<instance id>:<raw>``,
-    the server referenced by name and the ``mcp__<server>__<raw>`` an agent calls
-    it by — so a rule written against an agent's use of the tool governs the
-    client's use of it too.
+    ``mcp:<instance id>:<raw>`` or ``openapi:<connection id>:<tool>``, the names
+    an agent's call to the same tool is allowed by.
     """
     if tool_name in scope.platform_tools:
         return ()
     if operation := (scope.openapi or {}).get(tool_name):
-        return (operation.tool_name,)
+        return (openapi_tool_target(operation.connection_id, operation.tool_name),)
     owner = scope.proxy.owner_of(tool_name)
     if owner is None:
         return ()
     member, raw_name = owner
-    instance_id = str(member.mcp_instance_id)
-    return mcp_tool_policy_aliases(
-        instance_id, scope.proxy.instance_names.get(instance_id), raw_name
-    )
+    return mcp_tool_policy_aliases(str(member.mcp_instance_id), raw_name)
 
 
 def _restricting_aliases(scope: ClientScope, tool_name: str) -> tuple[str, ...]:
     """Names that may only narrow, as for an agent.
 
-    An OpenAPI operation's names, or the raw name an instance tool's server advertises.
+    Every name of a connection tool its connection's author or server chose: an
+    OpenAPI operation's, or an instance tool's server name, agent-facing name and
+    raw name. A deny or approval rule written against an agent's use of the tool
+    governs the client's use of it too.
     """
     operation = (scope.openapi or {}).get(tool_name)
     if operation is not None:
-        return (operation.operation, operation.connection_name, operation.connection_id)
+        return (
+            operation.tool_name,
+            operation.operation,
+            operation.connection_name,
+            operation.connection_id,
+        )
     if tool_name in scope.platform_tools:
         return ()
     owner = scope.proxy.owner_of(tool_name)
     if owner is None:
         return ()
-    _member, raw_name = owner
-    return (raw_name,)
+    member, raw_name = owner
+    instance_id = str(member.mcp_instance_id)
+    return mcp_tool_narrowing_names(scope.proxy.instance_names.get(instance_id), raw_name)
+
+
+def _name_allows(scope: ClientScope, tool_name: str) -> bool:
+    """Whether the client-facing name may allow the tool: not when a connection's names make it."""
+    return not _policy_aliases(scope, tool_name)
 
 
 def _client_tool_decision(scope: ClientScope, tool_name: str) -> ToolAuthorizationDecision:
@@ -530,6 +539,7 @@ def _client_tool_decision(scope: ClientScope, tool_name: str) -> ToolAuthorizati
         tool_name,
         aliases=_policy_aliases(scope, tool_name),
         restricting_aliases=_restricting_aliases(scope, tool_name),
+        name_allows=_name_allows(scope, tool_name),
     )
 
 
@@ -834,6 +844,7 @@ async def _layered_call(
             restricting_aliases=tuple(
                 dict.fromkeys((*restricting_aliases, *_restricting_aliases(scope, tool_name)))
             ),
+            name_allows=_name_allows(scope, tool_name),
         ),
         call_id=str(uuid4()),
         agent_id=None,

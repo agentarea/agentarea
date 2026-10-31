@@ -123,19 +123,29 @@ def mcp_tool_rule_target(instance_id: str, raw_name: str) -> str:
     return f"tool:{mcp_tool_target(instance_id, literal)}"
 
 
-def mcp_tool_policy_aliases(
-    instance_id: str, instance_name: str | None, raw_name: str
-) -> tuple[str, ...]:
+def mcp_tool_policy_aliases(instance_id: str, raw_name: str) -> tuple[str, ...]:
     """The names a policy rule may give one tool of one MCP instance to allow it.
 
-    The canonical ``mcp:<instance id>:<raw>``, the server referenced by name and
-    the ``mcp__<server>__<raw>`` an agent calls it by. The raw name only narrows:
-    see ``McpToolIdentity.restricting_names``.
+    Only the canonical ``mcp:<instance id>:<raw>``. Every other name of the tool
+    only narrows: see ``mcp_tool_narrowing_names``.
     """
-    names = [mcp_tool_target(instance_id, raw_name)]
+    return (mcp_tool_target(instance_id, raw_name),)
+
+
+def mcp_tool_narrowing_names(instance_name: str | None, raw_name: str) -> tuple[str, ...]:
+    """Names that may deny one tool of one MCP instance or hold it for approval, never allow it.
+
+    The server referenced by name, the ``mcp__<server>__<raw>`` an agent calls it
+    by and the raw name the server advertises. Connection names are not unique
+    and whoever adds a connection picks its name and its server picks the tool's,
+    so none of them may satisfy an allowlist: one written for ``github`` would
+    admit every connection called ``github``.
+    """
+    names: list[str] = []
     if instance_name:
         names += [
             mcp_tool_target(instance_name, raw_name),
             qualify_mcp_tool_name(instance_name, raw_name),
         ]
+    names.append(raw_name)
     return tuple(names)

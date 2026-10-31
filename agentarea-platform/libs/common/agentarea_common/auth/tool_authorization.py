@@ -43,6 +43,7 @@ class ToolAuthorizationRequest:
     effective_policy: dict[str, Any] | None = None
     aliases: Sequence[str] = ()
     restricting_aliases: Sequence[str] = ()
+    name_allows: bool = True
 
 
 @dataclass(frozen=True)
@@ -71,6 +72,7 @@ async def authorize_tool_invocation(
         request.tool_name,
         aliases=request.aliases,
         restricting_aliases=request.restricting_aliases,
+        name_allows=request.name_allows,
     )
 
 
@@ -80,6 +82,7 @@ def decide_tool_policy(
     *,
     aliases: Sequence[str] = (),
     restricting_aliases: Sequence[str] = (),
+    name_allows: bool = True,
 ) -> ToolAuthorizationDecision:
     """Evaluate only the task policy portion of a tool invocation decision.
 
@@ -96,18 +99,23 @@ def decide_tool_policy(
     that restricts nothing.
 
     A tool may be known by several names. ``aliases`` are its canonical names
-    — an MCP tool by the name the model calls, its canonical
-    ``mcp:<instance>:<tool>`` id, and the raw name its server advertises — and
-    a rule naming any of them governs the tool.
+    — an MCP tool's ``mcp:<instance id>:<tool>``, an OpenAPI operation's
+    ``openapi:<connection id>:<tool>`` — and a rule naming any of them governs
+    the tool.
 
     ``restricting_aliases`` are names taken from configuration an agent editor
     controls (a delegate's config name, a code toolset namespace, an OpenAPI
     connection). They may only narrow: a deny or approval rule naming one
     applies, but they never satisfy an allowlist, so editing an agent cannot
     make a tool match an administrator's ALLOW rule.
+
+    ``name_allows`` is false when ``tool_name`` itself was chosen by whoever added
+    the tool's connection (an MCP tool's name carries the connection's name, an
+    OpenAPI operation's is the spec's operationId): it then only narrows too,
+    and only ``aliases`` built from the connection's id may satisfy an allowlist.
     """
-    names = (tool_name, *aliases)
-    restricting_names = (*names, *restricting_aliases)
+    names = (tool_name, *aliases) if name_allows else tuple(aliases)
+    restricting_names = (tool_name, *aliases, *restricting_aliases)
     tools = (effective_policy or {}).get("tools") or {}
 
     denied = tools.get("denied") or []

@@ -2,6 +2,7 @@
 
 import re
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, cast
@@ -25,6 +26,8 @@ with workflow.unsafe.imports_passed_through():
     from uuid import uuid4
 
     from agentarea_agents_sdk.tools.a2a_agent_tool import delegate_tool_name
+    from agentarea_agents_sdk.tools.mcp_tool_identity import mcp_tool_target
+    from agentarea_agents_sdk.tools.openapi_tool import openapi_tool_target
     from agentarea_common.money import ZERO, Money, to_money
 
 from agentarea_agents_sdk.prompts import MessageTemplates, PromptBuilder
@@ -94,23 +97,111 @@ def tool_config_aliases(
         elif tool_type == "code" and name.rsplit("/", 1)[-1] == tool_name:
             aliases.append(name)
         elif tool_type == "openapi":
-            settings = config.get("settings")
-            settings = settings if isinstance(settings, Mapping) else {}
-            operations = [
-                operation
-                for operation in _openapi_allowed_operations(settings)
-                if re.sub(r"[^a-zA-Z0-9_-]", "_", operation) == tool_name
-            ]
-            resolved = (openapi_operation_tools or {}).get(name) or ()
-            if not operations and tool_name not in resolved:
+            match = _openapi_match(config, tool_name, openapi_operation_tools)
+            if match is None:
                 continue
-            connection_id = settings.get("openapi_connection_id")
+            operations, connection_id = match
             aliases.extend(operations)
             aliases.append(name)
-            if isinstance(connection_id, str):
+            if connection_id:
                 aliases.append(connection_id)
 
     return tuple(dict.fromkeys(alias for alias in aliases if alias and alias != tool_name))
+
+
+def _openapi_match(
+    config: Mapping[str, Any],
+    tool_name: str,
+    openapi_operation_tools: Mapping[str, Sequence[str]] | None,
+) -> tuple[list[str], str | None] | None:
+    """The operations of an OpenAPI attachment that produce ``tool_name``, and its connection id.
+
+    ``None`` when the attachment does not produce the tool.
+    """
+    settings = config.get("settings")
+    settings = settings if isinstance(settings, Mapping) else {}
+    operations = [
+        operation
+        for operation in _openapi_allowed_operations(settings)
+        if re.sub(r"[^a-zA-Z0-9_-]", "_", operation) == tool_name
+    ]
+    name = config.get("name")
+    resolved = (openapi_operation_tools or {}).get(name) or () if isinstance(name, str) else ()
+    if not operations and tool_name not in resolved:
+        return None
+    connection_id = settings.get("openapi_connection_id")
+    return operations, connection_id if isinstance(connection_id, str) else None
+
+
+def openapi_tool_aliases(
+    tool_name: str,
+    tool_configs: Sequence[Any] | None,
+    openapi_operation_tools: Mapping[str, Sequence[str]] | None = None,
+) -> tuple[str, ...]:
+    """The id-qualified names of an OpenAPI operation tool, ``openapi:<connection id>:<tool>``."""
+    targets: list[str] = []
+    for config in tool_configs or ():
+        if not isinstance(config, Mapping) or config.get("type") != "openapi":
+            continue
+        match = _openapi_match(config, tool_name, openapi_operation_tools)
+        if match is not None and match[1]:
+            targets.append(openapi_tool_target(match[1], tool_name))
+    return tuple(dict.fromkeys(targets))
+
+
+@dataclass(frozen=True)
+class ToolPolicyNames:
+    """A model-facing tool's names for the PDP, by what each may do."""
+
+    # May satisfy an allowlist, and narrow.
+    aliases: tuple[str, ...] = ()
+    # May deny the tool or hold it for approval, never allow it.
+    restricting: tuple[str, ...] = ()
+    # Whether the model-facing name itself may satisfy an allowlist.
+    name_allows: bool = True
+
+
+def tool_policy_names(
+    tool_name: str,
+    routes: Mapping[str, McpToolRoute] | McpToolRoute | None = None,
+    tool_configs: Sequence[Any] | None = None,
+    openapi_operation_tools: Mapping[str, Sequence[str]] | None = None,
+    *,
+    connection_names_narrow: bool = True,
+) -> ToolPolicyNames:
+    """Every name a policy rule may give a model-facing tool, and which of them may allow it.
+
+    A connection's tool is allowed by its connection's id alone, as
+    ``mcp:<instance id>:<raw>`` or ``openapi:<connection id>:<tool>``. Its
+    model-facing name and every other name its connection's author or server
+    chose only narrow: connection names are not unique and any member may add a
+    connection, so an allowlist written for ``github`` would admit every
+    connection called ``github``. ``connection_names_narrow`` is false only to
+    replay a run decided before that (``CONNECTION_NAMES_NARROW_PATCH``).
+    """
+    config_names = tool_config_aliases(tool_name, tool_configs, openapi_operation_tools)
+    if not connection_names_narrow:
+        return ToolPolicyNames(
+            tool_policy_aliases(routes, tool_name),
+            (*mcp_tool_restricting_aliases(routes, tool_name), *config_names),
+        )
+    route = _route_of(routes, tool_name)
+    if route is not None:
+        canonical = mcp_tool_target(route.instance_id, route.raw_name)
+        narrowing = (
+            *route.policy_names(tool_name),
+            *route.restricting_names(tool_name),
+            *config_names,
+        )
+        return ToolPolicyNames(
+            (canonical,),
+            tuple(dict.fromkeys(n for n in narrowing if n not in (canonical, tool_name))),
+            name_allows=False,
+        )
+    openapi = openapi_tool_aliases(tool_name, tool_configs, openapi_operation_tools)
+    if openapi:
+        return ToolPolicyNames(openapi, config_names, name_allows=False)
+    return ToolPolicyNames((), config_names)
 
 
 def resolve_effective_budget(
@@ -195,6 +286,7 @@ def decide_tool_action(
     aliases: Sequence[str] = (),
     *,
     restricting_aliases: Sequence[str] = (),
+    name_allows: bool = True,
 ) -> ToolAction:
     """Deterministic workflow preflight view of the tool authorization PDP."""
     decision = decide_tool_policy(
@@ -202,6 +294,7 @@ def decide_tool_action(
         tool_name,
         aliases=aliases,
         restricting_aliases=restricting_aliases,
+        name_allows=name_allows,
     )
     if decision.action is ToolAuthorizationAction.ALLOW:
         return ToolAction.ALLOW
@@ -293,6 +386,8 @@ def filter_disclosed_tools(
     mcp_tool_routes: Mapping[str, McpToolRoute] | None = None,
     tool_configs: Sequence[Any] | None = None,
     openapi_operation_tools: Mapping[str, Sequence[str]] | None = None,
+    *,
+    connection_names_narrow: bool = True,
 ) -> list[dict[str, Any]]:
     """Offer the model only the capability tools policy would actually let it call.
 
@@ -309,14 +404,19 @@ def filter_disclosed_tools(
         if name in CONTROL_FLOW_TOOL_NAMES:
             disclosed.append(tool)
             continue
+        names = tool_policy_names(
+            name,
+            mcp_tool_routes,
+            tool_configs,
+            openapi_operation_tools,
+            connection_names_narrow=connection_names_narrow,
+        )
         decision = decide_tool_action(
             effective_policy,
             name,
-            tool_policy_aliases(mcp_tool_routes, name),
-            restricting_aliases=(
-                *mcp_tool_restricting_aliases(mcp_tool_routes, name),
-                *tool_config_aliases(name, tool_configs, openapi_operation_tools),
-            ),
+            names.aliases,
+            restricting_aliases=names.restricting,
+            name_allows=names.name_allows,
         )
         if decision is not ToolAction.DENY:
             disclosed.append(tool)

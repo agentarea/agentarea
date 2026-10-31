@@ -24,6 +24,15 @@ def _slugify_name(name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]", "_", name)
 
 
+def openapi_tool_target(connection_id: str, tool_name: str) -> str:
+    """How a policy rule names one operation of one OpenAPI connection to allow it.
+
+    The operation's own name is the spec's operationId, which whoever adds the
+    connection writes, so only this id-qualified name may satisfy an allowlist.
+    """
+    return f"openapi:{connection_id}:{tool_name}"
+
+
 class OpenAPITool(BaseTool):
     """Wrapper for an OpenAPI operation that executes real HTTP calls.
 

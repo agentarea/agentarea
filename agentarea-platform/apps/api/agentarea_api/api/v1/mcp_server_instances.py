@@ -3,7 +3,7 @@ from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.mcp_tool_identity import (
-    mcp_tool_policy_aliases,
+    mcp_tool_narrowing_names,
     mcp_tool_rule_target,
     mcp_tool_target,
 )
@@ -624,8 +624,7 @@ def tool_policies_for_instance(
         decision = decide_tool_policy(
             workspace_policy,
             mcp_tool_target(instance_id, name),
-            aliases=mcp_tool_policy_aliases(instance_id, instance_name, name),
-            restricting_aliases=(name,),
+            restricting_aliases=mcp_tool_narrowing_names(instance_name, name),
         )
         effective = _VERDICTS[decision.action]
         stricter = _STRICTNESS[effective] > _STRICTNESS[default]

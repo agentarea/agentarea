@@ -218,7 +218,10 @@ by `_`. `<server>` comes from the instance name:
 Two instances with the same `<server>` on one agent are kept apart by a suffix
 of the second one's id. Your server receives the raw `<tool>` name in
 `tools/call`, never the qualified one, so renaming affects only what the model,
-the event stream and policy rules written against `tool:mcp__…` see.
+the event stream and policy rules written against `tool:mcp__…` see. Such a rule
+can deny the tool or require approval for it, but an `allow` must name the tool
+as `tool:mcp:<instance id>:<tool>`: see
+[Policy syntax](/reference/policy-syntax#target-selectors).
 
 **Compatibility.** Names of instances whose name is ASCII did not change. An
 instance with a non-ASCII name was previously offered as `mcp__` followed by one
