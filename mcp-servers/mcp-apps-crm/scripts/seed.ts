@@ -80,11 +80,11 @@ const past = (ms: number) => Math.min(workingHours(ms), AS_OF - int(20, 90) * MI
 // ---------------------------------------------------------------------------
 
 const OWNERS: Owner[] = [
-  { id: "own_01", name: "Anna Sokolova", title: "Head of Sales", email: "anna.sokolova@meridian.ru", kind: "human" },
-  { id: "own_02", name: "Dmitry Volkov", title: "Account Executive", email: "dmitry.volkov@meridian.ru", kind: "human" },
-  { id: "own_03", name: "Elena Petrova", title: "Account Executive", email: "elena.petrova@meridian.ru", kind: "human" },
-  { id: "own_04", name: "Ivan Kuznetsov", title: "Sales Development Rep", email: "ivan.kuznetsov@meridian.ru", kind: "human" },
-  { id: "own_05", name: "Scout", title: "AI sales agent", email: "scout@meridian.ru", kind: "agent" },
+  { id: "own_01", name: "Anna Sokolova", handle: "anna", title: "Head of Sales", email: "anna.sokolova@meridian.ru", kind: "human", platformId: null },
+  { id: "own_02", name: "Dmitry Volkov", handle: "dmitry", title: "Account Executive", email: "dmitry.volkov@meridian.ru", kind: "human", platformId: null },
+  { id: "own_03", name: "Elena Petrova", handle: "elena", title: "Account Executive", email: "elena.petrova@meridian.ru", kind: "human", platformId: null },
+  { id: "own_04", name: "Ivan Kuznetsov", handle: "ivan", title: "Sales Development Rep", email: "ivan.kuznetsov@meridian.ru", kind: "human", platformId: null },
+  { id: "own_05", name: "Scout", handle: "scout", title: "AI sales agent", email: "scout@meridian.ru", kind: "agent", platformId: null },
 ];
 const HUMANS = OWNERS.filter((o) => o.kind === "human");
 const AGENT = OWNERS.find((o) => o.kind === "agent")!;

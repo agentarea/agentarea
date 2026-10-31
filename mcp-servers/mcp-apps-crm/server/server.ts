@@ -3,8 +3,11 @@ import {
   registerAppTool,
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
+import type { Caller } from "@kit/context/caller.ts";
+import { installEvents } from "@kit/events/install.ts";
+import type { EventDispatcher } from "@kit/events/subscriptions.ts";
 import type { AppStore } from "@kit/store/store.ts";
-import { McpServer, type ReadResourceResult } from "@modelcontextprotocol/server";
+import { McpServer, ProtocolError, type ReadResourceResult } from "@modelcontextprotocol/server";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
@@ -19,8 +22,9 @@ import {
   pipelineSnapshotSchema,
   searchResultSchema,
 } from "../shared/schema.ts";
+import { EVENT_TYPES } from "./events.ts";
 import { Lookup } from "./lookup.ts";
-import { CrmStore } from "./store.ts";
+import { CrmStore, platformIdOf } from "./store.ts";
 import {
   activityRow,
   buildDealCard,
@@ -46,31 +50,61 @@ const VIEWS = [
 ] as const;
 export const VIEW_FILES = VIEWS.map((view) => view.file);
 
+/** Who the platform says is calling, and whether this app runs where it always says so. */
+export type Identity = { caller: Caller | null; required: boolean };
+
+export const NO_CALLER =
+  "This call carries no caller context, so it cannot say who makes the change. Call through AgentArea.";
+
 /**
  * The app is the view resources plus their tools. The data is not part of
  * it: it lives in `app`, the instance's store; every tool call is one read or
  * one transaction there. `current` is the CRM as of this request, for the
  * owners, stages and sources the tool descriptions name.
  */
-export function createServer(app: AppStore, appDir: string, current: CrmStore | null): McpServer {
+export function createServer(
+  app: AppStore,
+  appDir: string,
+  current: CrmStore | null,
+  identity: Identity,
+  dispatcher: EventDispatcher,
+): McpServer {
   const server = new McpServer({ name: "Sales CRM MCP App", version: "0.1.0" });
+  installEvents(server, { app, types: EVENT_TYPES, ProtocolError, dispatcher });
   if (!current) {
-    registerSetup(server, app);
+    registerSetup(server, app, identity);
     return server;
   }
   const { data } = current;
-  const read = <T>(fn: (store: CrmStore) => T) => app.read((db) => fn(CrmStore.load(db)));
-  const write = <T>(fn: (store: CrmStore) => T) =>
-    app.transact((db) => {
+  const { caller } = identity;
+  // A read names the caller when they are an owner; a write adds them first,
+  // except linking, which is how an owner already in the CRM becomes the caller.
+  const read = <T>(fn: (store: CrmStore) => T) =>
+    app.read((db) => {
       const store = CrmStore.load(db);
+      if (caller) store.identify(caller, false);
+      return fn(store);
+    });
+  // Every change may have logged an event, so subscribers are posted it as soon as it is stored.
+  const write = async <T>(fn: (store: CrmStore) => T, join = true) => {
+    const result = await app.transact((db) => {
+      const store = CrmStore.load(db);
+      if (caller) store.identify(caller, join);
+      else if (identity.required) throw new Error(NO_CALLER);
       const result = fn(store);
       store.save(db);
       return result;
     });
-  const owners = data.owners.map((o) => `${o.id} ${o.name}${o.kind === "agent" ? " (AI agent)" : ""}`).join(", ");
+    dispatcher.kick();
+    return result;
+  };
+  const owners = data.owners.map((o) => `${o.handle} ${o.name}${o.kind === "agent" ? " (AI agent)" : ""}`).join(", ");
+  const me = caller ? (data.owners.find((o) => o.platformId === platformIdOf(caller))?.name ?? "you, the caller") : null;
   const stages = data.pipelines[0].stages.map((s) => s.id).join(", ");
   const openStages = data.pipelines[0].stages.filter((s) => s.outcome === null).map((s) => s.id).join(", ");
-  const ownerId = z.string().describe(`Owner (sales rep) id: ${owners}`);
+  const ownerId = z.string().describe(`Owner (sales rep): an id, handle or name (${owners})${me ? `; "me" is ${me}` : ""}`);
+  // With a caller an owner left out defaults to them; without one (no platform) the call must name it.
+  const ownerFallback = me ? `, else ${me}` : "; required when there is no company_id";
   const done = (text: string, structuredContent: Record<string, unknown>) => ({
     content: [{ type: "text" as const, text }],
     structuredContent,
@@ -97,7 +131,10 @@ export function createServer(app: AppStore, appDir: string, current: CrmStore | 
     },
     async ({ owner_id, pipeline_id }) =>
       read((store) => {
-        const snapshot = buildPipelineSnapshot(store.data, store.now(), { ownerId: owner_id, pipelineId: pipeline_id });
+        const snapshot = buildPipelineSnapshot(store.data, store.now(), {
+          ownerId: owner_id && store.owner(owner_id).id,
+          pipelineId: pipeline_id,
+        });
         return done(summarizePipeline(snapshot), snapshot);
       }),
   );
@@ -116,7 +153,10 @@ export function createServer(app: AppStore, appDir: string, current: CrmStore | 
     },
     async ({ owner_id, pipeline_id }) =>
       read((store) => {
-        const snapshot = buildPipelineSnapshot(store.data, store.now(), { ownerId: owner_id, pipelineId: pipeline_id });
+        const snapshot = buildPipelineSnapshot(store.data, store.now(), {
+          ownerId: owner_id && store.owner(owner_id).id,
+          pipelineId: pipeline_id,
+        });
         return done(summarizePipeline(snapshot), snapshot);
       }),
   );
@@ -179,7 +219,7 @@ export function createServer(app: AppStore, appDir: string, current: CrmStore | 
           kinds: input.kinds,
           stageId: input.stage_id,
           status: input.status,
-          ownerId: input.owner_id,
+          ownerId: input.owner_id && store.owner(input.owner_id).id,
           overdueActivity: input.overdue_activity,
           noNextActivity: input.no_next_activity,
           rotting: input.rotting,
@@ -195,14 +235,14 @@ export function createServer(app: AppStore, appDir: string, current: CrmStore | 
       title: "Create deal",
       description:
         "Create a deal in an open stage (the first stage unless stage_id says otherwise). The owner defaults to " +
-        "the company's owner. Returns the new deal with its id.",
+        `the company's owner${me ? `, else ${me}` : ""}. Returns the new deal with its id.`,
       inputSchema: z.object({
         title: z.string().min(1).describe('Deal title, e.g. "Volga Logistics — WMS rollout"'),
         value: z.number().min(0).describe("Deal value in `currency`"),
         currency: z.enum(CURRENCIES).optional().describe(`Currency of value; default ${data.account.baseCurrency}`),
         company_id: z.string().optional().describe('Company id, e.g. "cmp_001"'),
         contact_ids: z.array(z.string()).optional().describe('Contact ids on the deal, e.g. ["ct_001"]'),
-        owner_id: ownerId.optional().describe(`Owner id (${owners}); required when there is no company_id`),
+        owner_id: ownerId.optional().describe(`Owner: an id, handle or name (${owners}); defaults to the company's owner${ownerFallback}`),
         pipeline_id: z.string().optional().describe(`Pipeline id; default "${data.pipelines[0].id}"`),
         stage_id: z.string().optional().describe(`Open stage to start in: ${openStages}`),
         expected_close_date: z.string().optional().describe("Expected close date, YYYY-MM-DD"),
@@ -315,15 +355,15 @@ export function createServer(app: AppStore, appDir: string, current: CrmStore | 
     {
       title: "Create contact",
       description:
-        "Add a contact (person), optionally at a company. The owner defaults to the company's owner. Fails if " +
-        "the email is already on another contact, naming its id.",
+        `Add a contact (person), optionally at a company. The owner defaults to the company's owner${me ? `, else ${me}` : ""}. ` +
+        "Fails if the email is already on another contact, naming its id.",
       inputSchema: z.object({
         name: z.string().min(1).describe("Full name"),
         company_id: z.string().optional().describe('Company id, e.g. "cmp_001"'),
         title: z.string().optional().describe("Job title"),
         email: z.string().optional(),
         phone: z.string().optional(),
-        owner_id: ownerId.optional().describe(`Owner id (${owners}); required when there is no company_id`),
+        owner_id: ownerId.optional().describe(`Owner: an id, handle or name (${owners}); defaults to the company's owner${ownerFallback}`),
       }),
       outputSchema: contactRowSchema,
       annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
@@ -418,8 +458,28 @@ export function createServer(app: AppStore, appDir: string, current: CrmStore | 
     async (fields) =>
       write((store) => {
         const owner = store.addOwner(fields);
-        return { content: [{ type: "text" as const, text: `Added owner ${owner.id} ${owner.name} (${owner.kind}).` }] };
+        return { content: [{ type: "text" as const, text: `Added owner ${owner.id} ${owner.name} as @${owner.handle} (${owner.kind}).` }] };
       }),
+  );
+
+  server.registerTool(
+    "link_owner",
+    {
+      title: "Link owner",
+      description:
+        "Tie an owner already in the CRM to their AgentArea identity, so their own calls act as them: " +
+        '"user:<user id>" for a member, "agent:<agent id>" for an agent.',
+      inputSchema: z.object({
+        owner: ownerId.describe(`Owner to link: an id, handle or name (${owners})`),
+        platform_id: platformIdArg,
+      }),
+      annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    },
+    async ({ owner: ref, platform_id }) =>
+      write((store) => {
+        const owner = store.linkOwner(ref, platform_id);
+        return { content: [{ type: "text" as const, text: `@${owner.handle} is ${owner.platformId}.` }] };
+      }, false),
   );
 
   for (const view of VIEWS) {
@@ -443,15 +503,23 @@ export function createServer(app: AppStore, appDir: string, current: CrmStore | 
   return server;
 }
 
+const platformIdArg = z.string().describe('AgentArea identity: "user:<user id>" or "agent:<agent id>"');
+
 const ownerFields = z.object({
   name: z.string().min(1).describe("Full name"),
+  handle: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Short unique handle, e.g. "anna"; tools accept it in place of the id. Default: from the email or name'),
   title: z.string().optional().describe("Role, e.g. Account Executive"),
   email: z.string().optional(),
   kind: z.enum(OWNER_KINDS).optional().describe("human or agent, default human"),
+  platformId: platformIdArg.optional().describe('Their AgentArea identity, "user:<id>" or "agent:<id>", when they have one'),
 });
 
 /** An instance whose storage holds no CRM yet offers one tool: the one that writes it. */
-function registerSetup(server: McpServer, app: AppStore): void {
+function registerSetup(server: McpServer, app: AppStore, identity: Identity): void {
   server.registerTool(
     "setup_crm",
     {
@@ -471,6 +539,7 @@ function registerSetup(server: McpServer, app: AppStore): void {
       annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     },
     async ({ base_currency, usd_rate, lost_reasons, ...rest }) => {
+      if (!identity.caller && identity.required) throw new Error(NO_CALLER);
       const store = await app.transact((db) =>
         CrmStore.setup(db, { ...rest, baseCurrency: base_currency, usdRate: usd_rate, lostReasons: lost_reasons }),
       );
