@@ -64,6 +64,31 @@ def test_parsed_operations_carry_their_cost_and_response_transform():
     assert by_name["wordstat_top"]["cost"] == SPEC["x-agentarea-cost"]
 
 
+def test_an_operation_error_path_wins_over_the_spec_default():
+    spec = {
+        **SPEC,
+        "x-agentarea-error-path": "$.response.error",
+        "paths": {
+            **SPEC["paths"],
+            "/v2/wordstat/topRequests": {
+                "post": {"operationId": "wordstat_top", "x-agentarea-error-path": "$.fault"}
+            },
+        },
+    }
+
+    by_name = {op["name"]: op for op in parse_openapi_operations(spec)}
+
+    assert by_name["web_search"]["error_path"] == "$.response.error"
+    assert by_name["wordstat_top"]["error_path"] == "$.fault"
+    assert all(op["error_path"] is None for op in parse_openapi_operations(SPEC))
+
+
+@pytest.mark.parametrize("path", ["response.error", "$", 3])
+def test_an_error_path_must_name_a_field(path):
+    with pytest.raises(ValueError, match="x-agentarea-error-path"):
+        parse_openapi_operations({**SPEC, "x-agentarea-error-path": path})
+
+
 def test_a_malformed_declaration_is_the_spec_authors_error():
     bad = {**SPEC, "x-agentarea-cost": {"source": "rate"}}
 

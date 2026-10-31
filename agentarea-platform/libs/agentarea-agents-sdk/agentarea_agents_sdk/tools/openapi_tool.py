@@ -370,16 +370,20 @@ class OpenAPITool(BaseTool):
             return self._success_result(result_str="", status_code=status_code)
 
         from agentarea_common.response_transform import apply_response_transform
+        from agentarea_common.tool_cost import json_path
 
         body: Any = None
+        steps = self._operation.get("response_transform") or []
         try:
             ct = response.headers.get("content-type", "")
+            is_xml = "/xml" in ct or "+xml" in ct
             if "application/json" in ct:
-                body = apply_response_transform(
-                    self._operation.get("response_transform") or [], response.json()
-                )
+                body = apply_response_transform(steps, response.json())
                 result_str = json.dumps(body, ensure_ascii=False)
-            elif ct.startswith("text/") or "text" in ct:
+            elif is_xml and steps:
+                body = apply_response_transform(steps, response.text)
+                result_str = json.dumps(body, ensure_ascii=False)
+            elif ct.startswith("text/") or "text" in ct or is_xml:
                 result_str = response.text
             else:
                 content_bytes = response.content
@@ -393,6 +397,23 @@ class OpenAPITool(BaseTool):
                 "tool_name": self.name,
                 "status_code": status_code,
             }
+
+        error_path = self._operation.get("error_path")
+        if error_path and body is not None:
+            try:
+                vendor_error = json_path(body, error_path)
+            except KeyError:
+                vendor_error = None
+            if vendor_error is not None:
+                detail = json.dumps(vendor_error, ensure_ascii=False)[:500]
+                return {
+                    "success": False,
+                    "error": f"HTTP {status_code} with an error: {detail}",
+                    "result": None,
+                    "tool_name": self.name,
+                    "status_code": status_code,
+                    "service_cost": "0",
+                }
 
         return self._success_result(result_str=result_str, status_code=status_code, body=body)
 
