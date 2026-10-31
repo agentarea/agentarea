@@ -170,6 +170,7 @@ export class TasksStore {
   linkPerson(ref: string, platformId: string): Person {
     const person = this.person(ref);
     const id = checkPlatformId(platformId);
+    if (person.platformId && person.platformId !== id) throw new Error(`@${person.handle} is already ${person.platformId}.`);
     const other = this.data.people.find((p) => p.platformId === id);
     if (other && other.id !== person.id) throw new Error(`${id} is already @${other.handle}.`);
     person.platformId = id;

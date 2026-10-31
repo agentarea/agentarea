@@ -459,7 +459,7 @@ export function createServer(
       write((store) => {
         const owner = store.addOwner(fields);
         return { content: [{ type: "text" as const, text: `Added owner ${owner.id} ${owner.name} as @${owner.handle} (${owner.kind}).` }] };
-      }),
+      }, false),
   );
 
   server.registerTool(

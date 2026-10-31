@@ -211,10 +211,11 @@ export class CrmStore {
     this.#me = { owner };
   }
 
-  /** Ties an owner already in the CRM to their platform identity. */
+  /** Ties an owner already in the CRM to their platform identity; an owner linked to someone else stays theirs. */
   linkOwner(ref: string, platformId: string): Owner {
     const owner = this.owner(ref);
     const id = checkPlatformId(platformId);
+    if (owner.platformId && owner.platformId !== id) throw new Error(`@${owner.handle} is already ${owner.platformId}.`);
     const other = this.data.owners.find((o) => o.platformId === id);
     if (other && other.id !== owner.id) throw new Error(`${id} is already @${other.handle}.`);
     owner.platformId = id;
@@ -234,7 +235,14 @@ export class CrmStore {
       if (this.#me) throw new Error('"me" is no owner in this CRM yet: make a change first, or ask someone to add you.');
       throw new Error('"me" means nobody when the call carries no caller context; name the owner by id, handle or name.');
     }
-    const owner = this.data.owners.find((o) => o.id === needle || o.handle === needle || o.name.toLowerCase() === needle);
+    const named = this.data.owners.filter((o) => o.name.toLowerCase() === needle);
+    if (named.length > 1 && !this.data.owners.some((o) => o.id === needle || o.handle === needle)) {
+      throw new Error(`${named.length} owners are named "${ref}"; name one by handle: ${named.map((o) => `@${o.handle}`).join(", ")}.`);
+    }
+    const owner =
+      this.data.owners.find((o) => o.id === needle) ??
+      this.data.owners.find((o) => o.handle === needle) ??
+      named[0];
     if (!owner) {
       const known = this.data.owners.map((o) => `${o.handle} (${o.name}${o.kind === "agent" ? ", agent" : ""})`).join(", ");
       throw new Error(`No owner "${ref}". Use an owner id, handle or name: ${known}.`);

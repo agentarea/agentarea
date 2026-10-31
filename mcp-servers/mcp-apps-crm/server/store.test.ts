@@ -174,6 +174,15 @@ describe("callers the platform names", () => {
     store.linkOwner("artem", `user:${maya.id}`);
     expect(() => store.linkOwner("sales-agent", `user:${maya.id}`)).toThrow("already @artem");
     expect(() => store.linkOwner("artem", "maya")).toThrow("not a platform identity");
+    expect(() => store.linkOwner("artem", `agent:${bot.id}`)).toThrow(`@artem is already user:${maya.id}`);
+  });
+
+  test("an owner is found by id, then handle, then a name only one owner has", () => {
+    const db = emptyDb();
+    const store = CrmStore.setup(db, { ...setup, owners: [...setup.owners, { name: "Artem Astapenko", handle: "artem.a" }, { name: "artem" }] });
+    expect(store.owner("own_02").handle).toBe("sales-agent");
+    expect(store.owner("artem").id).toBe("own_01");
+    expect(() => store.owner("Artem Astapenko")).toThrow('2 owners are named "Artem Astapenko"; name one by handle: @artem, @artem.a');
   });
 });
 

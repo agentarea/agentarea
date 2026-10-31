@@ -338,6 +338,7 @@ describe("callers the platform names", () => {
     store.linkPerson("artem", `user:${maya.id}`);
     expect(() => store.linkPerson("sales-bot", `user:${maya.id}`)).toThrow("already @artem");
     expect(() => store.linkPerson("artem", "maya")).toThrow("not a platform identity");
+    expect(() => store.linkPerson("artem", `agent:${bot.id}`)).toThrow(`@artem is already user:${maya.id}`);
   });
 
   test("a handle a caller would take is never reused", () => {
