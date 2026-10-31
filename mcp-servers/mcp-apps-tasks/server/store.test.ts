@@ -2,7 +2,8 @@ import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { MIGRATIONS } from "./db.ts";
 import { headPosition, readEvents } from "@kit/events/log.ts";
-import { TASK_ASSIGNED } from "./events.ts";
+import type { EventType } from "@kit/events/protocol.ts";
+import { TASK_ASSIGNED, TASK_COMMENTED, TASK_CREATED, TASK_STATUS_CHANGED, taskCommented, taskCreated, taskStatusChanged } from "./events.ts";
 import { TasksStore } from "./store.ts";
 
 function emptyDb(): Database {
@@ -141,6 +142,149 @@ describe("task.assigned events", () => {
   });
 });
 
+describe("task.created, task.status_changed and task.commented events", () => {
+  function change(db: Database, fn: (store: TasksStore) => void) {
+    db.transaction(() => {
+      const store = TasksStore.load(db);
+      fn(store);
+      store.save(db);
+    })();
+  }
+  const events = (db: Database, name: string, after = 0) =>
+    readEvents(db, { name, after, limit: 50, admits: () => true }).events.map((e) => e.data);
+  const artem = { handle: "artem", name: "Artem Astapenko", kind: "human" };
+  const salesBot = { handle: "sales-bot", name: "Sales Agent", kind: "agent" };
+  const project = { key: "OPS", name: "Operations" };
+
+  test("every new issue is one task.created, assigned or not", () => {
+    const db = emptyDb();
+    TasksStore.setup(db, team);
+    change(db, (store) => store.create("OPS", { title: "Unowned", due: "2026-11-02" }));
+    change(db, (store) => store.create("OPS", { title: "Owned", assignee: "sales-bot", status: "backlog" }, "sales-bot"));
+    expect(events(db, TASK_CREATED)).toEqual([
+      {
+        key: "OPS-1",
+        title: "Unowned",
+        description: "",
+        status: "todo",
+        priority: "none",
+        due: "2026-11-02",
+        project,
+        assignee: null,
+        createdBy: artem,
+      },
+      {
+        key: "OPS-2",
+        title: "Owned",
+        description: "",
+        status: "backlog",
+        priority: "none",
+        due: null,
+        project,
+        assignee: salesBot,
+        createdBy: salesBot,
+      },
+    ]);
+  });
+
+  test("a status move records from, to and who moved it; an update that keeps the status records none", () => {
+    const db = emptyDb();
+    TasksStore.setup(db, team);
+    change(db, (store) => store.create("OPS", { title: "Ship it", assignee: "sales-bot" }));
+    change(db, (store) => store.update("OPS-1", { status: "in_progress" }, "sales-bot"));
+    change(db, (store) => store.update("OPS-1", { status: "in_progress", priority: "high" }));
+    change(db, (store) => store.update("OPS-1", { title: "Shipped" }));
+    change(db, (store) => store.update("OPS-1", { status: "done" }));
+    expect(events(db, TASK_STATUS_CHANGED)).toEqual([
+      {
+        key: "OPS-1",
+        title: "Ship it",
+        description: "",
+        status: "in_progress",
+        priority: "none",
+        due: null,
+        project,
+        assignee: salesBot,
+        from: "todo",
+        to: "in_progress",
+        changedBy: salesBot,
+      },
+      {
+        key: "OPS-1",
+        title: "Shipped",
+        description: "",
+        status: "done",
+        priority: "high",
+        due: null,
+        project,
+        assignee: salesBot,
+        from: "in_progress",
+        to: "done",
+        changedBy: artem,
+      },
+    ]);
+  });
+
+  test("a comment records the issue, the comment and its author", () => {
+    const db = emptyDb();
+    TasksStore.setup(db, team);
+    change(db, (store) => store.create("OPS", { title: "Ship it", assignee: "sales-bot" }));
+    change(db, (store) => store.comment("OPS-1", "  Can you take a look?  "));
+    expect(events(db, TASK_COMMENTED)).toEqual([
+      {
+        key: "OPS-1",
+        title: "Ship it",
+        status: "todo",
+        project,
+        assignee: salesBot,
+        comment: { id: "cmt_001", body: "Can you take a look?" },
+        author: artem,
+      },
+    ]);
+  });
+
+  test("a change that rolls back records none of them", () => {
+    const db = emptyDb();
+    TasksStore.setup(db, team);
+    change(db, (store) => store.create("OPS", { title: "Kept" }));
+    const head = headPosition(db);
+    expect(() =>
+      change(db, (store) => {
+        store.create("OPS", { title: "Doomed" });
+        store.update("OPS-1", { status: "done" });
+        store.comment("OPS-1", "never");
+        throw new Error("abort");
+      }),
+    ).toThrow("abort");
+    for (const name of [TASK_CREATED, TASK_STATUS_CHANGED, TASK_COMMENTED]) expect(events(db, name, head)).toEqual([]);
+  });
+
+  test("filters narrow by project, assignee or unassigned, new status and the kind of person", () => {
+    const issue = { project, assignee: salesBot };
+    const created = { ...issue, createdBy: artem };
+    const admits = <A>(type: EventType<A>, raw: Record<string, unknown>, data: Record<string, unknown>) =>
+      type.admits(type.parseArguments(raw), data);
+    expect(admits(taskCreated, { project: "ops", assignee: "@Sales-Bot", creatorKind: "human" }, created)).toBe(true);
+    expect(admits(taskCreated, { creatorKind: "agent" }, created)).toBe(false);
+    expect(admits(taskCreated, { assignee: "unassigned" }, created)).toBe(false);
+    expect(admits(taskCreated, { assignee: "unassigned" }, { ...created, assignee: null })).toBe(true);
+    expect(admits(taskCreated, { assignee: "artem" }, { ...created, assignee: null })).toBe(false);
+    expect(admits(taskCreated, { project: "WEB" }, created)).toBe(false);
+
+    const moved = { ...issue, from: "in_progress", to: "in_review", changedBy: salesBot };
+    expect(admits(taskStatusChanged, { status: "in_review", project: "OPS", assignee: "sales-bot" }, moved)).toBe(true);
+    expect(admits(taskStatusChanged, { status: "done" }, moved)).toBe(false);
+    expect(() => taskStatusChanged.parseArguments({ status: "shipped" })).toThrow("status is backlog or todo");
+
+    const commented = { ...issue, author: salesBot };
+    expect(admits(taskCommented, { authorKind: "human" }, commented)).toBe(false);
+    expect(admits(taskCommented, { authorKind: "human", assignee: "sales-bot" }, { ...commented, author: artem })).toBe(true);
+    expect(() => taskCommented.parseArguments({ author: "artem" })).toThrow('unknown argument "author"');
+    expect(() => taskCommented.parseArguments({ authorKind: "robot" })).toThrow("authorKind is human or agent");
+    expect(() => taskCreated.parseArguments({ project: " " })).toThrow("project must be a non-empty string");
+  });
+});
+
 describe("callers the platform names", () => {
   const maya = { kind: "user" as const, id: "6f1c2b7e-0000-4000-8000-000000000001", workspaceId: "ws-1", email: "Maya.Chen@acme.ru" };
   const bot = { kind: "agent" as const, id: "7b146d29-d8fd-45c7-8d46-91d02a8f5b06", workspaceId: "ws-1" };
@@ -194,6 +338,7 @@ describe("callers the platform names", () => {
     store.linkPerson("artem", `user:${maya.id}`);
     expect(() => store.linkPerson("sales-bot", `user:${maya.id}`)).toThrow("already @artem");
     expect(() => store.linkPerson("artem", "maya")).toThrow("not a platform identity");
+    expect(() => store.linkPerson("artem", `agent:${bot.id}`)).toThrow(`@artem is already user:${maya.id}`);
   });
 
   test("a handle a caller would take is never reused", () => {

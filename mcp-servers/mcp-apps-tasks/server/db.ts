@@ -83,7 +83,7 @@ export const MIGRATIONS: Migration[] = [
       );
       CREATE INDEX issue_activity_issue ON issue_activity (issue_id);
     `),
-  // Outgoing MCP Events (task.assigned), served by events/poll.
+  // Outgoing MCP Events (task.assigned, task.created, task.status_changed, task.commented), served by events/poll.
   EVENT_LOG_MIGRATION,
   // People tied to the platform identity the caller context names.
   (db) =>
