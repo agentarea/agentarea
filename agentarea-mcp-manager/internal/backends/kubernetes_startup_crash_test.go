@@ -189,7 +189,7 @@ func TestCrashOutputCarriesNoLineOfAMultiLineSecret(t *testing.T) {
 		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
 			ExitCode: 1, Message: "bad key line: MIIEvQIBADANBgkqhkiG9w0BAQEFAASC",
 		}},
-	}, map[string][]byte{"KEY": []byte("-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----\n")})
+	}, map[string][]byte{"KEY": []byte("-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----\n")}) // pragma: allowlist secret
 	if strings.Contains(status.Message, "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC") {
 		t.Fatalf("message = %q leaks a line of the secret", status.Message)
 	}
