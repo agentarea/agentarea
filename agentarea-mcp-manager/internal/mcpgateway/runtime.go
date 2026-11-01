@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/agentarea/mcp-manager/internal/backends"
 	"github.com/agentarea/mcp-manager/internal/config"
@@ -60,8 +63,10 @@ type retryDelayError interface {
 	RetryDelay() time.Duration
 }
 
-// StartupFailureError exposes a classified start failure without returning
-// workload output. Cause remains available to the manager for diagnostics.
+// StartupFailureError exposes a classified start failure. Its reason carries
+// workload output only as the bounded tail a stopped server left behind, with
+// the instance's secret values already removed by the backend. Cause remains
+// available to the manager for diagnostics.
 type StartupFailureError struct {
 	reason     string
 	cause      error
@@ -104,6 +109,11 @@ func (e *StartBackoffError) RetryDelay() time.Duration {
 
 type workloadStoppedDuringStartupError struct {
 	status string
+	output string
+}
+
+func stoppedDuringStartup(status *backends.InstanceStatus) *workloadStoppedDuringStartupError {
+	return &workloadStoppedDuringStartupError{status: status.Status, output: status.Message}
 }
 
 func (e *workloadStoppedDuringStartupError) Error() string {
@@ -111,10 +121,36 @@ func (e *workloadStoppedDuringStartupError) Error() string {
 }
 
 func (e *workloadStoppedDuringStartupError) FailureReason() string {
+	reason := "workload stopped during startup"
 	if state := safeStartupState(e.status); state != "" {
-		return fmt.Sprintf("workload stopped during startup (state %s)", state)
+		reason = fmt.Sprintf("workload stopped during startup (state %s)", state)
 	}
-	return "workload stopped during startup"
+	if output := serverOutputTail(e.output); output != "" {
+		reason += ": " + output
+	}
+	return reason
+}
+
+// maxServerOutput bounds the server output a failure reason carries; the
+// reason travels in a response header.
+const maxServerOutput = 1000
+
+var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+
+// serverOutputTail is the end of a server's output as one line of printable
+// text: the last lines are the ones that say why it stopped.
+func serverOutputTail(output string) string {
+	text := strings.Join(strings.FieldsFunc(strings.ToValidUTF8(ansiEscape.ReplaceAllString(output, ""), ""), func(r rune) bool {
+		return unicode.IsSpace(r) || unicode.IsControl(r)
+	}), " ")
+	if len(text) <= maxServerOutput {
+		return text
+	}
+	tail := text[len(text)-maxServerOutput:]
+	for len(tail) > 0 && !utf8.RuneStart(tail[0]) {
+		tail = tail[1:]
+	}
+	return "..." + tail
 }
 
 func startFailureBackoff(consecutive int) time.Duration {
@@ -316,7 +352,7 @@ func (r *ProviderRuntime) awaitRunning(ctx context.Context, instance *models.MCP
 			return nil, r.cleanupFailedStart(instance, cause)
 		}
 		if statusErr == nil && runtimeStatusStopped(status.Status) {
-			return nil, r.cleanupFailedStart(instance, &workloadStoppedDuringStartupError{status: status.Status})
+			return nil, r.cleanupFailedStart(instance, stoppedDuringStartup(status))
 		}
 		select {
 		case <-ctx.Done():
@@ -353,7 +389,7 @@ func (r *ProviderRuntime) awaitListening(ctx context.Context, instance *models.M
 			}
 			status, err := r.backend.GetInstanceStatus(waitCtx, instance.InstanceID)
 			if err == nil && runtimeStatusStopped(status.Status) {
-				cancel(&workloadStoppedDuringStartupError{status: status.Status})
+				cancel(stoppedDuringStartup(status))
 				return
 			}
 		}

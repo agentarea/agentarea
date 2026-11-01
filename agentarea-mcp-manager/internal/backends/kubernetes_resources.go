@@ -137,6 +137,9 @@ func ceilingWithin(allowed, requested config.ResourceRequirements) error {
 	return nil
 }
 
+// serverContainerName is the MCP server's container in an instance pod.
+const serverContainerName = "mcp-server"
+
 // dataPlaneOwnerLabel marks a workload as owned by one data plane. The data
 // plane stamps it from its own configuration, never from the request.
 const dataPlaneOwnerLabel = "agentarea.io/dataplane-id"
@@ -222,7 +225,7 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 		pullPolicy = "IfNotPresent" // safe default for k3d/local; production should set Always
 	}
 	container := corev1.Container{
-		Name:            "mcp-server",
+		Name:            serverContainerName,
 		Image:           spec.Image,
 		ImagePullPolicy: corev1.PullPolicy(pullPolicy),
 		Ports: []corev1.ContainerPort{
@@ -250,6 +253,9 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 		},
 		Resources:       resourceRequirements,
 		SecurityContext: securityContext,
+		// A server that exits on error leaves its last log lines as the
+		// termination message, which GetInstanceStatus reports.
+		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 		// TCP probes — portable across all MCP server images. HTTP probes
 		// would require every image to implement the same /health path,
 		// which is not part of the MCP spec.

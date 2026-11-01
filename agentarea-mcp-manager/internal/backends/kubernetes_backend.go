@@ -325,11 +325,24 @@ func (k *KubernetesBackend) GetInstanceStatus(ctx context.Context, instanceID st
 		}
 	}
 
+	message := ""
+	if status == "starting" {
+		output, crashed, err := k.startupCrash(ctx, deployment)
+		if err != nil {
+			return nil, err
+		}
+		if crashed {
+			status = "failed"
+			message = redactSecretValues(output, secret.Data)
+		}
+	}
+
 	instanceStatus := &InstanceStatus{
 		ID:          string(deployment.UID),
 		Name:        instanceName,
 		ServiceName: instanceName,
 		Status:      status,
+		Message:     message,
 		URL:         k.k8sConfig.GetInstanceURL(instanceName),
 		InternalURL: k.k8sConfig.GetInternalServiceURL(instanceName, port),
 		Image:       image,
@@ -557,6 +570,58 @@ func (k *KubernetesBackend) ensureNamespace(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// startupCrash reports whether the workload's server container has exited
+// before it ever became ready, with the output it left behind. Such a container
+// only crash-loops until the startup probe gives up.
+func (k *KubernetesBackend) startupCrash(ctx context.Context, deployment *appsv1.Deployment) (string, bool, error) {
+	if deployment.Spec.Selector == nil {
+		return "", false, nil
+	}
+	pods := &corev1.PodList{}
+	if err := k.client.List(ctx, pods, client.InNamespace(k.k8sConfig.Namespace),
+		client.MatchingLabels(deployment.Spec.Selector.MatchLabels)); err != nil {
+		return "", false, fmt.Errorf("failed to list pods: %w", err)
+	}
+	for _, pod := range pods.Items {
+		// A predecessor's pods linger under the same labels while they go away.
+		if pod.DeletionTimestamp != nil || pod.CreationTimestamp.Before(&deployment.CreationTimestamp) {
+			continue
+		}
+		for _, container := range pod.Status.ContainerStatuses {
+			// A run that passed the startup probe has started; an earlier
+			// termination is history, and lost readiness is not a crash.
+			if container.Name != serverContainerName || container.Ready ||
+				(container.Started != nil && *container.Started) {
+				continue
+			}
+			if terminated := container.State.Terminated; terminated != nil {
+				return strings.TrimSpace(terminated.Message), true, nil
+			}
+			if terminated := container.LastTerminationState.Terminated; terminated != nil && container.RestartCount > 0 {
+				return strings.TrimSpace(terminated.Message), true, nil
+			}
+		}
+	}
+	return "", false, nil
+}
+
+// minRedactedSecretLength keeps short values such as "1" or "true" from
+// blanking out unrelated words of the output.
+const minRedactedSecretLength = 6
+
+func redactSecretValues(output string, secrets map[string][]byte) string {
+	for _, value := range secrets {
+		// A multi-line value, such as a PEM key, is printed a line at a time.
+		for _, part := range append([]string{string(value)}, strings.Split(string(value), "\n")...) {
+			part = strings.TrimSpace(part)
+			if len(part) >= minRedactedSecretLength {
+				output = strings.ReplaceAll(output, part, "[REDACTED]")
+			}
+		}
+	}
+	return output
 }
 
 // Common labels for all resources

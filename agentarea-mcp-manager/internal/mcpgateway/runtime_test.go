@@ -28,6 +28,7 @@ type runtimeBackendStub struct {
 type statusReply struct {
 	status      string
 	internalURL string
+	message     string
 	err         error
 }
 
@@ -39,7 +40,7 @@ func (b *runtimeBackendStub) GetInstanceStatus(context.Context, string) (*backen
 	if reply.err != nil {
 		return nil, reply.err
 	}
-	return &backends.InstanceStatus{Status: reply.status, InternalURL: reply.internalURL}, nil
+	return &backends.InstanceStatus{Status: reply.status, InternalURL: reply.internalURL, Message: reply.message}, nil
 }
 
 func (b *runtimeBackendStub) statusCalls() int {
@@ -308,6 +309,32 @@ func TestWorkloadThatStopsWhileStartingFailsFast(t *testing.T) {
 				t.Fatalf("creates=%d deletes=%d, want the failed start cleaned up", creates, deletes)
 			}
 		})
+	}
+}
+
+// The reason a crashed start reaches the caller with is the server's own last
+// output: "not found" or a SyntaxError says what is wrong, a state name does not.
+// It travels in a response header, so it is one bounded line of printable text.
+func TestStoppedStartReportsTheServerOutput(t *testing.T) {
+	output := strings.Repeat("npm notice\n", 400) + "\x1b[31msh: 1: some-server: not found\x1b[0m\n"
+	backend := &runtimeBackendStub{statuses: []statusReply{
+		{err: backends.ErrInstanceNotFound},
+		{status: "failed", message: output},
+	}}
+	_, err := testProviderRuntime(t, backend, &runtimeProviderStub{}, 30*time.Second).
+		EnsureReady(context.Background(), dockerInstance())
+	reason, _, classified := startupFailureDetails(err)
+	if !classified {
+		t.Fatalf("EnsureReady() error = %v, want a classified startup failure", err)
+	}
+	if !strings.Contains(reason, "sh: 1: some-server: not found") {
+		t.Fatalf("reason = %q, want the server output in it", reason)
+	}
+	if strings.ContainsAny(reason, "\x1b\n\r") {
+		t.Fatalf("reason = %q carries control characters", reason)
+	}
+	if len(reason) > 1200 {
+		t.Fatalf("reason is %d bytes, want it bounded", len(reason))
 	}
 }
 
