@@ -6980,6 +6980,28 @@
         "title": "MCPInstanceToolPolicies",
         "type": "object"
       },
+      "MCPInstanceToolPoliciesOfInstance": {
+        "properties": {
+          "instance_id": {
+            "format": "uuid",
+            "title": "Instance Id",
+            "type": "string"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/MCPInstanceToolPolicy"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "instance_id",
+          "tools"
+        ],
+        "title": "MCPInstanceToolPoliciesOfInstance",
+        "type": "object"
+      },
       "MCPInstanceToolPolicy": {
         "description": "One tool of a connection: its workspace default and the workspace's verdict on it.",
         "properties": {
@@ -7747,6 +7769,22 @@
         ],
         "title": "MCPTransport",
         "type": "string"
+      },
+      "MCPWorkspaceToolPolicies": {
+        "properties": {
+          "instances": {
+            "items": {
+              "$ref": "#/components/schemas/MCPInstanceToolPoliciesOfInstance"
+            },
+            "title": "Instances",
+            "type": "array"
+          }
+        },
+        "required": [
+          "instances"
+        ],
+        "title": "MCPWorkspaceToolPolicies",
+        "type": "object"
       },
       "MPPConfigSchema": {
         "properties": {
@@ -28678,6 +28716,60 @@
           }
         ],
         "summary": "Get Containers Health",
+        "tags": [
+          "v1",
+          "protected",
+          "mcp-server-instances"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/mcp-server-instances/tool-policies": {
+      "get": {
+        "description": "Each connection's tools with their workspace default and verdict, in one read.\n\nWhat the agent editor shows beside the tools of every server it can attach.",
+        "operationId": "list_mcp_server_instance_tool_policies_v1_mcp_server_instances_tool_policies_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPWorkspaceToolPolicies"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Mcp Server Instance Tool Policies",
         "tags": [
           "v1",
           "protected",

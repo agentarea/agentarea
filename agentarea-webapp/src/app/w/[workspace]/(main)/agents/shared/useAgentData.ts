@@ -1,9 +1,10 @@
 import type { ApiKeyResponse, SecretResponse } from "@/api/client/types.gen";
 import {
   getAgent,
-  listAPIKeys,
   listAgents,
   listAllTools,
+  listAPIKeys,
+  listMCPInstanceToolPolicies,
   listMCPServerInstances,
   listMCPServers,
   listModelInstances,
@@ -17,12 +18,18 @@ import type {
 } from "@/lib/api";
 import type { AgentFormValues } from "../create/types";
 import { fromAgent } from "./agentContract";
+import {
+  workspaceToolVerdicts,
+  type WorkspaceToolVerdicts,
+} from "./workspaceToolPolicy";
 
 export interface AgentData {
   mcpServers: MCPServer[];
   llmModelInstances: ModelInstance[];
   mcpInstanceList: MCPServerInstance[];
   builtinTools: unknown[];
+  /** What the workspace denies or holds for approval, whatever the agent sets. */
+  toolVerdicts: WorkspaceToolVerdicts;
 }
 
 export interface AgentEditData extends AgentData {
@@ -61,11 +68,23 @@ export async function loadAgentData(): Promise<AgentData> {
   const codeToolsResponse = await listAllTools({ include: "code" });
   const builtinTools = codeToolsResponse.data || [];
 
+  // Without them the editor shows no workspace verdicts; the runtime still applies them.
+  const toolPolicies = await listMCPInstanceToolPolicies();
+  if (toolPolicies.error) {
+    console.error(
+      "Failed to load workspace tool policies:",
+      toolPolicies.error
+    );
+  }
+
   return {
     mcpServers,
     llmModelInstances,
     mcpInstanceList,
     builtinTools,
+    toolVerdicts: toolPolicies.data
+      ? workspaceToolVerdicts(toolPolicies.data)
+      : {},
   };
 }
 

@@ -1,9 +1,11 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { ShieldCheck } from "lucide-react";
+import { EFFECT_STYLES } from "@/app/w/[workspace]/(main)/policies/components/policy-effects";
 import { Checkbox } from "@/components/ui/checkbox";
 import Divider from "@/components/ui/divider";
 import { cn } from "@/lib/utils";
+import type { WorkspaceToolVerdict } from "../../shared/workspaceToolPolicy";
 
 export interface Method {
   name: string;
@@ -26,6 +28,41 @@ export interface MethodsListProps {
   label?: string;
   /** Two columns on a wide screen, where the list has the room. */
   wide?: boolean;
+  /**
+   * What the workspace denies or holds for approval, by item name. Such an
+   * item shows the workspace's verdict instead of its own approval toggle:
+   * the agent cannot loosen it.
+   */
+  workspaceVerdicts?: Record<string, WorkspaceToolVerdict>;
+}
+
+/**
+ * The workspace's verdict on a tool, where the approval toggle would be: set on
+ * the connection's Tools tab or in Govern, and stronger than the agent's own.
+ */
+function WorkspaceVerdictChip({ verdict }: { verdict: WorkspaceToolVerdict }) {
+  const t = useTranslations("MethodsList");
+  const Icon = EFFECT_STYLES[verdict.effective].icon;
+  const denied = verdict.effective === "deny";
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 cursor-default items-center gap-1 rounded-full px-2 py-0.5 text-[10px]",
+        denied
+          ? "bg-muted text-muted-foreground"
+          : "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+      )}
+      title={[
+        denied ? t("workspaceDeniedHint") : t("workspaceApprovalHint"),
+        verdict.reason,
+      ]
+        .filter(Boolean)
+        .join("\n")}
+    >
+      <Icon className="h-3 w-3" />
+      {denied ? t("workspaceDenied") : t("workspaceApproval")}
+    </span>
+  );
 }
 
 export const MethodsList: React.FC<MethodsListProps> = ({
@@ -40,6 +77,7 @@ export const MethodsList: React.FC<MethodsListProps> = ({
   onApprovalToggle,
   label,
   wide = false,
+  workspaceVerdicts,
 }) => {
   const t = useTranslations("MethodsList");
 
@@ -86,6 +124,7 @@ export const MethodsList: React.FC<MethodsListProps> = ({
           const methodId = `${toolName}-${method.name}`;
           const isChecked = selectedMethods[method.name] === true;
           const needsApproval = approvalStates?.[method.name] === true;
+          const verdict = workspaceVerdicts?.[method.name];
 
           return (
             <div
@@ -121,25 +160,32 @@ export const MethodsList: React.FC<MethodsListProps> = ({
                   </span>
                 )}
               </label>
-              {onApprovalToggle && isChecked && (
-                <button
-                  type="button"
-                  className={cn(
-                    "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] transition-colors",
-                    needsApproval
-                      ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                      : "bg-muted/40 text-muted-foreground hover:bg-primary/10 hover:text-primary"
-                  )}
-                  onClick={() => onApprovalToggle(method.name, !needsApproval)}
-                  title={
-                    needsApproval
-                      ? t("approvalRequiredHint")
-                      : t("autoApprovedHint")
-                  }
-                >
-                  <ShieldCheck className="h-3 w-3" />
-                  {needsApproval ? t("approvalRequired") : t("autoApproved")}
-                </button>
+              {verdict ? (
+                <WorkspaceVerdictChip verdict={verdict} />
+              ) : (
+                onApprovalToggle &&
+                isChecked && (
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] transition-colors",
+                      needsApproval
+                        ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                        : "bg-muted/40 text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                    )}
+                    onClick={() =>
+                      onApprovalToggle(method.name, !needsApproval)
+                    }
+                    title={
+                      needsApproval
+                        ? t("approvalRequiredHint")
+                        : t("autoApprovedHint")
+                    }
+                  >
+                    <ShieldCheck className="h-3 w-3" />
+                    {needsApproval ? t("approvalRequired") : t("autoApproved")}
+                  </button>
+                )
               )}
             </div>
           );

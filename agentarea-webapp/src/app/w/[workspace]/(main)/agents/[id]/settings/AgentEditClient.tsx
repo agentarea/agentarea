@@ -1,18 +1,19 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+import { Sparkles } from "lucide-react";
 import type {
   McpServerInstanceResponse,
   McpServerResponse,
   ModelInstanceResponse,
 } from "@/api/client/types.gen";
-import { useTranslations } from "next-intl";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { Sparkles } from "lucide-react";
 import { ChatWelcome } from "@/components/Chat/componets/ChatWelcome";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import type { AgentFormValues } from "../../create/types";
 import AgentForm from "../../shared/AgentForm";
 import type { A2AAccess } from "../../shared/AgentForm";
 import type { DelegationData } from "../../shared/useAgentData";
+import type { WorkspaceToolVerdicts } from "../../shared/workspaceToolPolicy";
 import { updateAgentSettings } from "./actions";
 
 type MCPServer = McpServerResponse;
@@ -25,6 +26,7 @@ interface AgentEditClientProps {
   llmModelInstances: LLMModelInstance[];
   mcpInstanceList: McpServerInstanceResponse[];
   builtinTools: unknown[];
+  toolVerdicts: WorkspaceToolVerdicts;
   initialData: Partial<AgentFormValues>;
   delegation: DelegationData;
   a2aAccess: A2AAccess | null;
@@ -37,6 +39,7 @@ export default function AgentEditClient({
   llmModelInstances,
   mcpInstanceList,
   builtinTools,
+  toolVerdicts,
   initialData,
   delegation,
   a2aAccess,
@@ -72,6 +75,7 @@ export default function AgentEditClient({
       llmModelInstances={llmModelInstances}
       mcpInstanceList={mcpInstanceList}
       builtinTools={builtinTools}
+      toolVerdicts={toolVerdicts}
       initialData={initialData}
       agentId={agentId}
       delegation={delegation}

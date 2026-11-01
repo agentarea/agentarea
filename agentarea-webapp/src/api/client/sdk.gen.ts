@@ -588,6 +588,9 @@ import type {
   ListMcpServerInstancesV1McpServerInstancesGetData,
   ListMcpServerInstancesV1McpServerInstancesGetErrors,
   ListMcpServerInstancesV1McpServerInstancesGetResponses,
+  ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetData,
+  ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetErrors,
+  ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetResponses,
   ListMcpServersV1McpServersGetData,
   ListMcpServersV1McpServersGetErrors,
   ListMcpServersV1McpServersGetResponses,
@@ -5701,6 +5704,40 @@ export const getContainersHealthV1McpServerInstancesHealthContainersGet = <
     url: "/v1/workspaces/{workspace}/mcp-server-instances/health/containers",
     ...options,
   });
+
+/**
+ * List Mcp Server Instance Tool Policies
+ *
+ * Each connection's tools with their workspace default and verdict, in one read.
+ *
+ * What the agent editor shows beside the tools of every server it can attach.
+ */
+export const listMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGet =
+  <ThrowOnError extends boolean = false>(
+    options?: Options<
+      ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetResponses,
+    ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetErrors,
+    ThrowOnError
+  > =>
+    (options?.client ?? client).get<
+      ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetResponses,
+      ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/mcp-server-instances/tool-policies",
+      ...options,
+    });
 
 /**
  * Validate Instance Spec

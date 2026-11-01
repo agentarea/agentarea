@@ -1012,6 +1012,7 @@ const ToolConfig = ({
                 >
                   <McpToolSettings
                     id={key}
+                    instanceId={trigger.id}
                     tools={tools}
                     allowed={allowed}
                     onAllToolsChange={(all) =>
