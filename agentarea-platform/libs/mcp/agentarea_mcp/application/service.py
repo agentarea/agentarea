@@ -96,7 +96,9 @@ from agentarea_mcp.tool_timeout import (
     tool_timeout_seconds,
 )
 from agentarea_mcp.transport_spec import (
+    image_serves_stdio,
     instance_transport_spec,
+    merge_transport_spec,
     server_transport,
     server_transport_spec,
 )
@@ -721,6 +723,15 @@ class MCPServerInstanceService:
 
             instance_spec = _instance_owned_spec(submitted_spec)
             instance_spec.pop(CONTEXT_SIGNING_FLAG, None)
+            merged_spec = merge_transport_spec(transport_spec, instance_spec, instance_type)
+            if instance_type == MCPTransport.DOCKER and image_serves_stdio(merged_spec):
+                image = merged_spec.get("image")
+                raise MCPValidationError(
+                    [
+                        f"Image '{image}' speaks stdio; an image runs only when it serves MCP "
+                        + "over HTTP on a port, so use the server's npm or PyPI package instead"
+                    ]
+                )
             timeout_error = tool_timeout_error(instance_spec)
             if timeout_error:
                 raise MCPValidationError([timeout_error])

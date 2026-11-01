@@ -55,6 +55,9 @@ func (p *DockerProvider) CreateInstance(ctx context.Context, instance *models.MC
 		slog.String("instance_id", instance.InstanceID),
 		slog.String("name", instance.Name))
 
+	if err := refuseStdioImage(instance.JSONSpec); err != nil {
+		return err
+	}
 	resolvedSpec, err := resolveInstanceSpecSecrets(p.secretResolver, instance.InstanceID, instance.JSONSpec)
 	if err != nil {
 		p.logger.Error("Failed to resolve MCP instance environment",
