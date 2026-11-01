@@ -62,14 +62,22 @@ should have been passed so a same-platform agent would use the local binding.
 
 With an `a2a_url`, nothing is looked up on this platform: the tool config's
 `name` is only the label the model sees, and the description comes from
-`settings.description_override`. Without one, the target is resolved by name in
-the caller's workspace.
+`settings.description_override`. Without one, the target is the workspace
+agent whose id is in `settings.agent_id`; the `name` is again only the label.
+Agent names are not unique, so a delegate is never resolved by name at run
+time: two agents may carry a name, and resolving it would reach whichever was
+created last.
 
 Delegates are checked when the agent is saved, not when it is read, so a stored
-config that no longer passes still loads. Saving is refused with `400
-invalid_delegate` when a local delegate names no agent in the workspace, an
-`a2a_url` is not an http(s) URL with a host, or two delegates' names sanitize
-to the same tool name.
+config that no longer passes still loads. Saving binds a local delegate to its
+agent: a given `settings.agent_id` must name a live agent in the workspace, and
+a delegate given by name alone is bound only when exactly one live agent there
+carries the name. Saving is refused with `400 invalid_delegate` when a local
+delegate names no agent, names one several agents share, or sets both
+`agent_id` and `a2a_url`; when an `a2a_url` is not an http(s) URL with a host;
+or when two delegates' names sanitize to the same tool name. A delegate stored
+before ids were kept, whose name several agents share, is offered to no one
+until its agent is saved with the delegate chosen again.
 
 The tool name is derived from that name, sanitized to `delegate_to_<name>`, and
 both bindings produce the same one-parameter schema: a `message` string.

@@ -8,6 +8,10 @@ import pytest
 
 from agentarea_agents_sdk.tools.tool_manager import ToolManager
 
+from uuid import UUID
+
+AGENT_ID = "6f0c3e2a-1b2c-4d5e-8f90-123456789abc"
+
 
 def _make_mock_agent(agent_id="agent-123", name="researcher", description="Researches topics"):
     return SimpleNamespace(id=agent_id, name=name, description=description)
@@ -20,11 +24,11 @@ class TestToolManagerAgentDiscovery:
     async def test_agent_tool_added_to_discovered_tools(self):
         """Agent tools should be discovered and added via AgentToolFactory."""
         agent_service = AsyncMock()
-        agent_service.get_by_name = AsyncMock(return_value=_make_mock_agent())
+        agent_service.get = AsyncMock(return_value=_make_mock_agent())
         mcp_service = AsyncMock()
 
         tools_config = [
-            {"type": "agent", "name": "researcher", "settings": {}},
+            {"type": "agent", "name": "researcher", "settings": {"agent_id": AGENT_ID}},
         ]
 
         manager = ToolManager()
@@ -42,7 +46,7 @@ class TestToolManagerAgentDiscovery:
         ]
         assert len(agent_tool_defs) == 1
         assert agent_tool_defs[0]["function"]["name"] == "delegate_to_researcher"
-        agent_service.get_by_name.assert_awaited_once_with("researcher")
+        agent_service.get.assert_awaited_once_with(UUID(AGENT_ID))
 
     @pytest.mark.asyncio
     async def test_agent_tool_skipped_without_agent_service(self):
@@ -50,7 +54,7 @@ class TestToolManagerAgentDiscovery:
         mcp_service = AsyncMock()
 
         tools_config = [
-            {"type": "agent", "name": "researcher", "settings": {}},
+            {"type": "agent", "name": "researcher", "settings": {"agent_id": AGENT_ID}},
         ]
 
         manager = ToolManager()
@@ -74,7 +78,7 @@ class TestToolManagerAgentDiscovery:
         mcp_service = AsyncMock()
 
         tools_config = [
-            {"type": "agent", "name": "researcher", "settings": {}},
+            {"type": "agent", "name": "researcher", "settings": {"agent_id": AGENT_ID}},
         ]
 
         manager = ToolManager()
@@ -95,7 +99,7 @@ class TestToolManagerAgentDiscovery:
     async def test_agent_tool_with_settings(self):
         """Agent tools should pass settings like a2a_url and description_override."""
         agent_service = AsyncMock()
-        agent_service.get_by_name = AsyncMock(return_value=_make_mock_agent())
+        agent_service.get = AsyncMock(return_value=_make_mock_agent())
         mcp_service = AsyncMock()
 
         tools_config = [
@@ -174,12 +178,12 @@ class TestToolManagerAgentDiscovery:
     async def test_mixed_tool_types(self):
         """Mixed code and agent tools should both be processed."""
         agent_service = AsyncMock()
-        agent_service.get_by_name = AsyncMock(return_value=_make_mock_agent())
+        agent_service.get = AsyncMock(return_value=_make_mock_agent())
         mcp_service = AsyncMock()
 
         tools_config = [
             {"type": "code", "name": "file_tools", "settings": {}},
-            {"type": "agent", "name": "researcher", "settings": {}},
+            {"type": "agent", "name": "researcher", "settings": {"agent_id": AGENT_ID}},
         ]
 
         manager = ToolManager()

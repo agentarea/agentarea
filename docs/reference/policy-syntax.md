@@ -110,15 +110,18 @@ tools the tool is then denied.
 |---|---|---|
 | MCP | `mcp:<instance id>:<tool>` | The LLM-facing `mcp__<server>__<tool>`, `mcp:<instance name>:<tool>`, the raw `<tool>` the server advertises |
 | OpenAPI operation | `openapi:<connection id>:<tool>` | The LLM-facing operation name, the spec's `operationId`, the connection's name and its id alone |
-| Built-in, platform or delegate tool | The LLM-facing name | Its config name (a code toolset's namespace, a delegate's agent name) |
+| Delegate to a workspace agent | `agent:<agent id>` | The LLM-facing `delegate_to_<name>` and the delegate's name |
+| Delegate to a remote agent | `a2a:<agent address>` | The LLM-facing `delegate_to_<name>` and the delegate's name |
+| Built-in or platform tool | The LLM-facing name | Its config name (a code toolset's namespace) |
 
 Connection names are not unique, and any workspace member can add a connection
 and choose its name, its server's tool names and its OpenAPI `operationId`s. An
 `allow` that matched those names would admit every connection that reused them.
 To allow a connection tool, name it as `tool:mcp:<instance id>:<tool>` or
 `tool:openapi:<connection id>:<tool>`; the connection's page shows the id.
-A delegate tool is still allowed by its name, which comes from the delegated
-agent's name.
+A delegate's tool name comes from an agent name, which any member chooses and
+which is not unique either, so a delegate is allowed as
+`tool:agent:<agent id>`, or a remote one as `tool:a2a:<agent address>`.
 
 ### Params by effect
 

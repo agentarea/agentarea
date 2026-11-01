@@ -30,6 +30,7 @@ from .budget import BudgetMixin
 from .patches import (
     APPROVAL_RESPONSE_ONCE_PATCH,
     CONNECTION_NAMES_NARROW_PATCH,
+    DELEGATES_BY_ID_PATCH,
     REFUSED_TOOL_CALL_ANNOUNCED_PATCH,
     TOOL_CONFIG_ALIASES_PATCH,
     WEB_FETCH_SEEN_URL_PATCH,
@@ -65,6 +66,10 @@ class ToolApprovalMixin(BudgetMixin):
         """
         return workflow.patched(CONNECTION_NAMES_NARROW_PATCH)
 
+    def _delegates_by_id(self) -> bool:
+        """Whether a delegate is allowed only by its agent in this run (DELEGATES_BY_ID_PATCH)."""
+        return workflow.patched(DELEGATES_BY_ID_PATCH)
+
     def _tool_policy_names(self, tool_name: str) -> ToolPolicyNames:
         """Every name a rule may give this tool, and which of them may allow it."""
         return tool_policy_names(
@@ -72,6 +77,7 @@ class ToolApprovalMixin(BudgetMixin):
             self.state.mcp_tool_routes,
             *self._policy_tool_configs(),
             connection_names_narrow=self._connection_names_narrow(),
+            delegates_by_id=self._delegates_by_id(),
         )
 
     def _announce_tool_call(self, tool_call: ToolCall) -> None:

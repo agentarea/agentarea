@@ -264,7 +264,8 @@ async def get_network_topology(
     edges: list[NetworkEdge] = []
 
     # --- Lookup maps for resolving agent.tools references ---
-    agent_name_to_id: dict[str, str] = {a.name: str(a.id) for a in agents}
+    # A delegate names its agent by id: names are not unique.
+    live_agent_ids: set[str] = {str(a.id) for a in agents}
     openapi_name_to_id: dict[str, str] = {c.name: str(c.id) for c in openapi_connections}
     openapi_id_set: set[str] = {str(c.id) for c in openapi_connections}
 
@@ -359,8 +360,10 @@ async def get_network_topology(
                 settings = tool.get("settings") or {}
 
                 if tool_type == "agent":
-                    target_name = tool.get("name")
-                    target_id = agent_name_to_id.get(target_name) if target_name else None
+                    bound = settings.get("agent_id")
+                    target_id = (
+                        bound if isinstance(bound, str) and bound in live_agent_ids else None
+                    )
                     if target_id and target_id != agent_id and target_id not in seen_delegates:
                         seen_delegates.add(target_id)
                         edges.append(

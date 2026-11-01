@@ -152,3 +152,9 @@ LENGTH_CONTINUATION_PATCH = "length-continuation-v1"
 # Before, an allowlist naming a connection by name admitted any connection a
 # member gave that name.
 CONNECTION_NAMES_NARROW_PATCH = "connection-names-only-narrow-v1"
+# A local delegate reaches the agent id it was saved with, and a remote one
+# (a2a_url) is never looked up among the workspace's agents. Before, every
+# delegate was resolved by name, so the newest agent under a name, or a local
+# agent sharing a remote delegate's name, took its delegations; and a
+# delegate's name could satisfy an allowlist.
+DELEGATES_BY_ID_PATCH = "delegates-by-id-v1"

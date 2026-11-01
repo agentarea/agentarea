@@ -174,11 +174,12 @@ describe("automation execution resources", () => {
     ]);
   });
 
-  it("resolves delegation by exact agent name and keeps remote bindings distinct", () => {
+  it("resolves delegation by the bound agent id, never by name, and keeps remote bindings distinct", () => {
     const result = buildExecutionResources({
       ...base,
       agents: [
         { ...agent, id: "reviewer-id", name: "Reviewer", slug: "reviewer" },
+        { ...agent, id: "impostor-id", name: "Reviewer", slug: "reviewer-2" },
       ],
       agent: {
         ...agent,
@@ -186,7 +187,10 @@ describe("automation execution resources", () => {
           {
             type: "agent",
             name: "Reviewer",
-            settings: { requires_user_confirmation: true },
+            settings: {
+              agent_id: "reviewer-id",
+              requires_user_confirmation: true,
+            },
           },
           { type: "agent", name: "reviewer" },
           {

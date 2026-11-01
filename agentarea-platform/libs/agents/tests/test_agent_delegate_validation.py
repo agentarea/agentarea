@@ -213,13 +213,55 @@ async def test_a_local_delegate_must_name_an_agent_here(session):
         )
 
 
-async def test_a_local_delegate_naming_an_agent_here_is_kept(session):
+async def test_a_local_delegate_naming_an_agent_here_is_kept_with_its_id(session):
     service = _service(session, admin=False)
     target = await service.create_agent(_create([]))
 
     agent = await service.create_agent(_create([{"type": "agent", "name": target.name}]))
 
-    assert agent.tools == [{"type": "agent", "name": target.name}]
+    assert agent.tools == [
+        {"type": "agent", "name": target.name, "settings": {"agent_id": str(target.id)}}
+    ]
+
+
+async def test_a_name_two_agents_share_does_not_pick_one(session):
+    # Agent names are not unique: any member can create an agent under the
+    # name of one another agent delegates to, so a name alone is refused.
+    service = _service(session, admin=False)
+    shared = AgentCreate(name="reviewer", description="", instruction="", tools=[])
+    await service.create_agent(shared)
+    await service.create_agent(shared)
+
+    with pytest.raises(InvalidDelegateError, match="agent_id"):
+        await service.create_agent(_create([{"type": "agent", "name": "reviewer"}]))
+
+
+async def test_a_delegate_bound_by_id_keeps_its_agent_when_another_takes_the_name(session):
+    service = _service(session, admin=False)
+    target = await service.create_agent(
+        AgentCreate(name="reviewer", description="", instruction="", tools=[])
+    )
+    delegate = {"type": "agent", "name": "reviewer", "settings": {"agent_id": str(target.id)}}
+    await service.create_agent(AgentCreate(name="reviewer", description="", instruction="", tools=[]))
+
+    agent = await service.create_agent(_create([delegate]))
+
+    assert agent.tools[0]["settings"]["agent_id"] == str(target.id)
+
+
+async def test_a_delegate_bound_to_no_agent_here_is_refused(session):
+    tool = {"type": "agent", "name": "ghost", "settings": {"agent_id": str(uuid4())}}
+
+    with pytest.raises(InvalidDelegateError, match="ghost"):
+        await _service(session, admin=True).create_agent(_create([tool]))
+
+
+async def test_a_remote_delegate_names_no_local_agent(session):
+    tool = _remote(secret=None)
+    tool["settings"]["agent_id"] = str(uuid4())
+
+    with pytest.raises(InvalidDelegateError, match="agent_id"):
+        await _service(session, admin=True).create_agent(_create([tool]))
 
 
 async def test_delegates_whose_tool_names_collide_are_refused(session):

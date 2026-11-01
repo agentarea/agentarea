@@ -69,6 +69,7 @@ _APPROVER = "approver-1"
 _GATED_TOOL = "deploy_service"
 _HELPER_AGENT = "Helper"
 _DELEGATE_TOOL = f"delegate_to_{_HELPER_AGENT}"
+_HELPER_AGENT_ID = "0d6a1f2e-3b4c-4d5e-9f60-7a8b9c0d1e2f"
 _CODE_TOOL = "shell"
 _CODE_TOOLSET = "agentarea/shell"
 # An OpenAPI attachment with allowed_tools unset: its config does not list the
@@ -115,7 +116,7 @@ async def _mock_build_config(request: AgentConfigRequest) -> dict[str, Any]:
         "instruction": "Be helpful.",
         "tools_config": {"mcp_servers": []},
         "tools": [
-            {"type": "agent", "name": _HELPER_AGENT},
+            {"type": "agent", "name": _HELPER_AGENT, "settings": {"agent_id": _HELPER_AGENT_ID}},
             {"type": "code", "name": _CODE_TOOLSET},
             {
                 "type": "openapi",
@@ -164,7 +165,8 @@ async def _mock_resolve_model(request: ResolveModelRequest) -> dict[str, Any]:
 
 @activity.defn(name="resolve_agent_tools_activity")
 async def _mock_resolve_agent_tools(request: ResolveAgentToolsRequest) -> ResolveAgentToolsResult:
-    return ResolveAgentToolsResult(agent_map={_HELPER_AGENT: str(uuid.uuid4())})
+    # As the activity does: a delegate reaches the agent id it was saved with.
+    return ResolveAgentToolsResult(agent_map=dict(request.agent_ids))
 
 
 @activity.defn(name="create_delegation_task_activity")

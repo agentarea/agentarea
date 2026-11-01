@@ -191,6 +191,7 @@ class AgentToolBuilder(ToolBuilder):
             task_service=ctx.task_service,
             workspace_id=ctx.workspace_id,
             user_id=ctx.user_id,
+            agent_id=spec.settings.get("agent_id"),
         )
         if not tool:
             return []
