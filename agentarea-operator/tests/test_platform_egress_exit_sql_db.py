@@ -52,24 +52,24 @@ def _row(module, exit_id):
 
 
 def test_a_platform_exit_lands_in_the_platform_workspace_under_its_derived_id(handler):
-    exit_id = handler.sync_platform_egress_exit({"name": NAME, "via": "aeza", "remoteDns": True})
+    exit_id = handler.sync_platform_egress_exit({"name": NAME, "via": "hop-a", "remoteDns": True})
 
     row = _row(handler, exit_id)
     assert exit_id == handler.platform_egress_exit_id(NAME)
     assert (row.workspace_id, row.managed_by, row.via, row.remote_dns, row.upstream_url) == (
         "platform",
         "platform",
-        "aeza",
+        "hop-a",
         True,
         None,
     )
 
 
 def test_a_reconcile_of_an_unchanged_exit_writes_nothing_and_a_change_lands(handler):
-    exit_id = handler.sync_platform_egress_exit({"name": NAME, "via": "aeza"})
+    exit_id = handler.sync_platform_egress_exit({"name": NAME, "via": "hop-a"})
     first = _row(handler, exit_id)
 
-    handler.sync_platform_egress_exit({"name": NAME, "via": "aeza"})
+    handler.sync_platform_egress_exit({"name": NAME, "via": "hop-a"})
     assert _row(handler, exit_id).updated_at == first.updated_at
 
     handler.sync_platform_egress_exit({"name": NAME, "via": "other-hop"})

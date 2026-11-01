@@ -93,7 +93,7 @@ def _repo(s: AsyncSession, workspace_id: str = TENANT) -> EgressExitRepository:
 async def test_a_workspace_sees_its_own_exits_and_the_platforms_and_no_others(session):
     own = await _exit(session, TENANT)
     platform = await _exit(
-        session, PLATFORM_WORKSPACE_ID, managed_by="platform", upstream_url=None, via="aeza"
+        session, PLATFORM_WORKSPACE_ID, managed_by="platform", upstream_url=None, via="hop-a"
     )
     foreign = await _exit(session, OTHER)
 
@@ -107,7 +107,7 @@ async def test_a_workspace_sees_its_own_exits_and_the_platforms_and_no_others(se
 
 async def test_no_tenant_edits_or_deletes_a_platform_exit(session):
     platform = await _exit(
-        session, PLATFORM_WORKSPACE_ID, managed_by="platform", upstream_url=None, via="aeza"
+        session, PLATFORM_WORKSPACE_ID, managed_by="platform", upstream_url=None, via="hop-a"
     )
 
     with workspace_scope(TENANT):
@@ -137,5 +137,5 @@ async def test_the_instances_bound_to_an_exit_are_the_workspaces_own(session):
 
 async def test_only_a_platform_exit_may_leave_without_an_upstream(session):
     with pytest.raises(IntegrityError, match="ck_egress_exits_route"):
-        await _exit(session, TENANT, upstream_url=None, via="aeza")
+        await _exit(session, TENANT, upstream_url=None, via="hop-a")
     await session.rollback()

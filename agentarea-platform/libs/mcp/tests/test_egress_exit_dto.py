@@ -86,7 +86,7 @@ def test_an_instance_binds_an_exit_by_id():
     }
 
 
-@pytest.mark.parametrize("value", ["aeza-se", "", 123, {"id": "x"}])
+@pytest.mark.parametrize("value", ["exit-a", "", 123, {"id": "x"}])
 def test_an_instance_naming_an_exit_any_other_way_is_refused(value):
     with pytest.raises(ValidationError, match="egress exit id"):
         MCPServerInstanceCreate(name="i", server_spec_id=uuid4(), json_spec={"egress_exit": value})

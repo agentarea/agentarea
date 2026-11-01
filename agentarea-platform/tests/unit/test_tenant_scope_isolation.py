@@ -354,7 +354,7 @@ async def test_platform_rows_are_read_from_every_workspace(backend: Backend) -> 
         created_by="operator",
         managed_by=MANAGED_BY_PLATFORM,
         upstream_url=None,
-        via="aeza",
+        via="hop-a",
     )
     tenant_exit = await backend.write(EgressExit.__table__, workspace_id=WS_A, created_by="owner")
     config = await backend.write(
