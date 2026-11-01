@@ -22,6 +22,7 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.workspaces.lookup import workspace_slug_for
+from agentarea_mcp.application.validation_service import MCPValidationError
 from agentarea_mcp.schemas.dto import (
     MCPServerCreate,
     MCPServerInstanceCreate,
@@ -675,7 +676,10 @@ class MCPServersToolset(Toolset):
                 event_broker=event_broker,
                 secret_manager=secret_mgr,
             )
-            instance = await service.create_instance(payload)
+            try:
+                instance = await service.create_instance(payload)
+            except MCPValidationError as exc:
+                raise ToolError("; ".join(exc.errors)) from exc
             if not instance:
                 raise ToolError("Failed to create MCP server instance")
             action = await _connect_action(session, service, user_ctx, instance, probe=True)
@@ -751,7 +755,10 @@ class MCPServersToolset(Toolset):
                 event_broker=event_broker,
                 secret_manager=secret_mgr,
             )
-            instance = await service.update_instance(UUID(instance_id), payload)
+            try:
+                instance = await service.update_instance(UUID(instance_id), payload)
+            except MCPValidationError as exc:
+                raise ToolError("; ".join(exc.errors)) from exc
             if not instance:
                 raise ToolError("MCP server instance not found")
             action = await _connect_action(session, service, user_ctx, instance, probe=True)
