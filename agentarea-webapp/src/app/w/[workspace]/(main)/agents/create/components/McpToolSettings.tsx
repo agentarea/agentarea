@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Switch } from "@/components/ui/switch";
 import type { McpAvailableTool } from "@/lib/mcp/resolveMcpRef";
+import { useWorkspaceToolVerdicts } from "../../shared/WorkspaceToolVerdicts";
 import type { MCPToolConfig } from "../types";
 import { MethodsList } from "./MethodsList";
 
@@ -25,12 +26,15 @@ export function enabledMcpToolCount(
  */
 export function McpToolSettings({
   id,
+  instanceId,
   tools,
   allowed,
   onAllToolsChange,
   onToolStateChange,
 }: {
   id: string;
+  /** The connection the tools belong to, for the workspace's verdicts on them. */
+  instanceId: string;
   tools: McpAvailableTool[];
   /** null: every tool, including ones the server adds later. */
   allowed: MCPToolConfig[] | null;
@@ -39,6 +43,7 @@ export function McpToolSettings({
 }) {
   const t = useTranslations("AgentsPage");
   const tMethods = useTranslations("MethodsList");
+  const workspaceVerdicts = useWorkspaceToolVerdicts(instanceId);
 
   const enabled = (name: string) =>
     allowed === null || allowed.some((config) => config.tool_name === name);
@@ -88,6 +93,7 @@ export function McpToolSettings({
               requiresApproval ? "approval_required" : "enabled"
             )
           }
+          workspaceVerdicts={workspaceVerdicts}
           label={tMethods("availableTools", {
             enabled: enabledMcpToolCount(tools, allowed),
             total: tools.length,

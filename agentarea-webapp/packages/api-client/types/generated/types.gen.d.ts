@@ -3835,6 +3835,19 @@ export type McpInstanceToolPolicies = {
     tools: Array<McpInstanceToolPolicy>;
 };
 /**
+ * MCPInstanceToolPoliciesOfInstance
+ */
+export type McpInstanceToolPoliciesOfInstance = {
+    /**
+     * Instance Id
+     */
+    instance_id: string;
+    /**
+     * Tools
+     */
+    tools: Array<McpInstanceToolPolicy>;
+};
+/**
  * MCPInstanceToolPolicy
  *
  * One tool of a connection: its workspace default and the workspace's verdict on it.
@@ -4282,6 +4295,15 @@ export type McpServerUpdate = {
  * How a connection is reached: the instance's ``transport`` column, set once at creation.
  */
 export type McpTransport = 'url' | 'docker' | 'command' | 'bundle';
+/**
+ * MCPWorkspaceToolPolicies
+ */
+export type McpWorkspaceToolPolicies = {
+    /**
+     * Instances
+     */
+    instances: Array<McpInstanceToolPoliciesOfInstance>;
+};
 /**
  * MPPConfigSchema
  */
@@ -14212,6 +14234,26 @@ export type GetContainersHealthV1McpServerInstancesHealthContainersGetResponses 
     200: McpContainersHealthResponse;
 };
 export type GetContainersHealthV1McpServerInstancesHealthContainersGetResponse = GetContainersHealthV1McpServerInstancesHealthContainersGetResponses[keyof GetContainersHealthV1McpServerInstancesHealthContainersGetResponses];
+export type ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/mcp-server-instances/tool-policies';
+};
+export type ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetError = ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetErrors[keyof ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetErrors];
+export type ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: McpWorkspaceToolPolicies;
+};
+export type ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetResponse = ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetResponses[keyof ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetResponses];
 export type ValidateInstanceSpecV1McpServerInstancesValidatePostData = {
     body: ValidateRequest;
     path?: never;

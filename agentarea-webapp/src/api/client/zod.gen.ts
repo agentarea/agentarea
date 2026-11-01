@@ -1392,6 +1392,14 @@ export const zMcpInstanceToolPolicies = z.object({
 });
 
 /**
+ * MCPInstanceToolPoliciesOfInstance
+ */
+export const zMcpInstanceToolPoliciesOfInstance = z.object({
+  instance_id: z.uuid(),
+  tools: z.array(zMcpInstanceToolPolicy),
+});
+
+/**
  * MCPServerCreate
  *
  * Payload for creating an MCP server spec (catalog template).
@@ -1539,6 +1547,13 @@ export const zMcpServerInstanceResponse = z.object({
   transport: zMcpTransport,
   updated_at: z.iso.datetime(),
   verification: z.record(z.string(), z.unknown()),
+});
+
+/**
+ * MCPWorkspaceToolPolicies
+ */
+export const zMcpWorkspaceToolPolicies = z.object({
+  instances: z.array(zMcpInstanceToolPoliciesOfInstance),
 });
 
 /**
@@ -6046,6 +6061,12 @@ export const zCheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostBo
  */
 export const zGetContainersHealthV1McpServerInstancesHealthContainersGetResponse =
   zMcpContainersHealthResponse;
+
+/**
+ * Successful Response
+ */
+export const zListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetResponse =
+  zMcpWorkspaceToolPolicies;
 
 export const zValidateInstanceSpecV1McpServerInstancesValidatePostBody =
   zValidateRequest;

@@ -73,6 +73,8 @@ import { toAnswerCheckForm } from "./agentContract";
 import { useChat } from "./ChatContext";
 import { delegatesOf, withDelegates } from "./delegationTools";
 import type { DelegationData } from "./useAgentData";
+import type { WorkspaceToolVerdicts } from "./workspaceToolPolicy";
+import { WorkspaceToolVerdictsProvider } from "./WorkspaceToolVerdicts";
 
 type MCPServer = McpServerResponse;
 type LLMModelInstance = ModelInstanceResponse;
@@ -85,6 +87,8 @@ interface AgentFormProps {
   llmModelInstances: LLMModelInstance[];
   mcpInstanceList: McpServerInstanceResponse[];
   builtinTools: unknown[];
+  /** What the workspace denies or holds for approval, shown beside each tool. */
+  toolVerdicts: WorkspaceToolVerdicts;
   initialData?: Partial<AgentFormValues>;
   agentId?: string;
   delegation: DelegationData;
@@ -120,6 +124,7 @@ export default function AgentForm({
   llmModelInstances,
   mcpInstanceList,
   builtinTools,
+  toolVerdicts,
   initialData,
   agentId,
   delegation,
@@ -467,7 +472,7 @@ export default function AgentForm({
   );
 
   return (
-    <>
+    <WorkspaceToolVerdictsProvider verdicts={toolVerdicts}>
       <UnsavedChangesGuard isDirty={isDirty} />
       <ResizablePanelGroup
         direction="horizontal"
@@ -629,6 +634,6 @@ export default function AgentForm({
           </div>
         </SheetContent>
       </Sheet>
-    </>
+    </WorkspaceToolVerdictsProvider>
   );
 }

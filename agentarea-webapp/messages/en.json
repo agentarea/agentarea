@@ -6,7 +6,11 @@
     "approvalRequired": "Approval required",
     "autoApproved": "Auto",
     "approvalRequiredHint": "Requires human approval — click to auto-approve",
-    "autoApprovedHint": "Auto-approved — click to require approval"
+    "autoApprovedHint": "Auto-approved — click to require approval",
+    "workspaceDenied": "Denied in workspace",
+    "workspaceApproval": "Approval in workspace",
+    "workspaceDeniedHint": "The workspace policy denies this tool for every agent; the agent cannot call it. Set on the connection's Tools tab or in Govern.",
+    "workspaceApprovalHint": "The workspace policy holds every call of this tool for approval; the agent cannot turn it off. Set on the connection's Tools tab or in Govern."
   },
   "404": {
     "title": "Page not found",

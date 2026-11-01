@@ -1,16 +1,17 @@
 "use client";
 
+import React from "react";
 import type {
   AgentPresetResponse,
   McpServerInstanceResponse,
   McpServerResponse,
   ModelInstanceResponse,
 } from "@/api/client/types.gen";
-import React from "react";
 import type { StreamOptions } from "@/app/w/[workspace]/(main)/triggers/create/streamOptions";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import AgentForm from "../shared/AgentForm";
 import type { DelegationData } from "../shared/useAgentData";
+import type { WorkspaceToolVerdicts } from "../shared/workspaceToolPolicy";
 import { addAgent, type AddAgentFormState } from "./actions";
 import type { AgentFormValues } from "./types";
 
@@ -23,6 +24,7 @@ export default function CreateAgentClient({
   llmModelInstances,
   mcpInstanceList,
   builtinTools,
+  toolVerdicts,
   presets,
   streams,
   delegation,
@@ -32,6 +34,7 @@ export default function CreateAgentClient({
   llmModelInstances: LLMModelInstance[];
   mcpInstanceList: McpServerInstanceResponse[];
   builtinTools: unknown[];
+  toolVerdicts: WorkspaceToolVerdicts;
   presets: AgentPresetResponse[] | null;
   streams: StreamOptions;
   delegation: DelegationData;
@@ -57,6 +60,7 @@ export default function CreateAgentClient({
       llmModelInstances={llmModelInstances}
       mcpInstanceList={mcpInstanceList}
       builtinTools={builtinTools}
+      toolVerdicts={toolVerdicts}
       create={{ presets, streams }}
       delegation={delegation}
       initialData={{
@@ -64,7 +68,11 @@ export default function CreateAgentClient({
         description: "",
         instruction: "",
         model_id: "",
-        tools_config: { mcp_server_configs: [], builtin_tools: [], openapi_configs: [] },
+        tools_config: {
+          mcp_server_configs: [],
+          builtin_tools: [],
+          openapi_configs: [],
+        },
         planning: false,
         skills: [],
         triggers: [],

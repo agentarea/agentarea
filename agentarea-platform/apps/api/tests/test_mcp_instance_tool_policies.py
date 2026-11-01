@@ -61,6 +61,9 @@ class _InstanceService:
     async def get(self, instance_id: UUID):
         return self.instance if instance_id == INSTANCE_ID else None
 
+    async def list(self):
+        return [self.instance]
+
 
 def _member() -> UserContext:
     return UserContext(user_id="user-member", workspace_id=WORKSPACE)
@@ -213,5 +216,21 @@ async def test_an_allow_naming_the_connection_by_name_does_not_admit_its_tool(se
         )
         tools = _by_name(await _tool_policies(session))
 
+    assert tools["send"]["effective"] == "deny"
+    assert tools["read"]["effective"] == "allow"
+
+
+async def test_every_connections_verdicts_come_in_one_read(session_factory):
+    """The agent editor shows each attached server's workspace verdicts without a call per server."""
+    async with session_factory() as session:
+        await _seed(session, (f"tool:mcp:{INSTANCE_ID}:send", PolicyEffect.DENY, {}))
+        transport = ASGITransport(app=_app_for(session, _member()))
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/v1/workspaces/acme/mcp-server-instances/tool-policies")
+
+    assert response.status_code == 200, response.text
+    [instance] = response.json()["instances"]
+    assert instance["instance_id"] == str(INSTANCE_ID)
+    tools = {tool["name"]: tool for tool in instance["tools"]}
     assert tools["send"]["effective"] == "deny"
     assert tools["read"]["effective"] == "allow"

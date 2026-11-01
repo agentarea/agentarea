@@ -1692,11 +1692,13 @@ export const connectCatalogApi = async (
   body: CatalogConnectRequest
 ) => {
   const result =
-    await sdk.connectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPost({
-      client: serverClient,
-      path: { catalog_item_id: itemId },
-      body,
-    });
+    await sdk.connectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPost(
+      {
+        client: serverClient,
+        path: { catalog_item_id: itemId },
+        body,
+      }
+    );
   return withStatus(result);
 };
 
@@ -2207,6 +2209,14 @@ export const listPolicies = async (
     client: serverClient,
     query: params,
   });
+  return withStatus(result);
+};
+
+export const listMCPInstanceToolPolicies = async () => {
+  const result =
+    await sdk.listMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGet(
+      { client: serverClient }
+    );
   return withStatus(result);
 };
 

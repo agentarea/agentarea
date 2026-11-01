@@ -30,6 +30,7 @@ export default async function AgentEditContent({
       llmModelInstances={agentData.llmModelInstances}
       mcpInstanceList={agentData.mcpInstanceList}
       builtinTools={agentData.builtinTools}
+      toolVerdicts={agentData.toolVerdicts}
       initialData={agentData.initialData}
       delegation={delegation}
       a2aAccess={a2aAddress ? { address: a2aAddress, keys: agentKeys } : null}

@@ -17,6 +17,7 @@ from agentarea_api.api.v1.mcp_oauth_links import (
     OAuthLinkResponse,
     get_oauth_link_service,
 )
+from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import requires, requires_workspace_admin, unrestricted
 from agentarea_common.auth.tool_authorization import ToolAuthorizationAction, decide_tool_policy
@@ -439,6 +440,158 @@ async def list_mcp_server_instances(
     return response_instances
 
 
+ToolVerdict = Literal["allow", "approval", "deny"]
+
+_VERDICTS: dict[ToolAuthorizationAction, ToolVerdict] = {
+    ToolAuthorizationAction.ALLOW: "allow",
+    ToolAuthorizationAction.REQUIRE_APPROVAL: "approval",
+    ToolAuthorizationAction.DENY: "deny",
+}
+_STRICTNESS: dict[ToolVerdict, int] = {"allow": 0, "approval": 1, "deny": 2}
+
+
+class MCPInstanceToolPolicy(BaseModel):
+    """One tool of a connection: its workspace default and the workspace's verdict on it."""
+
+    name: str
+    # The workspace rule naming exactly this tool of this connection; none is allow.
+    # An approval rule that names its approvers is not a default: it was set elsewhere.
+    default: ToolVerdict
+    # What all of the workspace's rules make of the tool, as the tool PDP decides it.
+    effective: ToolVerdict
+    # The PDP's reason, when the effective verdict is stricter than the default.
+    reason: str | None = None
+
+
+class MCPInstanceToolPolicies(BaseModel):
+    tools: list[MCPInstanceToolPolicy]
+
+
+def _default_verdict(rules: list[PolicyRule], target: str) -> ToolVerdict:
+    effects = {
+        rule.effect
+        for rule in rules
+        if rule.target == target
+        and not rule.condition
+        and not (rule.effect == PolicyEffect.APPROVAL and (rule.params or {}).get("approvers"))
+    }
+    if PolicyEffect.DENY in effects:
+        return "deny"
+    if PolicyEffect.APPROVAL in effects:
+        return "approval"
+    return "allow"
+
+
+def tool_policies_for_instance(
+    instance_id: str,
+    instance_name: str | None,
+    tool_names: list[str],
+    workspace_rules: list[PolicyRule],
+    workspace_policy: dict[str, Any],
+) -> list[MCPInstanceToolPolicy]:
+    """Each tool's workspace default beside the verdict the workspace layer gives it.
+
+    The verdict is the one PDP's, over every name a rule may give the tool, so a
+    bare-name rule, a glob, an allowlist or an approval on every tool all count.
+    """
+    result: list[MCPInstanceToolPolicy] = []
+    for name in tool_names:
+        default = _default_verdict(workspace_rules, mcp_tool_rule_target(instance_id, name))
+        decision = decide_tool_policy(
+            workspace_policy,
+            mcp_tool_target(instance_id, name),
+            restricting_aliases=mcp_tool_narrowing_names(instance_name, name),
+        )
+        effective = _VERDICTS[decision.action]
+        stricter = _STRICTNESS[effective] > _STRICTNESS[default]
+        result.append(
+            MCPInstanceToolPolicy(
+                name=name,
+                default=default,
+                effective=effective,
+                reason=decision.reason if stricter else None,
+            )
+        )
+    return result
+
+
+def _instance_tool_names(instance: Any) -> list[str]:
+    """The names of the tools an instance advertises, each once."""
+    return list(
+        dict.fromkeys(
+            tool["name"]
+            for tool in instance.get_available_tools()
+            if isinstance(tool, dict) and isinstance(tool.get("name"), str) and tool["name"]
+        )
+    )
+
+
+async def _workspace_tool_policy(
+    session: AsyncSession, user_context: UserContext
+) -> tuple[list[PolicyRule], dict[str, Any]]:
+    """The workspace's enabled rules and its resolved policy layer, as the verdicts read them."""
+    repository_factory = RepositoryFactory(session, user_context)
+    workspace_rules = await GovernancePolicyService(repository_factory).list_rules(
+        subject_type=PolicySubjectType.WORKSPACE,
+        subject_id=user_context.workspace_id,
+        enabled=True,
+    )
+    try:
+        workspace_policy = await GovernancePolicyResolver(repository_factory).resolve(
+            workspace_id=user_context.workspace_id
+        )
+    except PolicyValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return workspace_rules, workspace_policy.to_json_dict()
+
+
+class MCPInstanceToolPoliciesOfInstance(BaseModel):
+    instance_id: UUID
+    tools: list[MCPInstanceToolPolicy]
+
+
+class MCPWorkspaceToolPolicies(BaseModel):
+    instances: list[MCPInstanceToolPoliciesOfInstance]
+
+
+# Declared before ``/{instance_id}``, which would otherwise take this path as an id.
+@router.get(
+    "/tool-policies",
+    response_model=MCPWorkspaceToolPolicies,
+    dependencies=[
+        unrestricted(
+            "workspace member; reads the workspace policy layer, as the effective-policy "
+            "preview does"
+        )
+    ],
+)
+async def list_mcp_server_instance_tool_policies(
+    user_context: UserContextDep,
+    session: DatabaseSessionDep,
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+) -> MCPWorkspaceToolPolicies:
+    """Each connection's tools with their workspace default and verdict, in one read.
+
+    What the agent editor shows beside the tools of every server it can attach.
+    """
+    workspace_rules, workspace_policy = await _workspace_tool_policy(session, user_context)
+    return MCPWorkspaceToolPolicies(
+        instances=[
+            MCPInstanceToolPoliciesOfInstance(
+                instance_id=instance.id,
+                tools=tool_policies_for_instance(
+                    str(instance.id),
+                    instance.name,
+                    _instance_tool_names(instance),
+                    workspace_rules,
+                    workspace_policy,
+                ),
+            )
+            for instance in await service.list()
+        ]
+    )
+
+
 @router.get(
     "/{instance_id}",
     response_model=MCPServerInstanceResponse,
@@ -564,81 +717,6 @@ async def list_mcp_server_instance_consumers(
     return consumers
 
 
-ToolVerdict = Literal["allow", "approval", "deny"]
-
-_VERDICTS: dict[ToolAuthorizationAction, ToolVerdict] = {
-    ToolAuthorizationAction.ALLOW: "allow",
-    ToolAuthorizationAction.REQUIRE_APPROVAL: "approval",
-    ToolAuthorizationAction.DENY: "deny",
-}
-_STRICTNESS: dict[ToolVerdict, int] = {"allow": 0, "approval": 1, "deny": 2}
-
-
-class MCPInstanceToolPolicy(BaseModel):
-    """One tool of a connection: its workspace default and the workspace's verdict on it."""
-
-    name: str
-    # The workspace rule naming exactly this tool of this connection; none is allow.
-    # An approval rule that names its approvers is not a default: it was set elsewhere.
-    default: ToolVerdict
-    # What all of the workspace's rules make of the tool, as the tool PDP decides it.
-    effective: ToolVerdict
-    # The PDP's reason, when the effective verdict is stricter than the default.
-    reason: str | None = None
-
-
-class MCPInstanceToolPolicies(BaseModel):
-    tools: list[MCPInstanceToolPolicy]
-
-
-def _default_verdict(rules: list[PolicyRule], target: str) -> ToolVerdict:
-    effects = {
-        rule.effect
-        for rule in rules
-        if rule.target == target
-        and not rule.condition
-        and not (rule.effect == PolicyEffect.APPROVAL and (rule.params or {}).get("approvers"))
-    }
-    if PolicyEffect.DENY in effects:
-        return "deny"
-    if PolicyEffect.APPROVAL in effects:
-        return "approval"
-    return "allow"
-
-
-def tool_policies_for_instance(
-    instance_id: str,
-    instance_name: str | None,
-    tool_names: list[str],
-    workspace_rules: list[PolicyRule],
-    workspace_policy: dict[str, Any],
-) -> list[MCPInstanceToolPolicy]:
-    """Each tool's workspace default beside the verdict the workspace layer gives it.
-
-    The verdict is the one PDP's, over every name a rule may give the tool, so a
-    bare-name rule, a glob, an allowlist or an approval on every tool all count.
-    """
-    result: list[MCPInstanceToolPolicy] = []
-    for name in tool_names:
-        default = _default_verdict(workspace_rules, mcp_tool_rule_target(instance_id, name))
-        decision = decide_tool_policy(
-            workspace_policy,
-            mcp_tool_target(instance_id, name),
-            restricting_aliases=mcp_tool_narrowing_names(instance_name, name),
-        )
-        effective = _VERDICTS[decision.action]
-        stricter = _STRICTNESS[effective] > _STRICTNESS[default]
-        result.append(
-            MCPInstanceToolPolicy(
-                name=name,
-                default=default,
-                effective=effective,
-                reason=decision.reason if stricter else None,
-            )
-        )
-    return result
-
-
 @router.get(
     "/{instance_id}/tool-policies",
     response_model=MCPInstanceToolPolicies,
@@ -659,34 +737,14 @@ async def get_mcp_server_instance_tool_policies(
     instance = await service.get(instance_id)
     if not instance:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
-
-    tool_names = list(
-        dict.fromkeys(
-            tool["name"]
-            for tool in instance.get_available_tools()
-            if isinstance(tool, dict) and isinstance(tool.get("name"), str) and tool["name"]
-        )
-    )
-    repository_factory = RepositoryFactory(session, user_context)
-    workspace_rules = await GovernancePolicyService(repository_factory).list_rules(
-        subject_type=PolicySubjectType.WORKSPACE,
-        subject_id=user_context.workspace_id,
-        enabled=True,
-    )
-    try:
-        workspace_policy = await GovernancePolicyResolver(repository_factory).resolve(
-            workspace_id=user_context.workspace_id
-        )
-    except PolicyValidationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
+    workspace_rules, workspace_policy = await _workspace_tool_policy(session, user_context)
     return MCPInstanceToolPolicies(
         tools=tool_policies_for_instance(
             str(instance.id),
             instance.name,
-            tool_names,
+            _instance_tool_names(instance),
             workspace_rules,
-            workspace_policy.to_json_dict(),
+            workspace_policy,
         )
     )
 
