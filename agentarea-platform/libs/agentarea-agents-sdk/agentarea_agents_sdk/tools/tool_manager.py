@@ -295,16 +295,20 @@ class ToolManager:
 
         return all_mcp_tools
 
-    async def _discover_mcp_tools_by_name(
+    async def _discover_instance_tools(
         self,
-        instance_name: str,
+        instance_ref: str,
         allowed_tools: list[str] | None,
         mcp_server_instance_service,
     ) -> tuple[Any, list]:
-        """Discover tools from an MCP server instance referenced by id or name.
+        """Discover tools from the MCP server instance an agent's MCP tool names by id.
+
+        Never by name: connection names are not unique and any member picks one,
+        so a name would reach whichever connection carries it. An agent saved
+        with a name has it bound to the id then (see ``AgentService``).
 
         Args:
-            instance_name: Id or name of the MCP server instance
+            instance_ref: Id of the MCP server instance
             allowed_tools: Tool names to allow; ``None`` means all, ``[]`` means none
             mcp_server_instance_service: Service for MCP server instances
 
@@ -315,21 +319,17 @@ class ToolManager:
         instance = None
 
         try:
-            # Find instance by ID (UUID) or by name
-            instance = None
             try:
-                from uuid import UUID as _UUID
-
-                instance_uuid = _UUID(instance_name)
-                instance = await mcp_server_instance_service.get(instance_uuid)
+                instance_id = UUID(instance_ref)
             except ValueError, TypeError:
-                pass  # Not a UUID — fall through to name lookup
+                logger.warning(
+                    f"MCP tool '{instance_ref}' names no connection id; re-save the agent to bind it"
+                )
+                return None, all_mcp_tools
 
+            instance = await mcp_server_instance_service.get(instance_id)
             if not instance:
-                instance = await mcp_server_instance_service.get_by_name(instance_name)
-
-            if not instance:
-                logger.warning(f"MCP server instance not found: {instance_name}")
+                logger.warning(f"MCP server instance not found: {instance_ref}")
                 return None, all_mcp_tools
 
             # Get tools from the instance
@@ -341,11 +341,11 @@ class ToolManager:
                 mcp_tools = [tool for tool in mcp_tools if tool.raw_name in allowed_tools]
 
             all_mcp_tools.extend(mcp_tools)
-            logger.info(f"Discovered {len(mcp_tools)} tools from MCP instance: {instance_name}")
+            logger.info(f"Discovered {len(mcp_tools)} tools from MCP instance: {instance_ref}")
 
         except Exception as e:
             logger.error(
-                f"Failed to get tools from MCP instance {instance_name}: {e}", exc_info=True
+                f"Failed to get tools from MCP instance {instance_ref}: {e}", exc_info=True
             )
 
         return instance, all_mcp_tools

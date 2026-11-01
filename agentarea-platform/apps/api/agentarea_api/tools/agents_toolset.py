@@ -41,7 +41,7 @@ _AGENT_ID = "Agent id (UUID), from `agents_list` or `agents_create`."
 _TOOLS = (
     'Tool configs, each {"type": "code"|"mcp"|"agent"|"openapi", "name": str, '
     '"settings"?: object}. Built-in toolsets are {"type": "code", "name": "agentarea/shell"}; '
-    "an MCP server is its instance name with type mcp."
+    "an MCP server is its connection id with type mcp."
 )
 
 

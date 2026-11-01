@@ -58,17 +58,27 @@ class FakeMcpServerSvc:
         return SimpleNamespace(id=uuid4())
 
 
+def _by_id(existing):
+    async def get(entity_id):
+        return existing if existing is not None and existing.id == entity_id else None
+
+    return get
+
+
 class FakeMcpInstSvc:
     def __init__(self, existing=None):
         self.existing = existing
         self.calls = []
+        self.created = []
 
-    async def get_by_name(self, name):
-        return self.existing
+    async def get(self, instance_id):
+        return await _by_id(self.existing)(instance_id)
 
     async def create_instance(self, payload):
         self.calls.append(payload)
-        return SimpleNamespace(id=uuid4())
+        instance = SimpleNamespace(id=uuid4())
+        self.created.append(instance)
+        return instance
 
 
 class FakeSkillSvc:
@@ -89,8 +99,8 @@ class FakeSkillRepo:
     def __init__(self, existing=None):
         self.existing = existing
 
-    async def get_by_name(self, name):
-        return self.existing
+    async def get(self, skill_id):
+        return await _by_id(self.existing)(skill_id)
 
 
 class FakeAgentSvc:
@@ -106,8 +116,8 @@ class FakeAgentRepo:
     def __init__(self, existing=None):
         self.existing = existing
 
-    async def get_agent_by_name(self, name):
-        return self.existing
+    async def get(self, agent_id):
+        return await _by_id(self.existing)(agent_id)
 
 
 _CATALOG = {
@@ -359,9 +369,10 @@ async def test_full_install_creates_everything():
     assert all(a == InstallAction.CREATED for a in actions.values())
     # secret resolved into instance environment
     assert deps["mcp_instance_service"].calls[0].json_spec["environment"] == {"GH_TOKEN": "secret"}
-    # agent wired to mcp by instance name + skill id
+    # agent wired to mcp by instance id + skill id
     agent = deps["agent_service"].calls[0]
-    assert [(t.type, t.name) for t in agent.tools] == [("mcp", "GitHub")]
+    (instance,) = deps["mcp_instance_service"].created
+    assert [(t.type, t.name) for t in agent.tools] == [("mcp", str(instance.id))]
     assert len(agent.skill_ids) == 1
 
 
@@ -474,25 +485,113 @@ channels:
     _assert_nothing_written(deps)
 
 
-async def test_idempotent_reuse_of_existing_entities():
-    existing_skill = SimpleNamespace(id=uuid4())
-    existing_agent = SimpleNamespace(id=uuid4())
-    existing_inst = SimpleNamespace(id=uuid4())
+def _installed_before():
+    """An earlier install of FULL: what it recorded, and those entities still here."""
+    skill = SimpleNamespace(id=uuid4())
+    agent = SimpleNamespace(id=uuid4(), status="active")
+    instance = SimpleNamespace(id=uuid4())
+    trigger = SimpleNamespace(id=uuid4(), name="seo:daily", agent_id=agent.id)
+    installed = {
+        ("mcp", "gh"): str(instance.id),
+        ("skill", "sk"): str(skill.id),
+        ("agent", "lead"): str(agent.id),
+    }
+    return installed, skill, agent, instance, trigger
+
+
+async def test_a_reinstall_reuses_what_the_earlier_install_recorded():
+    installed, skill, agent, instance, trigger = _installed_before()
     inst, deps = _installer(
-        skill_repository=FakeSkillRepo(existing=existing_skill),
-        agent_repository=FakeAgentRepo(existing=existing_agent),
-        mcp_instance_service=FakeMcpInstSvc(existing=existing_inst),
-        trigger_repository=FakeTriggerRepo(existing=[SimpleNamespace(name="seo:daily")]),
+        installed=installed,
+        skill_repository=FakeSkillRepo(existing=skill),
+        agent_repository=FakeAgentRepo(existing=agent),
+        mcp_instance_service=FakeMcpInstSvc(existing=instance),
+        trigger_repository=FakeTriggerRepo(existing=[trigger]),
     )
     res = await inst.install(parse_bundle(FULL), {"token": "secret"})
-    actions = {(e.kind, e.key): e.action for e in res.entities}
-    assert actions[("mcp", "gh")] == InstallAction.REUSED
-    assert actions[("skill", "sk")] == InstallAction.REUSED
-    assert actions[("agent", "lead")] == InstallAction.REUSED
-    assert actions[("automation", "daily")] == InstallAction.REUSED
-    # nothing newly created
+    ids = {(e.kind, e.key): (e.action, e.id) for e in res.entities}
+    assert ids[("mcp", "gh")] == (InstallAction.REUSED, str(instance.id))
+    assert ids[("skill", "sk")] == (InstallAction.REUSED, str(skill.id))
+    assert ids[("agent", "lead")] == (InstallAction.REUSED, str(agent.id))
+    assert ids[("automation", "daily")] == (InstallAction.REUSED, str(trigger.id))
     assert deps["agent_service"].calls == []
     assert deps["skill_service"].calls == []
+    assert deps["mcp_instance_service"].calls == []
+    assert deps["trigger_service"].created == []
+
+
+async def test_a_namesake_the_bundle_did_not_install_is_never_reused():
+    # Entities carrying the bundle's names, put there by someone else: the
+    # install recorded none of them, so it creates its own.
+    _, skill, agent, instance, trigger = _installed_before()
+    inst, deps = _installer(
+        skill_repository=FakeSkillRepo(existing=skill),
+        agent_repository=FakeAgentRepo(existing=agent),
+        mcp_instance_service=FakeMcpInstSvc(existing=instance),
+        trigger_repository=FakeTriggerRepo(existing=[trigger]),
+    )
+    res = await inst.install(parse_bundle(FULL), {"token": "secret"})
+
+    assert {e.action for e in res.entities} == {InstallAction.CREATED}
+    (created,) = deps["agent_service"].calls
+    (new_instance,) = deps["mcp_instance_service"].created
+    assert [t.name for t in created.tools] == [str(new_instance.id)]
+    (cron,) = deps["trigger_service"].created
+    assert cron.agent_id != agent.id
+
+
+async def test_a_trigger_under_the_bundle_name_running_another_agent_is_not_reused():
+    installed, skill, agent, instance, _ = _installed_before()
+    squatter = SimpleNamespace(id=uuid4(), name="seo:daily", agent_id=uuid4())
+    inst, deps = _installer(
+        installed=installed,
+        skill_repository=FakeSkillRepo(existing=skill),
+        agent_repository=FakeAgentRepo(existing=agent),
+        mcp_instance_service=FakeMcpInstSvc(existing=instance),
+        trigger_repository=FakeTriggerRepo(existing=[squatter]),
+    )
+    res = await inst.install(parse_bundle(FULL), {"token": "secret"})
+
+    actions = {(e.kind, e.key): e.action for e in res.entities}
+    assert actions[("automation", "daily")] == InstallAction.CREATED
+    (cron,) = deps["trigger_service"].created
+    assert cron.agent_id == agent.id
+
+
+async def test_a_trigger_other_than_the_recorded_one_is_not_reused():
+    # A member who may run the bundle's agent adds a trigger under the bundle's
+    # name for it: the install recorded another one, so it is not the bundle's.
+    installed, skill, agent, instance, trigger = _installed_before()
+    installed[("automation", "daily")] = str(uuid4())
+    inst, deps = _installer(
+        installed=installed,
+        skill_repository=FakeSkillRepo(existing=skill),
+        agent_repository=FakeAgentRepo(existing=agent),
+        mcp_instance_service=FakeMcpInstSvc(existing=instance),
+        trigger_repository=FakeTriggerRepo(existing=[trigger]),
+    )
+    res = await inst.install(parse_bundle(FULL), {"token": "secret"})
+
+    actions = {(e.kind, e.key): e.action for e in res.entities}
+    assert actions[("automation", "daily")] == InstallAction.CREATED
+
+
+async def test_a_recorded_agent_since_archived_is_installed_again():
+    installed, skill, agent, instance, _ = _installed_before()
+    agent.status = "archived"
+    inst, deps = _installer(
+        installed=installed,
+        skill_repository=FakeSkillRepo(existing=skill),
+        agent_repository=FakeAgentRepo(existing=agent),
+        mcp_instance_service=FakeMcpInstSvc(existing=instance),
+    )
+    res = await inst.install(parse_bundle(FULL), {"token": "secret"})
+
+    actions = {(e.kind, e.key): e.action for e in res.entities}
+    assert actions[("agent", "lead")] == InstallAction.CREATED
+    assert actions[("skill", "sk")] == InstallAction.REUSED
+    (created,) = deps["agent_service"].calls
+    assert [t.name for t in created.tools] == [str(instance.id)]
 
 
 async def test_unsupported_mcp_skipped_and_agent_created_without_it():
@@ -737,7 +836,8 @@ async def test_exported_workspace_round_trips_a_uuid_referenced_mcp_with_a_crede
     created_instance = deps["mcp_instance_service"].calls[0]
     assert created_instance.json_spec["environment"] == {"PGAPPNAME": "agentarea"}
     tools = deps["agent_service"].calls[0].tools
-    assert [(tool.type, tool.name) for tool in tools] == [("mcp", "Postgres")]
+    (instance,) = deps["mcp_instance_service"].created
+    assert [(tool.type, tool.name) for tool in tools] == [("mcp", str(instance.id))]
 
 
 async def test_a_json_spec_reference_to_an_undeclared_setup_field_blocks_install():
@@ -927,7 +1027,9 @@ async def test_a_reused_entity_is_never_removed_by_a_failed_install():
             raise RuntimeError("boom")
 
     existing = SimpleNamespace(id=uuid4())
-    inst, deps, log = _compensating_installer(agent_service=FailingAgents())
+    inst, deps, log = _compensating_installer(
+        agent_service=FailingAgents(), installed={("mcp", "gh"): str(existing.id)}
+    )
     deps["mcp_instance_service"].existing = existing
 
     with pytest.raises(RuntimeError):

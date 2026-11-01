@@ -79,6 +79,7 @@ class McpToolIdentity:
     instance_id: str
     raw_name: str
     attachment_ref: str
+    instance_name: str | None = None
 
     @property
     def canonical(self) -> str:
@@ -104,9 +105,13 @@ class McpToolIdentity:
         The raw name is whatever the server advertises, so it cannot satisfy an
         allowlist: ``allowed: ["search"]`` would admit every attached server that
         calls a tool ``search``. A deny or approval rule naming ``search`` still
-        reaches every server's ``search``.
+        reaches every server's ``search``. So does one naming the server by its
+        connection name, ``mcp:<instance name>:<raw>``, whatever the attachment
+        references it by.
         """
-        return (self.raw_name,)
+        if not self.instance_name:
+            return (self.raw_name,)
+        return (mcp_tool_target(self.instance_name, self.raw_name), self.raw_name)
 
 
 def mcp_tool_target(server_ref: str, raw_name: str) -> str:

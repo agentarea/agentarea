@@ -497,8 +497,7 @@ const ToolConfig = ({
     return res.status === "instance" ? res.availableTools : [];
   };
 
-  // Agents reference an MCP by instance UUID (webapp flow) or instance name
-  // (bundle installs); resolveMcpRef mirrors the runtime's id-then-name lookup.
+  // Agents reference an MCP by instance UUID; resolveMcpRef mirrors the runtime.
   const resolveInstanceTrigger = (mcpServerId: string) => {
     const res = resolveMcpRef(mcpServerId, activeInstances, mcpServers);
     if (res.status === "instance") {

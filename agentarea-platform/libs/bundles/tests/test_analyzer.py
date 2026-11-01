@@ -102,23 +102,22 @@ async def test_agent_without_model_blocks():
 
 
 class _AllExist:
-    async def agent_exists(self, name):
+    async def agent_exists(self, key):
         return True
 
-    async def mcp_instance_exists(self, name):
+    async def mcp_instance_exists(self, key):
         return True
 
-    async def skill_exists(self, name):
+    async def skill_exists(self, key):
         return True
 
-    async def trigger_exists(self, name):
+    async def trigger_exists(self, key, agent_key):
         return True
 
 
 async def test_existence_marks_already_exists():
     preview = await BundleAnalyzer(existence=_AllExist()).analyze(parse_bundle(GOOD))
     statuses = {(e.kind, e.key): e.status for e in preview.entities}
-    # mcp existence is by name; supported mcp should be ALREADY_EXISTS
     assert statuses[("skill", "sk")] == EntityStatus.ALREADY_EXISTS
     assert statuses[("agent", "lead")] == EntityStatus.ALREADY_EXISTS
     assert statuses[("automation", "daily")] == EntityStatus.ALREADY_EXISTS

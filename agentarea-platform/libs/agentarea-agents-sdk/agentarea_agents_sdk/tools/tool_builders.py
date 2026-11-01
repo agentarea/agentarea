@@ -50,7 +50,7 @@ class ToolBuildContext:
     """Everything a builder needs that isn't on the spec itself.
 
     ``manager`` is the owning ``ToolManager`` — builders call its shared
-    discovery helpers (``_discover_mcp_tools_by_name`` etc.) through it.
+    discovery helpers (``_discover_instance_tools`` etc.) through it.
     """
 
     manager: ToolManager
@@ -153,7 +153,7 @@ class McpToolBuilder(ToolBuilder):
     type = "mcp"
 
     async def _tool_defs(self, spec: ToolSpec, ctx: ToolBuildContext) -> list[dict[str, Any]]:
-        instance, tools = await ctx.manager._discover_mcp_tools_by_name(
+        instance, tools = await ctx.manager._discover_instance_tools(
             spec.name, allowed_tool_names(spec.settings), ctx.mcp_server_instance_service
         )
         if instance is None:
@@ -163,7 +163,9 @@ class McpToolBuilder(ToolBuilder):
         defs = []
         for tool in tools:
             model_name = qualify_mcp_tool_name(label, tool.raw_name)
-            ctx.register(McpToolIdentity(model_name, instance_id, tool.raw_name, spec.name))
+            ctx.register(
+                McpToolIdentity(model_name, instance_id, tool.raw_name, spec.name, instance.name)
+            )
             tool.expose_as(model_name)
             defs.append(tool.get_openai_function_definition())
         return defs

@@ -526,12 +526,15 @@ class McpToolRoute(BaseModel):
     """The server behind one model-facing MCP tool name, and the raw name it advertises.
 
     ``attachment_ref`` is how the agent's attachment references the server (id or
-    name); an agent-scoped rule may name the tool through it.
+    name); an agent-scoped rule may name the tool through it. ``instance_name`` is
+    the connection's name, which only narrows; a route recorded before it was
+    carried has none.
     """
 
     instance_id: str
     raw_name: str
     attachment_ref: str
+    instance_name: str | None = None
 
     @classmethod
     def from_identity(cls, identity: McpToolIdentity) -> McpToolRoute:
@@ -539,6 +542,7 @@ class McpToolRoute(BaseModel):
             instance_id=identity.instance_id,
             raw_name=identity.raw_name,
             attachment_ref=identity.attachment_ref,
+            instance_name=identity.instance_name,
         )
 
     def policy_names(self, model_name: str) -> tuple[str, ...]:
@@ -550,7 +554,9 @@ class McpToolRoute(BaseModel):
         return self._identity(model_name).restricting_names
 
     def _identity(self, model_name: str) -> McpToolIdentity:
-        return McpToolIdentity(model_name, self.instance_id, self.raw_name, self.attachment_ref)
+        return McpToolIdentity(
+            model_name, self.instance_id, self.raw_name, self.attachment_ref, self.instance_name
+        )
 
 
 class ToolDiscoveryResult(BaseModel):

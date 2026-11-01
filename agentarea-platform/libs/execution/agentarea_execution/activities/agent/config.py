@@ -117,14 +117,17 @@ async def _resolve_task_resources(
             instance = await mcp_service.get(instance_id)
             if instance is None:
                 raise ApplicationError("Selected task MCP is unavailable", non_retryable=True)
-            # Match both storage conventions. An inherited restriction must never
-            # be replaced by a second, unrestricted entry for the same server.
+            # An inherited restriction must never be replaced by a second,
+            # unrestricted entry for the same server. A configured tool still
+            # naming its connection reaches nothing on its own; selecting that
+            # connection for the run binds it, restriction and all.
             inherited = False
             for tool in tools:
                 if tool.get("type") != "mcp":
                     continue
                 reference = str(tool.get("name") or "")
                 if reference == instance.name:
+                    tool["name"] = str(instance.id)
                     inherited = True
                     break
                 try:
