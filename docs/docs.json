@@ -158,6 +158,7 @@
             "group": "MCP",
             "pages": [
               "guides/mcp/connect-a-remote-server",
+              "guides/mcp/connect-a-private-server",
               "guides/mcp/expose-your-app-tools",
               "guides/mcp/add-a-hosted-server",
               "guides/mcp/authenticate-with-oauth",
