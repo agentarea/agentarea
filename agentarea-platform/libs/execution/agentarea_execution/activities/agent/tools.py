@@ -863,6 +863,7 @@ def make_tools_activities(
 
                         delegation_tool = await AgentToolFactory.create_tool(
                             agent_name=agent_name,
+                            agent_id=settings.get("agent_id"),
                             agent_service=agent_service,
                             base_url=base_url,
                             a2a_url_override=a2a_url,

@@ -476,6 +476,7 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
             self.state.mcp_tool_routes,
             *self._policy_tool_configs(),
             connection_names_narrow=self._connection_names_narrow(),
+            delegates_by_id=self._delegates_by_id(),
         )
         withheld = len(available_tools) - len(disclosed)
         if withheld:

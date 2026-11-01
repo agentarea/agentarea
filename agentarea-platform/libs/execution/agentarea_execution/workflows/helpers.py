@@ -168,6 +168,7 @@ def tool_policy_names(
     openapi_operation_tools: Mapping[str, Sequence[str]] | None = None,
     *,
     connection_names_narrow: bool = True,
+    delegates_by_id: bool = True,
 ) -> ToolPolicyNames:
     """Every name a policy rule may give a model-facing tool, and which of them may allow it.
 
@@ -178,6 +179,11 @@ def tool_policy_names(
     connection, so an allowlist written for ``github`` would admit every
     connection called ``github``. ``connection_names_narrow`` is false only to
     replay a run decided before that (``CONNECTION_NAMES_NARROW_PATCH``).
+
+    A delegate is allowed by its agent, ``agent:<agent id>``, or a remote one by
+    its address, ``a2a:<url>``: its tool name comes from an agent name any
+    member picks. ``delegates_by_id`` is false only to replay a run decided
+    before that (``DELEGATES_BY_ID_PATCH``).
     """
     config_names = tool_config_aliases(tool_name, tool_configs, openapi_operation_tools)
     if not connection_names_narrow:
@@ -201,7 +207,33 @@ def tool_policy_names(
     openapi = openapi_tool_aliases(tool_name, tool_configs, openapi_operation_tools)
     if openapi:
         return ToolPolicyNames(openapi, config_names, name_allows=False)
+    if delegates_by_id and (delegate := _delegate_of(tool_name, tool_configs)) is not None:
+        return ToolPolicyNames(_delegate_targets(delegate), config_names, name_allows=False)
     return ToolPolicyNames((), config_names)
+
+
+def _delegate_of(tool_name: str, tool_configs: Sequence[Any] | None) -> Mapping[str, Any] | None:
+    """The delegate config that produces ``tool_name``, if one does."""
+    for config in tool_configs or ():
+        if (
+            isinstance(config, Mapping)
+            and config.get("type") == "agent"
+            and isinstance(config.get("name"), str)
+            and delegate_tool_name(config["name"]) == tool_name
+        ):
+            return config
+    return None
+
+
+def _delegate_targets(delegate: Mapping[str, Any]) -> tuple[str, ...]:
+    """The names that may allow a delegate: its agent's id, or a remote one's address."""
+    settings = delegate.get("settings")
+    settings = settings if isinstance(settings, Mapping) else {}
+    if isinstance(url := settings.get("a2a_url"), str) and url:
+        return (f"a2a:{url}",)
+    if isinstance(agent_id := settings.get("agent_id"), str) and agent_id:
+        return (f"agent:{agent_id}",)
+    return ()
 
 
 def resolve_effective_budget(
@@ -388,6 +420,7 @@ def filter_disclosed_tools(
     openapi_operation_tools: Mapping[str, Sequence[str]] | None = None,
     *,
     connection_names_narrow: bool = True,
+    delegates_by_id: bool = True,
 ) -> list[dict[str, Any]]:
     """Offer the model only the capability tools policy would actually let it call.
 
@@ -410,6 +443,7 @@ def filter_disclosed_tools(
             tool_configs,
             openapi_operation_tools,
             connection_names_narrow=connection_names_narrow,
+            delegates_by_id=delegates_by_id,
         )
         decision = decide_tool_action(
             effective_policy,

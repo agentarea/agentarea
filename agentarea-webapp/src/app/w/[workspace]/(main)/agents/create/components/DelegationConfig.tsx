@@ -345,12 +345,17 @@ export default function DelegationConfig({
     [agents, agentId]
   );
 
-  const byName = useMemo(
-    () => new Map(otherAgents.map((agent) => [agent.name, agent])),
+  // A delegate names its agent by id: two agents may share a name.
+  const byId = useMemo(
+    () => new Map(otherAgents.map((agent) => [agent.id, agent])),
     [otherAgents]
   );
+  const localAgent = (delegate: AgentToolConfig) => {
+    const id = !isRemoteDelegate(delegate) && delegate.settings?.agent_id;
+    return id ? byId.get(id) : undefined;
+  };
   const selectedIds = delegates.flatMap((delegate) => {
-    const agent = !isRemoteDelegate(delegate) && byName.get(delegate.name);
+    const agent = localAgent(delegate);
     return agent ? [agent.id] : [];
   });
 
@@ -451,8 +456,20 @@ export default function DelegationConfig({
                 heading={t("available")}
                 items={otherAgents}
                 selectedIds={selectedIds}
-                onAdd={(agent) => add({ type: "agent", name: agent.name })}
-                onRemove={(agent) => remove(agent.name)}
+                onAdd={(agent) =>
+                  add({
+                    type: "agent",
+                    name: agent.name,
+                    settings: { agent_id: agent.id },
+                  })
+                }
+                onRemove={(agent) =>
+                  onDelegatesChange(
+                    delegates.filter(
+                      (delegate) => delegate.settings?.agent_id !== agent.id
+                    )
+                  )
+                }
                 extractTitle={(agent) => agent.name}
                 extractSubtitle={(agent) => agent.description}
                 renderAvatar={(agent) => (
@@ -482,7 +499,7 @@ export default function DelegationConfig({
       <SelectedItems count={delegates.length} empty={t("empty")}>
         {delegates.map((delegate) => {
           const remote = isRemoteDelegate(delegate);
-          const local = remote ? undefined : byName.get(delegate.name);
+          const local = localAgent(delegate);
           const urlInvalid =
             remote &&
             remoteDelegateProblem(

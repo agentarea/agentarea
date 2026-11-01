@@ -643,21 +643,33 @@ def make_config_activities(
     async def resolve_agent_tools_activity(
         request: ResolveAgentToolsRequest,
     ) -> ResolveAgentToolsResult:
-        """Resolve agent names to their IDs for workflow-level delegation."""
+        """Confirm each local delegate's agent for workflow-level delegation.
+
+        A delegate reaches the agent id it was bound to when saved, never an
+        agent found by name: names are not unique, and the newest agent under a
+        name would take every delegation to it.
+        """
         user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             agent_service = await ctx.get_agent_service()
             agent_map: dict[str, str] = {}
 
             for agent_name in request.agent_names:
+                agent_id = request.agent_ids.get(agent_name)
+                if not agent_id:
+                    logger.warning(
+                        f"Delegate '{agent_name}' names no agent id; re-save the agent to bind it"
+                    )
+                    continue
                 try:
-                    agent = await agent_service.get_by_name(agent_name)
-                    if agent:
-                        agent_map[agent_name] = str(agent.id)
-                    else:
-                        logger.warning(f"Agent '{agent_name}' not found for delegation")
+                    agent = await agent_service.get(UUID(agent_id))
                 except Exception as e:
-                    logger.error(f"Failed to resolve agent '{agent_name}': {e}", exc_info=True)
+                    logger.error(f"Failed to resolve agent {agent_id}: {e}", exc_info=True)
+                    continue
+                if agent is None or agent.status == AgentStatus.ARCHIVED:
+                    logger.warning(f"Agent {agent_id} for delegate '{agent_name}' is not available")
+                    continue
+                agent_map[agent_name] = str(agent.id)
 
             return ResolveAgentToolsResult(agent_map=agent_map)
 

@@ -327,3 +327,45 @@ def test_an_openapi_operation_joins_an_allowlist_only_through_its_connection():
 
 def test_a_platform_tool_is_still_allowed_by_its_own_name():
     assert _named_decision({"tools": {"allowed": ["shell"]}}, "shell") is ToolAction.ALLOW
+
+
+def test_a_delegate_joins_an_allowlist_only_through_its_agent():
+    # The delegate's tool name comes from the agent's name, which any member
+    # picks, so an allowlist naming it admitted every agent that took the name.
+    agent_id = str(uuid4())
+    configs = [{"type": "agent", "name": "reviewer", "settings": {"agent_id": agent_id}}]
+    tool = "delegate_to_reviewer"
+    for rule in (tool, "reviewer"):
+        allowed = {"tools": {"allowed": [rule]}}
+        assert _named_decision(allowed, tool, tool_configs=configs) is ToolAction.DENY
+    pinned = {"tools": {"allowed": [f"agent:{agent_id}"]}}
+    assert _named_decision(pinned, tool, tool_configs=configs) is ToolAction.ALLOW
+    assert (
+        _named_decision({"tools": {"denied": [tool]}}, tool, tool_configs=configs)
+        is ToolAction.DENY
+    )
+
+
+def test_a_remote_delegate_joins_an_allowlist_through_its_address():
+    url = "https://docs.example.com/a2a"
+    configs = [{"type": "agent", "name": "docs", "settings": {"a2a_url": url}}]
+    tool = "delegate_to_docs"
+    assert (
+        _named_decision({"tools": {"allowed": [tool]}}, tool, tool_configs=configs)
+        is ToolAction.DENY
+    )
+    assert (
+        _named_decision({"tools": {"allowed": [f"a2a:{url}"]}}, tool, tool_configs=configs)
+        is ToolAction.ALLOW
+    )
+
+
+def test_a_run_from_before_delegate_ids_keeps_the_names_it_was_decided_by():
+    configs = [{"type": "agent", "name": "reviewer", "settings": {"agent_id": str(uuid4())}}]
+    tool = "delegate_to_reviewer"
+    assert (
+        _named_decision(
+            {"tools": {"allowed": [tool]}}, tool, tool_configs=configs, delegates_by_id=False
+        )
+        is ToolAction.ALLOW
+    )

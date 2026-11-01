@@ -118,6 +118,9 @@ class AgentToolSettings(BaseToolSettings):
     """
 
     description_override: str | None = None
+    # The workspace agent a local delegate hands its tasks to. Names are not
+    # unique, so the name is only the delegate's label; the id is what it reaches.
+    agent_id: str | None = None
     a2a_url: str | None = None
     auth_secret_name: str | None = Field(
         default=None,

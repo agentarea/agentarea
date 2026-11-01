@@ -963,6 +963,17 @@
             ],
             "title": "A2A Url"
           },
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
           "auth_secret_name": {
             "anyOf": [
               {

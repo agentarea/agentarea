@@ -284,6 +284,11 @@ class AgentService(BaseCrudService[Agent]):
             seen[tool_name] = name
             settings = tool.get("settings") or {}
             url = settings.get("a2a_url")
+            if url is not None and settings.get("agent_id"):
+                raise InvalidDelegateError(
+                    f"Delegate '{name}': agent_id names a workspace agent, and a remote "
+                    "delegate is reached at its a2a_url; give one of them."
+                )
             if url is not None:
                 # Stored as the agent's address, however it was pasted.
                 url = settings["a2a_url"] = agent_address(url)
@@ -296,8 +301,11 @@ class AgentService(BaseCrudService[Agent]):
                 raise InvalidDelegateError(
                     f"Delegate '{name}': auth_secret_name is only sent to an a2a_url."
                 )
-            elif await self.get_by_name(name) is None:
-                raise InvalidDelegateError(f"No agent named '{name}' in this workspace.")
+            else:
+                tool["settings"] = {
+                    **settings,
+                    "agent_id": await self._delegate_agent_id(name, settings.get("agent_id")),
+                }
 
         new_bindings = _credential_bindings(delegates) - _credential_bindings(previous)
         if not new_bindings:
@@ -311,6 +319,35 @@ class AgentService(BaseCrudService[Agent]):
             )
         for name, _url, secret_name in sorted(new_bindings):
             await self._require_delegate_secret(name, secret_name)
+
+    async def _delegate_agent_id(self, name: str, agent_id: Any) -> str:
+        """The id of the workspace agent a local delegate reaches.
+
+        Given, the id must name a live agent here. Without one, the name binds
+        only when exactly one live agent carries it: names are not unique, and a
+        delegate that took the newest of several would follow whoever last
+        created an agent under that name.
+        """
+        repository = self._get_agent_repository()
+        if agent_id:
+            try:
+                agent = await repository.get_by_id(UUID(str(agent_id)))
+            except ValueError:
+                agent = None
+            if agent is None or agent.status == AgentStatus.ARCHIVED:
+                raise InvalidDelegateError(
+                    f"Delegate '{name}': no agent {agent_id} in this workspace."
+                )
+            return str(agent.id)
+        matches = await repository.list_all(name=name)
+        if not matches:
+            raise InvalidDelegateError(f"No agent named '{name}' in this workspace.")
+        if len(matches) > 1:
+            raise InvalidDelegateError(
+                f"{len(matches)} agents here are named '{name}'; pass the one to delegate "
+                "to as settings.agent_id."
+            )
+        return str(matches[0].id)
 
     async def _require_delegate_secret(self, delegate: str, secret_name: str) -> None:
         from agentarea_secrets.catalog_service import find_secret

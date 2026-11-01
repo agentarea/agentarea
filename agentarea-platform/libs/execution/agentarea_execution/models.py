@@ -1104,10 +1104,14 @@ class CreateDelegationTaskResult(BaseModel):
 
 
 class ResolveAgentToolsRequest(BaseModel):
-    """Request to resolve agent tool names to agent IDs."""
+    """Request to confirm each local delegate's agent."""
 
     agent_names: list[str]
     workspace_id: str
+    # Each local delegate's name and the agent id it was bound to when saved.
+    # A run started before ids were stored sends names only, which resolve to
+    # nothing: names are not unique.
+    agent_ids: dict[str, str] = Field(default_factory=dict)
     user_context_data: dict[str, Any] | None = None
 
 
