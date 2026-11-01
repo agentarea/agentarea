@@ -38,7 +38,7 @@ spec:
                 via:
                   type: string
                   pattern: "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
-                  description: "The hop in the egress proxy's own configuration this exit leaves through (e.g. aeza)."
+                  description: "The hop in the egress proxy's own configuration this exit leaves through."
                 remoteDns:
                   type: boolean
                   default: false
