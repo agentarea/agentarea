@@ -110,8 +110,8 @@ workspace turns a signed instance's key into a fresh secret setup field.
 `GET /v1/workspaces/{workspace}/export` (admin only; **Settings → Workspace →
 Export workspace** in the webapp) writes the workspace's agents, MCP
 connections, skills, cron automations and supported webhook channels as one
-bundle. Agents reference MCPs by instance id or by name; both resolve to the
-exported MCP key. An agent that references an MCP or skill the export cannot
+bundle. Each agent's MCP reference, an instance id, resolves to the exported
+MCP key. An agent that references an MCP or skill the export cannot
 represent fails the export with a 422 naming it, so tools are never silently
 dropped.
 
@@ -195,15 +195,23 @@ Each step returns the key-to-id map the next one needs. An agent whose MCP was
 skipped is still created; an automation whose agent was not created is skipped
 with that reason recorded, rather than failing the install.
 
-### Idempotency is by name
+### Idempotency follows what the last install recorded
 
-Every step checks whether the named entity already exists in the workspace. An
-MCP instance, skill, agent, or trigger that exists is marked `REUSED` and not
-duplicated. Triggers are named `{bundle_name}:{key}` so they are unambiguous
-across bundles. An `InstalledBundle` row is upserted by bundle name, recording
-the canonical document and the full install result.
+An `InstalledBundle` row is upserted by bundle name, recording the canonical
+document and the full install result: each entity's key, action and id. The next
+install of the same bundle reuses an MCP instance, skill or agent only by the id
+that result recorded for its key, and only while it still exists (an archived
+agent is installed again). It is marked `REUSED` and not duplicated. Triggers are
+named `{bundle_name}:{key}`; one is reused only when it carries that name and runs
+the agent this install bound.
 
-Re-running an install is therefore close to a no-op for what already exists.
+An entity that merely carries a name from the bundle is never reused. Names are
+not unique and any member picks them, so an agent called `Triage Bot` that the
+bundle did not install is someone else's: reusing it would wire the bundle's
+triggers, channels and policies to it. The install creates its own alongside.
+
+An agent's MCP tools name the bundle's MCP instances by id. Re-running an install
+is therefore close to a no-op for what the bundle installed before.
 
 ### A failed install leaves nothing behind
 
@@ -281,9 +289,9 @@ preview, moves those failures to a point where nothing has been created yet.
   workspace.
 - **There is no uninstall.** `InstalledBundle` records what was installed, and
   removing those resources is manual. The API surface is analyze and install.
-- **Reuse is by name, not by identity.** An existing agent named `Triage Bot` is
-  reused whether or not it came from this bundle, and its configuration is not
-  reconciled against the document.
+- **A reused entity is not reconciled.** An agent the bundle installed before is
+  reused as it is now, edits included; its configuration is not brought back to
+  the document.
 - **`extra="forbid"` everywhere.** An unrecognized field anywhere in the document
   is a validation error, not a warning. A bundle authored against a newer schema
   version is rejected outright rather than partially understood.

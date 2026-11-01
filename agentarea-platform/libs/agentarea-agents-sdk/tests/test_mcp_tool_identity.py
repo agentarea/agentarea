@@ -105,6 +105,28 @@ class TestIdentity:
         assert "search" not in identity.policy_names
         assert identity.restricting_names == ("search",)
 
+    def test_the_connection_name_denies_or_holds_but_never_allows(self):
+        from agentarea_common.auth.tool_authorization import (
+            ToolAuthorizationAction,
+            decide_tool_policy,
+        )
+
+        instance_id = str(uuid4())
+        identity = McpToolIdentity("mcp__github__push", instance_id, "push", instance_id, "github")
+
+        def decide(tools: dict) -> ToolAuthorizationAction:
+            return decide_tool_policy(
+                {"tools": tools},
+                identity.model_name,
+                aliases=identity.policy_names,
+                restricting_aliases=identity.restricting_names,
+                name_allows=False,
+            ).action
+
+        assert decide({"denied": ["mcp:github:push"]}) is ToolAuthorizationAction.DENY
+        assert decide({"allowed": ["mcp:github:push"]}) is ToolAuthorizationAction.DENY
+        assert decide({"allowed": [f"mcp:{instance_id}:push"]}) is ToolAuthorizationAction.ALLOW
+
 
 class TestDiscovery:
     @pytest.mark.asyncio
@@ -125,6 +147,19 @@ class TestDiscovery:
         routed = {result.tool_identities[n].instance_id for n in mcp_names}
         assert routed == {str(work.id), str(personal.id)}
         assert {result.tool_identities[n].raw_name for n in mcp_names} == {"search"}
+
+    @pytest.mark.asyncio
+    async def test_a_tool_naming_its_connection_by_name_reaches_none(self):
+        # Names are not unique: whichever connection carried it would serve the
+        # tool. The agent is bound to an id when saved.
+        server = _instance("github", ["search"])
+        result = await ToolManager().discover_available_tools_split(
+            agent_id=uuid4(),
+            tools_config=[{"type": "mcp", "name": "github", "settings": {}}],
+            mcp_server_instance_service=_FakeMcpService(server),
+        )
+        assert not [n for n in _names(result.explicit_tools) if n.startswith("mcp__")]
+        assert result.tool_identities == {}
 
     @pytest.mark.asyncio
     async def test_empty_allowlist_exposes_no_tools(self):

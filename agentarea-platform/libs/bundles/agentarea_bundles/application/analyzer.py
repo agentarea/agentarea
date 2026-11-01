@@ -50,27 +50,27 @@ class BundleParseError(ValueError):
 
 
 class ExistenceChecker(Protocol):
-    """Workspace existence checks used to compute per-entity status."""
+    """Which of a bundle's entities, by bundle key, an install would reuse."""
 
-    async def agent_exists(self, name: str) -> bool: ...
-    async def mcp_instance_exists(self, name: str) -> bool: ...
-    async def skill_exists(self, name: str) -> bool: ...
-    async def trigger_exists(self, name: str) -> bool: ...
+    async def agent_exists(self, key: str) -> bool: ...
+    async def mcp_instance_exists(self, key: str) -> bool: ...
+    async def skill_exists(self, key: str) -> bool: ...
+    async def trigger_exists(self, key: str, agent_key: str) -> bool: ...
 
 
 class _NoExistence:
     """Default checker: nothing pre-exists (everything will be created)."""
 
-    async def agent_exists(self, name: str) -> bool:
+    async def agent_exists(self, key: str) -> bool:
         return False
 
-    async def mcp_instance_exists(self, name: str) -> bool:
+    async def mcp_instance_exists(self, key: str) -> bool:
         return False
 
-    async def skill_exists(self, name: str) -> bool:
+    async def skill_exists(self, key: str) -> bool:
         return False
 
-    async def trigger_exists(self, name: str) -> bool:
+    async def trigger_exists(self, key: str, agent_key: str) -> bool:
         return False
 
 
@@ -353,7 +353,7 @@ class BundleAnalyzer:
                         entity_key=skill.key,
                     )
                 )
-            exists = await self._existence.skill_exists(skill.name)
+            exists = await self._existence.skill_exists(skill.key)
             entities.append(
                 PreviewEntity(
                     kind=EntityKind.SKILL,
@@ -422,7 +422,7 @@ class BundleAnalyzer:
         self, package: Bundle, entities: list[PreviewEntity]
     ) -> None:
         for agent in package.agents:
-            exists = await self._existence.agent_exists(agent.name)
+            exists = await self._existence.agent_exists(agent.key)
             entities.append(
                 PreviewEntity(
                     kind=EntityKind.AGENT,
@@ -448,7 +448,7 @@ class BundleAnalyzer:
                         entity_key=auto.key,
                     )
                 )
-            exists = await self._existence.trigger_exists(auto.key)
+            exists = await self._existence.trigger_exists(auto.key, auto.agent)
             entities.append(
                 PreviewEntity(
                     kind=EntityKind.AUTOMATION,

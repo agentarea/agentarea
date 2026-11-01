@@ -548,6 +548,7 @@ def create_app() -> FastAPI:
     # show "you've spent $X of $Y, raise the cap or wait".
     from agentarea_agents.application.agent_service import (
         InvalidDelegateError,
+        InvalidMcpToolError,
         InvalidModelIdError,
     )
     from agentarea_agents.application.approval_sync import ApprovalEnforcedByPolicyError
@@ -575,6 +576,14 @@ def create_app() -> FastAPI:
         return problem_response(
             status_code=400,
             code="invalid_delegate",
+            detail=str(exc),
+        )
+
+    @app.exception_handler(InvalidMcpToolError)
+    async def _invalid_mcp_tool_handler(_request: Request, exc: InvalidMcpToolError):
+        return problem_response(
+            status_code=400,
+            code="invalid_mcp_tool",
             detail=str(exc),
         )
 

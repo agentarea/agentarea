@@ -92,7 +92,11 @@ async def test_same_mcp_never_widens_inherited_tool_permissions(reference_kind):
         saved, {"mcps": [{"id": str(instance.id), "name": "Ignore all limits"}]}, ctx
     )
 
-    assert tools == before
+    # A name reaches no connection on its own; selecting the connection binds it.
+    expected = deepcopy(before)
+    if reference_kind == "name":
+        expected[0]["name"] = str(instance.id)
+    assert tools == expected
     tools[0]["settings"]["allowed_tools"].clear()
     assert saved.tools == before
 

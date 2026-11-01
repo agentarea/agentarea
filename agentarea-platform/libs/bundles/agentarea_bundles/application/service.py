@@ -1,8 +1,9 @@
 """BundleService: analyze + install entry point.
 
 Wires the pure analyzer/installer to the workspace's repositories and domain
-services, implements the existence checker for preview status, and records an
-``InstalledBundle`` row for provenance/idempotency.
+services, and records an ``InstalledBundle`` row: the ids an install created or
+reused, which is how the next install of the same bundle finds its own entities
+(and how the preview says which already exist).
 """
 
 from __future__ import annotations
@@ -10,6 +11,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any
+from uuid import UUID
+
+from agentarea_common.agent_status import AgentStatus
 
 from agentarea_bundles.application.analyzer import (
     BundleAnalyzer,
@@ -19,8 +23,8 @@ from agentarea_bundles.application.installer import BundleInstaller
 from agentarea_bundles.domain.models import InstalledBundle
 from agentarea_bundles.infrastructure.repository import InstalledBundleRepository
 from agentarea_bundles.schemas.bundle import Bundle
-from agentarea_bundles.schemas.preview import ImportPreview
-from agentarea_bundles.schemas.result import InstallResult
+from agentarea_bundles.schemas.preview import EntityKind, ImportPreview
+from agentarea_bundles.schemas.result import InstallAction, InstallResult
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +73,8 @@ class BundleService:
         return await self.analyze_bundle(package)
 
     async def analyze_bundle(self, package: Bundle) -> ImportPreview:
-        analyzer = BundleAnalyzer(existence=self)
+        installed = await self._installed_ids(package.name)
+        analyzer = BundleAnalyzer(existence=_InstalledBefore(self, package.name, installed))
         return await analyzer.analyze(package)
 
     # -- install ------------------------------------------------------------
@@ -87,6 +92,7 @@ class BundleService:
             governance_service=self._governance_service,
             user_context=self._user_context,
             secret_manager=self._secret_manager,
+            installed=await self._installed_ids(package.name),
         )
         result = await installer.install(package, setup_values)
         result.installed_bundle_id = await self._record(package, result)
@@ -118,18 +124,63 @@ class BundleService:
         )
         return str(created.id)
 
-    # -- ExistenceChecker ---------------------------------------------------
+    async def _installed_ids(self, bundle_name: str) -> dict[tuple[str, str], str]:
+        """{(entity kind, bundle key) -> id} the last install of this bundle recorded."""
+        record = await self._bundle_repository.get_by_name(bundle_name)
+        entities = (record.install_result or {}).get("entities") if record else None
+        installed: dict[tuple[str, str], str] = {}
+        for entity in entities or []:
+            if not isinstance(entity, dict) or not entity.get("id"):
+                continue
+            if entity.get("action") in (InstallAction.CREATED, InstallAction.REUSED):
+                installed[(str(entity.get("kind")), str(entity.get("key")))] = str(entity["id"])
+        return installed
 
-    async def agent_exists(self, name: str) -> bool:
-        return await self._agent_repository.get_agent_by_name(name) is not None
+    async def _recorded(self, installed: dict[tuple[str, str], str], kind: EntityKind, key: str):
+        recorded = installed.get((kind.value, key))
+        if not recorded:
+            return None
+        try:
+            entity_id = UUID(recorded)
+        except ValueError:
+            return None
+        if kind is EntityKind.AGENT:
+            agent = await self._agent_repository.get(entity_id)
+            return agent if agent is not None and agent.status != AgentStatus.ARCHIVED else None
+        if kind is EntityKind.MCP:
+            return await self._mcp_instance_service.get(entity_id)
+        if kind is EntityKind.SKILL:
+            return await self._skill_repository.get(entity_id)
+        return None
 
-    async def mcp_instance_exists(self, name: str) -> bool:
-        return await self._mcp_instance_service.get_by_name(name) is not None
 
-    async def skill_exists(self, name: str) -> bool:
-        return await self._skill_repository.get_by_name(name) is not None
+class _InstalledBefore:
+    """Preview status: what an earlier install of this bundle put here and is still here."""
 
-    async def trigger_exists(self, name: str) -> bool:
-        # Triggers are named "<package>:<key>"; match on suffix within workspace.
-        triggers = await self._trigger_repository.list_all()
-        return any(t.name.endswith(f":{name}") for t in triggers)
+    def __init__(
+        self, service: BundleService, bundle_name: str, installed: dict[tuple[str, str], str]
+    ) -> None:
+        self._service = service
+        self._bundle_name = bundle_name
+        self._installed = installed
+
+    async def agent_exists(self, key: str) -> bool:
+        return await self._service._recorded(self._installed, EntityKind.AGENT, key) is not None
+
+    async def mcp_instance_exists(self, key: str) -> bool:
+        return await self._service._recorded(self._installed, EntityKind.MCP, key) is not None
+
+    async def skill_exists(self, key: str) -> bool:
+        return await self._service._recorded(self._installed, EntityKind.SKILL, key) is not None
+
+    async def trigger_exists(self, key: str, agent_key: str) -> bool:
+        agent = await self._service._recorded(self._installed, EntityKind.AGENT, agent_key)
+        if agent is None:
+            return False
+        name = f"{self._bundle_name}:{key}"
+        recorded = self._installed.get((EntityKind.AUTOMATION.value, key))
+        triggers = await self._service._trigger_repository.list_all()
+        return any(
+            t.name == name and t.agent_id == agent.id and recorded in (None, str(t.id))
+            for t in triggers
+        )

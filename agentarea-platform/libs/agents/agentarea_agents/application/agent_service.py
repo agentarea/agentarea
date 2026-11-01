@@ -1,5 +1,6 @@
 import builtins
 import logging
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, cast
 from urllib.parse import urlsplit
@@ -67,6 +68,10 @@ class InvalidDelegateError(ValueError):
     """Raised when an agent tool names a delegate the runtime could not use."""
 
 
+class InvalidMcpToolError(ValueError):
+    """Raised when an agent's MCP tool names a connection by a name that binds to none."""
+
+
 class ReasoningConflictError(ValueError):
     """Raised when an edit leaves an agent with both a reasoning level and a token budget."""
 
@@ -88,6 +93,14 @@ def _credential_bindings(tools: list[dict] | None) -> set[tuple[str, str, str]]:
                 )
             )
     return bindings
+
+
+def _is_uuid(value: Any) -> bool:
+    try:
+        UUID(str(value))
+    except ValueError:
+        return False
+    return True
 
 
 # The model settings each code toolset takes, and the kind each must be. A
@@ -320,6 +333,49 @@ class AgentService(BaseCrudService[Agent]):
         for name, _url, secret_name in sorted(new_bindings):
             await self._require_delegate_secret(name, secret_name)
 
+    async def _bind_mcp_tools(
+        self, tools: builtins.list[dict] | None, *, refuse_unbound: bool = True
+    ) -> None:
+        """Every MCP tool names its connection by id, which is all the runtime reads.
+
+        A tool given a connection name is bound to the one connection carrying
+        it, when that connection is the caller's own or the platform's. Names
+        are not unique and any member picks them, so a name several connections
+        carry, or only someone else's, is refused rather than resolved: a member
+        could add a connection under the name a catalog agent expects and take
+        its calls. A name no connection carries yet is kept: the editor offers
+        to connect it, and the save after that binds it.
+        """
+        named = [
+            tool
+            for tool in tools or []
+            if tool.get("type") == "mcp" and tool.get("name") and not _is_uuid(tool["name"])
+        ]
+        if not named:
+            return
+        from agentarea_common.constants import MANAGED_BY_PLATFORM
+        from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
+
+        repository = self.repository_factory.create_repository(MCPServerInstanceRepository)
+        for tool in named:
+            name = str(tool["name"])
+            matches = await repository.list_all(name=name)
+            if not matches:
+                continue
+            (match, *others) = matches
+            if not others and (
+                match.managed_by == MANAGED_BY_PLATFORM
+                or match.created_by == self._user_context.user_id
+            ):
+                tool["name"] = str(match.id)
+            elif refuse_unbound:
+                reason = (
+                    f"{len(matches)} MCP connections here are named '{name}'"
+                    if others
+                    else f"the MCP connection named '{name}' was added by someone else"
+                )
+                raise InvalidMcpToolError(f"{reason}; name the one to use by its id.")
+
     async def _delegate_agent_id(self, name: str, agent_id: Any) -> str:
         """The id of the workspace agent a local delegate reaches.
 
@@ -456,7 +512,13 @@ class AgentService(BaseCrudService[Agent]):
             await self.install_guard.require_allowed(
                 registry_id=item.registry_id, trust=item.registry_trust
             )
-        return _project_catalog_item(item)
+        agent = _project_catalog_item(item)
+        if to_run and isinstance(agent.tools, list):
+            # The runtime reads MCP connections by id; a catalog definition names them.
+            tools = deepcopy(agent.tools)
+            await self._bind_mcp_tools(tools, refuse_unbound=False)
+            agent.tools = tools
+        return agent
 
     async def _resolve_unique_slug(self, name: str) -> str:
         """Generate a workspace-unique slug from ``name``.
@@ -479,6 +541,7 @@ class AgentService(BaseCrudService[Agent]):
     @audited("agent.create", resource_type="agent")
     async def create_agent(self, payload: AgentCreate) -> Agent:
         tools = [t.model_dump(exclude_none=True) for t in payload.tools]
+        await self._bind_mcp_tools(tools)
         approval_targets, tools = self._lift_approval_toggles(tools)
         await self._validate_tool_models(tools)
         await self._validate_delegates(tools)
@@ -545,6 +608,8 @@ class AgentService(BaseCrudService[Agent]):
         tools = spec.get("tools")
         if not isinstance(tools, list):
             raise ValueError(f"catalog agent {item.name!r} has no tools list in its spec")
+        tools = deepcopy(tools)
+        await self._bind_mcp_tools(tools, refuse_unbound=False)
         approval_targets, tools = self._lift_approval_toggles(tools)
 
         # The catalog never binds a concrete model — that is a per-workspace
@@ -650,6 +715,7 @@ class AgentService(BaseCrudService[Agent]):
         tools_edited = "tools" in patch and payload.tools is not None
         edited_tools = [t.model_dump(exclude_none=True) for t in (payload.tools or [])]
         if tools_edited:
+            await self._bind_mcp_tools(edited_tools)
             await self._validate_tool_models(edited_tools)
             await self._validate_delegates(
                 edited_tools,
@@ -659,7 +725,7 @@ class AgentService(BaseCrudService[Agent]):
                 self.repository_factory.session,
                 self.repository_factory.user_context,
                 agent.id,
-                [t.model_dump(exclude_none=True) for t in (payload.tools or [])],
+                edited_tools,
             )
 
         if "name" in patch:
