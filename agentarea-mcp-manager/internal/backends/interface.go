@@ -109,6 +109,10 @@ type InstanceStatus struct {
 	CreatedAt    time.Time          `json:"created_at"`
 	UpdatedAt    time.Time          `json:"updated_at"`
 	HealthStatus *HealthCheckResult `json:"health_status,omitempty"`
+
+	// Message is the server's last output when its container stopped, with the
+	// instance's secret values removed.
+	Message string `json:"message,omitempty"`
 }
 
 // HealthCheckResult represents the result of a health check
