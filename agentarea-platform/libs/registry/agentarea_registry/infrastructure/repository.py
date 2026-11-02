@@ -608,8 +608,20 @@ class RegistryItemRepository:
         return list((await self.session.execute(text(sql), params)).scalars().all())
 
     async def _delete_items(self, registry_id: UUID | str, sql: str, ids: list[UUID]) -> int:
-        """Run an item DELETE returning ``registry_id``; how many rows were the registry's."""
+        """Run an item DELETE returning ``registry_id``; how many rows were the registry's.
+
+        Another registry that lost items no longer holds what its stored ETag
+        says was applied, so its next sync reads its source in full: an
+        unchanged models file must recreate a provider's models when the
+        provider comes back.
+        """
         returned = (await self.session.execute(text(sql), {"ids": ids})).scalars().all()
+        others = {UUID(str(owner)) for owner in returned} - {UUID(str(registry_id))}
+        if others:
+            await self.session.execute(
+                text("UPDATE registries SET source_etag = NULL WHERE id = ANY(:ids)"),
+                {"ids": list(others)},
+            )
         return sum(1 for owner in returned if str(owner) == str(registry_id))
 
     async def delete_unreferenced_out_of_source(self, registry_id: UUID | str) -> int:

@@ -7,6 +7,8 @@ instance, or a workspace's own copy of a model, in any workspace, and deleting
 a provider cascades through foreign keys only the migrated schema has.
 """
 
+import hashlib
+import json
 import os
 import uuid
 from collections.abc import AsyncGenerator
@@ -105,13 +107,19 @@ async def enforced(engine: AsyncEngine) -> AsyncGenerator[AsyncSession]:
 class Catalog:
     """The two LLM catalog files, synced the way the platform reconcile syncs them."""
 
-    def __init__(self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch):
+    def __init__(self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch, etags: bool = False):
         self.session = session
         self.payloads: dict[str, dict[str, Any]] = {}
         monkeypatch.setattr(
             RegistryService, "_fetch_source", staticmethod(lambda url: self.payloads[url])
         )
-        monkeypatch.setattr(RegistryService, "_source_etag", staticmethod(lambda _url: None))
+        # With etags, a source answers HEAD with a digest of what it serves, as
+        # S3 does, so a sync of an unchanged file skips it.
+        monkeypatch.setattr(
+            RegistryService,
+            "_source_etag",
+            staticmethod(lambda url: self._etag(url) if etags else None),
+        )
         self.service = RegistryService(
             RegistryRepository(session, PLATFORM),
             RegistryItemRepository(session, PLATFORM),
@@ -120,6 +128,10 @@ class Catalog:
             model_spec_repo=ModelSpecRepository(session, PLATFORM),
         )
         self.registries: dict[str, uuid.UUID] = {}
+
+    def _etag(self, url: str) -> str:
+        body = json.dumps(self.payloads[url], sort_keys=True).encode()
+        return hashlib.sha256(body).hexdigest()
 
     async def publish(self, providers: dict[str, Any], models: dict[str, Any]) -> None:
         self.payloads = {"providers": providers, "models": models}
@@ -333,6 +345,8 @@ async def test_a_model_instance_through_another_providers_config_keeps_the_provi
 
     assert await _provider_keys(session) == {_key("kept"), _key("dropped")}
     assert await _model_names(session) == {"k-1", "d-1"}
+    assert await _listed(enforced, WORKSPACE_A) == {_key("kept"), _key("dropped")}
+    assert await _listed(enforced, WORKSPACE_B) == {_key("kept")}
 
 
 async def test_a_workspaces_own_copy_of_a_model_keeps_the_provider(
@@ -353,7 +367,36 @@ async def test_a_workspaces_own_copy_of_a_model_keeps_the_provider(
     await catalog.publish(_providers("other"), _models())
 
     assert _key("dropped") in await _provider_keys(session)
-    assert await _listed(enforced, WORKSPACE_A) == {_key("other")}
+    assert await _listed(enforced, WORKSPACE_A) == {_key("other"), _key("dropped")}
+    assert await _listed(enforced, WORKSPACE_B) == {_key("other")}
+
+
+async def test_a_provider_dropped_then_published_again_gets_its_unchanged_models_back(
+    session: AsyncSession, enforced: AsyncSession, monkeypatch: pytest.MonkeyPatch
+):
+    # The provider's cleanup deletes the models file's items, so that file's
+    # stored ETag no longer describes what was applied from it; an unchanged
+    # file skipped on its ETag would leave the provider with no models.
+    catalog = Catalog(enforced, monkeypatch, etags=True)
+    models = _models(("kept", "k-1"), ("back", "b-1"))
+    await catalog.publish(_providers("kept", "back"), models)
+
+    catalog.payloads["providers"] = _providers("kept")
+    with workspace_scope(PLATFORM_WORKSPACE_ID):
+        await catalog.service.sync_registry(catalog.registries["providers"])
+    assert await _provider_keys(session) == {_key("kept")}
+    assert await _model_names(session) == {"k-1"}
+
+    await catalog.publish(_providers("kept", "back"), models)
+
+    assert await _provider_keys(session) == {_key("kept"), _key("back")}
+    assert await _model_names(session) == {"k-1", "b-1"}
+    assert await _items(session) == {
+        _key("kept"): True,
+        _key("back"): True,
+        f"{_key('kept')}/k-1": True,
+        f"{_key('back')}/b-1": True,
+    }
 
 
 async def test_a_dropped_model_of_a_kept_provider_goes_unless_an_instance_uses_it(

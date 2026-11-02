@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from agentarea_llm.domain.models import ProviderConfig, ProviderSpec
+from agentarea_llm.domain.models import ModelInstance, ModelSpec, ProviderConfig, ProviderSpec
 
 # The registry catalog's items, named as a table so this library does not
 # depend on agentarea-registry; a synced provider's item holds its spec's id.
@@ -24,10 +24,12 @@ _catalog_items = table(
 
 def offered_to(workspace_id: str) -> ColumnElement[bool]:
     """Provider specs a workspace may pick: what the catalog still publishes,
-    what never came from it, and what the workspace has a config on.
+    what never came from it, and what the workspace uses.
 
-    A provider the catalog dropped stays while some workspace's config uses it;
-    only the workspaces that can see such a config are offered it.
+    A provider the catalog dropped stays while some workspace uses it, in the
+    ways its cleanup counts as a use: a config on it, an instance on one of its
+    models, or the workspace's own copy of one. Only those workspaces are
+    offered it.
     """
     item = (_catalog_items.c.installed_entity_id == ProviderSpec.id) & (
         _catalog_items.c.registry_type == "llm_providers"
@@ -38,6 +40,16 @@ def offered_to(workspace_id: str) -> ColumnElement[bool]:
         exists().where(
             ProviderConfig.provider_spec_id == ProviderSpec.id,
             ProviderConfig.workspace_visibility(workspace_id),
+        ),
+        exists().where(
+            ModelSpec.provider_spec_id == ProviderSpec.id,
+            or_(
+                ModelSpec.workspace_id == workspace_id,
+                exists().where(
+                    ModelInstance.model_spec_id == ModelSpec.id,
+                    ModelInstance.workspace_visibility(workspace_id),
+                ),
+            ),
         ),
     )
 
