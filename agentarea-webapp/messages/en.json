@@ -3621,7 +3621,6 @@
       "createSecret": "Only a workspace admin can add a secret.",
       "manageSecret": "Only a workspace admin can edit, rotate or delete a secret.",
       "invitePeople": "Only a workspace admin can invite people.",
-      "manageProvider": "Only a workspace admin can add or edit a model provider.",
       "importPolicies": "Only a workspace admin can import policies.",
       "manageMcpAuth": "Only a workspace admin can pick or create an authentication config.",
       "viewPolicies": "Only a workspace admin can view policies.",
