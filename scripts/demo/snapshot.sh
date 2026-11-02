@@ -23,7 +23,7 @@ for db in "${DATABASES[@]}"; do
   docker exec "$DB_CONTAINER" pg_dump -U postgres -Fc "$db" >"$work/$db.dump"
 done
 printf "  object store\n"
-docker exec "$STORE_CONTAINER" tar -C /data -cf - . >"$work/store.tar"
+docker exec "$STORE_CONTAINER" tar -C /data -cf - . | gzip >"$work/store.tar.gz"
 
 jq -n --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg commit "$(git rev-parse --short HEAD)" \
   --arg revision "$(docker exec "$DB_CONTAINER" psql -U postgres -d agentarea -tAc 'SELECT version_num FROM alembic_version')" \

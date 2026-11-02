@@ -39,7 +39,7 @@ done
 
 printf "  object store\n"
 docker exec "$STORE_CONTAINER" sh -c 'find /data -mindepth 1 -maxdepth 1 -exec rm -rf {} +'
-docker exec -i "$STORE_CONTAINER" tar -C /data -xf - <"$work/store.tar"
+gunzip -c "$work/store.tar.gz" | docker exec -i "$STORE_CONTAINER" tar -C /data -xf -
 docker restart "$STORE_CONTAINER" >/dev/null
 
 "${COMPOSE[@]}" up -d
