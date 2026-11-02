@@ -111,11 +111,12 @@ def _patch_instance_lookup(
     auth_config_id=None,
     remote_url: str | None = _GMAIL_URL,
     spec_metadata: dict | None = None,
-    granted_scopes: list[str] | None = None,
+    current_scopes: list[str] | None = None,
+    verification: dict | None = None,
 ):
     """Point the flow at one URL-type instance without touching a database.
 
-    ``granted_scopes`` are what the instance's current auth config requested.
+    ``current_scopes`` are what the instance's current auth config asked for.
     """
     instance = SimpleNamespace(
         id=uuid4(),
@@ -124,6 +125,7 @@ def _patch_instance_lookup(
         name="Gmail",
         transport="url",
         json_spec={},
+        verification=verification,
     )
     json_spec: dict = {"type": "url"}
     if spec_metadata is not None:
@@ -151,9 +153,9 @@ def _patch_instance_lookup(
             pass
 
         async def get_by_id(self, requested_id):
-            if requested_id != auth_config_id or granted_scopes is None:
+            if requested_id != auth_config_id or current_scopes is None:
                 return None
-            return SimpleNamespace(id=auth_config_id, config={"scopes": granted_scopes})
+            return SimpleNamespace(id=auth_config_id, config={"scopes": current_scopes})
 
     monkeypatch.setattr(targets, "MCPServerInstanceRepository", _InstanceRepository)
     monkeypatch.setattr(targets, "MCPServerRepository", _ServerRepository)
@@ -735,7 +737,7 @@ async def test_authorize_refuses_a_scope_the_server_does_not_offer(monkeypatch):
     auth_create, _ = _patch_authorize(monkeypatch)
     _patch_registration(monkeypatch)
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(AppError) as exc_info:
         await _authorize(
             OAuthAuthorizeRequest(
                 instance_id=instance.id,
@@ -744,7 +746,8 @@ async def test_authorize_refuses_a_scope_the_server_does_not_offer(monkeypatch):
         )
 
     assert exc_info.value.status_code == 422
-    assert "gmail.send" in str(exc_info.value.detail)
+    assert exc_info.value.code == "invalid_scopes"
+    assert "gmail.send" in exc_info.value.detail
     auth_create.assert_not_awaited()
 
 
@@ -766,6 +769,7 @@ async def test_a_spec_default_the_server_no_longer_offers_is_reported(monkeypatc
         await _authorize(OAuthAuthorizeRequest(instance_id=instance.id))
 
     assert preflight.status == "unsupported"
+    assert "agentarea:oauth_scopes" in preflight.detail
     assert "gmail.send" in preflight.detail
     assert exc_info.value.status_code == 502
 
@@ -775,7 +779,7 @@ async def test_a_reconnect_preselects_what_the_connection_asked_for(monkeypatch)
     """Reconnecting starts from the access the connection has, so widening or
     narrowing it is one change, not re-picking everything."""
     _gmail_with_default(
-        monkeypatch, auth_config_id=uuid4(), granted_scopes=[_GMAIL_READONLY, _GMAIL_ALL]
+        monkeypatch, auth_config_id=uuid4(), current_scopes=[_GMAIL_READONLY, _GMAIL_ALL]
     )
 
     result = await _preflight(instance_id=uuid4())
@@ -789,12 +793,63 @@ async def test_a_reconnect_drops_scopes_the_server_no_longer_offers(monkeypatch)
     _gmail_with_default(
         monkeypatch,
         auth_config_id=uuid4(),
-        granted_scopes=[_GMAIL_READONLY, "https://www.googleapis.com/auth/gmail.send"],
+        current_scopes=[_GMAIL_READONLY, "https://www.googleapis.com/auth/gmail.send"],
     )
 
     result = await _preflight(instance_id=uuid4())
 
     assert result.default_scopes == [_GMAIL_READONLY]
+
+
+def _refused_for_scopes(*scopes: str) -> dict:
+    return {
+        "status": "failed",
+        "error": {
+            "code": "upstream_unauthorized",
+            "message": "Gmail needs access it was not granted",
+            "detail": {
+                "status": 403,
+                "error": "insufficient_scope",
+                "required_scopes": list(scopes),
+            },
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_reconnect_after_a_missing_scope_adds_it(monkeypatch):
+    """Reconnecting with the same scopes would mint the same token and hit the
+    same 403; the scopes the server asked for are ticked as well."""
+    _gmail_with_default(
+        monkeypatch,
+        auth_config_id=uuid4(),
+        current_scopes=[_GMAIL_READONLY],
+        verification=_refused_for_scopes(_GMAIL_MODIFY),
+    )
+
+    result = await _preflight(instance_id=uuid4())
+
+    assert result.default_scopes == [_GMAIL_READONLY, _GMAIL_MODIFY]
+
+
+@pytest.mark.asyncio
+async def test_a_missing_scope_the_metadata_does_not_list_can_still_be_picked(monkeypatch):
+    send = "https://www.googleapis.com/auth/gmail.send"
+    instance = _gmail_with_default(
+        monkeypatch,
+        auth_config_id=uuid4(),
+        current_scopes=[_GMAIL_MODIFY],
+        verification=_refused_for_scopes(send),
+    )
+    _patch_authorize(monkeypatch)
+    _patch_registration(monkeypatch)
+
+    result = await _preflight(instance_id=instance.id)
+    response = await _authorize(OAuthAuthorizeRequest(instance_id=instance.id))
+
+    assert send in result.scopes
+    assert result.default_scopes == [_GMAIL_MODIFY, send]
+    assert _query(response.authorize_url)["scope"] == [f"{_GMAIL_MODIFY} {send}"]
 
 
 def _dcr_refused(status_code: int = 400) -> httpx.HTTPStatusError:

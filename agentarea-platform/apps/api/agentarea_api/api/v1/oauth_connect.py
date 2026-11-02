@@ -118,10 +118,8 @@ class OAuthPreflightResponse(BaseModel):
     detail: str = ""
     issuer: str | None = None
     authorization_endpoint: str | None = None
-    # Every scope the server offers.
     scopes: list[str] = Field(default_factory=list)
-    # The ones a sign-in asks for unless the person picks others: the catalog
-    # spec's choice, or on a reconnect what the connection already has.
+    # Asked for unless the person picks among ``scopes``.
     default_scopes: list[str] = Field(default_factory=list)
     # The callback an OAuth app the user registers must allow.
     redirect_uri: str

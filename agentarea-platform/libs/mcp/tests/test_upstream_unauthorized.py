@@ -266,6 +266,35 @@ async def test_a_plain_refusal_names_no_scopes():
     assert exc_info.value.required_scopes == ()
 
 
+@pytest.mark.parametrize(
+    ("challenge", "insufficient", "scopes"),
+    [
+        ('BEARER Error="insufficient_scope", Scope="a b"', True, ("a", "b")),
+        ('Bearer error="invalid_token", error_description="no, error=insufficient_scope"', False, ()),
+        ('DPoP error="insufficient_scope", scope="x", Bearer error="invalid_token"', False, ()),
+        ('Bearer realm="r", error=insufficient_scope, scope=a', True, ("a",)),
+        ('Basic realm="x", Bearer error="insufficient_scope", scope="c"', True, ("c",)),
+    ],
+    ids=["case-insensitive", "quoted-lookalike", "other-scheme", "token-values", "second-challenge"],
+)
+def test_only_the_bearer_challenge_says_which_scopes_are_missing(challenge, insufficient, scopes):
+    refusal = mcp_client.MCPUpstreamUnauthorizedError(ENDPOINT, 403, challenge)
+
+    assert refusal.insufficient_scope is insufficient
+    assert refusal.required_scopes == scopes
+
+
+def test_a_server_cannot_flood_the_message_with_scopes():
+    challenge = 'Bearer error="insufficient_scope", scope="' + " ".join(
+        f"s{i}" for i in range(500)
+    ) + '"'
+
+    refusal = mcp_client.MCPUpstreamUnauthorizedError(ENDPOINT, 403, challenge)
+
+    assert len(refusal.required_scopes) == mcp_client.MAX_REQUIRED_SCOPES
+    assert len(refusal.message) < 2000
+
+
 @pytest.mark.asyncio
 async def test_verify_records_the_scopes_a_connection_was_not_granted():
     instance, server = _instance(auth_config_id=uuid.uuid4()), _server()

@@ -88,7 +88,10 @@ export function OAuthConnectPanel({
   const [credentials, setCredentials] =
     useState<CustomOAuthAppCredentials | null>(null);
   const [useOwnApp, setUseOwnApp] = useState(false);
-  const [pickedScopes, setPickedScopes] = useState<string[] | null>(null);
+  const [pickedScopes, setPickedScopes] = useState<{
+    key: string;
+    scopes: string[];
+  } | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const targetKind = target.kind;
@@ -128,7 +131,12 @@ export function OAuthConnectPanel({
     useOwnApp,
   });
   const choice = scopeChoice(preflight);
-  const scopes = choice ? (pickedScopes ?? choice.initial) : null;
+  const choiceKey = choice ? `${targetKey}\n${choice.offered.join(" ")}` : "";
+  const scopes = choice
+    ? pickedScopes?.key === choiceKey
+      ? pickedScopes.scopes
+      : choice.initial
+    : null;
 
   const onStateChangeRef = useRef(onStateChange);
   onStateChangeRef.current = onStateChange;
@@ -248,7 +256,7 @@ export function OAuthConnectPanel({
     <OAuthScopePicker
       offered={choice.offered}
       selected={scopes}
-      onChange={setPickedScopes}
+      onChange={(picked) => setPickedScopes({ key: choiceKey, scopes: picked })}
       disabled={isConnecting}
     />
   );

@@ -199,12 +199,31 @@ class SafeMCPTransport(httpx2.AsyncBaseTransport):
 UPSTREAM_REFUSAL_STATUSES = frozenset({401, 403})
 
 
-def _challenge_param(challenge: str, name: str) -> str:
-    """One auth-param of a ``WWW-Authenticate`` challenge (RFC 9110 §11.6.1), else ""."""
-    match = re.search(rf'(?:^|[\s,]){name}\s*=\s*(?:"([^"]*)"|([^\s,]+))', challenge)
-    if match is None:
-        return ""
-    return match.group(1) if match.group(1) is not None else match.group(2)
+_AUTH_ITEM = re.compile(
+    r"""([!#$%&'*+.^_`|~0-9A-Za-z-]+)\s*=\s*("(?:[^"\\]|\\.)*"|[^\s,]*)"""
+    r"""|([!#$%&'*+.^_`|~0-9A-Za-z-]+)"""
+)
+MAX_REQUIRED_SCOPES = 20
+
+
+def _bearer_params(challenge: str) -> dict[str, str]:
+    """The auth-params of the ``Bearer`` challenge in a ``WWW-Authenticate`` value.
+
+    Names compare case-insensitively (RFC 9110 §11.2); a quoted value is one
+    token, so ``error=`` inside an ``error_description`` is not a parameter.
+    """
+    params: dict[str, str] = {}
+    scheme = ""
+    for match in _AUTH_ITEM.finditer(challenge):
+        name, value, bare = match.groups()
+        if bare is not None:
+            scheme = bare.lower()
+            continue
+        if scheme == "bearer":
+            if value.startswith('"'):
+                value = re.sub(r"\\(.)", r"\1", value[1:-1])
+            params.setdefault(name.lower(), value)
+    return params
 
 
 def scope_short_name(scope: str) -> str:
@@ -223,11 +242,12 @@ class MCPUpstreamUnauthorizedError(MCPError):
 
     def __init__(self, url: str, status: int, challenge: str = "") -> None:
         self.status = status
-        self.insufficient_scope = (
-            status == 403 and _challenge_param(challenge, "error") == "insufficient_scope"
-        )
+        bearer = _bearer_params(challenge)
+        self.insufficient_scope = status == 403 and bearer.get("error") == "insufficient_scope"
         self.required_scopes: tuple[str, ...] = (
-            tuple(_challenge_param(challenge, "scope").split()) if self.insufficient_scope else ()
+            tuple(bearer.get("scope", "").split()[:MAX_REQUIRED_SCOPES])
+            if self.insufficient_scope
+            else ()
         )
         host = urlsplit(url).hostname or url
         data: dict[str, Any] = {"status": status}

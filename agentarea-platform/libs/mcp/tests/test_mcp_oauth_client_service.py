@@ -1132,7 +1132,7 @@ class TestDiscoveredProfileScopes:
         assert profile.scopes == ("gmail.modify",)
 
     def test_a_default_the_server_stopped_offering_is_an_error(self):
-        with pytest.raises(ValueError, match="gmail.send"):
+        with pytest.raises(ValueError, match="agentarea:oauth_scopes.*gmail.send"):
             discovered_profile(
                 _gmail_metadata(["gmail.readonly"]), self._URL, default_scopes=("gmail.send",)
             )

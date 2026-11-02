@@ -542,6 +542,18 @@ def discovered_profile(
     Raises:
         ValueError: the spec declares a default the server does not offer.
     """
+    try:
+        return _discovered_profile(metadata, mcp_url, authorize_params, default_scopes)
+    except ValueError as exc:
+        raise ValueError(f"{OAUTH_SCOPES_KEY}: {exc}") from exc
+
+
+def _discovered_profile(
+    metadata: AuthServerMetadata,
+    mcp_url: str,
+    authorize_params: Mapping[str, str] | None,
+    default_scopes: tuple[str, ...],
+) -> OAuthProfile:
     return OAuthProfile(
         provider="mcp-remote",
         issuer=metadata.issuer,

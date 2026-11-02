@@ -115,6 +115,18 @@ def instance_remote_url(instance: Any, server_spec: Any) -> str | None:
     return instance_transport_spec(server_spec, instance).get("endpoint_url") or None
 
 
+def _missing_scopes(verification: Any) -> tuple[str, ...]:
+    """The scopes the last check was refused for lacking (RFC 6750 insufficient_scope)."""
+    error = verification.get("error") if isinstance(verification, dict) else None
+    detail = error.get("detail") if isinstance(error, dict) else None
+    if not isinstance(detail, dict) or detail.get("error") != "insufficient_scope":
+        return ()
+    scopes = detail.get("required_scopes")
+    if not isinstance(scopes, list):
+        return ()
+    return tuple(scope for scope in scopes if isinstance(scope, str) and scope)
+
+
 def _spec_remote_url(server_spec: Any) -> str | None:
     spec = server_transport_spec(server_spec)
     if spec.get("type") != MCPTransport.URL:
@@ -153,8 +165,8 @@ def _invalid_spec(exc: ValueError) -> NotAuthorizableError:
 class MCPInstanceTarget:
     """An MCP instance: the callback attaches the credential to it.
 
-    ``granted_scopes`` are what its current credential asked for; a reconnect
-    starts from them.
+    A reconnect starts from ``current_scopes``, what its credential asked for,
+    plus ``missing_scopes``, what the server last refused it for lacking.
     """
 
     def __init__(
@@ -162,12 +174,13 @@ class MCPInstanceTarget:
         instance: Any,
         server_spec: Any,
         user_context: UserContext,
-        granted_scopes: tuple[str, ...] = (),
+        current_scopes: tuple[str, ...] = (),
     ) -> None:
         self.instance = instance
         self.server_spec = server_spec
         self.user_context = user_context
-        self.granted_scopes = granted_scopes
+        self.current_scopes = current_scopes
+        self.missing_scopes = _missing_scopes(getattr(instance, "verification", None))
         self.connected = instance.auth_config_id is not None
 
     @classmethod
@@ -182,24 +195,31 @@ class MCPInstanceTarget:
             server_spec = await MCPServerRepository(session, user_context).get_server_by_id(
                 instance.server_spec_id
             )
-        granted: tuple[str, ...] = ()
+        current: tuple[str, ...] = ()
         if instance.auth_config_id is not None:
             auth_config = await MCPAuthConfigRepository(session, user_context).get_by_id(
                 instance.auth_config_id
             )
             scopes = auth_config.config.get("scopes") if auth_config else None
             if isinstance(scopes, list):
-                granted = tuple(scope for scope in scopes if isinstance(scope, str))
-        return cls(instance, server_spec, user_context, granted)
+                current = tuple(scope for scope in scopes if isinstance(scope, str))
+        return cls(instance, server_spec, user_context, current)
 
     async def profile(self) -> OAuthProfile:
         profile = await _discovered(
             instance_remote_url(self.instance, self.server_spec), self.server_spec
         )
-        still_offered = tuple(scope for scope in self.granted_scopes if scope in profile.scopes)
+        # The server named these in its refusal, so it accepts them even when
+        # its metadata does not list them.
+        offered = tuple(dict.fromkeys((*profile.scopes, *self.missing_scopes)))
+        still_offered = tuple(scope for scope in self.current_scopes if scope in offered)
         if not still_offered:
-            return profile
-        return replace(profile, default_scopes=still_offered)
+            return replace(profile, scopes=offered)
+        return replace(
+            profile,
+            scopes=offered,
+            default_scopes=tuple(dict.fromkeys((*still_offered, *self.missing_scopes))),
+        )
 
     def oauth_app_required_detail(self, profile: OAuthProfile) -> str:
         return oauth_app_required_detail(profile.issuer or profile.authorization_endpoint)

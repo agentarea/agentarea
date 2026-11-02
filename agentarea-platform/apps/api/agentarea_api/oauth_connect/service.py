@@ -67,8 +67,6 @@ class Preflight:
     detail: str = ""
     issuer: str | None = None
     authorization_endpoint: str | None = None
-    # Every scope the server offers, and the ones a sign-in asks for unless the
-    # person picks others.
     scopes: tuple[str, ...] = ()
     default_scopes: tuple[str, ...] = ()
 
@@ -188,7 +186,7 @@ class OAuthConnectService:
         try:
             requested = profile.requested_scopes(scopes)
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            raise AppError(str(exc), status_code=422, code="invalid_scopes") from exc
 
         secret_manager = get_real_secret_manager(
             session=self._session, user_context=self._user_context
