@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  connectionFacets,
   modelNameMatchesPreferred,
   normalize,
   normalizeModelSlug,
@@ -334,4 +335,28 @@ describe("catalog data normalization", () => {
     false,
     "match: empty model name → false"
   );
+});
+
+describe("connectionFacets", () => {
+  const raw = { protocol: "mcp", hosting: "vendor", pricing: "paid" };
+
+  it("passes the facets through on connections", () => {
+    expect(connectionFacets("connections", raw)).toEqual(raw);
+  });
+
+  it("drops facets a connections tab left in the URL on any other type", () => {
+    for (const type of ["bundles", "agents", "skills"] as const) {
+      expect(connectionFacets(type, raw)).toEqual({});
+    }
+  });
+
+  it("treats ALL and junk as no filter", () => {
+    expect(
+      connectionFacets("connections", {
+        protocol: "all",
+        hosting: ["vendor"],
+        pricing: "cheap",
+      })
+    ).toEqual({ protocol: undefined, hosting: undefined, pricing: undefined });
+  });
 });
