@@ -1066,7 +1066,6 @@
           "saveFailed": "Couldn't change the tool policy",
           "groupLabel": "Policy for every tool in the group",
           "mixed": "Mixed",
-          "scope": "The policy is the workspace default for every agent and client that calls these tools; an agent's own rules can only tighten it. Called through the connection's own MCP address, a tool that needs approval is refused: nobody is there to approve it.",
           "adminOnly": "Only a workspace admin can change it.",
           "allPrefix": "All:",
           "failedMore": "{names} and {count} more",
