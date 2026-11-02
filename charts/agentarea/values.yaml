@@ -1335,6 +1335,10 @@ registryReconcile:
     - name: system-agents
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/agents.json
       recommendation_priority: 10
+    # Bundles: a team of agents with its skills and connections, installed in one step.
+    - name: system-bundles
+      source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/bundles.json
+      recommendation_priority: 10
     # Event source types (ADR-0040): webhook and poll providers, read by streams.
     - name: system-source-types
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/source-types.json

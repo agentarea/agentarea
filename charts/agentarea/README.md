@@ -527,9 +527,12 @@ The following table lists configurable parameters of the chart and their default
 | registryReconcile.registries[4].name | string | `"system-agents"` |  |
 | registryReconcile.registries[4].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/agents.json"` |  |
 | registryReconcile.registries[4].recommendation_priority | int | `10` |  |
-| registryReconcile.registries[5].name | string | `"system-source-types"` |  |
-| registryReconcile.registries[5].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/source-types.json"` |  |
+| registryReconcile.registries[5].name | string | `"system-bundles"` |  |
+| registryReconcile.registries[5].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/bundles.json"` |  |
 | registryReconcile.registries[5].recommendation_priority | int | `10` |  |
+| registryReconcile.registries[6].name | string | `"system-source-types"` |  |
+| registryReconcile.registries[6].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/source-types.json"` |  |
+| registryReconcile.registries[6].recommendation_priority | int | `10` |  |
 | openfga.enabled | bool | `true` |  |
 | openfga.replicaCount | int | `1` |  |
 | openfga.image.repository | string | `"openfga/openfga"` |  |
