@@ -40,8 +40,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { listMCPAuthConfigsAction as listMCPAuthConfigs, createMCPAuthConfigAction as createMCPAuthConfig } from "@/lib/server-actions";
+import { EgressExitField } from "../components/EgressExitField";
 import { HeaderRows } from "../components/HeaderRows";
 import { SecretRows } from "../components/SecretRows";
+import type { EgressExitChoices } from "../egress-exit";
 import {
   addMCPServer,
   type MCPServerFormState,
@@ -83,6 +85,7 @@ const BaseMCPServerSchema = z.object({
   headers: z.array(HeaderSchema),
   env: z.array(EnvVarSchema),
   tags: z.string().optional(),
+  egressExit: z.string().nullable(),
 });
 
 type FormValues = z.infer<typeof BaseMCPServerSchema>;
@@ -124,7 +127,12 @@ type AuthType = "api_key" | "bearer" | "oauth2";
 
 const AUTH_TYPES: AuthType[] = ["api_key", "bearer", "oauth2"];
 
-export function AddMCPServerForm() {
+export function AddMCPServerForm({
+  egressExits,
+}: {
+  /** Null on a deployment without egress exits. */
+  egressExits: EgressExitChoices | null;
+}) {
   const t = useTranslations("MCPServersPage.newServer");
   const tAuth = useTranslations("MCPServersPage.authConfigs");
   const tCommon = useTranslations("Common");
@@ -251,6 +259,7 @@ export function AddMCPServerForm() {
       headers: [],
       env: [],
       tags: "",
+      egressExit: null,
     },
   });
 
@@ -741,6 +750,22 @@ export function AddMCPServerForm() {
                 <p className="note">{t("env.hint")}</p>
               </div>
             )}
+
+            {(watchedType === "docker" || watchedType === "command") &&
+              egressExits && (
+                <Controller
+                  control={control}
+                  name="egressExit"
+                  render={({ field }) => (
+                    <EgressExitField
+                      id="egressExit"
+                      choices={egressExits}
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
+                  )}
+                />
+              )}
 
             {watchedType === "external" && (
               <>

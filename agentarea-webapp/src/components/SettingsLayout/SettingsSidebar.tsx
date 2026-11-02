@@ -8,6 +8,7 @@ import {
   Library,
   ScrollText,
   User,
+  Waypoints,
 } from "lucide-react";
 import { AppSidebarFooter } from "@/components/MainLayout/components/AppSidebarFooter";
 import { navItemClassName } from "@/components/MainLayout/components/NavMain";
@@ -21,6 +22,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import Link from "@/components/WorkspaceLink";
+import { useEgressExitsOffered } from "@/hooks/useEgressExitsOffered";
 import { useWorkspacePathname } from "@/hooks/useWorkspaceNavigation";
 import { useWorkspaceBillingUrl } from "@/lib/use-billing-url";
 
@@ -30,6 +32,7 @@ export function SettingsSidebarContent() {
   // Empty on any deployment that does not sell, which is the open default,
   // and off a workspace page.
   const billingUrl = useWorkspaceBillingUrl();
+  const egressExitsOffered = useEgressExitsOffered();
 
   const settingsNav = [
     {
@@ -50,6 +53,15 @@ export function SettingsSidebarContent() {
           href: "/settings/registries",
           icon: Library,
         },
+        ...(egressExitsOffered
+          ? [
+              {
+                title: t("egressExits"),
+                href: "/settings/egress-exits",
+                icon: Waypoints,
+              },
+            ]
+          : []),
         { title: t("auditLog"), href: "/settings/audit", icon: ScrollText },
       ],
     },

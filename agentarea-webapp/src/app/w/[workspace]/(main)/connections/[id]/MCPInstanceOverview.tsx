@@ -58,6 +58,8 @@ import {
 } from "../utils";
 import { CardField, ConnectionDetailsCard } from "../components/ConnectionCards";
 import { ConnectionCostSection } from "../components/ConnectionCostSection";
+import { EgressExitSection } from "../components/EgressExitSection";
+import { boundEgressExit, type EgressExitChoices } from "../egress-exit";
 import { relativeParts } from "../relative-parts";
 import { verifyInstance } from "./actions";
 
@@ -67,6 +69,8 @@ interface Props {
   memberNames?: Record<string, string>;
   consumers: MCPInstanceConsumer[] | null;
   consumersError: string | null;
+  /** Null when the connection cannot have one or the deployment has none. */
+  egressExits: EgressExitChoices | null;
 }
 
 interface McpServerJsonSpec {
@@ -98,6 +102,7 @@ export default function MCPInstanceOverview({
   memberNames = {},
   consumers,
   consumersError,
+  egressExits,
 }: Props) {
   const t = useTranslations("MCPServersPage.instanceDetail");
   const tState = useTranslations("MCPServersPage.state");
@@ -485,6 +490,14 @@ export default function MCPInstanceOverview({
                 </CardField>
               )}
             </SectionCard>
+
+            {egressExits && (
+              <EgressExitSection
+                instanceId={instance.id}
+                boundExitId={boundEgressExit(instance.json_spec ?? {})}
+                choices={egressExits}
+              />
+            )}
 
             {isUrlType && (
               <SectionCard>

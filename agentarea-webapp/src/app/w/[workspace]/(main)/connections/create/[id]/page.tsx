@@ -4,7 +4,9 @@ import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { getMCPServer } from "@/lib/api";
 import { apiErrorDetail } from "@/lib/api-errors";
 import CreateMCPInstanceClient from "./CreateMCPInstanceClient";
+import { loadEgressExitChoices } from "../../egressExitsData";
 import type { MCPServer } from "../../types";
+import { getConnectionType } from "../../utils";
 import MCPCreateHeaderControls from "./HeaderControls";
 
 export const metadata: Metadata = {
@@ -21,6 +23,10 @@ export default async function CreateMCPInstancePage({
 
   const { data: mcpServerData, error: serverError } = await getMCPServer(id);
   const mcpServer = mcpServerData as MCPServer | null;
+  const egressExits =
+    mcpServer && getConnectionType(mcpServer) !== "url"
+      ? await loadEgressExitChoices()
+      : null;
 
   const serverErrorText = serverError
     ? apiErrorDetail(
@@ -56,7 +62,7 @@ export default async function CreateMCPInstancePage({
           </div>
         </div>
       ) : (
-        <CreateMCPInstanceClient server={mcpServer} />
+        <CreateMCPInstanceClient server={mcpServer} egressExits={egressExits} />
       )}
     </ContentBlock>
   );
