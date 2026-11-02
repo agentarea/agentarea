@@ -127,25 +127,27 @@ export async function proxyRequest(
         : null,
     redirect: "manual",
   });
+  // A fetch response's headers are immutable; the response this returns gets a copy.
+  const headers = new Headers(upstreamResponse.headers);
 
   defaultOmitHeaders.forEach((header) => {
-    upstreamResponse.headers.delete(header);
+    headers.delete(header);
   });
 
-  if (upstreamResponse.headers.get("set-cookie")) {
+  if (headers.get("set-cookie")) {
     const cookies = processSetCookieHeaders(
       request.nextUrl.protocol,
       upstreamResponse,
       options,
       request.headers
     );
-    upstreamResponse.headers.delete("set-cookie");
+    headers.delete("set-cookie");
     cookies.forEach((cookie) => {
-      upstreamResponse.headers.append("Set-Cookie", cookie);
+      headers.append("Set-Cookie", cookie);
     });
   }
 
-  const originalLocation = upstreamResponse.headers.get("location");
+  const originalLocation = headers.get("location");
   if (originalLocation) {
     let location = originalLocation;
 
@@ -176,13 +178,13 @@ export async function proxyRequest(
       );
     }
 
-    upstreamResponse.headers.set("location", location);
+    headers.set("location", location);
   }
 
   let modifiedBody = Buffer.from(await upstreamResponse.arrayBuffer());
   if (
-    upstreamResponse.headers.get("content-type")?.includes("text/") ||
-    upstreamResponse.headers.get("content-type")?.includes("application/json")
+    headers.get("content-type")?.includes("text/") ||
+    headers.get("content-type")?.includes("application/json")
   ) {
     const bufferString = modifiedBody.toString("utf-8");
     modifiedBody = Buffer.from(
@@ -191,7 +193,7 @@ export async function proxyRequest(
   }
 
   return new NextResponse(modifiedBody, {
-    headers: upstreamResponse.headers,
+    headers,
     status: upstreamResponse.status,
   });
 }
