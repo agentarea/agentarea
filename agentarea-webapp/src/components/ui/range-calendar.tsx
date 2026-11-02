@@ -13,6 +13,7 @@ import {
   isSameDay,
   isSameMonth,
   isToday,
+  startOfDay,
   startOfMonth,
   startOfWeek,
   type Locale,
@@ -23,6 +24,11 @@ import { cn } from "@/lib/utils";
 
 const LOCALES: Record<string, Locale> = { en: enUS, ru };
 
+/** The date-fns locale of the UI language, for dates shown next to the calendar. */
+export function useCalendarLocale(): Locale {
+  return LOCALES[useLocale()] ?? enUS;
+}
+
 export interface RangeCalendarProps {
   /** First day of the range shown; with no `to`, a range still being picked. */
   from?: Date;
@@ -32,6 +38,9 @@ export interface RangeCalendarProps {
   onPick: (day: Date) => void;
   /** Days after this one cannot be picked, e.g. today for a log. */
   max?: Date;
+  /** Days before this one cannot be picked, e.g. today for a schedule. */
+  min?: Date;
+  className?: string;
 }
 
 /**
@@ -39,9 +48,16 @@ export interface RangeCalendarProps {
  * means. While only `from` is set, hovering previews the range it would make.
  * Month and weekday names, and the first day of the week, follow the UI locale.
  */
-export function RangeCalendar({ from, to, onPick, max }: RangeCalendarProps) {
+export function RangeCalendar({
+  from,
+  to,
+  onPick,
+  max,
+  min,
+  className,
+}: RangeCalendarProps) {
   const t = useTranslations("Common");
-  const locale = LOCALES[useLocale()] ?? enUS;
+  const locale = useCalendarLocale();
   const [month, setMonth] = useState(() =>
     startOfMonth(to ?? from ?? new Date())
   );
@@ -60,18 +76,20 @@ export function RangeCalendar({ from, to, onPick, max }: RangeCalendarProps) {
     from && end && isBefore(end, from) ? [end, from] : [from, end];
   const title = format(month, "LLLL yyyy", { locale });
   const canGoForward = !max || isBefore(endOfMonth(month), max);
+  const canGoBack = !min || isAfter(month, min);
 
   return (
     <div
-      className="w-[15.5rem] select-none"
+      className={cn("w-[15.5rem] select-none", className)}
       onMouseLeave={() => setHovered(null)}
     >
       <div className="mb-2 flex items-center justify-between">
         <button
           type="button"
           aria-label={t("previousMonth")}
+          disabled={!canGoBack}
           onClick={() => setMonth((m) => addMonths(m, -1))}
-          className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -100,7 +118,10 @@ export function RangeCalendar({ from, to, onPick, max }: RangeCalendarProps) {
         ))}
 
         {days.map((day, index) => {
-          const disabled = Boolean(max && isAfter(day, max));
+          const disabled = Boolean(
+            (max && isAfter(day, max)) ||
+              (min && isBefore(day, startOfDay(min)))
+          );
           const isStart = Boolean(start && isSameDay(day, start));
           const isStop = Boolean(stop && isSameDay(day, stop));
           const inRange = Boolean(
