@@ -62,7 +62,6 @@ Chart.yaml version (0.0.1) — independent chart version
 |---|---|---|
 | Production pin | `0.0.8-a8eaf7b` | Fully traceable, guaranteed not to change |
 | Production (auto patch) | `0.0` | Gets patch-level fixes automatically |
-| Staging | `0.0.8-<latest-main-sha>` | Test unreleased main builds |
 | "Show me the latest" | `latest` | Most recent release |
 
 ### Components

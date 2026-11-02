@@ -84,6 +84,7 @@ export const proxy = async (request: Request) => {
   if (
     currentHost &&
     publicOryUrl &&
+    new URL(publicOryUrl).host !== currentHost &&
     (request.url.startsWith(`http://${currentHost}/self-service`) ||
       request.url.startsWith(`https://${currentHost}/self-service`))
   ) {

@@ -1474,8 +1474,7 @@ kratos:
         cors:
           enabled: true
           allowed_origins:
-            - https://staging-0.agentarea.ai
-            - https://*.staging-0.agentarea.ai
+            - http://localhost:3000
           allowed_methods:
             - POST
             - GET

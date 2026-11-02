@@ -150,7 +150,7 @@ is the agent, not the deployment.
     |---|---|
     | Redirected to `localhost:4433` in production | `kratos.urls.public` unset, so the internal service URL was used |
     | Login succeeds, next request is anonymous | `kratos.session.cookieDomain` still `localhost` |
-    | CORS error in the browser console | `kratos.config.serve.public.cors.allowed_origins` still points at the shipped staging domain |
+    | CORS error in the browser console | `kratos.config.serve.public.cors.allowed_origins` still allows only the shipped `http://localhost:3000` |
     | Token rejected with a signature error | `AGENTAREA_AUTH_JWKS_B64` differs between Kratos and the API |
 
     `ORY_SDK_URL` is for server-side calls from the frontend container;

@@ -187,7 +187,7 @@ platform services that call addresses workspace members set.
     is anonymous.
 
     Kratos also has its own CORS allow-list under `kratos.config.serve.public.cors.allowed_origins`,
-    which ships pointing at `staging-0.agentarea.ai`. Replace it with your origins.
+    which ships allowing only `http://localhost:3000`. Replace it with your origins.
   </Step>
 
   <Step title="Route MCP server instances">
@@ -375,7 +375,7 @@ It must fail with a timeout.
   </Accordion>
   <Accordion title="Login fails with a CORS error in the browser console">
     Kratos rejects the origin. `kratos.config.serve.public.cors.allowed_origins`
-    ships pointing at a staging domain; replace it.
+    ships allowing only `http://localhost:3000`; replace it.
   </Accordion>
   <Accordion title="File uploads fail with a DNS error on an S3 hostname">
     `global.storage.publicEndpoint` is empty and the presigned URL points at the

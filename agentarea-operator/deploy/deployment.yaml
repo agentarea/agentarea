@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: agentarea-operator
-  namespace: agentarea-staging
+  namespace: agentarea
   labels:
     app: agentarea-operator
 spec:
