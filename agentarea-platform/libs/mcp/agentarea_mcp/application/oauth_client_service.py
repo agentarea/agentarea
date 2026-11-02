@@ -59,6 +59,10 @@ _PROTOCOL_AUTHORIZE_PARAMS = frozenset(
 # Spec metadata key for authorization parameters a provider requires beyond
 # OAuth 2.1 — Google issues a refresh token only for access_type=offline.
 OAUTH_AUTHORIZE_PARAMS_KEY = "agentarea:oauth_authorize_params"
+# Spec metadata key for the scopes a sign-in asks for unless the person picks
+# others — Gmail's server offers twenty, permanent deletion among them, and its
+# tools need one.
+OAUTH_SCOPES_KEY = "agentarea:oauth_scopes"
 
 # Hosts allowed to advertise a plain-http endpoint — the same carve-out
 # mcp_oauth_as.py uses for native-client redirect_uris.
@@ -529,15 +533,35 @@ def discovered_profile(
     metadata: AuthServerMetadata,
     mcp_url: str,
     authorize_params: Mapping[str, str] | None = None,
+    default_scopes: tuple[str, ...] = (),
 ) -> OAuthProfile:
-    """The profile a remote MCP server's discovery describes; tokens go to its origin."""
+    """The profile a remote MCP server's discovery describes; tokens go to its origin.
+
+    A server that lists no scopes offers the ones its catalog spec declares.
+
+    Raises:
+        ValueError: the spec declares a default the server does not offer.
+    """
+    try:
+        return _discovered_profile(metadata, mcp_url, authorize_params, default_scopes)
+    except ValueError as exc:
+        raise ValueError(f"{OAUTH_SCOPES_KEY}: {exc}") from exc
+
+
+def _discovered_profile(
+    metadata: AuthServerMetadata,
+    mcp_url: str,
+    authorize_params: Mapping[str, str] | None,
+    default_scopes: tuple[str, ...],
+) -> OAuthProfile:
     return OAuthProfile(
         provider="mcp-remote",
         issuer=metadata.issuer,
         authorization_endpoint=metadata.authorization_endpoint,
         token_endpoint=metadata.token_endpoint,
         registration_endpoint=metadata.registration_endpoint,
-        scopes=tuple(metadata.scopes_supported),
+        scopes=tuple(metadata.scopes_supported) or default_scopes,
+        default_scopes=default_scopes,
         resource=metadata.resource,
         offline_access_supported=metadata.offline_access_supported,
         resource_origins=(url_origin(mcp_url),),
@@ -565,6 +589,21 @@ def oauth_authorize_params(json_spec: Mapping[str, Any] | None) -> dict[str, str
         return checked_authorize_params(params)
     except ValueError as exc:
         raise ValueError(f"{OAUTH_AUTHORIZE_PARAMS_KEY}: {exc}") from exc
+
+
+def oauth_default_scopes(json_spec: Mapping[str, Any] | None) -> tuple[str, ...]:
+    """The scopes a catalog spec asks for by default; empty when it declares none."""
+    metadata = (json_spec or {}).get("metadata") or {}
+    declared = metadata.get(OAUTH_SCOPES_KEY) if isinstance(metadata, Mapping) else None
+    if declared is None:
+        return ()
+    if (
+        not isinstance(declared, list)
+        or not declared
+        or not all(isinstance(scope, str) and scope for scope in declared)
+    ):
+        raise ValueError(f"{OAUTH_SCOPES_KEY} must be a non-empty list of scope strings")
+    return tuple(dict.fromkeys(declared))
 
 
 def checked_authorize_params(extra_params: Mapping[str, str]) -> dict[str, str]:
