@@ -11,9 +11,9 @@
 //   explore_*        1 call each, one browseCatalog per   (explore/page.tsx) — 5 variants:
 //                    view (no batching in the real page)  default/sort/type/search/deep-page
 //   skills           1 call                               GET .../skills
-//   tasks            2-way parallel (TasksData.tsx)        tasks/, triggers/catalog
+//   tasks            2-way parallel (TasksData.tsx)        tasks/, streams/source-types
 //   inbox            1 call                               GET .../inbox/
-//   triggers         3-way parallel (TriggersContent.tsx)  triggers/, agents/, triggers/catalog
+//   triggers         2-way parallel (TriggersContent.tsx)  triggers/, agents/
 //
 // Read-only: works against any workspace, not just perf-k6.
 import { group } from "k6";
@@ -132,16 +132,17 @@ export const pages = [
       timedPage("skills", () => get(ws("/skills"), "skills", tag("browse", "skills", "skills"))),
   },
   {
-    // TasksData.tsx: tasks list + trigger catalog (for channel chips), parallel.
+    // TasksData.tsx: tasks list + stream source types (names and draws the
+    // provider a task's event came from), parallel.
     name: "tasks",
     run: () =>
       timedPage("tasks", () => {
         batchGet([
           { path: `${ws("/tasks/")}?limit=50&offset=0`, name: "tasks", tags: tag("browse", "tasks", "tasks") },
           {
-            path: ws("/triggers/catalog"),
-            name: "trigger_catalog",
-            tags: tag("browse", "trigger_catalog", "tasks"),
+            path: ws("/streams/source-types"),
+            name: "stream_source_types",
+            tags: tag("browse", "stream_source_types", "tasks"),
           },
         ]);
       }),
@@ -152,18 +153,13 @@ export const pages = [
       timedPage("inbox", () => get(ws("/inbox/"), "inbox", tag("browse", "inbox", "inbox"))),
   },
   {
-    // TriggersContent.tsx: triggers + owning agents (for the picker) + catalog.
+    // TriggersContent.tsx: triggers + owning agents (for the picker).
     name: "triggers",
     run: () =>
       timedPage("triggers", () => {
         batchGet([
           { path: ws("/triggers/"), name: "triggers", tags: tag("browse", "triggers", "triggers") },
           { path: ws("/agents/"), name: "agents", tags: tag("browse", "agents", "triggers") },
-          {
-            path: ws("/triggers/catalog"),
-            name: "trigger_catalog",
-            tags: tag("browse", "trigger_catalog", "triggers"),
-          },
         ]);
       }),
   },
