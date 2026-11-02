@@ -12,11 +12,13 @@ export function requireApiData<T>(
 ): NonNullable<T> {
   if (result.data != null) return result.data as NonNullable<T>;
 
-  if (isApiNotFound(result)) {
+  const status = getApiStatus(result);
+  // A 422 here is an id the API cannot parse, e.g. /connections/openapi landing
+  // on the [id] route: no such page, not a server error.
+  if (isApiNotFound(result) || status === 422) {
     notFound();
   }
 
-  const status = getApiStatus(result);
   const statusText = status ? ` (${status})` : "";
   throw new Error(
     `Failed to load ${resourceName}${statusText}: ${formatApiError(result)}`
