@@ -1478,7 +1478,16 @@
       "runAt": "Запустить в",
       "runNowAction": "Запустить сейчас",
       "done": "Готово",
-      "scheduleTask": "Запланировать задачу"
+      "scheduleTask": "Запланировать задачу",
+      "date": "Дата",
+      "time": "Время",
+      "invalidTime": "Введите дату и время, например {example}",
+      "timePassed": "Это время уже прошло",
+      "presets": {
+        "inOneHour": "Через час",
+        "tomorrowMorning": "Завтра утром",
+        "mondayMorning": "В понедельник утром"
+      }
     },
     "Messages": {
       "toolCall": "Использую инструмент",
