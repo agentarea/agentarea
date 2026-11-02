@@ -478,8 +478,8 @@ async def verify(
                         locked.auth_config_id or locked.get_configured_env_vars() or extra_headers
                     )
                     refusal = (
-                        "rejected the credentials"
-                        if sent_credentials
+                        leaf.refusal
+                        if sent_credentials or leaf.insufficient_scope
                         else "requires sign-in or a key"
                     )
                     payload = _make_payload(
@@ -487,7 +487,7 @@ async def verify(
                         VerificationError(
                             code="upstream_unauthorized",
                             message=f"{runtime_instance.name} {refusal} (HTTP {leaf.status})",
-                            detail={"status": leaf.status},
+                            detail=leaf.data,
                         ),
                     )
                     await _save_verification(locked.id, payload, db)

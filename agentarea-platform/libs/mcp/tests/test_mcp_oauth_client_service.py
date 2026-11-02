@@ -24,7 +24,9 @@ from agentarea_mcp.application.oauth_client_service import (
     _as_metadata_urls,
     _parse_resource_metadata_url,
     _parse_scope_from_www_authenticate,
+    discovered_profile,
     oauth_authorize_params,
+    oauth_default_scopes,
 )
 from agentarea_mcp.application.oauth_profile import OAuthProfile
 
@@ -1081,3 +1083,56 @@ class TestOAuthAuthorizeParamsFromSpec:
     def test_malformed_declaration_is_an_error(self, value):
         with pytest.raises(ValueError, match="oauth_authorize_params"):
             oauth_authorize_params({"metadata": {"agentarea:oauth_authorize_params": value}})
+
+
+class TestOAuthDefaultScopesFromSpec:
+    def test_spec_without_metadata_declares_none(self):
+        assert oauth_default_scopes({}) == ()
+        assert oauth_default_scopes(None) == ()
+        assert oauth_default_scopes({"metadata": {"agentarea:setup_tier": "x"}}) == ()
+
+    def test_declared_scopes_are_returned(self):
+        spec = {"metadata": {"agentarea:oauth_scopes": ["gmail.modify", "gmail.labels"]}}
+
+        assert oauth_default_scopes(spec) == ("gmail.modify", "gmail.labels")
+
+    @pytest.mark.parametrize("value", ["gmail.modify", [], [1], [""], {"scope": "x"}])
+    def test_malformed_declaration_is_an_error(self, value):
+        with pytest.raises(ValueError, match="oauth_scopes"):
+            oauth_default_scopes({"metadata": {"agentarea:oauth_scopes": value}})
+
+
+def _gmail_metadata(scopes: list[str]) -> AuthServerMetadata:
+    return AuthServerMetadata(
+        issuer="https://accounts.google.com",
+        authorization_endpoint="https://accounts.google.com/o/oauth2/v2/auth",
+        token_endpoint="https://oauth2.googleapis.com/token",  # noqa: S106
+        scopes_supported=scopes,
+    )
+
+
+class TestDiscoveredProfileScopes:
+    _URL = "https://gmailmcp.googleapis.com/mcp/v1"
+
+    def test_the_server_offers_its_scopes_and_the_spec_picks_the_default(self):
+        profile = discovered_profile(
+            _gmail_metadata(["gmail.readonly", "gmail.modify"]),
+            self._URL,
+            default_scopes=("gmail.modify",),
+        )
+
+        assert profile.scopes == ("gmail.readonly", "gmail.modify")
+        assert profile.requested_scopes(None) == ("gmail.modify",)
+
+    def test_a_server_that_lists_no_scopes_offers_the_declared_ones(self):
+        profile = discovered_profile(
+            _gmail_metadata([]), self._URL, default_scopes=("gmail.modify",)
+        )
+
+        assert profile.scopes == ("gmail.modify",)
+
+    def test_a_default_the_server_stopped_offering_is_an_error(self):
+        with pytest.raises(ValueError, match="gmail.send"):
+            discovered_profile(
+                _gmail_metadata(["gmail.readonly"]), self._URL, default_scopes=("gmail.send",)
+            )

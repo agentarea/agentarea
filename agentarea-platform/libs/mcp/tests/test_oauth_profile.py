@@ -133,3 +133,57 @@ def test_a_platform_app_replaces_the_discovered_endpoints(platform_apps):
     assert served.token_endpoint == "https://github.com/login/oauth/access_token"  # noqa: S105
     assert served.authorization_endpoint == "https://github.com/login/oauth/authorize"
     assert served.issuer == "https://github.com/login/oauth"
+
+
+_OFFERED = ("gmail.readonly", "gmail.modify", "mail.google.com")
+
+
+def test_without_a_choice_the_declared_default_scopes_are_requested():
+    profile = _discovered(scopes=_OFFERED, default_scopes=("gmail.modify",))
+
+    assert profile.requested_scopes(None) == ("gmail.modify",)
+
+
+def test_without_a_default_every_offered_scope_is_requested():
+    assert _discovered(scopes=_OFFERED).requested_scopes(None) == _OFFERED
+
+
+def test_a_choice_narrows_the_request_to_what_was_picked():
+    profile = _discovered(scopes=_OFFERED, default_scopes=("gmail.modify",))
+
+    assert profile.requested_scopes(["mail.google.com", "gmail.readonly", "gmail.readonly"]) == (
+        "mail.google.com",
+        "gmail.readonly",
+    )
+
+
+@pytest.mark.parametrize(
+    "chosen",
+    [[], ["gmail.send"], ["gmail.readonly", "gmail.send"]],
+    ids=["nothing", "not-offered", "partly-not-offered"],
+)
+def test_a_choice_outside_the_offered_scopes_is_refused(chosen):
+    with pytest.raises(ValueError):
+        _discovered(scopes=_OFFERED).requested_scopes(chosen)
+
+
+def test_nothing_can_be_picked_when_the_server_offers_nothing():
+    profile = _discovered()
+
+    assert profile.requested_scopes(None) == ()
+    with pytest.raises(ValueError):
+        profile.requested_scopes(["repo"])
+
+
+def test_a_default_the_server_does_not_offer_is_refused():
+    with pytest.raises(ValueError, match="gmail.send"):
+        _discovered(scopes=_OFFERED, default_scopes=("gmail.modify", "gmail.send"))
+
+
+def test_the_platform_app_keeps_the_default_scopes(platform_apps):
+    platform_apps.append(_GITHUB_APP)
+    profile = _discovered(scopes=("repo", "read:org"), default_scopes=("read:org",))
+
+    served = profile.served_by(platform_app_for(profile))
+
+    assert served.requested_scopes(None) == ("read:org",)

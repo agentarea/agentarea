@@ -5,6 +5,8 @@ import {
   canUseOwnApp,
   deriveOAuthConnectState,
   preflightAfterAuthorizeError,
+  scopeChoice,
+  scopeShortName,
   summarizeAuthorization,
   type OAuthPreflight,
 } from "./oauth-connect-state";
@@ -392,6 +394,96 @@ describe("catalog APIs", () => {
           client_id_secret_id: "secret-1",
           client_secret: "shh", // pragma: allowlist secret
         },
+      })
+    ).toBeNull();
+  });
+});
+
+const GMAIL_READONLY = "https://www.googleapis.com/auth/gmail.readonly";
+const GMAIL_MODIFY = "https://www.googleapis.com/auth/gmail.modify";
+const GMAIL_ALL = "https://mail.google.com/";
+
+describe("scopeChoice", () => {
+  it("offers nothing to pick when the server lists one scope or none", () => {
+    expect(scopeChoice(preflight({ scopes: [GMAIL_MODIFY] }))).toBeNull();
+    expect(scopeChoice(preflight({ scopes: [] }))).toBeNull();
+    expect(scopeChoice(null)).toBeNull();
+  });
+
+  it("offers every scope and starts from the ones the API asks for by default", () => {
+    const choice = scopeChoice(
+      preflight({
+        scopes: [GMAIL_READONLY, GMAIL_MODIFY, GMAIL_ALL],
+        default_scopes: [GMAIL_MODIFY],
+      })
+    );
+
+    expect(choice).toEqual({
+      offered: [GMAIL_READONLY, GMAIL_MODIFY, GMAIL_ALL],
+      initial: [GMAIL_MODIFY],
+    });
+  });
+
+  it("starts from everything when the API names no default", () => {
+    const choice = scopeChoice(
+      preflight({ scopes: [GMAIL_READONLY, GMAIL_MODIFY], default_scopes: [] })
+    );
+
+    expect(choice?.initial).toEqual([GMAIL_READONLY, GMAIL_MODIFY]);
+  });
+
+  it("has nothing to offer while the server cannot be authorized", () => {
+    expect(
+      scopeChoice(
+        preflight({
+          status: "unsupported",
+          scopes: [GMAIL_READONLY, GMAIL_MODIFY],
+        })
+      )
+    ).toBeNull();
+  });
+});
+
+describe("scopeShortName", () => {
+  it("keeps the last path segment of a URL scope and leaves others alone", () => {
+    expect(scopeShortName(GMAIL_MODIFY)).toBe("gmail.modify");
+    expect(scopeShortName(GMAIL_ALL)).toBe("mail.google.com");
+    expect(scopeShortName("read:org")).toBe("read:org");
+  });
+});
+
+describe("picked scopes", () => {
+  const state = deriveOAuthConnectState({
+    isUrlType: true,
+    preflight: preflight(),
+  });
+
+  it("are sent with the authorize request", () => {
+    const request = buildAuthorizeRequest({
+      target: { instance_id: INSTANCE_ID },
+      state,
+      scopes: [GMAIL_READONLY],
+    });
+
+    expect(request?.scopes).toEqual([GMAIL_READONLY]);
+  });
+
+  it("leave the API's default in charge when nothing was offered to pick", () => {
+    const request = buildAuthorizeRequest({
+      target: { instance_id: INSTANCE_ID },
+      state,
+    });
+
+    expect(request).not.toHaveProperty("scopes");
+  });
+
+  it("block Connect when every scope was unticked", () => {
+    expect(canAuthorize({ state, scopes: [] })).toBe(false);
+    expect(
+      buildAuthorizeRequest({
+        target: { instance_id: INSTANCE_ID },
+        state,
+        scopes: [],
       })
     ).toBeNull();
   });

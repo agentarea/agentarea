@@ -67,7 +67,10 @@ class Preflight:
     detail: str = ""
     issuer: str | None = None
     authorization_endpoint: str | None = None
+    # Every scope the server offers, and the ones a sign-in asks for unless the
+    # person picks others.
     scopes: tuple[str, ...] = ()
+    default_scopes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -149,6 +152,7 @@ async def preflight(target: PreflightTarget) -> Preflight:
         issuer=profile.issuer,
         authorization_endpoint=profile.authorization_endpoint,
         scopes=profile.scopes,
+        default_scopes=profile.requested_scopes(None),
     )
 
 
@@ -172,13 +176,19 @@ class OAuthConnectService:
         credential_mode: Literal["auto", "custom"],
         custom: CustomOAuthAppFields,
         return_to: str,
+        scopes: list[str] | None = None,
     ) -> Authorization:
+        """``scopes`` is the person's pick among the offered ones; None asks for the default."""
         await target.ensure_may_authorize()
         try:
             profile = await target.profile()
         except NotAuthorizableError as exc:
             count("oauth_connect", provider="unknown", outcome="failed:not_authorizable")
             raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        try:
+            requested = profile.requested_scopes(scopes)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         secret_manager = get_real_secret_manager(
             session=self._session, user_context=self._user_context
@@ -205,7 +215,7 @@ class OAuthConnectService:
                 **({"issuer": profile.issuer} if profile.issuer else {}),
                 "authorization_url": profile.authorization_endpoint,
                 "token_url": profile.token_endpoint,
-                "scopes": list(profile.scopes),
+                "scopes": list(requested),
                 "authorization_scheme": profile.authorization_scheme,
                 "client_auth_method": profile.client_auth_method,
                 **resolved.config,
@@ -241,6 +251,7 @@ class OAuthConnectService:
             redirect_uri=callback_uri(),
             pkce=pkce,
             state=token,
+            scopes=list(requested),
         )
         count("oauth_connect", provider=_provider_label(profile.issuer), outcome="started")
         return Authorization(authorize_url=authorize_url, connection_id=connection_id)

@@ -106,9 +106,27 @@ supply per connection. Ask the preflight endpoint rather than guessing.
     in Redis keyed by `state`. The state holds a reference to those credentials, never
     a copy of the client secret.
 
-    The requested scopes come from the resource's own metadata (RFC 9728) where it
+    The offered scopes come from the resource's own metadata (RFC 9728) where it
     publishes them, since that is the only place a provider states what the MCP
-    endpoint itself accepts. `offline_access` is added only when the authorization
+    endpoint itself accepts. A sign-in asks for all of them unless one of these
+    narrows it, first match wins:
+
+    - `scopes` in the request body: the person's pick, which must be a non-empty
+      subset of the offered ones (anything else is a 422). The connect panel shows
+      the offered scopes as checkboxes under "Access".
+    - On a reconnect, the scopes the connection's current credential asked for,
+      minus any the server no longer offers.
+    - `metadata["agentarea:oauth_scopes"]` on the catalog spec. Gmail's server
+      offers twenty scopes, permanent deletion among them, while its tools need
+      one, so its entry declares
+      `"agentarea:oauth_scopes": ["https://www.googleapis.com/auth/gmail.modify"]`.
+      A declared scope the server does not offer is refused with a 502 rather
+      than sent to a consent screen that would reject it.
+
+    `GET /oauth/preflight` returns both lists: `scopes` (offered) and
+    `default_scopes` (what a sign-in without `scopes` asks for).
+
+    `offline_access` is added only when the authorization
     server advertises it — asking a provider for a scope it never claimed risks
     `invalid_scope` on the consent screen, which costs the whole authorization
     rather than just its refresh token.
@@ -263,6 +281,13 @@ only succeeds if the OAuth credential was stored correctly.
     The stored refresh token is used to mint new access tokens, and some
     providers rotate refresh tokens on each use. If a refresh fails the
     connection needs re-authorizing — re-run `/authorize` for the same instance.
+  </Accordion>
+  <Accordion title='A tool call fails with "needs access it was not granted"'>
+    The server answered 403 with `error="insufficient_scope"` (RFC 6750): the
+    token is valid but was granted too little, usually because a scope was
+    unticked at sign-in. The message names the missing scopes, and the
+    verification records them under `detail.required_scopes`. Reconnect and
+    tick them; refreshing the token cannot add a scope.
   </Accordion>
   <Accordion title="Two auth configs for one instance">
     Each successful flow creates a new auth config named

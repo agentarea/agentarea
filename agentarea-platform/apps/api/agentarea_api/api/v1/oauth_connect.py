@@ -62,6 +62,14 @@ class OAuthAuthorizeRequest(CustomOAuthAppFields):
         description="Catalog API to connect; the connection is created by this request.",
     )
     credential_mode: Literal["auto", "custom"] = "auto"
+    scopes: list[str] | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Scopes to ask for, among the preflight's `scopes`; omitted asks for its "
+            "`default_scopes`."
+        ),
+    )
     return_to: str = Field(default="", max_length=2048)
 
     @model_validator(mode="after")
@@ -110,7 +118,11 @@ class OAuthPreflightResponse(BaseModel):
     detail: str = ""
     issuer: str | None = None
     authorization_endpoint: str | None = None
+    # Every scope the server offers.
     scopes: list[str] = Field(default_factory=list)
+    # The ones a sign-in asks for unless the person picks others: the catalog
+    # spec's choice, or on a reconnect what the connection already has.
+    default_scopes: list[str] = Field(default_factory=list)
     # The callback an OAuth app the user registers must allow.
     redirect_uri: str
 
@@ -166,6 +178,7 @@ async def oauth_preflight(
         issuer=answer.issuer,
         authorization_endpoint=answer.authorization_endpoint,
         scopes=list(answer.scopes),
+        default_scopes=list(answer.default_scopes),
         redirect_uri=callback_uri(),
     )
 
@@ -202,6 +215,7 @@ async def oauth_authorize(
         credential_mode=body.credential_mode,
         custom=body,
         return_to=body.return_to,
+        scopes=body.scopes,
     )
     return OAuthAuthorizeResponse(
         authorize_url=authorization.authorize_url, connection_id=authorization.connection_id

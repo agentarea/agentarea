@@ -27,14 +27,18 @@ ENDPOINT = "http://127.0.0.1/"
 SPEC_ID = "00000000-0000-4000-8000-0000000000bb"
 
 
-def _refusing(status: int):
+def _refusing(status: int, challenge: str | None = None):
+    response_headers = {"WWW-Authenticate": challenge} if challenge else {}
+
     def factory(headers=None, timeout=None, auth=None, **_kwargs):
         return httpx2.AsyncClient(
             headers=headers,
             timeout=timeout,
             auth=auth,
             transport=httpx2.MockTransport(
-                lambda _request: httpx2.Response(status, text='{"error":"invalid API key"}')
+                lambda _request: httpx2.Response(
+                    status, headers=response_headers, text='{"error":"invalid API key"}'
+                )
             ),
         )
 
@@ -211,6 +215,79 @@ async def test_verify_records_a_refusal_without_a_credential_as_needing_one(stat
         "code": "upstream_unauthorized",
         "message": f"remote requires sign-in or a key (HTTP {status})",
         "detail": {"status": status},
+    }
+    assert saved.await_args.args[1] == payload
+
+
+_MISSING_SCOPE = (
+    'Bearer error="insufficient_scope", '
+    'scope="https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.labels", '
+    'resource_metadata="https://gmailmcp.googleapis.com/.well-known/oauth-protected-resource"'
+)
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_for_missing_scopes_names_them():
+    """RFC 6750 §3.1: a 403 with insufficient_scope is not a dead credential but
+    one granted too little; the scopes it names are what a reconnect must add."""
+    with pytest.raises(mcp_client.MCPUpstreamUnauthorizedError) as exc_info:
+        async with mcp_client.connected_mcp_client(
+            ENDPOINT,
+            {"Authorization": "Bearer narrow"},
+            3.0,
+            transport="streamable-http",
+            httpx_client_factory=_refusing(403, _MISSING_SCOPE),
+        ) as client:
+            await client.list_tools()
+
+    refusal = exc_info.value
+    assert refusal.status == 403
+    assert refusal.insufficient_scope is True
+    assert refusal.required_scopes == (
+        "https://www.googleapis.com/auth/gmail.send",
+        "https://www.googleapis.com/auth/gmail.labels",
+    )
+    assert "reconnect" in refusal.message
+
+
+@pytest.mark.asyncio
+async def test_a_plain_refusal_names_no_scopes():
+    with pytest.raises(mcp_client.MCPUpstreamUnauthorizedError) as exc_info:
+        async with mcp_client.connected_mcp_client(
+            ENDPOINT,
+            {"Authorization": "Bearer stale"},
+            3.0,
+            transport="streamable-http",
+            httpx_client_factory=_refusing(401, 'Bearer error="invalid_token"'),
+        ) as client:
+            await client.list_tools()
+
+    assert exc_info.value.insufficient_scope is False
+    assert exc_info.value.required_scopes == ()
+
+
+@pytest.mark.asyncio
+async def test_verify_records_the_scopes_a_connection_was_not_granted():
+    instance, server = _instance(auth_config_id=uuid.uuid4()), _server()
+
+    async with _verifying(instance, server, _refusing(403, _MISSING_SCOPE)) as saved:
+        payload = await verify(instance, force=True)
+
+    assert payload["status"] == "failed"
+    assert payload["error"] == {
+        "code": "upstream_unauthorized",
+        "message": (
+            "remote needs access it was not granted (gmail.send, gmail.labels): "
+            "reconnect it and allow that access (HTTP 403)"
+        ),
+        "detail": {
+            "status": 403,
+            "error": "insufficient_scope",
+            "required_scopes": [
+                "https://www.googleapis.com/auth/gmail.send",
+                "https://www.googleapis.com/auth/gmail.labels",
+            ],
+        },
     }
     assert saved.await_args.args[1] == payload
 

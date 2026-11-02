@@ -9245,6 +9245,22 @@
             "maxLength": 2048,
             "title": "Return To",
             "type": "string"
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Scopes to ask for, among the preflight's `scopes`; omitted asks for its `default_scopes`.",
+            "title": "Scopes"
           }
         },
         "title": "OAuthAuthorizeRequest",
@@ -9442,6 +9458,13 @@
               }
             ],
             "title": "Credential Source"
+          },
+          "default_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Default Scopes",
+            "type": "array"
           },
           "detail": {
             "default": "",
