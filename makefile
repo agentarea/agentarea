@@ -4,6 +4,7 @@
 	agentarea-platform-lint agentarea-platform-format agentarea-platform-sync \
 	build-go lint-go test-go \
 	build ensure-env up up-dev down down-dev down-clean restart restart-dev logs \
+	demo-seed demo-snapshot demo-restore \
 	k8s-build-images helm-gen preflight validate-icons \
 	clean docker-clean full-clean
 
@@ -133,6 +134,15 @@ restart-dev: ## Restart the development stack
 
 logs: ## Follow logs from the development stack
 	docker compose -f docker-compose.dev.yaml logs -f
+
+demo-seed: ## Demo user (demo@agentarea.local / agentarea-demo-2026) with every catalog bundle installed
+	@./scripts/demo/seed.sh
+
+demo-snapshot: ## Save every local database and the object store to one file (SNAPSHOT=path.tar)
+	@./scripts/demo/snapshot.sh
+
+demo-restore: ## Replace local state with a snapshot (SNAPSHOT=path.tar, default the latest), then migrate
+	@./scripts/demo/restore.sh
 
 ##@ Kubernetes
 
