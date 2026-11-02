@@ -5,11 +5,41 @@ from uuid import UUID
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.repository import BaseRepository
 from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, column, exists, or_, select, table
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from agentarea_llm.domain.models import ProviderSpec
+from agentarea_llm.domain.models import ProviderConfig, ProviderSpec
+
+# The registry catalog's items, named as a table so this library does not
+# depend on agentarea-registry; a synced provider's item holds its spec's id.
+_catalog_items = table(
+    "registry_items",
+    column("installed_entity_id", PG_UUID(as_uuid=True)),
+    column("registry_type"),
+    column("in_source"),
+)
+
+
+def offered_to(workspace_id: str) -> ColumnElement[bool]:
+    """Provider specs a workspace may pick: what the catalog still publishes,
+    what never came from it, and what the workspace has a config on.
+
+    A provider the catalog dropped stays while some workspace's config uses it;
+    only the workspaces that can see such a config are offered it.
+    """
+    item = (_catalog_items.c.installed_entity_id == ProviderSpec.id) & (
+        _catalog_items.c.registry_type == "llm_providers"
+    )
+    return or_(
+        ~exists().where(item),
+        exists().where(item, _catalog_items.c.in_source.is_(True)),
+        exists().where(
+            ProviderConfig.provider_spec_id == ProviderSpec.id,
+            ProviderConfig.workspace_visibility(workspace_id),
+        ),
+    )
 
 
 class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily removed workspace scoping
@@ -73,13 +103,12 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
         limit: int = 100,
         offset: int = 0,
     ) -> list[ProviderSpec]:
-        """List provider specs with filtering and relationships."""
+        """List the provider specs offered to this workspace, with relationships."""
         filters = {}
         if is_builtin is not None:
             filters["is_builtin"] = is_builtin
 
-        # Build query with filters
-        query = select(ProviderSpec)
+        query = select(ProviderSpec).where(offered_to(self.user_context.workspace_id))
         if is_builtin is not None:
             query = query.where(ProviderSpec.is_builtin == is_builtin)
 

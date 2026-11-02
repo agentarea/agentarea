@@ -15,6 +15,7 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import unscoped
+from agentarea_common.constants import PLATFORM_WORKSPACE_ID
 from sqlalchemy import (
     String,
     and_,
@@ -483,6 +484,133 @@ class RegistryItemRepository:
             .distinct()
         )
         return [(row[0], str(row[1])) for row in result.all()]
+
+    async def delete_unused_dropped_providers(self, registry_id: UUID | str) -> int:
+        """Delete the provider specs the registry's source dropped that no workspace uses.
+
+        A spec goes once no catalog item still publishes it and no workspace, the
+        platform's included, has a config on it, an instance on one of its models
+        or its own copy of one; its models and every catalog item naming the spec
+        or one of its models go with it. Both are locked before the check, so a
+        config or instance added meanwhile waits and then fails rather than being
+        cascaded away. Returns how many of the registry's items were deleted.
+        """
+        # Raw SQL across the LLM tables, like ``move_references``: no workspace
+        # scope may confine it.
+        candidates = await self._ids(
+            """
+            SELECT ps.id FROM provider_specs ps
+            WHERE ps.id IN (
+                SELECT ri.installed_entity_id FROM registry_items ri
+                WHERE ri.registry_id = :registry_id AND ri.registry_type = 'llm_providers'
+                  AND NOT ri.in_source
+            )
+              AND NOT EXISTS (
+                SELECT 1 FROM registry_items live
+                WHERE live.installed_entity_id = ps.id AND live.registry_type = 'llm_providers'
+                  AND live.in_source
+            )
+            FOR UPDATE
+            """,
+            registry_id=UUID(str(registry_id)),
+        )
+        if not candidates:
+            return 0
+        await self._ids(
+            "SELECT id FROM model_specs WHERE provider_spec_id = ANY(:ids) FOR UPDATE",
+            ids=candidates,
+        )
+        unused = await self._ids(
+            """
+            SELECT ps.id FROM provider_specs ps
+            WHERE ps.id = ANY(:ids)
+              AND NOT EXISTS (SELECT 1 FROM provider_configs c WHERE c.provider_spec_id = ps.id)
+              AND NOT EXISTS (
+                SELECT 1 FROM model_specs ms
+                WHERE ms.provider_spec_id = ps.id
+                  AND (ms.workspace_id <> :platform OR EXISTS (
+                      SELECT 1 FROM model_instances mi WHERE mi.model_spec_id = ms.id
+                  ))
+            )
+            """,
+            ids=candidates,
+            platform=PLATFORM_WORKSPACE_ID,
+        )
+        deleted = await self._delete_items(
+            registry_id,
+            """
+            DELETE FROM registry_items
+            WHERE (registry_type = 'llm_providers' AND installed_entity_id = ANY(:ids))
+               OR (registry_type = 'llm_models' AND installed_entity_id IN (
+                   SELECT id FROM model_specs WHERE provider_spec_id = ANY(:ids)
+               ))
+            RETURNING registry_id
+            """,
+            unused,
+        )
+        await self.session.execute(
+            text("DELETE FROM provider_specs WHERE id = ANY(:ids)"), {"ids": unused}
+        )
+        await self.session.commit()
+        return deleted
+
+    async def delete_unused_dropped_models(self, registry_id: UUID | str) -> int:
+        """Delete the model specs the registry's source dropped that no instance runs on.
+
+        The platform's spec of a model goes, with every catalog item naming it,
+        once no catalog item still publishes it and no workspace has an instance
+        on it; a workspace's own copy is a row of its own and stays. Returns how
+        many of the registry's items were deleted.
+        """
+        candidates = await self._ids(
+            """
+            SELECT ms.id FROM model_specs ms
+            WHERE ms.id IN (
+                SELECT ri.installed_entity_id FROM registry_items ri
+                WHERE ri.registry_id = :registry_id AND ri.registry_type = 'llm_models'
+                  AND NOT ri.in_source
+            )
+              AND NOT EXISTS (
+                SELECT 1 FROM registry_items live
+                WHERE live.installed_entity_id = ms.id AND live.registry_type = 'llm_models'
+                  AND live.in_source
+            )
+            FOR UPDATE
+            """,
+            registry_id=UUID(str(registry_id)),
+        )
+        if not candidates:
+            return 0
+        unused = await self._ids(
+            """
+            SELECT ms.id FROM model_specs ms
+            WHERE ms.id = ANY(:ids)
+              AND NOT EXISTS (SELECT 1 FROM model_instances mi WHERE mi.model_spec_id = ms.id)
+            """,
+            ids=candidates,
+        )
+        deleted = await self._delete_items(
+            registry_id,
+            """
+            DELETE FROM registry_items
+            WHERE registry_type = 'llm_models' AND installed_entity_id = ANY(:ids)
+            RETURNING registry_id
+            """,
+            unused,
+        )
+        await self.session.execute(
+            text("DELETE FROM model_specs WHERE id = ANY(:ids)"), {"ids": unused}
+        )
+        await self.session.commit()
+        return deleted
+
+    async def _ids(self, sql: str, **params: Any) -> list[UUID]:
+        return list((await self.session.execute(text(sql), params)).scalars().all())
+
+    async def _delete_items(self, registry_id: UUID | str, sql: str, ids: list[UUID]) -> int:
+        """Run an item DELETE returning ``registry_id``; how many rows were the registry's."""
+        returned = (await self.session.execute(text(sql), {"ids": ids})).scalars().all()
+        return sum(1 for owner in returned if str(owner) == str(registry_id))
 
     async def delete_unreferenced_out_of_source(self, registry_id: UUID | str) -> int:
         """Delete the registry's items its source dropped that nothing uses.

@@ -98,7 +98,7 @@ PROVIDER_CONTRACT_FIELDS = (
 SOURCE_FETCH_TIMEOUT_SECONDS = 30
 # Part of the stored ETag: bump it when parsing or facets change, so the next
 # sync re-applies every source instead of skipping the unchanged ones.
-SYNC_FORMAT = "5"
+SYNC_FORMAT = "6"
 # The platform's own catalog rows: an item that changes in the source is applied
 # to its entity on sync. Other types install copies a workspace may have changed,
 # so a changed item only flags an update for someone to take.
@@ -1193,7 +1193,8 @@ class RegistryService:
                             await self._drop_platform_skill(item)
                     await self.item_repo.session.commit()
                 await self._move_uses(registry, await self._sibling_registries(registry))
-                deleted = await self.item_repo.delete_unreferenced_out_of_source(registry_id)
+                deleted = await self._delete_unused_llm_entities(registry)
+                deleted += await self.item_repo.delete_unreferenced_out_of_source(registry_id)
                 out_of_source -= deleted
 
         total = new_specs + updates_flagged + applied + unchanged
@@ -1288,7 +1289,30 @@ class RegistryService:
                 await self._drop_platform_skill(item)
             await self.item_repo.session.commit()
         await self._move_uses(registry, replacements)
-        return await self.item_repo.delete_unreferenced_out_of_source(registry_id)
+        deleted = await self._delete_unused_llm_entities(registry)
+        return deleted + await self.item_repo.delete_unreferenced_out_of_source(registry_id)
+
+    async def _delete_unused_llm_entities(self, registry: Registry) -> int:
+        """Delete the provider and model specs the registry dropped that nothing uses.
+
+        Every synced LLM item has its spec as ``installed_entity_id``, which the
+        generic cleanup reads as a use, so a dropped provider stayed listed
+        forever. Returns how many of the registry's items went with them.
+        """
+        if registry.registry_type == "llm_providers":
+            deleted = await self.item_repo.delete_unused_dropped_providers(registry.id)
+        elif registry.registry_type == "llm_models":
+            deleted = await self.item_repo.delete_unused_dropped_models(registry.id)
+        else:
+            return 0
+        if deleted:
+            logger.info(
+                "Deleted %d %s registry %s dropped that no workspace uses",
+                deleted,
+                registry.registry_type,
+                registry.id,
+            )
+        return deleted
 
     async def _move_uses(self, registry: Registry, replacements: Collection[UUID]) -> None:
         """Move what uses the registry's dropped items onto their replacements.

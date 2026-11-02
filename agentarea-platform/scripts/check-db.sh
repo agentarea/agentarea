@@ -51,6 +51,9 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     index that serves it, a property of the migrated indexes and the planner.
 #   catalog retire: a sync deletes what its source dropped unless a row of
 #     another module (install, fork, agent, connection) still references it.
+#   LLM catalog retire: a provider or model the catalog dropped is deleted, its
+#     specs cascading, unless a config, an instance or a workspace's own model
+#     copy in any workspace uses it; a kept one is offered only where it is used.
 #   catalog visibility: a workspace registry's items reach only that workspace
 #     (browse, search, by id, the skill and agent projections), a CHECK keeps
 #     it to catalog-only types, and names are unique per scope (ADR-0044).
@@ -167,6 +170,7 @@ PY_SUITES=(
   libs/llm/tests/test_video_generation_jobs_db.py
   libs/registry/tests/test_catalog_browse_plans_db.py
   libs/registry/tests/test_catalog_retire_db.py
+  libs/registry/tests/test_llm_catalog_retire_db.py
   libs/registry/tests/test_catalog_visibility_db.py
   libs/agents/tests/test_catalog_workspace_registry_db.py
   libs/agents/tests/test_catalog_presets_db.py
