@@ -271,3 +271,14 @@ async def test_reasoning_settings_are_refused_not_dropped(fields):
 
     with pytest.raises(ValueError, match="does not take reasoning settings"):
         await model.complete(LLMRequest(messages=[{"role": "user", "content": "hi"}], **fields))
+
+
+@pytest.mark.asyncio
+async def test_every_request_asks_for_the_prompt_to_be_cached(monkeypatch):
+    model = _claude()
+    captured: dict = {}
+    _serve(monkeypatch, model, STREAM, captured)
+
+    await model.complete(LLMRequest(messages=[{"role": "user", "content": "hi"}]))
+
+    assert captured["json"]["cache_control"] == {"type": "ephemeral"}

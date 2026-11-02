@@ -16,6 +16,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     or_,
     select,
     true,
@@ -100,6 +101,9 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
         String(16), nullable=False, default="reasoning_effort", server_default="reasoning_effort"
     )
     reasoning_efforts: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    cache_breakpoints: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
 
     def profile(self) -> ProviderProfile:
         return ProviderProfile.from_mapping(
@@ -112,6 +116,7 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
                 "models_query": self.models_query,
                 "reasoning_param": self.reasoning_param,
                 "reasoning_efforts": self.reasoning_efforts,
+                "cache_breakpoints": self.cache_breakpoints,
             }
         )
 
