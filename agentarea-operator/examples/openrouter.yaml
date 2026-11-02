@@ -1,5 +1,5 @@
 # Example: OpenRouter with model discovery
-# 1. Create the secret: kubectl create secret generic openrouter-api-key --from-literal=api-key=sk-or-... -n agentarea
+# 1. Create the secret: kubectl create secret generic openrouter-api-key --from-literal=api-key=sk-or-... -n agentarea  # pragma: allowlist secret
 # 2. Apply this: kubectl apply -f openrouter.yaml
 apiVersion: agentarea.io/v1alpha1
 kind: LLMProviderConfig
