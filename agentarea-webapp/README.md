@@ -83,6 +83,32 @@ npm run dev
 
 The application will be available at http://localhost:3000
 
+### Running the UI against staging
+
+Staging is a backend with its own data and its own accounts: an API at
+`https://api.staging.agentarea.ru` and Kratos at `https://auth.staging.agentarea.ru`.
+It has no UI of its own; you run this one locally.
+
+Put this in `.env.local`, then `pnpm dev`. Any port works; `ORY_BROWSER_URL` and
+`AGENTAREA_APP_ORIGIN` are the address you open.
+
+```bash
+AGENTAREA_API_URL=https://api.staging.agentarea.ru
+# Kratos is reached through this app's own /self-service proxy, so its cookies
+# land on localhost.
+ORY_SDK_URL=https://auth.staging.agentarea.ru
+ORY_BROWSER_URL=http://localhost:3000
+# Kratos admin is not public: leave AGENTAREA_AUTH_KRATOS_ADMIN_URL unset, and
+# member names and avatars fall back to ids.
+AGENTAREA_MCP_APPS_ORIGIN=http://127.0.0.1:3000
+AGENTAREA_APP_ORIGIN=http://localhost:3000
+```
+
+Open that address and register. Sign-in is by password; there is no mail, so no
+verification, recovery or email codes, and no MCP OAuth. Agent runs are real:
+sandboxes and the LLM gateway are production's. Staging has no platform models
+yet, so a new workspace needs a model provider added before its first run.
+
 ## Project Structure
 
 ```
