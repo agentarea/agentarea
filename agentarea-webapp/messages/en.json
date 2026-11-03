@@ -1482,7 +1482,16 @@
       "runAt": "Run at",
       "runNowAction": "Run now",
       "done": "Done",
-      "scheduleTask": "Schedule task"
+      "scheduleTask": "Schedule task",
+      "date": "Date",
+      "time": "Time",
+      "invalidTime": "Type a date and time like {example}",
+      "timePassed": "This time has already passed",
+      "presets": {
+        "inOneHour": "In an hour",
+        "tomorrowMorning": "Tomorrow morning",
+        "mondayMorning": "Monday morning"
+      }
     },
     "Messages": {
       "toolCall": "Tool Call",
