@@ -2089,7 +2089,6 @@
     "policyPerCall": "per call",
     "policyContentSafety": "Content safety",
     "policyPromptInjection": "Prompt-injection detection",
-    "policyOutputSanitizer": "Output sanitizer",
     "policyMonthlyCap": "Monthly cap",
     "policyAgentMonthlyCap": "Agent monthly cap",
     "policyServiceBudget": "Service budget",
@@ -3780,8 +3779,7 @@
         "removeValue": "Remove {value}"
       },
       "safety": {
-        "promptInjection": "Prompt-injection detection",
-        "outputSanitizer": "Output sanitizer"
+        "promptInjection": "Prompt-injection detection"
       },
       "validation": {
         "agentRequired": "Add at least one agent for this policy.",
@@ -3792,7 +3790,6 @@
         "amountMustNotBeNegative": "The amount can't be negative.",
         "atLeastOneToolRequired": "Add at least one tool.",
         "toolRequired": "Add a tool.",
-        "safetyCheckRequired": "Enable at least one safety check.",
         "approverUnsupported": "Only workspace members can approve; remove role and group approvers.",
         "ruleInvalid": "Rule {number} ({effect}): {error}",
         "installTargetRequired": "Pick at least one registry or trust level.",

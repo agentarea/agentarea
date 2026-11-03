@@ -2089,7 +2089,6 @@
     "policyPerCall": "за вызов",
     "policyContentSafety": "Безопасность контента",
     "policyPromptInjection": "Детект prompt-injection",
-    "policyOutputSanitizer": "Санитайзер вывода",
     "policyMonthlyCap": "Месячный лимит",
     "policyAgentMonthlyCap": "Месячный лимит агента",
     "policyServiceBudget": "Сервисный бюджет",
@@ -3780,8 +3779,7 @@
         "removeValue": "Удалить {value}"
       },
       "safety": {
-        "promptInjection": "Обнаружение инъекций в промпт",
-        "outputSanitizer": "Очистка вывода"
+        "promptInjection": "Обнаружение инъекций в промпт"
       },
       "validation": {
         "agentRequired": "Добавьте хотя бы одного агента для этой политики.",
@@ -3792,7 +3790,6 @@
         "amountMustNotBeNegative": "Сумма не может быть отрицательной.",
         "atLeastOneToolRequired": "Добавьте хотя бы один инструмент.",
         "toolRequired": "Добавьте инструмент.",
-        "safetyCheckRequired": "Включите хотя бы одну проверку безопасности.",
         "approverUnsupported": "Согласовывать могут только участники рабочего пространства — удалите роли и группы из согласующих.",
         "ruleInvalid": "Правило № {number} («{effect}»): {error}",
         "installTargetRequired": "Выберите хотя бы один реестр или уровень доверия.",

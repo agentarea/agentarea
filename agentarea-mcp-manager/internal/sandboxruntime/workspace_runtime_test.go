@@ -136,6 +136,9 @@ func (r *fakeWorkspaceRuntime) SandboxFileDownload(_ context.Context, _, _, path
 }
 
 func (r *fakeWorkspaceRuntime) SandboxFileList(context.Context, string, string, string) (*warmpool.FileListResponse, error) {
+	if r.workspaceGone {
+		return nil, warmpool.ErrTaskWorkspaceGone
+	}
 	paths := make([]string, 0, len(r.files))
 	for path := range r.files {
 		paths = append(paths, path)
@@ -717,5 +720,44 @@ func TestEnsureWorkspaceHydrated_NonAdditiveDiffStillRefused(t *testing.T) {
 				t.Fatalf("uploads = %d, want only the original hydration", provider.puts)
 			}
 		})
+	}
+}
+
+// A task with no inputs has no task directory until something writes one. A read that
+// ensured the sandbox is live sees an empty workspace there, not an expired one.
+func TestWorkspaceRuntimeEnsuredReadOfAnUnwrittenWorkspaceIsEmpty(t *testing.T) {
+	revision := strings.Repeat("a", 64)
+	provider := &fakeWorkspaceProvider{mount: &sandboxworkspace.Mount{
+		WorkspaceID: "workspace-1", TaskID: "task-1", Root: WorkspaceRoot,
+		RevisionSHA256: revision,
+		Hydration:      workspace.Hydration{RevisionSHA256: revision},
+	}}
+	dataPlane := &fakeWorkspaceRuntime{workspaceGone: true}
+	runtime, err := NewWorkspaceRuntime(dataPlane, provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ensured := WorkspaceFileDemand{WorkspaceID: "workspace-1", TaskID: "task-1", Ensure: true}
+
+	listing, err := runtime.ListWorkspaceFiles(context.Background(), WorkspaceFileList{WorkspaceFileDemand: ensured})
+	if err != nil {
+		t.Fatalf("ensured list error = %v, want an empty listing", err)
+	}
+	if len(listing.Paths) != 0 {
+		t.Fatalf("ensured list = %v, want empty", listing.Paths)
+	}
+	if _, err := runtime.GetWorkspaceFile(context.Background(), WorkspaceFileRead{WorkspaceFileDemand: ensured, Path: "notes.md"}); !errors.Is(err, warmpool.ErrFileNotFound) {
+		t.Fatalf("ensured get error = %v, want file not found", err)
+	}
+	if _, err := runtime.OpenWorkspaceFile(context.Background(), WorkspaceFileRead{WorkspaceFileDemand: ensured, Path: "notes.md"}); !errors.Is(err, warmpool.ErrFileNotFound) {
+		t.Fatalf("ensured open error = %v, want file not found", err)
+	}
+	if dataPlane.fences != dataPlane.fenceReleases {
+		t.Fatalf("fences acquired %d, released %d", dataPlane.fences, dataPlane.fenceReleases)
+	}
+
+	inspect := WorkspaceFileDemand{WorkspaceID: "workspace-1", TaskID: "task-1"}
+	if _, err := runtime.ListWorkspaceFiles(context.Background(), WorkspaceFileList{WorkspaceFileDemand: inspect}); !errors.Is(err, warmpool.ErrTaskWorkspaceGone) {
+		t.Fatalf("inspecting list error = %v, want workspace gone", err)
 	}
 }

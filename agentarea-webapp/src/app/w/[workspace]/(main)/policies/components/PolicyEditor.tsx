@@ -179,7 +179,6 @@ interface FormState {
   approvers: string[];
   // safety
   promptInjection: boolean;
-  outputSanitizer: boolean;
   // catalog installs: registry:<id> / registry_trust:<level> targets
   installEffect: InstallEffect;
   installTargets: string[];
@@ -203,7 +202,6 @@ const EMPTY_FORM: FormState = {
   tools: [],
   approvers: [],
   promptInjection: true,
-  outputSanitizer: false,
   installEffect: "deny",
   installTargets: [],
 };
@@ -480,7 +478,6 @@ function policyToForm(policy: Policy): {
       : [];
   } else if (policy.effect === "safety") {
     form.promptInjection = Boolean(p.prompt_injection);
-    form.outputSanitizer = Boolean(p.output_sanitizer);
   }
 
   return { effect: policy.effect, form };
@@ -500,7 +497,6 @@ type RuleBuildError =
   | "amountMustNotBeNegative"
   | "atLeastOneToolRequired"
   | "toolRequired"
-  | "safetyCheckRequired"
   | "approverUnsupported"
   | "installTargetRequired";
 
@@ -591,17 +587,12 @@ function buildRuleBodies(
   }
 
   // safety
-  if (!form.promptInjection && !form.outputSanitizer)
-    return { error: "safetyCheckRequired" };
   return {
     bodies: [
       {
         target: "content",
         effect,
-        params: {
-          prompt_injection: form.promptInjection,
-          output_sanitizer: form.outputSanitizer,
-        },
+        params: { prompt_injection: form.promptInjection },
       },
     ],
   };
@@ -1132,11 +1123,7 @@ function previewParams(effect: RuleKind, form: FormState): string {
       form.approvers.length > 0 ? ` approvers=${form.approvers.length}` : "";
     return `${scope}${approvers}`;
   }
-  const checks = [
-    form.promptInjection && "prompt_injection",
-    form.outputSanitizer && "output_sanitizer",
-  ].filter(Boolean);
-  return checks.length > 0 ? checks.join(" ") : "checks=pending";
+  return form.promptInjection ? "prompt_injection" : "checks=pending";
 }
 
 // --- editor ---------------------------------------------------------------
@@ -1183,9 +1170,7 @@ export default function PolicyEditor({
               ? t("validation.toolRequired")
               : error === "approverUnsupported"
                 ? t("validation.approverUnsupported")
-                : error === "installTargetRequired"
-                  ? t("validation.installTargetRequired")
-                  : t("validation.safetyCheckRequired");
+                : t("validation.installTargetRequired");
   const currencySymbol = useMemo(
     () => getCurrencySymbol(currency, locale),
     [currency, locale]
@@ -2047,16 +2032,6 @@ export default function PolicyEditor({
                     id="prompt-injection"
                     checked={form.promptInjection}
                     onCheckedChange={(v) => update("promptInjection", v)}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="output-sanitizer" className="font-normal">
-                    {t("safety.outputSanitizer")}
-                  </Label>
-                  <Switch
-                    id="output-sanitizer"
-                    checked={form.outputSanitizer}
-                    onCheckedChange={(v) => update("outputSanitizer", v)}
                   />
                 </div>
               </div>

@@ -349,3 +349,71 @@ async def test_a_provider_that_caches_on_its_own_gets_the_messages_unmarked(monk
     sent = await _sent_messages(monkeypatch, OPENAI, _conversation())
 
     assert sent == _conversation()
+
+
+def _openrouter():
+    return LLMModel(
+        provider_type="openrouter",
+        provider=ProviderProfile(base_url="https://openrouter.ai/api/v1"),
+        model_name="vendor/model",
+        api_key="k",
+        input_cost_per_token=0.001,
+        output_cost_per_token=0.002,
+    )
+
+
+@pytest.mark.parametrize(
+    ("event", "status"),
+    [
+        (
+            {
+                "error": {"code": 502, "message": "Upstream timed out"},
+                "choices": [{"delta": {"content": ""}, "finish_reason": "error"}],
+            },
+            502,
+        ),
+        ({"error": {"code": 429, "message": "Rate limited upstream"}, "choices": []}, 429),
+        ({"choices": [{"delta": {}, "finish_reason": "error"}]}, 502),
+        # OpenRouter's documented mid-stream shape names the cause with a string code.
+        (
+            {
+                "error": {"code": "server_error", "message": "Provider disconnected unexpectedly"},
+                "choices": [{"delta": {"content": ""}, "finish_reason": "error"}],
+            },
+            502,
+        ),
+        ({"error": {"code": "invalid_api_key", "message": "Key revoked"}}, 401),
+        ({"error": {"code": "insufficient_quota", "message": "Account not active"}}, 402),
+        ({"error": {"code": "rate_limit_exceeded", "message": "Slow down"}}, 429),
+        ({"error": {"code": "context_length_exceeded", "message": "Too long"}}, 400),
+    ],
+)
+@pytest.mark.asyncio
+async def test_an_error_inside_the_stream_is_a_provider_error_not_an_empty_reply(
+    monkeypatch, event, status
+):
+    from agentarea_agents_sdk.models.llm_model import LLMProviderHTTPError
+
+    model = _openrouter()
+    _serve_sse(monkeypatch, model, [{"choices": [{"delta": {"content": "par"}}]}, event], {})
+
+    with pytest.raises(LLMProviderHTTPError) as raised:
+        async for _ in model.ainvoke_stream(LLMRequest(messages=[{"role": "user", "content": "hi"}])):
+            pass
+
+    assert raised.value.status_code == status
+
+
+@pytest.mark.asyncio
+async def test_a_stream_error_keeps_its_code_in_the_message(monkeypatch):
+    from agentarea_agents_sdk.models.llm_model import LLMProviderHTTPError
+
+    model = _openrouter()
+    event = {"error": {"code": "context_length_exceeded", "message": "Too long"}}
+    _serve_sse(monkeypatch, model, [event], {})
+
+    with pytest.raises(LLMProviderHTTPError) as raised:
+        async for _ in model.ainvoke_stream(LLMRequest(messages=[{"role": "user", "content": "hi"}])):
+            pass
+
+    assert raised.value.provider_message == "context_length_exceeded: Too long"

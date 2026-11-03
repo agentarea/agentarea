@@ -176,3 +176,31 @@ func stubContainerRuntime(t *testing.T) string {
 	}
 	return path
 }
+
+// A retired task directory is gone, so the next demand must hydrate the inputs again
+// rather than trust the revision recorded for the deleted directory.
+func TestDockerBackendRetirementForgetsTheHydratedRevision(t *testing.T) {
+	allowSharedExecutor(t)
+	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	backend := NewDockerBackend(&config.Config{Container: config.ContainerConfig{
+		SandboxExecutorURL: server.URL,
+	}}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	retired, kept := dockerTaskKey("workspace-1", "task-1"), dockerTaskKey("workspace-1", "task-10")
+	backend.hydrated[retired] = "revision-a"
+	backend.hydrated[kept] = "revision-b"
+
+	if err := backend.RetireSandboxTask(context.Background(), "workspace-1", "task-1", 0); err != nil {
+		t.Fatal(err)
+	}
+
+	if revision, ok := backend.hydrated[retired]; ok {
+		t.Fatalf("retired task still recorded as hydrated at %q", revision)
+	}
+	if backend.hydrated[kept] != "revision-b" {
+		t.Fatal("retiring task-1 forgot task-10's hydration")
+	}
+}

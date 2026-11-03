@@ -2251,10 +2251,6 @@ export type CollectionUpdateRequest = {
 export type ContentSafetyPolicy = {
   answer_check?: AnswerCheckPolicy | null;
   /**
-   * Output Sanitizer Enabled
-   */
-  output_sanitizer_enabled?: boolean | null;
-  /**
    * Prompt Injection Detection Enabled
    */
   prompt_injection_detection_enabled?: boolean | null;
