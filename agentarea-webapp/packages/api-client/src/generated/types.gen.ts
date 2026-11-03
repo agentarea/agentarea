@@ -6722,6 +6722,10 @@ export type ProviderSpecResponse = {
      */
     is_builtin: boolean;
     /**
+     * Is First Party
+     */
+    is_first_party: boolean;
+    /**
      * Name
      */
     name: string;
@@ -6767,6 +6771,10 @@ export type ProviderSpecWithModelsResponse = {
      * Is Builtin
      */
     is_builtin: boolean;
+    /**
+     * Is First Party
+     */
+    is_first_party: boolean;
     /**
      * Models
      */

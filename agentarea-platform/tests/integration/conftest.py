@@ -35,6 +35,7 @@ from sqlalchemy.pool import StaticPool
 # (trigger/task tests) that share this in-memory-SQLite db_session fixture.
 from agentarea_agents.domain.models import Agent  # noqa: F401
 from agentarea_llm.domain.models import ModelSpec, ProviderSpec  # noqa: F401
+from agentarea_registry.domain.models import RegistryItem  # noqa: F401
 from agentarea_tasks.infrastructure.orm import TaskEventORM, TaskORM  # noqa: F401
 from agentarea_triggers.infrastructure.orm import TriggerExecutionORM, TriggerORM  # noqa: F401
 

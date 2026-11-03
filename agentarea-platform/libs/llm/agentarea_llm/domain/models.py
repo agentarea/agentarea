@@ -78,6 +78,11 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
     provider_type: Mapped[str] = mapped_column(String, nullable=False)
     icon: Mapped[str | None] = mapped_column(String, nullable=True)
     is_builtin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # The provider the platform itself hosts, as the catalog marks it: listed
+    # first and badged as ours.
+    is_first_party: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     # Whether this provider type authenticates at all. False for the local ones
     # (Ollama and friends), which listen on an unauthenticated endpoint — asking
     # for a key there leaves the user with a required field they can only satisfy

@@ -481,6 +481,25 @@ class TestParseLLMProviders:
         items = RegistryService._parse_llm_providers(data)
         assert items[0]["spec"]["is_builtin"] is False
 
+    def test_carries_the_first_party_flag(self):
+        data = {
+            "providers": [
+                {"provider_key": "ours", "first_party": True},
+                {"provider_key": "theirs"},
+            ]
+        }
+
+        ours, theirs = (item["spec"] for item in RegistryService._parse_llm_providers(data))
+
+        assert ours["first_party"] is True
+        assert theirs["first_party"] is False
+
+    def test_a_first_party_flag_that_is_not_a_bool_is_refused(self):
+        with pytest.raises(ValueError, match="first_party"):
+            RegistryService._parse_llm_providers(
+                {"providers": [{"provider_key": "ours", "first_party": "yes"}]}
+            )
+
 
 class TestParseLLMModels:
     def test_basic_model(self):

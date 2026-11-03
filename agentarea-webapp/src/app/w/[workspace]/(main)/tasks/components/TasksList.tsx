@@ -1,15 +1,15 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import type { SourceType } from "@/lib/sourceTypes";
-import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
 import { AgentLink } from "@/components/AgentIdentity";
+import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
 import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
 import { TaskItem } from "@/components/TaskItem";
 import { TaskSourceBadge } from "@/components/TaskSourceBadge";
 import { TaskStatus } from "@/components/TaskStatus";
 import type { TaskWithAgent } from "@/lib/api";
 import { CARD_GRID_WIDE } from "@/lib/collectionGrids";
+import type { SourceType } from "@/lib/sourceTypes";
 import TaskCostDisplay, { TaskCostProvider } from "./TaskCostDisplay";
 
 interface TasksListProps {
@@ -48,12 +48,7 @@ export default function TasksList({
       cellClassName: "w-[140px]",
       render: (value: string, row: TaskWithAgent) => (
         <div className="flex flex-col gap-1">
-          <TaskStatus
-            status={value}
-            size="default"
-            caption="auto"
-            className="font-medium"
-          />
+          <TaskStatus status={value} size="default" className="font-medium" />
           {row.scheduled_at && (
             <TableDateDisplay dateString={row.scheduled_at} />
           )}

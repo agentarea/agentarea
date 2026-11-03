@@ -1,12 +1,13 @@
 "use client";
 
-import Image from "next/image";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { useTranslations } from "next-intl";
+import Image from "next/image";
 import EmptyState from "@/components/EmptyState";
-import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import Table from "@/components/Table/Table";
+import { useViewerCapabilities } from "@/components/ViewerCapabilities";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
+import { FirstPartyBadge } from "./FirstPartyBadge";
 import ModelsList from "./ModelsList";
 import { ProviderConfigCard } from "./ProviderItem";
 import { ModelInstance, ProviderConfig } from "./types";
@@ -27,7 +28,6 @@ export default function ProviderConfigsView({
   const t = useTranslations("Models.table");
   const tEmpty = useTranslations("Models.empty");
   const tCommon = useTranslations("Common");
-  const tAdmin = useTranslations("AdminOnly");
   const router = useWorkspaceRouter();
   const { canAdminister } = useViewerCapabilities();
 
@@ -56,6 +56,12 @@ export default function ProviderConfigsView({
     {
       accessor: "provider_spec_name",
       header: t("provider"),
+      render: (value: string | null, item: ProviderConfig) => (
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate">{value}</span>
+          {item.spec?.is_first_party && <FirstPartyBadge />}
+        </div>
+      ),
     },
     {
       accessor: "model_instances",
@@ -82,12 +88,14 @@ export default function ProviderConfigsView({
           hints={
             hasNoData
               ? [
-                  canAdminister
-                    ? {
-                        text: tEmpty("noOwnConfigs.hintAdd"),
-                        href: "/models/create",
-                      }
-                    : { text: tAdmin("hints.manageProvider") },
+                  ...(canAdminister
+                    ? [
+                        {
+                          text: tEmpty("noOwnConfigs.hintAdd"),
+                          href: "/models/create",
+                        },
+                      ]
+                    : []),
                   { text: tEmpty("noOwnConfigs.hintEnable") },
                   { text: tEmpty("noOwnConfigs.hintSecret") },
                 ]
@@ -113,9 +121,7 @@ export default function ProviderConfigsView({
         data={configs}
         columns={configColumns}
         onRowClick={(config) => {
-          router.push(
-            `/models/edit/${config.id}`
-          );
+          router.push(`/models/edit/${config.id}`);
         }}
       />
     );

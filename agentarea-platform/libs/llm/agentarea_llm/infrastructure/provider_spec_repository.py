@@ -5,11 +5,53 @@ from uuid import UUID
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.repository import BaseRepository
 from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, column, exists, func, or_, select, table
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from agentarea_llm.domain.models import ProviderSpec
+from agentarea_llm.domain.models import ModelInstance, ModelSpec, ProviderConfig, ProviderSpec
+
+# The registry catalog's items, named as a table so this library does not
+# depend on agentarea-registry; a synced provider's item holds its spec's id.
+_catalog_items = table(
+    "registry_items",
+    column("installed_entity_id", PG_UUID(as_uuid=True)),
+    column("registry_type"),
+    column("in_source"),
+)
+
+
+def offered_to(workspace_id: str) -> ColumnElement[bool]:
+    """Provider specs a workspace may pick: what the catalog still publishes,
+    what never came from it, and what the workspace uses.
+
+    A provider the catalog dropped stays while some workspace uses it, in the
+    ways its cleanup counts as a use: a config on it, an instance on one of its
+    models, or the workspace's own copy of one. Only those workspaces are
+    offered it.
+    """
+    item = (_catalog_items.c.installed_entity_id == ProviderSpec.id) & (
+        _catalog_items.c.registry_type == "llm_providers"
+    )
+    return or_(
+        ~exists().where(item),
+        exists().where(item, _catalog_items.c.in_source.is_(True)),
+        exists().where(
+            ProviderConfig.provider_spec_id == ProviderSpec.id,
+            ProviderConfig.workspace_visibility(workspace_id),
+        ),
+        exists().where(
+            ModelSpec.provider_spec_id == ProviderSpec.id,
+            or_(
+                ModelSpec.workspace_id == workspace_id,
+                exists().where(
+                    ModelInstance.model_spec_id == ModelSpec.id,
+                    ModelInstance.workspace_visibility(workspace_id),
+                ),
+            ),
+        ),
+    )
 
 
 class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily removed workspace scoping
@@ -73,17 +115,20 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
         limit: int = 100,
         offset: int = 0,
     ) -> list[ProviderSpec]:
-        """List provider specs with filtering and relationships."""
+        """List the provider specs offered to this workspace, with relationships.
+
+        The platform's own provider comes first, then the rest by name.
+        """
         filters = {}
         if is_builtin is not None:
             filters["is_builtin"] = is_builtin
 
-        # Build query with filters
-        query = select(ProviderSpec)
+        query = select(ProviderSpec).where(offered_to(self.user_context.workspace_id))
         if is_builtin is not None:
             query = query.where(ProviderSpec.is_builtin == is_builtin)
 
-        query = query.limit(limit).offset(offset)
+        order = (ProviderSpec.is_first_party.desc(), func.lower(ProviderSpec.name))
+        query = query.order_by(*order).limit(limit).offset(offset)
         result = await self.session.execute(query)
         specs = list(result.scalars().all())
 
@@ -97,6 +142,7 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
                     selectinload(ProviderSpec.provider_configs),
                 )
                 .where(ProviderSpec.id.in_(spec_ids))
+                .order_by(*order)
             )
             specs_with_relations = result.scalars().all()
             return list(specs_with_relations)
@@ -119,6 +165,7 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
             existing.provider_type = entity.provider_type
             existing.icon = entity.icon
             existing.is_builtin = entity.is_builtin
+            existing.is_first_party = bool(entity.is_first_party)
             for column, value in contract.items():
                 setattr(existing, column, value)
             return await self.update(existing)

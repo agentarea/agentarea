@@ -1,10 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import { useTranslations } from "next-intl";
+import Image from "next/image";
 import type { ProviderSpecWithModelsResponse } from "@/api/client/types.gen";
 import Table from "@/components/Table/Table";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
+import { FirstPartyBadge } from "./FirstPartyBadge";
 import { ProviderSpecCard } from "./ProviderItem";
 
 interface ProviderSpecsViewProps {
@@ -47,7 +48,10 @@ export default function ProviderSpecsView({
             </span>
           )}
           <div className="min-w-0">
-            <div className="truncate font-medium">{value}</div>
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate font-medium">{value}</span>
+              {row.is_first_party && <FirstPartyBadge />}
+            </div>
             <div className="truncate text-[11px] text-muted-foreground">
               {row.provider_key}
             </div>

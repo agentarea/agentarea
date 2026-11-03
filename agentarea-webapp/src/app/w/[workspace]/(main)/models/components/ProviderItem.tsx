@@ -1,12 +1,13 @@
-import { AlertCircle, Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
+import { AlertCircle, Check } from "lucide-react";
+import type { ProviderSpecWithModelsResponse } from "@/api/client/types.gen";
+import LinkedCard from "@/components/LinkedCard/LinkedCard";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { FirstPartyBadge } from "./FirstPartyBadge";
 import ModelsList from "./ModelsList";
-import type { ProviderSpecWithModelsResponse } from "@/api/client/types.gen";
 import { ProviderConfig } from "./types";
-import LinkedCard from "@/components/LinkedCard/LinkedCard";
 
 interface ProviderConfigCardProps {
   config: ProviderConfig;
@@ -22,6 +23,7 @@ export function ProviderConfigCard({ config }: ProviderConfigCardProps) {
       title={config.name}
       icon={config.spec?.icon_url}
       type="edit"
+      topRight={config.spec?.is_first_party ? <FirstPartyBadge /> : undefined}
       subtitle={
         <p className="w-full truncate text-xs text-muted-foreground">
           {config.spec?.name}
@@ -76,6 +78,7 @@ export function PlatformProviderConfigCard({
             {config.spec?.name}
           </p>
         </div>
+        {config.spec?.is_first_party && <FirstPartyBadge />}
       </div>
 
       <div className="mt-auto flex flex-col gap-2 py-2">
@@ -112,6 +115,7 @@ export function ProviderSpecCard({ spec }: ProviderSpecCardProps) {
       title={spec.name}
       icon={spec.icon_url ?? undefined}
       type="config"
+      topRight={spec.is_first_party ? <FirstPartyBadge /> : undefined}
       subtitle={
         <p className="w-full truncate text-xs text-muted-foreground">
           {spec.provider_key}

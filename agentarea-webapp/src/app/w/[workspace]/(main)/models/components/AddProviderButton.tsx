@@ -1,8 +1,7 @@
 import { getTranslations } from "next-intl/server";
-import Link from "@/components/WorkspaceLink";
 import { Settings } from "lucide-react";
-import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import { Button } from "@/components/ui/button";
+import Link from "@/components/WorkspaceLink";
 import { getViewerCapabilities } from "@/lib/workspace-context";
 
 /**
@@ -32,17 +31,14 @@ export default async function AddProviderButton() {
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <AdminOnlyHint action="manageProvider" />
-      <Button
-        className="shrink-0"
-        size="xs"
-        data-test="new-config-button"
-        disabled
-      >
-        <Settings />
-        {t("createButton")}
-      </Button>
-    </div>
+    <Button
+      className="shrink-0"
+      size="xs"
+      data-test="new-config-button"
+      disabled
+    >
+      <Settings />
+      {t("createButton")}
+    </Button>
   );
 }
