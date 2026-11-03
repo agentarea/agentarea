@@ -42,7 +42,7 @@ function Count({
 }) {
   if (atLeast && value === undefined) return null;
   return (
-    <span className="text-xs tabular-nums text-muted-foreground">
+    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
       {value ?? 0}
       {atLeast && "+"}
     </span>
@@ -192,7 +192,11 @@ function Filters({
             <MenuRow
               key={stream.id}
               icon={<EntityIcon kind="stream" className="h-3.5 w-3.5" />}
-              label={<span className="truncate">{stream.name}</span>}
+              label={
+                <span className="truncate" title={stream.name}>
+                  {stream.name}
+                </span>
+              }
               selected={state.stream === stream.id}
               onClick={() => go({ stream: stream.id })}
               trailing={
@@ -286,7 +290,7 @@ export default function FeedFilters(props: FiltersProps) {
   ].filter(Boolean).length;
   return (
     <>
-      <aside className="hidden lg:sticky lg:top-0 lg:block lg:self-start">
+      <aside className="hidden min-w-0 lg:sticky lg:top-0 lg:block lg:self-start">
         <Filters {...props} />
       </aside>
       <div className="lg:hidden">

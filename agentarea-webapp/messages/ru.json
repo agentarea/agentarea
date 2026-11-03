@@ -142,8 +142,6 @@
     "confirm": "Подтвердить",
     "display": "Вид",
     "skipToContent": "Перейти к основному содержимому",
-    "switchToDarkTheme": "Переключить на тёмную тему",
-    "switchToLightTheme": "Переключить на светлую тему",
     "scrollToLatestMessage": "Прокрутить к последнему сообщению",
     "previousPage": "Назад",
     "nextPage": "Вперёд",
@@ -201,6 +199,9 @@
     }
   },
   "Sidebar": {
+    "search": "Поиск",
+    "searchPlaceholder": "Поиск…",
+    "searchEmpty": "Ничего не найдено",
     "dashboard": "Дашборд",
     "newTask": "Новая задача",
     "inbox": "Входящие",
@@ -239,6 +240,7 @@
     "policies": "Политики",
     "settings": "Настройки",
     "logout": "Выйти",
+    "support": "Поддержка",
     "workspaceSettings": "Настройки воркспейса",
     "inboxPending": "{count, plural, one {Входящие, # согласование ждёт} few {Входящие, # согласования ждут} other {Входящие, # согласований ждут}}",
     "audit": "Аудит"
@@ -369,7 +371,17 @@
   "NavUser": {
     "settings": "Настройки",
     "billing": "Оплата",
-    "logout": "Выйти"
+    "logout": "Выйти",
+    "theme": "Тема",
+    "themeSystem": "Как в системе",
+    "themeLight": "Светлая",
+    "themeDark": "Тёмная"
+  },
+  "NavHelp": {
+    "title": "Помощь",
+    "support": "Написать в поддержку",
+    "docs": "Документация",
+    "discord": "Наш Discord"
   },
   "SettingsSidebar": {
     "title": "Настройки",
@@ -2656,11 +2668,6 @@
     },
     "streamsTitle": "Потоки",
     "streamsDescription": "Именованные потоки событий, их источники и пересылки",
-    "live": {
-      "on": "В эфире",
-      "connecting": "Подключение",
-      "off": "Переподключение"
-    },
     "streamsMenu": {
       "button": "Потоки",
       "all": "Все потоки",
@@ -4353,7 +4360,7 @@
     "paidByOwner": "Оплачивает владелец",
     "unavailable": "Недоступен",
     "topUp": "Пополнить",
-    "bannerPayer": "Агенты на моделях AgentArea не запускаются. Пополните баланс, чтобы они снова работали.",
+    "ownKey": "Подключить свой ключ",
     "bannerMember": "Агенты на моделях AgentArea не запускаются. Попросите владельца воркспейса пополнить баланс.",
     "runway": "Хватит примерно на {days, plural, one {# день} few {# дня} many {# дней} other {# дня}} при расходе {perDay} в день",
     "runwayUnderDay": "Хватит меньше чем на день при расходе {perDay} в день"

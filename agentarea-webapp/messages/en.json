@@ -142,8 +142,6 @@
     "confirm": "Confirm",
     "display": "Display",
     "skipToContent": "Skip to content",
-    "switchToDarkTheme": "Switch to dark theme",
-    "switchToLightTheme": "Switch to light theme",
     "scrollToLatestMessage": "Scroll to latest message",
     "previousPage": "Previous",
     "nextPage": "Next",
@@ -201,6 +199,9 @@
     }
   },
   "Sidebar": {
+    "search": "Search",
+    "searchPlaceholder": "Search…",
+    "searchEmpty": "Nothing found",
     "dashboard": "Dashboard",
     "newTask": "New task",
     "inbox": "Inbox",
@@ -369,7 +370,17 @@
   "NavUser": {
     "settings": "Settings",
     "billing": "Billing",
-    "logout": "Log out"
+    "logout": "Log out",
+    "theme": "Theme",
+    "themeSystem": "System",
+    "themeLight": "Light",
+    "themeDark": "Dark"
+  },
+  "NavHelp": {
+    "title": "Help & support",
+    "support": "Contact support",
+    "docs": "Documentation",
+    "discord": "Join our Discord"
   },
   "SettingsSidebar": {
     "title": "Settings",
@@ -2656,11 +2667,6 @@
     },
     "streamsTitle": "Streams",
     "streamsDescription": "Named event streams, their sources and forwards",
-    "live": {
-      "on": "Live",
-      "connecting": "Connecting",
-      "off": "Reconnecting"
-    },
     "streamsMenu": {
       "button": "Streams",
       "all": "All streams",
@@ -4353,7 +4359,7 @@
     "paidByOwner": "Paid by the owner",
     "unavailable": "Unavailable",
     "topUp": "Top up",
-    "bannerPayer": "Agents on AgentArea models do not start. Top up to get them running again.",
+    "ownKey": "Use your own API key",
     "bannerMember": "Agents on AgentArea models do not start. Ask the workspace owner to top up.",
     "runway": "Enough for ~{days, plural, one {# day} other {# days}} at {perDay}/day",
     "runwayUnderDay": "Enough for less than a day at {perDay}/day"

@@ -12,6 +12,7 @@ ORY_SDK_URL: "{{ include "agentarea.kratosPublicUrl" . }}"
 ORY_BROWSER_URL: "{{ include "agentarea.kratosPublicBrowserUrl" . }}"
 AGENTAREA_MCP_APPS_ORIGIN: "{{ .Values.global.webapp.appsSandboxUrl }}"
 AGENTAREA_APP_ORIGIN: "{{ include "agentarea.frontendUrl" . }}"
+AGENTAREA_SUPPORT_URL: "{{ .Values.global.webapp.supportUrl }}"
 {{- end }}
 
 {{- define "agentarea.frontend.envs" }}
@@ -55,4 +56,9 @@ AGENTAREA_APP_ORIGIN: "{{ include "agentarea.frontendUrl" . }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-frontend
       key: AGENTAREA_APP_ORIGIN
+- name: AGENTAREA_SUPPORT_URL
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-frontend
+      key: AGENTAREA_SUPPORT_URL
 {{- end }}

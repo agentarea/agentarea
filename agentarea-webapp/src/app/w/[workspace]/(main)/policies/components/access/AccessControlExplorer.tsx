@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { Plus, Share2, Zap } from "lucide-react";
+import { Plus, Share2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   AccessControlGraph,
@@ -419,18 +419,6 @@ export default function AccessControlExplorer({
               </button>
             </div>
 
-            <div className={styles.scaleNote}>
-              <span className={styles.scaleNoteIcon}>
-                <Zap className="h-4 w-4" />
-              </span>
-              <div>
-                <b>Why this scales.</b> Grants attach to collections, not
-                individual skills. One rule on a collection governs every skill
-                inside it; adding a skill to the collection grants it
-                automatically — no per-skill work, even across thousands of
-                skills.
-              </div>
-            </div>
           </aside>
         </div>
     </div>

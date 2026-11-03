@@ -44,11 +44,11 @@ export default function TasksList({
     {
       accessor: "status",
       header: t("statusLabel"),
-      headerClassName: "w-[140px]",
-      cellClassName: "w-[140px]",
+      headerClassName: "w-0 whitespace-nowrap",
+      cellClassName: "w-0 whitespace-nowrap",
       render: (value: string, row: TaskWithAgent) => (
         <div className="flex flex-col gap-1">
-          <TaskStatus status={value} size="default" className="font-medium" />
+          <TaskStatus status={value} size="default" caption="never" />
           {row.scheduled_at && (
             <TableDateDisplay dateString={row.scheduled_at} />
           )}

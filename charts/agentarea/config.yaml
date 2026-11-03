@@ -76,6 +76,7 @@ groups:
       ORY_BROWSER_URL: '{{ include "agentarea.kratosPublicBrowserUrl" . }}'
       AGENTAREA_MCP_APPS_ORIGIN: '{{ .Values.global.webapp.appsSandboxUrl }}'
       AGENTAREA_APP_ORIGIN: '{{ include "agentarea.frontendUrl" . }}'
+      AGENTAREA_SUPPORT_URL: '{{ .Values.global.webapp.supportUrl }}'
 
   backend:
     configVars:
