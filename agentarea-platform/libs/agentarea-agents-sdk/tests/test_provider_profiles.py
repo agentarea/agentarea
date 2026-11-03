@@ -140,3 +140,16 @@ def test_a_level_the_catalog_does_not_list_is_refused():
 @pytest.mark.parametrize("levels", [None, []])
 def test_with_no_listed_levels_any_level_passes(levels):
     check_effort_supported("xhigh", levels, model_name="m")
+
+
+def test_whether_a_provider_takes_cache_breakpoints_round_trips():
+    profile = ProviderProfile.from_mapping({"cache_breakpoints": True})
+
+    assert profile.cache_breakpoints is True
+    assert ProviderProfile.from_mapping(profile.as_mapping()) == profile
+    assert ProviderProfile.from_mapping({}).cache_breakpoints is False
+
+
+def test_a_cache_breakpoints_value_that_is_not_a_boolean_is_refused():
+    with pytest.raises(ValueError, match="cache_breakpoints"):
+        ProviderProfile.from_mapping({"cache_breakpoints": "False"})

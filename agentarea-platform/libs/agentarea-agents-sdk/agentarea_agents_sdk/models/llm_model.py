@@ -36,6 +36,9 @@ ENDPOINT_REFUSED = "the endpoint URL points to an address this deployment does n
 # Anthropic requires max_tokens on every request.
 ANTHROPIC_DEFAULT_MAX_TOKENS = 4096
 
+# A prompt-cache breakpoint: everything up to the marked block is cached for five minutes.
+CACHE_BREAKPOINT = {"type": "ephemeral"}
+
 # Anthropic reports a failure inside an open stream as an event, not a status.
 _ANTHROPIC_STREAM_ERROR_STATUS = {
     "invalid_request_error": 400,
@@ -173,7 +176,9 @@ def usage_from_provider(raw: Any) -> LLMUsage:
         completion_tokens=completion,
         total_tokens=_tokens(fields.get("total_tokens")) or prompt + completion,
         cached_prompt_tokens=min(cached, prompt),
-        cache_creation_tokens=_tokens(details.get("cache_creation_tokens")) or cache_write,
+        cache_creation_tokens=_tokens(details.get("cache_creation_tokens"))
+        or _tokens(details.get("cache_write_tokens"))
+        or cache_write,
     )
 
 
@@ -190,6 +195,37 @@ class LLMResponse:
     # Why the model stopped, in OpenAI's words: "stop", "length", "tool_calls", ...
     # "length" means the reply was cut off at the output limit.
     finish_reason: str | None = None
+
+
+def _marked(message: dict[str, Any]) -> dict[str, Any]:
+    content = message.get("content")
+    if isinstance(content, str) and content:
+        parts = [{"type": "text", "text": content}]
+    elif isinstance(content, list) and content and isinstance(content[-1], dict):
+        parts = list(content)
+    else:
+        return message
+    parts[-1] = {**parts[-1], "cache_control": CACHE_BREAKPOINT}
+    return {**message, "content": parts}
+
+
+def with_cache_breakpoints(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The messages with a cache breakpoint on the system prompt and on the last turn.
+
+    The first caches the tools and instructions every call repeats; the second
+    moves with the conversation, so each call reads the previous call's whole
+    prompt from the cache. An empty turn is left unmarked: an empty block cannot
+    be cached.
+    """
+    marked = list(messages)
+    targets = {len(marked) - 1} if marked else set()
+    system = [i for i, m in enumerate(marked) if isinstance(m, dict) and m.get("role") == "system"]
+    if system:
+        targets.add(system[-1])
+    for i in targets:
+        if isinstance(marked[i], dict):
+            marked[i] = _marked(marked[i])
+    return marked
 
 
 def _text_of(content: Any) -> str:
@@ -532,6 +568,8 @@ class LLMModel:
         url = self._api_url("/chat/completions")
 
         normalized_messages = self._normalize_messages(request.messages)
+        if self._profile.cache_breakpoints:
+            normalized_messages = with_cache_breakpoints(normalized_messages)
 
         payload: dict[str, Any] = {
             "model": self.model_name,
@@ -679,6 +717,8 @@ class LLMModel:
             "messages": turns,
             "max_tokens": request.max_tokens or ANTHROPIC_DEFAULT_MAX_TOKENS,
             "stream": True,
+            # Anthropic moves this breakpoint to the last block of every request.
+            "cache_control": CACHE_BREAKPOINT,
         }
         if system:
             payload["system"] = system

@@ -88,6 +88,7 @@ PROVIDER_CONTRACT_FIELDS = (
     "models_query",
     "reasoning_param",
     "reasoning_efforts",
+    "cache_breakpoints",
 )
 
 # Per-socket-operation timeout for fetching a catalog over HTTP. urllib applies

@@ -86,6 +86,14 @@ def _levels(value: Any) -> tuple[str, ...] | None:
     return tuple(value)
 
 
+def _flag(name: str, value: Any) -> bool:
+    if value is None:
+        return False
+    if not isinstance(value, bool):
+        raise ValueError(f"{name} must be true or false")
+    return value
+
+
 def _with_scheme(url: str) -> str:
     url = url.rstrip("/")
     return url if url.startswith(("http://", "https://")) else f"http://{url}"
@@ -111,6 +119,10 @@ class ProviderProfile:
         reasoning_param: How a request states its reasoning effort.
         reasoning_efforts: The reasoning levels its models take, unless a model
             states its own; ``None`` when the catalog does not say.
+        cache_breakpoints: The API takes Anthropic-style ``cache_control``
+            breakpoints on message content and hands them to the models that
+            cache only what a request marks (Claude, Qwen); models that cache on
+            their own ignore them. OpenRouter and gateways in front of it.
     """
 
     base_url: str | None = None
@@ -121,6 +133,7 @@ class ProviderProfile:
     models_query: str | None = None
     reasoning_param: ReasoningParam = ReasoningParam.EFFORT
     reasoning_efforts: tuple[str, ...] | None = None
+    cache_breakpoints: bool = False
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any] | None) -> ProviderProfile:
@@ -135,6 +148,7 @@ class ProviderProfile:
             models_query=data.get("models_query") or None,
             reasoning_param=ReasoningParam(data.get("reasoning_param") or ReasoningParam.EFFORT),
             reasoning_efforts=_levels(data.get("reasoning_efforts")),
+            cache_breakpoints=_flag("cache_breakpoints", data.get("cache_breakpoints")),
         )
 
     def as_mapping(self) -> dict[str, Any]:
@@ -144,6 +158,7 @@ class ProviderProfile:
         mapping["reasoning_efforts"] = (
             list(self.reasoning_efforts) if self.reasoning_efforts is not None else None
         )
+        mapping["cache_breakpoints"] = self.cache_breakpoints
         return mapping
 
     @property

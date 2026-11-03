@@ -271,3 +271,81 @@ async def test_the_reasoning_effort_is_asked_for_in_the_providers_form(
     )
 
     assert {k: captured["json"][k] for k in fields} == fields
+
+
+CACHED = {"type": "ephemeral"}
+
+
+def _conversation():
+    return [
+        {"role": "system", "content": "you are on call"},
+        {"role": "user", "content": "check alerts"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "c1", "type": "function", "function": {"name": "m", "arguments": "{}"}}
+            ],
+        },
+        {"role": "tool", "tool_call_id": "c1", "content": "all green"},
+    ]
+
+
+async def _sent_messages(monkeypatch, provider, messages):
+    model = LLMModel(provider_type="x", model_name="m", provider=provider)
+    captured: dict = {}
+    _serve_sse(monkeypatch, model, [{"choices": [{"delta": {"content": "ok"}}]}], captured)
+    await model.complete(LLMRequest(messages=messages))
+    return captured["json"]["messages"]
+
+
+@pytest.mark.asyncio
+async def test_a_provider_taking_cache_breakpoints_gets_the_system_prompt_and_the_last_turn_marked(
+    monkeypatch,
+):
+    messages = _conversation()
+
+    sent = await _sent_messages(
+        monkeypatch,
+        ProviderProfile(base_url="https://openrouter.ai/api/v1", cache_breakpoints=True),
+        messages,
+    )
+
+    assert sent[0]["content"] == [
+        {"type": "text", "text": "you are on call", "cache_control": CACHED}
+    ]
+    assert sent[-1] == {
+        "role": "tool",
+        "tool_call_id": "c1",
+        "content": [{"type": "text", "text": "all green", "cache_control": CACHED}],
+    }
+    assert sent[1:3] == messages[1:3]
+    assert messages == _conversation()
+
+
+@pytest.mark.asyncio
+async def test_the_breakpoint_goes_on_the_last_part_of_a_multipart_turn(monkeypatch):
+    image = {"type": "image_url", "image_url": {"url": "https://example.com/a.png"}}
+    messages = [
+        {"role": "system", "content": ""},
+        {"role": "user", "content": [{"type": "text", "text": "what is this?"}, image]},
+    ]
+
+    sent = await _sent_messages(
+        monkeypatch,
+        ProviderProfile(base_url="https://openrouter.ai/api/v1", cache_breakpoints=True),
+        messages,
+    )
+
+    assert sent[0] == {"role": "system", "content": ""}
+    assert sent[1]["content"] == [
+        {"type": "text", "text": "what is this?"},
+        {**image, "cache_control": CACHED},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_provider_that_caches_on_its_own_gets_the_messages_unmarked(monkeypatch):
+    sent = await _sent_messages(monkeypatch, OPENAI, _conversation())
+
+    assert sent == _conversation()
