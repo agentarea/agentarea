@@ -206,14 +206,6 @@ export function documentToRules(
         value: "on",
         stage: STAGE.llmInput,
       });
-    if (cs.output_sanitizer_enabled)
-      rules.push({
-        effect: "safety",
-        category: "Safety",
-        label: "Output sanitizer",
-        value: "on",
-        stage: STAGE.llmOutput,
-      });
   }
 
   return rules;
@@ -367,7 +359,6 @@ function describeRule(
   if (dimension === "safety") {
     const parts: string[] = [];
     if (p.prompt_injection) parts.push("prompt-injection");
-    if (p.output_sanitizer) parts.push("output sanitizer");
     return {
       label: "Content safety",
       value: parts.length > 0 ? parts.join(", ") : "on",
@@ -508,8 +499,6 @@ function buildDimensions(
   let allowToolCount = 0;
   let approvalAll = false;
   let approvalToolCount = 0;
-  let safetyInput = false;
-  let safetyOutput = false;
   let safetyOn = false;
 
   for (const policy of rules) {
@@ -542,9 +531,7 @@ function buildDimensions(
       if (policy.target === "*") approvalAll = true;
       else approvalToolCount += 1;
     } else if (dimension === "safety") {
-      if (p.prompt_injection) safetyInput = true;
-      if (p.output_sanitizer) safetyOutput = true;
-      if (!p.prompt_injection && !p.output_sanitizer) safetyOn = true;
+      safetyOn = true;
     }
   }
 
@@ -571,11 +558,7 @@ function buildDimensions(
     };
   }
 
-  if (safetyInput && safetyOutput)
-    dims.safety = { value: "on", effect: "safety" };
-  else if (safetyInput) dims.safety = { value: "input", effect: "safety" };
-  else if (safetyOutput) dims.safety = { value: "output", effect: "safety" };
-  else if (safetyOn) dims.safety = { value: "on", effect: "safety" };
+  if (safetyOn) dims.safety = { value: "on", effect: "safety" };
 
   return { dimensions: dims, customCount };
 }

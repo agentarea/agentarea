@@ -43,12 +43,11 @@ policies:
       max_tool_calls_per_turn: 10
       max_tool_calls_total: 1000
 
-  # Content safety filters on by default.
+  # Prompt-injection detection on by default.
   - target: content
     effect: safety
     params:
       prompt_injection: true
-      output_sanitizer: true
 
   # No approval policy by default — workspaces opt into human-in-the-loop
   # explicitly via the Approval column.

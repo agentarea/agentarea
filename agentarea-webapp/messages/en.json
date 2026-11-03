@@ -2089,7 +2089,6 @@
     "policyPerCall": "per call",
     "policyContentSafety": "Content safety",
     "policyPromptInjection": "Prompt-injection detection",
-    "policyOutputSanitizer": "Output sanitizer",
     "policyMonthlyCap": "Monthly cap",
     "policyAgentMonthlyCap": "Agent monthly cap",
     "policyServiceBudget": "Service budget",
@@ -3780,8 +3779,7 @@
         "removeValue": "Remove {value}"
       },
       "safety": {
-        "promptInjection": "Prompt-injection detection",
-        "outputSanitizer": "Output sanitizer"
+        "promptInjection": "Prompt-injection detection"
       },
       "validation": {
         "agentRequired": "Add at least one agent for this policy.",

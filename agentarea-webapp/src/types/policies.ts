@@ -35,7 +35,6 @@ export interface ApprovalPolicy {
 
 export interface ContentSafetyPolicy {
   prompt_injection_detection_enabled?: boolean | null;
-  output_sanitizer_enabled?: boolean | null;
 }
 
 export interface PolicyDocument {

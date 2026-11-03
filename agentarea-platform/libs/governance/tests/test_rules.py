@@ -139,8 +139,9 @@ class TestCompiler:
         doc = rules_to_document(
             [_rule("content", PolicyEffect.SAFETY, prompt_injection=True, output_sanitizer=False)]
         )
-        assert doc.content_safety.prompt_injection_detection_enabled is True
-        assert doc.content_safety.output_sanitizer_enabled is False
+        assert doc.content_safety.model_dump(exclude_none=True) == {
+            "prompt_injection_detection_enabled": True
+        }
 
     def test_answer_check_compiles_into_content_safety(self):
         rule = _rule("content", PolicyEffect.SAFETY, answer_check={"language": "ru"})
@@ -262,7 +263,7 @@ class TestAssertEnforceable:
             ("tool:*", PolicyEffect.APPROVAL, {}),
             ("tool:send_email", PolicyEffect.APPROVAL, {}),
             ("content", PolicyEffect.SAFETY, {"prompt_injection": True}),
-            ("content", PolicyEffect.SAFETY, {"output_sanitizer": True}),
+            ("content", PolicyEffect.SAFETY, {"prompt_injection": True, "output_sanitizer": True}),
             ("mcp:github", PolicyEffect.EGRESS, {"allowed_hosts": ["*.github.com"]}),
             ("mcp:github", PolicyEffect.EGRESS, {}),
         ],
@@ -287,6 +288,7 @@ class TestAssertEnforceable:
             ("spend", PolicyEffect.CAP, {"amount_usd": 1, "period": "week"}),
             ("model:x", PolicyEffect.APPROVAL, {}),
             ("content", PolicyEffect.SAFETY, {}),
+            ("content", PolicyEffect.SAFETY, {"output_sanitizer": True}),
             ("tool:x", PolicyEffect.SAFETY, {}),
         ],
     )

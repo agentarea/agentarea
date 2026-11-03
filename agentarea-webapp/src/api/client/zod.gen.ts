@@ -770,7 +770,6 @@ export const zCollectionUpdateRequest = z.object({
  */
 export const zContentSafetyPolicy = z.object({
   answer_check: zAnswerCheckPolicy.nullish(),
-  output_sanitizer_enabled: z.boolean().nullish(),
   prompt_injection_detection_enabled: z.boolean().nullish(),
 });
 

@@ -340,19 +340,22 @@ def test_to_execution_state_emits_content_safety_flags():
     effective = PolicyResolver().resolve(
         [
             PolicyDocument(
-                content_safety=ContentSafetyPolicy(
-                    prompt_injection_detection_enabled=False,
-                    output_sanitizer_enabled=True,
-                )
+                content_safety=ContentSafetyPolicy(prompt_injection_detection_enabled=False)
             )
         ]
     )
 
     state = effective.to_execution_state()
 
-    content_safety = state["content_safety"]
-    assert content_safety["prompt_injection_enabled"] is False
-    assert content_safety["output_sanitizer_enabled"] is True
+    assert state["content_safety"] == {"prompt_injection_enabled": False}
+
+
+def test_a_stored_policy_with_the_removed_sanitizer_flag_still_loads():
+    policy = ContentSafetyPolicy.model_validate(
+        {"prompt_injection_detection_enabled": True, "output_sanitizer_enabled": True}
+    )
+
+    assert policy.model_dump(exclude_none=True) == {"prompt_injection_detection_enabled": True}
 
 
 def test_to_execution_state_empty_policy_is_empty_state():

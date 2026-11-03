@@ -87,7 +87,8 @@ def test_decompose_then_compile_roundtrips_known_fields():
     assert "send_email" in doc.approval.escalation_rules
     assert doc.approval.approvers == ["user:alice"]
     assert doc.content_safety.prompt_injection_detection_enabled is True
-    assert doc.content_safety.output_sanitizer_enabled is False
+    safety = next(item for item in decomposed if item["effect"] == "safety")
+    assert safety["params"] == {"prompt_injection": True, "output_sanitizer": False}
 
 
 def test_decompose_skips_unknown_keys():

@@ -3956,17 +3956,6 @@
               }
             ]
           },
-          "output_sanitizer_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Output Sanitizer Enabled"
-          },
           "prompt_injection_detection_enabled": {
             "anyOf": [
               {
