@@ -72,6 +72,26 @@ class LLMProviderHTTPError(RuntimeError):
         self.provider_message = provider_message
 
 
+def _raise_stream_error(chunk: dict[str, Any]) -> None:
+    """Raise for a chunk that reports the call failed after the stream opened.
+
+    OpenRouter relays an upstream failure as an `error` object or finish_reason "error"
+    in a chunk. That is a failed call, not an empty reply; without a status of its own
+    it counts as a 502 from upstream.
+    """
+    error = chunk.get("error")
+    choices = chunk.get("choices") or []
+    if not error and not (choices and choices[0].get("finish_reason") == "error"):
+        return
+    details = error if isinstance(error, dict) else {}
+    code = details.get("code")
+    status = code if isinstance(code, int) and 400 <= code <= 599 else 502
+    message = details.get("message") or (error if isinstance(error, str) else None)
+    raise LLMProviderHTTPError(
+        status, str(message or "the provider ended the stream with an error")
+    )
+
+
 def _error_body_message(body: bytes) -> str:
     """The provider's own words from an error response body."""
     text = body.decode("utf-8", errors="replace").strip()
@@ -618,6 +638,8 @@ class LLMModel:
                         chunk = json.loads(data_str)
                     except json.JSONDecodeError:
                         continue
+
+                    _raise_stream_error(chunk)
 
                     usage_data = chunk.get("usage")
                     if usage_data:

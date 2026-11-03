@@ -103,8 +103,7 @@ def _model_call_failure(message: str, error: Exception) -> ApplicationError:
         message,
         *([failure.as_detail()] if failure else []),
         type=type(error).__name__,
-        non_retryable=_is_non_retryable_error(error)
-        or (failure is not None and not failure.retryable),
+        non_retryable=not failure.retryable if failure else _is_non_retryable_error(error),
     )
 
 

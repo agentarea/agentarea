@@ -349,3 +349,44 @@ async def test_a_provider_that_caches_on_its_own_gets_the_messages_unmarked(monk
     sent = await _sent_messages(monkeypatch, OPENAI, _conversation())
 
     assert sent == _conversation()
+
+
+def _openrouter():
+    return LLMModel(
+        provider_type="openrouter",
+        provider=ProviderProfile(base_url="https://openrouter.ai/api/v1"),
+        model_name="vendor/model",
+        api_key="k",
+        input_cost_per_token=0.001,
+        output_cost_per_token=0.002,
+    )
+
+
+@pytest.mark.parametrize(
+    ("event", "status"),
+    [
+        (
+            {
+                "error": {"code": 502, "message": "Upstream timed out"},
+                "choices": [{"delta": {"content": ""}, "finish_reason": "error"}],
+            },
+            502,
+        ),
+        ({"error": {"code": 429, "message": "Rate limited upstream"}, "choices": []}, 429),
+        ({"choices": [{"delta": {}, "finish_reason": "error"}]}, 502),
+    ],
+)
+@pytest.mark.asyncio
+async def test_an_error_inside_the_stream_is_a_provider_error_not_an_empty_reply(
+    monkeypatch, event, status
+):
+    from agentarea_agents_sdk.models.llm_model import LLMProviderHTTPError
+
+    model = _openrouter()
+    _serve_sse(monkeypatch, model, [{"choices": [{"delta": {"content": "par"}}]}, event], {})
+
+    with pytest.raises(LLMProviderHTTPError) as raised:
+        async for _ in model.ainvoke_stream(LLMRequest(messages=[{"role": "user", "content": "hi"}])):
+            pass
+
+    assert raised.value.status_code == status
