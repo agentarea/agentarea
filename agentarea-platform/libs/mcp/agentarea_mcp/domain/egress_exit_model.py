@@ -3,10 +3,12 @@
 An exit is a proxy whose address the destination sees: the workspace's own (a
 customer or purchased proxy) or one the platform runs. An instance binds one with
 ``json_spec.egress_exit = "<exit id>"``; without the enterprise extension nothing
-enforces the binding.
+enforces the binding. A server spec whose image cannot run without one declares
+``json_spec.egress = {"required": true}``, and every instance of it inherits that.
 """
 
 from importlib import import_module
+from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
@@ -27,6 +29,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 import_module("agentarea_secrets.models")
 
 EGRESS_EXIT_SPEC_KEY = "egress_exit"
+EGRESS_SPEC_KEY = "egress"
+
+
+def egress_required(spec: dict[str, Any] | None) -> bool:
+    egress = (spec or {}).get(EGRESS_SPEC_KEY)
+    return isinstance(egress, dict) and egress.get("required") is True
 
 
 class EgressExit(BaseModel, WorkspaceScopedMixin):

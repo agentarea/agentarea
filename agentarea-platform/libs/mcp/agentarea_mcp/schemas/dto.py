@@ -24,7 +24,7 @@ from pydantic import (
     field_validator,
 )
 
-from ..domain.egress_exit_model import EGRESS_EXIT_SPEC_KEY
+from ..domain.egress_exit_model import EGRESS_EXIT_SPEC_KEY, EGRESS_SPEC_KEY
 from ..tool_context import CONTEXT_SECRET_MIN_LENGTH, CONTEXT_SPEC_KEY
 from .egress_exit_dto import validate_spec_egress_exit
 from .image_reference import validate_optional_image_reference, validate_spec_image
@@ -80,6 +80,27 @@ def refuse_spec_egress_exit(json_spec: dict[str, Any] | None) -> dict[str, Any] 
     return json_spec
 
 
+def validate_spec_egress(json_spec: dict[str, Any]) -> dict[str, Any]:
+    """``{"required": true}`` when the server's image reaches the internet only through an exit."""
+    if EGRESS_SPEC_KEY not in json_spec:
+        return json_spec
+    egress = json_spec[EGRESS_SPEC_KEY]
+    if (
+        not isinstance(egress, dict)
+        or set(egress) != {"required"}
+        or not isinstance(egress["required"], bool)
+    ):
+        raise ValueError(f'json_spec.{EGRESS_SPEC_KEY} must be exactly {{"required": <bool>}}')
+    return json_spec
+
+
+def refuse_instance_egress(json_spec: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Whether a workload needs an exit is its image's, declared on the server spec."""
+    if json_spec is not None and EGRESS_SPEC_KEY in json_spec:
+        raise ValueError(f"json_spec.{EGRESS_SPEC_KEY} is set on a server spec, not an instance")
+    return json_spec
+
+
 # json_spec is read back in SQL (``json_spec->>'type'``); a NUL or unpaired
 # surrogate stored there broke every such query, so refuse it at the edge.
 JsonSpec = Annotated[
@@ -91,7 +112,12 @@ JsonSpec = Annotated[
 ]
 # A spec or instance json_spec whose ``image`` reaches ``docker run``.
 ContainerJsonSpec = Annotated[JsonSpec, AfterValidator(validate_spec_image)]
-ServerJsonSpec = Annotated[ContainerJsonSpec, AfterValidator(refuse_spec_egress_exit)]
+ServerJsonSpec = Annotated[
+    ContainerJsonSpec,
+    AfterValidator(refuse_spec_egress_exit),
+    AfterValidator(validate_spec_egress),
+]
+InstanceJsonSpec = Annotated[ContainerJsonSpec, AfterValidator(refuse_instance_egress)]
 ImageReference = Annotated[str | None, AfterValidator(validate_optional_image_reference)]
 
 # Write-only key that signs the per-call context sent to a URL instance
@@ -245,7 +271,7 @@ class MCPServerInstanceCreate(BaseModel):
             "(env_schema, secret routing, etc.)."
         ),
     )
-    json_spec: ContainerJsonSpec = Field(
+    json_spec: InstanceJsonSpec = Field(
         description=(
             "Instance configuration (environment, env_vars, headers). Transport "
             "keys such as 'type' are ignored: the server spec declares the transport."
@@ -276,7 +302,9 @@ class MCPServerInstanceUpdate(BaseModel):
 
     name: Annotated[str | None, NotNull] = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
-    json_spec: Annotated[JsonSpec | None, NotNull] = None
+    json_spec: Annotated[
+        Annotated[JsonSpec, AfterValidator(refuse_instance_egress)] | None, NotNull
+    ] = None
     context_secret: ContextSecret = Field(
         default=None,
         description=f"{CONTEXT_SIGNING_HELP} Send null to remove it.",
