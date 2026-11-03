@@ -41,7 +41,7 @@ const OWNER_HREFS: Record<string, (id: string) => string | null> = {
   // Auth configs are edited inside the connection they belong to, so there is
   // no page of their own to link at.
   mcp_auth_config: () => null,
-  openapi_connection: () => "/connections/openapi",
+  openapi_connection: (id) => `/connections/openapi/${id}`,
   trigger: (id) => `/triggers/${id}`,
   agent: (id) => `/agents/${id}`,
 };
