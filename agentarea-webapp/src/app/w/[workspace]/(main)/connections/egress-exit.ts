@@ -13,7 +13,6 @@ export const EGRESS_EXIT_SPEC_KEY = "egress_exit";
 export interface EgressExitOption {
   id: string;
   name: string;
-  platform: boolean;
 }
 
 /** What the picker offers, or why the list did not load. */
@@ -26,19 +25,10 @@ export function bindsEgressExit(transport: McpTransport): boolean {
   return transport === "docker" || transport === "command";
 }
 
-/** The workspace's own exits first, then the platform's. */
 export function toEgressExitOptions(
   exits: EgressExitResponse[]
 ): EgressExitOption[] {
-  const options = exits.map((exit) => ({
-    id: exit.id,
-    name: exit.name,
-    platform: exit.managed_by === "platform",
-  }));
-  return [
-    ...options.filter((option) => !option.platform),
-    ...options.filter((option) => option.platform),
-  ];
+  return exits.map((exit) => ({ id: exit.id, name: exit.name }));
 }
 
 export function boundEgressExit(

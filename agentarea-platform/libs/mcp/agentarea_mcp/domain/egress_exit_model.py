@@ -14,12 +14,10 @@ from agentarea_common.constants import MANAGED_BY_PLATFORM
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
-    ColumnElement,
     ForeignKey,
     String,
     Text,
     UniqueConstraint,
-    or_,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -63,15 +61,10 @@ class EgressExit(BaseModel, WorkspaceScopedMixin):
     allow_plaintext_credentials: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    # ``"platform"``: an exit the deployment supplies to every workspace, written
-    # only by the operator. NULL: the workspace's own.
+    # ``"platform"``: an exit the deployment runs for itself, written only by the
+    # operator into the platform workspace; no tenant sees it. NULL: the workspace's own.
     managed_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     @property
     def is_platform(self) -> bool:
         return self.managed_by == MANAGED_BY_PLATFORM
-
-    @classmethod
-    def workspace_visibility(cls, workspace_id: str) -> ColumnElement[bool]:
-        """The workspace's own exits, plus the platform's."""
-        return or_(cls.workspace_id == workspace_id, cls.managed_by == MANAGED_BY_PLATFORM)

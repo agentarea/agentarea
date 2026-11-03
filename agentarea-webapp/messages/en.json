@@ -4255,8 +4255,6 @@
     "description": "Proxies that container connections (Docker and command) reach the internet through, so their traffic comes from the proxy's address.",
     "add": "Add exit",
     "loadFailed": "Couldn't load the egress exits",
-    "platformLabel": "Platform",
-    "viaHop": "Platform route {via}",
     "noCredentials": "None",
     "passwordFromSecret": "Password from a workspace secret",
     "table": {
@@ -4313,8 +4311,7 @@
     "picker": {
       "label": "Egress exit",
       "hint": "The proxy this connection reaches the internet through. Exits are managed in Settings.",
-      "direct": "None: leave directly",
-      "platformOption": "{name} (platform)"
+      "direct": "None: leave directly"
     },
     "section": {
       "title": "Egress exit",
@@ -4322,7 +4319,6 @@
       "saveFailed": "Couldn't change the egress exit",
       "restartHint": "A running connection stops; the next call starts it through the new exit.",
       "direct": "None: it reaches the internet directly.",
-      "boundPlatform": "{name} (platform)",
       "unknown": "An exit that is no longer listed ({id})"
     }
   },

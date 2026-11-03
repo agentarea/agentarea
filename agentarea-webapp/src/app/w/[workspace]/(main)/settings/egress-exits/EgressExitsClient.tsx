@@ -16,8 +16,6 @@ import EgressExitFormDialog, {
   type SecretChoices,
 } from "./EgressExitFormDialog";
 
-const isPlatform = (exit: EgressExitResponse) => exit.managed_by === "platform";
-
 function RowActions({
   exit,
   onEdit,
@@ -54,10 +52,7 @@ function RowActions({
   );
 }
 
-/**
- * The workspace's own exits, which members add, edit and remove, followed by
- * the platform's, which can be bound but are the operator's to change.
- */
+/** The workspace's exits, which members add, edit and remove. */
 export default function EgressExitsClient({
   exits,
   secrets,
@@ -78,11 +73,6 @@ export default function EgressExitsClient({
       session: (previous?.session ?? 0) + 1,
     }));
 
-  const rows = [
-    ...exits.filter((exit) => !isPlatform(exit)),
-    ...exits.filter(isPlatform),
-  ];
-
   const columns: Column<EgressExitResponse>[] = [
     {
       header: t("table.name"),
@@ -94,11 +84,6 @@ export default function EgressExitsClient({
             <span className="block truncate text-[13px] font-medium">
               {exit.name}
             </span>
-            {isPlatform(exit) && (
-              <span className="block text-xs text-muted-foreground">
-                {t("platformLabel")}
-              </span>
-            )}
             {exit.description && (
               <span className="block truncate text-xs text-muted-foreground">
                 {exit.description}
@@ -115,9 +100,7 @@ export default function EgressExitsClient({
         exit ? (
           <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
             <Globe aria-hidden className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate font-mono">
-              {exit.upstream_url ?? t("viaHop", { via: exit.via ?? "" })}
-            </span>
+            <span className="truncate font-mono">{exit.upstream_url}</span>
           </span>
         ) : null,
     },
@@ -148,7 +131,7 @@ export default function EgressExitsClient({
       headerClassName: "w-0",
       cellClassName: "text-right",
       render: (_, exit) =>
-        exit && !isPlatform(exit) ? (
+        exit ? (
           <RowActions
             exit={exit}
             onError={setError}
@@ -167,7 +150,7 @@ export default function EgressExitsClient({
   return (
     <div className="space-y-3">
       {error && <FormError>{error}</FormError>}
-      {rows.length === 0 ? (
+      {exits.length === 0 ? (
         <EmptyState
           title={t("empty.title")}
           description={t("empty.description")}
@@ -178,7 +161,7 @@ export default function EgressExitsClient({
           }}
         />
       ) : (
-        <Table data={rows} columns={columns} />
+        <Table data={exits} columns={columns} />
       )}
 
       {dialog && (

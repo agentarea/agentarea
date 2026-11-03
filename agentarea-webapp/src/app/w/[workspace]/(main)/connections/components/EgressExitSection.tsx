@@ -92,11 +92,7 @@ export function EgressExitSection({
           <p className="text-[12.5px]">
             {!boundExitId
               ? t("direct")
-              : bound
-                ? bound.platform
-                  ? t("boundPlatform", { name: bound.name })
-                  : bound.name
-                : t("unknown", { id: boundExitId })}
+              : (bound?.name ?? t("unknown", { id: boundExitId }))}
           </p>
         )}
       </div>

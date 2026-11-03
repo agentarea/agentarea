@@ -1375,7 +1375,7 @@ def periodic_platform_connection_resync(spec, meta, namespace, patch, **_):
 
 
 def sync_platform_egress_exit(spec: dict) -> str:
-    """Upsert the platform exit every workspace may bind. Returns its id.
+    """Upsert a platform exit into the platform workspace. Returns its id.
 
     A platform exit leaves through a hop of the egress proxy's own configuration;
     it holds no credentials. Re-running against an unchanged spec changes no row.
