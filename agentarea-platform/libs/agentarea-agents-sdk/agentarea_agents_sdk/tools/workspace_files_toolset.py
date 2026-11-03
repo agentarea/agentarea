@@ -12,7 +12,10 @@ clients, while an agent writes files through its sandbox instead.
 from __future__ import annotations
 
 import json
+from typing import Annotated
 from urllib.parse import quote
+
+from pydantic import Field
 
 from .base_tool import ToolError
 from .decorator_tool import Toolset, tool_method
@@ -24,7 +27,11 @@ from .tool_definition import toolset
 @toolset(
     namespace="agentarea/workspace_files",
     display_name="Workspace Files",
-    description="List, fetch API download paths for, and delete workspace files.",
+    description=(
+        "List, delete or get the download path of this task's files. A file you list in "
+        "completion artifacts already reaches the user with its own download button. To "
+        "read or write a file's content use the files tool or the shell."
+    ),
     category="platform",
     plane="runtime",
     group="sandbox",
@@ -84,9 +91,15 @@ class WorkspaceFilesToolset(Toolset):
             )
         return await self.storage.exists(self.workspace_id, resolved_path)
 
-    @tool_method(effect="read")
+    @tool_method(effect="read", description="List this task's files with their size and type.")
     @unrestricted("workspace files are member-level, as /v1/files serves them")
-    async def list(self, prefix: str = "", max_items: int = 200) -> str:
+    async def list(
+        self,
+        prefix: Annotated[
+            str, Field(description="Only paths starting with this, e.g. reports/.")
+        ] = "",
+        max_items: Annotated[int, Field(description="Most files to return.")] = 200,
+    ) -> str:
         """List files in the current workspace's storage."""
         resolved_prefix = self._resolve_prefix(prefix)
         if self.workspace_repository is not None:
@@ -113,9 +126,16 @@ class WorkspaceFilesToolset(Toolset):
             )
         return json.dumps(rows, default=str)
 
-    @tool_method(effect="read")
+    @tool_method(
+        effect="read",
+        description="Get the AgentArea download path for a file of this task.",
+    )
     @unrestricted("workspace files are member-level, as /v1/files serves them")
-    async def get_url(self, path: str, expires_in: int = 3600) -> str:
+    async def get_url(
+        self,
+        path: Annotated[str, Field(description="Path of the file, as list returns it.")],
+        expires_in: Annotated[int, Field(description="Seconds the link stays valid.")] = 3600,
+    ) -> str:
         """Return an AgentArea API download path for a workspace file.
 
         A task's file is served by the task files endpoint
@@ -141,9 +161,11 @@ class WorkspaceFilesToolset(Toolset):
             }
         )
 
-    @tool_method(effect="destructive")
+    @tool_method(effect="destructive", description="Delete a file of this task.")
     @unrestricted("workspace files are member-level, as DELETE /v1/files allows")
-    async def delete(self, path: str) -> str:
+    async def delete(
+        self, path: Annotated[str, Field(description="Path of the file, as list returns it.")]
+    ) -> str:
         """Delete a workspace file."""
         resolved_path = self._resolve_prefix(path)
         if not await self._exists(resolved_path):

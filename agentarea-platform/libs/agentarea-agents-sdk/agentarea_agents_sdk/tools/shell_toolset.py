@@ -19,9 +19,10 @@ import json
 import logging
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
-from typing import Any
+from typing import Annotated, Any
 
 import httpx
+from pydantic import Field
 
 from .decorator_tool import Toolset, tool_method
 from .invocation_context import ToolInvocationContext
@@ -35,7 +36,11 @@ logger = logging.getLogger(__name__)
 @toolset(
     namespace="agentarea/shell",
     display_name="Shell",
-    description="Run bash commands in an isolated sandbox.",
+    description=(
+        "Run bash commands in an isolated sandbox. Each command runs to the end before "
+        "you get its result, and processes it leaves in the background (&, nohup) are "
+        "stopped when it returns, so the shell cannot do anything later on its own."
+    ),
     category="utility",
     plane="runtime",
     group="sandbox",
@@ -67,8 +72,25 @@ class ShellToolset(Toolset):
     @unrestricted("runs in the run's own sandbox; the runtime policy engine governs each call")
     async def bash(
         self,
-        command: str,
-        timeout_seconds: int | None = None,
+        command: Annotated[
+            str,
+            Field(
+                description=(
+                    "The bash command to run in /workspace, the task's working directory. "
+                    "Chain steps with && or put them in a script."
+                )
+            ),
+        ],
+        timeout_seconds: Annotated[
+            int | None,
+            Field(
+                description=(
+                    "Seconds the command may run before it is stopped. Omit for the "
+                    "default; asking for more than the sandbox allows returns an error "
+                    "naming the maximum."
+                )
+            ),
+        ] = None,
     ) -> dict[str, Any]:
         """Run a bash command and return stdout, stderr, and the exit code."""
         if not self._mcp_manager_url:

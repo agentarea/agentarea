@@ -14,20 +14,31 @@ class TestPromptBuilder:
         agent_instruction = "You are a test agent."
         goal_description = "Complete a test task"
         success_criteria = ["Do something", "Complete the task"]
-        available_tools = [{"name": "test_tool", "description": "A test tool"}]
 
         prompt = PromptBuilder.build_react_system_prompt(
             agent_name=agent_name,
             agent_instruction=agent_instruction,
             goal_description=goal_description,
             success_criteria=success_criteria,
-            available_tools=available_tools,
         )
 
         assert agent_name in prompt
         assert agent_instruction in prompt
         assert goal_description in prompt
-        assert "test_tool" in prompt
+        assert "## Success Criteria\n\n- Do something\n- Complete the task" in prompt
+
+    def test_a_task_without_success_criteria_has_no_empty_section(self):
+        from agentarea_agents_sdk.prompts import PromptBuilder
+
+        prompt = PromptBuilder.build_react_system_prompt(
+            agent_name="Aide",
+            agent_instruction="Help.",
+            goal_description="The user's messages are the task.",
+            success_criteria=[],
+        )
+
+        assert "Success Criteria" not in prompt
+        assert "The user's messages are the task.\n\n# How to work" in prompt
 
 
 class TestToolExecutor:

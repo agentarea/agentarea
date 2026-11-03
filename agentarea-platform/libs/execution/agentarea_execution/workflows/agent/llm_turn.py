@@ -42,7 +42,8 @@ from .patches import (
 from .tool_dispatch import ToolDispatchMixin
 
 FIRST_MESSAGE_IS_THE_TASK = (
-    "The task is the first user message of this conversation. It stays in view for the whole run."
+    "The user's messages in this conversation are the task. The first one stays in view for "
+    "the whole run; act on the latest one, with the earlier ones as its context."
 )
 
 
@@ -331,7 +332,6 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 if input_in_first_message
                 else self.state.goal.description,
                 success_criteria=self.state.goal.success_criteria,
-                available_tools=self.state.available_tools,
                 a2ui_enabled=self._a2ui_available,
             )
 

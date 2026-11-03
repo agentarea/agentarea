@@ -18,10 +18,11 @@ import json
 import re
 from collections.abc import Callable
 from html.parser import HTMLParser
-from typing import Any, ClassVar
+from typing import Annotated, Any, ClassVar
 from urllib.parse import urljoin
 
 import httpx
+from pydantic import Field
 
 from .decorator_tool import Toolset, tool_method
 from .tool_authz import unrestricted
@@ -145,12 +146,15 @@ class WebToolset(Toolset):
         self.search_base_url = search_base_url.rstrip("/") if search_base_url else None
         self._http_client_factory = http_client_factory
 
-    @tool_method(effect="read")
+    @tool_method(
+        effect="read",
+        description="Search the public web; returns titles, links and snippets.",
+    )
     @unrestricted("the public web; reads and writes no workspace state")
     async def search_web(
         self,
-        query: str,
-        max_results: int = 8,
+        query: Annotated[str, Field(description="What to search for, as you would type it.")],
+        max_results: Annotated[int, Field(description="How many results, 1 to 20.")] = 8,
     ) -> str:
         """Search the public web through the deployment's configured search service."""
         if not self._search_enabled:
@@ -207,12 +211,22 @@ class WebToolset(Toolset):
             ensure_ascii=False,
         )
 
-    @tool_method(effect="read")
+    @tool_method(
+        effect="read",
+        description=(
+            "Read a web page (HTML, text or JSON) and return its text and links. Opens only "
+            "links already seen in this task: in the request, search results or pages read "
+            "before. Binary content (images, PDFs, archives) is refused; download it with "
+            "the shell."
+        ),
+    )
     @unrestricted("the public web; reads and writes no workspace state")
     async def fetch_webpage(
         self,
-        url: str,
-        timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
+        url: Annotated[str, Field(description="Full http(s) URL of the page.")],
+        timeout_seconds: Annotated[
+            float, Field(description="Seconds to wait for the page.")
+        ] = _DEFAULT_TIMEOUT_SECONDS,
     ) -> str:
         """Read a web page (HTML, text or JSON) and return its text and links.
 

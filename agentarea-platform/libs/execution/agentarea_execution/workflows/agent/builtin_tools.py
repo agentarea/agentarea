@@ -7,7 +7,7 @@ from temporalio import workflow
 with workflow.unsafe.imports_passed_through():
     from agentarea_governance.domain.tool_calls import WAIT_TOOL_NAME
 
-from .wait import WAIT_MAX_SECONDS, WAIT_MIN_SECONDS
+from .wait import WAIT_MIN_SECONDS
 
 
 def completion_tool_schema() -> dict[str, Any]:
@@ -221,11 +221,17 @@ def wait_tool_schema() -> dict[str, Any]:
         "function": {
             "name": WAIT_TOOL_NAME,
             "description": (
-                "Pause this task for a number of seconds without holding the sandbox. "
-                "Use it between polls of an asynchronous job (for example a video "
-                "generation) instead of sleep in a shell command. A user message or a "
-                "pause ends the wait early; the result says how long you waited and why "
-                "it ended."
+                "Pause this task for a number of seconds, then continue. Nothing is held "
+                "while it waits, not a worker and not the sandbox, and the wait survives "
+                "restarts, so it can run for minutes, hours or days. Use it whenever "
+                "something should happen later: the user asks for something in some "
+                "minutes or at a given time (wait until then, then do it and reply), or "
+                "you poll an asynchronous job such as a video render. Never wait with "
+                "sleep, a timer or a background process in the shell: a shell command "
+                "holds the user off until it returns, and its background processes stop "
+                "when it does. A user message or a pause ends the wait early; the result "
+                "says how long you waited and why it ended, so answer the message and "
+                "then wait out the rest."
             ),
             "parameters": {
                 "type": "object",
@@ -233,10 +239,8 @@ def wait_tool_schema() -> dict[str, Any]:
                     "seconds": {
                         "type": "integer",
                         "minimum": WAIT_MIN_SECONDS,
-                        "maximum": WAIT_MAX_SECONDS,
                         "description": (
-                            f"How long to wait, {WAIT_MIN_SECONDS} to {WAIT_MAX_SECONDS}. "
-                            "Call again to wait longer."
+                            "How long to wait. For a moment in time, the seconds from now until it."
                         ),
                     },
                     "reason": {

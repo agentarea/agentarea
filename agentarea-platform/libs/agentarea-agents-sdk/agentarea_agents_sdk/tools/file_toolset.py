@@ -16,7 +16,9 @@ import fnmatch
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Annotated, Any, Protocol
+
+from pydantic import Field
 
 from .decorator_tool import Toolset, tool_method
 from .tool_authz import unrestricted
@@ -194,7 +196,10 @@ RUN_OWN_FILES = "files under the storage prefix the worker injects for this run"
 @toolset(
     namespace="agentarea/files",
     display_name="File Operations",
-    description="Read, write, list, and search files in the agent's workspace storage.",
+    description=(
+        "Read, write and list text files in this task's working directory, /workspace, "
+        "the same files the shell sees. Use the shell for binary files."
+    ),
     category="utility",
     plane="runtime",
     group="sandbox",
@@ -250,9 +255,24 @@ class FileToolset(Toolset):
             return f"{self.base_prefix}/{name}"
         return name
 
-    @tool_method(effect="write")
+    @tool_method(
+        effect="write",
+        description=(
+            "Write text to a file in /workspace. Text only: "
+            "produce .pdf, .xlsx, images and other binary files with a program in the shell."
+        ),
+    )
     @unrestricted(RUN_OWN_FILES)
-    async def save_file(self, contents: str, file_name: str, overwrite: bool = True) -> str:
+    async def save_file(
+        self,
+        contents: Annotated[str, Field(description="The full text to write.")],
+        file_name: Annotated[
+            str, Field(description="Path relative to /workspace, e.g. reports/summary.md.")
+        ],
+        overwrite: Annotated[
+            bool, Field(description="Replace an existing file; false refuses to.")
+        ] = True,
+    ) -> str:
         """Save ``contents`` as a text file in the live task workspace.
 
         Args:
@@ -297,9 +317,14 @@ class FileToolset(Toolset):
         except Exception as e:
             return f"Error saving to file: {e}"
 
-    @tool_method(effect="read")
+    @tool_method(effect="read", description="Read a text file from /workspace.")
     @unrestricted(RUN_OWN_FILES)
-    async def read_file(self, file_name: str) -> str:
+    async def read_file(
+        self,
+        file_name: Annotated[
+            str, Field(description="Path relative to /workspace, e.g. inputs/brief.txt.")
+        ],
+    ) -> str:
         """Read a text file from the live task workspace.
 
         Binary objects (images, PDFs) should be fetched through the
@@ -320,9 +345,15 @@ class FileToolset(Toolset):
         except Exception as e:
             return f"Error reading file: {e}"
 
-    @tool_method(effect="read")
+    @tool_method(effect="read", description="List the files in /workspace.")
     @unrestricted(RUN_OWN_FILES)
-    async def list_files(self, pattern: str = "*") -> str:
+    async def list_files(
+        self,
+        pattern: Annotated[
+            str,
+            Field(description="Glob over paths relative to /workspace, e.g. *.csv; * lists all."),
+        ] = "*",
+    ) -> str:
         """List files under the task scope, optionally filtered by glob pattern.
 
         The pattern matches against the file name relative to the task scope,
@@ -351,9 +382,14 @@ class FileToolset(Toolset):
         except Exception as e:
             return f"Error listing files: {e}"
 
-    @tool_method(effect="read")
+    @tool_method(effect="read", description="Find files in /workspace whose path matches a glob.")
     @unrestricted(RUN_OWN_FILES)
-    async def search_files(self, pattern: str) -> str:
+    async def search_files(
+        self,
+        pattern: Annotated[
+            str, Field(description="Glob over paths relative to /workspace, e.g. reports/*.md.")
+        ],
+    ) -> str:
         """Search the task scope for files whose name matches a glob pattern.
 
         Equivalent to ``list_files`` with the pattern applied — the split
