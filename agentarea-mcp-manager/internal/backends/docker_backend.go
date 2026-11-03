@@ -482,13 +482,8 @@ func (d *DockerBackend) deleteTaskWorkspace(ctx context.Context, workspaceID, ta
 	if err := warmpool.DeleteTaskWorkspace(ctx, base, workspaceID, taskID, 30*time.Second); err != nil {
 		return err
 	}
-	prefix := dockerTaskKey(workspaceID, taskID) + "\x00"
 	d.hydrationMu.Lock()
-	for key := range d.hydrated {
-		if strings.HasPrefix(key, prefix) {
-			delete(d.hydrated, key)
-		}
-	}
+	delete(d.hydrated, dockerTaskKey(workspaceID, taskID))
 	d.hydrationMu.Unlock()
 	return nil
 }
