@@ -497,7 +497,6 @@ type RuleBuildError =
   | "amountMustNotBeNegative"
   | "atLeastOneToolRequired"
   | "toolRequired"
-  | "safetyCheckRequired"
   | "approverUnsupported"
   | "installTargetRequired";
 
@@ -588,7 +587,6 @@ function buildRuleBodies(
   }
 
   // safety
-  if (!form.promptInjection) return { error: "safetyCheckRequired" };
   return {
     bodies: [
       {
@@ -1172,9 +1170,7 @@ export default function PolicyEditor({
               ? t("validation.toolRequired")
               : error === "approverUnsupported"
                 ? t("validation.approverUnsupported")
-                : error === "installTargetRequired"
-                  ? t("validation.installTargetRequired")
-                  : t("validation.safetyCheckRequired");
+                : t("validation.installTargetRequired");
   const currencySymbol = useMemo(
     () => getCurrencySymbol(currency, locale),
     [currency, locale]

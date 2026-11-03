@@ -357,11 +357,14 @@ function describeRule(
   }
 
   if (dimension === "safety") {
-    const parts: string[] = [];
-    if (p.prompt_injection) parts.push("prompt-injection");
     return {
       label: "Content safety",
-      value: parts.length > 0 ? parts.join(", ") : "on",
+      value:
+        p.prompt_injection === false
+          ? "prompt-injection off"
+          : p.prompt_injection
+            ? "prompt-injection"
+            : "on",
     };
   }
 
@@ -500,6 +503,7 @@ function buildDimensions(
   let approvalAll = false;
   let approvalToolCount = 0;
   let safetyOn = false;
+  let safetyOff = false;
 
   for (const policy of rules) {
     const dimension = ruleDimension(policy);
@@ -531,7 +535,9 @@ function buildDimensions(
       if (policy.target === "*") approvalAll = true;
       else approvalToolCount += 1;
     } else if (dimension === "safety") {
-      safetyOn = true;
+      if (p.prompt_injection === false && !isPlainObject(p.answer_check))
+        safetyOff = true;
+      else safetyOn = true;
     }
   }
 
@@ -559,6 +565,7 @@ function buildDimensions(
   }
 
   if (safetyOn) dims.safety = { value: "on", effect: "safety" };
+  else if (safetyOff) dims.safety = { value: "off", effect: "safety" };
 
   return { dimensions: dims, customCount };
 }

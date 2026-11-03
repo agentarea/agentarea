@@ -3790,7 +3790,6 @@
         "amountMustNotBeNegative": "The amount can't be negative.",
         "atLeastOneToolRequired": "Add at least one tool.",
         "toolRequired": "Add a tool.",
-        "safetyCheckRequired": "Enable at least one safety check.",
         "approverUnsupported": "Only workspace members can approve; remove role and group approvers.",
         "ruleInvalid": "Rule {number} ({effect}): {error}",
         "installTargetRequired": "Pick at least one registry or trust level.",

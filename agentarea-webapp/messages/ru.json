@@ -3790,7 +3790,6 @@
         "amountMustNotBeNegative": "Сумма не может быть отрицательной.",
         "atLeastOneToolRequired": "Добавьте хотя бы один инструмент.",
         "toolRequired": "Добавьте инструмент.",
-        "safetyCheckRequired": "Включите хотя бы одну проверку безопасности.",
         "approverUnsupported": "Согласовывать могут только участники рабочего пространства — удалите роли и группы из согласующих.",
         "ruleInvalid": "Правило № {number} («{effect}»): {error}",
         "installTargetRequired": "Выберите хотя бы один реестр или уровень доверия.",
