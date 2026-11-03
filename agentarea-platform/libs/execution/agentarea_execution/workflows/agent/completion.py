@@ -478,7 +478,7 @@ class CompletionMixin(BudgetMixin):
             "generation": result.generation,
             "issues": [item.model_dump() for item in result.issues],
             "instruction": (
-                "Repair or create the missing output in /workspace/outputs/, or drop the path "
+                "Repair or create the missing output in outputs/, or drop the path "
                 "from artifacts, then call completion again. Do not claim success until "
                 "validation passes."
             ),

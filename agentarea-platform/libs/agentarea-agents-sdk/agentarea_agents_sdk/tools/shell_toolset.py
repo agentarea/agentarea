@@ -76,8 +76,9 @@ class ShellToolset(Toolset):
             str,
             Field(
                 description=(
-                    "The bash command to run in /workspace, the task's working directory. "
-                    "Chain steps with && or put them in a script."
+                    "The bash command to run. It starts in the task's working directory; "
+                    "use paths relative to it, such as outputs/report.md. Chain steps with "
+                    "&& or put them in a script."
                 )
             ),
         ],
