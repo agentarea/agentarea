@@ -4,9 +4,9 @@ The catalog flags that provider with first_party; the Models page lists it first
 and badges it, reading the column, so the webapp never names a provider. Every
 existing row is a third party until the catalog's next sync says otherwise.
 
-Revision ID: 20261103_1200_first_party
-Revises: 20261101_1800_mcp_tool_ids
-Create Date: 2026-11-03 12:00:00.000000
+Revision ID: 20261103_1300_first_party
+Revises: 20261103_1200_cache_breakpoints
+Create Date: 2026-11-03 13:00:00.000000
 """
 
 from collections.abc import Sequence
@@ -14,8 +14,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20261103_1200_first_party"
-down_revision: str | None = "20261101_1800_mcp_tool_ids"
+revision: str = "20261103_1300_first_party"
+down_revision: str | None = "20261103_1200_cache_breakpoints"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
