@@ -42,7 +42,7 @@ automountServiceAccountToken: false
   ingressName   name of the ingress policy
   fromPods      matchLabels of the one pod allowed in, when it is not on the host network
   ingressPorts  ports it may connect to; empty allows all
-  egressLabel   pods labelled agentarea.io/egress get DNS and np.egressProxy only
+  egressLabel   pods labelled agentarea.io/egress get DNS, np.egressProxy and np.extraEgress only
 */}}
 {{- define "dataplane.workloadNetworkPolicies" -}}
 {{- $np := .np }}
@@ -119,8 +119,8 @@ spec:
             {{- end }}
 {{- if .egressLabel }}
 ---
-# Out, for pods labelled agentarea.io/egress: cluster DNS and the egress proxy.
-# With no proxy configured they reach DNS only.
+# Out, for pods labelled agentarea.io/egress: cluster DNS, the egress proxy and
+# extraEgress. With no proxy configured they reach DNS and extraEgress only.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -153,6 +153,9 @@ spec:
         - {{ toYaml $peer | nindent 10 | trim }}
       ports:
         - { protocol: TCP, port: {{ .port }} }
+    {{- end }}
+    {{- with $np.extraEgress }}
+    {{- toYaml . | nindent 4 }}
     {{- end }}
 {{- end }}
 {{- end -}}

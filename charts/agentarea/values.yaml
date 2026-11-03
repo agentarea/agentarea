@@ -824,10 +824,11 @@ mcpManager:
       - 172.16.0.0/12
       - 192.168.0.0/16
     # Extra raw NetworkPolicyEgressRule entries appended as-is (e.g. to allow a
-    # specific in-cluster dependency).
+    # specific in-cluster dependency), for every instance pod, those labelled
+    # agentarea.io/egress included.
     extraEgress: []
     # Proxy that instance pods labelled agentarea.io/egress may reach; those pods
-    # get DNS and this proxy only, and DNS only while it is empty. Shape:
+    # get DNS, this proxy and extraEgress only. Shape:
     # {namespaceSelector: {matchLabels: ...}, podSelector: {matchLabels: ...}, port: 3128}
     egressProxy: {}
 

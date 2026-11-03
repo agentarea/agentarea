@@ -93,8 +93,9 @@ spec:
     {{- toYaml . | nindent 4 }}
     {{- end }}
 ---
-# Pods labelled agentarea.io/egress reach DNS and the configured egress proxy,
-# nothing else. Without a proxy configured they reach DNS only.
+# Pods labelled agentarea.io/egress reach DNS, the configured egress proxy and
+# extraEgress, nothing else. Without a proxy configured they reach DNS and
+# extraEgress only.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -132,5 +133,8 @@ spec:
       ports:
         - protocol: TCP
           port: {{ .port }}
+    {{- end }}
+    {{- with .Values.mcpManager.instanceNetworkPolicy.extraEgress }}
+    {{- toYaml . | nindent 4 }}
     {{- end }}
 {{- end }}

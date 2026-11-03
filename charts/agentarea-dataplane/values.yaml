@@ -119,11 +119,13 @@ workloads:
       namespace: kube-system
       podLabels:
         k8s-app: kube-dns
-    # -- Additional egress rules, as NetworkPolicy egress entries. For a host that
-    # REDIRECTs some traffic to a local proxy, allow the redirect target here.
+    # -- Additional egress rules, as NetworkPolicy egress entries, for every MCP
+    # server, those labelled agentarea.io/egress included (an in-cluster
+    # dependency such as a storage gateway). For a host that REDIRECTs some
+    # traffic to a local proxy, allow the redirect target here.
     extraEgress: []
     # -- Proxy that MCP servers labelled agentarea.io/egress may reach; those
-    # servers get DNS and this proxy only, and DNS only while it is empty. Shape:
+    # servers get DNS, this proxy and extraEgress only. Shape:
     # {namespaceSelector: {matchLabels: ...}, podSelector: {matchLabels: ...}, port: 3128}
     egressProxy: {}
 
