@@ -33,6 +33,12 @@ def test_a_budget_must_be_a_positive_integer(value):
         reasoning_max_tokens_of({"reasoning_max_tokens": value})
 
 
+def test_a_budget_larger_than_the_agent_can_store_is_refused():
+    assert reasoning_max_tokens_of({"reasoning_max_tokens": 2**31 - 1}) == 2**31 - 1
+    with pytest.raises(ValueError, match="at most 2147483647"):
+        reasoning_max_tokens_of({"reasoning_max_tokens": 8839416901014346860})
+
+
 def test_a_level_and_a_budget_together_are_refused():
     with pytest.raises(ValueError, match="not both"):
         check_reasoning({"reasoning_effort": "low", "reasoning_max_tokens": 1024})

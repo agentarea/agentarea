@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 from collections.abc import AsyncIterator, Callable, Iterator, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
 from contextvars import ContextVar
@@ -198,17 +199,72 @@ class SafeMCPTransport(httpx2.AsyncBaseTransport):
 UPSTREAM_REFUSAL_STATUSES = frozenset({401, 403})
 
 
+_AUTH_ITEM = re.compile(
+    r"""([!#$%&'*+.^_`|~0-9A-Za-z-]+)\s*=\s*("(?:[^"\\]|\\.)*"|[^\s,]*)"""
+    r"""|([!#$%&'*+.^_`|~0-9A-Za-z-]+)"""
+)
+MAX_REQUIRED_SCOPES = 20
+
+
+def _bearer_params(challenge: str) -> dict[str, str]:
+    """The auth-params of the ``Bearer`` challenge in a ``WWW-Authenticate`` value.
+
+    Names compare case-insensitively (RFC 9110 §11.2); a quoted value is one
+    token, so ``error=`` inside an ``error_description`` is not a parameter.
+    """
+    params: dict[str, str] = {}
+    scheme = ""
+    for match in _AUTH_ITEM.finditer(challenge):
+        name, value, bare = match.groups()
+        if bare is not None:
+            scheme = bare.lower()
+            continue
+        if scheme == "bearer":
+            if value.startswith('"'):
+                value = re.sub(r"\\(.)", r"\1", value[1:-1])
+            params.setdefault(name.lower(), value)
+    return params
+
+
+def scope_short_name(scope: str) -> str:
+    """``gmail.send`` for ``https://www.googleapis.com/auth/gmail.send``; other scopes as they are."""
+    return scope.rstrip("/").rsplit("/", 1)[-1] or scope
+
+
 class MCPUpstreamUnauthorizedError(MCPError):
     """The upstream MCP server refused the credentials with HTTP 401 or 403.
 
     The SDK reports such an answer as a generic MCP error without its status.
+    A 403 whose challenge says ``insufficient_scope`` (RFC 6750 §3.1) refused a
+    credential granted too little: ``required_scopes`` are what a reconnect
+    must add.
     """
 
-    def __init__(self, url: str, status: int) -> None:
+    def __init__(self, url: str, status: int, challenge: str = "") -> None:
         self.status = status
+        bearer = _bearer_params(challenge)
+        self.insufficient_scope = status == 403 and bearer.get("error") == "insufficient_scope"
+        self.required_scopes: tuple[str, ...] = (
+            tuple(bearer.get("scope", "").split()[:MAX_REQUIRED_SCOPES])
+            if self.insufficient_scope
+            else ()
+        )
         host = urlsplit(url).hostname or url
-        super().__init__(
-            INTERNAL_ERROR, f"{host} rejected the credentials (HTTP {status})", {"status": status}
+        data: dict[str, Any] = {"status": status}
+        if self.insufficient_scope:
+            data["error"] = "insufficient_scope"
+            data["required_scopes"] = list(self.required_scopes)
+        super().__init__(INTERNAL_ERROR, f"{host} {self.refusal} (HTTP {status})", data)
+
+    @property
+    def refusal(self) -> str:
+        """What the server refused, after its name: why the call failed and what fixes it."""
+        if not self.insufficient_scope:
+            return "rejected the credentials"
+        missing = ", ".join(scope_short_name(scope) for scope in self.required_scopes)
+        return (
+            f"needs access it was not granted{f' ({missing})' if missing else ''}: "
+            "reconnect it and allow that access"
         )
 
 
@@ -384,6 +440,7 @@ class _ConnectedClient:
         self._cached = False
         self._retried = False
         self._refused_status: int | None = None
+        self._refused_challenge = ""
 
     def _observed_client(
         self,
@@ -406,10 +463,13 @@ class _ConnectedClient:
     async def _observe(self, response: httpx2.Response) -> None:
         if response.status_code in UPSTREAM_REFUSAL_STATUSES:
             self._refused_status = response.status_code
+            self._refused_challenge = response.headers.get("www-authenticate", "")
 
     def _refusal(self, url: str) -> MCPUpstreamUnauthorizedError | None:
         status = self._refused_status
-        return None if status is None else MCPUpstreamUnauthorizedError(url, status)
+        if status is None:
+            return None
+        return MCPUpstreamUnauthorizedError(url, status, self._refused_challenge)
 
     @property
     def session(self):

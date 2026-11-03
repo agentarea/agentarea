@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # An MCP pod labelled agentarea.io/egress leaves the default egress policy. That
 # must never widen what it reaches: in both charts it has to be selected by
-# exactly one egress policy, that policy may open DNS and the configured egress
-# proxy only, and ingress still applies to it as to every other MCP pod.
+# exactly one egress policy, that policy may open DNS, the configured egress
+# proxy and the operator's extraEgress only, and ingress still applies to it as
+# to every other MCP pod.
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -11,6 +12,7 @@ trap 'rm -rf "$renders"' EXIT
 
 proxy_namespace='{"matchLabels":{"kubernetes.io/metadata.name":"egress"}}'
 proxy_pods='{"matchLabels":{"app.kubernetes.io/name":"egress-proxy"}}'
+extra='[{"to":[{"ipBlock":{"cidr":"10.43.0.10/32"}}],"ports":[{"protocol":"TCP","port":9000}]}]'
 dataplane=(--kube-version 1.31.0 --set dataPlane.id=dp --set dataPlane.auth.existingSecret=s)
 
 helm template egress "$repository_root/charts/agentarea" >"$renders/main-default.yaml"
@@ -19,6 +21,12 @@ helm template egress "$repository_root/charts/agentarea" \
   --set-json "mcpManager.instanceNetworkPolicy.egressProxy.namespaceSelector=$proxy_namespace" \
   --set-json "mcpManager.instanceNetworkPolicy.egressProxy.podSelector=$proxy_pods" \
   >"$renders/main-proxy.yaml"
+helm template egress "$repository_root/charts/agentarea" \
+  --set mcpManager.instanceNetworkPolicy.egressProxy.port=3128 \
+  --set-json "mcpManager.instanceNetworkPolicy.egressProxy.namespaceSelector=$proxy_namespace" \
+  --set-json "mcpManager.instanceNetworkPolicy.egressProxy.podSelector=$proxy_pods" \
+  --set-json "mcpManager.instanceNetworkPolicy.extraEgress=$extra" \
+  >"$renders/main-extra.yaml"
 helm template dp "$repository_root/charts/agentarea-dataplane" "${dataplane[@]}" \
   --set sandboxes.enabled=true --set sandboxes.server.auth.existingSecret=k >"$renders/dataplane-default.yaml"
 helm template dp "$repository_root/charts/agentarea-dataplane" "${dataplane[@]}" \
@@ -26,14 +34,22 @@ helm template dp "$repository_root/charts/agentarea-dataplane" "${dataplane[@]}"
   --set-json "workloads.networkPolicy.egressProxy.namespaceSelector=$proxy_namespace" \
   --set-json "workloads.networkPolicy.egressProxy.podSelector=$proxy_pods" \
   >"$renders/dataplane-proxy.yaml"
+helm template dp "$repository_root/charts/agentarea-dataplane" "${dataplane[@]}" \
+  --set workloads.networkPolicy.egressProxy.port=3128 \
+  --set-json "workloads.networkPolicy.egressProxy.namespaceSelector=$proxy_namespace" \
+  --set-json "workloads.networkPolicy.egressProxy.podSelector=$proxy_pods" \
+  --set-json "workloads.networkPolicy.extraEgress=$extra" \
+  >"$renders/dataplane-extra.yaml"
 
-python3 - "$renders" <<'PY'
+python3 - "$renders" "$extra" <<'PY'
+import json
 import pathlib
 import sys
 
 import yaml
 
 renders = pathlib.Path(sys.argv[1])
+extra = json.loads(sys.argv[2])
 mcp_pod = {
     "app.kubernetes.io/name": "mcp-server",
     "app.kubernetes.io/instance": "instance",
@@ -42,10 +58,12 @@ mcp_pod = {
 }
 # The main chart's policies carry no namespace: they land in the release's.
 cases = {
-    "main-default": (None, False),
-    "main-proxy": (None, True),
-    "dataplane-default": ("agentarea-mcp", False),
-    "dataplane-proxy": ("agentarea-mcp", True),
+    "main-default": (None, False, []),
+    "main-proxy": (None, True, []),
+    "main-extra": (None, True, extra),
+    "dataplane-default": ("agentarea-mcp", False, []),
+    "dataplane-proxy": ("agentarea-mcp", True, []),
+    "dataplane-extra": ("agentarea-mcp", True, extra),
 }
 failures = []
 
@@ -68,7 +86,7 @@ def selects(selector, labels):
     return True
 
 
-for name, (namespace, proxy) in cases.items():
+for name, (namespace, proxy, extra_rules) in cases.items():
     policies = [
         doc
         for doc in yaml.safe_load_all((renders / f"{name}.yaml").read_text())
@@ -88,6 +106,12 @@ for name, (namespace, proxy) in cases.items():
         if not labelled:
             continue
         rules = egress[0]["spec"].get("egress") or []
+        # extraEgress (an in-cluster dependency such as a storage gateway) is
+        # the operator's to open, verbatim; nothing else may add a range.
+        missing = [rule for rule in extra_rules if rule not in rules]
+        if missing:
+            failures.append(f"{who} lacks extraEgress {missing}")
+        rules = [rule for rule in rules if rule not in extra_rules]
         peers = [peer for rule in rules for peer in rule.get("to") or [{}]]
         if any("ipBlock" in peer or not peer for peer in peers):
             failures.append(f"{who} may reach an address range: {rules}")
@@ -99,5 +123,5 @@ for name, (namespace, proxy) in cases.items():
 if failures:
     print("\n".join(failures), file=sys.stderr)
     sys.exit(1)
-print("labelled MCP pods get exactly one egress policy: DNS and the egress proxy only")
+print("labelled MCP pods get exactly one egress policy: DNS, the egress proxy and extraEgress only")
 PY

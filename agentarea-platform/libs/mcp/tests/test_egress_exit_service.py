@@ -5,6 +5,11 @@ from uuid import UUID, uuid4
 
 import pytest
 from agentarea_common.auth.context import UserContext
+from agentarea_common.extensions.egress_exits import (
+    EGRESS_EXITS_EXTENSION,
+    EgressExitsNotSupportedError,
+)
+from agentarea_common.extensions.registry import ExtensionRegistry
 from agentarea_mcp.application import egress_exit_service as module
 from agentarea_mcp.application.egress_exit_service import (
     EgressExitInUseError,
@@ -12,6 +17,8 @@ from agentarea_mcp.application.egress_exit_service import (
     EgressExitValidationError,
     PlatformEgressExitError,
 )
+from agentarea_mcp.application.service import MCPServerInstanceService
+from agentarea_mcp.application.validation_service import MCPValidationError
 from agentarea_mcp.domain.transport import MCPTransport
 from agentarea_mcp.schemas.egress_exit_dto import EgressExitUpdate
 
@@ -94,6 +101,14 @@ def _instance(transport=MCPTransport.DOCKER):
     return SimpleNamespace(id=uuid4(), name=f"mcp-{uuid4().hex[:4]}", transport=transport)
 
 
+@pytest.fixture(autouse=True)
+def _enforced():
+    ExtensionRegistry.clear()
+    ExtensionRegistry.register(EGRESS_EXITS_EXTENSION, lambda: True)
+    yield
+    ExtensionRegistry.clear()
+
+
 @pytest.fixture
 def retired(monkeypatch) -> list[UUID]:
     calls: list[UUID] = []
@@ -125,9 +140,7 @@ async def test_a_platform_exit_is_bound_but_never_changed(retired):
     assert exits.updated is None and exits.deleted is False
 
 
-async def test_a_new_route_restarts_the_running_instances_before_it_is_stored(
-    retired, monkeypatch
-):
+async def test_a_new_route_restarts_the_running_instances_before_it_is_stored(retired, monkeypatch):
     async def public(url):
         return None
 
@@ -187,3 +200,27 @@ async def test_a_platform_exit_binds_without_a_grant_and_an_own_one_needs_use(mo
     service, _ = _service(own)
     assert await service.require_bindable(own.id) is own
     assert checked == [("use", "egress_exit", str(own.id))]
+
+
+async def test_nothing_binds_an_exit_on_a_deployment_that_cannot_enforce_it(monkeypatch):
+    ExtensionRegistry.clear()
+    platform = _row(managed_by="platform", upstream_url=None)
+    service, _ = _service(platform)
+
+    with pytest.raises(EgressExitsNotSupportedError):
+        await service.require_bindable(platform.id)
+
+
+async def test_an_instance_asking_for_an_exit_there_is_told_why_it_cannot():
+    ExtensionRegistry.clear()
+    _, exits = _service(_row())
+    instances = MCPServerInstanceService.__new__(MCPServerInstanceService)
+    instances.repository_factory = SimpleNamespace(
+        session=exits.session, user_context=CALLER, create_repository=lambda cls: exits
+    )
+    instances.secret_manager = SimpleNamespace()
+
+    with pytest.raises(MCPValidationError, match="enterprise"):
+        await instances._assert_may_bind_egress_exit(
+            {"egress_exit": str(uuid4())}, MCPTransport.DOCKER
+        )

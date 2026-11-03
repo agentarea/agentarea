@@ -90,7 +90,7 @@ def _repo(s: AsyncSession, workspace_id: str = TENANT) -> EgressExitRepository:
     return EgressExitRepository(s, UserContext(user_id="member", workspace_id=workspace_id))
 
 
-async def test_a_workspace_sees_its_own_exits_and_the_platforms_and_no_others(session):
+async def test_a_workspace_sees_only_the_exits_it_created(session):
     own = await _exit(session, TENANT)
     platform = await _exit(
         session, PLATFORM_WORKSPACE_ID, managed_by="platform", upstream_url=None, via="hop-a"
@@ -99,10 +99,12 @@ async def test_a_workspace_sees_its_own_exits_and_the_platforms_and_no_others(se
 
     with workspace_scope(TENANT):
         listed = {e.id for e in await _repo(session).list_all()}
-        hidden = await _repo(session).get_by_id(foreign)
+        platform_row = await _repo(session).get_by_id(platform)
+        foreign_row = await _repo(session).get_by_id(foreign)
 
-    assert own in listed and platform in listed and foreign not in listed
-    assert hidden is None
+    assert listed == {own}
+    assert platform_row is None
+    assert foreign_row is None
 
 
 async def test_no_tenant_edits_or_deletes_a_platform_exit(session):

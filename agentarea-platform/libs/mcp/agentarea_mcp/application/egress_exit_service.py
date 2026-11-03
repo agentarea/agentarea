@@ -1,4 +1,4 @@
-"""Egress exits: define the workspace's own, list them with the platform's, bind one to an instance."""
+"""Egress exits: define the workspace's own, list them, bind one to an instance."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 
 from agentarea_common.audit import audited
 from agentarea_common.auth.permission import require_permission
+from agentarea_common.extensions.egress_exits import require_egress_exits
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.utils.url_safety import OutboundPolicy, UnsafeUrlError, validate_outbound_url
 from agentarea_secrets.catalog_service import SecretCatalogService
@@ -52,7 +53,7 @@ class EgressExitInUseError(RuntimeError):
 
 
 class PlatformEgressExitError(PermissionError):
-    """A platform exit is the deployment's; a tenant may bind it but not change it."""
+    """A platform exit is the operator's; nothing changes it through the API."""
 
 
 async def _assert_upstream_public(upstream_url: str) -> None:
@@ -81,7 +82,7 @@ class EgressExitService:
         )
 
     async def list(self) -> list[EgressExit]:
-        """The workspace's own exits and the platform's, newest first."""
+        """The workspace's own exits, newest first."""
         return await self.repository.list_all()
 
     async def get(self, exit_id: UUID) -> EgressExit:
@@ -92,6 +93,7 @@ class EgressExitService:
 
     async def require_bindable(self, exit_id: UUID | str) -> EgressExit:
         """The exit an instance of this workspace asks to leave through, if the caller may use it."""
+        require_egress_exits()
         exit_ = await self.repository.get_by_id(exit_id)
         if exit_ is None:
             raise EgressExitNotFoundError(exit_id)
@@ -169,6 +171,6 @@ class EgressExitService:
         exit_ = await self.get(exit_id)
         if exit_.is_platform:
             raise PlatformEgressExitError(
-                f"Egress exit {exit_id} is the platform's; it can be bound but not changed"
+                f"Egress exit {exit_id} is the platform's; it is not changed through the API"
             )
         return exit_

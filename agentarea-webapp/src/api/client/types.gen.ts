@@ -2745,7 +2745,7 @@ export type EgressExitResponse = {
   /**
    * Managed By
    *
-   * "platform" for an exit the deployment supplies; null for the workspace's own.
+   * "platform" for an exit the operator manages; null for the workspace's own.
    */
   managed_by: string | null;
   /**
@@ -5217,6 +5217,12 @@ export type OAuthAuthorizeRequest = {
    * Return To
    */
   return_to?: string;
+  /**
+   * Scopes
+   *
+   * Scopes to ask for, among the preflight's `scopes`; omitted asks for its `default_scopes`.
+   */
+  scopes?: Array<string> | null;
 };
 
 /**
@@ -5348,6 +5354,10 @@ export type OAuthPreflightResponse = {
    * Credential Source
    */
   credential_source?: "platform" | "dynamic" | null;
+  /**
+   * Default Scopes
+   */
+  default_scopes?: Array<string>;
   /**
    * Detail
    */

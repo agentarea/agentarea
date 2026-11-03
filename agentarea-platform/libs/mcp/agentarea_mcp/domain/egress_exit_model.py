@@ -3,10 +3,12 @@
 An exit is a proxy whose address the destination sees: the workspace's own (a
 customer or purchased proxy) or one the platform runs. An instance binds one with
 ``json_spec.egress_exit = "<exit id>"``; without the enterprise extension nothing
-enforces the binding.
+enforces the binding. A server spec whose image cannot run without one declares
+``json_spec.egress = {"required": true}``, and every instance of it inherits that.
 """
 
 from importlib import import_module
+from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
@@ -14,12 +16,10 @@ from agentarea_common.constants import MANAGED_BY_PLATFORM
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
-    ColumnElement,
     ForeignKey,
     String,
     Text,
     UniqueConstraint,
-    or_,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -29,6 +29,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 import_module("agentarea_secrets.models")
 
 EGRESS_EXIT_SPEC_KEY = "egress_exit"
+EGRESS_SPEC_KEY = "egress"
+
+
+def egress_required(spec: dict[str, Any] | None) -> bool:
+    egress = (spec or {}).get(EGRESS_SPEC_KEY)
+    return isinstance(egress, dict) and egress.get("required") is True
 
 
 class EgressExit(BaseModel, WorkspaceScopedMixin):
@@ -63,15 +69,10 @@ class EgressExit(BaseModel, WorkspaceScopedMixin):
     allow_plaintext_credentials: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    # ``"platform"``: an exit the deployment supplies to every workspace, written
-    # only by the operator. NULL: the workspace's own.
+    # ``"platform"``: an exit the deployment runs for itself, written only by the
+    # operator into the platform workspace; no tenant sees it. NULL: the workspace's own.
     managed_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     @property
     def is_platform(self) -> bool:
         return self.managed_by == MANAGED_BY_PLATFORM
-
-    @classmethod
-    def workspace_visibility(cls, workspace_id: str) -> ColumnElement[bool]:
-        """The workspace's own exits, plus the platform's."""
-        return or_(cls.workspace_id == workspace_id, cls.managed_by == MANAGED_BY_PLATFORM)

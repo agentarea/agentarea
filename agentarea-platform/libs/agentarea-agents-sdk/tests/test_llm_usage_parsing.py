@@ -55,6 +55,18 @@ def test_anthropic_shape_counts_cache_reads_and_writes_into_the_prompt():
     )
 
 
+def test_openrouter_cache_writes_are_read_from_prompt_details():
+    usage = usage_from_provider(
+        {
+            "prompt_tokens": 8696,
+            "completion_tokens": 12,
+            "prompt_tokens_details": {"cached_tokens": 7290, "cache_write_tokens": 1404},
+        }
+    )
+
+    assert (usage.cached_prompt_tokens, usage.cache_creation_tokens) == (7290, 1404)
+
+
 def test_deepseek_cache_hits_are_cached_tokens():
     usage = usage_from_provider(
         {

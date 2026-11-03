@@ -4943,7 +4943,7 @@
                 "type": "null"
               }
             ],
-            "description": "\"platform\" for an exit the deployment supplies; null for the workspace's own.",
+            "description": "\"platform\" for an exit the operator manages; null for the workspace's own.",
             "title": "Managed By"
           },
           "name": {
@@ -9245,6 +9245,22 @@
             "maxLength": 2048,
             "title": "Return To",
             "type": "string"
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Scopes to ask for, among the preflight's `scopes`; omitted asks for its `default_scopes`.",
+            "title": "Scopes"
           }
         },
         "title": "OAuthAuthorizeRequest",
@@ -9442,6 +9458,13 @@
               }
             ],
             "title": "Credential Source"
+          },
+          "default_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Default Scopes",
+            "type": "array"
           },
           "detail": {
             "default": "",
@@ -26342,7 +26365,7 @@
     },
     "/v1/workspaces/{workspace}/egress-exits/": {
       "get": {
-        "description": "List the workspace's own exits and the platform's.",
+        "description": "List the workspace's own exits.",
         "operationId": "list_egress_exits_v1_egress_exits__get",
         "parameters": [
           {
@@ -26517,7 +26540,7 @@
         ]
       },
       "get": {
-        "description": "Get an exit of the workspace or the platform.",
+        "description": "Get one of the workspace's exits.",
         "operationId": "get_egress_exit_v1_egress_exits__exit_id__get",
         "parameters": [
           {

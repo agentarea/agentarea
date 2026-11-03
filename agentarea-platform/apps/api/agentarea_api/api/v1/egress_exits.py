@@ -1,9 +1,9 @@
 """Egress exits: the proxies a workspace's MCP instances may leave through.
 
-The workspace defines its own (a customer or purchased proxy); the platform's are
-listed beside them and can be bound but not changed. An instance binds one with
+The workspace defines its own (a customer or purchased proxy) and sees only those;
+the platform's live in the platform workspace, out of every tenant's sight. An instance binds one with
 ``json_spec.egress_exit = "<exit id>"``. Enforcing the binding takes the
-enterprise edition; without it a bound instance does not start.
+enterprise edition; without it every route here answers 404.
 """
 
 from typing import Annotated
@@ -11,6 +11,10 @@ from uuid import UUID
 
 from agentarea_api.api.deps.services import get_egress_exit_service
 from agentarea_common.auth.route_authz import requires, unrestricted
+from agentarea_common.extensions.egress_exits import (
+    EgressExitsNotSupportedError,
+    require_egress_exits,
+)
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.egress_exit_service import (
     EgressExitInUseError,
@@ -29,7 +33,19 @@ from agentarea_secrets.catalog_service import (
 from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-router = APIRouter(prefix="/egress-exits", tags=["egress-exits"])
+
+def _deployment_has_egress_exits() -> None:
+    try:
+        require_egress_exits()
+    except EgressExitsNotSupportedError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+router = APIRouter(
+    prefix="/egress-exits",
+    tags=["egress-exits"],
+    dependencies=[Depends(_deployment_has_egress_exits)],
+)
 
 EgressExitServiceDep = Annotated[EgressExitService, Depends(get_egress_exit_service)]
 
@@ -44,7 +60,7 @@ class EgressExitResponse(BaseModel):
     via: str | None = Field(description="The platform hop this exit leaves through, if any.")
     allow_plaintext_credentials: bool
     managed_by: str | None = Field(
-        description='"platform" for an exit the deployment supplies; null for the workspace\'s own.'
+        description='"platform" for an exit the operator manages; null for the workspace\'s own.'
     )
     created_by: str
     created_at: UtcDatetime
@@ -78,14 +94,11 @@ def _secret_error(e: Exception) -> HTTPException:
     "/",
     response_model=list[EgressExitResponse],
     dependencies=[
-        unrestricted(
-            "workspace member; the workspace-scoped repository is the boundary, "
-            "and platform exits are readable by every workspace"
-        )
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
     ],
 )
 async def list_egress_exits(service: EgressExitServiceDep) -> list[EgressExitResponse]:
-    """List the workspace's own exits and the platform's."""
+    """List the workspace's own exits."""
     return [EgressExitResponse.from_model(e) for e in await service.list()]
 
 
@@ -118,7 +131,7 @@ async def create_egress_exit(
     ],
 )
 async def get_egress_exit(exit_id: UUID, service: EgressExitServiceDep) -> EgressExitResponse:
-    """Get an exit of the workspace or the platform."""
+    """Get one of the workspace's exits."""
     try:
         return EgressExitResponse.from_model(await service.get(exit_id))
     except EgressExitNotFoundError as e:

@@ -7,6 +7,7 @@ asked about before any instance exists. Everything else in the flow is shared.
 
 import asyncio
 import logging
+from dataclasses import replace
 from typing import Any, Protocol
 from urllib.parse import urlparse
 from uuid import UUID
@@ -28,9 +29,11 @@ from agentarea_mcp.application.oauth_client_service import (
     discovered_profile,
     oauth_app_required_detail,
     oauth_authorize_params,
+    oauth_default_scopes,
 )
 from agentarea_mcp.application.oauth_profile import OAuthProfile
 from agentarea_mcp.domain.transport import MCPTransport
+from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
@@ -112,6 +115,18 @@ def instance_remote_url(instance: Any, server_spec: Any) -> str | None:
     return instance_transport_spec(server_spec, instance).get("endpoint_url") or None
 
 
+def _missing_scopes(verification: Any) -> tuple[str, ...]:
+    """The scopes the last check was refused for lacking (RFC 6750 insufficient_scope)."""
+    error = verification.get("error") if isinstance(verification, dict) else None
+    detail = error.get("detail") if isinstance(error, dict) else None
+    if not isinstance(detail, dict) or detail.get("error") != "insufficient_scope":
+        return ()
+    scopes = detail.get("required_scopes")
+    if not isinstance(scopes, list):
+        return ()
+    return tuple(scope for scope in scopes if isinstance(scope, str) and scope)
+
+
 def _spec_remote_url(server_spec: Any) -> str | None:
     spec = server_transport_spec(server_spec)
     if spec.get("type") != MCPTransport.URL:
@@ -125,26 +140,47 @@ async def _discovered(mcp_url: str | None, server_spec: Any) -> OAuthProfile:
             "No remote URL configured. OAuth connect requires a URL-type MCP connection.",
             status_code=400,
         )
+    json_spec = server_spec.json_spec if server_spec else None
     try:
-        authorize_params = oauth_authorize_params(server_spec.json_spec if server_spec else None)
+        authorize_params = oauth_authorize_params(json_spec)
+        default_scopes = oauth_default_scopes(json_spec)
     except ValueError as exc:
-        raise NotAuthorizableError(
-            f"The MCP server spec's OAuth settings are invalid: {exc}", status_code=502
-        ) from exc
+        raise _invalid_spec(exc) from exc
     try:
         metadata = await MCPOAuthClientService().discover_auth_server(mcp_url)
     except MCPOAuthDiscoveryError as exc:
         raise NotAuthorizableError(str(exc), status_code=502) from exc
-    return discovered_profile(metadata, mcp_url, authorize_params)
+    try:
+        return discovered_profile(metadata, mcp_url, authorize_params, default_scopes)
+    except ValueError as exc:
+        raise _invalid_spec(exc) from exc
+
+
+def _invalid_spec(exc: ValueError) -> NotAuthorizableError:
+    return NotAuthorizableError(
+        f"The MCP server spec's OAuth settings are invalid: {exc}", status_code=502
+    )
 
 
 class MCPInstanceTarget:
-    """An MCP instance: the callback attaches the credential to it."""
+    """An MCP instance: the callback attaches the credential to it.
 
-    def __init__(self, instance: Any, server_spec: Any, user_context: UserContext) -> None:
+    A reconnect starts from ``current_scopes``, what its credential asked for,
+    plus ``missing_scopes``, what the server last refused it for lacking.
+    """
+
+    def __init__(
+        self,
+        instance: Any,
+        server_spec: Any,
+        user_context: UserContext,
+        current_scopes: tuple[str, ...] = (),
+    ) -> None:
         self.instance = instance
         self.server_spec = server_spec
         self.user_context = user_context
+        self.current_scopes = current_scopes
+        self.missing_scopes = _missing_scopes(getattr(instance, "verification", None))
         self.connected = instance.auth_config_id is not None
 
     @classmethod
@@ -159,11 +195,30 @@ class MCPInstanceTarget:
             server_spec = await MCPServerRepository(session, user_context).get_server_by_id(
                 instance.server_spec_id
             )
-        return cls(instance, server_spec, user_context)
+        current: tuple[str, ...] = ()
+        if instance.auth_config_id is not None:
+            auth_config = await MCPAuthConfigRepository(session, user_context).get_by_id(
+                instance.auth_config_id
+            )
+            scopes = auth_config.config.get("scopes") if auth_config else None
+            if isinstance(scopes, list):
+                current = tuple(scope for scope in scopes if isinstance(scope, str))
+        return cls(instance, server_spec, user_context, current)
 
     async def profile(self) -> OAuthProfile:
-        return await _discovered(
+        profile = await _discovered(
             instance_remote_url(self.instance, self.server_spec), self.server_spec
+        )
+        # The server named these in its refusal, so it accepts them even when
+        # its metadata does not list them.
+        offered = tuple(dict.fromkeys((*profile.scopes, *self.missing_scopes)))
+        still_offered = tuple(scope for scope in self.current_scopes if scope in offered)
+        if not still_offered:
+            return replace(profile, scopes=offered)
+        return replace(
+            profile,
+            scopes=offered,
+            default_scopes=tuple(dict.fromkeys((*still_offered, *self.missing_scopes))),
         )
 
     def oauth_app_required_detail(self, profile: OAuthProfile) -> str:

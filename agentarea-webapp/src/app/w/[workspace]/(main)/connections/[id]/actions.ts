@@ -7,12 +7,15 @@ import {
   createPolicy,
   deleteMCPServerInstance,
   deletePolicy,
+  getMCPServerInstance,
   listPolicies,
+  updateMCPServerInstance,
   verifyMCPServerInstance,
 } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 import { requestWorkspacePath } from "@/lib/workspace-request";
+import { egressExitUpdateSpec } from "../egress-exit";
 import {
   parseToolPolicyChange,
   planToolPolicyChange,
@@ -26,6 +29,29 @@ export async function verifyInstance(instanceId: string) {
 
 export async function deleteInstance(instanceId: string) {
   return deleteMCPServerInstance(instanceId);
+}
+
+/**
+ * Bind the exit a container connection leaves through, or unbind with null.
+ * The update replaces the whole spec, so it is built from the stored one.
+ */
+export async function bindEgressExitAction(
+  instanceId: string,
+  exitId: string | null
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const t = await getTranslations("EgressExits.section");
+  const current = await getMCPServerInstance(instanceId);
+  if (current.error || !current.data) {
+    return { ok: false, error: apiErrorMessage(current, t("saveFailed")) };
+  }
+  const result = await updateMCPServerInstance(instanceId, {
+    json_spec: egressExitUpdateSpec(current.data.json_spec ?? {}, exitId),
+  });
+  if (result.error) {
+    return { ok: false, error: apiErrorMessage(result, t("saveFailed")) };
+  }
+  revalidatePath(await requestWorkspacePath(`/connections/${instanceId}`));
+  return { ok: true };
 }
 
 // Rule writes in flight at once, so a large group does not flood the API.

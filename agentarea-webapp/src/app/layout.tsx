@@ -9,8 +9,10 @@ import { NuqsAdapter } from "nuqs/adapters/next/app";
 import ConditionalLayout from "@/components/ConditionalLayout";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { BalanceProvider } from "@/hooks/useBalance";
+import { EgressExitsOfferedProvider } from "@/hooks/useEgressExitsOffered";
 import { getBalance } from "@/lib/api-dashboard";
 import type { BalanceState } from "@/lib/balance";
+import { getEgressExits, type EgressExitsState } from "@/lib/egress-exits";
 // @ory/nextjs is vendored under src/lib/ory rather than installed, so the
 // session helper comes from there. main still imported the package path; the
 // billing-URL fix below is main's and is kept.
@@ -133,9 +135,9 @@ export default async function RootLayout({
   const { workspaces, active } = session
     ? await getWorkspaceContext()
     : { workspaces: [], active: null };
-  const balance: BalanceState = active
-    ? await getBalance()
-    : { status: "none" };
+  const [balance, egressExits]: [BalanceState, EgressExitsState] = active
+    ? await Promise.all([getBalance(), getEgressExits()])
+    : [{ status: "none" }, { status: "none" }];
 
   return (
     <html lang={locale} suppressHydrationWarning className={inter.variable}>
@@ -152,12 +154,17 @@ export default async function RootLayout({
             <NextIntlClientProvider>
               <NuqsAdapter>
                 <BalanceProvider balance={balance}>
-                  <ConditionalLayout
-                    sidebarDefaultOpen={sidebarDefaultOpen}
-                    workspaces={workspaces}
+                  {/* A failed list still shows the entry: the page reports it. */}
+                  <EgressExitsOfferedProvider
+                    offered={egressExits.status !== "none"}
                   >
-                    {children}
-                  </ConditionalLayout>
+                    <ConditionalLayout
+                      sidebarDefaultOpen={sidebarDefaultOpen}
+                      workspaces={workspaces}
+                    >
+                      {children}
+                    </ConditionalLayout>
+                  </EgressExitsOfferedProvider>
                 </BalanceProvider>
               </NuqsAdapter>
             </NextIntlClientProvider>

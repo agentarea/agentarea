@@ -12,6 +12,8 @@ from typing import Any
 REASONING_EFFORT_PARAMETER = "reasoning_effort"
 REASONING_MAX_TOKENS_PARAMETER = "reasoning_max_tokens"
 _EFFORT_SHAPE = re.compile(r"^[a-z][a-z_-]{0,15}$")
+# agents.reasoning_max_tokens is a 32-bit integer column.
+MAX_REASONING_MAX_TOKENS = 2**31 - 1
 
 
 def checked_reasoning_effort(value: Any) -> str | None:
@@ -29,6 +31,8 @@ def checked_reasoning_max_tokens(value: Any) -> int | None:
         return None
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise ValueError("reasoning_max_tokens must be a positive integer")
+    if value > MAX_REASONING_MAX_TOKENS:
+        raise ValueError(f"reasoning_max_tokens must be at most {MAX_REASONING_MAX_TOKENS}")
     return value
 
 

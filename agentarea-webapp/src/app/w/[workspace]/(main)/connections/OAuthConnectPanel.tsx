@@ -19,9 +19,11 @@ import {
   canUseOwnApp,
   deriveOAuthConnectState,
   preflightAfterAuthorizeError,
+  scopeChoice,
   type OAuthConnectState,
   type OAuthPreflight,
 } from "./oauth-connect-state";
+import { OAuthScopePicker } from "./OAuthScopePicker";
 
 /**
  * The single place a connection — a remote MCP server or a catalog API — is
@@ -86,6 +88,10 @@ export function OAuthConnectPanel({
   const [credentials, setCredentials] =
     useState<CustomOAuthAppCredentials | null>(null);
   const [useOwnApp, setUseOwnApp] = useState(false);
+  const [pickedScopes, setPickedScopes] = useState<{
+    key: string;
+    scopes: string[];
+  } | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const targetKind = target.kind;
@@ -124,6 +130,13 @@ export function OAuthConnectPanel({
     error: preflightError,
     useOwnApp,
   });
+  const choice = scopeChoice(preflight);
+  const choiceKey = choice ? `${targetKey}\n${choice.offered.join(" ")}` : "";
+  const scopes = choice
+    ? pickedScopes?.key === choiceKey
+      ? pickedScopes.scopes
+      : choice.initial
+    : null;
 
   const onStateChangeRef = useRef(onStateChange);
   onStateChangeRef.current = onStateChange;
@@ -139,7 +152,7 @@ export function OAuthConnectPanel({
   }, [isUrlType, preflight, preflightError, useOwnApp]);
 
   const handleConnect = useCallback(async () => {
-    if (!canAuthorize({ state, credentials })) return;
+    if (!canAuthorize({ state, credentials, scopes })) return;
 
     setIsConnecting(true);
     setConnectError(null);
@@ -158,6 +171,7 @@ export function OAuthConnectPanel({
               },
         state,
         credentials,
+        scopes,
         returnTo,
       });
       if (!request) return;
@@ -184,6 +198,7 @@ export function OAuthConnectPanel({
     }
   }, [
     credentials,
+    scopes,
     state,
     t,
     target,
@@ -235,8 +250,16 @@ export function OAuthConnectPanel({
   const connectLabel = state.connected
     ? t("reconnect")
     : (actionLabel ?? t("connect"));
-  const canConnect = canAuthorize({ state, credentials });
+  const canConnect = canAuthorize({ state, credentials, scopes });
   const buttonSize = bare ? "lg" : compact ? "xs" : "sm";
+  const scopePicker = choice && scopes && (
+    <OAuthScopePicker
+      offered={choice.offered}
+      selected={scopes}
+      onChange={(picked) => setPickedScopes({ key: choiceKey, scopes: picked })}
+      disabled={isConnecting}
+    />
+  );
 
   if (state.kind === "ready") {
     const button = (
@@ -246,7 +269,7 @@ export function OAuthConnectPanel({
         className={bare ? "w-full" : undefined}
         onClick={handleConnect}
         isLoading={isConnecting}
-        disabled={isConnecting}
+        disabled={isConnecting || !canConnect}
       >
         {connectLabel}
       </Button>
@@ -285,6 +308,7 @@ export function OAuthConnectPanel({
           </div>
           {!bare && button}
         </Row>
+        {scopePicker}
         {bare && button}
         {canUseOwnApp(preflight) && (
           <Button
@@ -342,6 +366,7 @@ export function OAuthConnectPanel({
         onChange={setCredentials}
         disabled={isConnecting}
       />
+      {scopePicker}
       <div className={bare ? "flex flex-col gap-2" : "flex items-center gap-2"}>
         <Button
           size={buttonSize}
@@ -352,7 +377,7 @@ export function OAuthConnectPanel({
         >
           {connectLabel}
         </Button>
-        {!canConnect && (
+        {!canAuthorize({ state, credentials }) && (
           <span className="text-xs text-muted-foreground">
             {t("needsAppHint")}
           </span>

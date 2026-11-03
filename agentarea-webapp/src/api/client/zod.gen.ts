@@ -1959,6 +1959,7 @@ export const zOAuthAuthorizeRequest = z.object({
   credential_mode: z.enum(["auto", "custom"]).optional().default("auto"),
   instance_id: z.uuid().nullish(),
   return_to: z.string().max(2048).optional().default(""),
+  scopes: z.array(z.string()).min(1).nullish(),
 });
 
 /**
@@ -2022,6 +2023,7 @@ export const zOAuthPreflightResponse = z.object({
   authorization_endpoint: z.string().nullish(),
   connected: z.boolean(),
   credential_source: z.enum(["platform", "dynamic"]).nullish(),
+  default_scopes: z.array(z.string()).optional(),
   detail: z.string().optional().default(""),
   issuer: z.string().nullish(),
   redirect_uri: z.string(),

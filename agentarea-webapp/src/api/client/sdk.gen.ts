@@ -4412,7 +4412,7 @@ export const getDashboardV1DashboardGet = <
 /**
  * List Egress Exits
  *
- * List the workspace's own exits and the platform's.
+ * List the workspace's own exits.
  */
 export const listEgressExitsV1EgressExitsGet = <
   ThrowOnError extends boolean = false,
@@ -4506,7 +4506,7 @@ export const deleteEgressExitV1EgressExitsExitIdDelete = <
 /**
  * Get Egress Exit
  *
- * Get an exit of the workspace or the platform.
+ * Get one of the workspace's exits.
  */
 export const getEgressExitV1EgressExitsExitIdGet = <
   ThrowOnError extends boolean = false,

@@ -419,7 +419,8 @@ async def test_platform_rows_are_read_from_every_workspace(backend: Backend) -> 
             assert mirror["id"] in await ids(session, MCPServer)
             assert stale_mirror["id"] not in await ids(session, MCPServer)
             assert tenant_copy["id"] not in await ids(session, MCPServer)
-            assert platform_exit["id"] in await ids(session, EgressExit)
+            # The platform's exits are its own infrastructure, not an offering.
+            assert platform_exit["id"] not in await ids(session, EgressExit)
             assert tenant_exit["id"] not in await ids(session, EgressExit)
 
             refused_exit = await session.execute(
