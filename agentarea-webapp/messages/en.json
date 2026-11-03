@@ -1343,6 +1343,7 @@
     "providerConfigsSection": "Provider Configs",
     "platformProviderConfigsSection": "Provided by the platform",
     "platformManagedBadge": "No setup needed",
+    "firstPartyBadge": "By AgentArea",
     "createConfig": "Create Configuration",
     "table": {
       "name": "Name",

@@ -1,13 +1,6 @@
-export interface ProviderSpec {
-  id: string;
-  provider_key: string;
-  name: string;
-  description: string | null;
-  provider_type: string;
-  icon_url: string | null;
-  is_builtin: boolean;
-  models: unknown[];
-}
+import type { ProviderSpecWithModelsResponse } from "@/api/client/types.gen";
+
+export type ProviderSpec = ProviderSpecWithModelsResponse;
 
 export interface ModelInstance {
   id: string;

@@ -98,7 +98,7 @@ PROVIDER_CONTRACT_FIELDS = (
 SOURCE_FETCH_TIMEOUT_SECONDS = 30
 # Part of the stored ETag: bump it when parsing or facets change, so the next
 # sync re-applies every source instead of skipping the unchanged ones.
-SYNC_FORMAT = "6"
+SYNC_FORMAT = "7"
 # The platform's own catalog rows: an item that changes in the source is applied
 # to its entity on sync. Other types install copies a workspace may have changed,
 # so a changed item only flags an update for someone to take.
@@ -1640,6 +1640,7 @@ class RegistryService:
             provider_type=spec.get("provider_type", spec["provider_key"]),
             icon=spec.get("icon"),
             is_builtin=spec.get("is_builtin", True),
+            is_first_party=spec.get("first_party", False),
         )
         created = await self.provider_spec_repo.upsert_by_provider_key(
             entity, self._provider_contract(spec)
@@ -1659,6 +1660,7 @@ class RegistryService:
             provider_type=spec.get("provider_type", spec["provider_key"]),
             icon=spec.get("icon"),
             is_builtin=spec.get("is_builtin", True),
+            is_first_party=spec.get("first_party", False),
         )
         return await self.provider_spec_repo.upsert_by_provider_key(
             entity, self._provider_contract(spec)
@@ -2238,6 +2240,11 @@ class RegistryService:
             provider_key = entry.get("provider_key")
             if not provider_key:
                 continue
+            first_party = entry.get("first_party", False)
+            if not isinstance(first_party, bool):
+                raise ValueError(
+                    f"Provider '{provider_key}' has first_party {first_party!r}; expected a bool"
+                )
             items.append(
                 {
                     "external_id": provider_key,
@@ -2249,6 +2256,7 @@ class RegistryService:
                         "provider_type": entry.get("provider_type", provider_key),
                         "icon": entry.get("icon"),
                         "is_builtin": entry.get("is_builtin", True),
+                        "first_party": first_party,
                         **{
                             field: entry[field]
                             for field in PROVIDER_CONTRACT_FIELDS

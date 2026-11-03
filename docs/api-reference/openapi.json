@@ -11919,6 +11919,10 @@
             "title": "Is Builtin",
             "type": "boolean"
           },
+          "is_first_party": {
+            "title": "Is First Party",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -11946,6 +11950,7 @@
           "icon",
           "icon_url",
           "is_builtin",
+          "is_first_party",
           "created_at",
           "updated_at"
         ],
@@ -12000,6 +12005,10 @@
             "title": "Is Builtin",
             "type": "boolean"
           },
+          "is_first_party": {
+            "title": "Is First Party",
+            "type": "boolean"
+          },
           "models": {
             "items": {
               "$ref": "#/components/schemas/agentarea_api__api__v1__provider_specs__ModelSpecResponse"
@@ -12034,6 +12043,7 @@
           "icon",
           "icon_url",
           "is_builtin",
+          "is_first_party",
           "created_at",
           "updated_at",
           "models"
