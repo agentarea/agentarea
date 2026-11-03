@@ -230,6 +230,41 @@ class RegistryRepository:
         return True
 
 
+_ITEMS = table(
+    "registry_items",
+    column("registry_id"),
+    column("registry_type"),
+    column("installed_entity_id"),
+    column("in_source"),
+)
+_REGISTRIES = table("registries", column("id"), column("source_etag"))
+_PROVIDER_SPECS = table("provider_specs", column("id"))
+_PROVIDER_CONFIGS = table("provider_configs", column("provider_spec_id"))
+_MODEL_SPECS = table(
+    "model_specs", column("id"), column("provider_spec_id"), column("workspace_id")
+)
+_MODEL_INSTANCES = table("model_instances", column("model_spec_id"))
+
+
+def _dropped_entities(registry_id: UUID | str, registry_type: str) -> Any:
+    """What the registry's items its source no longer publishes materialized."""
+    return select(_ITEMS.c.installed_entity_id).where(
+        _ITEMS.c.registry_id == UUID(str(registry_id)),
+        _ITEMS.c.registry_type == registry_type,
+        _ITEMS.c.in_source.is_(False),
+    )
+
+
+def _published(entity_id: Any, registry_type: str) -> ColumnElement[bool]:
+    """Whether some registry's source still publishes the entity."""
+    live = _ITEMS.alias("live")
+    return exists().where(
+        live.c.installed_entity_id == entity_id,
+        live.c.registry_type == registry_type,
+        live.c.in_source.is_(True),
+    )
+
+
 class RegistryItemRepository:
     """Global (non-scoped) repository for RegistryItem rows."""
 
@@ -495,62 +530,56 @@ class RegistryItemRepository:
         config or instance added meanwhile waits and then fails rather than being
         cascaded away. Returns how many of the registry's items were deleted.
         """
-        # Raw SQL across the LLM tables, like ``move_references``: no workspace
-        # scope may confine it.
-        candidates = await self._ids(
-            """
-            SELECT ps.id FROM provider_specs ps
-            WHERE ps.id IN (
-                SELECT ri.installed_entity_id FROM registry_items ri
-                WHERE ri.registry_id = :registry_id AND ri.registry_type = 'llm_providers'
-                  AND NOT ri.in_source
+        with unscoped("a provider spec is used from any workspace; the check must see all"):
+            candidates = await self._ids(
+                select(_PROVIDER_SPECS.c.id)
+                .where(
+                    _PROVIDER_SPECS.c.id.in_(_dropped_entities(registry_id, "llm_providers")),
+                    ~_published(_PROVIDER_SPECS.c.id, "llm_providers"),
+                )
+                .with_for_update()
             )
-              AND NOT EXISTS (
-                SELECT 1 FROM registry_items live
-                WHERE live.installed_entity_id = ps.id AND live.registry_type = 'llm_providers'
-                  AND live.in_source
+            if not candidates:
+                return 0
+            await self._ids(
+                select(_MODEL_SPECS.c.id)
+                .where(_MODEL_SPECS.c.provider_spec_id.in_(candidates))
+                .with_for_update()
             )
-            FOR UPDATE
-            """,
-            registry_id=UUID(str(registry_id)),
-        )
-        if not candidates:
-            return 0
-        await self._ids(
-            "SELECT id FROM model_specs WHERE provider_spec_id = ANY(:ids) FOR UPDATE",
-            ids=candidates,
-        )
-        unused = await self._ids(
-            """
-            SELECT ps.id FROM provider_specs ps
-            WHERE ps.id = ANY(:ids)
-              AND NOT EXISTS (SELECT 1 FROM provider_configs c WHERE c.provider_spec_id = ps.id)
-              AND NOT EXISTS (
-                SELECT 1 FROM model_specs ms
-                WHERE ms.provider_spec_id = ps.id
-                  AND (ms.workspace_id <> :platform OR EXISTS (
-                      SELECT 1 FROM model_instances mi WHERE mi.model_spec_id = ms.id
-                  ))
+            ms = _MODEL_SPECS.alias("ms")
+            unused = await self._ids(
+                select(_PROVIDER_SPECS.c.id).where(
+                    _PROVIDER_SPECS.c.id.in_(candidates),
+                    ~exists().where(_PROVIDER_CONFIGS.c.provider_spec_id == _PROVIDER_SPECS.c.id),
+                    ~exists().where(
+                        ms.c.provider_spec_id == _PROVIDER_SPECS.c.id,
+                        or_(
+                            ms.c.workspace_id != PLATFORM_WORKSPACE_ID,
+                            exists().where(_MODEL_INSTANCES.c.model_spec_id == ms.c.id),
+                        ),
+                    ),
+                )
             )
-            """,
-            ids=candidates,
-            platform=PLATFORM_WORKSPACE_ID,
-        )
-        deleted = await self._delete_items(
-            registry_id,
-            """
-            DELETE FROM registry_items
-            WHERE (registry_type = 'llm_providers' AND installed_entity_id = ANY(:ids))
-               OR (registry_type = 'llm_models' AND installed_entity_id IN (
-                   SELECT id FROM model_specs WHERE provider_spec_id = ANY(:ids)
-               ))
-            RETURNING registry_id
-            """,
-            unused,
-        )
-        await self.session.execute(
-            text("DELETE FROM provider_specs WHERE id = ANY(:ids)"), {"ids": unused}
-        )
+            deleted = await self._delete_items(
+                registry_id,
+                or_(
+                    and_(
+                        _ITEMS.c.registry_type == "llm_providers",
+                        _ITEMS.c.installed_entity_id.in_(unused),
+                    ),
+                    and_(
+                        _ITEMS.c.registry_type == "llm_models",
+                        _ITEMS.c.installed_entity_id.in_(
+                            select(_MODEL_SPECS.c.id).where(
+                                _MODEL_SPECS.c.provider_spec_id.in_(unused)
+                            )
+                        ),
+                    ),
+                ),
+            )
+            await self.session.execute(
+                delete(_PROVIDER_SPECS).where(_PROVIDER_SPECS.c.id.in_(unused))
+            )
         await self.session.commit()
         return deleted
 
@@ -562,65 +591,58 @@ class RegistryItemRepository:
         on it; a workspace's own copy is a row of its own and stays. Returns how
         many of the registry's items were deleted.
         """
-        candidates = await self._ids(
-            """
-            SELECT ms.id FROM model_specs ms
-            WHERE ms.id IN (
-                SELECT ri.installed_entity_id FROM registry_items ri
-                WHERE ri.registry_id = :registry_id AND ri.registry_type = 'llm_models'
-                  AND NOT ri.in_source
+        with unscoped("a model spec is run from any workspace; the check must see all"):
+            candidates = await self._ids(
+                select(_MODEL_SPECS.c.id)
+                .where(
+                    _MODEL_SPECS.c.id.in_(_dropped_entities(registry_id, "llm_models")),
+                    ~_published(_MODEL_SPECS.c.id, "llm_models"),
+                )
+                .with_for_update()
             )
-              AND NOT EXISTS (
-                SELECT 1 FROM registry_items live
-                WHERE live.installed_entity_id = ms.id AND live.registry_type = 'llm_models'
-                  AND live.in_source
+            if not candidates:
+                return 0
+            unused = await self._ids(
+                select(_MODEL_SPECS.c.id).where(
+                    _MODEL_SPECS.c.id.in_(candidates),
+                    ~exists().where(_MODEL_INSTANCES.c.model_spec_id == _MODEL_SPECS.c.id),
+                )
             )
-            FOR UPDATE
-            """,
-            registry_id=UUID(str(registry_id)),
-        )
-        if not candidates:
-            return 0
-        unused = await self._ids(
-            """
-            SELECT ms.id FROM model_specs ms
-            WHERE ms.id = ANY(:ids)
-              AND NOT EXISTS (SELECT 1 FROM model_instances mi WHERE mi.model_spec_id = ms.id)
-            """,
-            ids=candidates,
-        )
-        deleted = await self._delete_items(
-            registry_id,
-            """
-            DELETE FROM registry_items
-            WHERE registry_type = 'llm_models' AND installed_entity_id = ANY(:ids)
-            RETURNING registry_id
-            """,
-            unused,
-        )
-        await self.session.execute(
-            text("DELETE FROM model_specs WHERE id = ANY(:ids)"), {"ids": unused}
-        )
+            deleted = await self._delete_items(
+                registry_id,
+                and_(
+                    _ITEMS.c.registry_type == "llm_models",
+                    _ITEMS.c.installed_entity_id.in_(unused),
+                ),
+            )
+            await self.session.execute(delete(_MODEL_SPECS).where(_MODEL_SPECS.c.id.in_(unused)))
         await self.session.commit()
         return deleted
 
-    async def _ids(self, sql: str, **params: Any) -> list[UUID]:
-        return list((await self.session.execute(text(sql), params)).scalars().all())
+    async def _ids(self, statement: Any) -> list[UUID]:
+        return list((await self.session.execute(statement)).scalars().all())
 
-    async def _delete_items(self, registry_id: UUID | str, sql: str, ids: list[UUID]) -> int:
-        """Run an item DELETE returning ``registry_id``; how many rows were the registry's.
+    async def _delete_items(self, registry_id: UUID | str, where: ColumnElement[bool]) -> int:
+        """Delete the items ``where`` names; how many of them were the registry's.
 
         Another registry that lost items no longer holds what its stored ETag
         says was applied, so its next sync reads its source in full: an
         unchanged models file must recreate a provider's models when the
         provider comes back.
         """
-        returned = (await self.session.execute(text(sql), {"ids": ids})).scalars().all()
+        returned = (
+            (
+                await self.session.execute(
+                    delete(_ITEMS).where(where).returning(_ITEMS.c.registry_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
         others = {UUID(str(owner)) for owner in returned} - {UUID(str(registry_id))}
         if others:
             await self.session.execute(
-                text("UPDATE registries SET source_etag = NULL WHERE id = ANY(:ids)"),
-                {"ids": list(others)},
+                update(_REGISTRIES).where(_REGISTRIES.c.id.in_(others)).values(source_etag=None)
             )
         return sum(1 for owner in returned if str(owner) == str(registry_id))
 
