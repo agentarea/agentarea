@@ -33,14 +33,13 @@ def completion_tool_schema() -> dict[str, Any]:
                         "items": {"type": "string"},
                         "maxItems": 1000,
                         "description": (
-                            "Workspace-relative paths of every file the response delivers, "
-                            "for example reports/result.pdf. They are saved for the user on "
-                            "completion. Use an empty list only when the response promises "
-                            "no files."
+                            "Files outside outputs/ the response also delivers, as "
+                            "workspace-relative paths such as reports/result.pdf. Everything "
+                            "in outputs/ is delivered without being listed."
                         ),
                     },
                 },
-                "required": ["result", "artifacts"],
+                "required": ["result"],
             },
         },
     }

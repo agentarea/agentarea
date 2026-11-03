@@ -8,7 +8,6 @@ from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.file_toolset import FileToolset
 from agentarea_agents_sdk.tools.shell_toolset import ShellToolset
 from agentarea_agents_sdk.tools.web_toolset import WebToolset
-from agentarea_agents_sdk.tools.workspace_files_toolset import WorkspaceFilesToolset
 from pydantic import Field
 
 
@@ -20,7 +19,7 @@ def _bare(cls: type[Toolset]) -> Toolset:
 
 @pytest.mark.parametrize(
     "toolset_cls",
-    [ShellToolset, FileToolset, WorkspaceFilesToolset, WebToolset, ContextToolset],
+    [ShellToolset, FileToolset, WebToolset, ContextToolset],
 )
 def test_every_parameter_of_an_agent_toolset_is_described(toolset_cls):
     properties = _bare(toolset_cls).get_openai_function_definition()["function"]["parameters"][

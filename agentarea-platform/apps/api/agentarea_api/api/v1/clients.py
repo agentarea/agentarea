@@ -5,9 +5,12 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from agentarea_agents_sdk.mcp_server import UnknownToolsetError
-from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
 from agentarea_agents_sdk.tools.tool_definition import ToolEffect
-from agentarea_api.platform_mcp import attachable_toolset, client_platform_server
+from agentarea_api.platform_mcp import (
+    attachable_toolset,
+    client_platform_server,
+    client_platform_toolset_metadata,
+)
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.auth.route_authz import (
@@ -179,7 +182,7 @@ async def _to_response(service: ClientService, client: Client) -> ClientResponse
 
 def platform_toolset_catalog() -> list[PlatformToolsetResponse]:
     """The platform toolsets a client can carry, with their methods."""
-    metadata = get_code_tools_metadata()
+    metadata = client_platform_toolset_metadata()
     catalog = []
     for toolset in client_platform_server().toolsets.values():
         meta = metadata.get(toolset.namespace, {})

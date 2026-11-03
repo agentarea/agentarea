@@ -12,7 +12,6 @@ import pytest
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.file_toolset import InMemoryStorage
 from agentarea_agents_sdk.tools.tool_definition import toolset
-from agentarea_agents_sdk.tools.workspace_files_toolset import WorkspaceFilesToolset
 
 
 @toolset(namespace="test/one", display_name="O", description="d", register=False)
@@ -184,14 +183,17 @@ async def test_unknown_argument_is_named():
     assert "unknown argument 'colour'" in result["error"]
 
 
-@pytest.mark.asyncio
-async def test_workspace_files_list_accepts_max_items_as_a_string():
-    storage = InMemoryStorage()
-    await storage.put("ws-1", "a.txt", b"a", "text/plain")
-    await storage.put("ws-1", "b.txt", b"b", "text/plain")
-    files = WorkspaceFilesToolset(storage=storage, workspace_id="ws-1")
+@toolset(namespace="test/listing", display_name="L", description="d", register=False)
+class _Listing(Toolset):
+    @tool_method
+    async def list(self, max_items: int = 200) -> str:
+        """List items."""
+        return "x" * max_items
 
-    result = await files.execute(action="list", list_max_items="1")
+
+@pytest.mark.asyncio
+async def test_an_integer_argument_sent_as_a_string_is_accepted():
+    result = await _Listing().execute(max_items="2")
 
     assert result["success"] is True
-    assert result["result"].count('"path"') == 1
+    assert result["result"] == "xx"
