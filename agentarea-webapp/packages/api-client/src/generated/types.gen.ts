@@ -2737,7 +2737,7 @@ export type EgressExitResponse = {
     /**
      * Managed By
      *
-     * "platform" for an exit the deployment supplies; null for the workspace's own.
+     * "platform" for an exit the operator manages; null for the workspace's own.
      */
     managed_by: string | null;
     /**
