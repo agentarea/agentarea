@@ -639,6 +639,8 @@ class MCPServerInstanceService:
         self, spec: dict[str, Any], transport: MCPTransport
     ) -> None:
         """An instance leaves through an exit of its workspace, or the platform's."""
+        from agentarea_common.extensions.egress_exits import EgressExitsNotSupportedError
+
         from agentarea_mcp.application.egress_exit_service import (
             EgressExitNotFoundError,
             EgressExitService,
@@ -655,7 +657,7 @@ class MCPServerInstanceService:
             await EgressExitService(self.repository_factory, self.secret_manager).require_bindable(
                 exit_id
             )
-        except EgressExitNotFoundError as e:
+        except (EgressExitNotFoundError, EgressExitsNotSupportedError) as e:
             raise MCPValidationError([str(e)]) from e
 
     @audited("mcp_instance.create", resource_type="mcp_instance")

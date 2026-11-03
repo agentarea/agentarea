@@ -12,6 +12,7 @@ import { zCreateMcpServerConnectionV1McpServerInstancesWithSpecPostBody } from "
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { getServerClient } from "@/lib/server-client";
 import { requestWorkspacePath } from "@/lib/workspace-request";
+import { withEgressExit } from "../egress-exit";
 
 export type MCPServerFormValues = {
   type: "docker" | "command" | "external";
@@ -33,6 +34,7 @@ export type MCPServerFormValues = {
   }>;
   tags?: string;
   authConfigId?: string | null;
+  egressExit?: string | null;
 };
 
 export interface MCPServerFormState {
@@ -148,7 +150,10 @@ function toServerConnectionCreate(
         image: input.dockerImageUrl ?? "",
       },
     };
-    instanceJsonSpec = Object.keys(environment).length ? { environment } : {};
+    instanceJsonSpec = withEgressExit(
+      Object.keys(environment).length ? { environment } : {},
+      input.egressExit ?? null
+    );
   } else if (input.type === "command") {
     const argsArray = input.args ? input.args.trim().split(/\s+/) : [];
     const { envSchema, environment } = splitEnvRows(input.env);
@@ -165,7 +170,10 @@ function toServerConnectionCreate(
         args: argsArray,
       },
     };
-    instanceJsonSpec = Object.keys(environment).length ? { environment } : {};
+    instanceJsonSpec = withEgressExit(
+      Object.keys(environment).length ? { environment } : {},
+      input.egressExit ?? null
+    );
   } else {
     const headersObject: Record<string, string> = Object.fromEntries(
       (input.headers || [])

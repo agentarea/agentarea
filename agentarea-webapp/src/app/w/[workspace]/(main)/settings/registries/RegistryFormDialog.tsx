@@ -15,6 +15,7 @@ import {
   Warehouse,
 } from "lucide-react";
 import { Controller, useForm, useWatch, type Control } from "react-hook-form";
+import FieldError from "@/components/FieldError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { useRegistryTrustLabel } from "@/components/RegistryBadge";
 import { SecretSelect, type SelectableSecret } from "@/components/SecretSelect";
@@ -48,14 +49,6 @@ import {
 export type RegistryDialogTarget =
   | { mode: "create" }
   | { mode: "edit"; registryId: string; values: RegistryFormValues };
-
-function FieldError({ message }: { message?: string }) {
-  return message ? (
-    <p className="form-error" role="alert">
-      {message}
-    </p>
-  ) : null;
-}
 
 /** The secret picker, once the workspace's secrets have loaded. */
 function CredentialsField({

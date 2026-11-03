@@ -3,7 +3,7 @@
 The workspace defines its own (a customer or purchased proxy); the platform's are
 listed beside them and can be bound but not changed. An instance binds one with
 ``json_spec.egress_exit = "<exit id>"``. Enforcing the binding takes the
-enterprise edition; without it a bound instance does not start.
+enterprise edition; without it every route here answers 404.
 """
 
 from typing import Annotated
@@ -11,6 +11,10 @@ from uuid import UUID
 
 from agentarea_api.api.deps.services import get_egress_exit_service
 from agentarea_common.auth.route_authz import requires, unrestricted
+from agentarea_common.extensions.egress_exits import (
+    EgressExitsNotSupportedError,
+    require_egress_exits,
+)
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.egress_exit_service import (
     EgressExitInUseError,
@@ -29,7 +33,19 @@ from agentarea_secrets.catalog_service import (
 from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-router = APIRouter(prefix="/egress-exits", tags=["egress-exits"])
+
+def _deployment_has_egress_exits() -> None:
+    try:
+        require_egress_exits()
+    except EgressExitsNotSupportedError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+router = APIRouter(
+    prefix="/egress-exits",
+    tags=["egress-exits"],
+    dependencies=[Depends(_deployment_has_egress_exits)],
+)
 
 EgressExitServiceDep = Annotated[EgressExitService, Depends(get_egress_exit_service)]
 

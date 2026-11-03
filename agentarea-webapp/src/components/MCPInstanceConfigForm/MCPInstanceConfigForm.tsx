@@ -48,6 +48,8 @@ export interface MCPInstanceConfigFormProps {
   validateLabel?: string;
   // Optional extra actions (e.g., Cancel)
   extraActions?: React.ReactNode;
+  // Fields of the caller's own, after the environment
+  extraFields?: React.ReactNode;
   // Form handling
   formAction?: string | ((formData: FormData) => void | Promise<void>);
   onSubmit?: (e?: React.FormEvent<HTMLFormElement>) => void | Promise<void>;
@@ -84,6 +86,7 @@ export default function MCPInstanceConfigForm({
   forceCreateLabel,
   validateLabel,
   extraActions,
+  extraFields,
   formAction,
   onSubmit,
   formId,
@@ -220,6 +223,8 @@ export default function MCPInstanceConfigForm({
           </div>
         </div>
       )}
+
+      {extraFields}
 
       {onValidate && (
         <div className="flex items-center justify-between gap-2">

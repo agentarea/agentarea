@@ -49,6 +49,8 @@ import {
   type CredentialFieldSpec,
 } from "../../credential-fields";
 import { createMCPServerInstance } from "../../actions";
+import { EgressExitField } from "../../components/EgressExitField";
+import { withEgressExit, type EgressExitChoices } from "../../egress-exit";
 import { getConnectionType, MCP_CONSTANTS } from "../../utils";
 import { VerifyingModal } from "../../components/VerifyingModal";
 
@@ -700,7 +702,13 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
 // Docker/Command form (existing MCPInstanceConfigForm)
 // ---------------------------------------------------------------------------
 
-function DockerCommandForm({ server }: { server: MCPServer }) {
+function DockerCommandForm({
+  server,
+  egressExits,
+}: {
+  server: MCPServer;
+  egressExits: EgressExitChoices | null;
+}) {
   const router = useWorkspaceRouter();
   const t = useTranslations("MCPServersPage.createInstance");
 
@@ -715,6 +723,7 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
     });
     return init;
   });
+  const [egressExitId, setEgressExitId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [verifyingInstance, setVerifyingInstance] = useState<{
@@ -737,11 +746,14 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
         name: instanceName,
         description: instanceDescription,
         server_spec_id: server.id,
-        json_spec: {
-          image: server.docker_image_url,
-          port: MCP_CONSTANTS.DEFAULT_CONTAINER_PORT,
-          environment: envVars,
-        },
+        json_spec: withEgressExit(
+          {
+            image: server.docker_image_url,
+            port: MCP_CONSTANTS.DEFAULT_CONTAINER_PORT,
+            environment: envVars,
+          },
+          egressExitId
+        ),
       });
 
       if (instanceResult.error) {
@@ -839,6 +851,16 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
           submitLabel={
             isCreating ? t("actions.creating") : t("actions.createInstance")
           }
+          extraFields={
+            egressExits && (
+              <EgressExitField
+                id="egress-exit"
+                choices={egressExits}
+                value={egressExitId}
+                onChange={setEgressExitId}
+              />
+            )
+          }
           showContainerSummary
           containerImage={server.docker_image_url ?? undefined}
           containerPort={MCP_CONSTANTS.DEFAULT_CONTAINER_PORT}
@@ -854,8 +876,10 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
 
 export default function CreateMCPInstanceClient({
   server,
+  egressExits,
 }: {
   server: MCPServer;
+  egressExits: EgressExitChoices | null;
 }) {
   const connType = getConnectionType(server);
 
@@ -863,5 +887,5 @@ export default function CreateMCPInstanceClient({
     return <UrlConnectForm server={server} />;
   }
 
-  return <DockerCommandForm server={server} />;
+  return <DockerCommandForm server={server} egressExits={egressExits} />;
 }

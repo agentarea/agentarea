@@ -13,6 +13,8 @@ import type {
   CreateInvitationBody,
   CreateWalletRequest,
   CreateWorkspaceDirectoryRequest,
+  EgressExitCreate,
+  EgressExitUpdate,
   FundWalletRequest,
   GetAllTasksV1TasksGetData,
   GetInboxItemsV1InboxGetData,
@@ -219,6 +221,44 @@ export const syncWorkspaceRegistry = async (registryId: string) => {
       client: serverClient,
       path: { registry_id: registryId },
     });
+  return withStatus(result);
+};
+
+// Egress exits: the proxies a workspace's container MCP instances leave
+// through. A deployment without them answers every route 404; read the list
+// through getEgressExits (@/lib/egress-exits), which says so.
+export const listEgressExits = async () => {
+  const result = await sdk.listEgressExitsV1EgressExitsGet({
+    client: serverClient,
+  });
+  return withStatus(result);
+};
+
+export const createEgressExit = async (body: EgressExitCreate) => {
+  const result = await sdk.createEgressExitV1EgressExitsPost({
+    client: serverClient,
+    body,
+  });
+  return withStatus(result);
+};
+
+export const updateEgressExit = async (
+  exitId: string,
+  body: EgressExitUpdate
+) => {
+  const result = await sdk.updateEgressExitV1EgressExitsExitIdPatch({
+    client: serverClient,
+    path: { exit_id: exitId },
+    body,
+  });
+  return withStatus(result);
+};
+
+export const deleteEgressExit = async (exitId: string) => {
+  const result = await sdk.deleteEgressExitV1EgressExitsExitIdDelete({
+    client: serverClient,
+    path: { exit_id: exitId },
+  });
   return withStatus(result);
 };
 

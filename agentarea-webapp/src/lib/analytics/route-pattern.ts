@@ -64,6 +64,7 @@ export const PAGE_ROUTES = [
   "/settings",
   "/settings/api-keys",
   "/settings/audit",
+  "/settings/egress-exits",
   "/settings/ory",
   "/settings/registries",
   "/skills",

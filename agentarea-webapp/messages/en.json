@@ -381,7 +381,8 @@
     "apiKeys": "API Keys",
     "auditLog": "Audit Log",
     "workspaceSettings": "Workspace settings",
-    "registries": "Registries"
+    "registries": "Registries",
+    "egressExits": "Egress exits"
   },
   "LlmBrowsePage": {
     "title": "LLM Models",
@@ -4247,6 +4248,82 @@
       "llm_models": "LLM models",
       "agents": "Agents",
       "bundles": "Bundles"
+    }
+  },
+  "EgressExits": {
+    "title": "Egress exits",
+    "description": "Proxies that container connections (Docker and command) reach the internet through, so their traffic comes from the proxy's address.",
+    "add": "Add exit",
+    "loadFailed": "Couldn't load the egress exits",
+    "platformLabel": "Platform",
+    "viaHop": "Platform route {via}",
+    "noCredentials": "None",
+    "passwordFromSecret": "Password from a workspace secret",
+    "table": {
+      "name": "Name",
+      "proxy": "Proxy",
+      "credentials": "Username"
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "delete": {
+      "title": "Delete exit",
+      "description": "Delete {name}? A connection that still leaves through it has to be moved to another exit first."
+    },
+    "empty": {
+      "title": "No egress exits yet",
+      "description": "Add a proxy, then pick it on a Docker or command connection to send its traffic out from that proxy's address."
+    },
+    "errors": {
+      "invalid": "Check the highlighted fields",
+      "createFailed": "Couldn't add the exit",
+      "updateFailed": "Couldn't save the exit",
+      "deleteFailed": "Couldn't delete the exit"
+    },
+    "form": {
+      "createTitle": "Add egress exit",
+      "editTitle": "Edit egress exit",
+      "description": "A proxy the workspace's container connections can reach the internet through.",
+      "create": "Add exit",
+      "save": "Save",
+      "createFailed": "Couldn't add the exit",
+      "updateFailed": "Couldn't save the exit",
+      "name": "Name",
+      "namePlaceholder": "office-proxy",
+      "nameRequired": "Name the exit",
+      "descriptionLabel": "Description",
+      "upstreamUrl": "Proxy address",
+      "upstreamUrlRequired": "Enter the proxy address",
+      "upstreamUrlHint": "scheme://host:port, where the scheme is http, https or socks5. Credentials go in the fields below, not in the address.",
+      "username": "Username",
+      "password": "Password",
+      "passwordHint": "A workspace secret holding the proxy password. The exit keeps a reference, never a copy; a changed value applies at the connection's next start.",
+      "passwordNone": "None",
+      "passwordLoading": "Loading secrets…",
+      "passwordSearch": "Search secrets…",
+      "passwordEmpty": "No secrets found.",
+      "passwordCreate": "Create a secret",
+      "passwordClear": "Clear",
+      "passwordLoadFailed": "Couldn't load the workspace secrets",
+      "allowPlaintext": "Send the sign-in unencrypted",
+      "allowPlaintextHint": "An http or socks5 proxy receives the username and password in plain text. Turn this on only if you accept that, or use an https proxy."
+    },
+    "picker": {
+      "label": "Egress exit",
+      "hint": "The proxy this connection reaches the internet through. Exits are managed in Settings.",
+      "direct": "None: leave directly",
+      "platformOption": "{name} (platform)"
+    },
+    "section": {
+      "title": "Egress exit",
+      "save": "Save egress exit",
+      "saveFailed": "Couldn't change the egress exit",
+      "restartHint": "A running connection stops; the next call starts it through the new exit.",
+      "direct": "None: it reaches the internet directly.",
+      "boundPlatform": "{name} (platform)",
+      "unknown": "An exit that is no longer listed ({id})"
     }
   },
   "CatalogFetchErrors": {
