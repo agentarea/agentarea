@@ -5,21 +5,11 @@ Prompt structure follows patterns from OpenCode and Claude Code:
 - Identity and role first (who are you?)
 - Environment context in XML blocks (what's around you?)
 - Task and success criteria (what are you doing?)
-- Tools for reference (what can you use?)
 - Guidelines and tone (how should you behave?)
 """
 
 from datetime import UTC, datetime
-from typing import Any, Final, TypedDict
-
-
-class ToolInfo(TypedDict, total=False):
-    """Type definition for tool information."""
-
-    name: str
-    description: str
-    type: str
-    function: dict[str, Any]
+from typing import Any, Final
 
 
 class MessageTemplates:
@@ -30,20 +20,12 @@ class MessageTemplates:
 {agent_instruction}
 
 <env>
-Date: {current_date}
+This run started at {started_at} UTC.
 </env>
 
 # Task
 
-{goal_description}
-
-## Success Criteria
-
-{success_criteria}
-
-## Available Tools
-
-{available_tools}
+{goal_description}{success_criteria}
 
 # How to work
 
@@ -157,7 +139,6 @@ class PromptBuilder:
         agent_instruction: str,
         goal_description: str,
         success_criteria: list[str],
-        available_tools: list[ToolInfo],
         use_react_framework: bool = False,
         a2ui_enabled: bool = False,
     ) -> str:
@@ -168,7 +149,6 @@ class PromptBuilder:
             agent_instruction: Agent's role and capabilities
             goal_description: Current task description
             success_criteria: List of success criteria
-            available_tools: List of available tools
             use_react_framework: Ignored (kept for API compatibility)
             a2ui_enabled: Whether to include A2UI v0.9 output instructions
 
@@ -176,32 +156,21 @@ class PromptBuilder:
         - Agent identity and instruction come first (who are you?)
         - Environment context in XML blocks (what's around you?)
         - Current task is clearly separated (what are you doing?)
-        - Tools are listed for reference (what can you use?)
         - Guidelines and tone last (how should you behave?)
         """
-        criteria_text = "\n".join(f"- {criteria}" for criteria in success_criteria)
-
-        # Handle both old format and OpenAI function format for tools
-        def get_tool_info(tool: ToolInfo) -> tuple[str, str]:
-            if tool.get("type") == "function" and "function" in tool:
-                func = tool["function"]
-                return func.get("name", "Unknown"), func.get("description", "No description")
-            else:
-                return tool.get("name", "Unknown"), tool.get("description", "No description")
-
-        tools_text = "\n".join(
-            f"- {name}: {desc}" for name, desc in (get_tool_info(tool) for tool in available_tools)
+        criteria = [criterion for criterion in success_criteria if criterion.strip()]
+        criteria_text = (
+            "\n\n## Success Criteria\n\n" + "\n".join(f"- {criterion}" for criterion in criteria)
+            if criteria
+            else ""
         )
-
-        current_date = datetime.now(UTC).strftime("%Y-%m-%d")
 
         prompt = MessageTemplates.SYSTEM_PROMPT.format(
             agent_name=agent_name,
             agent_instruction=agent_instruction,
             goal_description=goal_description,
             success_criteria=criteria_text,
-            available_tools=tools_text,
-            current_date=current_date,
+            started_at=datetime.now(UTC).strftime("%Y-%m-%d %H:%M"),
         )
 
         if a2ui_enabled:
@@ -215,7 +184,6 @@ class PromptBuilder:
         agent_instruction: str,
         goal_description: str,
         success_criteria: list[str],
-        available_tools: list[ToolInfo],
         a2ui_enabled: bool = False,
     ) -> str:
         """Build system prompt (delegates to build_system_prompt).
@@ -228,7 +196,6 @@ class PromptBuilder:
             agent_instruction=agent_instruction,
             goal_description=goal_description,
             success_criteria=success_criteria,
-            available_tools=available_tools,
             a2ui_enabled=a2ui_enabled,
         )
 

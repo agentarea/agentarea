@@ -214,9 +214,7 @@ def make_files_activities(
     async def validate_artifacts_activity(
         request: ArtifactValidationRequest,
     ) -> ArtifactValidationResult:
-        """Completion barrier: persist the declared files before the task is done."""
-        if not request.declared_paths:
-            return ArtifactValidationResult(state="passed", generation=0)
+        """Completion barrier: persist the delivered files before the task is done."""
         return await validate_published_artifacts(
             request,
             manager_url=dependencies.settings.mcp.MANAGER_URL,

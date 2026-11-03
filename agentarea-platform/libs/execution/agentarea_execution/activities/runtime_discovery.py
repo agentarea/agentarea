@@ -53,9 +53,8 @@ def render_runtime_prompt(
         browser_policy = "Browser automation: Playwright is available."
 
     org_context_line = (
-        "- Organization library: read the organization's shared files with the "
-        "`list_org_files` and `read_org_file` tools (read-only). It is never changed by "
-        "anything you do in the sandbox.\n"
+        "- Organization library: read the organization's shared files with the `context` "
+        "tool (read-only). It is never changed by anything you do in the sandbox.\n"
         if has_org_context
         else ""
     )
@@ -66,28 +65,32 @@ def render_runtime_prompt(
         else "npm not available in this runtime"
     )
 
+    install_policy = (
+        "You can install more packages with pip or npm."
+        if manifest.managed_environment == "mutable"
+        else "Packages cannot be installed; use the preinstalled ones."
+    )
+
     return (
         "\n\n# Runtime environment\n\n"
-        f"- Image: {manifest.image_version}\n"
         f"- Python: {manifest.python.version}\n"
         f"- Node: {manifest.node.version} ({npm_state})\n"
-        f"- Managed environment: {manifest.managed_environment}\n"
         f"- Preinstalled Python packages: {package_names or 'none declared'}\n"
-        f"- {browser_policy}\n"
-        "- Arbitrary workspace code is supported. Network access and managed-environment "
-        "behavior are defined by the active runtime."
+        f"- {install_policy}\n"
+        f"- {browser_policy}"
         "\n\n# Workspace and context\n\n"
         f"{org_context_line}"
         "- Your working directory is the live task workspace. User-provided inputs are under "
         "`/workspace/inputs`. File and shell tools operate on the same live filesystem.\n"
-        "- Live workspace files are ephemeral. A file survives the task only if you list its "
-        "workspace-relative path in completion `artifacts`; everything else is discarded with "
-        "the sandbox. List only user-facing outputs, not caches, dependencies, or intermediate "
-        "files. A file written outside `/workspace` is scratch and cannot be kept.\n"
+        "- Put every file meant for the user in `/workspace/outputs/`. When you finish, each "
+        "file there is attached to your reply with a download button. You have no link or "
+        "path the user can open, so name the file instead of writing one. "
+        "Everything else is scratch, discarded with the sandbox, so keep caches, "
+        "dependencies and intermediate files out of `outputs/`.\n"
         "- Binary deliverables (.xlsx, .pptx, .docx, .pdf, images): the file tool saves text "
         "only, so writing binary through it corrupts the file. Generate them by running a "
-        "program in the shell that writes the file into your working directory, using a library "
-        "from the preinstalled packages listed above, then list that path in `artifacts`."
+        "program in the shell that writes the file into `/workspace/outputs/`, using a library "
+        "from the preinstalled packages listed above."
     )
 
 

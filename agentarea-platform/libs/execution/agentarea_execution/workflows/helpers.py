@@ -750,7 +750,6 @@ class MessageBuilder:
         agent_instruction: str,
         goal_description: str,
         success_criteria: list[str],
-        available_tools: list[dict[str, Any]],
         a2ui_enabled: bool = False,
     ) -> str:
         """Build system prompt with ReAct framework instructions."""
@@ -759,7 +758,6 @@ class MessageBuilder:
             agent_instruction=agent_instruction,
             goal_description=goal_description,
             success_criteria=success_criteria,
-            available_tools=cast(Any, available_tools),
             a2ui_enabled=a2ui_enabled,
         )
 
