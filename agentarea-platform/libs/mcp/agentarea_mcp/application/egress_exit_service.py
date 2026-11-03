@@ -1,4 +1,4 @@
-"""Egress exits: define the workspace's own, list them with the platform's, bind one to an instance."""
+"""Egress exits: define the workspace's own, list them, bind one to an instance."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ class EgressExitInUseError(RuntimeError):
 
 
 class PlatformEgressExitError(PermissionError):
-    """A platform exit is the deployment's; a tenant may bind it but not change it."""
+    """A platform exit is the operator's; nothing changes it through the API."""
 
 
 async def _assert_upstream_public(upstream_url: str) -> None:
@@ -82,7 +82,7 @@ class EgressExitService:
         )
 
     async def list(self) -> list[EgressExit]:
-        """The workspace's own exits and the platform's, newest first."""
+        """The workspace's own exits, newest first."""
         return await self.repository.list_all()
 
     async def get(self, exit_id: UUID) -> EgressExit:
@@ -171,6 +171,6 @@ class EgressExitService:
         exit_ = await self.get(exit_id)
         if exit_.is_platform:
             raise PlatformEgressExitError(
-                f"Egress exit {exit_id} is the platform's; it can be bound but not changed"
+                f"Egress exit {exit_id} is the platform's; it is not changed through the API"
             )
         return exit_

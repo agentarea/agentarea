@@ -42,9 +42,7 @@ export function EgressExitSelect({
         <SelectItem value={DIRECT}>{t("direct")}</SelectItem>
         {exits.map((exit) => (
           <SelectItem key={exit.id} value={exit.id}>
-            {exit.platform
-              ? t("platformOption", { name: exit.name })
-              : exit.name}
+            {exit.name}
           </SelectItem>
         ))}
       </SelectContent>

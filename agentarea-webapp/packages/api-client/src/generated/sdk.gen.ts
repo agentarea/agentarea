@@ -1789,7 +1789,7 @@ export const getDashboardV1DashboardGet = <ThrowOnError extends boolean = false>
 /**
  * List Egress Exits
  *
- * List the workspace's own exits and the platform's.
+ * List the workspace's own exits.
  */
 export const listEgressExitsV1EgressExitsGet = <ThrowOnError extends boolean = false>(options?: Options<ListEgressExitsV1EgressExitsGetData, ThrowOnError>): RequestResult<ListEgressExitsV1EgressExitsGetResponses, ListEgressExitsV1EgressExitsGetErrors, ThrowOnError> => (options?.client ?? client).get<ListEgressExitsV1EgressExitsGetResponses, ListEgressExitsV1EgressExitsGetErrors, ThrowOnError>({
     security: [{
@@ -1838,7 +1838,7 @@ export const deleteEgressExitV1EgressExitsExitIdDelete = <ThrowOnError extends b
 /**
  * Get Egress Exit
  *
- * Get an exit of the workspace or the platform.
+ * Get one of the workspace's exits.
  */
 export const getEgressExitV1EgressExitsExitIdGet = <ThrowOnError extends boolean = false>(options: Options<GetEgressExitV1EgressExitsExitIdGetData, ThrowOnError>): RequestResult<GetEgressExitV1EgressExitsExitIdGetResponses, GetEgressExitV1EgressExitsExitIdGetErrors, ThrowOnError> => (options.client ?? client).get<GetEgressExitV1EgressExitsExitIdGetResponses, GetEgressExitV1EgressExitsExitIdGetErrors, ThrowOnError>({
     security: [{
