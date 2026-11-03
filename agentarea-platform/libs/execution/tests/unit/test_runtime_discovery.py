@@ -85,10 +85,11 @@ def test_render_runtime_prompt_describes_the_workspace() -> None:
     # while selected deliverables are explicitly published.
     assert "working directory" in prompt
     assert "file tool" in prompt
-    assert "`/workspace/outputs/`" in prompt
+    assert "`outputs/`" in prompt
+    assert "/workspace" not in prompt
     assert "artifact_id" not in prompt
     assert "Everything else is scratch" in prompt
-    assert "/workspace/inputs" in prompt
+    assert "`inputs/`" in prompt
     # binary deliverables must be produced via the shell, not the text file tool
     assert "Binary deliverables" in prompt
     assert "corrupts the file" in prompt

@@ -248,7 +248,7 @@ async def test_failed_validation_returns_tool_feedback_for_two_repairs() -> None
     feedback = json.loads(instance.state.messages[-1].content)
     assert feedback["status"] == "validation_failed"
     assert feedback["repair_attempts_remaining"] == 1
-    assert "/workspace/outputs/" in feedback["instruction"]
+    assert "outputs/" in feedback["instruction"]
     assert "artifact_id" not in feedback["instruction"]
     assert instance.state.messages[-1].tool_call_id == completion.id
 
