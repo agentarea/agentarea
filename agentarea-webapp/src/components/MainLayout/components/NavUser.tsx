@@ -26,6 +26,7 @@ import { deterministicHue } from "@/lib/avatar-hue";
 import { formatMoney } from "@/lib/money";
 import { useWorkspaceBillingUrl } from "@/lib/use-billing-url";
 import { cn } from "@/lib/utils";
+import { ThemeSwitch } from "./ThemeSwitch";
 
 export function NavUser() {
   const t = useTranslations("NavUser");
@@ -155,6 +156,8 @@ export function NavUser() {
                 </DropdownMenuItem>
               ) : null}
             </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <ThemeSwitch />
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="mr-2 size-4" />

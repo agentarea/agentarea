@@ -112,6 +112,8 @@ function getRuntimeConfig() {
     // the link in the sidebar would have pointed at an internal cluster URL that no
     // browser can reach.
     CLIENT_BILLING_URL: process.env.AGENTAREA_BILLING_PAGE_URL || "",
+    // Where users ask for help; empty hides the sidebar's support link.
+    CLIENT_SUPPORT_URL: process.env.AGENTAREA_SUPPORT_URL || "",
     AGENTAREA_MCP_APPS_ORIGIN: process.env.AGENTAREA_MCP_APPS_ORIGIN || "",
     SENTRY_DSN: process.env.SENTRY_DSN || "",
     SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT || "",

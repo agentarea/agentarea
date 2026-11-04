@@ -351,6 +351,7 @@ be weakened from these values.
 | `AGENTAREA_AUTH_KRATOS_ADMIN_URL` | `kratos.urls.admin`, else the internal service | derived |
 | `AGENTAREA_MCP_APPS_ORIGIN` | `global.webapp.appsSandboxUrl` | empty |
 | `AGENTAREA_APP_ORIGIN` | `global.webapp.url`, else the internal frontend service URL | derived |
+| `AGENTAREA_SUPPORT_URL` | `global.webapp.supportUrl` | GitHub issues |
 
 `ORY_SDK_URL` is used for server-side calls from the frontend container;
 `ORY_BROWSER_URL` is what the browser is redirected to. Set

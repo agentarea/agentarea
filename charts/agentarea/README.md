@@ -128,6 +128,7 @@ The following table lists configurable parameters of the chart and their default
 | global.api.auth.headerValue | string | `""` |  |
 | global.webapp.url | string | `""` |  |
 | global.webapp.appsSandboxUrl | string | `""` |  |
+| global.webapp.supportUrl | string | `"https://github.com/agentarea/agentarea/issues"` |  |
 | global.jobs.kube.namespace | string | `""` |  |
 | global.jobs.kube.serviceAccount | string | `""` |  |
 | global.jobs.kube.scheduling.spec.nodeSelectors | object | `{}` |  |

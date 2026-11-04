@@ -737,17 +737,13 @@ function TaskRow({
         className="px-[15px] py-[11px]"
         dividerClassName="border-b border-border/60"
         contentClassName="gap-3"
-        // Leads the row, icon first. It is the only place the status is named
-        // now -- the caption underneath used to repeat it, so every row said
-        // "Completed" twice.
+        // Leads the row as a bare marker; its name is the tooltip and the
+        // accessible label.
         start={
           visuallyHideStatus ? (
             <span className="sr-only">{label}</span>
           ) : (
-            <TaskStatus
-              status={status}
-              className="shrink-0 whitespace-nowrap text-[12px] font-medium"
-            />
+            <TaskStatus status={status} caption="never" className="shrink-0" />
           )
         }
         end={

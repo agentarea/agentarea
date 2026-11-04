@@ -14,7 +14,7 @@ import { requireApiData } from "@/lib/server-resource";
 import FeedContent from "./components/feed/FeedContent";
 import FeedEventPanelServer from "./components/feed/FeedEventPanelServer";
 import FeedEventSidePanel from "./components/feed/FeedEventSidePanel";
-import { FeedLiveProvider, LiveIndicator } from "./components/feed/FeedLive";
+import { FeedLiveProvider } from "./components/feed/FeedLive";
 import { FeedSelectionProvider } from "./components/feed/FeedSelection";
 import FeedSkeleton, {
   FEED_GRID,
@@ -57,12 +57,7 @@ export default async function EventsPage({
           header={{
             breadcrumb: [{ label: t("title") }],
             description: t("description"),
-            controls: (
-              <>
-                <LiveIndicator />
-                <StreamsMenu streams={streams} />
-              </>
-            ),
+            controls: <StreamsMenu streams={streams} />,
           }}
         >
           <div className="min-w-0 flex-1 overflow-y-auto px-4 py-5">
