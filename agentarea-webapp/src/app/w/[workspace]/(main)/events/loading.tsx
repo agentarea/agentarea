@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
-import FeedSkeleton, { FEED_GRID } from "./components/feed/FeedSkeleton";
+import FeedSkeleton from "./components/feed/FeedSkeleton";
+import FeedToolbar from "./components/feed/FeedToolbar";
 
 export default async function Loading() {
   const t = await getTranslations("EventsPage");
@@ -10,10 +11,11 @@ export default async function Loading() {
         breadcrumb: [{ label: t("title") }],
         description: t("description"),
       }}
+      subheader={
+        <FeedToolbar streams={[]} platformStreams={[]} sourceTypes={[]} />
+      }
     >
-      <div className={FEED_GRID}>
-        <FeedSkeleton />
-      </div>
+      <FeedSkeleton />
     </ContentBlock>
   );
 }

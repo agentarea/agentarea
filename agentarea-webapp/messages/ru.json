@@ -157,7 +157,9 @@
       "title": "Уйти без сохранения?",
       "description": "Изменения на этой странице ещё не сохранены. Если уйти, они пропадут.",
       "leave": "Уйти"
-    }
+    },
+    "removeFilter": "Убрать фильтр: {label}",
+    "clearAll": "Сбросить всё"
   },
   "admin": {
     "title": "Панель администратора",
@@ -2655,18 +2657,7 @@
       "notPolledYet": "Ещё не опрашивался",
       "pollError": "Последний опрос не удался: {error}"
     },
-    "streamsTitle": "Потоки",
     "streamsDescription": "Именованные потоки событий, их источники и пересылки",
-    "live": {
-      "on": "В эфире",
-      "connecting": "Подключение",
-      "off": "Переподключение"
-    },
-    "streamsMenu": {
-      "button": "Потоки",
-      "all": "Все потоки",
-      "empty": "Потоков пока нет"
-    },
     "result": {
       "all": "Все",
       "queued": "В очереди",
@@ -2702,7 +2693,13 @@
       "skippedOf": "пропущено {done}/{total}",
       "filterSession": "Показать всю сессию",
       "unknownStream": "Удалённый поток",
-      "showPlatform": "Показывать события платформы"
+      "platformHidden": "События платформы скрыты.",
+      "emptyTitle": "Событий пока нет",
+      "emptyAction": "Открыть потоки",
+      "noneMatchingTitle": "Ничего не найдено",
+      "showPlatformAction": "Показать события платформы",
+      "onlyPlatformTitle": "Извне пока ничего не пришло",
+      "onlyPlatform": "Пришли только события платформы, а они скрыты из ленты."
     },
     "panel": {
       "handlers": "Обработчики",
@@ -2727,6 +2724,24 @@
       "everyEvent": "для каждого события",
       "createdAt": "Добавлен {time}",
       "code": "Код (processor.py)"
+    },
+    "sections": {
+      "label": "Разделы событий",
+      "events": "События",
+      "streams": "Потоки"
+    },
+    "toolbar": {
+      "kindPlaceholder": "Фильтр по типу: order.* или order.paid",
+      "allResults": "Все результаты",
+      "allStreams": "Все потоки",
+      "allProviders": "Все источники",
+      "sourcesCount": "{count, plural, one {# источник} few {# источника} many {# источников} other {# источника}}",
+      "origin": "Откуда",
+      "origins": {
+        "outside": "Извне",
+        "all": "Извне и платформа",
+        "platform": "Только платформа"
+      }
     }
   },
   "NetworkPage": {

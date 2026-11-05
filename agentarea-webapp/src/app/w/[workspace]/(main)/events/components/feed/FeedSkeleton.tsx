@@ -3,25 +3,6 @@ import { InfoPanelBody } from "@/components/InfoPanel";
 import { TableSkeleton } from "@/components/Skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
-/** The feed's columns: the filter rail and the rows. */
-export const FEED_GRID =
-  "grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)] xl:gap-8";
-
-export function FeedRailSkeleton() {
-  return (
-    <div className="hidden space-y-5 lg:block" aria-hidden="true">
-      {[4, 3, 6].map((rows, section) => (
-        <div key={section} className="space-y-2">
-          <Skeleton className="h-3 w-16" />
-          {Array.from({ length: rows }, (_, i) => (
-            <Skeleton key={i} className="h-5 w-full" />
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export function FeedRowsSkeleton({ rows = 12 }: { rows?: number }) {
   const t = useTranslations("EventsPage");
   return (
@@ -46,12 +27,7 @@ export function FeedRowsSkeleton({ rows = 12 }: { rows?: number }) {
 }
 
 export default function FeedSkeleton() {
-  return (
-    <>
-      <FeedRailSkeleton />
-      <FeedRowsSkeleton />
-    </>
-  );
+  return <FeedRowsSkeleton />;
 }
 
 /** The side panel while the open event loads: its header, envelope, handlers and body. */

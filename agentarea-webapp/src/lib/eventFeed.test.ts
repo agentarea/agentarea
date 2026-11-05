@@ -6,11 +6,12 @@ import {
   dayGroups,
   feedApiQuery,
   feedHref,
+  feedOrigin,
   liveQuery,
   matchesResult,
   neighbourEvent,
+  originPatch,
   parseFeedState,
-  platformForced,
   processingProgress,
   shortAge,
   showsPlatform,
@@ -64,7 +65,6 @@ describe("the feed's URL state", () => {
         session: "src:alice",
         event: "e1",
         tab: "grid",
-        source_type: ["a", "b"],
       })
     ).toEqual({
       stream: "s1",
@@ -75,15 +75,30 @@ describe("the feed's URL state", () => {
     });
   });
 
+  it("reads several sources, once each, and writes each back", () => {
+    const state = parseFeedState({ source_type: ["slack", "github", "slack"] });
+    expect(state).toEqual({ source_type: ["slack", "github"] });
+    expect(parseFeedState({ source_type: "slack" })).toEqual({
+      source_type: ["slack"],
+    });
+    expect(parseFeedState({ source_type: [""] })).toEqual({});
+    expect(feedHref(state)).toBe(
+      "/events?source_type=slack&source_type=github"
+    );
+  });
+
   it("ignores a result the API does not have", () => {
     expect(parseFeedState({ result: "maybe" })).toEqual({});
   });
 
-  it("reads the platform switch only as 1", () => {
-    expect(parseFeedState({ platform: "1" })).toEqual({ platform: "1" });
-    expect(parseFeedState({ platform: "true" })).toEqual({});
-    expect(feedHref({ platform: "1" }, { stream: "s1" })).toBe(
-      "/events?stream=s1&platform=1"
+  it("reads the origin it knows", () => {
+    expect(parseFeedState({ origin: "all" })).toEqual({ origin: "all" });
+    expect(parseFeedState({ origin: "platform" })).toEqual({
+      origin: "platform",
+    });
+    expect(parseFeedState({ origin: "outside" })).toEqual({});
+    expect(feedHref({ origin: "all" }, { stream: "s1" })).toBe(
+      "/events?stream=s1&origin=all"
     );
   });
 
@@ -99,7 +114,7 @@ describe("the feed's URL state", () => {
   it("names the API's parameters, and live leaves the result out", () => {
     const state = {
       stream: "s1",
-      source_type: "mail",
+      source_type: ["mail", "slack"],
       kind: "order.*",
       result: "handled" as const,
       session: "x",
@@ -108,7 +123,7 @@ describe("the feed's URL state", () => {
     };
     expect(feedApiQuery(state, true)).toEqual({
       stream_id: "s1",
-      source_type: "mail",
+      source_type: ["mail", "slack"],
       kind: "order.*",
       result: "handled",
       session_key: "x",
@@ -116,7 +131,7 @@ describe("the feed's URL state", () => {
       platform: undefined,
     });
     expect(liveQuery(state, true)).toBe(
-      "stream_id=s1&source_type=mail&kind=order.*&session_key=x&sender=bob"
+      "stream_id=s1&source_type=mail&source_type=slack&kind=order.*&session_key=x&sender=bob"
     );
   });
 
@@ -131,18 +146,58 @@ describe("the feed's URL state", () => {
 describe("the platform's own events", () => {
   const platformStreams = ["p1"];
 
-  it("are left out unless the switch is on", () => {
-    expect(showsPlatform({}, platformStreams)).toBe(false);
+  it("are left out unless the origin takes them in", () => {
+    expect(feedOrigin({}, platformStreams)).toBe("outside");
     expect(showsPlatform({ stream: "s1" }, platformStreams)).toBe(false);
-    expect(showsPlatform({ platform: "1" }, platformStreams)).toBe(true);
+    expect(feedOrigin({ origin: "all" }, platformStreams)).toBe("all");
+    expect(feedOrigin({ origin: "platform" }, platformStreams)).toBe(
+      "platform"
+    );
   });
 
-  it("are shown whatever the switch says when the view is the platform's", () => {
-    for (const state of [{ stream: "p1" }, { source_type: "platform" }]) {
-      expect(platformForced(state, platformStreams)).toBe(true);
-      expect(showsPlatform(state, platformStreams)).toBe(true);
-    }
-    expect(platformForced({ platform: "1" }, platformStreams)).toBe(false);
+  it("are what the view holds when its filter is the platform's", () => {
+    expect(feedOrigin({ stream: "p1" }, platformStreams)).toBe("platform");
+    expect(feedOrigin({ source_type: ["platform"] }, platformStreams)).toBe(
+      "platform"
+    );
+    expect(
+      feedOrigin({ source_type: ["slack", "platform"] }, platformStreams)
+    ).toBe("all");
+  });
+
+  it("only the platform's asks the API for its source alone", () => {
+    expect(
+      feedApiQuery({ origin: "platform", source_type: ["slack"] }, true)
+    ).toMatchObject({ source_type: ["platform"], platform: undefined });
+  });
+
+  it("outside and platform keeps the platform's beside the picked sources", () => {
+    expect(
+      feedApiQuery({ origin: "all", source_type: ["slack"] }, true)
+    ).toMatchObject({ source_type: ["slack", "platform"] });
+    expect(feedApiQuery({ origin: "all" }, true).source_type).toBeUndefined();
+    expect(feedApiQuery({ source_type: ["slack"] }, false).source_type).toEqual(
+      ["slack"]
+    );
+  });
+
+  it("switching origin drops the filters that contradict it", () => {
+    const state = { stream: "p1", source_type: ["slack", "platform"] };
+    expect(originPatch(state, platformStreams, "outside")).toEqual({
+      origin: undefined,
+      stream: undefined,
+      source_type: ["slack"],
+    });
+    expect(originPatch(state, platformStreams, "platform")).toEqual({
+      origin: "platform",
+      stream: "p1",
+      source_type: ["platform"],
+    });
+    expect(originPatch({ stream: "s1" }, platformStreams, "all")).toEqual({
+      origin: "all",
+      stream: "s1",
+      source_type: undefined,
+    });
   });
 });
 

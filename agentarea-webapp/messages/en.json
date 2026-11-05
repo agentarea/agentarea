@@ -157,7 +157,9 @@
       "title": "Leave without saving?",
       "description": "The changes on this page are not saved yet. If you leave, they are lost.",
       "leave": "Leave"
-    }
+    },
+    "removeFilter": "Remove filter: {label}",
+    "clearAll": "Clear all"
   },
   "admin": {
     "title": "Admin Dashboard",
@@ -2655,18 +2657,7 @@
       "notPolledYet": "Not polled yet",
       "pollError": "Last poll failed: {error}"
     },
-    "streamsTitle": "Streams",
     "streamsDescription": "Named event streams, their sources and forwards",
-    "live": {
-      "on": "Live",
-      "connecting": "Connecting",
-      "off": "Reconnecting"
-    },
-    "streamsMenu": {
-      "button": "Streams",
-      "all": "All streams",
-      "empty": "No streams yet"
-    },
     "result": {
       "all": "All",
       "queued": "Queued",
@@ -2702,7 +2693,13 @@
       "skippedOf": "skipped {done}/{total}",
       "filterSession": "Show the whole session",
       "unknownStream": "Deleted stream",
-      "showPlatform": "Show platform events"
+      "platformHidden": "Platform events are hidden.",
+      "emptyTitle": "No events yet",
+      "emptyAction": "Open streams",
+      "noneMatchingTitle": "No matching events",
+      "showPlatformAction": "Show platform events",
+      "onlyPlatformTitle": "Nothing from outside yet",
+      "onlyPlatform": "Only platform events have arrived, and they are hidden from the feed."
     },
     "panel": {
       "handlers": "Handlers",
@@ -2727,6 +2724,24 @@
       "everyEvent": "on every event",
       "createdAt": "Added {time}",
       "code": "Code (processor.py)"
+    },
+    "sections": {
+      "label": "Events sections",
+      "events": "Events",
+      "streams": "Streams"
+    },
+    "toolbar": {
+      "kindPlaceholder": "Filter by kind: order.* or order.paid",
+      "allResults": "All results",
+      "allStreams": "All streams",
+      "allProviders": "All sources",
+      "sourcesCount": "{count, plural, one {# source} other {# sources}}",
+      "origin": "Origin",
+      "origins": {
+        "outside": "From outside",
+        "all": "Outside and platform",
+        "platform": "Platform only"
+      }
     }
   },
   "NetworkPage": {

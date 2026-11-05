@@ -7462,7 +7462,7 @@ export const zListWorkspaceEventsV1StreamsEventsGetQuery = z.object({
   before: z.int().gte(1).lte(9223372036854776000).nullish(),
   limit: z.int().gte(1).lte(200).optional().default(50),
   stream_id: z.uuid().nullish(),
-  source_type: z.string().max(64).nullish(),
+  source_type: z.array(z.string()).max(50).optional().default([]),
   kind: z.string().max(255).nullish(),
   sender: z.string().max(512).nullish(),
   session_key: z.string().max(512).nullish(),
@@ -7480,7 +7480,7 @@ export const zListWorkspaceEventsV1StreamsEventsGetResponse =
 
 export const zStreamWorkspaceEventsV1StreamsEventsLiveGetQuery = z.object({
   stream_id: z.uuid().nullish(),
-  source_type: z.string().max(64).nullish(),
+  source_type: z.array(z.string()).max(50).optional().default([]),
   kind: z.string().max(255).nullish(),
   sender: z.string().max(512).nullish(),
   session_key: z.string().max(512).nullish(),

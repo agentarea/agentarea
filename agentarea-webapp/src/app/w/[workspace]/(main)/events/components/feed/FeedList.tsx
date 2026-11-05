@@ -19,6 +19,7 @@ import {
   type FeedState,
 } from "@/lib/eventFeed";
 import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
+import FeedEmptyState from "./FeedEmptyState";
 import { useFeedLive } from "./FeedLive";
 import { useFeedSelection } from "./FeedSelection";
 import ProcessingPill from "./ProcessingPill";
@@ -171,15 +172,6 @@ export default function FeedList({
   const streamNames = new Map(streams.map((s) => [s.id, s.name]));
   const zone = clock?.zone ?? "UTC";
   const groups = dayGroups(rows, new Date(clock?.now ?? Date.now()), zone);
-  const filtered = Boolean(
-    hidesPlatform ||
-      state.stream ||
-      state.source_type ||
-      state.kind ||
-      state.result ||
-      state.session ||
-      state.sender
-  );
 
   const columns: Column<FeedRow>[] = [
     {
@@ -294,9 +286,7 @@ export default function FeedList({
         </div>
       )}
       {rows.length === 0 ? (
-        <div className="py-6 text-center text-sm text-muted-foreground">
-          {filtered ? t("noneMatching") : t("empty")}
-        </div>
+        <FeedEmptyState state={state} hidesPlatform={hidesPlatform} />
       ) : (
         groups.map((group, index) => (
           <section key={group.day} aria-label={group.day}>
