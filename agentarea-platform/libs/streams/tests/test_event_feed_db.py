@@ -151,8 +151,10 @@ async def test_a_wildcard_kind_is_a_prefix_and_any_other_is_exact(world):
 async def test_stream_provider_sender_and_session_filters(world):
     keys, _ = await _keys(world, FeedFilter(stream_id=world.streams["mail"].id))
     assert keys == ["error", "handled"]
-    keys, _ = await _keys(world, FeedFilter(source_type="generic_webhook"))
+    keys, _ = await _keys(world, FeedFilter(source_types=["generic_webhook"]))
     assert keys == ["no_handlers", "processing", "queued"]
+    keys, _ = await _keys(world, FeedFilter(source_types=["generic_webhook", "mail"]))
+    assert keys == ["no_handlers", "error", "handled", "processing", "queued"]
     keys, _ = await _keys(world, FeedFilter(sender="carol"))
     assert keys == ["error", "handled"]
     keys, _ = await _keys(world, FeedFilter(session_key="s:1"))
@@ -192,7 +194,7 @@ async def test_facets_count_each_stream_and_provider_under_the_other_filters(wor
     assert facets.source_types == {"mail": 2}
     async with world.maker() as session:
         facets = await StreamEventRepository(session, world.ctx).feed_facets(
-            FeedFilter(source_type="mail"), _readable(world)
+            FeedFilter(source_types=["mail"]), _readable(world)
         )
     assert facets.source_types == {"generic_webhook": 3, "mail": 2, "repo": 1}
     assert facets.streams == {world.streams["mail"].id: 2}

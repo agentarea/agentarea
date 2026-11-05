@@ -642,7 +642,7 @@ class StreamsToolset(Toolset):
         _check_range("after", after, 0)
         filters = FeedFilter(
             stream_id=UUID(stream_id) if stream_id else None,
-            source_type=source_type,
+            source_types=[source_type] if source_type else [],
             kind=kind,
             sender=sender,
             session_key=session_key,

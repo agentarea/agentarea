@@ -38637,20 +38637,19 @@
             }
           },
           {
+            "description": "Any of these source types; repeat it for several.",
             "in": "query",
             "name": "source_type",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 64,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Source Type"
+              "default": [],
+              "description": "Any of these source types; repeat it for several.",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 50,
+              "title": "Source Type",
+              "type": "array"
             }
           },
           {
@@ -38846,20 +38845,19 @@
             }
           },
           {
+            "description": "Any of these source types; repeat it for several.",
             "in": "query",
             "name": "source_type",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 64,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Source Type"
+              "default": [],
+              "description": "Any of these source types; repeat it for several.",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 50,
+              "title": "Source Type",
+              "type": "array"
             }
           },
           {
