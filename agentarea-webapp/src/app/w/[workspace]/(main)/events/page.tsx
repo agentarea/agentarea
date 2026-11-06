@@ -13,6 +13,7 @@ import { isPlatformStream } from "@/lib/platformStream";
 import { requireApiData } from "@/lib/server-resource";
 import FeedActiveFilters from "./components/feed/FeedActiveFilters";
 import FeedContent from "./components/feed/FeedContent";
+import { feedSourceCounts } from "./components/feed/feedData";
 import FeedEventPanelServer from "./components/feed/FeedEventPanelServer";
 import FeedEventSidePanel from "./components/feed/FeedEventSidePanel";
 import { FeedLiveProvider } from "./components/feed/FeedLive";
@@ -47,11 +48,18 @@ export default async function EventsPage({
   const platformStreams = streams.filter(isPlatformStream).map((s) => s.id);
   const { event, ...filters } = state;
   const filterKey = feedHref(filters);
+  const showPlatform = showsPlatform(state, platformStreams);
+  const toolbar = (sourceCounts?: ReturnType<typeof feedSourceCounts>) => (
+    <FeedToolbar
+      streams={streams}
+      platformStreams={platformStreams}
+      sourceTypes={sourceTypes}
+      sourceCounts={sourceCounts}
+    />
+  );
 
   return (
-    <FeedLiveProvider
-      query={liveQuery(state, showsPlatform(state, platformStreams))}
-    >
+    <FeedLiveProvider query={liveQuery(state, showPlatform)}>
       <FeedSelectionProvider serverEvent={event}>
         <ContentBlock
           className="flex overflow-hidden p-0"
@@ -60,11 +68,11 @@ export default async function EventsPage({
             description: t("description"),
           }}
           subheader={
-            <FeedToolbar
-              streams={streams}
-              platformStreams={platformStreams}
-              sourceTypes={sourceTypes}
-            />
+            // The sources menu fills in from the counts when they arrive;
+            // until then the toolbar is the same, its menu holding the picks.
+            <Suspense fallback={toolbar()}>
+              {toolbar(feedSourceCounts(state, showPlatform))}
+            </Suspense>
           }
         >
           <div className="min-w-0 flex-1 overflow-y-auto px-4 py-5">

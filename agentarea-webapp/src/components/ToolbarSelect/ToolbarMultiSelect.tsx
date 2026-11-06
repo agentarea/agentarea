@@ -46,14 +46,17 @@ export default function ToolbarMultiSelect<T extends string>({
       <PopoverTrigger asChild>
         <ToolbarButton active={open} aria-label={label}>
           {only?.icon ?? all.icon}
-          <span className="max-sm:sr-only">
+          <span data-toolbar-label className="max-sm:sr-only">
             {picked.length === 0
               ? all.triggerLabel
               : only
                 ? (only.triggerLabel ?? only.label)
                 : countLabel(picked.length)}
           </span>
-          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/70" />
+          <ChevronDown
+            data-toolbar-chevron
+            className="h-3.5 w-3.5 text-muted-foreground/70"
+          />
         </ToolbarButton>
       </PopoverTrigger>
       <PopoverContent

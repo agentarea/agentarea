@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { use, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import {
@@ -45,8 +45,7 @@ import {
   type FeedOrigin,
   type FeedState,
 } from "@/lib/eventFeed";
-import { memberSourceTypes } from "@/lib/platformStream";
-import type { SourceType } from "@/lib/sourceTypes";
+import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
 import { getEventProcessingStatusPresentation } from "@/lib/status";
 import EventsSectionTabs from "../EventsSectionTabs";
 
@@ -80,7 +79,7 @@ function queryRecord(params: URLSearchParams) {
   return record;
 }
 
-/** The feed's filters in one menu, a section each: the phone's subheader. */
+/** The feed's filters in one menu, a section each: the subheader when the selects do not fit. */
 function FiltersMenu({
   filters,
   sources,
@@ -99,10 +98,16 @@ function FiltersMenu({
         <ToolbarButton
           active={open}
           aria-label={t("filters")}
-          className="md:hidden"
+          className="feed-filters-menu"
         >
           <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
-          {active > 0 && <span className="tabular-nums">{active}</span>}
+          {/* Icon-only on a phone, as DisplayMenu. */}
+          <span className="max-sm:sr-only">{t("filters")}</span>
+          {active > 0 && (
+            <span className="rounded-full bg-muted px-[7px] text-[11.5px] leading-[17px] tabular-nums text-muted-foreground">
+              {active}
+            </span>
+          )}
         </ToolbarButton>
       </PopoverTrigger>
       <PopoverContent
@@ -152,15 +157,31 @@ export default function FeedToolbar({
   streams,
   platformStreams,
   sourceTypes,
+  sourceCounts,
 }: {
   streams: { id: string; name: string }[];
   platformStreams: string[];
   sourceTypes: SourceType[];
+  /** Events per source under the other filters; still to come while loading. */
+  sourceCounts?: Promise<{ counts: Record<string, number>; capped: boolean }>;
 }) {
   const t = useTranslations("EventsPage");
   const router = useWorkspaceRouter();
   const searchParams = useSearchParams();
   const state = parseFeedState(queryRecord(searchParams));
+  const facets = sourceCounts ? use(sourceCounts) : undefined;
+  // The sources the view has events from, most first, as the feed counts
+  // them; a picked one stays in the list with nothing left under it.
+  const picked = state.source_type ?? [];
+  const sourceSlugs = [
+    ...Object.entries(facets?.counts ?? {})
+      .sort((a, b) => b[1] - a[1])
+      .map(([slug]) => slug),
+    ...picked,
+  ].filter(
+    (slug, index, all) =>
+      slug !== PLATFORM_SOURCE_TYPE && all.indexOf(slug) === index
+  );
   const go = (patch: Partial<FeedState>) =>
     router.push(
       feedHref(state, { ...patch, event: undefined, before: undefined }),
@@ -186,6 +207,11 @@ export default function FeedToolbar({
           return {
             value: origin,
             label: t(`toolbar.origins.${origin}`),
+            // "Outside and platform" is every event: the button says so in
+            // fewer words, the row keeps the name that explains it.
+            ...(origin === "all" && {
+              triggerLabel: t("toolbar.allEvents"),
+            }),
             icon: <Icon className={ICON} />,
           };
         }),
@@ -203,7 +229,8 @@ export default function FeedToolbar({
           {
             value: ALL,
             label: t("result.all"),
-            triggerLabel: t("toolbar.allResults"),
+            // Unfiltered, the button names the filter (as Linear does).
+            triggerLabel: t("list.result"),
             icon: <ListFilter className={ICON} />,
           },
         ],
@@ -237,7 +264,7 @@ export default function FeedToolbar({
           {
             value: ALL,
             label: t("list.all"),
-            triggerLabel: t("toolbar.allStreams"),
+            triggerLabel: t("list.stream"),
             icon: <EntityIcon kind="stream" className={ICON} />,
           },
         ],
@@ -261,24 +288,33 @@ export default function FeedToolbar({
     label: t("list.provider"),
     all: {
       label: t("list.all"),
-      triggerLabel: t("toolbar.allProviders"),
+      triggerLabel: t("list.provider"),
       icon: <Shapes className={ICON} />,
     },
     // The platform's own source is "Origin" too, so it is not offered here.
-    options: memberSourceTypes(sourceTypes)
-      .filter((type) => type.slug !== PLATFORM_SOURCE_TYPE)
-      .map((type) => ({
-        value: type.slug,
-        label: <span className="truncate">{type.name}</span>,
-        icon: (
-          <SourceTypeMark
-            type={type}
-            slug={type.slug}
-            inline
-            className={ICON}
-          />
+    options: sourceSlugs.map((slug) => {
+      const type = sourceTypeBySlug(sourceTypes, slug);
+      const name = type?.name ?? slug;
+      const count = facets?.counts[slug];
+      return {
+        value: slug,
+        label: (
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="flex-1 truncate">{name}</span>
+            {count !== undefined && (
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {count}
+                {facets?.capped && "+"}
+              </span>
+            )}
+          </span>
         ),
-      })),
+        triggerLabel: name,
+        icon: (
+          <SourceTypeMark type={type} slug={slug} inline className={ICON} />
+        ),
+      };
+    }),
     values: state.source_type ?? [],
     onChange: (values) =>
       go({
@@ -289,29 +325,33 @@ export default function FeedToolbar({
   };
 
   return (
-    <SubheaderToolbar
-      categories={<EventsSectionTabs />}
-      search={
-        <SearchInput
-          urlParamName="kind"
-          urlPath="/events"
-          resetParamNames={["event", "before"]}
-          placeholder={t("toolbar.kindPlaceholder")}
-        />
-      }
-      controls={
-        <>
-          {/* Four selects do not fit on a phone: there they fold into one
-              menu. */}
-          <div className="hidden items-center gap-3 md:flex">
-            {filters.map((filter) => (
-              <ToolbarSelect<string> key={filter.label} {...filter} />
-            ))}
-            <ToolbarMultiSelect<string> {...sources} />
-          </div>
-          <FiltersMenu filters={filters} sources={sources} />
-        </>
-      }
-    />
+    // The subheader's own width decides whether the selects fit (globals.css,
+    // `feed-toolbar`), not the screen's: the sidebar takes its share.
+    <div className="feed-toolbar-cq flex h-full w-full min-w-0 flex-1">
+      <SubheaderToolbar
+        categories={<EventsSectionTabs />}
+        search={
+          <SearchInput
+            urlParamName="kind"
+            urlPath="/events"
+            resetParamNames={["event", "before"]}
+            placeholder={t("toolbar.kindPlaceholder")}
+          />
+        }
+        controls={
+          <>
+            {/* The four selects while the subheader has room for them beside
+              the section tabs and the search; the menu below otherwise. */}
+            <div className="feed-filters-inline items-center gap-1">
+              {filters.map((filter) => (
+                <ToolbarSelect<string> key={filter.label} {...filter} />
+              ))}
+              <ToolbarMultiSelect<string> {...sources} />
+            </div>
+            <FiltersMenu filters={filters} sources={sources} />
+          </>
+        }
+      />
+    </div>
   );
 }

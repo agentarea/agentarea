@@ -2671,7 +2671,7 @@
     "list": {
       "filters": "Filters",
       "stream": "Stream",
-      "provider": "Provider",
+      "provider": "Source",
       "kind": "Kind",
       "kindPlaceholder": "order.* or order.paid",
       "result": "Result",
@@ -2715,7 +2715,9 @@
       "close": "Close",
       "gone": "This event is no longer kept.",
       "title": "Event",
-      "processor": "Processor"
+      "processor": "Processor",
+      "details": "Details",
+      "received": "Received"
     },
     "processors": {
       "title": "Processors",
@@ -2732,16 +2734,14 @@
     },
     "toolbar": {
       "kindPlaceholder": "Filter by kind: order.* or order.paid",
-      "allResults": "All results",
-      "allStreams": "All streams",
-      "allProviders": "All sources",
       "sourcesCount": "{count, plural, one {# source} other {# sources}}",
       "origin": "Origin",
       "origins": {
         "outside": "From outside",
         "all": "Outside and platform",
         "platform": "Platform only"
-      }
+      },
+      "allEvents": "All events"
     }
   },
   "NetworkPage": {

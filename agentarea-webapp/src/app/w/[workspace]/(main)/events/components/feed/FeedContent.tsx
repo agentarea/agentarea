@@ -1,15 +1,11 @@
-import { listWorkspaceEvents } from "@/lib/api";
 import {
-  feedApiQuery,
   PLATFORM_SOURCE_TYPE,
   showsPlatform,
   type FeedState,
 } from "@/lib/eventFeed";
-import { requireApiData } from "@/lib/server-resource";
 import type { SourceType } from "@/lib/sourceTypes";
+import { feedPage } from "./feedData";
 import FeedList from "./FeedList";
-
-const PAGE = 50;
 
 /** The rows of the feed: the first page of it under the view's filters. */
 export default async function FeedContent({
@@ -24,18 +20,7 @@ export default async function FeedContent({
   sourceTypes: SourceType[];
 }) {
   const showPlatform = showsPlatform(state, platformStreams);
-  const before =
-    state.before && /^\d+$/.test(state.before)
-      ? Number(state.before)
-      : undefined;
-  const page = requireApiData(
-    await listWorkspaceEvents({
-      ...feedApiQuery(state, showPlatform),
-      before,
-      limit: PAGE,
-    }),
-    "workspace events"
-  );
+  const page = await feedPage(state, showPlatform);
   return (
     <FeedList
       initial={page.events}

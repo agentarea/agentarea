@@ -30,7 +30,12 @@ export default function SubheaderToolbar({
       )}
       {categories && search && <ToolbarDivider />}
       <div className="flex flex-1 items-center justify-end gap-3">
-        {search && <div className="min-w-[7rem] flex-1">{search}</div>}
+        {search && (
+          // `data-subheader-search`: a page may narrow it in a tight toolbar.
+          <div data-subheader-search className="min-w-[7rem] flex-1">
+            {search}
+          </div>
+        )}
         {controls && (
           <div className="flex shrink-0 items-center gap-3">{controls}</div>
         )}
