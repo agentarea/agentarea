@@ -137,13 +137,19 @@ export default function AccessControlExplorer({
       setLoading(true);
       setError(null);
       try {
-        const data = await resolveAccessAction({
+        const resolved = await resolveAccessAction({
           subject_id: subjectId,
           resource_kind: selectedObject.kind,
           resource_id: splitObjectId(objectId).object,
         });
-        if (!cancelled) {
-          setResult(data);
+        if (cancelled) {
+          return;
+        }
+        if (resolved.ok) {
+          setResult(resolved.data);
+        } else {
+          setError(resolved.error);
+          setResult(null);
         }
       } catch (e) {
         if (cancelled) {
@@ -208,12 +214,16 @@ export default function AccessControlExplorer({
         throw new Error("Create a collection or MCP resource before adding a relationship rule.");
       }
       const target = splitObjectId(ruleObjectId);
-      await createAccessRelationshipAction({
+      const created = await createAccessRelationshipAction({
         namespace: target.namespace,
         object: target.object,
         relation: ruleRelation,
         subject_id: ruleSubjectId,
       });
+      if (!created.ok) {
+        setRuleStatus(created.error);
+        return;
+      }
       setRuleStatus("Relationship rule created.");
       setShowRuleForm(false);
       router.refresh();
