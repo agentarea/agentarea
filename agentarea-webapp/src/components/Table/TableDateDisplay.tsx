@@ -3,7 +3,7 @@
 import { useFormatter, useNow } from "next-intl";
 import { Calendar, Clock } from "lucide-react";
 
-const WEEK = 7 * 24 * 60 * 60 * 1000;
+const DAY = 24 * 60 * 60 * 1000;
 
 interface TableDateDisplayProps {
   dateString: string;
@@ -11,6 +11,8 @@ interface TableDateDisplayProps {
   onlyDate?: boolean;
   /** Within the last week, say how long ago ("4 days ago") instead of the date. */
   relative?: boolean;
+  /** How many days back `relative` says how long ago; 7 unless given. */
+  relativeDays?: number;
   /** Time down to the millisecond, for things that happen moments apart. */
   precise?: boolean;
 }
@@ -21,6 +23,7 @@ export function TableDateDisplay({
   oneRow,
   onlyDate,
   relative,
+  relativeDays = 7,
   precise,
 }: TableDateDisplayProps) {
   const format = useFormatter();
@@ -29,7 +32,7 @@ export function TableDateDisplay({
 
   const date = new Date(dateString);
 
-  if (relative && now.getTime() - date.getTime() < WEEK) {
+  if (relative && now.getTime() - date.getTime() < relativeDays * DAY) {
     return (
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Clock className="h-3 w-3 shrink-0" />

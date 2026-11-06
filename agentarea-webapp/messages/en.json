@@ -2517,7 +2517,10 @@
       "created": "Created",
       "platformName": "Platform",
       "platformLabel": "Written by the platform",
-      "platformDescription": "What happened to this workspace's tasks: completed, failed, cancelled, or waiting for an approval or an answer. Put a trigger on it to react to another agent's outcome."
+      "platformDescription": "What happened to this workspace's tasks: completed, failed, cancelled, or waiting for an approval or an answer. Put a trigger on it to react to another agent's outcome.",
+      "writtenBy": "Written by",
+      "platformWriter": "The platform",
+      "sourcesWriter": "Its sources"
     },
     "noStreams": "No streams yet",
     "noStreamsDescription": "A stream collects the events of its sources. Create one, then add a source to it.",

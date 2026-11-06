@@ -1,12 +1,12 @@
-import { getLocale, getTranslations } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import type { StreamResponse } from "@/api/client/types.gen";
 import EmptyState from "@/components/EmptyState";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
+import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
 import { listStreams } from "@/lib/api";
-import { EntityIcon } from "@/lib/entity-icons";
-import { requireApiData } from "@/lib/server-resource";
 import { isPlatformStream } from "@/lib/platformStream";
-import { formatDate } from "@/utils/dateUtils";
+import { requireApiData } from "@/lib/server-resource";
+import StreamCard, { StreamAvatar } from "./StreamCard";
 
 export default async function StreamsContent({
   search,
@@ -15,13 +15,13 @@ export default async function StreamsContent({
   search: string;
   viewMode: string;
 }) {
-  const [t, tCommon, tTriggers, locale, streamsResult] = await Promise.all([
+  const [t, tCommon, tTriggers, streamsResult] = await Promise.all([
     getTranslations("EventsPage"),
     getTranslations("Common"),
     getTranslations("TriggersPage"),
-    getLocale(),
     listStreams(),
   ]);
+  // The platform's stream is named and described by the platform.
   const streams = requireApiData(streamsResult, "streams").map((stream) =>
     isPlatformStream(stream)
       ? {
@@ -31,8 +31,6 @@ export default async function StreamsContent({
         }
       : stream
   );
-  const icon = (stream?: StreamResponse) =>
-    stream && isPlatformStream(stream) ? "platformStream" : "stream";
   const query = search.trim().toLowerCase();
   const shown = query
     ? streams.filter(
@@ -53,11 +51,69 @@ export default async function StreamsContent({
     );
   }
 
+  // As the Projects table: a tile, the name and a line of description, then
+  // the plain columns in the table's muted 13px.
+  const columns = [
+    {
+      header: t("streams.name"),
+      accessor: "name",
+      rowLink: true,
+      render: (name: unknown, stream?: StreamResponse) =>
+        stream && (
+          <div className="flex min-w-0 items-center gap-2.5">
+            <StreamAvatar stream={stream} size={28} />
+            <div className="min-w-0">
+              <div className="truncate text-[13px] font-medium text-foreground">
+                {String(name)}
+              </div>
+              {stream.description && (
+                <div className="max-w-md truncate text-xs text-muted-foreground">
+                  {stream.description}
+                </div>
+              )}
+            </div>
+          </div>
+        ),
+    },
+    {
+      header: t("streams.writtenBy"),
+      accessor: "kind",
+      headerClassName: "hidden w-[200px] md:table-cell",
+      cellClassName: "hidden md:table-cell",
+      render: (_value: unknown, stream?: StreamResponse) => (
+        <span className="text-[13px] text-muted-foreground">
+          {stream && isPlatformStream(stream)
+            ? t("streams.platformWriter")
+            : t("streams.sourcesWriter")}
+        </span>
+      ),
+    },
+    {
+      header: t("streams.created"),
+      accessor: "created_at",
+      headerClassName: "w-[120px]",
+      // As the tables elsewhere (Tasks): the shared date cell, the day only,
+      // how long ago for the last five days.
+      render: (value: unknown) => (
+        <TableDateDisplay
+          dateString={String(value)}
+          onlyDate
+          relative
+          relativeDays={5}
+        />
+      ),
+    },
+  ];
+
   return (
     <GridAndTableViews
       viewMode={viewMode}
       data={shown}
+      columns={columns}
       itemLink={(stream: StreamResponse) => `/events/${stream.id}`}
+      // StreamCard is a LinkedCard: it owns its surface and its link.
+      wrapCardContent={false}
+      cardContent={(stream: StreamResponse) => <StreamCard stream={stream} />}
       emptyState={
         <EmptyState
           title={t("noMatchingStreams")}
@@ -65,52 +121,6 @@ export default async function StreamsContent({
           action={{ label: tCommon("clearSearch"), href: "/events/streams" }}
         />
       }
-      columns={[
-        {
-          header: t("streams.name"),
-          accessor: "name",
-          rowLink: true,
-          render: (name: unknown, stream?: StreamResponse) => (
-            <div className="flex items-center gap-2">
-              <EntityIcon kind={icon(stream)} className="text-primary" />
-              <div>
-                <div className="font-medium">{String(name)}</div>
-                {stream && isPlatformStream(stream) && (
-                  <div className="text-xs text-muted-foreground">
-                    {t("streams.platformLabel")}
-                  </div>
-                )}
-                {stream?.description && (
-                  <div className="mt-1 line-clamp-1 max-w-md text-xs text-muted-foreground">
-                    {stream.description}
-                  </div>
-                )}
-              </div>
-            </div>
-          ),
-        },
-        {
-          header: t("streams.created"),
-          accessor: "created_at",
-          render: (value: unknown) => formatDate(String(value), locale),
-        },
-      ]}
-      cardContent={(stream: StreamResponse) => (
-        <div className="flex h-full flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <EntityIcon kind={icon(stream)} className="text-primary" />
-            <div className="truncate text-[16px] font-[500]">{stream.name}</div>
-          </div>
-          {stream.description && (
-            <div className="line-clamp-2 text-[14px] opacity-50">
-              {stream.description}
-            </div>
-          )}
-          <div className="mt-auto text-xs tabular-nums text-muted-foreground">
-            {formatDate(stream.created_at, locale)}
-          </div>
-        </div>
-      )}
     />
   );
 }
