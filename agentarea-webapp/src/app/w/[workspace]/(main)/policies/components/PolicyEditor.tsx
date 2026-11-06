@@ -1449,7 +1449,11 @@ export default function PolicyEditor({
     setSaving(true);
     setError(null);
     try {
-      await deletePolicyRuleAction(target.policy.id);
+      const result = await deletePolicyRuleAction(target.policy.id);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
       router.push(returnHref);
       router.refresh();
     } catch (e) {

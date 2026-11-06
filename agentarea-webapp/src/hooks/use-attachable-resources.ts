@@ -105,8 +105,8 @@ export function useAttachableResources({
           : []
       );
       setSecrets(
-        secretsResult.status === "fulfilled" && Array.isArray(secretsResult.value)
-          ? secretsResult.value.filter((secret) => !secret.owner)
+        secretsResult.status === "fulfilled" && secretsResult.value?.data
+          ? secretsResult.value.data.filter((secret) => !secret.owner)
           : []
       );
       setFailed([
@@ -115,9 +115,7 @@ export function useAttachableResources({
         // unusable; a missing spec costs an icon, not the entry itself.
         ...(broke(instancesResult) ? (["mcps"] as const) : []),
         ...(withFiles && broke(filesResult) ? (["files"] as const) : []),
-        ...(withSecrets && secretsResult.status === "rejected"
-          ? (["secrets"] as const)
-          : []),
+        ...(withSecrets && broke(secretsResult) ? (["secrets"] as const) : []),
       ]);
       setLoading(false);
     }

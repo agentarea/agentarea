@@ -1,4 +1,5 @@
 import { env } from "@/env";
+import { unreachableApiResponse } from "@/lib/api-errors";
 import { getAuthToken } from "@/lib/getAuthToken";
 import { AGENTAREA_API_TIMEOUT } from "@/lib/server-timeouts";
 import { fillWorkspace, isWorkspaceScoped } from "@/lib/workspace-url";
@@ -53,7 +54,18 @@ export const createClientConfig: CreateClientConfig = (config) => ({
 
     await addAuthToken(request);
 
-    const response = await fetch(request);
+    let response: Response;
+    try {
+      response = await fetch(request);
+    } catch (error) {
+      const unreachable = unreachableApiResponse(error, AGENTAREA_API_TIMEOUT);
+      if (!unreachable) throw error;
+      console.error(
+        `[Server Client] ${request.method} ${request.url} - no answer:`,
+        error
+      );
+      return unreachable;
+    }
 
     if (response.status === 403) {
       console.error("[Server Client] 403 Forbidden details:", {

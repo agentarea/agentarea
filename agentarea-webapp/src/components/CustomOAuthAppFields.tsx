@@ -28,7 +28,9 @@ export function CustomOAuthAppFields({
   onChange,
   disabled,
 }: {
-  loadSecrets: () => Promise<SecretResponse[]>;
+  loadSecrets: () => Promise<
+    { data: SecretResponse[]; error: null } | { data: null; error: string }
+  >;
   onChange: (credentials: CustomOAuthAppCredentials) => void;
   disabled?: boolean;
 }) {
@@ -47,7 +49,9 @@ export function CustomOAuthAppFields({
     let active = true;
     loadSecrets()
       .then((loaded) => {
-        if (active) setSecrets(loaded);
+        if (!active) return;
+        if (loaded.error !== null) setSecretsError(loaded.error);
+        setSecrets(loaded.data ?? []);
       })
       .catch((error: unknown) => {
         if (!active) return;

@@ -650,14 +650,17 @@ export async function probeInstanceAuthAction(instanceId: string) {
  * they all filter the same way (`owner` set means the secret belongs to another
  * entity and is not reusable).
  */
-export async function listWorkspaceSecretsAction(): Promise<SecretResponse[]> {
+export async function listWorkspaceSecretsAction(): Promise<
+  { data: SecretResponse[]; error: null } | { data: null; error: string }
+> {
   const { data, error } = await listSecrets();
   if (error || !data) {
-    throw new Error(
-      apiErrorMessage({ error }, "Failed to load workspace secrets")
-    );
+    return {
+      data: null,
+      error: apiErrorMessage({ error }, "Failed to load workspace secrets"),
+    };
   }
-  return zListSecretsV1SecretsGetResponse.parse(data);
+  return { data: zListSecretsV1SecretsGetResponse.parse(data), error: null };
 }
 
 /**
