@@ -6,9 +6,10 @@ import SourceTypeMark from "@/components/SourceTypeMark";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { EntityIcon } from "@/lib/entity-icons";
-import { feedHref, type FeedState } from "@/lib/eventFeed";
+import type { FeedState } from "@/lib/eventFeed";
 import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
 import { getEventProcessingStatusPresentation } from "@/lib/status";
+import { useFeedHref } from "./FeedPath";
 
 const ICON = "h-3.5 w-3.5";
 
@@ -23,14 +24,18 @@ export default function FeedActiveFilters({
   streams,
   platformStreams,
   sourceTypes,
+  inToolbar = [],
 }: {
   state: FeedState;
+  /** Filters whose value the toolbar's own button shows: no chip for them. */
+  inToolbar?: (keyof FeedState)[];
   streams: { id: string; name: string }[];
   platformStreams: string[];
   sourceTypes: SourceType[];
 }) {
   const t = useTranslations("EventsPage");
   const router = useWorkspaceRouter();
+  const feedHref = useFeedHref();
   const go = (patch: Partial<FeedState>) =>
     router.push(
       feedHref(state, { ...patch, event: undefined, before: undefined }),
@@ -38,7 +43,7 @@ export default function FeedActiveFilters({
     );
 
   const filters: ActiveFilter[] = [];
-  if (state.result) {
+  if (state.result && !inToolbar.includes("result")) {
     const presentation = getEventProcessingStatusPresentation(state.result);
     filters.push({
       id: "result",

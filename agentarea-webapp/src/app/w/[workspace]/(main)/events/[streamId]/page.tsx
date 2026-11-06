@@ -1,29 +1,32 @@
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
-import ContentBlock from "@/components/ContentBlock";
-import SubheaderToolbar from "@/components/SubheaderToolbar";
-import { getStream, listStreamSourceTypes } from "@/lib/api";
-import { isPlatformStream, memberSourceTypes } from "@/lib/platformStream";
+import { redirect } from "next/navigation";
+import { getStreamEvent, listStreams, listStreamSourceTypes } from "@/lib/api";
+import {
+  feedHref,
+  legacyEventSequence,
+  liveQuery,
+  parseFeedState,
+  showsPlatform,
+} from "@/lib/eventFeed";
+import { isPlatformStream } from "@/lib/platformStream";
 import { requireApiData } from "@/lib/server-resource";
-import type { DispositionFilter as Filter } from "@/lib/streamOutcome";
-import AddSourceDialog from "./components/AddSourceDialog";
-import DispositionFilter from "./components/DispositionFilter";
-import EventDetail from "./components/EventDetail";
-import EventFeed from "./components/EventFeed";
-import EventFeedSkeleton from "./components/EventFeedSkeleton";
-import StreamProcessors from "./components/StreamProcessors";
-import StreamSources, {
-  StreamSourcesSkeleton,
-} from "./components/StreamSources";
+import { requestWorkspacePath } from "@/lib/workspace-request";
+import FeedActiveFilters from "../components/feed/FeedActiveFilters";
+import FeedContent from "../components/feed/FeedContent";
+import FeedEventPanelServer from "../components/feed/FeedEventPanelServer";
+import FeedEventSidePanel from "../components/feed/FeedEventSidePanel";
+import { FeedLiveProvider } from "../components/feed/FeedLive";
+import { FeedPathProvider } from "../components/feed/FeedPath";
+import { FeedSelectionProvider } from "../components/feed/FeedSelection";
+import FeedSkeleton, {
+  FeedEventPanelSkeleton,
+} from "../components/feed/FeedSkeleton";
 
-const FILTERS: Filter[] = ["all", "reacted", "skipped", "error", "unheard"];
-
-function sequenceParam(value: string | string[] | undefined) {
-  return typeof value === "string" && /^\d+$/.test(value)
-    ? Number(value)
-    : undefined;
-}
-
+/**
+ * The stream's events: the workspace feed, the same table and side panel,
+ * pinned to this stream — its URL keeps the stream out, the page names it.
+ */
 export default async function StreamEventsPage({
   params,
   searchParams,
@@ -31,76 +34,80 @@ export default async function StreamEventsPage({
   params: Promise<{ streamId: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const [{ streamId }, query, t] = await Promise.all([
-    params,
-    searchParams,
-    getTranslations("EventsPage"),
-  ]);
-  const [streamResult, typesResult] = await Promise.all([
-    getStream(streamId),
-    listStreamSourceTypes(),
-  ]);
-  const stream = requireApiData(streamResult, "stream");
+  const [{ streamId }, query, t, streamsResult, typesResult] =
+    await Promise.all([
+      params,
+      searchParams,
+      getTranslations("EventsPage"),
+      listStreams(),
+      listStreamSourceTypes(),
+    ]);
+  // An old link to this page named its event by its sequence here: open the
+  // same event by its id.
+  const sequence = legacyEventSequence(query.event);
+  if (sequence !== undefined) {
+    const legacy = await getStreamEvent(streamId, sequence);
+    const params = new URLSearchParams();
+    if (legacy.data) params.set("event", legacy.data.event_id);
+    const target = params.toString();
+    redirect(
+      await requestWorkspacePath(
+        `/events/${streamId}${target ? `?${target}` : ""}`
+      )
+    );
+  }
+  const { stream: _ignored, ...fromUrl } = parseFeedState(query);
+  const state = { ...fromUrl, stream: streamId };
+  const streams = requireApiData(streamsResult, "streams").map((s) => ({
+    id: s.id,
+    // The platform's stream is named by the platform, not by a member.
+    name: isPlatformStream(s) ? t("streams.platformName") : s.name,
+    kind: s.kind,
+  }));
   const sourceTypes = requireApiData(typesResult, "stream source types");
-  const outcome = FILTERS.find((f) => f === query.outcome) ?? "all";
-  const before = sequenceParam(query.before);
-  const selected = sequenceParam(query.event);
-  const platform = isPlatformStream(stream);
+  const platformStreams = streams.filter(isPlatformStream).map((s) => s.id);
+  const showPlatform = showsPlatform(state, platformStreams);
+  const { event, ...filters } = state;
+  const path = { base: `/events/${streamId}`, pinned: ["stream"] as const };
 
   return (
-    <ContentBlock
-      header={{
-        breadcrumb: [
-          { label: t("title"), href: "/events" },
-          { label: platform ? t("streams.platformName") : stream.name },
-        ],
-        description: platform
-          ? t("streams.platformDescription")
-          : stream.description || undefined,
-        controls: platform ? undefined : (
-          <AddSourceDialog
-            streamId={streamId}
-            types={memberSourceTypes(sourceTypes)}
-          />
-        ),
-      }}
-      subheader={
-        <SubheaderToolbar controls={<DispositionFilter current={outcome} />} />
-      }
-    >
-      <Suspense fallback={<StreamSourcesSkeleton />}>
-        <StreamSources streamId={streamId} types={sourceTypes} />
-      </Suspense>
-      <Suspense fallback={null}>
-        <StreamProcessors streamId={streamId} />
-      </Suspense>
-      <div
-        className={
-          selected !== undefined
-            ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]"
-            : undefined
-        }
-      >
-        <Suspense key={`${outcome}-${before}`} fallback={<EventFeedSkeleton />}>
-          <EventFeed
-            streamId={streamId}
-            outcome={outcome}
-            before={before}
-            selected={selected}
-          />
-        </Suspense>
-        {selected !== undefined && (
-          <Suspense key={selected} fallback={<EventFeedSkeleton rows={4} />}>
-            <EventDetail
-              streamId={streamId}
-              sequence={selected}
-              outcome={outcome}
-              before={before}
+    <FeedPathProvider path={path}>
+      <FeedLiveProvider query={liveQuery(state, showPlatform)}>
+        <FeedSelectionProvider serverEvent={event}>
+          <div className="min-w-0 flex-1 overflow-y-auto px-4 py-5">
+            {/* Its one select, the result, says its value on its button. */}
+            <FeedActiveFilters
+              inToolbar={["result"]}
+              state={fromUrl}
+              streams={streams}
+              platformStreams={platformStreams}
               sourceTypes={sourceTypes}
             />
-          </Suspense>
-        )}
-      </div>
-    </ContentBlock>
+            <Suspense
+              key={feedHref(filters, {}, path)}
+              fallback={<FeedSkeleton />}
+            >
+              <FeedContent
+                state={state}
+                streams={streams}
+                platformStreams={platformStreams}
+                sourceTypes={sourceTypes}
+              />
+            </Suspense>
+          </div>
+          <FeedEventSidePanel streams={streams} sourceTypes={sourceTypes}>
+            {event && (
+              <Suspense key={event} fallback={<FeedEventPanelSkeleton />}>
+                <FeedEventPanelServer
+                  eventId={event}
+                  streams={streams}
+                  sourceTypes={sourceTypes}
+                />
+              </Suspense>
+            )}
+          </FeedEventSidePanel>
+        </FeedSelectionProvider>
+      </FeedLiveProvider>
+    </FeedPathProvider>
   );
 }

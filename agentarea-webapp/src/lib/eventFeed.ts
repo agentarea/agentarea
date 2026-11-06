@@ -58,6 +58,18 @@ const KEYS = [
   "origin",
 ] as const;
 
+const UUID =
+  /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
+
+/** An old stream page's `?event=`: the event's sequence in that stream. */
+export function legacyEventSequence(
+  value: string | string[] | undefined
+): number | undefined {
+  return typeof value === "string" && /^\d+$/.test(value)
+    ? Number(value)
+    : undefined;
+}
+
 export function parseFeedState(
   params: Record<string, string | string[] | undefined>
 ): FeedState {
@@ -75,6 +87,10 @@ export function parseFeedState(
       if (result) state.result = result;
     } else if (key === "origin") {
       if (value === "all" || value === "platform") state.origin = value;
+    } else if (key === "event") {
+      // An event is named by its id; anything else (an old link's sequence)
+      // opens nothing rather than failing the read.
+      if (UUID.test(value)) state.event = value;
     } else {
       state[key] = value;
     }
@@ -82,17 +98,33 @@ export function parseFeedState(
   return state;
 }
 
+/**
+ * Where a feed lives: the workspace's (`/events`) or one stream's, whose page
+ * pins the stream, so its URL never carries it.
+ */
+export interface FeedPath {
+  base: string;
+  pinned?: readonly (keyof FeedState)[];
+}
+
+export const WORKSPACE_FEED: FeedPath = { base: "/events" };
+
 /** A feed URL; `patch` replaces values, an `undefined` in it removes one. */
-export function feedHref(state: FeedState, patch: Partial<FeedState> = {}) {
+export function feedHref(
+  state: FeedState,
+  patch: Partial<FeedState> = {},
+  path: FeedPath = WORKSPACE_FEED
+) {
   const merged: FeedState = { ...state, ...patch };
   const params = new URLSearchParams();
   for (const key of KEYS) {
+    if (path.pinned?.includes(key)) continue;
     for (const value of [merged[key] ?? []].flat()) {
       if (value) params.append(key, value);
     }
   }
   const query = params.toString();
-  return `/events${query ? `?${query}` : ""}`;
+  return `${path.base}${query ? `?${query}` : ""}`;
 }
 
 /**

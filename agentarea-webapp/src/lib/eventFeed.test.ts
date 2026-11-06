@@ -7,6 +7,7 @@ import {
   feedApiQuery,
   feedHref,
   feedOrigin,
+  legacyEventSequence,
   liveQuery,
   matchesResult,
   neighbourEvent,
@@ -63,7 +64,7 @@ describe("the feed's URL state", () => {
         kind: "order.*",
         result: "error",
         session: "src:alice",
-        event: "e1",
+        event: "0f8c2a1e-5b7d-4c3a-9e21-6d4b8a7c9f10",
         tab: "grid",
       })
     ).toEqual({
@@ -71,7 +72,7 @@ describe("the feed's URL state", () => {
       kind: "order.*",
       result: "error",
       session: "src:alice",
-      event: "e1",
+      event: "0f8c2a1e-5b7d-4c3a-9e21-6d4b8a7c9f10",
     });
   });
 
@@ -87,8 +88,24 @@ describe("the feed's URL state", () => {
     );
   });
 
+  it("opens an event only by its id; an old link's sequence opens nothing", () => {
+    const id = "97193960-b93c-4d71-b67f-1937d4ea293f";
+    expect(parseFeedState({ event: id })).toEqual({ event: id });
+    expect(parseFeedState({ event: "2" })).toEqual({});
+    expect(legacyEventSequence("2")).toBe(2);
+    expect(legacyEventSequence(id)).toBeUndefined();
+  });
+
   it("ignores a result the API does not have", () => {
     expect(parseFeedState({ result: "maybe" })).toEqual({});
+  });
+
+  it("a stream's feed lives under its page and leaves its stream out", () => {
+    const path = { base: "/events/s1", pinned: ["stream"] as const };
+    expect(feedHref({ stream: "s1" }, { result: "error" }, path)).toBe(
+      "/events/s1?result=error"
+    );
+    expect(feedHref({ stream: "s1" }, {}, path)).toBe("/events/s1");
   });
 
   it("reads the origin it knows", () => {

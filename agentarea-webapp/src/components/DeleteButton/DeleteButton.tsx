@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Trash2 } from "lucide-react";
 import BaseModal from "@/components/BaseModal/BaseModal";
+import { TableRowAction } from "@/components/Table/TableRowAction";
 import { Button } from "@/components/ui/button";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import {
   apiErrorMessage,
   formatApiError,
@@ -26,6 +27,8 @@ interface DeleteButtonProps {
     unexpectedError?: string;
   };
   size?: "default" | "sm" | "lg" | "icon" | "xs";
+  /** As a table row's hover action (TableRowAction), as Secrets deletes. */
+  rowAction?: boolean;
 }
 
 export default function DeleteButton({
@@ -38,6 +41,7 @@ export default function DeleteButton({
   description,
   errorMessages = {},
   size = "sm",
+  rowAction = false,
 }: DeleteButtonProps) {
   const router = useWorkspaceRouter();
   const tCommon = useTranslations("Common");
@@ -89,10 +93,16 @@ export default function DeleteButton({
         if (next) setError(null);
       }}
     >
-      <Button variant="destructiveOutline" size={size}>
-        <Trash2 />
-        {tCommon("delete")}
-      </Button>
+      {rowAction ? (
+        <TableRowAction variant="destructiveOutline" icon={<Trash2 />}>
+          {tCommon("delete")}
+        </TableRowAction>
+      ) : (
+        <Button variant="destructiveOutline" size={size}>
+          <Trash2 />
+          {tCommon("delete")}
+        </Button>
+      )}
     </BaseModal>
   );
 }

@@ -3,14 +3,7 @@
 import { use, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import {
-  Cpu,
-  Globe,
-  Layers,
-  ListFilter,
-  Shapes,
-  SlidersHorizontal,
-} from "lucide-react";
+import { Cpu, Globe, Layers, Shapes, SlidersHorizontal } from "lucide-react";
 import SearchInput from "@/components/SearchInput";
 import SourceTypeMark from "@/components/SourceTypeMark";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
@@ -30,7 +23,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { StatusIndicator } from "@/components/ui/status-indicator";
 import { ToolbarButton } from "@/components/ui/toolbar";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { EntityIcon } from "@/lib/entity-icons";
@@ -41,13 +33,12 @@ import {
   originPatch,
   parseFeedState,
   PLATFORM_SOURCE_TYPE,
-  PROCESSING_RESULTS,
   type FeedOrigin,
   type FeedState,
 } from "@/lib/eventFeed";
 import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
-import { getEventProcessingStatusPresentation } from "@/lib/status";
 import EventsSectionTabs from "../EventsSectionTabs";
+import { useResultFilter } from "./useResultFilter";
 
 const ALL = "all";
 const ICON = "h-3.5 w-3.5";
@@ -197,6 +188,7 @@ export default function FeedToolbar({
     (stream) => !platformStreams.includes(stream.id)
   );
 
+  const resultFilter = useResultFilter(state, go);
   const filters: Filter[] = [
     {
       label: t("toolbar.origin"),
@@ -222,37 +214,7 @@ export default function FeedToolbar({
         if (origin) go(originPatch(state, platformStreams, origin));
       },
     },
-    {
-      label: t("list.result"),
-      groups: [
-        [
-          {
-            value: ALL,
-            label: t("result.all"),
-            // Unfiltered, the button names the filter (as Linear does).
-            triggerLabel: t("list.result"),
-            icon: <ListFilter className={ICON} />,
-          },
-        ],
-        PROCESSING_RESULTS.map((result) => {
-          const presentation = getEventProcessingStatusPresentation(result);
-          return {
-            value: result,
-            label: t(`result.${presentation.labelKey}`),
-            icon: (
-              <StatusIndicator
-                size="sm"
-                kind={presentation.kind}
-                aria-hidden="true"
-              />
-            ),
-          };
-        }),
-      ],
-      value: state.result ?? ALL,
-      onChange: (value) =>
-        go({ result: PROCESSING_RESULTS.find((r) => r === value) }),
-    },
+    resultFilter,
   ];
   // A workspace with no stream of its own has nothing to pick here: no
   // dropdown with a lone "All".

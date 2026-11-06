@@ -41,6 +41,8 @@ export const PAGE_ROUTES = [
   "/dashboard",
   "/events",
   "/events/*",
+  "/events/*/processors",
+  "/events/*/sources",
   "/events/streams",
   "/explore",
   "/files",

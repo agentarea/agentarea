@@ -2720,7 +2720,8 @@
       "title": "Событие",
       "processor": "Процессор",
       "details": "Подробности",
-      "received": "Получено"
+      "received": "Получено",
+      "loadFailed": "Не удалось загрузить событие"
     },
     "processors": {
       "title": "Процессоры",
@@ -2745,6 +2746,26 @@
         "platform": "Только платформа"
       },
       "allEvents": "Все события"
+    },
+    "streamPage": {
+      "label": "Разделы потока",
+      "events": "События",
+      "sources": "Источники",
+      "processors": "Процессоры",
+      "noSources": "Источников пока нет",
+      "noProcessors": "Этот поток не читает ни один процессор",
+      "deliveries": {
+        "webhook": "Вебхук",
+        "poll": "Опрос",
+        "platform": "Платформа"
+      },
+      "receiving": "Принимает",
+      "pollFailed": "Опрос не удался",
+      "takes": "Берёт",
+      "source": "Источник",
+      "delivery": "Как приходят",
+      "address": "Адрес",
+      "state": "Состояние"
     }
   },
   "NetworkPage": {

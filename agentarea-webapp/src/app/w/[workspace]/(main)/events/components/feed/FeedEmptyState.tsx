@@ -3,7 +3,8 @@
 import { useTranslations } from "next-intl";
 import { Radio, Webhook, Zap } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
-import { feedHref, type FeedState } from "@/lib/eventFeed";
+import type { FeedState } from "@/lib/eventFeed";
+import { useFeedHref, useFeedPath } from "./FeedPath";
 
 const ICONS = [Webhook, Radio, Zap];
 
@@ -21,6 +22,8 @@ export default function FeedEmptyState({
   hidesPlatform: boolean;
 }) {
   const t = useTranslations("EventsPage.list");
+  const tFeed = useTranslations("EventsPage.feed");
+  const feedHref = useFeedHref();
   const filtered = Boolean(
     state.stream ||
       state.source_type ||
@@ -37,6 +40,19 @@ export default function FeedEmptyState({
       before: undefined,
     }),
   };
+
+  // On a stream's own page: nothing has arrived on it, and its sources are
+  // one tab away.
+  const onStream = useFeedPath().pinned?.includes("stream");
+  if (onStream && !filtered && !hidesPlatform) {
+    return (
+      <EmptyState
+        title={t("emptyTitle")}
+        description={tFeed("empty")}
+        icons={ICONS}
+      />
+    );
+  }
 
   if (!filtered && !hidesPlatform) {
     return (

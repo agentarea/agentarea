@@ -25,6 +25,7 @@ import { CopyableText } from "@/components/ui/copyable-text";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import WorkspaceLink from "@/components/WorkspaceLink";
+import { useWorkspacePathname } from "@/hooks/useWorkspaceNavigation";
 import { deterministicHue } from "@/lib/avatar-hue";
 import { EntityIcon, type EntityKind } from "@/lib/entity-icons";
 import { PLATFORM_SOURCE_TYPE, processingProgress } from "@/lib/eventFeed";
@@ -32,7 +33,6 @@ import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
 import { getStreamOutcomeStatusPresentation } from "@/lib/status";
 import { parseUtcTimestamp } from "@/utils/dateUtils";
 import { formatFileSize } from "@/utils/fileUtils";
-import { feedHref as streamFeedHref } from "../../[streamId]/feedHref";
 import ProcessingPill from "./ProcessingPill";
 
 type Translator = ReturnType<typeof useTranslations>;
@@ -74,10 +74,11 @@ export default function FeedEventPanel({
   const searchParams = useSearchParams();
   // Another event (a cause, a forward) opens in this same panel, the feed
   // and its filters left as they are.
+  const pathname = useWorkspacePathname();
   const openEvent = (id: string) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("event", id);
-    return `/events?${params.toString()}`;
+    return `${pathname}?${params.toString()}`;
   };
   const when = (value: string | null | undefined) => {
     const date = parseUtcTimestamp(value);
@@ -280,14 +281,14 @@ export default function FeedEventPanel({
           </pre>
         </InfoPanelSection>
 
-        <ActionLink
-          href={streamFeedHref(event.stream_id, {
-            outcome: "all",
-            event: event.sequence,
-          })}
-        >
-          {t("panel.openInStream")}
-        </ActionLink>
+        {/* On its own stream's page the event is already in its stream. */}
+        {pathname !== `/events/${event.stream_id}` && (
+          <ActionLink
+            href={`/events/${event.stream_id}?event=${event.event_id}`}
+          >
+            {t("panel.openInStream")}
+          </ActionLink>
+        )}
       </InfoPanelBody>
     </>
   );

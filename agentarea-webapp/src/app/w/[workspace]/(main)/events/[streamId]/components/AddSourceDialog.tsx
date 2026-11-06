@@ -69,12 +69,21 @@ const EMPTY: SourceFormValues = { secrets: {}, settings: {}, templates: {} };
 export default function AddSourceDialog({
   streamId,
   types,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
 }: {
   streamId: string;
   types: SourceType[];
+  /** Opened from elsewhere (a menu): then it draws no trigger of its own. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const t = useTranslations("EventsPage.sources");
-  const [open, setOpen] = useState(false);
+  const controlled = openProp !== undefined;
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = controlled ? openProp : ownOpen;
+  const setOpen = (next: boolean) =>
+    controlled ? onOpenChangeProp?.(next) : setOwnOpen(next);
   const [typeId, setTypeId] = useState("");
   const [values, setValues] = useState<SourceFormValues>(EMPTY);
   const [error, setError] = useState<string | null>(null);
@@ -134,12 +143,14 @@ export default function AddSourceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button className="shrink-0" size="xs">
-          <Plus />
-          {t("add")}
-        </Button>
-      </DialogTrigger>
+      {!controlled && (
+        <DialogTrigger asChild>
+          <Button className="shrink-0" size="xs">
+            <Plus />
+            {t("add")}
+          </Button>
+        </DialogTrigger>
+      )}
       {created ? (
         <SuccessModalContent
           title={t("created.title")}

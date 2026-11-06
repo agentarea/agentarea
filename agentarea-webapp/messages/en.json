@@ -2720,7 +2720,8 @@
       "title": "Event",
       "processor": "Processor",
       "details": "Details",
-      "received": "Received"
+      "received": "Received",
+      "loadFailed": "Could not load the event"
     },
     "processors": {
       "title": "Processors",
@@ -2745,6 +2746,26 @@
         "platform": "Platform only"
       },
       "allEvents": "All events"
+    },
+    "streamPage": {
+      "label": "Stream sections",
+      "events": "Events",
+      "sources": "Sources",
+      "processors": "Processors",
+      "noSources": "No sources yet",
+      "noProcessors": "No processors read this stream",
+      "deliveries": {
+        "webhook": "Webhook",
+        "poll": "Polling",
+        "platform": "The platform"
+      },
+      "receiving": "Receiving",
+      "pollFailed": "Last poll failed",
+      "takes": "Takes",
+      "source": "Source",
+      "delivery": "Delivery",
+      "address": "Address",
+      "state": "State"
     }
   },
   "NetworkPage": {

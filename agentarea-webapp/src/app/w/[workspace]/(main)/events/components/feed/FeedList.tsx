@@ -15,7 +15,6 @@ import {
   applyProcessing,
   applyRecorded,
   dayGroups,
-  feedHref,
   matchesResult,
   neighbourEvent,
   type FeedState,
@@ -23,6 +22,7 @@ import {
 import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
 import FeedEmptyState from "./FeedEmptyState";
 import { useFeedLive } from "./FeedLive";
+import { useFeedHref, useFeedPath } from "./FeedPath";
 import { useFeedSelection } from "./FeedSelection";
 import ProcessingPill from "./ProcessingPill";
 
@@ -73,6 +73,9 @@ export default function FeedList({
 }) {
   const t = useTranslations("EventsPage.list");
   const tFeed = useTranslations("EventsPage.feed");
+  const feedHref = useFeedHref();
+  // On a stream's own page every row is of that stream: no column for it.
+  const oneStream = useFeedPath().pinned?.includes("stream") ?? false;
   const locale = useLocale();
   const router = useWorkspaceRouter();
   const { listen } = useFeedLive();
@@ -209,20 +212,24 @@ export default function FeedList({
           </span>
         ),
     },
-    {
-      header: t("stream"),
-      accessor: "stream_id",
-      headerClassName: "hidden w-[180px] md:table-cell",
-      cellClassName: "hidden w-[180px] md:table-cell",
-      render: (value) => (
-        <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground">
-          <EntityIcon kind="stream" className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">
-            {streamNames.get(String(value)) ?? t("unknownStream")}
-          </span>
-        </span>
-      ),
-    },
+    ...(oneStream
+      ? []
+      : [
+          {
+            header: t("stream"),
+            accessor: "stream_id",
+            headerClassName: "hidden w-[180px] md:table-cell",
+            cellClassName: "hidden w-[180px] md:table-cell",
+            render: (value) => (
+              <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground">
+                <EntityIcon kind="stream" className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">
+                  {streamNames.get(String(value)) ?? t("unknownStream")}
+                </span>
+              </span>
+            ),
+          } satisfies Column<FeedRow>,
+        ]),
     {
       header: t("session"),
       accessor: "session_key",
