@@ -1,7 +1,9 @@
 """Discovery decides each model's kind from what the provider says it outputs."""
 
+import json
+
 import httpx
-from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
+from agentarea_agents_sdk.models.provider_profiles import ModelListShape, ProviderProfile
 from agentarea_llm.application.model_discovery_service import ModelDiscoveryService
 from agentarea_llm.domain.models import ModelKind
 
@@ -95,7 +97,13 @@ async def test_openrouter_discovery_lists_every_output_modality():
         )
 
     service = ModelDiscoveryService(transport=httpx.MockTransport(handler))
-    models = await service.discover("openrouter", "sk-test", provider=ProviderProfile(base_url="https://openrouter.ai/api/v1", models_query="output_modalities=all"))
+    models = await service.discover(
+        "openrouter",
+        "sk-test",
+        provider=ProviderProfile(
+            base_url="https://openrouter.ai/api/v1", models_query="output_modalities=all"
+        ),
+    )
 
     assert [(url.path, url.params.get("output_modalities")) for url in seen] == [
         ("/api/v1/models", "all")
@@ -118,9 +126,67 @@ async def test_other_providers_keep_their_plain_listing():
         seen.append(request.url)
         return httpx.Response(200, json={"data": [{"id": "gpt-4o"}]})
 
-    await ModelDiscoveryService(transport=httpx.MockTransport(handler)).discover("openai", "sk", provider=ProviderProfile(base_url="https://api.openai.com/v1"))
+    await ModelDiscoveryService(transport=httpx.MockTransport(handler)).discover(
+        "openai", "sk", provider=ProviderProfile(base_url="https://api.openai.com/v1")
+    )
 
     assert [str(url) for url in seen] == ["https://api.openai.com/v1/models"]
+
+
+async def test_ollama_discovery_enriches_models_with_context_windows():
+    seen: list[tuple[str, str, dict | None]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content) if request.content else None
+        seen.append((request.method, str(request.url), body))
+        if request.url.path == "/api/tags":
+            return httpx.Response(
+                200,
+                json={
+                    "models": [
+                        {"name": "qwen3:8b"},
+                        {"name": "legacy"},
+                        {"name": "unreachable"},
+                    ]
+                },
+            )
+        if request.url.path == "/api/show":
+            name = body["name"]
+            if name == "qwen3:8b":
+                return httpx.Response(
+                    200,
+                    json={"model_info": {"qwen3.context_length": 32_768}},
+                )
+            if name == "unreachable":
+                return httpx.Response(404)
+            return httpx.Response(200, json={"model_info": {"general.architecture": "llama"}})
+        return httpx.Response(404)
+
+    provider = ProviderProfile(
+        base_url="http://localhost:11434",
+        models_path="/api/tags",
+        list_shape=ModelListShape.MODELS_NAME,
+    )
+    models = await ModelDiscoveryService(transport=httpx.MockTransport(handler)).discover(
+        "ollama", None, provider=provider
+    )
+
+    assert [(method, url) for method, url, _ in seen] == [
+        ("GET", "http://localhost:11434/api/tags"),
+        ("POST", "http://localhost:11434/api/show"),
+        ("POST", "http://localhost:11434/api/show"),
+        ("POST", "http://localhost:11434/api/show"),
+    ]
+    assert [body for _, _, body in seen[1:]] == [
+        {"name": "qwen3:8b"},
+        {"name": "legacy"},
+        {"name": "unreachable"},
+    ]
+    assert [(model.model_name, model.context_window) for model in models] == [
+        ("qwen3:8b", 32_768),
+        ("legacy", None),
+        ("unreachable", None),
+    ]
 
 
 def test_image_input_marks_the_model_as_reading_images():
