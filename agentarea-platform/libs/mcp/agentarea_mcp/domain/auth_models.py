@@ -174,12 +174,7 @@ class APIKey(BaseModel, WorkspaceScopedMixin):
     access_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     agent_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True, index=True)
-    client_id: Mapped[UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("clients.id", ondelete="CASCADE"),
-        nullable=True,
-        index=True,
-    )
+    client_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True, index=True)
 
     def __init__(
         self,
