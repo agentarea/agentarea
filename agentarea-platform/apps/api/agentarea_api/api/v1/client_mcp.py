@@ -114,10 +114,15 @@ async def _authorize_client_access(user_ctx, client_id: str) -> None:
     """Enforce that the authenticated principal may use this client's bundle.
 
     A client-credentials principal (token subject IS the client) is trusted for
-    its own bundle; any other principal must hold the `use` relation in the
-    access-control graph. Raises ``ClientAccessDeniedError`` otherwise.
+    its own bundle, and so is the token of a turn the client's runner holds, for
+    that client's bundle only; any other principal must hold the `use` relation
+    in the access-control graph. Raises ``ClientAccessDeniedError`` otherwise.
     """
     if getattr(user_ctx, "client_id", None) == client_id:
+        return
+    if getattr(user_ctx, "bound_task_id", None) is not None:
+        if getattr(user_ctx, "turn_client_id", None) != client_id:
+            raise ClientAccessDeniedError(client_id)
         return
     from agentarea_common.auth.permission import PermissionService
     from agentarea_common.di.container import resolve
@@ -303,6 +308,8 @@ async def _effective_tool_policy(session: AsyncSession, user_ctx: UserContext) -
 def _actor_type(principal, client_id: str) -> str:
     if principal.client_id == client_id:
         return "client"
+    if principal.subject is not None and principal.subject.kind == "agent":
+        return "agent"
     credential = principal.credential
     return "api_key" if credential is not None and credential.kind == "api_key" else "user"
 

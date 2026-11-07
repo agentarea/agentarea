@@ -20,6 +20,7 @@ with workflow.unsafe.imports_passed_through():
 from ..models import (
     AgentExecutionRequest,
     AgentExecutionResult,
+    RunnerTurnUpdate,
     UpdateTaskGovernanceSnapshotRequest,
     UpdateTaskGovernanceSnapshotResult,
 )
@@ -200,6 +201,12 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
                 + f"approved={approved}"
                 + (f" comment='{comment}'" if comment else "")
             )
+
+    @workflow.signal
+    async def runner_turn_update(self, update: RunnerTurnUpdate) -> None:
+        """What the runner of the run's current turn reported (ADR-0051)."""
+        if update.turn_key == self._runner_turn_key:
+            self._runner_updates.append(update)
 
     @workflow.signal
     async def workflow_command(self, command: str, payload: dict[str, Any]) -> None:

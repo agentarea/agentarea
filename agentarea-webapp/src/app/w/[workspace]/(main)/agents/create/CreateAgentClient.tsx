@@ -68,6 +68,7 @@ export default function CreateAgentClient({
         description: "",
         instruction: "",
         model_id: "",
+        client_id: "",
         tools_config: {
           mcp_server_configs: [],
           builtin_tools: [],

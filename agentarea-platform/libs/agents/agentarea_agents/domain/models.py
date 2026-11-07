@@ -1,9 +1,11 @@
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from agentarea_common.agent_status import AgentStatus
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from agentarea_common.rebac.ownership import INVOKER_RELATION, OWNER_RELATIONS
 from sqlalchemy import JSON, Boolean, Integer, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
@@ -63,6 +65,10 @@ class Agent(BaseModel, WorkspaceScopedMixin):
     # Forward provenance link to the catalog item this agent was forked from
     # (copy-on-write). Null for agents created from scratch. See ADR-003.
     registry_item_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    # The harness client whose runner executes this agent's tasks (a Codex or Claude
+    # Code CLI on a subscription, ADR-0051); None runs them on the platform's own loop.
+    # References clients.id (FK in the migration; the client model lives in agentarea_mcp).
+    client_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
 
     # Relationships
     skills: Mapped[list[Skill]] = relationship(

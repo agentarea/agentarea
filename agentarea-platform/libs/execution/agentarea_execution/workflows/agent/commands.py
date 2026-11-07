@@ -230,7 +230,14 @@ class CommandsMixin(BudgetMixin):
         if not text:
             workflow.logger.warning("queue_message received with empty text, ignoring")
             return
-        self._message_queue.append({"id": msg_id, "content": text})
+        queued: dict[str, Any] = {"id": msg_id, "content": text}
+        # Who sent it, ``{"type": "user"|"agent", "id": ...}``: a runner's turn acts for them.
+        sender = payload.get("sender")
+        if sender is not None:
+            if not isinstance(sender, dict) or sender.get("type") not in ("user", "agent"):
+                raise ValueError("sender must name a user or an agent")
+            queued["sender"] = {"type": sender["type"], "id": str(sender["id"])}
+        self._message_queue.append(queued)
         if self.event_manager:
             self.event_manager.add_event(
                 EventTypes.MESSAGE_QUEUED,

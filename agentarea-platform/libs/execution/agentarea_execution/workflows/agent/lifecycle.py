@@ -49,7 +49,7 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
                 if self._paused:
                     await workflow.wait_condition(lambda: not self._paused)
                     await self._check_monthly_spend_cap()
-                if workflow.info().is_continue_as_new_suggested():
+                if self._continue_as_new_suggested():
                     await self._continue_as_new()
 
             # Increment iteration count
@@ -131,7 +131,7 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
                 break
 
             # Check if Temporal suggests resetting event history
-            if workflow.info().is_continue_as_new_suggested():
+            if self._continue_as_new_suggested():
                 await self._continue_as_new()
                 # continue_as_new raises an exception internally, so we won't reach here
 
@@ -141,6 +141,10 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
                 await self._check_monthly_spend_cap()
 
         return {"iterations_completed": self.state.current_iteration}
+
+    def _continue_as_new_suggested(self) -> bool:
+        """Whether to roll the history over now; a run on a runner keeps its history."""
+        return self._runner_client_id is None and workflow.info().is_continue_as_new_suggested()
 
     async def _await_continuation(self, failure_reason: str, message: str) -> bool:
         """Idle durably until the user grants resources or the window expires."""

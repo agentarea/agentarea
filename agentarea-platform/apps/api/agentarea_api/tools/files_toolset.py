@@ -29,6 +29,8 @@ from pydantic import BaseModel, Field
 from .base import platform_context, platform_read_context
 
 _PATH = "Path of the file relative to the workspace root, as `workspace_files_list` returns it."
+# A text file returned whole in a tool result; larger ones are fetched by URL.
+READ_MAX_BYTES = 512 * 1024
 
 
 class WorkspaceFileOutput(BaseModel):
@@ -44,6 +46,11 @@ class WorkspaceFileUrlOutput(BaseModel):
     url: str = Field(description="AgentArea API URL that downloads the file with your credentials.")
     path: str = Field(description="The requested path.")
     expires_in: int = Field(description="The requested lifetime in seconds, echoed back.")
+
+
+class WorkspaceFileContentOutput(BaseModel):
+    path: str = Field(description="The requested path.")
+    content: str = Field(description="The file's text, UTF-8.")
 
 
 class WorkspaceFileUploadPlan(BaseModel):
@@ -88,14 +95,14 @@ async def _exists(svc: ArtifactService, workspace_id: str, path: str) -> bool:
 @toolset(
     namespace="agentarea/workspace_files",
     display_name="Workspace Files",
-    description="List, upload, fetch download URLs for, and delete workspace files.",
+    description="List, read, upload, fetch download URLs for, and delete workspace files.",
     category="platform",
     plane="operate",
     requires_user_confirmation=True,
     register=False,
 )
 class FilesToolset(Toolset):
-    """List, upload, fetch download URLs for, and delete workspace files."""
+    """List, read, upload, fetch download URLs for, and delete workspace files."""
 
     open_world = False
 
@@ -148,6 +155,25 @@ class FilesToolset(Toolset):
                 raise ToolError("File not found")
             url = await _workspace_file_download_url(user_ctx, path)
             return json.dumps({"url": url, "path": path, "expires_in": expires_in})
+
+    @tool_method(
+        display_name="Read workspace file", effect="read", output=WorkspaceFileContentOutput
+    )
+    @unrestricted("workspace files are member-level, as /v1/files serves them")
+    async def read(self, path: Annotated[str, Field(description=_PATH)]) -> str:
+        """Read a workspace text file (UTF-8, up to 512 KB); use `get_url` for anything else."""
+        async with platform_read_context() as (_session, user_ctx, _repo, _broker, _secret):
+            try:
+                body, _content_type = await ArtifactService().get(user_ctx.workspace_id, path)
+            except (FileNotFoundError, InvalidArtifactPathError) as exc:
+                raise ToolError("File not found") from exc
+        if len(body) > READ_MAX_BYTES:
+            raise ToolError(f"File is larger than {READ_MAX_BYTES} bytes; use get_url")
+        try:
+            content = body.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ToolError("File is not UTF-8 text; use get_url") from exc
+        return json.dumps({"path": path, "content": content}, ensure_ascii=False)
 
     @tool_method(
         display_name="Get workspace file upload URLs",

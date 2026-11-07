@@ -8,6 +8,12 @@ import {
 import {configManager} from './utils/config.js';
 import {logger} from './utils/logger.js';
 import {connectClient} from './commands/connect.js';
+import {
+	defaultRunnerRoot,
+	loadRunnerConfig,
+	registerRunner,
+	runRunner,
+} from './commands/runner.js';
 import {loadAccessToken, runLogin, runLogout} from './commands/login.js';
 import {
 	printOperationList,
@@ -75,6 +81,67 @@ export async function handleCliCommand(
 		configManager.set('workspace', slug);
 		console.error(`Workspace-scoped commands now run in "${slug}".`);
 		await flushAndExit(0);
+	}
+
+	// A runner holds its client's runner key, never a person's session.
+	if (command === 'runner') {
+		const rawFlags = options.rawFlags ?? {};
+		const root =
+			typeof rawFlags['root'] === 'string'
+				? rawFlags['root']
+				: defaultRunnerRoot();
+		if (subcommand === 'register') {
+			const key =
+				typeof rawFlags['key'] === 'string' ? rawFlags['key'] : undefined;
+			if (!key) {
+				console.error(
+					'Usage: agentarea runner register --api-url <url> --key <key> [--root <dir>]',
+				);
+				return false;
+			}
+
+			const config = await registerRunner(apiUrl, key, root);
+			console.error(
+				`Registered as the ${config.kind} runner of client ${config.client_id} in ${config.workspace}; key stored in ${root}`,
+			);
+			await flushAndExit(0);
+		}
+
+		if (subcommand !== 'codex' && subcommand !== 'claude') {
+			console.error(
+				'Usage: agentarea runner codex|claude [--root <dir>] [--login-from <dir>] [--sandbox none] [--allow-domain <host,...>] [--capacity <turns>]',
+			);
+			return false;
+		}
+
+		const config = loadRunnerConfig(root);
+		if (config.kind !== subcommand) {
+			console.error(
+				`This runner is registered for a ${config.kind} client; run \`agentarea runner ${config.kind}\`.`,
+			);
+			return false;
+		}
+
+		const loginFrom =
+			typeof rawFlags['loginFrom'] === 'string'
+				? rawFlags['loginFrom']
+				: subcommand === 'codex'
+				? `${process.env['HOME']}/.codex`
+				: undefined;
+		return runRunner({
+			config,
+			harness: subcommand,
+			root,
+			loginFrom,
+			sandbox: rawFlags['sandbox'] === 'none' ? 'none' : 'profile',
+			allowDomains: ([] as unknown[])
+				.concat(rawFlags['allowDomain'] ?? [])
+				.flatMap(value => String(value).split(','))
+				.map(host => host.trim())
+				.filter(Boolean),
+			capacity:
+				rawFlags['capacity'] === undefined ? 2 : Number(rawFlags['capacity']),
+		});
 	}
 
 	// Load token from CLI flag, environment, or the stored OAuth session

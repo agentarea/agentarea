@@ -15,6 +15,7 @@ from agentarea_common.base.models import BaseModel
 from agentarea_common.workspaces import Workspace
 from agentarea_mcp.application.access_token_service import hash_token
 from agentarea_mcp.domain.auth_models import APIKey
+from agentarea_mcp.domain.client_models import Client
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -28,7 +29,7 @@ async def session_factory():
     async with engine.begin() as conn:
         await conn.run_sync(
             lambda sync_conn: BaseModel.metadata.create_all(
-                sync_conn, tables=[Workspace.__table__, APIKey.__table__]
+                sync_conn, tables=[Workspace.__table__, Client.__table__, APIKey.__table__]
             )
         )
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)

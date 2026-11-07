@@ -288,17 +288,17 @@ def _psql(sql: str) -> str:
 
 @pytest.fixture(scope="session")
 def llm_provider_spec_id() -> str:
-    """Seed a system-scoped OpenAI-compatible provider_spec if missing.
+    """Seed a platform-scoped OpenAI-compatible provider_spec if missing.
 
     Provider specs have no POST endpoint (they're normally seeded via registry
-    sync). For local e2e we INSERT via SQL into workspace_id='system' so every
+    sync). For local e2e we INSERT via SQL into the platform workspace so every
     authenticated user can reference it.
     """
     _psql(
         "INSERT INTO provider_specs(id,provider_key,name,provider_type,"
         "is_builtin,workspace_id,created_by) "
         f"VALUES (gen_random_uuid(),'{LLM_PROVIDER_KEY}',"
-        "'OpenAI-compatible (e2e)','openai-compatible',true,'system','system') "
+        "'OpenAI-compatible (e2e)','openai-compatible',true,'platform','platform') "
         "ON CONFLICT (provider_key) DO NOTHING;"
     )
     spec_id = _psql(
@@ -310,28 +310,22 @@ def llm_provider_spec_id() -> str:
 
 @pytest.fixture(scope="session")
 def llm_model_spec_id(llm_provider_spec_id: str) -> str:
-    """Seed a system-scoped model_spec for the configured model.
+    """Seed a platform-scoped model_spec for the configured model.
 
-    model_specs has a (provider_spec_id, model_name) unique constraint that is
-    NOT workspace-scoped, so a per-user POST breaks on re-run. Seed once in
-    workspace='system' and let all users read it via their accessible list.
-    Also promotes any pre-existing rows to system workspace.
+    Every user reads the platform workspace's specs, so one row serves all
+    tests and re-runs.
     """
     _psql(
-        "UPDATE model_specs SET workspace_id='system', created_by='system' "
-        f"WHERE provider_spec_id='{llm_provider_spec_id}' "
-        f"AND model_name='{LLM_MODEL}';"
-    )
-    _psql(
         "INSERT INTO model_specs(id,provider_spec_id,model_name,display_name,"
-        "context_window,is_active,workspace_id,created_by) VALUES "
+        "context_window,input_cost_per_token,output_cost_per_token,"
+        "is_active,workspace_id,created_by) VALUES "
         f"(gen_random_uuid(),'{llm_provider_spec_id}','{LLM_MODEL}',"
-        f"'{LLM_MODEL}',200000,true,'system','system') "
-        "ON CONFLICT (provider_spec_id, model_name) DO NOTHING;"
+        f"'{LLM_MODEL}',128000,0,0,true,'platform','platform') "
+        "ON CONFLICT (workspace_id, provider_spec_id, model_name) DO NOTHING;"
     )
     spec_id = _psql(
         f"SELECT id FROM model_specs WHERE provider_spec_id='{llm_provider_spec_id}' "
-        f"AND model_name='{LLM_MODEL}';"
+        f"AND model_name='{LLM_MODEL}' AND workspace_id='platform';"
     )
     assert spec_id, "failed to seed model_spec"
     return spec_id

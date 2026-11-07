@@ -4,16 +4,21 @@ A Client is a governable principal that is *not* runnable — it represents an
 external harness (codex, claude-code, …) that connects to a scoped set of MCP
 server instances, OpenAPI connections, platform toolsets, and skills. Its tool
 set is exactly its own attachments.
+
+A client of a kind a runner drives (Codex, Claude Code) can also execute agents'
+turns: its runner holds the client's key, keeps one socket to the platform and
+runs each turn on the CLI's subscription, with the client's tools (ADR-0051).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy as sa
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -21,6 +26,9 @@ if TYPE_CHECKING:
     from agentarea_agents.domain.skill_models import Skill
 
     from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+
+# The client kinds a runner drives: a client of one of them can execute agents' turns.
+RUNNER_KINDS = ("codex", "claude")
 
 client_skills = sa.Table(
     "client_skills",
@@ -137,6 +145,14 @@ class Client(BaseModel, WorkspaceScopedMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     kind: Mapped[str] = mapped_column(String(32), nullable=False, default="harness")
+    # [{name, reasoning_levels, default_reasoning}], as the client's runner reports them.
+    models: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
+    # The CLI's own name of the model turns use unless a task names one; None leaves the CLI's.
+    default_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Hosts the CLI's sandbox reaches during a turn, beside those its runner allows.
+    allow_domains: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
 
     skills: Mapped[list[Skill]] = relationship(
         "Skill",

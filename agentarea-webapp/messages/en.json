@@ -66,6 +66,7 @@
     "openFiles": "Open files",
     "closeTab": "Close {name}",
     "download": "Download",
+    "closePreview": "Close",
     "copyContents": "Copy contents",
     "copied": "Copied",
     "emptyFile": "Empty file",
@@ -698,6 +699,13 @@
       "answerCheckHint": "Models sometimes leak their internals into the reply: Chinese characters, tool names like web_search, internal codes, chunks of JSON, error texts, stray English words in a Russian answer. Chinese models do this more often.\n\nThe check looks for these traces in the final answer. If it finds any, the agent's model rewrites the answer once. The extra model call happens only when something is found.",
       "loadModeHint": "All at once: on every step the model gets the full description of every tool of this connection. It never misses a tool, but each call spends more tokens.\n\nOn demand: the model sees only tool names with a short description and loads the full description of a tool when it needs it. Use it for connections with many tools.",
       "llmModel": "LLM Model",
+      "runsOn": "Runs on",
+      "runsOnPlatform": "AgentArea",
+      "runsOnOffline": "offline",
+      "runsOnHint": "AgentArea runs the agent on a platform model. A Codex or Claude Code client runs it on that CLI's own subscription, through the client's runner, with the client's tools.",
+      "runnerModel": "Model",
+      "runnerModelsPending": "The client's runner has not reported its models yet",
+      "runnerModelHint": "Every agent on this client runs with this model unless a task names another.",
       "selectModel": "Select a model",
       "noConfigurationsYet": "No configurations yet",
       "createAndUseProviderConfiguration": "Create and use a provider configuration",
@@ -3914,7 +3922,36 @@
     "connectionsCount": "{count, plural, one {# connection} other {# connections}}",
     "skillsCount": "{count, plural, one {# skill} other {# skills}}",
     "deleteTitle": "Delete harness",
-    "deleteDescription": "Delete \"{name}\"? The scoped MCP endpoint stops working for any harness connected to it. This cannot be undone."
+    "deleteDescription": "Delete \"{name}\"? The scoped MCP endpoint stops working for any harness connected to it. This cannot be undone.",
+    "runner": {
+      "title": "Runner",
+      "description": "This client's CLI can run agents' turns on its own subscription. Start a runner on the machine where the CLI is signed in; agents set to run on this client execute there, with this client's tools.",
+      "online": "Online",
+      "offline": "Offline",
+      "model": "Default model",
+      "modelHint": "Agents on this client run with this model unless a task names another.",
+      "modelsPending": "The runner has not reported its models yet.",
+      "domains": "Allowed domains",
+      "domainsHint": "Hosts the CLI's sandbox may reach during a turn, one per line, besides those the runner itself allows.",
+      "save": "Save",
+      "connect": {
+        "title": "Connect a runner",
+        "description": "Issue a key and run the command on the machine where the CLI is signed in. The key reaches only this client's runner.",
+        "issue": "Issue a key",
+        "register": "Run this on the machine where the CLI is signed in",
+        "shownOnce": "Copy it now: the key is not shown again.",
+        "then": "Then start it:",
+        "done": "Done"
+      },
+      "keys": {
+        "title": "Runner keys",
+        "empty": "No runner key yet.",
+        "key": "Key",
+        "created": "Issued",
+        "lastUsed": "Last used",
+        "revoke": "Revoke"
+      }
+    }
   },
   "AttachmentSection": {
     "addFailed": "Couldn’t add {item}",

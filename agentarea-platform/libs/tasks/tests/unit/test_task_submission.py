@@ -36,7 +36,7 @@ def _make_service(temporal_executor=None):
     task_repo.create_task = AsyncMock(side_effect=lambda t: t)
     task_repo.find_active_in_session = AsyncMock(return_value=[])
 
-    agent_stub = MagicMock(id=uuid4())
+    agent_stub = MagicMock(id=uuid4(), client_id=None)
     agent_stub.name = "stub-agent"  # MagicMock(name=...) is the mock's own name, not a field
     agent_stub.tools = [
         {
@@ -499,7 +499,7 @@ async def test_create_and_execute_routes_to_active_workflow_when_the_session_con
 
 
 def _model_less_agent():
-    agent = MagicMock(id=uuid4())
+    agent = MagicMock(id=uuid4(), client_id=None)
     agent.name = "no-model-agent"
     agent.model_id = None  # installed catalog agent with no matching workspace model
     agent.tools = [

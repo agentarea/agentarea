@@ -31,6 +31,7 @@ with workflow.unsafe.imports_passed_through():
     from ..models import AgentGoal
 
 from ...models import (
+    RUNNER_CLIENT_METADATA_KEY,
     AgentConfigRequest,
     AgentConfigResult,
     AgentExecutionRequest,
@@ -111,6 +112,7 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
         )
         self.state.effective_policy = request.effective_policy
         self._workflow_metadata = dict(request.workflow_metadata or {})
+        self._runner_client_id = self._workflow_metadata.get(RUNNER_CLIENT_METADATA_KEY)
 
         # Initialize helpers
         self.event_manager = EventManager(
@@ -155,6 +157,12 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
                     workspace_id=self.state.workspace_id,
                 )
             )
+
+        if self._runner_client_id is not None:
+            # The client's CLI brings its own model, tools and context.
+            if request.resume is not None and not resumed_before_record:
+                self._adopt_resume(request.resume)
+            return
 
         # Initialize agent configuration
         await self._initialize_agent_config()

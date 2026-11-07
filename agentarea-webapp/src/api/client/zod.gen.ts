@@ -105,6 +105,17 @@ export const zAgentCardSummary = z.object({
 });
 
 /**
+ * AgentClientSummary
+ */
+export const zAgentClientSummary = z.object({
+  default_model: z.string().nullable(),
+  id: z.uuid(),
+  kind: z.string(),
+  name: z.string(),
+  online: z.boolean(),
+});
+
+/**
  * AgentSpend
  */
 export const zAgentSpend = z.object({
@@ -685,13 +696,17 @@ export const zClientRef = z.object({
  * ClientResponse
  */
 export const zClientResponse = z.object({
+  allow_domains: z.array(z.string()).optional().default([]),
   created_by: z.string(),
+  default_model: z.string().nullish(),
   description: z.string().nullable(),
   id: z.uuid(),
   kind: z.string(),
   mcp_endpoint_url: z.string().nullish(),
   mcp_instances: z.array(zClientMcpInstanceRef).optional().default([]),
+  models: z.array(z.record(z.string(), z.unknown())).nullish(),
   name: z.string(),
+  online: z.boolean().optional().default(false),
   openapi_connections: z
     .array(zClientOpenApiConnectionRef)
     .optional()
@@ -707,6 +722,8 @@ export const zClientResponse = z.object({
  * Patch payload for a client. Unset fields remain unchanged.
  */
 export const zClientUpdate = z.object({
+  allow_domains: z.array(z.string()).optional(),
+  default_model: z.string().max(255).nullish(),
   description: z.string().max(1000).nullish(),
   kind: z.string().max(32).optional(),
   name: z.string().min(1).max(255).optional(),
@@ -1297,6 +1314,19 @@ export const zInvitationResponse = z.object({
  * IssueSeverity
  */
 export const zIssueSeverity = z.enum(["block", "warn"]);
+
+/**
+ * IssuedRunnerKey
+ */
+export const zIssuedRunnerKey = z.object({
+  created_at: z.iso.datetime(),
+  created_by: z.string(),
+  id: z.uuid(),
+  key: z.string(),
+  last_used_at: z.iso.datetime().nullable(),
+  name: z.string(),
+  prefix: z.string(),
+});
 
 /**
  * MCPAuthConfigCreateRequest
@@ -2084,6 +2114,8 @@ export const zAgentResponse = z.object({
   a2ui_enabled: z.boolean().nullish(),
   agent_type: z.string().optional().default("stateless"),
   answer_check: zAnswerCheckPolicy.nullish(),
+  client: zAgentClientSummary.nullish(),
+  client_id: z.uuid().nullish(),
   description: z.string().nullish(),
   id: z.uuid(),
   instruction: z.string().nullish(),
@@ -2120,6 +2152,7 @@ export const zAgentUpdate = z.object({
   agent_type: z.enum(["stateless", "stateful"]).optional(),
   answer_check: zAnswerCheckPolicy.nullish(),
   capabilities: z.array(z.string()).nullish(),
+  client_id: z.uuid().nullish(),
   description: z.string().max(1000).nullish(),
   instruction: z.string().max(20000).nullish(),
   model_id: z.string().nullish(),
@@ -2874,6 +2907,29 @@ export const zRestoredFileResponse = z.object({
  */
 export const zRunExecutionConfig = z.object({
   max_model_turns: z.int().gt(0),
+});
+
+/**
+ * RunnerIdentity
+ */
+export const zRunnerIdentity = z.object({
+  client_id: z.uuid(),
+  kind: z.string(),
+  workspace: z.string(),
+});
+
+/**
+ * RunnerKeyResponse
+ *
+ * A runner key of a client; the key itself is shown only when issued.
+ */
+export const zRunnerKeyResponse = z.object({
+  created_at: z.iso.datetime(),
+  created_by: z.string(),
+  id: z.uuid(),
+  last_used_at: z.iso.datetime().nullable(),
+  name: z.string(),
+  prefix: z.string(),
 });
 
 /**
@@ -4304,6 +4360,7 @@ export const zAgentCreateRequest = z.object({
   a2ui_enabled: z.boolean().nullish(),
   agent_type: z.enum(["stateless", "stateful"]).optional().default("stateless"),
   answer_check: zAnswerCheckPolicy.nullish(),
+  client_id: z.uuid().nullish(),
   description: z.string().max(1000).optional().default(""),
   instruction: z.string().max(20000).optional().default(""),
   model_id: z.string().nullish(),
@@ -5002,6 +5059,22 @@ export const zOauthFinishV1OauthFinishPostResponse = zOAuthFinishResponse;
 export const zGetPricingCurrencyV1PricingCurrencyGetResponse =
   zPricingCurrencyResponse;
 
+export const zUploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutPath = z.object({
+  task_id: z.uuid(),
+  file_path: z.string(),
+});
+
+/**
+ * Successful Response
+ */
+export const zUploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutResponse =
+  z.void();
+
+/**
+ * Successful Response
+ */
+export const zRunnerWhoamiV1RunnerWhoamiGetResponse = zRunnerIdentity;
+
 /**
  * Response List Workspaces V1 Workspaces Get
  *
@@ -5699,6 +5772,40 @@ export const zRemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsTo
  * Successful Response
  */
 export const zRemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponse =
+  z.void();
+
+export const zListRunnerKeysV1ClientsClientIdRunnerKeysGetPath = z.object({
+  client_id: z.uuid(),
+});
+
+/**
+ * Response List Runner Keys V1 Clients  Client Id  Runner Keys Get
+ *
+ * Successful Response
+ */
+export const zListRunnerKeysV1ClientsClientIdRunnerKeysGetResponse =
+  z.array(zRunnerKeyResponse);
+
+export const zIssueRunnerKeyV1ClientsClientIdRunnerKeysPostPath = z.object({
+  client_id: z.uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zIssueRunnerKeyV1ClientsClientIdRunnerKeysPostResponse =
+  zIssuedRunnerKey;
+
+export const zRevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeletePath =
+  z.object({
+    client_id: z.uuid(),
+    key_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zRevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteResponse =
   z.void();
 
 export const zAddSkillToClientV1ClientsClientIdSkillsPostBody =

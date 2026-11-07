@@ -212,7 +212,11 @@ function partIdFor(
     ) {
       return null;
     }
-    return `${executionId}:${iteration}`;
+    // A CLI runtime's turn holds several replies, each named by its item.
+    const itemId = asStr(data.item_id);
+    return itemId
+      ? `${executionId}:${iteration}:${itemId}`
+      : `${executionId}:${iteration}`;
   }
   if (kind === "form") {
     if (canonical === APPROVAL_REQUESTED || canonical === APPROVAL_DECIDED) {

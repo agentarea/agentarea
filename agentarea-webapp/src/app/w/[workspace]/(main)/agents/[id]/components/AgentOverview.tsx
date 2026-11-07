@@ -212,16 +212,23 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     hue,
     iconKey,
     status: getAgentStatusPresentation(agent.status || "inactive"),
-    model: {
-      label:
-        modelInstance?.model_display_name ||
-        modelInstance?.name ||
-        modelInstance?.config_name ||
-        agent.model_id ||
-        null,
-      provider: modelInstance?.provider_name || null,
-      iconUrl: modelInstance?.provider_icon_url || null,
-    },
+    // An agent on a client's runner runs the CLI's model, not a platform model instance.
+    model: agent.client
+      ? {
+          label: agent.client.default_model || null,
+          provider: agent.client.name,
+          iconUrl: null,
+        }
+      : {
+          label:
+            modelInstance?.model_display_name ||
+            modelInstance?.name ||
+            modelInstance?.config_name ||
+            agent.model_id ||
+            null,
+          provider: modelInstance?.provider_name || null,
+          iconUrl: modelInstance?.provider_icon_url || null,
+        },
     triggers: {
       count: triggers.length,
       titles: Array.from(new Set(triggers.map((u) => u.title).filter(Boolean))),

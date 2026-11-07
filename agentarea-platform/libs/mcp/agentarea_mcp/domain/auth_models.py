@@ -158,7 +158,8 @@ class APIKey(BaseModel, WorkspaceScopedMixin):
     Access is workspace-scoped: the token grants access to any MCP instance
     that belongs to the same workspace. A key with ``agent_id`` reaches only
     that agent, over A2A, and nothing else in the workspace: it is the key
-    handed to a caller outside the workspace.
+    handed to a caller outside the workspace. A key with ``client_id`` is a
+    runner's: it reaches only that client's runner routes.
     """
 
     __tablename__ = "api_keys"
@@ -173,6 +174,12 @@ class APIKey(BaseModel, WorkspaceScopedMixin):
     access_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     agent_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True, index=True)
+    client_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("clients.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
 
     def __init__(
         self,
@@ -181,6 +188,7 @@ class APIKey(BaseModel, WorkspaceScopedMixin):
         token_prefix: str,
         expires_at: datetime | None = None,
         agent_id: UUID | None = None,
+        client_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -188,6 +196,7 @@ class APIKey(BaseModel, WorkspaceScopedMixin):
         self.token_hash = token_hash
         self.token_prefix = token_prefix
         self.agent_id = agent_id
+        self.client_id = client_id
         self.is_active = True
         self.expires_at = expires_at
         self.access_count = 0

@@ -27,10 +27,12 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import HTTPConnection
 
 from ..observability.authz import authz_timed
 from .authorization import AuthorizationService
 from .context import (
+    Subject,
     UserContext,
     UserPrincipal,
     WorkspaceUnreachableError,
@@ -39,6 +41,7 @@ from .context_manager import ContextManager
 from .credential import SESSION, Credential
 from .interfaces import AuthResult
 from .providers.factory import AuthProviderFactory
+from .turn_token import decode_turn_token, is_turn_token, live_turns
 
 if TYPE_CHECKING:
     from agentarea_common.workspaces.models import Workspace
@@ -48,6 +51,7 @@ logger = logging.getLogger(__name__)
 _API_KEY_PREFIX = "aat_"
 WORKSPACE_PATH_PARAM = "workspace"
 WORKSPACE_BINDER_ATTR = "__binds_workspace__"
+TURN_TOKEN_ROUTE_ATTR = "__admits_turn_token__"  # noqa: S105 - an attribute name
 _WORKSPACE_BINDING_STATE = "agentarea_workspace_binding"
 _PRINCIPAL_STATE = "agentarea_principal"
 
@@ -68,6 +72,8 @@ class _WorkspaceBinding:
     workspace_slug: str
     # The agent an A2A route bound the workspace for; an agent's key acts only there.
     agent_id: str | None = None
+    # The client a runner route bound the workspace for; a runner's key acts only there.
+    client_id: str | None = None
 
 
 def binds_workspace[F: Callable[..., Any]](dependency: F) -> F:
@@ -81,20 +87,38 @@ def binds_workspace[F: Callable[..., Any]](dependency: F) -> F:
 
 
 def bind_request_workspace(
-    request: Request, workspace_id: str, workspace_slug: str, *, agent_id: str | None = None
+    request: Request,
+    workspace_id: str,
+    workspace_slug: str,
+    *,
+    agent_id: str | None = None,
+    client_id: str | None = None,
 ) -> None:
     """Select the workspace ``get_user_context`` resolves for this request.
 
     ``agent_id`` names the agent the request was authorized on, which is the
-    only place a key bound to that agent may act.
+    only place a key bound to that agent may act; ``client_id`` likewise for
+    a runner's key.
     """
     setattr(
         request.state,
         _WORKSPACE_BINDING_STATE,
         _WorkspaceBinding(
-            workspace_id=workspace_id, workspace_slug=workspace_slug, agent_id=agent_id
+            workspace_id=workspace_id,
+            workspace_slug=workspace_slug,
+            agent_id=agent_id,
+            client_id=client_id,
         ),
     )
+
+
+def admits_turn_token[F: Callable[..., Any]](endpoint: F) -> F:
+    """Mark a route of one task that a turn of that task may call with its token.
+
+    The route must name the task as its ``task_id`` path parameter.
+    """
+    setattr(endpoint, TURN_TOKEN_ROUTE_ATTR, True)
+    return endpoint
 
 
 def _www_authenticate_bearer() -> str:
@@ -186,6 +210,15 @@ async def _resolve_access_unobserved(
 ) -> Workspace | None:
     from agentarea_common.di.container import resolve
 
+    if principal.bound_task_id is not None:
+        # A turn's token reaches its task's workspace and nothing it administers.
+        _, named = await _owned_and_named_workspaces(
+            principal.user_id, slug=slug, workspace_id=workspace_id
+        )
+        principal.accessible_workspaces = [principal.bound_workspace_id or ""]
+        principal.admin_workspaces = []
+        return named
+
     authz = resolve(AuthorizationService)
     accessible = list(await authz.get_accessible_workspaces(principal))
     for member_of in await _member_workspace_ids(principal.user_id):
@@ -203,7 +236,7 @@ async def _resolve_access_unobserved(
     if principal.bound_workspace_id is not None:
         accessible = [w for w in accessible if w == principal.bound_workspace_id]
         administered = [w for w in administered if w == principal.bound_workspace_id]
-    if principal.bound_agent_id is not None:
+    if principal.bound_agent_id is not None or principal.bound_client_id is not None:
         accessible, administered = [], []
 
     principal.accessible_workspaces = accessible
@@ -323,7 +356,7 @@ async def _record_api_key_use(key_id: Any, last_written: datetime | None) -> Non
         logger.warning("Could not record use of API key %s", key_id, exc_info=True)
 
 
-async def _validate_api_key(token: str, request: Request) -> UserPrincipal | None:
+async def _validate_api_key(token: str, request: HTTPConnection) -> UserPrincipal | None:
     """Validate an API key and return its principal, or None if invalid.
 
     A key carries no authority of its own: it is only as good as its owner's
@@ -351,6 +384,7 @@ async def _validate_api_key(token: str, request: Request) -> UserPrincipal | Non
         user_id = str(record.created_by)
         workspace_id = str(record.workspace_id)
         agent_id = str(record.agent_id) if record.agent_id else None
+        client_id = str(record.client_id) if record.client_id else None
         owned = await _owns_workspace(session, user_id, workspace_id)
 
     if not owned and not await _has_graph_membership(user_id, workspace_id):
@@ -367,12 +401,56 @@ async def _validate_api_key(token: str, request: Request) -> UserPrincipal | Non
 
     # The key acts for its creator, and only in the workspace it was issued
     # for: _resolve_access narrows the principal's reach to that one, or to no
-    # workspace at all for an agent's key, which only the A2A edge admits.
+    # workspace at all for an agent's or a runner's key, which only the A2A
+    # edge or the runner routes admit.
     return UserPrincipal(
         user_id=user_id,
         bound_workspace_id=workspace_id,
         bound_agent_id=agent_id,
+        bound_client_id=client_id,
         credential=Credential(kind="api_key", key_id=str(key_id)),
+    )
+
+
+async def _validate_turn_token(token: str) -> UserPrincipal | None:
+    """The actor of the running turn ``token`` was issued for, or None once that turn ended.
+
+    A person acts only while still a member of the workspace; an agent acts
+    under the person its task is attributed to, as the agent.
+    """
+    claims = decode_turn_token(token)
+    if claims is None:
+        return None
+    if not await live_turns().alive(claims.turn_id):
+        logger.info(
+            "Refused the token of turn %s of task %s: the turn is over",
+            claims.turn_id,
+            claims.task_id,
+        )
+        return None
+    agent = claims.actor_type == "agent"
+    user_id = claims.on_behalf_of if agent else claims.actor_id
+    if not agent:
+        from agentarea_common.config import get_database
+
+        async with get_database().async_session_factory() as session:
+            owned = await _owns_workspace(session, user_id, claims.workspace_id)
+        if not owned and not await _has_graph_membership(user_id, claims.workspace_id):
+            logger.warning(
+                "Token of turn %s of task %s refused: its actor %s is not a member of %s",
+                claims.turn_id,
+                claims.task_id,
+                user_id,
+                claims.workspace_id,
+            )
+            return None
+    return UserPrincipal(
+        user_id=user_id,
+        bound_workspace_id=claims.workspace_id,
+        bound_task_id=claims.task_id,
+        turn_client_id=claims.client_id,
+        subject=Subject(kind="agent", id=claims.actor_id) if agent else None,
+        credential=Credential(kind="turn", key_id=claims.turn_id),
     )
 
 
@@ -495,6 +573,16 @@ async def _authenticate_token(token: str, request: Request) -> UserPrincipal:
 
 
 async def _verify_token(token: str, request: Request) -> UserPrincipal:
+    if is_turn_token(token):
+        principal = await _validate_turn_token(token)
+        if principal is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="The turn this token was issued for has ended",
+                headers={"WWW-Authenticate": _www_authenticate_bearer()},
+            )
+        return principal
+
     if token.startswith(_API_KEY_PREFIX):
         principal = await _validate_api_key(token, request)
         if principal is None:
@@ -554,12 +642,18 @@ async def authenticate_principal(
     return await _authenticate_token(credentials.credentials, request)
 
 
-def _refuse_agent_key(principal: UserPrincipal) -> None:
+_AGENT_KEY_REFUSED = "This key reaches only its agent, over A2A"
+_RUNNER_KEY_REFUSED = "This key reaches only its client's runner routes"
+_TURN_TOKEN_REFUSED = "This token reaches only its client's tools and task files"  # noqa: S105
+
+
+def _refuse_bound_key(principal: UserPrincipal) -> None:
     if principal.bound_agent_id is not None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This key reaches only its agent, over A2A",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_AGENT_KEY_REFUSED)
+    if principal.bound_client_id is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_RUNNER_KEY_REFUSED)
+    if principal.bound_task_id is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_TURN_TOKEN_REFUSED)
 
 
 async def get_principal(
@@ -570,7 +664,7 @@ async def get_principal(
     For routes that act on no single workspace: listing and creating
     workspaces, accepting an invitation, and the binders of id-addressed routes.
     """
-    _refuse_agent_key(principal)
+    _refuse_bound_key(principal)
     await _resolve_access(principal)
     return principal
 
@@ -595,6 +689,10 @@ async def get_user_context(
     binding = getattr(request.state, _WORKSPACE_BINDING_STATE, None)
     if principal.bound_agent_id is not None:
         _admit_agent_key(principal, None if reference is not None else binding)
+    if principal.bound_client_id is not None:
+        _admit_runner_key(principal, None if reference is not None else binding)
+    if principal.bound_task_id is not None:
+        _admit_turn_token(principal, request)
     if reference is not None:
         # Checked here, before any lookup: the route's Path declaration only
         # reports its error after every dependency has run.
@@ -643,15 +741,63 @@ def _admit_agent_key(principal: UserPrincipal, binding: _WorkspaceBinding | None
         or binding.agent_id != principal.bound_agent_id
         or binding.workspace_id != principal.bound_workspace_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This key reaches only its agent, over A2A",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_AGENT_KEY_REFUSED)
     principal.accessible_workspaces = [binding.workspace_id]
     principal.admin_workspaces = []
 
 
-async def resolve_principal_from_token(token: str | None, request: Request) -> UserPrincipal | None:
+def _admit_runner_key(principal: UserPrincipal, binding: _WorkspaceBinding | None) -> None:
+    """Let a runner's key act in its workspace only on a request bound to its client."""
+    if (
+        binding is None
+        or binding.client_id != principal.bound_client_id
+        or binding.workspace_id != principal.bound_workspace_id
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_RUNNER_KEY_REFUSED)
+    principal.accessible_workspaces = [binding.workspace_id]
+    principal.admin_workspaces = []
+
+
+def _admit_turn_token(principal: UserPrincipal, request: Request) -> None:
+    """Let a turn's token call only the routes of its own task marked for it."""
+    endpoint = request.scope.get("endpoint")
+    if not getattr(endpoint, TURN_TOKEN_ROUTE_ATTR, False) or str(
+        request.path_params.get("task_id")
+    ) != str(principal.bound_task_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_TURN_TOKEN_REFUSED)
+
+
+async def authenticate_runner_key(token: str, connection: HTTPConnection) -> UserPrincipal | None:
+    """The principal of a client's runner key, or None for any other or no valid token.
+
+    For the runner's socket, which no ``Depends`` chain authenticates.
+    """
+    if not token.startswith(_API_KEY_PREFIX):
+        return None
+    principal = await _validate_api_key(token, connection)
+    if principal is None or principal.bound_client_id is None:
+        return None
+    return principal
+
+
+def enter_as_runner(
+    principal: UserPrincipal, workspace_id: str, workspace_slug: str
+) -> UserContext:
+    """The runner key's context in its client's workspace, as its runner routes act in it."""
+    _admit_runner_key(
+        principal,
+        _WorkspaceBinding(
+            workspace_id=workspace_id,
+            workspace_slug=workspace_slug,
+            client_id=principal.bound_client_id,
+        ),
+    )
+    return principal.enter(workspace_id, workspace_slug)
+
+
+async def resolve_principal_from_token(
+    token: str | None, request: Request, *, admit_turn: bool = False
+) -> UserPrincipal | None:
     """Resolve a principal from a bearer token, or None if absent/invalid.
 
     This is the single authentication resolution shared by every optional-auth
@@ -660,6 +806,7 @@ async def resolve_principal_from_token(token: str | None, request: Request) -> U
     accepted the same way at every entry point. It never raises for an auth
     failure; it returns None so the caller decides the posture (401, anonymous
     subject, ...). The returned principal has its reachable workspaces resolved.
+    A turn's token resolves only where ``admit_turn`` says so: the client MCP endpoint.
     """
     if not token:
         return None
@@ -667,6 +814,12 @@ async def resolve_principal_from_token(token: str | None, request: Request) -> U
         principal = await _authenticate_token(token, request)
     except HTTPException as exc:
         logger.debug("Token authentication failed: %s", exc.detail)
+        return None
+    if principal.bound_client_id is not None:
+        logger.info("Refused a runner's key for client %s here", principal.bound_client_id)
+        return None
+    if principal.bound_task_id is not None and not admit_turn:
+        logger.info("Refused the token of a turn of task %s here", principal.bound_task_id)
         return None
     await _resolve_access(principal)
     return principal

@@ -46,6 +46,7 @@ from agentarea_common.workspaces import (
 )
 from agentarea_mcp.application.access_token_service import hash_token
 from agentarea_mcp.domain.auth_models import APIKey
+from agentarea_mcp.domain.client_models import Client
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -112,6 +113,7 @@ async def session_factory():
                     Workspace.__table__,
                     WorkspaceInvitation.__table__,
                     WorkspaceMembership.__table__,
+                    Client.__table__,
                     APIKey.__table__,
                     EventOutbox.__table__,
                 ],

@@ -13,7 +13,7 @@ the source of truth is ``ClientCreate``/``ClientUpdate`` in
 
 import builtins
 import json
-from typing import Annotated
+from typing import Annotated, Any, cast
 from uuid import UUID
 
 from agentarea_agents_sdk.mcp_server import UnknownToolsetError
@@ -26,6 +26,7 @@ from agentarea_mcp.application.client_service import ClientService
 from agentarea_mcp.infrastructure.client_repository import ClientRepository
 from agentarea_mcp.schemas.client_dto import ClientCreate, ClientUpdate
 from pydantic import BaseModel, Field
+from pydantic.experimental.missing_sentinel import MISSING
 
 from ..api.v1._access_control_grants import grant_resource_owner
 from ..api.v1.clients import ClientResponse, client_mcp_endpoint_url, client_responses
@@ -165,6 +166,22 @@ class ClientsToolset(Toolset):
         kind: Annotated[
             str | None, Field(description="New kind, up to 32 characters; omit to keep it.")
         ] = None,
+        default_model: Annotated[
+            str | None,
+            Field(
+                description="Model a codex or claude client's runner uses when a task names "
+                "none, by the CLI's own name (`clients_get` lists the models it reported); "
+                "omit to keep it, pass null to let the CLI choose."
+            ),
+        ] = cast(Any, MISSING),
+        allow_domains: Annotated[
+            builtins.list[str] | None,
+            Field(
+                description="Hosts the CLI's sandbox reaches during the runner's turns, e.g. "
+                "`pypi.org` or `*.githubusercontent.com`; replaces the list, [] for none; "
+                "omit to keep it."
+            ),
+        ] = None,
     ) -> str:
         """Update a client's fields. Only fields explicitly set are written."""
         patch: dict[str, object] = {}
@@ -174,6 +191,10 @@ class ClientsToolset(Toolset):
             patch["description"] = description
         if kind is not None:
             patch["kind"] = kind
+        if default_model is not MISSING:
+            patch["default_model"] = default_model
+        if allow_domains is not None:
+            patch["allow_domains"] = allow_domains
         payload = ClientUpdate.model_validate(patch)
 
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):

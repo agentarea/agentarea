@@ -25,6 +25,7 @@ from agentarea_common.di.container import get_container
 from agentarea_common.testing import install_graph_ownership_stub
 from agentarea_common.workspaces import Workspace
 from agentarea_mcp.domain.auth_models import APIKey
+from agentarea_mcp.domain.client_models import Client
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -58,6 +59,7 @@ async def session_factory():
                 sync_conn,
                 tables=[
                     Workspace.__table__,
+                    Client.__table__,
                     APIKey.__table__,
                     Agent.__table__,
                     Skill.__table__,
