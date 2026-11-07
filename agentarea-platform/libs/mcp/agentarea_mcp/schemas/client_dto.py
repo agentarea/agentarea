@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from typing import Annotated
 
 from agentarea_common.utils.types import NotNull
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+_HOST = re.compile(
+    r"^(\*\.)?[a-z\d]([a-z\d-]*[a-z\d])?(\.[a-z\d]([a-z\d-]*[a-z\d])?)*$", re.IGNORECASE
+)
 
 
 class ClientCreate(BaseModel):
@@ -38,3 +43,11 @@ class ClientUpdate(BaseModel):
     default_model: str | None = Field(default=None, max_length=255)
     # Hosts the CLI's sandbox reaches during its runner's turns.
     allow_domains: Annotated[list[str] | None, NotNull] = None
+
+    @field_validator("allow_domains")
+    @classmethod
+    def _check_domains(cls, v: list[str] | None) -> list[str] | None:
+        for domain in v or []:
+            if len(domain) > 253 or not _HOST.match(domain):
+                raise ValueError(f"not a host name: {domain!r}")
+        return v

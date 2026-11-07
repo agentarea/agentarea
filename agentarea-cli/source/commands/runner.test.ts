@@ -1,5 +1,7 @@
 import test from 'ava';
 import {
+	apiRoute,
+	checkedAssign,
 	claudeEvents,
 	codexConfig,
 	codexEvents,
@@ -200,4 +202,44 @@ test('a sandboxed config proxies every host, so one off the list can be asked fo
 	t.regex(config, /\.network\]\nenabled = true\n/);
 	t.regex(config, /"pypi\.org" = "allow"/);
 	t.regex(codexConfig(options, '/data/profiles/u/codex'), /enabled = true/);
+});
+
+const assign = {
+	turn_id: 'a3f1c2d4-0000-4000-8000-000000000001',
+	task_id: 'a3f1c2d4-0000-4000-8000-000000000002',
+	agent_id: 'a3f1c2d4-0000-4000-8000-000000000003',
+	requested_by: 'a3f1c2d4-0000-4000-8000-000000000004',
+	mcp_path: '/mcp/clients/a3f1c2d4-0000-4000-8000-000000000005',
+	allow_domains: ['pypi.org', '*.npmjs.org'],
+};
+
+test('a turn whose ids would name folders outside the runner root is refused', t => {
+	t.notThrows(() => checkedAssign(assign));
+	t.throws(() => checkedAssign({...assign, task_id: '../../etc'}), {
+		message: /task_id/,
+	});
+	t.throws(() => checkedAssign({...assign, requested_by: 'a/b'}), {
+		message: /requested_by/,
+	});
+});
+
+test('a turn may reach only its client MCP endpoint and plain hosts', t => {
+	t.throws(() => checkedAssign({...assign, mcp_path: '@evil.example/mcp'}), {
+		message: /mcp_path/,
+	});
+	t.throws(() => checkedAssign({...assign, allow_domains: ['a.org"\n[x]']}), {
+		message: /allowed domains/,
+	});
+});
+
+test('an API route stays on the platform origin', t => {
+	t.is(
+		apiRoute('http://localhost:8000', '/v1/runner/whoami'),
+		'http://localhost:8000/v1/runner/whoami',
+	);
+	t.is(
+		apiRoute('https://api.example.com/base/', '/mcp/clients/x'),
+		'https://api.example.com/base/mcp/clients/x',
+	);
+	t.throws(() => apiRoute('http://localhost:8000', '//evil.example/x'));
 });

@@ -75,6 +75,49 @@ export interface Assign {
 	mcp_path: string;
 }
 
+const ID_SEGMENT = /^[\w-]{1,64}$/;
+const HOST =
+	/^(\*\.)?[a-z\d]([a-z\d-]*[a-z\d])?(\.[a-z\d]([a-z\d-]*[a-z\d])?)*$/i;
+const CLIENT_MCP_PATH = /^\/mcp\/clients\/[\w-]{1,64}$/;
+
+/** A value from the platform, made safe to put on one log line. */
+export function logged(value: unknown): string {
+	return String(value).replace(/[\r\n\u2028\u2029]/g, ' ');
+}
+
+/** The turn the platform assigned, checked before its ids name folders or URLs. */
+export function checkedAssign(frame: Record<string, unknown>): Assign {
+	for (const field of ['turn_id', 'task_id', 'agent_id', 'requested_by']) {
+		if (typeof frame[field] !== 'string' || !ID_SEGMENT.test(frame[field])) {
+			throw new Error(`turn.assign has an invalid ${field}`);
+		}
+	}
+
+	if (
+		typeof frame['mcp_path'] !== 'string' ||
+		!CLIENT_MCP_PATH.test(frame['mcp_path'])
+	) {
+		throw new Error('turn.assign has an invalid mcp_path');
+	}
+
+	checkedDomains(frame['allow_domains']);
+	return frame as unknown as Assign;
+}
+
+/** Hosts for the sandbox's allowlist; anything else would be written into the CLI's config. */
+export function checkedDomains(domains: unknown): string[] {
+	if (
+		!Array.isArray(domains) ||
+		!domains.every(domain => typeof domain === 'string' && HOST.test(domain))
+	) {
+		throw new Error(
+			`invalid allowed domains: ${logged(JSON.stringify(domains))}`,
+		);
+	}
+
+	return domains as string[];
+}
+
 /** What a turn reports, as `turn.event` bodies. */
 export type TurnEventBody =
 	| {
@@ -164,7 +207,9 @@ export function codexConfig(
 		return [...features, ''].join('\n');
 	}
 
-	const domains = [...new Set([...options.allowDomains, ...clientDomains])];
+	const domains = [
+		...new Set(checkedDomains([...options.allowDomains, ...clientDomains])),
+	];
 	const hidden = [
 		options.root,
 		...(options.loginFrom ? [options.loginFrom] : []),
@@ -1222,12 +1267,14 @@ export async function registerRunner(
 	key: string,
 	root: string,
 ): Promise<RunnerConfig> {
-	const res = await fetch(`${apiUrl}/v1/runner/whoami`, {
+	const res = await fetch(apiRoute(apiUrl, '/v1/runner/whoami'), {
 		headers: {Authorization: `Bearer ${key}`},
 	});
 	if (!res.ok) {
 		throw new Error(
-			`the platform refused the key: HTTP ${res.status} ${await res.text()}`,
+			`the platform refused the key: HTTP ${res.status} ${logged(
+				await res.text(),
+			)}`,
 		);
 	}
 
@@ -1236,6 +1283,18 @@ export async function registerRunner(
 		workspace: string;
 		kind: RunnerHarness;
 	};
+	if (
+		!ID_SEGMENT.test(String(identity.client_id)) ||
+		!ID_SEGMENT.test(String(identity.workspace)) ||
+		(identity.kind !== 'codex' && identity.kind !== 'claude')
+	) {
+		throw new Error(
+			`the platform answered an unexpected identity: ${logged(
+				JSON.stringify(identity),
+			)}`,
+		);
+	}
+
 	const config: RunnerConfig = {
 		api_url: apiUrl,
 		workspace: identity.workspace,
@@ -1262,7 +1321,18 @@ export function loadRunnerConfig(root: string): RunnerConfig {
 }
 
 function runnerUrl(options: RunnerOptions, route: string): string {
-	return `${options.config.api_url}/v1/runner/${route}`;
+	return apiRoute(options.config.api_url, `/v1/runner/${route}`);
+}
+
+/** A path on the platform's API; refuses one that would leave its origin. */
+export function apiRoute(apiUrl: string, pathname: string): string {
+	const base = new URL(apiUrl);
+	const url = new URL(base.pathname.replace(/\/$/, '') + pathname, base);
+	if (url.origin !== base.origin) {
+		throw new Error(`${logged(pathname)} leaves the platform's API`);
+	}
+
+	return url.toString();
 }
 
 /** The runner's socket URL: the API's, over ws(s). */
@@ -1298,8 +1368,8 @@ export async function uploadTaskFiles(
 	cwd: string,
 ): Promise<void> {
 	for (const rel of taskFiles(cwd)) {
-		const file = path.join(cwd, rel);
-		if (fs.statSync(file).size > MAX_UPLOAD_BYTES) {
+		const body = fs.readFileSync(path.join(cwd, rel));
+		if (body.length > MAX_UPLOAD_BYTES) {
 			console.error(
 				`[runner] ${rel}: larger than ${MAX_UPLOAD_BYTES} bytes, not uploaded`,
 			);
@@ -1308,19 +1378,24 @@ export async function uploadTaskFiles(
 
 		const encoded = rel.split('/').map(encodeURIComponent).join('/');
 		const res = await fetch(
-			runnerUrl(options, `tasks/${taskId}/files/${encoded}`),
+			runnerUrl(
+				options,
+				`tasks/${encodeURIComponent(taskId)}/files/${encoded}`,
+			),
 			{
 				method: 'PUT',
 				headers: {
 					Authorization: `Bearer ${options.config.token}`,
 					'Content-Type': 'application/octet-stream',
 				},
-				body: fs.readFileSync(file),
+				body,
 			},
 		);
 		if (!res.ok) {
 			console.error(
-				`[runner] upload ${rel}: HTTP ${res.status} ${await res.text()}`,
+				`[runner] upload ${rel}: HTTP ${res.status} ${logged(
+					await res.text(),
+				)}`,
 			);
 		}
 	}
@@ -1470,7 +1545,7 @@ export class McpRelay {
 		}
 
 		const method = request.method ?? 'GET';
-		const upstream = await fetch(`${this.apiUrl}${turn.mcp_path}`, {
+		const upstream = await fetch(apiRoute(this.apiUrl, turn.mcp_path), {
 			method,
 			headers,
 			...(method === 'GET' || method === 'HEAD' || method === 'DELETE'
@@ -1612,7 +1687,26 @@ class Runner {
 			}
 
 			case 'turn.assign': {
-				this.start(frame as unknown as Assign);
+				let assign: Assign;
+				try {
+					assign = checkedAssign(frame);
+				} catch (error) {
+					console.error(`[runner] refused a turn: ${logged(error)}`);
+					if (typeof frame['turn_id'] === 'string') {
+						this.send({
+							type: 'turn.finished',
+							turn_id: frame['turn_id'],
+							status: 'failed',
+							response: null,
+							error: String(error),
+							session_id: null,
+						});
+					}
+
+					break;
+				}
+
+				this.start(assign);
 				break;
 			}
 
@@ -1650,7 +1744,7 @@ class Runner {
 			}
 
 			default: {
-				console.error(`[runner] unknown frame ${String(frame['type'])}`);
+				console.error(`[runner] unknown frame ${logged(frame['type'])}`);
 			}
 		}
 	}
@@ -1760,9 +1854,9 @@ class Runner {
 			);
 		} catch (error) {
 			console.error(
-				`[runner] uploading the files of task ${
-					assign.task_id
-				} failed: ${String(error)}`,
+				`[runner] uploading the files of task ${logged(
+					assign.task_id,
+				)} failed: ${logged(error)}`,
 			);
 		}
 
@@ -1779,15 +1873,17 @@ class Runner {
 		}
 
 		console.error(
-			`[runner] task ${assign.task_id} turn ${assign.iteration} ${status}${
-				fields.error ? `: ${fields.error}` : ''
-			}`,
+			`[runner] task ${logged(assign.task_id)} turn ${logged(
+				assign.iteration,
+			)} ${status}${fields.error ? `: ${logged(fields.error)}` : ''}`,
 		);
 	}
 
 	private start(assign: Assign): void {
 		console.error(
-			`[runner] task ${assign.task_id} turn ${assign.iteration} from ${assign.requested_by}`,
+			`[runner] task ${logged(assign.task_id)} turn ${logged(
+				assign.iteration,
+			)} from ${logged(assign.requested_by)}`,
 		);
 		const running: Running = {
 			assign,
@@ -1816,7 +1912,9 @@ class Runner {
 		let server = this.codexServers.get(home);
 		if (server && server.config !== config) {
 			console.error(
-				`[runner] the client's allowed domains changed; restarting the CLI of ${assign.requested_by}`,
+				`[runner] the client's allowed domains changed; restarting the CLI of ${logged(
+					assign.requested_by,
+				)}`,
 			);
 			server.retire();
 			server = undefined;
