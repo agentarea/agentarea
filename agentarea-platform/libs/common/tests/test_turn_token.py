@@ -68,12 +68,34 @@ def test_a_token_signed_elsewhere_expired_or_not_a_turn_is_refused():
     assert not is_turn_token(jwt.encode({"sub": "u"}, KEY, algorithm="HS256"))
 
 
+def _membership(member: bool):
+    @contextlib.asynccontextmanager
+    async def session():
+        yield Mock()
+
+    return (
+        patch(
+            "agentarea_common.config.get_database",
+            return_value=SimpleNamespace(async_session_factory=session),
+        ),
+        patch.object(dependencies, "_owns_workspace", AsyncMock(return_value=member)),
+        patch.object(dependencies, "_has_graph_membership", AsyncMock(return_value=member)),
+    )
+
+
+AGENT_TURN = TurnClaims(**{**CLAIMS.__dict__, "actor_type": "agent", "actor_id": "agent-1"})
+
+
 @pytest.mark.asyncio
 async def test_a_live_turn_of_an_agent_acts_as_the_agent_under_the_task_owner():
-    token = issue_turn_token(
-        TurnClaims(**{**CLAIMS.__dict__, "actor_type": "agent", "actor_id": "agent-1"}), 600
-    )
-    with patch.object(dependencies, "live_turns", return_value=_LiveTurns("turn-1")):
+    token = issue_turn_token(AGENT_TURN, 600)
+    database, owns, graph = _membership(True)
+    with (
+        patch.object(dependencies, "live_turns", return_value=_LiveTurns("turn-1")),
+        database,
+        owns,
+        graph,
+    ):
         principal = await dependencies._validate_turn_token(token)
 
     assert principal is not None
@@ -84,6 +106,18 @@ async def test_a_live_turn_of_an_agent_acts_as_the_agent_under_the_task_owner():
     assert principal.turn_client_id == "client-1"
     assert principal.credential is not None and principal.credential.kind == "turn"
     assert principal.credential.key_id == "turn-1"
+
+
+@pytest.mark.asyncio
+async def test_an_agent_turn_stops_acting_once_its_task_owner_left():
+    database, owns, graph = _membership(False)
+    with (
+        patch.object(dependencies, "live_turns", return_value=_LiveTurns("turn-1")),
+        database,
+        owns,
+        graph,
+    ):
+        assert await dependencies._validate_turn_token(issue_turn_token(AGENT_TURN, 600)) is None
 
 
 @pytest.mark.asyncio

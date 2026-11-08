@@ -415,8 +415,8 @@ async def _validate_api_key(token: str, request: HTTPConnection) -> UserPrincipa
 async def _validate_turn_token(token: str) -> UserPrincipal | None:
     """The actor of the running turn ``token`` was issued for, or None once that turn ended.
 
-    A person acts only while still a member of the workspace; an agent acts
-    under the person its task is attributed to, as the agent.
+    An agent acts under the person its task is attributed to, as the agent; the
+    person, actor or not, must still be a member of the workspace.
     """
     claims = decode_turn_token(token)
     if claims is None:
@@ -430,20 +430,19 @@ async def _validate_turn_token(token: str) -> UserPrincipal | None:
         return None
     agent = claims.actor_type == "agent"
     user_id = claims.on_behalf_of if agent else claims.actor_id
-    if not agent:
-        from agentarea_common.config import get_database
+    from agentarea_common.config import get_database
 
-        async with get_database().async_session_factory() as session:
-            owned = await _owns_workspace(session, user_id, claims.workspace_id)
-        if not owned and not await _has_graph_membership(user_id, claims.workspace_id):
-            logger.warning(
-                "Token of turn %s of task %s refused: its actor %s is not a member of %s",
-                claims.turn_id,
-                claims.task_id,
-                user_id,
-                claims.workspace_id,
-            )
-            return None
+    async with get_database().async_session_factory() as session:
+        owned = await _owns_workspace(session, user_id, claims.workspace_id)
+    if not owned and not await _has_graph_membership(user_id, claims.workspace_id):
+        logger.warning(
+            "Token of turn %s of task %s refused: %s is not a member of %s",
+            claims.turn_id,
+            claims.task_id,
+            user_id,
+            claims.workspace_id,
+        )
+        return None
     return UserPrincipal(
         user_id=user_id,
         bound_workspace_id=claims.workspace_id,

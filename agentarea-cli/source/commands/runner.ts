@@ -1001,11 +1001,21 @@ class ClaudeTurn implements TurnControl {
 			'--permission-mode',
 			options.sandbox === 'none' ? 'bypassPermissions' : 'acceptEdits',
 			'--mcp-config',
-			JSON.stringify({
-				mcpServers: {
-					[MCP_SERVER_NAME]: {type: 'http', url: relay.url(assign.task_id)},
-				},
-			}),
+			privateFile(
+				home,
+				`mcp-${assign.task_id}.json`,
+				JSON.stringify({
+					mcpServers: {
+						[MCP_SERVER_NAME]: {type: 'http', url: relay.url(assign.task_id)},
+					},
+				}),
+			),
+			'--settings',
+			privateFile(
+				home,
+				'settings.json',
+				JSON.stringify(claudeSettings(options)),
+			),
 			// Each call is judged by the platform for the turn's actor.
 			'--allowedTools',
 			`mcp__${MCP_SERVER_NAME}`,
@@ -1945,6 +1955,36 @@ class Runner {
 			turn.end('failed', {error: String(error)});
 		}
 	}
+}
+
+/** A file only this user can read; its path goes on a command line instead of its content. */
+function privateFile(dir: string, name: string, content: string): string {
+	const file = path.join(dir, name);
+	fs.writeFileSync(file, content, {mode: 0o600});
+	fs.chmodSync(file, 0o600);
+	return file;
+}
+
+/**
+ * Claude Code has no command jail here: its commands wait for a person's
+ * approval, and its own file tools are kept off the runner's key, logins and
+ * per-person profiles.
+ */
+export function claudeSettings(options: RunnerOptions): {
+	permissions: {deny: string[]};
+} {
+	const secret = [
+		path.join(path.resolve(options.root), CONFIG_FILE),
+		path.join(path.resolve(options.root), 'profiles', '**'),
+		...(options.loginFrom
+			? [path.join(path.resolve(options.loginFrom), '**')]
+			: []),
+	];
+	return {
+		permissions: {
+			deny: secret.flatMap(target => [`Read(/${target})`, `Edit(/${target})`]),
+		},
+	};
 }
 
 /** A sandboxed Codex needs its managed network proxy on, or no approval can reach a host. */

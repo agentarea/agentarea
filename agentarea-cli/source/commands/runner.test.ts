@@ -3,6 +3,7 @@ import {
 	apiRoute,
 	checkedAssign,
 	claudeEvents,
+	claudeSettings,
 	codexConfig,
 	codexEvents,
 	managesNetwork,
@@ -242,4 +243,15 @@ test('an API route stays on the platform origin', t => {
 		'https://api.example.com/base/mcp/clients/x',
 	);
 	t.throws(() => apiRoute('http://localhost:8000', '//evil.example/x'));
+});
+
+test("claude's file tools are kept off the runner's key, profiles and login", t => {
+	const {deny} = claudeSettings({
+		root: '/data',
+		loginFrom: '/login',
+	} as Parameters<typeof claudeSettings>[0]).permissions;
+	t.true(deny.includes('Read(//data/runner.json)'));
+	t.true(deny.includes('Edit(//data/profiles/**)'));
+	t.true(deny.includes('Read(//login/**)'));
+	t.false(deny.some(rule => rule.includes('/data/tasks')));
 });

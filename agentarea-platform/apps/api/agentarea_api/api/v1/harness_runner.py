@@ -177,6 +177,10 @@ UPDATE_SECONDS = 0.3
 STOP_GRACE_SECONDS = 15.0
 # A tool's output as the task log keeps it; the runner uploads the files it made.
 TOOL_OUTPUT_MAX_CHARS = 32_000
+# The largest frame a runner may send.
+FRAME_MAX_CHARS = 1_000_000
+# What a turn may report before its workflow has heard any of it.
+TURN_PENDING_MAX = 2_000
 
 
 def turn_settings(
@@ -272,10 +276,8 @@ class RunnerConnection:
         bind_workspace_scope(self.context.workspace_id)
         ContextManager.set_context(self.context)
         try:
-            hello = parse_up_frame(
-                await asyncio.wait_for(self.websocket.receive_text(), HELLO_SECONDS)
-            )
-        except TimeoutError, ValidationError, WebSocketDisconnect:
+            hello = parse_up_frame(await asyncio.wait_for(self._receive(), HELLO_SECONDS))
+        except TimeoutError, ValidationError, ProtocolError, WebSocketDisconnect:
             logger.warning("Runner of client %s sent no hello", self.client_id, exc_info=True)
             await self._close(status.WS_1008_POLICY_VIOLATION)
             return
@@ -300,7 +302,7 @@ class RunnerConnection:
         ]
         try:
             while True:
-                await self._handle(parse_up_frame(await self.websocket.receive_text()))
+                await self._handle(parse_up_frame(await self._receive()))
         except WebSocketDisconnect:
             logger.info(
                 "Runner of client %s disconnected holding %d turns",
@@ -324,6 +326,12 @@ class RunnerConnection:
             for task in tasks:
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
+
+    async def _receive(self) -> str:
+        text = await self.websocket.receive_text()
+        if len(text) > FRAME_MAX_CHARS:
+            raise ProtocolError(f"a frame of {len(text)} characters")
+        return text
 
     @contextlib.asynccontextmanager
     async def _session(self) -> AsyncIterator[AsyncSession]:
@@ -533,6 +541,10 @@ class RunnerConnection:
                 frame.turn_id,
             )
             return
+        if len(turn.events) + len(turn.approvals) + len(turn.steers) >= TURN_PENDING_MAX:
+            raise ProtocolError(
+                f"turn {turn.request.turn_key} reported more than the run has heard"
+            )
         if isinstance(frame, TurnStarted):
             await self._keep_session(turn, frame.session_id)
         elif isinstance(frame, TurnEvent):
