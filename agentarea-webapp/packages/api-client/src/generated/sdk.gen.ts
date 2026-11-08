@@ -1488,7 +1488,7 @@ export const createApiKeyV1ApiKeysPost = <ThrowOnError extends boolean = false>(
  *
  * The key's creator, or a workspace admin. The repository is scoped to the
  * workspace, not to the caller, so without this a member could cut off a
- * colleague's integrations.
+ * colleague's integrations. A runner's key is revoked on its client's page.
  */
 export const revokeApiKeyV1ApiKeysTokenIdDelete = <ThrowOnError extends boolean = false>(options: Options<RevokeApiKeyV1ApiKeysTokenIdDeleteData, ThrowOnError>): RequestResult<RevokeApiKeyV1ApiKeysTokenIdDeleteResponses, RevokeApiKeyV1ApiKeysTokenIdDeleteErrors, ThrowOnError> => (options.client ?? client).delete<RevokeApiKeyV1ApiKeysTokenIdDeleteResponses, RevokeApiKeyV1ApiKeysTokenIdDeleteErrors, ThrowOnError>({
     security: [{
@@ -1506,7 +1506,8 @@ export const revokeApiKeyV1ApiKeysTokenIdDelete = <ThrowOnError extends boolean 
  * Get a single API key by ID.
  *
  * Someone else's key answers 404 to a member, as a missing one does, so the
- * ids of colleagues' keys cannot be confirmed.
+ * ids of colleagues' keys cannot be confirmed. A runner's key lives on its
+ * client's page and answers 404 here too.
  */
 export const getApiKeyV1ApiKeysTokenIdGet = <ThrowOnError extends boolean = false>(options: Options<GetApiKeyV1ApiKeysTokenIdGetData, ThrowOnError>): RequestResult<GetApiKeyV1ApiKeysTokenIdGetResponses, GetApiKeyV1ApiKeysTokenIdGetErrors, ThrowOnError> => (options.client ?? client).get<GetApiKeyV1ApiKeysTokenIdGetResponses, GetApiKeyV1ApiKeysTokenIdGetErrors, ThrowOnError>({
     security: [{

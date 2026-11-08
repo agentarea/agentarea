@@ -25234,7 +25234,7 @@
     },
     "/v1/workspaces/{workspace}/api-keys/{token_id}": {
       "delete": {
-        "description": "Immediately revoke an API key.\n\nThe key's creator, or a workspace admin. The repository is scoped to the\nworkspace, not to the caller, so without this a member could cut off a\ncolleague's integrations.",
+        "description": "Immediately revoke an API key.\n\nThe key's creator, or a workspace admin. The repository is scoped to the\nworkspace, not to the caller, so without this a member could cut off a\ncolleague's integrations. A runner's key is revoked on its client's page.",
         "operationId": "revoke_api_key_v1_api_keys__token_id__delete",
         "parameters": [
           {
@@ -25289,7 +25289,7 @@
         ]
       },
       "get": {
-        "description": "Get a single API key by ID.\n\nSomeone else's key answers 404 to a member, as a missing one does, so the\nids of colleagues' keys cannot be confirmed.",
+        "description": "Get a single API key by ID.\n\nSomeone else's key answers 404 to a member, as a missing one does, so the\nids of colleagues' keys cannot be confirmed. A runner's key lives on its\nclient's page and answers 404 here too.",
         "operationId": "get_api_key_v1_api_keys__token_id__get",
         "parameters": [
           {
