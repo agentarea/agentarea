@@ -60,6 +60,15 @@ function fallbackStatusPresentation(status: string): StatusPresentation {
   return { label: status, kind: "draft" };
 }
 
+/** A client's runner is online while its socket to the platform is connected. */
+export function getRunnerStatusPresentation(
+  online: boolean
+): StatusPresentation {
+  return online
+    ? { label: "Online", labelKey: "online", kind: "active" }
+    : { label: "Offline", labelKey: "offline", kind: "off" };
+}
+
 export function getMcpVerificationStatusPresentation(
   status: string
 ): StatusPresentation {

@@ -16,6 +16,7 @@ from agentarea_common.agent_status import AgentArchivedError, AgentStatus
 from agentarea_common.analytics import count
 from agentarea_common.artifacts.workspace import WorkspaceValidationError, normalize_workspace_path
 from agentarea_common.audit import audited
+from agentarea_common.auth.context import UserContext
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.extensions.customer_pricing import get_customer_pricing
 from agentarea_common.model_override import model_override_of
@@ -26,7 +27,11 @@ from agentarea_common.reserved_task_parameters import (
     SESSION_PARAMETER,
 )
 from agentarea_common.trigger_event_file import TRIGGER_EVENT_FILE_PARAMETER
-from agentarea_execution.models import AgentExecutionResume, ConversationResumeSnapshot
+from agentarea_execution.models import (
+    RUNNER_CLIENT_METADATA_KEY,
+    AgentExecutionResume,
+    ConversationResumeSnapshot,
+)
 from agentarea_governance.domain.policies import (
     ApprovalPolicy,
     EffectivePolicy,
@@ -136,6 +141,14 @@ def _limit_ceilings(policy: EffectivePolicy) -> dict[str, str]:
         else None,
     }
     return {reason: str(value) for reason, value in ceilings.items() if value is not None}
+
+
+def message_sender(user_context: UserContext) -> dict[str, str]:
+    """Who sends a message to a run: a person, or an agent in its own run."""
+    subject = user_context.subject
+    if subject is not None and subject.kind == "agent":
+        return {"type": "agent", "id": subject.id}
+    return {"type": "user", "id": user_context.user_id}
 
 
 def continued_session(parameters: dict[str, Any] | None) -> tuple[str | None, str | None]:
@@ -384,7 +397,7 @@ class TaskService(BaseTaskService):
         ``None`` only in test/standalone mode (no repository wired), where the
         check is skipped — mirroring ``_validate_agent_exists``.
         """
-        if agent is None:
+        if agent is None or agent.client_id is not None:
             return
         if model_override_of(parameters):
             return
@@ -481,6 +494,9 @@ class TaskService(BaseTaskService):
         metadata: dict[str, Any] = {}
         if metadata_overrides:
             metadata.update(metadata_overrides)
+        if agent is not None and agent.client_id is not None:
+            # The task's turns run on this client's runner for its whole life.
+            metadata[RUNNER_CLIENT_METADATA_KEY] = str(agent.client_id)
         metadata.setdefault("created_via", "api")
         # Only stamp a name we actually loaded. `agent` is None only in
         # test/standalone mode (no agent_repository wired) — recording
@@ -1095,15 +1111,16 @@ class TaskService(BaseTaskService):
         task = await self.get_task(task_id)
         if task is None or not task.execution_id or self.workflow_service is None:
             return False
+        sender = message_sender(self.repository_factory.user_context)
         if task.status not in _STOPPED_TASK_STATUSES and (
             await self.workflow_service.send_workflow_command(
-                task.execution_id, "queue_message", {"message": message}
+                task.execution_id, "queue_message", {"message": message, "sender": sender}
             )
         ):
             return True
         if task.status != "completed" and task.status not in _STOPPED_TASK_STATUSES:
             return False
-        return await self._continue_closed_conversation(task, message)
+        return await self._continue_closed_conversation(task, message, sender)
 
     async def retry_last_turn(self, task_id: UUID) -> bool:
         """Re-run the turn a failed task's conversation ended on.
@@ -1119,7 +1136,9 @@ class TaskService(BaseTaskService):
             return False
         return await self._continue_closed_conversation(task, None)
 
-    async def _continue_closed_conversation(self, task: AgentTask, message: str | None) -> bool:
+    async def _continue_closed_conversation(
+        self, task: AgentTask, message: str | None, sender: dict[str, str] | None = None
+    ) -> bool:
         """Start a run that carries a closed task's conversation on."""
         if (
             (task.metadata or {}).get("created_via") == "agent_delegation"
@@ -1144,7 +1163,7 @@ class TaskService(BaseTaskService):
         resume = await self._conversation_resume(task)
         if message is None:
             resume = resume.model_copy(update={"retry": True})
-        await self.task_manager.resume_task(task, resume, message)
+        await self.task_manager.resume_task(task, resume, message, sender=sender)
         return True
 
     async def _conversation_resume(self, task: AgentTask) -> AgentExecutionResume:

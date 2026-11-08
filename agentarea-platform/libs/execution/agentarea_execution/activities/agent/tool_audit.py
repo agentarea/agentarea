@@ -57,7 +57,18 @@ def tool_audit_entry(event: dict[str, Any]) -> ToolAuditEntry | None:
         "tool_call_id": data.get("tool_call_id"),
     }
 
+    # A runner's turn acts for whoever it names: the person who sent its message.
+    actor = data.get("actor") if isinstance(data.get("actor"), dict) else None
+
     def as_agent(action: str, **extra: Any) -> ToolAuditEntry:
+        if actor is not None:
+            return ToolAuditEntry(
+                action=action,
+                actor_type=str(actor.get("type")),
+                actor_id=str(actor.get("id")),
+                task_id=task_id,
+                metadata={**base, **extra},
+            )
         return ToolAuditEntry(
             action=action,
             actor_type="agent",

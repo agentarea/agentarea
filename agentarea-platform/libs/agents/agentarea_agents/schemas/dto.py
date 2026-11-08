@@ -28,6 +28,10 @@ REASONING_EFFORT_DESCRIPTION = (
     "A reasoning level the model takes, e.g. low or high; the catalog lists each "
     "model's levels. Unset keeps the model's default. Not together with reasoning_max_tokens."
 )
+CLIENT_ID_DESCRIPTION = (
+    "A Codex or Claude Code client of this workspace whose runner runs the agent's tasks "
+    "on the CLI's subscription; null runs them on the platform's own loop and model."
+)
 REASONING_MAX_TOKENS_DESCRIPTION = (
     "A token budget for the model's reasoning, a positive integer. Unset keeps the "
     "model's default. Not together with reasoning_effort."
@@ -67,6 +71,7 @@ class AgentCreate(BaseModel):
             "Null means no model is bound yet and the agent cannot be run."
         ),
     )
+    client_id: UUID | None = Field(default=None, description=CLIENT_ID_DESCRIPTION)
     tools: list[ToolConfig] = Field(
         description=(
             "Tools attached to the agent (code/mcp/agent/openapi). Required: pass [] "
@@ -149,6 +154,7 @@ class AgentUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=1000)
     instruction: str | None = Field(default=None, max_length=20000)
     model_id: str | None = None
+    client_id: UUID | None = Field(default=None, description=CLIENT_ID_DESCRIPTION)
     tools: list[ToolConfig] | None = None
     planning: bool | None = None
     a2ui_enabled: bool | None = None

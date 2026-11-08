@@ -45,14 +45,19 @@ class BaseTaskManager(ABC):
     supports_resume: bool = False
 
     async def resume_task(
-        self, task: AgentTask, resume: AgentExecutionResume, message: str | None
+        self,
+        task: AgentTask,
+        resume: AgentExecutionResume,
+        message: str | None,
+        *,
+        sender: dict[str, str] | None = None,
     ) -> AgentTask:
         """Continue a closed task's conversation with a new execution.
 
-        ``message`` is the follow-up that starts it. If an execution of the task
-        is already running, it receives the message instead. Without a message
-        the execution retries the turn the conversation ends on. Only engines
-        with ``supports_resume`` implement this.
+        ``message`` is the follow-up that starts it, sent by ``sender``. If an
+        execution of the task is already running, it receives the message
+        instead. Without a message the execution retries the turn the
+        conversation ends on. Only engines with ``supports_resume`` implement this.
         """
         raise NotImplementedError(f"{type(self).__name__} cannot resume tasks")
 

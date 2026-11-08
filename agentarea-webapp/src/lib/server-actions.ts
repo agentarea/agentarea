@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { ZodError } from "zod";
 import type {
   CatalogConnectRequest,
+  ClientUpdate,
   ContinueTaskPayload,
   CreateWalletRequest,
   CreateWorkspaceDirectoryRequest,
@@ -30,11 +31,11 @@ import {
   zCatalogConnectRequest,
   zCreateWorkspaceDirectoryRequest,
   zListSecretsV1SecretsGetResponse,
+  zModelSpecCreate,
   zOAuthAuthorizeResponse,
   zOAuthFinishResponse,
   zOAuthPreflightResponse,
   zProjectCreate,
-  zModelSpecCreate,
   zProjectUpdate,
   zProviderConfigCreate,
   zProviderConfigUpdate,
@@ -602,7 +603,10 @@ export async function connectCatalogApiAction(
   if (!isUUID(itemId)) return { data: null, error: "Invalid ID" };
   const parsed = zCatalogConnectRequest.safeParse(body);
   if (!parsed.success) {
-    return { data: null, error: parsed.error.issues[0]?.message ?? "Invalid keys" };
+    return {
+      data: null,
+      error: parsed.error.issues[0]?.message ?? "Invalid keys",
+    };
   }
   const result = await connectCatalogApi(itemId, parsed.data);
   if (!result.data) {
@@ -817,11 +821,7 @@ export async function createClientAction(payload: {
 
 export async function updateClientAction(
   clientId: string,
-  payload: {
-    name?: string;
-    description?: string | null;
-    kind?: string;
-  }
+  payload: ClientUpdate
 ) {
   return await updateClient(clientId, payload);
 }

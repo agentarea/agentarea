@@ -64,6 +64,10 @@ class InvalidModelIdError(ValueError):
     """Raised when ``model_id`` does not resolve to a usable model instance."""
 
 
+class InvalidClientError(ValueError):
+    """Raised when ``client_id`` names no client the caller may run agents on."""
+
+
 class InvalidDelegateError(ValueError):
     """Raised when an agent tool names a delegate the runtime could not use."""
 
@@ -207,6 +211,30 @@ class AgentService(BaseCrudService[Agent]):
                 raise NotFoundError(f"Skill {skill_id} not found")
             resolved.append(installed.id)
         return resolved
+
+    async def _validate_client_id(self, client_id: UUID | None) -> UUID | None:
+        """A runner's client of this workspace the caller may use, or None for the platform loop."""
+        if client_id is None:
+            return None
+        from agentarea_common.auth.permission import PermissionService
+        from agentarea_common.di.container import resolve
+        from agentarea_mcp.domain.client_models import RUNNER_KINDS
+        from agentarea_mcp.infrastructure.client_repository import ClientRepository
+
+        client = await self.repository_factory.create_repository(ClientRepository).get_by_id(
+            client_id
+        )
+        if (
+            client is None
+            or client.kind not in RUNNER_KINDS
+            or not await resolve(PermissionService).check(
+                self._user_context.graph_subject, "use", "client", str(client_id)
+            )
+        ):
+            raise InvalidClientError(
+                f"Client '{client_id}' is no Codex or Claude Code client of this workspace"
+            )
+        return client.id
 
     async def _validate_model_id(self, model_id: str | None) -> str | None:
         """Resolve ``model_id`` to a model instance, or reject it.
@@ -548,6 +576,7 @@ class AgentService(BaseCrudService[Agent]):
 
         slug = await self._resolve_unique_slug(payload.name)
         model_id = await self._validate_model_id(payload.model_id)
+        client_id = await self._validate_client_id(payload.client_id)
         skill_ids = await self._resolve_skills(payload.skill_ids)
 
         agent = Agent(
@@ -556,6 +585,7 @@ class AgentService(BaseCrudService[Agent]):
             description=payload.description,
             instruction=payload.instruction,
             model_id=model_id,
+            client_id=client_id,
             tools=tools,
             planning=payload.planning,
             a2ui_enabled=payload.a2ui_enabled,
@@ -738,6 +768,8 @@ class AgentService(BaseCrudService[Agent]):
             agent.instruction = patch["instruction"]
         if "model_id" in patch:
             agent.model_id = await self._validate_model_id(patch["model_id"])
+        if "client_id" in patch:
+            agent.client_id = await self._validate_client_id(patch["client_id"])
         approval_targets: set[str] = set()
         if tools_edited:
             approval_targets, agent.tools = self._lift_approval_toggles(edited_tools)

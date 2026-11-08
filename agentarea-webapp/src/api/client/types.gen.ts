@@ -239,6 +239,32 @@ export type AgentCardSummary = {
 };
 
 /**
+ * AgentClientSummary
+ */
+export type AgentClientSummary = {
+  /**
+   * Default Model
+   */
+  default_model: string | null;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Kind
+   */
+  kind: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Online
+   */
+  online: boolean;
+};
+
+/**
  * AgentCreateRequest
  *
  * ``AgentCreate`` plus the triggers created with the agent.
@@ -262,6 +288,12 @@ export type AgentCreateRequest = {
    * Check the agent's final answer for leaks (other scripts, tool names, codes, JSON, stack traces) and have the model rewrite it once before the person sees it. Null leaves it off. A governance safety rule that sets answer_check overrides this setting.
    */
   answer_check?: AnswerCheckPolicy | null;
+  /**
+   * Client Id
+   *
+   * A Codex or Claude Code client of this workspace whose runner runs the agent's tasks on the CLI's subscription; null runs them on the platform's own loop and model.
+   */
+  client_id?: string | null;
   /**
    * Description
    *
@@ -427,6 +459,11 @@ export type AgentResponse = {
    */
   agent_type?: string;
   answer_check?: AnswerCheckPolicy | null;
+  client?: AgentClientSummary | null;
+  /**
+   * Client Id
+   */
+  client_id?: string | null;
   /**
    * Description
    */
@@ -579,6 +616,12 @@ export type AgentUpdate = {
    * Capabilities
    */
   capabilities?: Array<string> | null;
+  /**
+   * Client Id
+   *
+   * A Codex or Claude Code client of this workspace whose runner runs the agent's tasks on the CLI's subscription; null runs them on the platform's own loop and model.
+   */
+  client_id?: string | null;
   /**
    * Description
    */
@@ -2059,9 +2102,17 @@ export type ClientRef = {
  */
 export type ClientResponse = {
   /**
+   * Allow Domains
+   */
+  allow_domains?: Array<string>;
+  /**
    * Created By
    */
   created_by: string;
+  /**
+   * Default Model
+   */
+  default_model?: string | null;
   /**
    * Description
    */
@@ -2083,9 +2134,19 @@ export type ClientResponse = {
    */
   mcp_instances?: Array<ClientMcpInstanceRef>;
   /**
+   * Models
+   */
+  models?: Array<{
+    [key: string]: unknown;
+  }> | null;
+  /**
    * Name
    */
   name: string;
+  /**
+   * Online
+   */
+  online?: boolean;
   /**
    * Openapi Connections
    */
@@ -2110,6 +2171,14 @@ export type ClientResponse = {
  * Patch payload for a client. Unset fields remain unchanged.
  */
 export type ClientUpdate = {
+  /**
+   * Allow Domains
+   */
+  allow_domains?: Array<string>;
+  /**
+   * Default Model
+   */
+  default_model?: string | null;
   /**
    * Description
    */
@@ -3814,6 +3883,42 @@ export type InvitationResponse = {
  * IssueSeverity
  */
 export type IssueSeverity = "block" | "warn";
+
+/**
+ * IssuedRunnerKey
+ */
+export type IssuedRunnerKey = {
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Created By
+   */
+  created_by: string;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Key
+   *
+   * The runner's key for `agentarea runner register`; shown once
+   */
+  key: string;
+  /**
+   * Last Used At
+   */
+  last_used_at: string | null;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Prefix
+   */
+  prefix: string;
+};
 
 /**
  * MCPAuthConfigCreateRequest
@@ -7341,6 +7446,56 @@ export type RunExecutionConfig = {
    * Maximum LLM/model turns requested for this run.
    */
   max_model_turns: number;
+};
+
+/**
+ * RunnerIdentity
+ */
+export type RunnerIdentity = {
+  /**
+   * Client Id
+   */
+  client_id: string;
+  /**
+   * Kind
+   */
+  kind: string;
+  /**
+   * Workspace
+   */
+  workspace: string;
+};
+
+/**
+ * RunnerKeyResponse
+ *
+ * A runner key of a client; the key itself is shown only when issued.
+ */
+export type RunnerKeyResponse = {
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Created By
+   */
+  created_by: string;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Last Used At
+   */
+  last_used_at: string | null;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Prefix
+   */
+  prefix: string;
 };
 
 /**
@@ -11972,6 +12127,59 @@ export type GetPricingCurrencyV1PricingCurrencyGetResponses = {
 export type GetPricingCurrencyV1PricingCurrencyGetResponse =
   GetPricingCurrencyV1PricingCurrencyGetResponses[keyof GetPricingCurrencyV1PricingCurrencyGetResponses];
 
+export type UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutData = {
+  body?: never;
+  path: {
+    /**
+     * Task Id
+     */
+    task_id: string;
+    /**
+     * File Path
+     */
+    file_path: string;
+  };
+  query?: never;
+  url: "/v1/runner/tasks/{task_id}/files/{file_path}";
+};
+
+export type UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutError =
+  UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutErrors[keyof UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutErrors];
+
+export type UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutResponse =
+  UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutResponses[keyof UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutResponses];
+
+export type RunnerWhoamiV1RunnerWhoamiGetData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/v1/runner/whoami";
+};
+
+export type RunnerWhoamiV1RunnerWhoamiGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: RunnerIdentity;
+};
+
+export type RunnerWhoamiV1RunnerWhoamiGetResponse =
+  RunnerWhoamiV1RunnerWhoamiGetResponses[keyof RunnerWhoamiV1RunnerWhoamiGetResponses];
+
 export type ListWorkspacesV1WorkspacesGetData = {
   body?: never;
   path?: never;
@@ -14368,6 +14576,108 @@ export type RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsTool
 
 export type RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponse =
   RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponses[keyof RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponses];
+
+export type ListRunnerKeysV1ClientsClientIdRunnerKeysGetData = {
+  body?: never;
+  path: {
+    /**
+     * Client Id
+     */
+    client_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/clients/{client_id}/runner-keys";
+};
+
+export type ListRunnerKeysV1ClientsClientIdRunnerKeysGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListRunnerKeysV1ClientsClientIdRunnerKeysGetError =
+  ListRunnerKeysV1ClientsClientIdRunnerKeysGetErrors[keyof ListRunnerKeysV1ClientsClientIdRunnerKeysGetErrors];
+
+export type ListRunnerKeysV1ClientsClientIdRunnerKeysGetResponses = {
+  /**
+   * Response List Runner Keys V1 Clients  Client Id  Runner Keys Get
+   *
+   * Successful Response
+   */
+  200: Array<RunnerKeyResponse>;
+};
+
+export type ListRunnerKeysV1ClientsClientIdRunnerKeysGetResponse =
+  ListRunnerKeysV1ClientsClientIdRunnerKeysGetResponses[keyof ListRunnerKeysV1ClientsClientIdRunnerKeysGetResponses];
+
+export type IssueRunnerKeyV1ClientsClientIdRunnerKeysPostData = {
+  body?: never;
+  path: {
+    /**
+     * Client Id
+     */
+    client_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/clients/{client_id}/runner-keys";
+};
+
+export type IssueRunnerKeyV1ClientsClientIdRunnerKeysPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type IssueRunnerKeyV1ClientsClientIdRunnerKeysPostError =
+  IssueRunnerKeyV1ClientsClientIdRunnerKeysPostErrors[keyof IssueRunnerKeyV1ClientsClientIdRunnerKeysPostErrors];
+
+export type IssueRunnerKeyV1ClientsClientIdRunnerKeysPostResponses = {
+  /**
+   * Successful Response
+   */
+  201: IssuedRunnerKey;
+};
+
+export type IssueRunnerKeyV1ClientsClientIdRunnerKeysPostResponse =
+  IssueRunnerKeyV1ClientsClientIdRunnerKeysPostResponses[keyof IssueRunnerKeyV1ClientsClientIdRunnerKeysPostResponses];
+
+export type RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteData = {
+  body?: never;
+  path: {
+    /**
+     * Client Id
+     */
+    client_id: string;
+    /**
+     * Key Id
+     */
+    key_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/clients/{client_id}/runner-keys/{key_id}";
+};
+
+export type RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteError =
+  RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteErrors[keyof RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteErrors];
+
+export type RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteResponse =
+  RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteResponses[keyof RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteResponses];
 
 export type AddSkillToClientV1ClientsClientIdSkillsPostData = {
   body: AssociationBody;

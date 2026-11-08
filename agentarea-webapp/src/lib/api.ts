@@ -9,6 +9,7 @@ import type {
   AnalyzeRequest,
   TaskResponse as ApiTaskResponse,
   CatalogConnectRequest,
+  ClientUpdate,
   ContinueTaskPayload,
   CreateInvitationBody,
   CreateWalletRequest,
@@ -1934,20 +1935,38 @@ export const createClient = async (payload: {
   return { data, error };
 };
 
-export const updateClient = async (
-  clientId: string,
-  payload: {
-    name?: string;
-    description?: string | null;
-    kind?: string;
-  }
-) => {
+export const updateClient = async (clientId: string, payload: ClientUpdate) => {
   const { data, error } = await sdk.updateClientV1ClientsClientIdPatch({
     client: serverClient,
     path: { client_id: clientId },
     body: payload,
   });
   return { data, error };
+};
+
+export const issueRunnerKey = async (clientId: string) => {
+  const result = await sdk.issueRunnerKeyV1ClientsClientIdRunnerKeysPost({
+    client: serverClient,
+    path: { client_id: clientId },
+  });
+  return withStatus(result);
+};
+
+export const listRunnerKeys = async (clientId: string) => {
+  const result = await sdk.listRunnerKeysV1ClientsClientIdRunnerKeysGet({
+    client: serverClient,
+    path: { client_id: clientId },
+  });
+  return withStatus(result);
+};
+
+export const revokeRunnerKey = async (clientId: string, keyId: string) => {
+  const result =
+    await sdk.revokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDelete({
+      client: serverClient,
+      path: { client_id: clientId, key_id: keyId },
+    });
+  return withStatus(result);
 };
 
 export const deleteClient = async (clientId: string) => {

@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from agentarea_mcp.application.access_token_service import (
@@ -18,6 +18,7 @@ def _make_token(
     raw: str = "aat_testtoken",
     is_active: bool = True,
     expires_at: datetime | None = None,
+    client_id: UUID | None = None,
 ) -> APIKey:
     record = MagicMock(spec=APIKey)
     record.id = uuid4()
@@ -26,6 +27,7 @@ def _make_token(
     record.token_prefix = raw[:12]
     record.is_active = is_active
     record.expires_at = expires_at
+    record.client_id = client_id
     record.is_expired = MagicMock(
         return_value=bool(expires_at and datetime.utcnow() >= expires_at)
     )
@@ -196,6 +198,19 @@ class TestListAndGet:
 
         result = await service.list_tokens()
         assert result == tokens
+
+    @pytest.mark.asyncio
+    async def test_runner_keys_are_listed_only_for_their_client(self, service, repo):
+        client_id = uuid4()
+        personal = _make_token(name="personal")
+        runner = _make_token(name="runner", client_id=client_id)
+        repo.list_all.return_value = [personal, runner]
+
+        assert await service.list_tokens() == [personal]
+
+        repo.list_all.return_value = [runner]
+        assert await service.list_tokens(client_id=client_id) == [runner]
+        repo.list_all.assert_awaited_with(client_id=client_id)
 
     @pytest.mark.asyncio
     async def test_get_returns_record(self, service, repo):

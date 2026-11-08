@@ -1,0 +1,448 @@
+"use client";
+
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
+import { useParams } from "next/navigation";
+import { Link as LinkIcon, Loader2, Pencil, Terminal } from "lucide-react";
+import type { ClientResponse, PlatformToolsetResponse } from "@/api/client";
+import {
+  AttachmentSection,
+  hydrateAttachments,
+  type AttachmentItem,
+} from "@/components/AttachmentSection";
+import ContentBlock from "@/components/ContentBlock";
+import DeleteButton from "@/components/DeleteButton";
+import EntityMark from "@/components/EntityMark";
+import FormError from "@/components/FormError";
+import FormLabel from "@/components/FormLabel/FormLabel";
+import { harnessOf } from "@/components/harnesses";
+import { SkillTile } from "@/components/SkillTile";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { CopyableText } from "@/components/ui/copyable-text";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import Divider from "@/components/ui/divider";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { useAttachableResources } from "@/hooks/use-attachable-resources";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
+import { ENTITY_ICONS } from "@/lib/entity-icons";
+import { mcpRefIdentity } from "@/lib/mcp/resolveMcpRef";
+import {
+  addMcpInstanceToClientAction,
+  addPlatformToolsetToClientAction,
+  addSkillToClientAction,
+  deleteClientAction,
+  getClientAction,
+  listClientPlatformToolsetsAction,
+  removeMcpInstanceFromClientAction,
+  removePlatformToolsetFromClientAction,
+  removeSkillFromClientAction,
+  updateClientAction,
+} from "@/lib/server-actions";
+import { McpInstanceTools, PlatformToolsetMethods } from "./ToolSelection";
+
+const McpIcon = ENTITY_ICONS.mcp;
+const SkillIcon = ENTITY_ICONS.skill;
+const ToolIcon = ENTITY_ICONS.tool;
+
+/**
+ * The client's page, from the client the server loaded; `runner` is its runner
+ * section, for a Codex or Claude Code client.
+ */
+export default function ClientDetail({
+  initialClient,
+  runner,
+}: {
+  initialClient: ClientResponse;
+  runner: ReactNode;
+}) {
+  const params = useParams();
+  const clientId = params.id as string;
+  const t = useTranslations("ClientsPage");
+  const tCommon = useTranslations("Common");
+
+  const [client, setClient] = useState<ClientResponse>(initialClient);
+  const resources = useAttachableResources();
+  const { skills: allSkills, mcpInstances: allMcp, mcpServers } = resources;
+
+  const [showEdit, setShowEdit] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [platformCatalog, setPlatformCatalog] = useState<
+    PlatformToolsetResponse[] | null
+  >(null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+
+  // Refetch after an edit: a failure throws so the caller shows it inline.
+  const fetchClient = useCallback(async () => {
+    const result = await getClientAction(clientId);
+    if (result.error || !result.data) {
+      throw new Error(apiErrorMessage(result, t("loadOneFailed")));
+    }
+    setClient(result.data);
+  }, [clientId, t]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const result = await listClientPlatformToolsetsAction();
+        if (result.error || !result.data) {
+          setCatalogError(
+            apiErrorMessage(result, "Couldn’t load platform toolsets")
+          );
+          setPlatformCatalog([]);
+          return;
+        }
+        setPlatformCatalog(result.data);
+      } catch (err) {
+        console.error("Failed to load platform toolsets", err);
+        setCatalogError(
+          `Couldn’t load platform toolsets: ${formatApiError(err)}`
+        );
+        setPlatformCatalog([]);
+      }
+    })();
+  }, []);
+
+  const harness = harnessOf(client.kind);
+  const HarnessGlyph = harness.icon;
+
+  const mcpMark = (instance: AttachmentItem) => (
+    <EntityMark
+      identity={mcpRefIdentity(instance.id, allMcp, mcpServers)}
+      className="h-5 w-5 shrink-0 rounded-md"
+    />
+  );
+
+  const toolsetItems = (platformCatalog ?? []).map((toolset) => ({
+    id: toolset.name,
+    name: toolset.display_name,
+    description: toolset.description,
+  }));
+
+  const handleSave = async () => {
+    if (!editName.trim()) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const result = await updateClientAction(clientId, {
+        name: editName.trim(),
+        description: editDescription || null,
+      });
+      if (result.error) {
+        setSaveError(apiErrorMessage(result, t("updateFailed")));
+        return;
+      }
+    } catch (err) {
+      console.error("Failed to update harness", err);
+      setSaveError(`${t("updateFailed")}: ${formatApiError(err)}`);
+      return;
+    } finally {
+      setSaving(false);
+    }
+    setShowEdit(false);
+    await refresh();
+  };
+
+  const refresh = async () => {
+    setRefreshError(null);
+    try {
+      await fetchClient();
+    } catch (err) {
+      console.error("Failed to reload harness", err);
+      setRefreshError(formatApiError(err));
+    }
+  };
+
+  const syncCmd = `agentarea mcp sync --client=${clientId} --target=${
+    client.kind === "harness" ? "codex" : client.kind
+  }`;
+
+  return (
+    <ContentBlock
+      header={{
+        breadcrumb: [
+          { label: t("title"), href: "/clients" },
+          { label: client.name },
+        ],
+        controls: (
+          <div className="flex items-center gap-2 py-1">
+            <Button
+              size="xs"
+              variant="outline"
+              onClick={() => {
+                setEditName(client.name);
+                setEditDescription(client.description || "");
+                setSaveError(null);
+                setShowEdit(true);
+              }}
+            >
+              <Pencil />
+              {tCommon("edit")}
+            </Button>
+            <DeleteButton
+              size="xs"
+              itemId={clientId}
+              itemName={client.name}
+              onDelete={deleteClientAction}
+              redirectPath="/clients"
+              title={t("deleteTitle")}
+              description={t("deleteDescription", { name: client.name })}
+            />
+          </div>
+        ),
+      }}
+    >
+      <div className="mx-auto w-full max-w-4xl overflow-auto p-4 sm:p-6">
+        {refreshError && (
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start">
+            <FormError className="flex-1">{refreshError}</FormError>
+            <Button
+              size="xs"
+              variant="outline"
+              className="self-start"
+              onClick={() => void refresh()}
+            >
+              {tCommon("retry")}
+            </Button>
+          </div>
+        )}
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background text-muted-foreground">
+            <HarnessGlyph aria-hidden="true" className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-semibold text-foreground">
+                {client.name}
+              </h2>
+              <Badge variant="outline" className="text-xs">
+                {harness.label}
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {client.description ||
+                "A governed, scoped tool bundle an external harness connects to over MCP."}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {client.mcp_endpoint_url && (
+            <div className="space-y-1.5">
+              <FormLabel icon={LinkIcon}>MCP endpoint</FormLabel>
+              <CopyableText text={client.mcp_endpoint_url} />
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <FormLabel icon={Terminal}>Sync command</FormLabel>
+            <CopyableText text={syncCmd} />
+          </div>
+        </div>
+
+        <Divider />
+
+        {runner && (
+          <>
+            {runner}
+            <Divider />
+          </>
+        )}
+
+        <AttachmentSection
+          id="client-mcp"
+          title="MCP Servers"
+          icon={McpIcon}
+          note={
+            <p>
+              Instances exposed through this harness&apos;s endpoint. Tools keep
+              the namespace prefix set on the instance; uncheck the ones the
+              harness should not see.
+            </p>
+          }
+          triggerText="MCP Server"
+          sheetTitle="MCP Servers"
+          sheetDescription="Add MCP server instances to this harness's bundle"
+          availableTitle="Active MCP Server Instances"
+          attached={hydrateAttachments(client.mcp_instances, allMcp)}
+          available={allMcp}
+          emptyLabel="No MCP servers connected. Add one to expose its tools through the endpoint."
+          emptyAvailable={
+            <p>
+              No MCP server instances yet. Create one under Connections first.
+            </p>
+          }
+          onAdd={(item) => addMcpInstanceToClientAction(clientId, item.id)}
+          onRemove={(item) =>
+            removeMcpInstanceFromClientAction(clientId, item.id)
+          }
+          onChanged={fetchClient}
+          renderMark={mcpMark}
+          renderDetails={(item) => {
+            const attachment = client.mcp_instances?.find(
+              (instance) => instance.id === item.id
+            );
+            return attachment ? (
+              <McpInstanceTools
+                clientId={clientId}
+                attachment={attachment}
+                onSaved={refresh}
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {item.description || "—"}
+              </p>
+            );
+          }}
+        />
+
+        <Divider />
+
+        <AttachmentSection
+          id="client-platform"
+          title="Platform Tools"
+          icon={ToolIcon}
+          note={
+            <p>
+              AgentArea toolsets served through the endpoint, in this
+              harness&apos;s workspace and with the caller&apos;s own
+              permissions. Uncheck the methods the harness should not see.
+            </p>
+          }
+          triggerText="Platform Toolset"
+          sheetTitle="Platform Tools"
+          sheetDescription="Add AgentArea toolsets to this harness's bundle"
+          availableTitle="Platform Toolsets"
+          attached={hydrateAttachments(
+            (client.platform_toolsets ?? []).map((toolset) => ({
+              id: toolset.name,
+              name: toolset.name,
+            })),
+            toolsetItems
+          )}
+          available={toolsetItems}
+          loading={platformCatalog === null}
+          emptyLabel="No platform toolsets. Add the ones this harness should manage AgentArea with."
+          emptyAvailable={
+            <p>{catalogError ?? "The platform serves no toolsets."}</p>
+          }
+          onAdd={(item) =>
+            addPlatformToolsetToClientAction(clientId, item.id, null)
+          }
+          onRemove={(item) =>
+            removePlatformToolsetFromClientAction(clientId, item.id)
+          }
+          onChanged={fetchClient}
+          renderDetails={(item) => {
+            const attachment = client.platform_toolsets?.find(
+              (toolset) => toolset.name === item.id
+            );
+            return attachment ? (
+              <PlatformToolsetMethods
+                clientId={clientId}
+                attachment={attachment}
+                toolset={platformCatalog?.find(
+                  (toolset) => toolset.name === item.id
+                )}
+                onSaved={refresh}
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {item.description || "—"}
+              </p>
+            );
+          }}
+        />
+
+        <Divider />
+
+        <AttachmentSection
+          id="client-skills"
+          title="Skills"
+          icon={SkillIcon}
+          note={
+            <p>
+              Skills reachable through the endpoint&apos;s `activate_skill`
+              tool.
+            </p>
+          }
+          triggerText="Skill"
+          sheetTitle="Skills"
+          sheetDescription="Add skills to this harness's bundle"
+          availableTitle="Available Skills"
+          attached={hydrateAttachments(client.skills, allSkills)}
+          available={allSkills}
+          emptyLabel="No skills connected. Add skills the harness should be able to activate."
+          emptyAvailable={<p>No skills available. Create one under Skills.</p>}
+          onAdd={(item) => addSkillToClientAction(clientId, item.id)}
+          onRemove={(item) => removeSkillFromClientAction(clientId, item.id)}
+          onChanged={fetchClient}
+          renderMark={(item) => <SkillTile skillId={item.id} />}
+        />
+      </div>
+
+      <Dialog open={showEdit} onOpenChange={setShowEdit}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("edit")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {saveError && <FormError>{saveError}</FormError>}
+            <div className="space-y-1.5">
+              <FormLabel htmlFor="client-name" required>
+                {t("name")}
+              </FormLabel>
+              <Input
+                id="client-name"
+                placeholder="my-codex"
+                value={editName}
+                onChange={(e) => {
+                  setEditName(e.target.value);
+                  setSaveError(null);
+                }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <FormLabel htmlFor="client-description" optional>
+                {t("descriptionLabel")}
+              </FormLabel>
+              <Textarea
+                id="client-description"
+                placeholder={t("descriptionPlaceholder")}
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowEdit(false)}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={!editName.trim() || saving}
+            >
+              {saving && <Loader2 className="animate-spin" />}
+              {tCommon("save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </ContentBlock>
+  );
+}

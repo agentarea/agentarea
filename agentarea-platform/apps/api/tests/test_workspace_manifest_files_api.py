@@ -200,7 +200,7 @@ async def test_task_artifact_download_reads_explicit_artifact_from_manager(
     task_id = uuid4()
     agent_id = uuid4()
     task_service = SimpleNamespace(
-        get_task=AsyncMock(return_value=SimpleNamespace(agent_id=agent_id))
+        get_task=AsyncMock(return_value=SimpleNamespace(agent_id=agent_id, metadata={}))
     )
     manager_client = SimpleNamespace(aclose=AsyncMock())
     manager_response = httpx.Response(
@@ -246,7 +246,7 @@ async def test_task_artifact_download_forces_attachment_for_html_even_when_manag
     task_id = uuid4()
     agent_id = uuid4()
     task_service = SimpleNamespace(
-        get_task=AsyncMock(return_value=SimpleNamespace(agent_id=agent_id))
+        get_task=AsyncMock(return_value=SimpleNamespace(agent_id=agent_id, metadata={}))
     )
     manager_client = SimpleNamespace(aclose=AsyncMock())
     manager_response = httpx.Response(
@@ -280,7 +280,7 @@ async def test_live_sandbox_file_read_sets_nosniff_and_keeps_content_disposition
     task_id = uuid4()
     agent_id = uuid4()
     task_service = SimpleNamespace(
-        get_task=AsyncMock(return_value=SimpleNamespace(agent_id=agent_id))
+        get_task=AsyncMock(return_value=SimpleNamespace(agent_id=agent_id, metadata={}))
     )
     manager_client = SimpleNamespace(aclose=AsyncMock())
     manager_response = httpx.Response(
@@ -308,7 +308,7 @@ async def test_task_artifact_download_rejects_legacy_task_path(monkeypatch) -> N
     task_id = uuid4()
     agent_id = uuid4()
     task_service = SimpleNamespace(
-        get_task=AsyncMock(return_value=SimpleNamespace(agent_id=agent_id))
+        get_task=AsyncMock(return_value=SimpleNamespace(agent_id=agent_id, metadata={}))
     )
     manager_request = AsyncMock()
     monkeypatch.setattr(agents_tasks, "_sandbox_manager_request", manager_request)
@@ -331,7 +331,7 @@ async def test_live_sandbox_file_list_does_not_wake_expired_workspace(monkeypatc
     task_id = uuid4()
     agent_id = uuid4()
     task_service = SimpleNamespace(
-        get_task=AsyncMock(return_value=SimpleNamespace(agent_id=agent_id))
+        get_task=AsyncMock(return_value=SimpleNamespace(agent_id=agent_id, metadata={}))
     )
     manager_request = AsyncMock(
         return_value=httpx.Response(200, json={"paths": ["inputs/a.txt", "reports/out.txt"]})
@@ -364,7 +364,7 @@ async def test_live_sandbox_file_read_streams_manager_payload(monkeypatch) -> No
     task_id = uuid4()
     agent_id = uuid4()
     task_service = SimpleNamespace(
-        get_task=AsyncMock(return_value=SimpleNamespace(agent_id=agent_id))
+        get_task=AsyncMock(return_value=SimpleNamespace(agent_id=agent_id, metadata={}))
     )
     manager_client = SimpleNamespace(aclose=AsyncMock())
     manager_response = httpx.Response(

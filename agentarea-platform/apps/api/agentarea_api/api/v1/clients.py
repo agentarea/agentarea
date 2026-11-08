@@ -6,27 +6,35 @@ from uuid import UUID
 
 from agentarea_agents_sdk.mcp_server import UnknownToolsetError
 from agentarea_agents_sdk.tools.tool_definition import ToolEffect
+from agentarea_api.api.deps.services import AuditServiceDep
 from agentarea_api.platform_mcp import (
     attachable_toolset,
     client_platform_server,
     client_platform_toolset_metadata,
 )
+from agentarea_common.auth.credential import Scope
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.auth.route_authz import (
     enforced_in_handler,
     requires,
+    requires_scope,
     unrestricted,
 )
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.base.pagination import MAX_OFFSET
 from agentarea_common.config.app import get_app_settings
+from agentarea_common.utils.types import UtcDatetime
+from agentarea_mcp.application.access_token_service import APIKeyService
 from agentarea_mcp.application.client_service import ClientService
-from agentarea_mcp.domain.client_models import Client
+from agentarea_mcp.domain.auth_models import APIKey
+from agentarea_mcp.domain.client_models import RUNNER_KINDS, Client
+from agentarea_mcp.infrastructure.auth_repository import APIKeyRepository
 from agentarea_mcp.infrastructure.client_repository import ClientRepository
+from agentarea_mcp.infrastructure.runner_presence import runner_presence
 from agentarea_mcp.schemas.client_dto import ClientCreate, ClientUpdate
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, field_validator
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import BaseModel, Field, field_validator
 
 from ._access_control_grants import grant_resource_owner
 
@@ -110,6 +118,12 @@ class ClientResponse(BaseModel):
     openapi_connections: list[ClientOpenAPIConnectionRef] = []
     platform_toolsets: list[ClientPlatformToolsetRef] = []
     mcp_endpoint_url: str | None = None
+    # Its runner (a Codex or Claude Code client's): the models it reported, the
+    # one turns use by default, the hosts its CLI reaches, and whether it is connected.
+    models: list[dict[str, Any]] | None = None
+    default_model: str | None = None
+    allow_domains: list[str] = []
+    online: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -135,10 +149,14 @@ class PlatformToolsetResponse(BaseModel):
     methods: list[PlatformToolsetMethod]
 
 
+def client_mcp_path(client_id: UUID) -> str:
+    """The client's MCP endpoint, relative to the API: what its harness and its runner's turns call."""
+    return f"/mcp/clients/{client_id}"
+
+
 def client_mcp_endpoint_url(client_id: UUID) -> str:
     """URL a harness connects to. Shared with the clients toolset — one shape."""
-    base = get_app_settings().API_URL.rstrip("/")
-    return f"{base}/mcp/clients/{client_id}"
+    return get_app_settings().API_URL.rstrip("/") + client_mcp_path(client_id)
 
 
 async def client_responses(service: ClientService, clients: list[Client]) -> list[ClientResponse]:
@@ -147,6 +165,7 @@ async def client_responses(service: ClientService, clients: list[Client]) -> lis
     Shared with the clients toolset, so both surfaces describe a client alike.
     """
     ids = [client.id for client in clients]
+    online = await runner_presence().online(c.id for c in clients if c.kind in RUNNER_KINDS)
     links = await service.instance_links(ids)
     toolsets = await service.platform_toolsets(ids)
     openapi_links = await service.openapi_links(ids)
@@ -154,6 +173,7 @@ async def client_responses(service: ClientService, clients: list[Client]) -> lis
     for client in clients:
         response = ClientResponse.model_validate(client)
         response.mcp_endpoint_url = client_mcp_endpoint_url(client.id)
+        response.online = client.id in online
         client_links = links.get(str(client.id), {})
         for instance in response.mcp_instances:
             if link := client_links.get(str(instance.id)):
@@ -422,3 +442,122 @@ async def remove_platform_toolset_from_client(
 ):
     """Detach a toolset by the namespace the client lists it under."""
     await service.remove_platform_toolset(client_id, toolset)
+
+
+class RunnerKeyResponse(BaseModel):
+    """A runner key of a client; the key itself is shown only when issued."""
+
+    id: UUID
+    name: str
+    prefix: str
+    created_by: str
+    created_at: UtcDatetime
+    last_used_at: UtcDatetime | None
+
+    @classmethod
+    def of(cls, key: APIKey) -> RunnerKeyResponse:
+        return cls(
+            id=key.id,
+            name=key.name,
+            prefix=key.token_prefix,
+            created_by=key.created_by,
+            created_at=key.created_at,
+            last_used_at=key.last_accessed_at,
+        )
+
+
+class IssuedRunnerKey(RunnerKeyResponse):
+    key: str = Field(description="The runner's key for `agentarea runner register`; shown once")
+
+
+def _runner_keys(factory: RepositoryFactoryDep) -> APIKeyService:
+    return APIKeyService(APIKeyRepository(factory.session, factory.user_context))
+
+
+async def _runner_client(service: ClientService, client_id: UUID) -> Client:
+    client = await service.get(client_id)
+    if client is None:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return client
+
+
+@router.post(
+    "/{client_id}/runner-keys",
+    response_model=IssuedRunnerKey,
+    status_code=201,
+    dependencies=[
+        requires_scope(Scope.CREDENTIALS, "issue runner keys"),
+        requires("edit", "client", id_param="client_id"),
+    ],
+)
+async def issue_runner_key(
+    client_id: UUID,
+    service: ClientServiceDep,
+    factory: RepositoryFactoryDep,
+    audit: AuditServiceDep,
+) -> IssuedRunnerKey:
+    """A key for this client's runner; it reaches nothing but the client's runner routes."""
+    client = await _runner_client(service, client_id)
+    if client.kind not in RUNNER_KINDS:
+        raise HTTPException(
+            status_code=422, detail="Only a Codex or Claude Code client has a runner"
+        )
+    record, key = await _runner_keys(factory).create_token(
+        name=f"runner: {client.name}", client_id=client.id
+    )
+    await audit.record(
+        "api_key.create",
+        "api_key",
+        record.id,
+        event_metadata={
+            "resource_name": record.name,
+            "token_prefix": record.token_prefix,
+            "client_id": str(client.id),
+        },
+    )
+    return IssuedRunnerKey(**RunnerKeyResponse.of(record).model_dump(), key=key)
+
+
+@router.get(
+    "/{client_id}/runner-keys",
+    response_model=list[RunnerKeyResponse],
+    dependencies=[requires("edit", "client", id_param="client_id")],
+)
+async def list_runner_keys(
+    client_id: UUID, service: ClientServiceDep, factory: RepositoryFactoryDep
+) -> list[RunnerKeyResponse]:
+    """The live keys of this client's runners."""
+    await _runner_client(service, client_id)
+    keys = await _runner_keys(factory).list_tokens(client_id=client_id)
+    return [RunnerKeyResponse.of(key) for key in keys if key.is_active]
+
+
+@router.delete(
+    "/{client_id}/runner-keys/{key_id}",
+    status_code=204,
+    dependencies=[
+        requires_scope(Scope.CREDENTIALS, "revoke runner keys"),
+        requires("edit", "client", id_param="client_id"),
+    ],
+)
+async def revoke_runner_key(
+    client_id: UUID,
+    key_id: UUID,
+    service: ClientServiceDep,
+    factory: RepositoryFactoryDep,
+    audit: AuditServiceDep,
+) -> Response:
+    """Cut a runner off: its key answers 401 from the next request on."""
+    await _runner_client(service, client_id)
+    keys = _runner_keys(factory)
+    key = await keys.get_token(key_id)
+    if key is None or key.client_id != client_id or not key.is_active:
+        raise HTTPException(status_code=404, detail="Runner key not found")
+    await keys.revoke_token(key_id)
+    await audit.record(
+        "api_key.revoke",
+        "api_key",
+        key_id,
+        event_metadata={"client_id": str(client_id), "token_prefix": key.token_prefix},
+    )
+    return Response(status_code=204)

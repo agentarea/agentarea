@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { useFileBrowserState } from "@/components/files/file-browser";
 import { useWorkspaceSlug } from "@/hooks/useWorkspaceNavigation";
 import { apiErrorDetail, formatApiError } from "@/lib/api-errors";
@@ -16,9 +17,13 @@ export default function TaskFilesPage() {
   const workspaceSlug = useWorkspaceSlug();
   const [listing, setListing] = useState<SandboxListing>({ kind: "loading" });
   const [refreshing, setRefreshing] = useState(false);
-  // The task arrives a render later; the strip restores once its key is known.
+  // A link from the conversation names one file (?file=), opened on top of the
+  // remembered tabs. The task arrives a render later; the strip restores once
+  // its key is known.
+  const linkedFile = useRef(useSearchParams().get("file"));
   const [browserState, setBrowserState] = useFileBrowserState(
-    `task:${task?.id ?? "pending"}`
+    `task:${task?.id ?? "pending"}`,
+    linkedFile.current
   );
 
   const loadFiles = useCallback(async () => {

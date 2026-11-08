@@ -41,6 +41,7 @@ def _agent(name: str) -> SimpleNamespace:
         description="",
         instruction="",
         model_id=str(uuid4()),
+        client_id=None,
         status="active",
         tools=[],
         planning=False,

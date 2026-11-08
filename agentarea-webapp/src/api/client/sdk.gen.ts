@@ -538,6 +538,9 @@ import type {
   InstallSkillV1SkillsSkillIdInstallPostData,
   InstallSkillV1SkillsSkillIdInstallPostErrors,
   InstallSkillV1SkillsSkillIdInstallPostResponses,
+  IssueRunnerKeyV1ClientsClientIdRunnerKeysPostData,
+  IssueRunnerKeyV1ClientsClientIdRunnerKeysPostErrors,
+  IssueRunnerKeyV1ClientsClientIdRunnerKeysPostResponses,
   ListAgentPresetsV1AgentsPresetsGetData,
   ListAgentPresetsV1AgentsPresetsGetErrors,
   ListAgentPresetsV1AgentsPresetsGetResponses,
@@ -651,6 +654,9 @@ import type {
   ListRelationshipsV1AccessControlRelationshipsGetData,
   ListRelationshipsV1AccessControlRelationshipsGetErrors,
   ListRelationshipsV1AccessControlRelationshipsGetResponses,
+  ListRunnerKeysV1ClientsClientIdRunnerKeysGetData,
+  ListRunnerKeysV1ClientsClientIdRunnerKeysGetErrors,
+  ListRunnerKeysV1ClientsClientIdRunnerKeysGetResponses,
   ListSandboxesV1SandboxesGetData,
   ListSandboxesV1SandboxesGetErrors,
   ListSandboxesV1SandboxesGetResponses,
@@ -828,12 +834,17 @@ import type {
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteData,
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteErrors,
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteResponses,
+  RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteData,
+  RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteErrors,
+  RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteResponses,
   RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostData,
   RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostErrors,
   RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostResponses,
   RotateSecretV1SecretsSecretIdValuePutData,
   RotateSecretV1SecretsSecretIdValuePutErrors,
   RotateSecretV1SecretsSecretIdValuePutResponses,
+  RunnerWhoamiV1RunnerWhoamiGetData,
+  RunnerWhoamiV1RunnerWhoamiGetResponses,
   RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostData,
   RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostErrors,
   RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostResponses,
@@ -969,6 +980,9 @@ import type {
   UploadSkillV1SkillsUploadPostData,
   UploadSkillV1SkillsUploadPostErrors,
   UploadSkillV1SkillsUploadPostResponses,
+  UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutData,
+  UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutErrors,
+  UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutResponses,
   UploadWorkspaceLogoV1LogoPutData,
   UploadWorkspaceLogoV1LogoPutErrors,
   UploadWorkspaceLogoV1LogoPutResponses,
@@ -1949,6 +1963,69 @@ export const getPricingCurrencyV1PricingCurrencyGet = <
       },
     ],
     url: "/v1/pricing/currency",
+    ...options,
+  });
+
+/**
+ * Upload Task File
+ *
+ * Store a file the CLI made in its task folder, so the task's file links open it.
+ */
+export const uploadTaskFileV1RunnerTasksTaskIdFilesFilePathPut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutData,
+    ThrowOnError
+  >
+): RequestResult<
+  UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutResponses,
+  UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutResponses,
+    UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/runner/tasks/{task_id}/files/{file_path}",
+    ...options,
+  });
+
+/**
+ * Runner Whoami
+ *
+ * The client this runner key serves, so `agentarea runner register` can check the key.
+ */
+export const runnerWhoamiV1RunnerWhoamiGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<RunnerWhoamiV1RunnerWhoamiGetData, ThrowOnError>
+): RequestResult<
+  RunnerWhoamiV1RunnerWhoamiGetResponses,
+  unknown,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    RunnerWhoamiV1RunnerWhoamiGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/runner/whoami",
     ...options,
   });
 
@@ -3749,7 +3826,7 @@ export const createApiKeyV1ApiKeysPost = <ThrowOnError extends boolean = false>(
  *
  * The key's creator, or a workspace admin. The repository is scoped to the
  * workspace, not to the caller, so without this a member could cut off a
- * colleague's integrations.
+ * colleague's integrations. A runner's key is revoked on its client's page.
  */
 export const revokeApiKeyV1ApiKeysTokenIdDelete = <
   ThrowOnError extends boolean = false,
@@ -3782,7 +3859,8 @@ export const revokeApiKeyV1ApiKeysTokenIdDelete = <
  * Get a single API key by ID.
  *
  * Someone else's key answers 404 to a member, as a missing one does, so the
- * ids of colleagues' keys cannot be confirmed.
+ * ids of colleagues' keys cannot be confirmed. A runner's key lives on its
+ * client's page and answers 404 here too.
  */
 export const getApiKeyV1ApiKeysTokenIdGet = <
   ThrowOnError extends boolean = false,
@@ -4312,6 +4390,105 @@ export const removePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToo
       url: "/v1/workspaces/{workspace}/clients/{client_id}/platform-toolsets/{toolset}",
       ...options,
     });
+
+/**
+ * List Runner Keys
+ *
+ * The live keys of this client's runners.
+ */
+export const listRunnerKeysV1ClientsClientIdRunnerKeysGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ListRunnerKeysV1ClientsClientIdRunnerKeysGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListRunnerKeysV1ClientsClientIdRunnerKeysGetResponses,
+  ListRunnerKeysV1ClientsClientIdRunnerKeysGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListRunnerKeysV1ClientsClientIdRunnerKeysGetResponses,
+    ListRunnerKeysV1ClientsClientIdRunnerKeysGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/clients/{client_id}/runner-keys",
+    ...options,
+  });
+
+/**
+ * Issue Runner Key
+ *
+ * A key for this client's runner; it reaches nothing but the client's runner routes.
+ */
+export const issueRunnerKeyV1ClientsClientIdRunnerKeysPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    IssueRunnerKeyV1ClientsClientIdRunnerKeysPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  IssueRunnerKeyV1ClientsClientIdRunnerKeysPostResponses,
+  IssueRunnerKeyV1ClientsClientIdRunnerKeysPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    IssueRunnerKeyV1ClientsClientIdRunnerKeysPostResponses,
+    IssueRunnerKeyV1ClientsClientIdRunnerKeysPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/clients/{client_id}/runner-keys",
+    ...options,
+  });
+
+/**
+ * Revoke Runner Key
+ *
+ * Cut a runner off: its key answers 401 from the next request on.
+ */
+export const revokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteResponses,
+  RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteResponses,
+    RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/clients/{client_id}/runner-keys/{key_id}",
+    ...options,
+  });
 
 /**
  * Add Skill To Client

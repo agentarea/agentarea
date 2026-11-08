@@ -467,10 +467,11 @@ export function FileBrowser({
  * project's, and both from the workspace. A page that also wants the folder in
  * its URL builds the same shape from search params instead. */
 export function useFileBrowserState(
-  surface: string
+  surface: string,
+  seed?: string | null
 ): [FileBrowserState, (next: FileBrowserState) => void] {
   const [folder, setFolder] = useState("");
-  const [tabs, setTabs] = useFileTabs(surface);
+  const [tabs, setTabs] = useFileTabs(surface, seed);
   const state = useMemo(() => ({ folder, tabs }), [folder, tabs]);
   const update = useCallback(
     (next: FileBrowserState) => {

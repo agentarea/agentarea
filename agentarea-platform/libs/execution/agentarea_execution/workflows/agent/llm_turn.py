@@ -39,6 +39,7 @@ from .patches import (
     THINKING_ONLY_REPLY_PATCH,
     TURN_ABORTED_EVENT_PATCH,
 )
+from .runner_turn import RunnerTurnMixin
 from .tool_dispatch import ToolDispatchMixin
 
 FIRST_MESSAGE_IS_THE_TASK = (
@@ -99,7 +100,7 @@ def _render_workspace_attachment_prompt(value: Any) -> str:
     )
 
 
-class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
+class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin, RunnerTurnMixin):
     """One iteration of the agent loop: the model call and its response."""
 
     async def _execute_iteration(self) -> None:
@@ -118,7 +119,10 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
         await self._publish_events_immediately()
 
         try:
-            await self._execute_traditional_iteration()
+            if self._runner_client_id is not None:
+                await self._execute_runner_turn()
+            else:
+                await self._execute_traditional_iteration()
 
             # Check budget warnings
             await self._check_budget_status()

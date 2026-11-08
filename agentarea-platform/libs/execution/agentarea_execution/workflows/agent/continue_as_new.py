@@ -23,7 +23,7 @@ with workflow.unsafe.imports_passed_through():
     from ..helpers import BudgetTracker, EventManager
     from ..models import ContinueAsNewState, Message
 
-from ...models import AgentExecutionRequest, ToolProviderData
+from ...models import RUNNER_CLIENT_METADATA_KEY, AgentExecutionRequest, ToolProviderData
 from ..constants import CONTEXT_MAX_PAYLOAD_BYTES, EventTypes
 from .compaction import CompactionMixin
 from .patches import COMPACTION_BOUNDS_PAYLOAD_PATCH
@@ -125,6 +125,7 @@ class ContinueAsNewMixin(CompactionMixin):
         self._paused = state.paused
         self._pause_reason = state.pause_reason
         self._workflow_metadata = dict(state.workflow_metadata)
+        self._runner_client_id = self._workflow_metadata.get(RUNNER_CLIENT_METADATA_KEY)
         if state.interaction_contract_enabled is not None:
             self._interaction_contract_enabled = state.interaction_contract_enabled
         self.state.interaction_capabilities = (
@@ -193,16 +194,18 @@ class ContinueAsNewMixin(CompactionMixin):
         self.budget_tracker = BudgetTracker(self.state.budget_usd)
         self.budget_tracker.add_cost(state.total_cost)
         self.budget_tracker.restore(warning_sent=state.budget_warning_sent, currency=state.currency)
-        if self.state.context_window is None:
+        if self.state.context_window is not None:
+            self.context_manager = ContextWindowManager(self.state.context_window)
+            self.context_manager.restore(
+                warning_sent=state.context_warning_sent, compaction_count=state.compaction_count
+            )
+        elif self._runner_client_id is None:
+            # A run on a client's runner has no context window: its CLI keeps its own.
             raise ApplicationError(
                 "continued execution state has no ModelSpec context_window",
                 type="InvalidExecutionSnapshot",
                 non_retryable=True,
             )
-        self.context_manager = ContextWindowManager(self.state.context_window)
-        self.context_manager.restore(
-            warning_sent=state.context_warning_sent, compaction_count=state.compaction_count
-        )
 
         workflow.logger.info(
             f"Restored from run {state.continued_from_run_id}, "

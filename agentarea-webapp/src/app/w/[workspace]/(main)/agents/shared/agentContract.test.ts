@@ -59,6 +59,7 @@ describe("toAgentCreate", () => {
       description: "",
       instruction: "",
       model_id: "",
+      client_id: "",
       tools_config: { mcp_server_configs: [] },
       planning: false,
       a2ui_enabled: false,
