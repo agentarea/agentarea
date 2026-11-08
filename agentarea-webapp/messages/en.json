@@ -2128,7 +2128,9 @@
     "executionAwaitingFollowUp": "Awaiting follow-up",
     "startsAt": "Starts",
     "builtinTools": "Built-in tools",
-    "toolFailed": "{count} failed"
+    "toolFailed": "{count} failed",
+    "ranOn": "Ran on",
+    "runsOn": "Runs on"
   },
   "Workplace": {
     "hero": {
@@ -3951,6 +3953,11 @@
         "lastUsed": "Last used",
         "revoke": "Revoke"
       }
+    },
+    "agents": {
+      "title": "Agents on this harness",
+      "description": "Agents set to run on this harness. Their turns execute on its runner, with its tools.",
+      "empty": "No agent runs on this harness yet. Pick it under “Runs on” in an agent's settings."
     }
   },
   "AttachmentSection": {

@@ -218,6 +218,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
           label: agent.client.default_model || null,
           provider: agent.client.name,
           iconUrl: null,
+          client: agent.client,
         }
       : {
           label:
@@ -228,6 +229,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
             null,
           provider: modelInstance?.provider_name || null,
           iconUrl: modelInstance?.provider_icon_url || null,
+          client: null,
         },
     triggers: {
       count: triggers.length,

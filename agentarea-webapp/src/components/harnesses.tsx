@@ -1,7 +1,10 @@
 import type { ComponentType, SVGProps } from "react";
 import { Plug } from "lucide-react";
+import type { AgentClientSummary } from "@/api/client";
 import { ClaudeIcon, CodexIcon } from "@/components/brand-icons";
 import { Badge } from "@/components/ui/badge";
+import Link from "@/components/WorkspaceLink";
+import { cn } from "@/lib/utils";
 
 type HarnessGlyph = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -43,5 +46,31 @@ export function HarnessBadge({ kind }: { kind?: string | null }) {
     <Badge variant="outline" className="text-xs">
       {harnessOf(kind).label}
     </Badge>
+  );
+}
+
+/** The client an agent runs on, linking to its page. */
+export function HarnessClientLink({
+  client,
+  withIcon = true,
+  className,
+}: {
+  client: Pick<AgentClientSummary, "id" | "kind" | "name">;
+  withIcon?: boolean;
+  className?: string;
+}) {
+  return (
+    <Link
+      href={`/clients/${client.id}`}
+      className={cn(
+        "inline-flex min-w-0 max-w-full items-center gap-1 rounded-sm text-foreground/80 hover:text-foreground hover:underline",
+        className
+      )}
+    >
+      {withIcon && (
+        <HarnessIcon kind={client.kind} className="h-3.5 w-3.5 shrink-0" />
+      )}
+      <span className="truncate">{client.name}</span>
+    </Link>
   );
 }

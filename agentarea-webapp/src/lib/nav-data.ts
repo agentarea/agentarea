@@ -13,6 +13,7 @@ import {
   Radio,
   ShieldCheck,
   Sparkles,
+  Terminal,
   Users,
   Wallet,
   Zap,
@@ -111,6 +112,12 @@ export const navData = {
           titleKey: "connections",
           url: "/connections",
           icon: Plug,
+        },
+        {
+          title: "Harnesses",
+          titleKey: "clients",
+          url: "/clients",
+          icon: Terminal,
         },
         {
           title: "Automation",
