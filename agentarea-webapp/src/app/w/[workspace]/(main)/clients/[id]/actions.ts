@@ -9,6 +9,22 @@ async function revalidateClient(clientId: string) {
   revalidatePath(await requestWorkspacePath(`/clients/${clientId}`));
 }
 
+export async function saveClientDetailsAction(
+  clientId: string,
+  form: FormData
+): Promise<{ error: string | null }> {
+  const description = String(form.get("description") ?? "").trim();
+  const result = await updateClient(clientId, {
+    name: String(form.get("name") ?? "").trim(),
+    description: description || null,
+  });
+  if (result.error) {
+    return { error: apiErrorMessage(result, "The harness could not be saved") };
+  }
+  await revalidateClient(clientId);
+  return { error: null };
+}
+
 export async function setRunnerModelAction(
   clientId: string,
   model: string

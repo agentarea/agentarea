@@ -1110,10 +1110,7 @@
         "notSet": "not set"
       },
       "details": {
-        "title": "Details",
-        "id": "Connection ID",
-        "created": "Created",
-        "updated": "Updated"
+        "id": "Connection ID"
       },
       "confirm": {
         "deleteTitle": "Delete instance?",
@@ -3903,9 +3900,7 @@
   },
   "ClientsPage": {
     "loadFailed": "Couldn’t load harnesses",
-    "loadOneFailed": "Couldn’t load the harness",
     "createFailed": "Couldn’t add the harness",
-    "updateFailed": "Couldn’t save the harness",
     "title": "Harnesses",
     "description": "Connect external agent harnesses to your workspace's tools and skills.",
     "add": "Add harness",
@@ -3948,16 +3943,92 @@
       "keys": {
         "title": "Runner keys",
         "empty": "No runner key yet.",
-        "key": "Key",
-        "created": "Issued",
-        "lastUsed": "Last used",
-        "revoke": "Revoke"
+        "revoke": "Revoke",
+        "issued": "Issued {when}",
+        "used": "last used {when}",
+        "neverUsed": "never used"
       }
     },
     "agents": {
       "title": "Agents on this harness",
       "description": "Agents set to run on this harness. Their turns execute on its runner, with its tools.",
       "empty": "No agent runs on this harness yet. Pick it under “Runs on” in an agent's settings."
+    },
+    "tabs": {
+      "label": "Harness sections",
+      "overview": "Overview",
+      "tools": "Tools",
+      "runner": "Runner"
+    },
+    "overview": {
+      "defaultDescription": "A governed, scoped tool bundle an external harness connects to over MCP.",
+      "showMore": "Show more",
+      "showLess": "Show less",
+      "stats": {
+        "mcp": "MCP servers",
+        "toolsets": "Platform toolsets",
+        "skills": "Skills",
+        "agents": "Agents",
+        "allTools": "every tool served",
+        "none": "none attached",
+        "narrowed": "{count, plural, one {# with a tool subset} other {# with a tool subset}}",
+        "skillsSub": "through activate_skill",
+        "agentsSub": "run on its runner",
+        "agentsNone": "none assigned yet"
+      },
+      "connection": {
+        "title": "Connection",
+        "endpoint": "MCP endpoint",
+        "endpointHint": "Point the harness's MCP client here. It serves this bundle and nothing else.",
+        "sync": "Sync command",
+        "syncHint": "Writes the endpoint into the harness's own MCP config."
+      },
+      "runner": {
+        "manage": "Manage",
+        "status": "Status",
+        "noModel": "Not set",
+        "keyCount": "{count, plural, =0 {No keys} one {# key} other {# keys}}"
+      },
+      "agentSub": "Runs on this harness",
+      "details": {
+        "id": "Harness ID"
+      }
+    },
+    "tools": {
+      "add": "Add",
+      "servedTitle": "Served tools",
+      "servedEmpty": "Nothing served yet. Add an MCP server or a platform toolset to choose which of its tools the harness sees.",
+      "served": "Served tools ({selected}/{total})",
+      "openConnection": "Open",
+      "allServed": "All tools served",
+      "someServed": "{count, plural, one {# tool served} other {# tools served}}",
+      "someOff": "{count, plural, one {# method hidden} other {# methods hidden}}",
+      "saveFailed": "Couldn’t save the tool selection",
+      "toolsetGone": "The platform no longer serves this toolset. Remove it from the harness.",
+      "mcpToolsFailed": "Couldn’t load the instance’s tools",
+      "mcpNoTools": "This instance has not reported any tools yet, so the harness serves whatever it exposes.",
+      "catalogFailed": "Couldn’t load platform toolsets",
+      "mcp": {
+        "title": "MCP servers",
+        "sheetDescription": "Instances exposed through this harness's endpoint. Tools keep the namespace prefix set on the instance.",
+        "available": "Active MCP server instances",
+        "empty": "No MCP servers. Add one to expose its tools through the endpoint.",
+        "noneAvailable": "No MCP server instances yet. Create one under Connections first."
+      },
+      "toolsets": {
+        "title": "Platform tools",
+        "sheetDescription": "AgentArea toolsets served through the endpoint, in this harness's workspace and with the caller's own permissions.",
+        "available": "Platform toolsets",
+        "empty": "No platform toolsets. Add the ones this harness should manage AgentArea with.",
+        "noneAvailable": "The platform serves no toolsets."
+      },
+      "skills": {
+        "title": "Skills",
+        "sheetDescription": "Skills reachable through the endpoint's activate_skill tool.",
+        "available": "Available skills",
+        "empty": "No skills. Add the ones the harness should be able to activate.",
+        "noneAvailable": "No skills available. Create one under Skills."
+      }
     }
   },
   "AttachmentSection": {
@@ -3965,6 +4036,11 @@
     "removeFailed": "Couldn’t remove {item}",
     "remove": "Remove {item}",
     "loading": "Loading…"
+  },
+  "DetailsCard": {
+    "title": "Details",
+    "created": "Created",
+    "updated": "Updated"
   },
   "CatalogPage": {
     "title": "Catalog",

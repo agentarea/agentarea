@@ -26,6 +26,8 @@ export const PAGE_ROUTES = [
   "/bundles/import",
   "/clients",
   "/clients/*",
+  "/clients/*/runner",
+  "/clients/*/tools",
   "/connect/*",
   "/connect/catalog/*",
   "/connections",

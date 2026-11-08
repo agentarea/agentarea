@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useState } from "react";
+import { useTranslations } from "next-intl";
 import type {
   ClientMcpInstanceRef,
   ClientPlatformToolsetRef,
   PlatformToolsetResponse,
 } from "@/api/client";
 import FormError from "@/components/FormError";
-import Note from "@/components/ui/note";
+import { EmptyRow } from "@/components/Overview/OverviewCard";
 import {
   apiErrorMessage,
   formatApiError,
@@ -17,7 +17,6 @@ import {
 import {
   addMcpInstanceToClientAction,
   addPlatformToolsetToClientAction,
-  listMcpInstanceToolsAction,
 } from "@/lib/server-actions";
 import {
   MethodsList,
@@ -25,6 +24,9 @@ import {
 } from "../../agents/create/components/MethodsList";
 
 type SaveResult = { error?: unknown };
+
+/** An attached MCP instance's reported tools, or why they could not be read. */
+export type McpToolsResult = { tools: Method[] } | { error: string };
 
 /**
  * Checkboxes over a harness attachment's tools. A toggle saves at once; the
@@ -41,8 +43,9 @@ function ToolChecklist({
   tools: Method[];
   enabled: string[];
   save: (enabled: string[]) => Promise<SaveResult>;
-  onSaved: () => Promise<void>;
+  onSaved: () => void;
 }) {
+  const t = useTranslations("ClientsPage.tools");
   const [selected, setSelected] = useState(() => new Set(enabled));
   const [error, setError] = useState<string | null>(null);
 
@@ -52,25 +55,20 @@ function ToolChecklist({
     setError(null);
     try {
       const result = await save(
-        tools.map((t) => t.name).filter((n) => next.has(n))
+        tools.map((tool) => tool.name).filter((name) => next.has(name))
       );
       if (result?.error) {
         setSelected(previous);
-        setError(
-          apiErrorMessage(
-            result as ApiResultLike,
-            "Couldn’t save the tool selection"
-          )
-        );
+        setError(apiErrorMessage(result as ApiResultLike, t("saveFailed")));
         return;
       }
     } catch (err) {
       console.error("Failed to save the harness tool selection", err);
       setSelected(previous);
-      setError(`Couldn’t save the tool selection: ${formatApiError(err)}`);
+      setError(`${t("saveFailed")}: ${formatApiError(err)}`);
       return;
     }
-    await onSaved();
+    onSaved();
   };
 
   return (
@@ -78,10 +76,10 @@ function ToolChecklist({
       {error && <FormError>{error}</FormError>}
       <MethodsList
         toolName={id}
-        label={`Served tools (${selected.size}/${tools.length})`}
+        label={t("served", { selected: selected.size, total: tools.length })}
         methods={tools}
         selectedMethods={Object.fromEntries(
-          tools.map((t) => [t.name, selected.has(t.name)])
+          tools.map((tool) => [tool.name, selected.has(tool.name)])
         )}
         onMethodToggle={(name, checked) => {
           const next = new Set(selected);
@@ -91,8 +89,9 @@ function ToolChecklist({
         }}
         showSelectAll
         onSelectAll={(checked) =>
-          void apply(new Set(checked ? tools.map((t) => t.name) : []))
+          void apply(new Set(checked ? tools.map((tool) => tool.name) : []))
         }
+        wide
       />
     </div>
   );
@@ -108,31 +107,26 @@ export function PlatformToolsetMethods({
   clientId: string;
   attachment: ClientPlatformToolsetRef;
   toolset: PlatformToolsetResponse | undefined;
-  onSaved: () => Promise<void>;
+  onSaved: () => void;
 }) {
+  const t = useTranslations("ClientsPage.tools");
   if (!toolset) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        The platform no longer serves this toolset. Remove it from the harness.
-      </p>
-    );
+    return <EmptyRow text={t("toolsetGone")} />;
   }
   const disabled = new Set(attachment.disabled_methods ?? []);
   return (
-    <div className="space-y-2">
-      {toolset.description && (
-        <p className="text-xs text-muted-foreground">{toolset.description}</p>
-      )}
+    <div className="space-y-2 px-[15px] py-3">
+      {toolset.description && <p className="note">{toolset.description}</p>}
       <ToolChecklist
         id={`platform-${toolset.name}`}
         tools={toolset.methods}
         enabled={toolset.methods
-          .map((m) => m.name)
-          .filter((n) => !disabled.has(n))}
+          .map((method) => method.name)
+          .filter((name) => !disabled.has(name))}
         save={(enabled) => {
           const off = toolset.methods
-            .map((m) => m.name)
-            .filter((n) => !enabled.includes(n));
+            .map((method) => method.name)
+            .filter((name) => !enabled.includes(name));
           return addPlatformToolsetToClientAction(
             clientId,
             toolset.name,
@@ -149,76 +143,42 @@ export function PlatformToolsetMethods({
 export function McpInstanceTools({
   clientId,
   attachment,
+  result,
   onSaved,
 }: {
   clientId: string;
   attachment: ClientMcpInstanceRef;
-  onSaved: () => Promise<void>;
+  result: McpToolsResult | undefined;
+  onSaved: () => void;
 }) {
-  const [tools, setTools] = useState<Method[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const result = await listMcpInstanceToolsAction(attachment.id);
-        if (cancelled) return;
-        if (result.error || !result.data) {
-          setError(
-            apiErrorMessage(result, "Couldn’t load the instance’s tools")
-          );
-          return;
-        }
-        setTools(
-          result.data.map((tool) => ({
-            name: tool.name,
-            description: tool.description,
-          }))
-        );
-      } catch (err) {
-        console.error("Failed to load MCP instance tools", err);
-        if (!cancelled) {
-          setError(
-            `Couldn’t load the instance’s tools: ${formatApiError(err)}`
-          );
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [attachment.id]);
-
-  if (error) return <FormError>{error}</FormError>;
-  if (!tools) {
-    return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
-  }
-  if (tools.length === 0) {
+  const t = useTranslations("ClientsPage.tools");
+  if (!result || "error" in result) {
     return (
-      <Note>
-        <p>
-          This instance has not reported any tools yet, so the harness serves
-          whatever it exposes.
-        </p>
-      </Note>
+      <div className="px-[15px] py-3">
+        <FormError>{result?.error ?? t("mcpToolsFailed")}</FormError>
+      </div>
     );
   }
-  const names = tools.map((t) => t.name);
+  if (result.tools.length === 0) {
+    return <EmptyRow text={t("mcpNoTools")} />;
+  }
+  const names = result.tools.map((tool) => tool.name);
   return (
-    <ToolChecklist
-      id={`mcp-${attachment.id}`}
-      tools={tools}
-      enabled={attachment.allowed_tools ?? names}
-      save={(enabled) =>
-        addMcpInstanceToClientAction(
-          clientId,
-          attachment.id,
-          attachment.namespace_prefix,
-          enabled.length === names.length ? null : enabled
-        )
-      }
-      onSaved={onSaved}
-    />
+    <div className="px-[15px] py-3">
+      <ToolChecklist
+        id={`mcp-${attachment.id}`}
+        tools={result.tools}
+        enabled={attachment.allowed_tools ?? names}
+        save={(enabled) =>
+          addMcpInstanceToClientAction(
+            clientId,
+            attachment.id,
+            attachment.namespace_prefix,
+            enabled.length === names.length ? null : enabled
+          )
+        }
+        onSaved={onSaved}
+      />
+    </div>
   );
 }

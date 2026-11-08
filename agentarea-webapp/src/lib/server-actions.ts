@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import type { ZodError } from "zod";
 import type {
   CatalogConnectRequest,
-  ClientUpdate,
   ContinueTaskPayload,
   CreateWalletRequest,
   CreateWorkspaceDirectoryRequest,
@@ -80,7 +79,6 @@ import {
   getAgentTaskStatus,
   getAgentWallet,
   getAgentWalletPayments,
-  getClient,
   getMCPServerInstance,
   getNetworkTopology,
   getOpenAPIConnection,
@@ -93,8 +91,6 @@ import {
   installAgent,
   installSkill,
   listAgents,
-  listAllTools,
-  listClientPlatformToolsets,
   listClients,
   listMCPAuthConfigs,
   listMCPServerInstances,
@@ -135,7 +131,6 @@ import {
   submitTaskInput,
   updateAgentWallet,
   updateAllSkills,
-  updateClient,
   updateInstalledSkill,
   updateMCPServerInstance,
   updateOpenAPIConnection,
@@ -807,23 +802,12 @@ export async function listClientsAction() {
   return await listClients();
 }
 
-export async function getClientAction(clientId: string) {
-  return await getClient(clientId);
-}
-
 export async function createClientAction(payload: {
   name: string;
   description?: string | null;
   kind?: string;
 }) {
   return await createClient(payload);
-}
-
-export async function updateClientAction(
-  clientId: string,
-  payload: ClientUpdate
-) {
-  return await updateClient(clientId, payload);
 }
 
 export async function deleteClientAction(clientId: string) {
@@ -863,15 +847,6 @@ export async function removeMcpInstanceFromClientAction(
   mcpInstanceId: string
 ) {
   return await removeMcpInstanceFromClient(clientId, mcpInstanceId);
-}
-
-/** Tools an MCP instance last reported, without dialing it again. */
-export async function listMcpInstanceToolsAction(mcpInstanceId: string) {
-  return await listAllTools({ include: "mcp", mcpInstanceId });
-}
-
-export async function listClientPlatformToolsetsAction() {
-  return await listClientPlatformToolsets();
 }
 
 export async function addPlatformToolsetToClientAction(
