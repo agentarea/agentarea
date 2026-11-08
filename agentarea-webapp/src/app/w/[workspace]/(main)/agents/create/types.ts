@@ -80,6 +80,8 @@ export type AgentFormValues = {
   model_id: string;
   // A Codex or Claude Code client whose runner runs the agent, or "" for the platform's own loop.
   client_id: string;
+  // The level a runner agent's CLI reasons at, or "" for the model's default.
+  reasoning_effort?: string;
   tools_config: {
     mcp_server_configs: MCPServerConfig[];
     builtin_tools?: BuiltinToolConfig[];

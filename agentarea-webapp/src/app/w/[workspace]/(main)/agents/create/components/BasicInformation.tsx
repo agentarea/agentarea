@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Bot, Cpu, FileText, MessageSquare } from "lucide-react";
+import { Bot, Brain, Cpu, FileText, MessageSquare } from "lucide-react";
 import {
   Control,
   Controller,
@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
+import { offeredLevel, runnerModel, runnerModels } from "@/lib/runner-models";
 import type { AgentFormValues } from "../../create/types";
 import {
   listRunnerClientsAction,
@@ -37,8 +38,9 @@ import {
 } from "../../shared/runnerClientActions";
 import { getNestedErrorMessage } from "../utils/formUtils";
 
-// The Select's value for "no client": Radix refuses an empty item value.
+// The Selects' values for "no client" and "the model's level": Radix refuses an empty item value.
 const PLATFORM = "platform";
+const MODEL_DEFAULT = "default";
 const ClientIcon = ENTITY_ICONS.client;
 
 type LLMModelInstance = ModelInstanceResponse;
@@ -58,6 +60,7 @@ const BasicInformation = ({
   register,
   control,
   errors,
+  setValue,
   llmModelInstances,
   onRefreshModels,
   suggestedName,
@@ -81,6 +84,18 @@ const BasicInformation = ({
   }, []);
   const clientId = useWatch({ control, name: "client_id" });
   const runnerClient = runnerClients.find((c) => c.id === clientId) ?? null;
+  const reasoningEffort = useWatch({ control, name: "reasoning_effort" });
+  const currentRunnerModel = runnerClient
+    ? runnerModel(runnerClient, runnerClient.default_model)
+    : null;
+
+  const keepOfferedLevel = (client: ClientResponse | undefined) => {
+    const model = client ? runnerModel(client, client.default_model) : null;
+    const level = offeredLevel(model, reasoningEffort);
+    if (level !== (reasoningEffort ?? "")) {
+      setValue("reasoning_effort", level, { shouldDirty: true });
+    }
+  };
 
   const saveRunnerModel = (model: string) => {
     if (!runnerClient) return;
@@ -89,6 +104,7 @@ const BasicInformation = ({
         setRunnerClients((all) =>
           all.map((c) => (c.id === result.client.id ? result.client : c))
         );
+        keepOfferedLevel(result.client);
         setRunnerError(null);
       } else {
         setRunnerError(result.error);
@@ -168,9 +184,14 @@ const BasicInformation = ({
               render={({ field }) => (
                 <Select
                   value={field.value || PLATFORM}
-                  onValueChange={(value) =>
-                    field.onChange(value === PLATFORM ? "" : value)
-                  }
+                  onValueChange={(value) => {
+                    field.onChange(value === PLATFORM ? "" : value);
+                    if (value !== PLATFORM) {
+                      keepOfferedLevel(
+                        runnerClients.find((c) => c.id === value)
+                      );
+                    }
+                  }}
                 >
                   <SelectTrigger id="client_id">
                     <SelectValue />
@@ -200,7 +221,7 @@ const BasicInformation = ({
               <FormLabel htmlFor="runner_model" icon={Cpu}>
                 {t("runnerModel")}
               </FormLabel>
-              {runnerClient.models && runnerClient.models.length > 0 ? (
+              {runnerModels(runnerClient).length > 0 ? (
                 <Select
                   value={runnerClient.default_model ?? undefined}
                   onValueChange={saveRunnerModel}
@@ -209,12 +230,9 @@ const BasicInformation = ({
                     <SelectValue placeholder={t("selectModel")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {runnerClient.models.map((model) => (
-                      <SelectItem
-                        key={String(model.name)}
-                        value={String(model.name)}
-                      >
-                        {String(model.name)}
+                    {runnerModels(runnerClient).map((model) => (
+                      <SelectItem key={model.name} value={model.name}>
+                        {model.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -267,6 +285,45 @@ const BasicInformation = ({
               )}
             </div>
           )}
+          {currentRunnerModel &&
+            currentRunnerModel.reasoningLevels.length > 0 && (
+              <div className="space-y-2">
+                <FormLabel htmlFor="reasoning_effort" icon={Brain}>
+                  {t("reasoningLevel")}
+                </FormLabel>
+                <Controller
+                  name="reasoning_effort"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value || MODEL_DEFAULT}
+                      onValueChange={(value) =>
+                        field.onChange(value === MODEL_DEFAULT ? "" : value)
+                      }
+                    >
+                      <SelectTrigger id="reasoning_effort">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={MODEL_DEFAULT}>
+                          {currentRunnerModel.defaultReasoning
+                            ? t("reasoningModelDefaultLevel", {
+                                level: currentRunnerModel.defaultReasoning,
+                              })
+                            : t("reasoningModelDefault")}
+                        </SelectItem>
+                        {currentRunnerModel.reasoningLevels.map((level) => (
+                          <SelectItem key={level} value={level}>
+                            {level}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <p className="note">{t("reasoningLevelHint")}</p>
+              </div>
+            )}
         </div>
         <div className="space-y-2">
           <FormLabel htmlFor="description" icon={FileText} optional>

@@ -19,6 +19,7 @@ import {
 } from "@/lib/api-dashboard";
 import { apiErrorMessage, isApiNotFound } from "@/lib/api-errors";
 import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
+import { withReasoning } from "@/lib/runner-models";
 import { getAgentStatusPresentation } from "@/lib/status";
 import { getViewerCapabilities } from "@/lib/workspace-context";
 import { agentSkillViews } from "@/types/agent";
@@ -215,7 +216,10 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     // An agent on a client's runner runs the CLI's model, not a platform model instance.
     model: agent.client
       ? {
-          label: agent.client.default_model || null,
+          label: withReasoning(
+            agent.client.default_model,
+            agent.reasoning_effort
+          ),
           provider: agent.client.name,
           iconUrl: null,
           client: agent.client,
