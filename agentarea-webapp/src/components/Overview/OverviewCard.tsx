@@ -100,6 +100,22 @@ export function EmptyRow({
   );
 }
 
+/** A labelled value inside a section card: a URL, a command, an image. */
+export function CardField({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5 border-b border-border/60 px-[15px] py-3 last:border-b-0">
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      {children}
+    </div>
+  );
+}
+
 /* ------------------------------ hero / rail ----------------------------- */
 
 /** Dot-separated meta item for a detail page hero. */
