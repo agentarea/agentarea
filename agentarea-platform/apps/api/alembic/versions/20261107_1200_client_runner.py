@@ -45,6 +45,7 @@ def upgrade() -> None:
             nullable=True,
         ),
     )
+    op.create_index("ix_agents_client_id", "agents", ["client_id"])
     op.add_column(
         "api_keys",
         sa.Column(
@@ -62,6 +63,7 @@ def downgrade() -> None:
     op.execute("DELETE FROM api_keys WHERE client_id IS NOT NULL")
     op.drop_index("ix_api_keys_client_id", table_name="api_keys")
     op.drop_column("api_keys", "client_id")
+    op.drop_index("ix_agents_client_id", table_name="agents")
     op.drop_column("agents", "client_id")
     op.drop_column("clients", "allow_domains")
     op.drop_column("clients", "default_model")

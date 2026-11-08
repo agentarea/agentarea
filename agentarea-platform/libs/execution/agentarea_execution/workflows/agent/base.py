@@ -143,10 +143,14 @@ class AgentWorkflowBase:
         self._runner_held_back: list[dict[str, Any]] = []
         # The CLI's open approval requests: escalation id -> the runner's request id.
         self._runner_asks: dict[str, str] = {}
+        # Every request id the running turn asked about, answered or not.
+        self._runner_seen_asks: set[str] = set()
         # Commands of the running turn the runner reported started and not yet finished.
         self._runner_open_tools: dict[str, str | None] = {}
         # A pause asked the runner to stop the running turn; the resume starts the next.
         self._runner_pausing = False
+        # What a retried run sends its first turn: the run's retry carries no message.
+        self._runner_retry_message: str | None = None
 
     @property
     def _questions_available(self) -> bool:

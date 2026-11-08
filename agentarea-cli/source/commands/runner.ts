@@ -4,7 +4,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
-import {Readable} from 'node:stream';
+import {Readable, pipeline} from 'node:stream';
 import {spawn, type ChildProcessWithoutNullStreams} from 'node:child_process';
 
 /**
@@ -459,15 +459,35 @@ export function codexEvents(
 	}
 }
 
+/** How long a request to `codex app-server` may go unanswered. */
+const REQUEST_TIMEOUT_MS = 60_000;
+/** How long a stopped turn's CLI may take to stop before the runner stops it itself. */
+const CANCEL_GRACE_MS = 10_000;
+
+async function delay(ms: number): Promise<void> {
+	return new Promise(resolve => {
+		setTimeout(resolve, ms);
+	});
+}
+
+/** Why a CLI could not start, as a turn's error says it. */
+function spawnFailure(command: string, error: NodeJS.ErrnoException): string {
+	return error.code === 'ENOENT'
+		? `${command} not found on PATH`
+		: `${command} could not start: ${error.message}`;
+}
+
 /** A newline-delimited JSON-RPC peer over a child's stdio, as `codex app-server` speaks it. */
-class JsonRpcPeer {
+export class JsonRpcPeer {
 	private next = 1;
+	private failed: Error | undefined;
 	private readonly waiting = new Map<
 		number,
 		{resolve: (value: any) => void; reject: (error: Error) => void}
 	>();
 
 	private readonly child: ChildProcessWithoutNullStreams;
+	private readonly timeoutMs: number;
 	private readonly onNotification: (
 		method: string,
 		params: Record<string, any>,
@@ -487,10 +507,15 @@ class JsonRpcPeer {
 			method: string,
 			params: Record<string, any>,
 		) => void,
+		timeoutMs = REQUEST_TIMEOUT_MS,
 	) {
+		this.timeoutMs = timeoutMs;
 		this.child = child;
 		this.onNotification = onNotification;
 		this.onRequest = onRequest;
+		child.stdin.on('error', (error: Error) => {
+			console.error(`[runner] writing to codex app-server: ${String(error)}`);
+		});
 		const lines = readline.createInterface({input: child.stdout});
 		lines.on('line', line => {
 			this.receive(line);
@@ -498,9 +523,30 @@ class JsonRpcPeer {
 	}
 
 	async request(method: string, params: unknown): Promise<any> {
+		if (this.failed) {
+			throw this.failed;
+		}
+
 		const id = this.next++;
 		return new Promise((resolve, reject) => {
-			this.waiting.set(id, {resolve, reject});
+			const timer = setTimeout(() => {
+				this.waiting.delete(id);
+				reject(
+					new Error(
+						`codex app-server did not answer ${method} in ${this.timeoutMs} ms`,
+					),
+				);
+			}, this.timeoutMs);
+			this.waiting.set(id, {
+				resolve(value) {
+					clearTimeout(timer);
+					resolve(value);
+				},
+				reject(error) {
+					clearTimeout(timer);
+					reject(error);
+				},
+			});
 			this.write({id, method, params});
 		});
 	}
@@ -518,6 +564,7 @@ class JsonRpcPeer {
 	}
 
 	failAll(error: Error): void {
+		this.failed = error;
 		for (const pending of this.waiting.values()) {
 			pending.reject(error);
 		}
@@ -572,6 +619,7 @@ class CodexTurn implements TurnControl {
 	private readonly pendingSteers: Array<{messageId: string; text: string}> = [];
 	private cancelled = false;
 	private ended = false;
+	private stopTimer: NodeJS.Timeout | undefined;
 	private response: string | undefined;
 	private error: string | undefined;
 	readonly fileChanges = new Map<string, unknown>();
@@ -612,6 +660,17 @@ class CodexTurn implements TurnControl {
 					console.error(`[runner] interrupt: ${String(error)}`);
 				});
 		}
+
+		this.stopTimer ??= setTimeout(() => {
+			if (!this.ended) {
+				console.error(
+					`[runner] codex did not stop turn ${logged(
+						this.assign.turn_id,
+					)}; ending it here`,
+				);
+				this.end('interrupted', {});
+			}
+		}, CANCEL_GRACE_MS);
 	}
 
 	decide(requestId: string, approved: boolean): void {
@@ -671,6 +730,10 @@ class CodexTurn implements TurnControl {
 					...(assign.model ? {model: assign.model} : {}),
 			  });
 		this.threadId = String(thread.thread.id);
+		if (this.ended) {
+			return;
+		}
+
 		this.server.byThread.set(this.threadId, this);
 		this.sink.started(this.threadId);
 		const started = await this.server.peer.request('turn/start', {
@@ -682,6 +745,10 @@ class CodexTurn implements TurnControl {
 		this.codexTurnId = String(started.turn.id);
 		if (this.cancelled) {
 			this.cancel();
+		}
+
+		if (this.ended) {
+			return;
 		}
 
 		for (const {messageId, text} of this.pendingSteers.splice(0)) {
@@ -822,7 +889,11 @@ class CodexTurn implements TurnControl {
 		}
 
 		this.ended = true;
-		if (this.threadId !== null) {
+		clearTimeout(this.stopTimer);
+		if (
+			this.threadId !== null &&
+			this.server.byThread.get(this.threadId) === this
+		) {
 			this.server.byThread.delete(this.threadId);
 		}
 
@@ -855,6 +926,38 @@ class CodexTurn implements TurnControl {
 }
 
 /**
+ * The turn of `turns` a Codex notification belongs to: the one with its thread
+ * and turn id. A thread resumed for a new turn while its earlier, stopped turn
+ * winds down hears both; `latest` is the thread's newest turn, which takes
+ * what carries no turn id and what arrives before its own turn id is known.
+ */
+export function notifiedTurn<
+	T extends {threadId: string | null; codexTurnId: string | null},
+>(
+	turns: Iterable<T>,
+	latest: T | undefined,
+	params: Record<string, any>,
+): T | undefined {
+	const threadId: unknown = params['threadId'];
+	if (typeof threadId !== 'string') {
+		return undefined;
+	}
+
+	const turnId: unknown = params['turnId'] ?? params['turn']?.['id'];
+	if (typeof turnId !== 'string') {
+		return latest;
+	}
+
+	for (const turn of turns) {
+		if (turn.threadId === threadId && turn.codexTurnId === turnId) {
+			return turn;
+		}
+	}
+
+	return latest?.codexTurnId === null ? latest : undefined;
+}
+
+/**
  * One `codex app-server` for one person's CLI home, shared by their tasks'
  * turns. It keeps the config it started with: a thread it loaded keeps the
  * network allowlist of that config, so a changed config retires the server
@@ -868,6 +971,7 @@ class CodexServer {
 	readonly peer: JsonRpcPeer;
 	private readonly child: ChildProcessWithoutNullStreams;
 	private stderr = '';
+	private closed = false;
 	readonly ready: Promise<void>;
 
 	readonly options: RunnerOptions;
@@ -897,17 +1001,10 @@ class CodexServer {
 		this.peer = new JsonRpcPeer(
 			this.child,
 			(method, params) => {
-				const turn =
-					typeof params['threadId'] === 'string'
-						? this.byThread.get(params['threadId'])
-						: undefined;
-				turn?.onNotification(method, params);
+				this.turnOf(params)?.onNotification(method, params);
 			},
 			(id, method, params) => {
-				const turn =
-					typeof params['threadId'] === 'string'
-						? this.byThread.get(params['threadId'])
-						: undefined;
+				const turn = this.turnOf(params);
 				if (turn) {
 					turn.onRequest(id, method, params);
 				} else {
@@ -919,17 +1016,48 @@ class CodexServer {
 			},
 		);
 		this.child.on('close', code => {
-			const error = new Error(
+			this.close(
 				this.stderr.trim() || `codex app-server exited with ${String(code)}`,
 			);
-			this.peer.failAll(error);
-			for (const turn of [...this.byThread.values()]) {
-				turn.end('failed', {error: error.message});
-			}
-
-			this.onExit();
+		});
+		this.child.on('error', (error: NodeJS.ErrnoException) => {
+			console.error(`[runner] codex app-server: ${String(error)}`);
+			this.close(spawnFailure('codex', error));
 		});
 		this.ready = this.initialize();
+	}
+
+	/** The turn a notification or request of the server is about; one of an earlier turn on the thread is not the current one's. */
+	private turnOf(params: Record<string, any>): CodexTurn | undefined {
+		const turn = notifiedTurn(
+			this.turns,
+			typeof params['threadId'] === 'string'
+				? this.byThread.get(params['threadId'])
+				: undefined,
+			params,
+		);
+		if (!turn && typeof params['threadId'] === 'string') {
+			console.debug(
+				`[runner] codex said something of a turn this runner no longer runs`,
+			);
+		}
+
+		return turn;
+	}
+
+	private close(message: string): void {
+		if (this.closed) {
+			return;
+		}
+
+		this.closed = true;
+		const error = new Error(message);
+		this.peer.failAll(error);
+		for (const turn of [...this.turns]) {
+			turn.end('failed', {error: error.message});
+		}
+
+		this.onExit();
 	}
 
 	/** Retire the server for one with a new config; it stops when its turns end. */
@@ -975,6 +1103,8 @@ class ClaudeTurn implements TurnControl {
 	private sessionId: string | undefined;
 	private messageId = '';
 	private readonly approvals = new Map<string, Record<string, any>>();
+	/** Settles once the process is gone. */
+	readonly exited: Promise<void>;
 
 	readonly assign: Assign;
 	private readonly sink: TurnSink;
@@ -1047,9 +1177,25 @@ class ClaudeTurn implements TurnControl {
 		readline.createInterface({input: this.child.stdout}).on('line', line => {
 			this.receive(line);
 		});
-		this.child.on('close', code => {
-			this.end('failed', {
-				error: this.stderr.trim() || `claude exited with ${String(code)}`,
+		this.child.stdin.on('error', (error: Error) => {
+			console.error(`[runner] writing to claude: ${String(error)}`);
+		});
+		this.exited = new Promise(resolve => {
+			this.child.on('close', code => {
+				resolve();
+				if (this.interrupting) {
+					this.end('interrupted', {});
+					return;
+				}
+
+				this.end('failed', {
+					error: this.stderr.trim() || `claude exited with ${String(code)}`,
+				});
+			});
+			this.child.on('error', (error: NodeJS.ErrnoException) => {
+				console.error(`[runner] claude: ${String(error)}`);
+				resolve();
+				this.end('failed', {error: spawnFailure('claude', error)});
 			});
 		});
 		this.write({
@@ -1059,18 +1205,10 @@ class ClaudeTurn implements TurnControl {
 		});
 	}
 
-	steer(messageId: string, text: string): void {
-		if (this.ended) {
-			this.sink.steered(messageId, false);
-			return;
-		}
-
-		this.write({
-			type: 'user',
-			message: {role: 'user', content: text},
-			parent_tool_use_id: null,
-		});
-		this.sink.steered(messageId, true);
+	steer(messageId: string, _text: string): void {
+		// Claude answers a message written mid-turn as an exchange of its own, after
+		// this turn's result; refused, the platform sends it as the next turn.
+		this.sink.steered(messageId, false);
 	}
 
 	cancel(): void {
@@ -1080,6 +1218,34 @@ class ClaudeTurn implements TurnControl {
 			request_id: `interrupt-${Date.now()}`,
 			request: {subtype: 'interrupt'},
 		});
+		setTimeout(() => {
+			if (this.running) {
+				console.error(
+					`[runner] claude did not stop turn ${logged(
+						this.assign.turn_id,
+					)}; killing it`,
+				);
+				this.child.kill('SIGKILL');
+			}
+		}, CANCEL_GRACE_MS);
+	}
+
+	/** Wait for the process of an earlier turn to exit, killing it after `graceMs`. */
+	async stop(graceMs: number): Promise<void> {
+		await Promise.race([this.exited, delay(graceMs)]);
+		if (this.running) {
+			console.error(
+				`[runner] claude of turn ${logged(
+					this.assign.turn_id,
+				)} still running; killing it`,
+			);
+			this.child.kill('SIGKILL');
+			await Promise.race([this.exited, delay(graceMs)]);
+		}
+	}
+
+	private get running(): boolean {
+		return this.child.exitCode === null && this.child.signalCode === null;
 	}
 
 	decide(requestId: string, approved: boolean): void {
@@ -1555,9 +1721,14 @@ export class McpRelay {
 		}
 
 		const method = request.method ?? 'GET';
+		const gone = new AbortController();
+		response.on('close', () => {
+			gone.abort();
+		});
 		const upstream = await fetch(apiRoute(this.apiUrl, turn.mcp_path), {
 			method,
 			headers,
+			signal: gone.signal,
 			...(method === 'GET' || method === 'HEAD' || method === 'DELETE'
 				? {}
 				: {body: Buffer.concat(chunks)}),
@@ -1572,7 +1743,11 @@ export class McpRelay {
 
 		response.writeHead(upstream.status, shown);
 		if (upstream.body) {
-			Readable.fromWeb(upstream.body as any).pipe(response);
+			pipeline(Readable.fromWeb(upstream.body as any), response, error => {
+				if (error && !gone.signal.aborted) {
+					console.error(`[runner] MCP relay stream: ${String(error)}`);
+				}
+			});
 		} else {
 			response.end();
 		}
@@ -1601,14 +1776,25 @@ interface Running {
 	control: TurnControl | undefined;
 	/** The platform gave the turn away while this runner was disconnected. */
 	dropped: boolean;
+	/** The platform stopped the turn, maybe before its CLI started. */
+	cancelled: boolean;
 	/** Tool calls the CLI started and has not answered, by id: their names. */
 	open: Map<string, string>;
 }
 
 /**
+ * What waits for the next `welcome` when the socket is closed: a turn's end.
+ * The platform gives every running turn away on reconnect, so what those turns
+ * report meanwhile is dropped rather than queued.
+ */
+export function queuedWhileAway(frame: Record<string, unknown>): boolean {
+	return frame['type'] === 'turn.finished';
+}
+
+/**
  * The runner: one socket to the platform, reconnecting with backoff. Frames
- * that find the socket closed wait in the outbox and go after the next
- * `welcome`; the platform drops any it already kept by their position.
+ * that find the socket closed are dropped, except those `queuedWhileAway`
+ * keeps for after the next `welcome`.
  */
 class Runner {
 	private socket: Socket | undefined;
@@ -1616,6 +1802,8 @@ class Runner {
 	private outbox: Array<Record<string, unknown>> = [];
 	private readonly running = new Map<string, Running>();
 	private readonly codexServers = new Map<string, CodexServer>();
+	/** Each task's latest Claude process, which a new turn of the task waits out. */
+	private readonly claudeTurns = new Map<string, ClaudeTurn>();
 	private pinger: NodeJS.Timeout | undefined;
 	private backoff = 1000;
 
@@ -1684,7 +1872,7 @@ class Runner {
 	private send(frame: Record<string, unknown>): void {
 		if (this.socket?.readyState === OPEN && this.welcomed) {
 			this.socket.send(JSON.stringify(frame));
-		} else {
+		} else if (queuedWhileAway(frame)) {
 			this.outbox.push(frame);
 		}
 	}
@@ -1739,7 +1927,12 @@ class Runner {
 			}
 
 			case 'turn.cancel': {
-				this.running.get(frame['turn_id'])?.control?.cancel();
+				const turn = this.running.get(frame['turn_id']);
+				if (turn) {
+					turn.cancelled = true;
+					turn.control?.cancel();
+				}
+
 				break;
 			}
 
@@ -1765,6 +1958,7 @@ class Runner {
 			if (!kept.has(turnId)) {
 				console.error(`[runner] turn ${turnId} was given away; stopping it`);
 				turn.dropped = true;
+				turn.cancelled = true;
 				turn.control?.cancel();
 			}
 		}
@@ -1900,16 +2094,43 @@ class Runner {
 			seq: 0,
 			control: undefined,
 			dropped: false,
+			cancelled: false,
 			open: new Map(),
 		};
 		this.running.set(assign.turn_id, running);
 		const sink = this.sinkFor(running);
 		if (this.options.harness === 'claude') {
-			running.control = new ClaudeTurn(this.options, this.relay, assign, sink);
+			void this.startClaude(running, sink);
 			return;
 		}
 
 		void this.startCodex(running, sink);
+	}
+
+	private async startClaude(running: Running, sink: TurnSink): Promise<void> {
+		const {assign} = running;
+		// Two processes resuming one session would both write it.
+		await this.claudeTurns.get(assign.task_id)?.stop(CANCEL_GRACE_MS);
+		if (running.cancelled) {
+			sink.finished('interrupted', {});
+			return;
+		}
+
+		let turn: ClaudeTurn;
+		try {
+			turn = new ClaudeTurn(this.options, this.relay, assign, sink);
+		} catch (error) {
+			sink.finished('failed', {error: String(error)});
+			return;
+		}
+
+		running.control = turn;
+		this.claudeTurns.set(assign.task_id, turn);
+		void turn.exited.then(() => {
+			if (this.claudeTurns.get(assign.task_id) === turn) {
+				this.claudeTurns.delete(assign.task_id);
+			}
+		});
 	}
 
 	private async startCodex(running: Running, sink: TurnSink): Promise<void> {

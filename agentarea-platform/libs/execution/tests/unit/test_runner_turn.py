@@ -10,20 +10,38 @@ from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
 import pytest
+from agentarea_common.money import to_money
 from agentarea_execution.interaction import resolve_interaction_capabilities
 from agentarea_execution.models import (
+    AgentExecutionResume,
+    ConversationResumeSnapshot,
     RunnerActor,
     RunnerApprovalAsk,
     RunnerTurnEvent,
     RunnerTurnResult,
     RunnerTurnUpdate,
 )
-from agentarea_execution.workflows.agent.runner_turn import RESUME_MESSAGE, RUNNER_LOST
+from agentarea_execution.workflows.agent.runner_turn import (
+    RESUME_MESSAGE,
+    RETRY_MESSAGE,
+    RUNNER_LOST,
+)
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
-from agentarea_execution.workflows.constants import Activities, EventTypes
-from agentarea_execution.workflows.helpers import EventManager
+from agentarea_execution.workflows.constants import (
+    RUNNER_TURN_MAX_ATTEMPTS,
+    Activities,
+    EventTypes,
+)
+from agentarea_execution.workflows.helpers import BudgetTracker, EventManager
 from agentarea_execution.workflows.models import AgentGoal
-from temporalio.exceptions import ActivityError, ApplicationError, RetryState
+from temporalio.exceptions import (
+    ActivityError,
+    ApplicationError,
+    CancelledError,
+    RetryState,
+    TimeoutError,
+    TimeoutType,
+)
 
 CLIENT_ID = "f9e7328e-4d39-43a7-aa65-0116330ca9d5"
 MODULE = "agentarea_execution.workflows.agent.runner_turn.workflow"
@@ -83,18 +101,34 @@ def _finished(result: RunnerTurnResult | BaseException) -> asyncio.Future:
     return future
 
 
-def _runner_lost() -> ActivityError:
+def _activity_error(cause: BaseException, activity_type: str = Activities.RUN_RUNNER_TURN):
     error = ActivityError(
         "Activity task failed",
         scheduled_event_id=1,
         started_event_id=2,
         identity="api",
-        activity_type=Activities.RUN_RUNNER_TURN,
+        activity_type=activity_type,
         activity_id="1",
         retry_state=RetryState.MAXIMUM_ATTEMPTS_REACHED,
     )
-    error.__cause__ = ApplicationError("the runner went away", type=RUNNER_LOST)
+    error.__cause__ = cause
     return error
+
+
+def _runner_lost() -> ActivityError:
+    return _activity_error(ApplicationError("the runner went away", type=RUNNER_LOST))
+
+
+class _RunningTurn(asyncio.Future):
+    """A turn activity still running, which ends cancelled when the run cancels it."""
+
+    cancel_requested = False
+
+    def cancel(self, msg=None) -> bool:
+        self.cancel_requested = True
+        if not self.done():
+            self.set_exception(_activity_error(CancelledError()))
+        return True
 
 
 def _workflow_module(handles: list[asyncio.Future]):
@@ -294,3 +328,124 @@ async def test_a_pause_stops_the_clis_turn_and_the_resume_continues_the_session(
 async def test_a_resume_with_no_message_tells_the_cli_to_continue(instance):
     instance._runner_turn_key = "1.1"
     assert instance._runner_resumed_turn(None) == (RESUME_MESSAGE, None)
+
+
+@pytest.mark.asyncio
+async def test_a_turn_its_runners_keep_losing_fails_after_a_bounded_number_of_attempts(instance):
+    module = _workflow_module([_finished(_runner_lost()) for _ in range(RUNNER_TURN_MAX_ATTEMPTS)])
+    with patch(MODULE, module), pytest.raises(ApplicationError) as failed:
+        await instance._run_runner_turn("go", None)
+
+    assert failed.value.type == "RunnerTurnLost"
+    assert module.start_activity.call_count == RUNNER_TURN_MAX_ATTEMPTS
+
+
+@pytest.mark.asyncio
+async def test_a_turn_no_runner_takes_fails_as_the_runner_being_offline(instance):
+    offline = _activity_error(
+        TimeoutError(
+            "activity timed out", type=TimeoutType.SCHEDULE_TO_START, last_heartbeat_details=[]
+        )
+    )
+    module = _workflow_module([_finished(offline)])
+    with patch(MODULE, module), pytest.raises(ApplicationError) as failed:
+        await instance._run_runner_turn("go", None)
+
+    assert failed.value.type == "RunnerOffline"
+    assert module.start_activity.call_count == 1
+    assert module.start_activity.call_args.kwargs["schedule_to_start_timeout"]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_delivery_stops_the_clis_turn_before_the_run_fails(instance):
+    handle = _RunningTurn()
+    outage = _activity_error(ApplicationError("redis is down"), Activities.DELIVER_TO_RUNNER)
+    instance._deliver_to_runner.side_effect = outage
+    instance._message_queue.append({"id": "m2", "content": "and the totals"})
+    with patch(MODULE, _workflow_module([handle])), pytest.raises(ActivityError) as failed:
+        await instance._run_runner_turn("go", None)
+
+    assert failed.value is outage
+    assert handle.cancel_requested
+    assert instance._runner_turn_key is None
+    await instance.runner_turn_update(RunnerTurnUpdate(turn_key="1.1"))
+    assert instance._runner_updates == []
+
+
+@pytest.mark.asyncio
+async def test_an_answer_while_the_turn_pauses_waits_for_the_paused_turn(instance):
+    instance._runner_turn_key = "1.1"
+    await instance.runner_turn_update(
+        RunnerTurnUpdate(
+            turn_key="1.1",
+            approvals=[RunnerApprovalAsk(request_id="r1", kind="command", tool_name="shell")],
+        )
+    )
+    with patch(MODULE, _workflow_module([])):
+        await instance._serve_runner_turn(deliver=True)
+    (escalation_id,) = instance._pending_escalations
+    instance._runner_pausing = True
+    await instance.resolve_escalation(escalation_id, True, None, resolved_by="maria")
+
+    assert instance._runner_has_work() is False
+    instance._message_queue.append({"id": "m2", "content": "later"})
+    assert instance._runner_has_work() is False
+
+
+@pytest.mark.asyncio
+async def test_an_approval_reported_again_after_its_answer_opens_no_second_escalation(instance):
+    instance._runner_turn_key = "1.1"
+    ask = RunnerApprovalAsk(request_id="r1", kind="command", tool_name="shell")
+    with patch(MODULE, _workflow_module([])):
+        await instance.runner_turn_update(RunnerTurnUpdate(turn_key="1.1", approvals=[ask]))
+        await instance._serve_runner_turn(deliver=True)
+        (escalation_id,) = instance._pending_escalations
+        await instance.resolve_escalation(escalation_id, True, None, resolved_by="maria")
+        await instance._serve_runner_turn(deliver=True)
+        await instance.runner_turn_update(RunnerTurnUpdate(turn_key="1.1", approvals=[ask]))
+        await instance._serve_runner_turn(deliver=True)
+
+    assert instance._pending_escalations == {}
+    assert len(_events(instance, EventTypes.HUMAN_APPROVAL_REQUESTED)) == 1
+
+
+def _resume(current_iteration: int) -> AgentExecutionResume:
+    return AgentExecutionResume(
+        snapshot=ConversationResumeSnapshot(
+            head_seqs=[], tail_start=0, next_seq=3, current_iteration=current_iteration
+        ),
+        retry=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_retry_after_a_failed_first_turn_sends_the_task_again(instance):
+    instance.budget_tracker = BudgetTracker(to_money("1"))
+    instance._adopt_resume(_resume(1))
+    instance._conversation_seeded = True
+    module = _workflow_module([_finished(RunnerTurnResult(status="completed", response="ok"))])
+    with patch(MODULE, module):
+        await instance._execute_runner_turn()
+
+    assert module.start_activity.call_args.args[1].message == "parse the proposal"
+
+
+@pytest.mark.asyncio
+async def test_a_retry_after_a_later_turn_tells_the_cli_to_do_it_again(instance):
+    instance.budget_tracker = BudgetTracker(to_money("1"))
+    instance._adopt_resume(_resume(3))
+    instance._conversation_seeded = True
+    module = _workflow_module([_finished(RunnerTurnResult(status="completed", response="ok"))])
+    with patch(MODULE, module):
+        await instance._execute_runner_turn()
+
+    assert module.start_activity.call_args.args[1].message == RETRY_MESSAGE
+
+
+@pytest.mark.asyncio
+async def test_a_message_with_a_malformed_sender_is_rejected_not_raised(instance):
+    await instance.workflow_command("queue_message", {"message": "hi", "sender": {"type": "robot"}})
+    await instance.workflow_command("queue_message", {"message": "hi", "sender": {"type": "user"}})
+
+    assert instance._message_queue == []
+    assert len(_events(instance, EventTypes.COMMAND_REJECTED)) == 2

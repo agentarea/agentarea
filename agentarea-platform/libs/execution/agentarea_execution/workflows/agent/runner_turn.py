@@ -22,6 +22,7 @@ from temporalio.exceptions import (
     ActivityError,
     ApplicationError,
     TimeoutError,
+    TimeoutType,
     is_cancelled_exception,
 )
 
@@ -43,7 +44,9 @@ from ...models import (
 from ..constants import (
     ACTIVITY_TIMEOUT,
     RUNNER_TURN_HEARTBEAT_TIMEOUT,
+    RUNNER_TURN_MAX_ATTEMPTS,
     RUNNER_TURN_RETRY_DELAY,
+    RUNNER_TURN_START_TIMEOUT,
     RUNNER_TURN_TIMEOUT,
     Activities,
     EventTypes,
@@ -56,6 +59,8 @@ from .base import AgentWorkflowBase
 RUNNER_LOST = "RunnerLost"
 # The turn after a resume, when nobody sent the paused run a message.
 RESUME_MESSAGE = "You were paused. Continue from where you stopped."
+# The turn a retry of a failed run sends, when the failed turn was not the first.
+RETRY_MESSAGE = "Your last turn ended before it finished. Do it again from where you stopped."
 
 
 class RunnerTurnMixin(AgentWorkflowBase):
@@ -79,6 +84,11 @@ class RunnerTurnMixin(AgentWorkflowBase):
                 )
             queued.insert(0, {"id": str(workflow.uuid4()), "content": self.state.goal.description})
             self._conversation_seeded = True
+        if not queued and self._runner_retry_message is not None:
+            # A retry re-runs the failed turn; the CLI's session holds what it was asked.
+            text, self._runner_retry_message = self._runner_retry_message, None
+            self._end_runner_turn(await self._run_runner_turn(text, None))
+            return
         if not queued:
             raise ApplicationError(
                 "A turn on a runner has no message to send; send the task a message instead",
@@ -94,6 +104,9 @@ class RunnerTurnMixin(AgentWorkflowBase):
             "\n\n".join(message["content"] for message in queued),
             RunnerActor.model_validate(sender) if sender else None,
         )
+        self._end_runner_turn(result)
+
+    def _end_runner_turn(self, result: RunnerTurnResult) -> None:
         self._settle_runner_turn()
         if result.status == "completed":
             self._complete_runner_turn(result.response or "")
@@ -117,6 +130,7 @@ class RunnerTurnMixin(AgentWorkflowBase):
             self._runner_turn_key = f"{self.state.current_iteration}.{attempt}"
             self._runner_last_seq = 0
             self._runner_updates = []
+            self._runner_seen_asks = set()
             await self._publish_events_immediately()
             handle = workflow.start_activity(
                 Activities.RUN_RUNNER_TURN,
@@ -131,6 +145,7 @@ class RunnerTurnMixin(AgentWorkflowBase):
                 ),
                 result_type=RunnerTurnResult,
                 task_queue=runner_task_queue(str(self._runner_client_id)),
+                schedule_to_start_timeout=RUNNER_TURN_START_TIMEOUT,
                 start_to_close_timeout=RUNNER_TURN_TIMEOUT,
                 heartbeat_timeout=RUNNER_TURN_HEARTBEAT_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=1),
@@ -142,32 +157,38 @@ class RunnerTurnMixin(AgentWorkflowBase):
                         lambda handle=handle: handle.done() or self._runner_has_work()
                     )
                     await self._serve_runner_turn(deliver=True)
-                result = await handle
-            except asyncio.CancelledError:
-                # The run was stopped: the activity stops the CLI's turn, and what
-                # it reported until then is recorded before the run closes.
-                handle.cancel()
-                try:
-                    await handle
-                except ActivityError as stopped:
-                    if not is_cancelled_exception(stopped):
-                        raise
-                await self._serve_runner_turn(deliver=False)
-                await self._close_open_runner_tools("Stopped before it finished.")
+            except BaseException as error:
+                await self._leave_runner_turn(handle, error)
                 raise
+            try:
+                result = await handle
             except ActivityError as error:
+                lost = self._runner_lost(error)
                 await self._serve_runner_turn(deliver=False)
                 await self._close_open_runner_tools(
                     "The runner was lost before it finished."
-                    if self._runner_lost(error)
+                    if lost
                     else "The turn ended before it finished."
                 )
-                if is_cancelled_exception(error) or not self._runner_lost(error):
-                    raise
+                await self._expire_runner_escalations(
+                    "The runner was lost before a decision."
+                    if lost
+                    else "The turn ended before a decision."
+                )
+                if not lost:
+                    reason = self._runner_turn_error(error)
+                    if reason is None:
+                        raise
+                    raise reason from error
+                if attempt >= RUNNER_TURN_MAX_ATTEMPTS:
+                    raise ApplicationError(
+                        f"The runner was lost {attempt} times during this turn",
+                        type="RunnerTurnLost",
+                        non_retryable=True,
+                    ) from error
                 workflow.logger.warning(
                     f"Runner of turn {self._runner_turn_key} was lost; assigning it again"
                 )
-                await self._expire_runner_escalations("The runner was lost before a decision.")
                 self._runner_held_back.extend(self._runner_steering.values())
                 self._runner_steering.clear()
                 await workflow.sleep(RUNNER_TURN_RETRY_DELAY)
@@ -182,28 +203,76 @@ class RunnerTurnMixin(AgentWorkflowBase):
                 if result.status == "interrupted"
                 else "The turn ended before it finished."
             )
+            await self._expire_runner_escalations(
+                "The run was paused before a decision."
+                if paused
+                else "The turn ended before a decision."
+            )
             if not paused:
+                self._runner_turn_key = None
                 return result
-            await self._expire_runner_escalations("The run was paused before a decision.")
             await workflow.wait_condition(lambda: not self._paused)
             text, actor = self._runner_resumed_turn(actor)
+
+    async def _leave_runner_turn(
+        self, handle: workflow.ActivityHandle[RunnerTurnResult], error: BaseException
+    ) -> None:
+        """The run leaves a turn the CLI still works on: the activity stops the CLI's turn.
+
+        On a stop, what the runner reported until then is recorded before the run closes.
+        """
+        handle.cancel()
+        try:
+            await handle
+        except ActivityError as stopped:
+            if not is_cancelled_exception(stopped):
+                workflow.logger.warning(
+                    f"Turn {self._runner_turn_key} ended with an error while it was stopped",
+                    exc_info=True,
+                )
+        if isinstance(error, asyncio.CancelledError) or is_cancelled_exception(error):
+            await self._serve_runner_turn(deliver=False)
+            await self._close_open_runner_tools("Stopped before it finished.")
+        self._runner_turn_key = None
+        self._runner_updates = []
 
     @staticmethod
     def _runner_lost(error: ActivityError) -> bool:
         cause = error.cause
         if isinstance(cause, TimeoutError):
-            return True
+            return cause.type == TimeoutType.HEARTBEAT
         return isinstance(cause, ApplicationError) and cause.type == RUNNER_LOST
 
+    @staticmethod
+    def _runner_turn_error(error: ActivityError) -> ApplicationError | None:
+        """Why a turn timed out, in words a person can act on."""
+        cause = error.cause
+        if isinstance(cause, TimeoutError) and cause.type == TimeoutType.SCHEDULE_TO_START:
+            minutes = int(RUNNER_TURN_START_TIMEOUT.total_seconds() // 60)
+            return ApplicationError(
+                f"No runner of the agent's client took the turn within {minutes} minutes; "
+                + "start the client's runner and send the task a message",
+                type="RunnerOffline",
+                non_retryable=True,
+            )
+        if isinstance(cause, TimeoutError) and cause.type == TimeoutType.START_TO_CLOSE:
+            hours = int(RUNNER_TURN_TIMEOUT.total_seconds() // 3600)
+            return ApplicationError(
+                f"The CLI's turn ran longer than {hours} hours",
+                type="RunnerTurnTimedOut",
+                non_retryable=True,
+            )
+        return None
+
     def _runner_has_work(self) -> bool:
+        if self._runner_pausing:
+            # Messages wait for the turn after the resume; answers die with the paused turn.
+            return bool(self._runner_updates)
         answered = any(
             escalation.resolved
             for escalation_id, escalation in self._pending_escalations.items()
             if escalation_id in self._runner_asks
         )
-        if self._runner_pausing:
-            # Messages wait for the turn after the resume.
-            return bool(self._runner_updates) or answered
         return bool(self._runner_updates) or bool(self._message_queue) or answered or self._paused
 
     def _runner_resumed_turn(self, actor: RunnerActor | None) -> tuple[str, RunnerActor | None]:
@@ -330,8 +399,9 @@ class RunnerTurnMixin(AgentWorkflowBase):
 
     async def _open_runner_escalation(self, ask: RunnerApprovalAsk) -> None:
         """The CLI waits for a person: an escalation of the run, as a tool's would be."""
-        if ask.request_id in self._runner_asks.values():
+        if ask.request_id in self._runner_seen_asks:
             return
+        self._runner_seen_asks.add(ask.request_id)
         escalation_id = str(workflow.uuid4())
         escalation = PendingEscalation(
             escalation_id=escalation_id,

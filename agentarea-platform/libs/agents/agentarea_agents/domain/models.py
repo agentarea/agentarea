@@ -68,7 +68,7 @@ class Agent(BaseModel, WorkspaceScopedMixin):
     # The harness client whose runner executes this agent's tasks (a Codex or Claude
     # Code CLI on a subscription, ADR-0051); None runs them on the platform's own loop.
     # References clients.id (FK in the migration; the client model lives in agentarea_mcp).
-    client_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    client_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True, index=True)
 
     # Relationships
     skills: Mapped[list[Skill]] = relationship(

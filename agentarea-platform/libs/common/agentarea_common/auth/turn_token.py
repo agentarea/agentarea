@@ -136,8 +136,9 @@ class LiveTurns:
         await client.set(self._key(turn_id), "1", ex=ttl_seconds)
 
     async def renew(self, turn_id: str, ttl_seconds: int) -> None:
+        # Set again rather than extended, so a turn outlives a lapse while Redis was away.
         client = await self._get_client()
-        await client.expire(self._key(turn_id), ttl_seconds)
+        await client.set(self._key(turn_id), "1", ex=ttl_seconds)
 
     async def end(self, turn_id: str) -> None:
         client = await self._get_client()

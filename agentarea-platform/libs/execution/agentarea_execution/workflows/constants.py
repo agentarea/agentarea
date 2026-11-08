@@ -26,6 +26,10 @@ HEARTBEAT_TIMEOUT: Final[timedelta] = timedelta(seconds=30)
 RUNNER_TURN_TIMEOUT: Final[timedelta] = timedelta(hours=12)
 RUNNER_TURN_HEARTBEAT_TIMEOUT: Final[timedelta] = timedelta(seconds=30)
 RUNNER_TURN_RETRY_DELAY: Final[timedelta] = timedelta(seconds=5)
+# A turn no runner of its client takes within this fails: the runner is offline.
+RUNNER_TURN_START_TIMEOUT: Final[timedelta] = timedelta(minutes=10)
+# How many runners in a row may lose one turn before it fails.
+RUNNER_TURN_MAX_ATTEMPTS: Final[int] = 5
 
 # Agent delegation: the child's own turn, token and budget limits bound its work;
 # this only stops a child that is stuck.

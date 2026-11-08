@@ -1,5 +1,7 @@
+import {PassThrough} from 'node:stream';
 import test from 'ava';
 import {
+	JsonRpcPeer,
 	apiRoute,
 	checkedAssign,
 	claudeEvents,
@@ -7,6 +9,8 @@ import {
 	codexConfig,
 	codexEvents,
 	managesNetwork,
+	notifiedTurn,
+	queuedWhileAway,
 	socketUrl,
 } from './runner.js';
 
@@ -254,4 +258,82 @@ test("claude's file tools are kept off the runner's key, profiles and login", t 
 	t.true(deny.includes('Edit(//data/profiles/**)'));
 	t.true(deny.includes('Read(//login/**)'));
 	t.false(deny.some(rule => rule.includes('/data/tasks')));
+});
+
+test("a resumed thread's new turn does not hear the end of the stopped turn before it", t => {
+	const stopped = {name: 'stopped', threadId: 'th1', codexTurnId: 'turn-1'};
+	const resumed = {
+		name: 'resumed',
+		threadId: 'th1',
+		codexTurnId: null as string | null,
+	};
+	const turns = [stopped, resumed];
+	t.is(
+		notifiedTurn(turns, resumed, {threadId: 'th1', turn: {id: 'turn-1'}}),
+		stopped,
+	);
+	t.is(
+		notifiedTurn(turns, resumed, {threadId: 'th1', turn: {id: 'turn-2'}}),
+		resumed,
+	);
+	resumed.codexTurnId = 'turn-2';
+	t.is(
+		notifiedTurn(turns, resumed, {threadId: 'th1', turnId: 'turn-2'}),
+		resumed,
+	);
+	t.is(
+		notifiedTurn(turns, resumed, {threadId: 'th1', turnId: 'turn-9'}),
+		undefined,
+	);
+	t.is(notifiedTurn(turns, resumed, {threadId: 'th1'}), resumed);
+	t.is(notifiedTurn(turns, resumed, {turnId: 'turn-2'}), undefined);
+});
+
+function fakeChild() {
+	return {stdin: new PassThrough(), stdout: new PassThrough()} as any;
+}
+
+test('a request codex app-server never answers fails instead of hanging the turn', async t => {
+	const peer = new JsonRpcPeer(
+		fakeChild(),
+		() => undefined,
+		() => undefined,
+		20,
+	);
+	await t.throwsAsync(peer.request('thread/resume', {}), {
+		message: /did not answer thread\/resume/,
+	});
+});
+
+test('a request to an app-server that exited fails at once', async t => {
+	const child = fakeChild();
+	const peer = new JsonRpcPeer(
+		child,
+		() => undefined,
+		() => undefined,
+	);
+	const pending = peer.request('turn/start', {});
+	peer.failAll(new Error('codex app-server exited with 1'));
+	await t.throwsAsync(pending, {message: /exited/});
+	await t.throwsAsync(peer.request('turn/interrupt', {}), {message: /exited/});
+});
+
+test('a writing error on the CLI stdin is no crash', t => {
+	const child = fakeChild();
+	const peer = new JsonRpcPeer(
+		child,
+		() => undefined,
+		() => undefined,
+	);
+	t.notThrows(() => {
+		child.stdin.emit('error', new Error('write EPIPE'));
+	});
+	peer.failAll(new Error('gone'));
+});
+
+test('while the socket is closed only a turn end waits for the platform', t => {
+	t.true(queuedWhileAway({type: 'turn.finished', turn_id: 't'}));
+	t.false(queuedWhileAway({type: 'turn.event', turn_id: 't', seq: 1}));
+	t.false(queuedWhileAway({type: 'approval.request', turn_id: 't'}));
+	t.false(queuedWhileAway({type: 'steer.accepted', turn_id: 't'}));
 });

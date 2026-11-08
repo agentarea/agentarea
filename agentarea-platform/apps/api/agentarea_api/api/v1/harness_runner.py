@@ -171,8 +171,13 @@ HELLO_SECONDS = 30
 SIGNAL_POLL_SECONDS = 5.0
 # How often a held turn's activity heartbeats, and keeps its token's turn live.
 HEARTBEAT_SECONDS = 2.0
-# What the CLI did is signalled to the turn's workflow at most this often.
-UPDATE_SECONDS = 0.3
+# What the CLI did is signalled to the turn's workflow at most this often; each
+# signal grows the run's history, the live deltas reach the task page meanwhile.
+UPDATE_SECONDS = 1.0
+# The most of a turn's reported events one signal carries, well under Temporal's 2 MB payload.
+SIGNAL_MAX_CHARS = 500_000
+# How often the turn's last report is tried before the turn fails with it unheard.
+FINAL_SIGNAL_ATTEMPTS = 5
 # How long a stopped turn waits for its runner to confirm the CLI stopped.
 STOP_GRACE_SECONDS = 15.0
 # A tool's output as the task log keeps it; the runner uploads the files it made.
@@ -199,6 +204,18 @@ async def _instructions(factory: RepositoryFactory, agent: Agent) -> str | None:
     for skill in agent.skills:
         parts.append(f"## Skill: {skill.name}\n\n{(await skills.read_skill_md(skill)).strip()}")
     return "\n\n".join(parts) or None
+
+
+def signal_batch(events: list[RunnerTurnEvent]) -> list[RunnerTurnEvent]:
+    """The first of a turn's events one signal carries: at least one, at most SIGNAL_MAX_CHARS."""
+    batch: list[RunnerTurnEvent] = []
+    size = 0
+    for event in events:
+        size += len(event.model_dump_json())
+        if batch and size > SIGNAL_MAX_CHARS:
+            break
+        batch.append(event)
+    return batch
 
 
 def _clipped(output: str) -> str:
@@ -242,6 +259,7 @@ class _Turn:
     steers: list[RunnerSteerOutcome] = field(default_factory=list)
     signalled_actor: bool = False
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    live: LiveSnapshots = field(default_factory=LiveSnapshots)
 
     @property
     def pending(self) -> bool:
@@ -267,7 +285,6 @@ class RunnerConnection:
         self.temporal = temporal
         self.capacity = 1
         self.turns: dict[UUID, _Turn] = {}
-        self.live = LiveSnapshots()
         self.broker = harness_broker()
         self.closed = False
         self._send_lock = asyncio.Lock()
@@ -295,37 +312,76 @@ class RunnerConnection:
             default_heartbeat_throttle_interval=timedelta(seconds=1),
             graceful_shutdown_timeout=timedelta(seconds=STOP_GRACE_SECONDS),
         )
-        tasks = [
-            asyncio.create_task(worker.run()),
-            asyncio.create_task(self._listen()),
-            asyncio.create_task(self._send_updates()),
-        ]
+        frames = asyncio.create_task(self._receive_frames())
+        polling = asyncio.create_task(worker.run())
+        background = {
+            polling: "the worker polling its turns",
+            asyncio.create_task(self._listen()): "the deliveries",
+            asyncio.create_task(self._send_updates()): "the updates",
+        }
         try:
-            while True:
-                await self._handle(parse_up_frame(await self._receive()))
-        except WebSocketDisconnect:
-            logger.info(
-                "Runner of client %s disconnected holding %d turns",
-                self.client_id,
-                len(self.turns),
-            )
-        except ValidationError, ProtocolError:
-            logger.error("Runner of client %s sent a bad frame", self.client_id, exc_info=True)
-            await self._close(status.WS_1003_UNSUPPORTED_DATA)
-        except Exception:
-            logger.error("Runner socket of client %s failed", self.client_id, exc_info=True)
-            await self._close(status.WS_1011_INTERNAL_ERROR)
+            done, _ = await asyncio.wait({frames, *background}, return_when=asyncio.FIRST_COMPLETED)
+            for task in done - {frames}:
+                logger.error(
+                    "Runner socket of client %s lost %s; closing it",
+                    self.client_id,
+                    background[task],
+                    exc_info=task.exception(),
+                )
+            if frames in done:
+                await self._frames_ended(frames)
+            else:
+                await self._close(status.WS_1011_INTERNAL_ERROR)
         finally:
             self.closed = True
             for turn in self.turns.values():
                 if not turn.finished.done():
                     turn.finished.set_exception(RunnerLostError())
-            await worker.shutdown()
-            for task in tasks[1:]:
+            running = [task for task in [frames, *background] if not task.done()]
+            if polling in running:
+                # A worker that never started never completes a shutdown.
+                await worker.shutdown()
+            for task in running:
                 task.cancel()
-            for task in tasks:
-                with contextlib.suppress(asyncio.CancelledError):
+            for task in running:
+                try:
                     await task
+                except asyncio.CancelledError, WebSocketDisconnect:
+                    pass
+                except Exception:
+                    logger.error(
+                        "Runner socket of client %s ended with an error",
+                        self.client_id,
+                        exc_info=True,
+                    )
+
+    async def _receive_frames(self) -> None:
+        while True:
+            # A runner pings while it holds the socket; one that stopped is gone.
+            text = await asyncio.wait_for(self._receive(), LEASE_SECONDS)
+            await self._handle(parse_up_frame(text))
+
+    async def _frames_ended(self, frames: asyncio.Task[None]) -> None:
+        error = frames.exception()
+        if isinstance(error, WebSocketDisconnect):
+            logger.info(
+                "Runner of client %s disconnected holding %d turns",
+                self.client_id,
+                len(self.turns),
+            )
+        elif isinstance(error, TimeoutError):
+            logger.warning(
+                "Runner of client %s sent nothing for %d seconds; closing its socket",
+                self.client_id,
+                LEASE_SECONDS,
+            )
+            await self._close(status.WS_1001_GOING_AWAY)
+        elif isinstance(error, ValidationError | ProtocolError):
+            logger.error("Runner of client %s sent a bad frame", self.client_id, exc_info=error)
+            await self._close(status.WS_1003_UNSUPPORTED_DATA)
+        else:
+            logger.error("Runner socket of client %s failed", self.client_id, exc_info=error)
+            await self._close(status.WS_1011_INTERNAL_ERROR)
 
     async def _receive(self) -> str:
         text = await self.websocket.receive_text()
@@ -433,12 +489,15 @@ class RunnerConnection:
                 }
             )
             finished = await self._await_finish(turn)
+            await self._report(turn)
         except asyncio.CancelledError:
             if self.closed or activity.is_worker_shutdown():
+                await self._report_lost(turn)
                 raise ApplicationError("the runner went away", type=RUNNER_LOST) from None
             await self._stop(turn)
             raise
         except RunnerLostError:
+            await self._report_lost(turn)
             raise ApplicationError("the runner went away", type=RUNNER_LOST) from None
         except Exception:
             if self.closed:
@@ -448,12 +507,22 @@ class RunnerConnection:
                     request.turn_key,
                     exc_info=True,
                 )
+                await self._report_lost(turn)
                 raise ApplicationError("the runner went away", type=RUNNER_LOST) from None
+            logger.error(
+                "Turn %s of task %s failed on the platform; stopping the CLI's turn",
+                request.turn_key,
+                request.task_id,
+                exc_info=True,
+            )
+            await self._cancel_on_runner(turn)
             raise
         finally:
             self.turns.pop(turn.turn_id, None)
-            await live_turns().end(str(turn.turn_id))
-        await self._signal(turn)
+            try:
+                await live_turns().end(str(turn.turn_id))
+            except Exception:
+                logger.error("Could not end the lease of turn %s", request.turn_key, exc_info=True)
         return RunnerTurnResult(
             status=finished.status, response=finished.response, error=finished.error
         )
@@ -461,12 +530,60 @@ class RunnerConnection:
     async def _await_finish(self, turn: _Turn) -> TurnFinished:
         while not (await asyncio.wait({turn.finished}, timeout=HEARTBEAT_SECONDS))[0]:
             activity.heartbeat()
-            await live_turns().renew(str(turn.turn_id), LEASE_SECONDS)
+            try:
+                await live_turns().renew(str(turn.turn_id), LEASE_SECONDS)
+            except Exception:
+                logger.error(
+                    "Could not renew the lease of turn %s; trying again",
+                    turn.request.turn_key,
+                    exc_info=True,
+                )
         return turn.finished.result()
+
+    async def _report(self, turn: _Turn) -> None:
+        """Signal the turn's last report, tried again: a turn its run never heard is lost."""
+        for attempt in range(1, FINAL_SIGNAL_ATTEMPTS + 1):
+            try:
+                await self._signal(turn)
+                return
+            except Exception:
+                if attempt == FINAL_SIGNAL_ATTEMPTS:
+                    raise
+                logger.warning(
+                    "Could not signal run %s the end of turn %s; trying again",
+                    turn.workflow_id,
+                    turn.request.turn_key,
+                    exc_info=True,
+                )
+            activity.heartbeat()
+            await asyncio.sleep(HEARTBEAT_SECONDS)
+
+    async def _report_lost(self, turn: _Turn) -> None:
+        """What a lost runner reported before it went is still the run's."""
+        try:
+            await self._signal(turn)
+        except Exception:
+            logger.error(
+                "Could not signal run %s what turn %s did before its runner went away",
+                turn.workflow_id,
+                turn.request.turn_key,
+                exc_info=True,
+            )
+
+    async def _cancel_on_runner(self, turn: _Turn) -> None:
+        try:
+            await self._send({"type": "turn.cancel", "turn_id": str(turn.turn_id)})
+        except Exception:
+            logger.error(
+                "Could not tell the runner of client %s to stop turn %s",
+                self.client_id,
+                turn.request.turn_key,
+                exc_info=True,
+            )
 
     async def _stop(self, turn: _Turn) -> None:
         """The run was stopped: stop the CLI's turn and record what it did until then."""
-        await self._send({"type": "turn.cancel", "turn_id": str(turn.turn_id)})
+        await self._cancel_on_runner(turn)
         done, _ = await asyncio.wait({turn.finished}, timeout=STOP_GRACE_SECONDS)
         if not done or turn.finished.exception() is not None:
             logger.warning(
@@ -474,7 +591,15 @@ class RunnerConnection:
                 self.client_id,
                 turn.request.turn_key,
             )
-        await self._signal(turn)
+        try:
+            await self._report(turn)
+        except Exception:
+            logger.error(
+                "Run %s never heard what stopped turn %s did",
+                turn.workflow_id,
+                turn.request.turn_key,
+                exc_info=True,
+            )
 
     async def _assignment(self, request: RunnerTurnRequest) -> tuple[dict[str, Any], RunnerActor]:
         """The turn as the runner needs it: model, instructions, the CLI's session, the actor."""
@@ -560,7 +685,15 @@ class RunnerConnection:
                     reason=frame.reason,
                 )
             )
-            await self._signal(turn)
+            try:
+                await self._signal(turn)
+            except Exception:
+                logger.error(
+                    "Could not signal run %s the approval turn %s asks for; trying again",
+                    turn.workflow_id,
+                    turn.request.turn_key,
+                    exc_info=True,
+                )
         elif isinstance(frame, SteerAccepted | SteerRejected):
             turn.steers.append(
                 RunnerSteerOutcome(
@@ -575,6 +708,17 @@ class RunnerConnection:
 
     async def _keep_session(self, turn: _Turn, session_id: str) -> None:
         """Keep the CLI's session on the task, so every later turn resumes it."""
+        try:
+            await self._store_session(turn, session_id)
+        except Exception:
+            logger.error(
+                "Could not keep the CLI session of turn %s on task %s",
+                turn.request.turn_key,
+                turn.request.task_id,
+                exc_info=True,
+            )
+
+    async def _store_session(self, turn: _Turn, session_id: str) -> None:
         async with self._session() as session:
             task = await session.scalar(
                 select(TaskORM)
@@ -598,7 +742,7 @@ class RunnerConnection:
     async def _on_event(self, turn: _Turn, frame: TurnEvent) -> None:
         event = frame.event
         if isinstance(event, MessageDelta):
-            snapshot = self.live.text(event.item_id, event.text, event.channel)
+            snapshot = turn.live.text(event.item_id, event.text, event.channel)
             if snapshot is not None:
                 text, thinking = snapshot
                 await self._broadcast(
@@ -617,7 +761,7 @@ class RunnerConnection:
                 )
             return
         if isinstance(event, ToolProgress):
-            output = self.live.output(event.id, event.output)
+            output = turn.live.output(event.id, event.output)
             if output is not None:
                 await self._broadcast(
                     turn,
@@ -635,7 +779,7 @@ class RunnerConnection:
                     model=event.model,
                 )
             )
-            self.live.forget(event.item_id)
+            turn.live.forget(event.item_id)
         elif isinstance(event, ToolCall):
             turn.events.append(
                 RunnerTurnEvent(
@@ -658,40 +802,48 @@ class RunnerConnection:
                     exit_code=event.exit_code,
                 )
             )
-            self.live.forget(event.id)
+            turn.live.forget(event.id)
 
     async def _broadcast(self, turn: _Turn, event_type: str, data: dict[str, Any]) -> None:
-        await broadcast_live(
-            self.broker,
-            task_event(
-                task_id=str(turn.request.task_id),
-                workspace_id=self.context.workspace_id,
-                event_type=event_type,
-                event_id=str(uuid4()),
-                timestamp=datetime.now(UTC),
-                data={"task_id": str(turn.request.task_id), **data},
-            ),
-        )
+        try:
+            await broadcast_live(
+                self.broker,
+                task_event(
+                    task_id=str(turn.request.task_id),
+                    workspace_id=self.context.workspace_id,
+                    event_type=event_type,
+                    event_id=str(uuid4()),
+                    timestamp=datetime.now(UTC),
+                    data={"task_id": str(turn.request.task_id), **data},
+                ),
+            )
+        except Exception:
+            # A live delta only; the recorded events carry the turn.
+            logger.error(
+                "Could not broadcast %s of turn %s",
+                event_type,
+                turn.request.turn_key,
+                exc_info=True,
+            )
 
     async def _signal(self, turn: _Turn) -> None:
         """Tell the turn's workflow what the runner reported since the last time."""
         async with turn.lock:
-            if not turn.pending:
-                return
-            update = RunnerTurnUpdate(
-                turn_key=turn.request.turn_key,
-                actor=turn.actor,
-                events=list(turn.events),
-                approvals=list(turn.approvals),
-                steers=list(turn.steers),
-            )
-            await self.temporal.get_workflow_handle(turn.workflow_id).signal(
-                "runner_turn_update", update
-            )
-            del turn.events[: len(update.events)]
-            del turn.approvals[: len(update.approvals)]
-            del turn.steers[: len(update.steers)]
-            turn.signalled_actor = True
+            while turn.pending:
+                update = RunnerTurnUpdate(
+                    turn_key=turn.request.turn_key,
+                    actor=turn.actor,
+                    events=signal_batch(turn.events),
+                    approvals=list(turn.approvals),
+                    steers=list(turn.steers),
+                )
+                await self.temporal.get_workflow_handle(turn.workflow_id).signal(
+                    "runner_turn_update", update
+                )
+                del turn.events[: len(update.events)]
+                del turn.approvals[: len(update.approvals)]
+                del turn.steers[: len(update.steers)]
+                turn.signalled_actor = True
 
     async def _send_updates(self) -> None:
         """Signal each held turn's workflow what is new; a failed signal is tried again."""

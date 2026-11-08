@@ -1,11 +1,18 @@
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from agentarea_api.api.v1 import harness_runner
 from agentarea_api.api.v1.client_mcp import ClientAccessDeniedError, _authorize_client_access
 from agentarea_api.api.v1.harness_runner import turn_settings
-from agentarea_common.auth.context import UserPrincipal
+from agentarea_common.auth.context import UserContext, UserPrincipal
+from agentarea_common.exceptions.errors import ConflictError
+from agentarea_execution.models import RunnerActor, RunnerTurnEvent, RunnerTurnRequest
+from agentarea_mcp.application.client_service import ClientService
 from agentarea_mcp.domain.client_models import Client
 from agentarea_mcp.infrastructure.runner_presence import PRESENCE_SECONDS, RunnerPresence
+from fastapi import status
 
 
 def client(**fields) -> Client:
@@ -64,3 +71,119 @@ async def test_a_turn_reaches_the_bundle_of_the_client_whose_runner_holds_it():
 async def test_a_turn_is_refused_another_clients_bundle():
     with pytest.raises(ClientAccessDeniedError):
         await _authorize_client_access(_turn(str(uuid4())), str(uuid4()))
+
+
+def _connection(
+    temporal: object | None = None, websocket: AsyncMock | None = None
+) -> harness_runner.RunnerConnection:
+    with patch.object(harness_runner, "harness_broker"):
+        return harness_runner.RunnerConnection(
+            websocket or AsyncMock(),
+            client(id=uuid4()),
+            UserContext(user_id="maria", workspace_id="ws", workspace_slug="acme"),
+            temporal or MagicMock(),
+        )
+
+
+def _held_turn(events: list[RunnerTurnEvent]) -> harness_runner._Turn:
+    return harness_runner._Turn(
+        turn_id=uuid4(),
+        request=RunnerTurnRequest(
+            task_id=uuid4(),
+            agent_id=uuid4(),
+            workspace_id="ws",
+            iteration=1,
+            turn_key="1.1",
+            message="go",
+        ),
+        workflow_id="task-1",
+        actor=RunnerActor(type="user", id="maria"),
+        finished=asyncio.get_running_loop().create_future(),
+        events=events,
+    )
+
+
+def test_one_signal_carries_at_most_its_share_of_a_turns_events():
+    big = [
+        RunnerTurnEvent(seq=seq, kind="tool.result", item_id=str(seq), output="x" * 200_000)
+        for seq in range(1, 6)
+    ]
+    assert [event.seq for event in harness_runner.signal_batch(big)] == [1, 2]
+    huge = [RunnerTurnEvent(seq=1, kind="message", item_id="m", text="x" * 900_000)]
+    assert harness_runner.signal_batch(huge) == huge
+
+
+async def test_a_turns_last_report_is_tried_again_and_sent_in_signals_of_bounded_size():
+    temporal = MagicMock()
+    signal = AsyncMock(side_effect=[RuntimeError("temporal blip"), None, None, None])
+    temporal.get_workflow_handle.return_value.signal = signal
+    connection = _connection(temporal)
+    turn = _held_turn(
+        [
+            RunnerTurnEvent(seq=seq, kind="tool.result", item_id=str(seq), output="x" * 200_000)
+            for seq in range(1, 6)
+        ]
+    )
+    with (
+        patch.object(harness_runner.activity, "heartbeat"),
+        patch.object(harness_runner.asyncio, "sleep", AsyncMock()),
+    ):
+        await connection._report(turn)
+
+    assert signal.await_count == 4
+    assert [len(call.args[1].events) for call in signal.await_args_list[1:]] == [2, 2, 1]
+    assert turn.events == []
+
+
+class _DeadWorker:
+    def __init__(self, *args, **kwargs) -> None:
+        pass
+
+    async def run(self) -> None:
+        raise RuntimeError("temporal is unreachable")
+
+    async def shutdown(self) -> None:
+        # A worker that failed before it started never finishes a shutdown.
+        await asyncio.Event().wait()
+
+
+async def test_a_socket_whose_worker_died_is_closed_so_its_runner_reconnects():
+    websocket = AsyncMock()
+    connection = _connection(websocket=websocket)
+    frames = iter(['{"type": "hello"}'])
+
+    async def receive() -> str:
+        for frame in frames:
+            return frame
+        await asyncio.Event().wait()
+        raise AssertionError("unreachable")
+
+    websocket.receive_text = receive
+
+    async def forever() -> None:
+        await asyncio.Event().wait()
+
+    with (
+        patch.object(harness_runner, "Worker", _DeadWorker),
+        patch.object(connection, "_on_hello", AsyncMock()),
+        patch.object(connection, "_listen", forever),
+        patch.object(connection, "_send_updates", forever),
+    ):
+        await asyncio.wait_for(connection.serve(), 5)
+
+    websocket.close.assert_awaited_once_with(code=status.WS_1011_INTERNAL_ERROR)
+    assert connection.closed
+
+
+async def test_a_client_agents_run_on_is_not_deleted_under_them():
+    repository = MagicMock()
+    repository.get_by_id = AsyncMock(return_value=client(id=uuid4()))
+    repository.session.scalar = AsyncMock(return_value=2)
+    repository.delete = AsyncMock(return_value=True)
+
+    with pytest.raises(ConflictError):
+        await ClientService(repository).delete(uuid4())
+    repository.delete.assert_not_awaited()
+
+    repository.session.scalar.return_value = 0
+    assert await ClientService(repository).delete(uuid4()) is True

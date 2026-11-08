@@ -22,6 +22,7 @@ from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.resource_visibility import readable_resource_ids
+from agentarea_common.exceptions.errors import ConflictError
 from agentarea_mcp.application.client_service import ClientService
 from agentarea_mcp.infrastructure.client_repository import ClientRepository
 from agentarea_mcp.schemas.client_dto import ClientCreate, ClientUpdate
@@ -212,7 +213,10 @@ class ClientsToolset(Toolset):
         """Delete a client. Its MCP endpoint stops answering."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
-            deleted = await service.delete(UUID(client_id))
+            try:
+                deleted = await service.delete(UUID(client_id))
+            except ConflictError as exc:
+                raise ToolError(exc.detail) from exc
             return json.dumps({"deleted": deleted})
 
     @tool_method(

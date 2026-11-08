@@ -65,6 +65,7 @@ from .patches import (
     UNSTARTED_TASK_MARKED_RUNNING_PATCH,
     WAIT_TOOL_PATCH,
 )
+from .runner_turn import RETRY_MESSAGE
 
 
 class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
@@ -193,6 +194,10 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
         if resume.own_cost is not None:
             self._delegated_cost = max(resume.total_cost - resume.own_cost, ZERO)
         self._resume_system_prompt_missing = resume.system_prompt_missing
+        if resume.retry and self._runner_client_id is not None and self.state.goal is not None:
+            self._runner_retry_message = (
+                self.state.goal.description if snapshot.current_iteration <= 1 else RETRY_MESSAGE
+            )
         if resume.retry:
             self._events.add_event(
                 EventTypes.WORKFLOW_RETRIED,
