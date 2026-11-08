@@ -115,6 +115,7 @@ export function fromAgent(agent: AgentResponse): AgentFormValues {
     instruction: agent.instruction ?? "",
     model_id: agent.model_id ?? "",
     client_id: agent.client_id ?? "",
+    reasoning_effort: agent.reasoning_effort ?? "",
     tools_config: toToolsConfig(agent.tools ?? []),
     planning: agent.planning ?? false,
     a2ui_enabled: agent.a2ui_enabled ?? false,
@@ -183,6 +184,13 @@ function toAgentBody(input: AgentFormValues) {
     instruction: input.instruction,
     model_id: input.client_id ? "" : input.model_id,
     client_id: input.client_id || null,
+    // A runner's CLI takes a level, not a token budget.
+    ...(input.client_id
+      ? {
+          reasoning_effort: input.reasoning_effort || null,
+          reasoning_max_tokens: null,
+        }
+      : {}),
     tools: toToolsPayload(input.tools_config),
     planning: input.planning,
     a2ui_enabled: input.a2ui_enabled,

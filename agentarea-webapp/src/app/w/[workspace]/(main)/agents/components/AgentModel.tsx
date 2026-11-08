@@ -1,5 +1,6 @@
 import { HarnessClientLink } from "@/components/harnesses";
 import ModelBadge from "@/components/ui/model-badge";
+import { withReasoning } from "@/lib/runner-models";
 import { cn } from "@/lib/utils";
 import type { Agent } from "@/types";
 
@@ -8,7 +9,7 @@ export function AgentModel({
   agent,
   className,
 }: {
-  agent: Pick<Agent, "client" | "model_info">;
+  agent: Pick<Agent, "client" | "model_info" | "reasoning_effort">;
   className?: string;
 }) {
   if (agent.client) {
@@ -25,7 +26,7 @@ export function AgentModel({
         />
         {agent.client.default_model && (
           <span className="truncate text-muted-foreground">
-            {agent.client.default_model}
+            {withReasoning(agent.client.default_model, agent.reasoning_effort)}
           </span>
         )}
       </span>
