@@ -144,15 +144,15 @@ rejected by the API server.
 | workloads.networkPolicy.extraEgress | list | `[]` | Additional egress rules, as NetworkPolicy egress entries, for every MCP server, those labelled agentarea.io/egress included (an in-cluster dependency such as a storage gateway). For a host that REDIRECTs some traffic to a local proxy, allow the redirect target here. |
 | workloads.networkPolicy.egressProxy | object | `{}` | Proxy that MCP servers labelled agentarea.io/egress may reach; those servers get DNS, this proxy and extraEgress only. Shape: {namespaceSelector: {matchLabels: ...}, podSelector: {matchLabels: ...}, port: 3128} |
 | sandboxes.enabled | bool | `false` | Run the sandbox server and confine the sandboxes it creates. |
-| sandboxes.server.image.repository | string | `"opensandbox/server"` | OpenSandbox server image. The mcp-manager adapter is tested against release-1.1.1. |
-| sandboxes.server.image.tag | string | `"release-1.1.1@sha256:bcd5f264101262cebfa7e1ff9cd0424403e42f31a6596e4364cf90d8cb5c936b"` | Tag, optionally with a digest. |
+| sandboxes.server.image.repository | string | `"opensandbox/server"` | OpenSandbox server image. The mcp-manager adapter is tested against release-1.2.0. |
+| sandboxes.server.image.tag | string | `"release-1.2.0@sha256:25bebdcf1cf7724eb923faecbdbbf82d4038c6ab35c736151574726d14006f30"` | Tag, optionally with a digest. |
 | sandboxes.server.image.pullPolicy | string | `"IfNotPresent"` | Pull policy for the server image. |
 | sandboxes.server.port | int | `8081` | Port the sandbox API listens on. |
 | sandboxes.server.logLevel | string | `"INFO"` | Server log level. |
 | sandboxes.server.auth.existingSecret | string | `""` | Secret holding the API key the control plane sends as OPEN-SANDBOX-API-KEY. |
 | sandboxes.server.auth.existingSecretKey | string | `"api-key"` | Key in existingSecret. |
 | sandboxes.server.auth.apiKey | string | `""` | Creates the Secret from this value when existingSecret is empty. For development only. |
-| sandboxes.server.execdImage | string | `"opensandbox/execd:release-1.1.1@sha256:cda2bc35409bbf57561599b316cafb899598f7dce671332e7ceda14eb1cfeded"` | Image the server copies execd from into every sandbox. The runtime identity the control plane pins (AGENTAREA_SANDBOX_OSB_IDENTITY) names this digest. |
+| sandboxes.server.execdImage | string | `"opensandbox/execd:release-1.2.0@sha256:c75836c46ef4302afccec182d5d7339eb2f905f51e3d73b7aa17bb76c832526c"` | Image the server copies execd from into every sandbox. The runtime identity the control plane pins (AGENTAREA_SANDBOX_OSB_IDENTITY) names this digest. |
 | sandboxes.server.maxSandboxTimeoutSeconds | int | `21600` | Longest lifetime a sandbox may be created with. |
 | sandboxes.server.createTimeoutSeconds | int | `120` | How long a create waits for the pod to run, image pull included. The control plane's AGENTAREA_SANDBOX_PROVISION_TIMEOUT should be longer. |
 | sandboxes.server.resources | object | `{"limits":{"cpu":"1","memory":"1Gi"},"requests":{"cpu":"50m","memory":"128Mi"}}` | Resources of the server itself. |
@@ -178,8 +178,8 @@ rejected by the API server.
 | opensandbox-controller.enabled | bool | `false` | Install the controller and the CRDs of opensandbox-base. One per cluster. |
 | opensandbox-controller.namespaceOverride | string | `"agentarea-system"` | Namespace of the controller. The subchart does not follow the release namespace; keep this equal to it. |
 | opensandbox-controller.controller.image.repository | string | `"opensandbox/controller"` | Controller image, from Docker Hub rather than the upstream default registry. |
-| opensandbox-controller.controller.image.tag | string | `"release-1.1.1@sha256:aca5cda09a0fbc5867e6028f8b6aaa60fdcd78ebee634f71a263d45d5f6c2bab"` | Tag, optionally with a digest. |
-| opensandbox-controller.controller.snapshot.imageCommitterImage | string | `"opensandbox/image-committer:release-1.1.1@sha256:0ef67b7852daa304fa24c0ff971e682444e28c8eed1ada18ef211d30152717be"` | Only used for snapshots, which AgentArea does not take. |
+| opensandbox-controller.controller.image.tag | string | `"release-1.2.0@sha256:7701db7eacda4c3533a961e0451f6ce067535d8ce46f15765a04dcf0ffa6e2c6"` | Tag, optionally with a digest. |
+| opensandbox-controller.controller.snapshot.imageCommitterImage | string | `"opensandbox/image-committer:release-1.2.0@sha256:5320733579d1cb56322b345927b2c48a8b73f4a6ab32e22d203cc0bcf33ff0f9"` | Only used for snapshots, which AgentArea does not take. |
 | sandboxPolicy | object | `{"providerProvisioningTimeout":"5m","providerSessionTTL":"24h","taskIdleTTL":"15m","taskLeaseTTL":"10m"}` | Required by the Kubernetes backend at start although a data plane runs no agent sandboxes: the task lease is read unconditionally. |
 | extraEnv | list | `[]` | Extra environment for the data plane container. |
 | resources | object | `{"limits":{"cpu":"1","memory":"512Mi"},"requests":{"cpu":"50m","memory":"64Mi"}}` | Resources of the data plane itself. |
