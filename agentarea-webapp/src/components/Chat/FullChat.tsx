@@ -23,6 +23,7 @@ import {
   type CompletedRun,
   type EventState,
 } from "@/lib/events/reducer";
+import { ON_PLATFORM, type RunTargets } from "@/lib/run-targets";
 import { resumeAgentTaskAction as resumeAgentTask } from "@/lib/server-actions";
 import { getTaskStatusPresentation } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -85,6 +86,7 @@ export interface Agent {
   name: string;
   description?: string | null;
   icon?: string | null;
+  runTargets?: RunTargets;
 }
 
 export interface ProjectOption {
@@ -355,6 +357,14 @@ export default function FullChat({
   const [taskMcps, setTaskMcps] = React.useState<TaskResourceRef[]>([]);
   const [taskSkills, setTaskSkills] = React.useState<TaskResourceRef[]>([]);
   const [scheduledAt, setScheduledAt] = React.useState<Date | null>(null);
+  const [runTargetChoice, setRunTargetChoice] = React.useState<{
+    agentId: string;
+    target: string;
+  } | null>(null);
+  const runTarget =
+    runTargetChoice?.agentId === agent.id
+      ? runTargetChoice.target
+      : (agent.runTargets?.agentTarget ?? null);
   const router = useWorkspaceRouter();
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const cardContainerRef = React.useRef<HTMLDivElement>(null);
@@ -644,6 +654,9 @@ export default function FullChat({
           plainContent || "Use the attached files to complete the task.",
         project_id: selectedProjectId,
         task_policy: taskPolicy,
+        ...(runTarget && runTarget !== ON_PLATFORM
+          ? { runner_client_id: runTarget }
+          : {}),
         parameters: {
           context: {
             project_id: selectedProjectId,
@@ -1090,6 +1103,14 @@ export default function FullChat({
             currentTaskPolicyId={selectedTaskPolicyId}
             availableTaskPolicies={availableTaskPolicies}
             onTaskPolicyChange={setSelectedTaskPolicyId}
+            runTargets={agent.runTargets?.targets}
+            currentRunTarget={runTarget}
+            onRunTargetChange={
+              currentTaskId
+                ? undefined
+                : (target) =>
+                    setRunTargetChoice({ agentId: agent.id, target })
+            }
             taskMcps={taskMcps}
             taskSkills={taskSkills}
             onTaskMcpsChange={setTaskMcps}

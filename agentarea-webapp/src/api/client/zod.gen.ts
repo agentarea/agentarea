@@ -4190,6 +4190,7 @@ export const zScheduleTaskCreate = z.object({
   parameters: z.record(z.string(), z.unknown()).optional(),
   project_id: z.string().nullish(),
   requires_human_approval: z.boolean().nullish().default(false),
+  runner_client_id: z.uuid().nullish(),
   scheduled_at: z.iso.datetime(),
   task_policy: zPolicyDocument.nullish(),
   webhook: zTaskWebhook.nullish(),
@@ -4207,6 +4208,7 @@ export const zTaskCreate = z.object({
   parameters: z.record(z.string(), z.unknown()).optional(),
   project_id: z.string().nullish(),
   requires_human_approval: z.boolean().nullish().default(false),
+  runner_client_id: z.uuid().nullish(),
   task_policy: zPolicyDocument.nullish(),
   webhook: zTaskWebhook.nullish(),
 });

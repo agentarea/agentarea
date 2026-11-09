@@ -12,7 +12,7 @@ import FullChat, {
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Kbd } from "@/components/ui/kbd";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getAgents } from "@/components/actions";
+import { getAgentsWithRunTargets } from "@/components/actions";
 import { apiErrorMessage } from "@/lib/api-errors";
 import {
   getViewerCapabilitiesAction,
@@ -110,7 +110,7 @@ export default function QuickTaskDialog() {
     if (!open || dataLoaded) return;
     let cancelled = false;
     Promise.all([
-      getAgents(),
+      getAgentsWithRunTargets(),
       listProjectsAction(),
       getViewerCapabilitiesAction(),
     ])
@@ -123,6 +123,7 @@ export default function QuickTaskDialog() {
             name: a.name,
             description: a.description ?? null,
             icon: a.icon ?? null,
+            runTargets: agentsRes.runTargets[String(a.id)],
           })
         );
         const projectList: ProjectOption[] = (

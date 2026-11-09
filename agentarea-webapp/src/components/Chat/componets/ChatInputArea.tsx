@@ -25,9 +25,11 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { AttachmentCard } from "@/components/ui/attachment-card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import type { RunTarget } from "@/lib/run-targets";
 import { cn } from "@/lib/utils";
 import { MentionMenu } from "../MentionMenu";
 import { ContextSelect } from "./ContextSelect";
+import { RunTargetSelect } from "./RunTargetSelect";
 import { ScheduleChip } from "./ScheduleChip";
 
 const NO_PROJECT_VALUE = "__no_project__";
@@ -253,6 +255,13 @@ export interface ChatInputAreaProps {
   onTaskPolicyChange?: (policyId: string | null) => void;
 
   /**
+   * Where the run goes and on which model; shown read-only once a task runs.
+   */
+  runTargets?: RunTarget[];
+  currentRunTarget?: string | null;
+  onRunTargetChange?: (target: string) => void;
+
+  /**
    * MCP servers and skills attached to this run on top of the agent's own.
    * Present only where a task is being composed; absent leaves the control out.
    */
@@ -361,6 +370,9 @@ export function ChatInputArea({
   availableProjects,
   onProjectChange,
   currentTaskPolicyId,
+  runTargets,
+  currentRunTarget,
+  onRunTargetChange,
   availableTaskPolicies,
   onTaskPolicyChange,
   taskMcps,
@@ -387,6 +399,7 @@ export function ChatInputArea({
     Boolean(currentAgent && availableAgents?.length && onAgentChange) ||
     Boolean(availableProjects?.length && onProjectChange) ||
     Boolean(availableTaskPolicies?.length && onTaskPolicyChange) ||
+    Boolean(runTargets?.length && currentRunTarget) ||
     Boolean(onScheduledAtChange);
 
   return (
@@ -479,6 +492,15 @@ export function ChatInputArea({
                       )}
                     />
                   </div>
+                ) : null}
+
+                {runTargets?.length && currentRunTarget ? (
+                  <RunTargetSelect
+                    targets={runTargets}
+                    value={currentRunTarget}
+                    disabled={isLoading || !onRunTargetChange}
+                    onValueChange={(target) => onRunTargetChange?.(target)}
+                  />
                 ) : null}
 
                 {availableProjects?.length && onProjectChange ? (

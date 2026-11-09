@@ -33,7 +33,11 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.money import serialize_money
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
-from agentarea_tasks.domain.exceptions import BudgetCapExceededError, RunStillClosingError
+from agentarea_tasks.domain.exceptions import (
+    BudgetCapExceededError,
+    InvalidRunnerClientError,
+    RunStillClosingError,
+)
 from agentarea_tasks.domain.feed import feed_event
 from agentarea_tasks.domain.models import TaskProvenance
 from agentarea_tasks.infrastructure.repository import TaskRepository
@@ -325,6 +329,13 @@ class RunsToolset(Toolset):
                 "offset, e.g. 2026-09-01T09:00:00+03:00."
             ),
         ] = None,
+        runner_client_id: Annotated[
+            str | None,
+            Field(
+                description="Run on this Codex or Claude Code client, from `clients_list`, "
+                "instead of where the agent runs."
+            ),
+        ] = None,
     ) -> str:
         """Start a new agent run, now or once at a future moment.
 
@@ -345,6 +356,7 @@ class RunsToolset(Toolset):
                 "requires_human_approval": requires_human_approval,
                 "project_id": project_id,
                 "scheduled_at": scheduled_at,
+                "runner_client_id": runner_client_id,
             }
         )
 
@@ -364,7 +376,7 @@ class RunsToolset(Toolset):
                     created_via="mcp",
                     provenance=started_by(user_ctx),
                 )
-            except BudgetCapExceededError as exc:
+            except (BudgetCapExceededError, InvalidRunnerClientError) as exc:
                 raise ToolError(str(exc)) from None
             return json.dumps(
                 {

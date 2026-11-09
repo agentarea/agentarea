@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { getAgents } from "@/components/actions";
 import { WorkplaceChat } from "@/components/Chat/WorkplaceChat";
 import { WorkplaceOnboarding } from "@/components/Chat/WorkplaceOnboarding";
+import { loadAgentRunTargets } from "@/lib/agent-run-targets";
 import { listModelInstances, listPolicies, listProjects } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { getViewerCapabilities } from "@/lib/workspace-context";
@@ -49,12 +50,14 @@ export async function WorkplaceData() {
   }
 
   type AgentWithDisplay = AgentResponse & { icon?: string | null };
+  const runTargets = await loadAgentRunTargets(agentsData ?? []);
   const agents =
     (agentsData as AgentWithDisplay[] | undefined)?.map((agent) => ({
       id: String(agent.id),
       name: agent.name,
       description: agent.description,
       icon: agent.icon ?? null,
+      runTargets: runTargets[String(agent.id)],
     })) || [];
 
   const projects =
