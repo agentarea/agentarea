@@ -69,7 +69,7 @@ export async function handleCliCommand(
 	}
 
 	if (command === 'logout') {
-		return runLogout();
+		return runLogout({apiUrl, all: options.rawFlags?.['all'] === true});
 	}
 
 	if (command === 'init') {

@@ -1,52 +1,82 @@
 import {logger} from './logger.js';
 import {StorageError} from './error.js';
 import {type AuthToken} from '../types/index.js';
-import {apiOrigin, isSameApiOrigin, normalizeApiUrl} from './apiUrl.js';
+import {apiOrigin} from './apiUrl.js';
 
 const SERVICE_NAME = 'agentarea-cli';
-const TOKEN_KEY = 'auth_token';
-
-// Hosts already told why the stored sign-in was withheld, so one command does
-// not print the hint once per request.
-const warnedHosts = new Set<string>();
+// Before sign-ins were kept per host, the one sign-in lived under this account.
+const LEGACY_TOKEN_KEY = 'auth_token';
 
 // Load the native OS keychain addon lazily on first token operation rather than
 // at module import. The dependency is still required — a broken load throws
 // here as it always would — but merely importing this module (e.g. from a
 // unit test or a headless environment) no longer forces the native binding.
 type Keyring = typeof import('@zowe/secrets-for-zowe-sdk')['keyring'];
+export type KeyringStore = Pick<
+	Keyring,
+	'getPassword' | 'setPassword' | 'deletePassword' | 'findCredentials'
+>;
 let keyringPromise: Promise<Keyring> | undefined;
 async function getKeyring(): Promise<Keyring> {
 	keyringPromise ??= import('@zowe/secrets-for-zowe-sdk').then(m => m.keyring);
 	return keyringPromise;
 }
 
+/**
+ * The keychain account a sign-in lives under: the origin of the API it was
+ * issued for, so each host keeps its own and signing in to one never replaces
+ * another's.
+ */
+function accountFor(apiUrl: string | undefined): string {
+	const origin = apiOrigin(apiUrl);
+	if (!origin) {
+		throw new StorageError(
+			`A sign-in must belong to an http(s) API, got ${apiUrl ?? 'none'}`,
+		);
+	}
+
+	return origin;
+}
+
 export class TokenStorage {
+	private migration: Promise<void> | undefined;
+	private warnedUnboundLegacy = false;
+
+	private readonly keyring: () => Promise<KeyringStore>;
+
+	constructor(keyring: () => Promise<KeyringStore> = getKeyring) {
+		this.keyring = keyring;
+	}
+
 	async saveToken(token: AuthToken): Promise<void> {
+		const account = accountFor(token.apiUrl);
 		try {
-			const tokenString = JSON.stringify(token);
-			const keyring = await getKeyring();
-			await keyring.setPassword(SERVICE_NAME, TOKEN_KEY, tokenString);
-			logger.debug('Token saved to keychain');
+			await this.migrateLegacyToken();
+			const keyring = await this.keyring();
+			await keyring.setPassword(SERVICE_NAME, account, JSON.stringify(token));
+			// Whatever is still under the legacy account has no recorded host and
+			// was never sent; this sign-in is what its warning asked for.
+			await keyring.deletePassword(SERVICE_NAME, LEGACY_TOKEN_KEY);
+			logger.debug(`Token for ${account} saved to keychain`);
 		} catch (error) {
 			logger.error('Failed to save token:', error);
 			throw new StorageError(`Failed to save authentication token: ${error}`);
 		}
 	}
 
-	async getToken(): Promise<AuthToken | null> {
+	/** The sign-in stored for *apiUrl*'s origin, or null when there is none. */
+	async getTokenFor(apiUrl: string): Promise<AuthToken | null> {
+		const account = accountFor(apiUrl);
 		try {
-			const keyring = await getKeyring();
-			const tokenString = await keyring.getPassword(SERVICE_NAME, TOKEN_KEY);
-
+			await this.migrateLegacyToken();
+			const keyring = await this.keyring();
+			const tokenString = await keyring.getPassword(SERVICE_NAME, account);
 			if (!tokenString) {
-				logger.debug('No stored token found');
+				logger.debug(`No stored token for ${account}`);
 				return null;
 			}
 
-			const token: AuthToken = JSON.parse(tokenString);
-			logger.debug('Token retrieved from keychain');
-			return token;
+			return JSON.parse(tokenString) as AuthToken;
 		} catch (error) {
 			logger.error('Failed to retrieve token:', error);
 			throw new StorageError(
@@ -55,53 +85,75 @@ export class TokenStorage {
 		}
 	}
 
-	/**
-	 * The stored token, but only when it was issued for *apiUrl*'s origin. A
-	 * token for another host (or one with no recorded host) is withheld, with a
-	 * hint to sign in to the host the command targets.
-	 */
-	async getTokenFor(apiUrl: string): Promise<AuthToken | null> {
-		const token = await this.getToken();
-		if (!token) {
-			return null;
-		}
-
-		if (isSameApiOrigin(token.apiUrl, apiUrl)) {
-			return token;
-		}
-
-		const target = normalizeApiUrl(apiUrl);
-		if (!warnedHosts.has(target)) {
-			warnedHosts.add(target);
-			logger.warn(
-				`Not sending the stored sign-in to ${target}: it was issued for ${
-					apiOrigin(token.apiUrl) ?? 'an unrecorded host'
-				}. Run \`agentarea login --api-url=${target}\` to sign in to that host.`,
-			);
-		}
-
-		return null;
-	}
-
-	async clearToken(): Promise<void> {
+	/** Sign out of *apiUrl*'s origin; other hosts keep their sign-ins. */
+	async clearToken(apiUrl: string): Promise<void> {
+		const account = accountFor(apiUrl);
 		try {
-			const keyring = await getKeyring();
-			await keyring.deletePassword(SERVICE_NAME, TOKEN_KEY);
-			logger.debug('Token cleared from keychain');
+			await this.migrateLegacyToken();
+			const keyring = await this.keyring();
+			await keyring.deletePassword(SERVICE_NAME, account);
+			logger.debug(`Token for ${account} cleared from keychain`);
 		} catch (error) {
 			logger.error('Failed to clear token:', error);
 			throw new StorageError(`Failed to clear authentication token: ${error}`);
 		}
 	}
 
-	async hasToken(): Promise<boolean> {
+	/** Sign out of every host; returns the accounts that were cleared. */
+	async clearAllTokens(): Promise<string[]> {
 		try {
-			const token = await this.getToken();
-			return token !== null;
+			const keyring = await this.keyring();
+			const accounts = (await keyring.findCredentials(SERVICE_NAME)).map(
+				credential => credential.account,
+			);
+			for (const account of accounts) {
+				await keyring.deletePassword(SERVICE_NAME, account);
+			}
+
+			logger.debug(`Cleared ${accounts.length} token(s) from keychain`);
+			return accounts;
 		} catch (error) {
-			logger.error('Failed to check token:', error);
-			return false;
+			logger.error('Failed to clear tokens:', error);
+			throw new StorageError(`Failed to clear authentication tokens: ${error}`);
 		}
+	}
+
+	private async migrateLegacyToken(): Promise<void> {
+		this.migration ??= this.moveLegacyToken();
+		return this.migration;
+	}
+
+	/**
+	 * Move the single pre-per-host sign-in to its host's account. One with no
+	 * recorded host is left where it is and never sent: nothing says which API
+	 * issued it.
+	 */
+	private async moveLegacyToken(): Promise<void> {
+		const keyring = await this.keyring();
+		const legacy = await keyring.getPassword(SERVICE_NAME, LEGACY_TOKEN_KEY);
+		if (!legacy) {
+			return;
+		}
+
+		const token = JSON.parse(legacy) as AuthToken;
+		const origin = apiOrigin(token.apiUrl);
+		if (!origin) {
+			if (!this.warnedUnboundLegacy) {
+				this.warnedUnboundLegacy = true;
+				logger.warn(
+					'Ignoring the stored sign-in: it does not record which API issued it. Run `agentarea login --api-url=<api>` to sign in again.',
+				);
+			}
+
+			return;
+		}
+
+		if (!(await keyring.getPassword(SERVICE_NAME, origin))) {
+			await keyring.setPassword(SERVICE_NAME, origin, legacy);
+		}
+
+		await keyring.deletePassword(SERVICE_NAME, LEGACY_TOKEN_KEY);
+		logger.debug(`Moved the stored sign-in to ${origin}`);
 	}
 
 	isTokenExpired(token: AuthToken): boolean {

@@ -217,16 +217,25 @@ export async function runLogin(options: {apiUrl: string}): Promise<boolean> {
 	}
 }
 
-export async function runLogout(): Promise<boolean> {
-	await tokenStorage.clearToken();
-	console.log('Signed out (local token cleared).');
+export async function runLogout(options: {
+	apiUrl: string;
+	all: boolean;
+}): Promise<boolean> {
+	if (options.all) {
+		const cleared = await tokenStorage.clearAllTokens();
+		console.log(`Signed out of every host (${cleared.length} cleared).`);
+		return true;
+	}
+
+	await tokenStorage.clearToken(options.apiUrl);
+	console.log(`Signed out of ${normalizeApiUrl(options.apiUrl)}.`);
 	return true;
 }
 
 /**
  * Return a usable access token for *apiUrl*, refreshing it when it is expiring
- * and a refresh token is available. Returns null when there is nothing stored,
- * or when the stored token was issued for a different origin than *apiUrl*.
+ * and a refresh token is available. Returns null when nothing is stored for
+ * *apiUrl*'s origin.
  */
 export async function loadAccessToken(apiUrl: string): Promise<string | null> {
 	let stored: AuthToken | null = null;
@@ -252,8 +261,8 @@ export async function loadAccessToken(apiUrl: string): Promise<string | null> {
 		return stored.accessToken;
 	}
 
-	// getTokenFor only returns a token bound to apiUrl's origin, so its
-	// recorded apiUrl is set and is the API it was issued by.
+	// getTokenFor only returns the token stored for apiUrl's origin, which was
+	// saved with that apiUrl recorded.
 	const metadata = await discoverAuthServer(stored.apiUrl!);
 	const refreshed = await refreshAccessToken({
 		metadata,
