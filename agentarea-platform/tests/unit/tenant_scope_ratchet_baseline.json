@@ -40,7 +40,7 @@
     "libs/mcp/agentarea_mcp/dispatch_stamps.py": 1,
     "libs/secrets/agentarea_secrets/catalog_service.py": 13,
     "libs/secrets/agentarea_secrets/database_secret_manager.py": 5,
-    "libs/secrets/agentarea_secrets/graph_owners.py": 1,
+    "libs/secrets/agentarea_secrets/graph_owners.py": 2,
     "libs/streams/agentarea_streams/application/ingest.py": 1,
     "libs/streams/agentarea_streams/infrastructure/catalog_source_types.py": 2,
     "libs/streams/agentarea_streams/infrastructure/partitions.py": 4,
