@@ -304,37 +304,6 @@ def reconcile(
 
 
 @cli.group()
-def secrets():
-    """Secret maintenance."""
-
-
-@secrets.command("grant-owners")
-@click.option("--dry-run", is_flag=True, help="List the secrets it would grant; write nothing.")
-def grant_secret_owners(dry_run: bool):
-    """Make each user secret's creator its owner in the authorization graph.
-
-    Secrets became graph resources with ``can_use_secret``; one created before
-    has no tuples, so only a workspace admin may wire it in until this runs.
-    Idempotent: run once after upgrading.
-    """
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    asyncio.run(_grant_secret_owners(dry_run=dry_run))
-
-
-async def _grant_secret_owners(*, dry_run: bool) -> None:
-    from agentarea_secrets.graph_owners import grant_user_secret_owners
-
-    if not dry_run:
-        await _register_graph_client()
-    db = Database(get_db_settings())
-    async with db.async_session_factory() as session:
-        owners = await grant_user_secret_owners(session, dry_run=dry_run)
-    for owner in owners:
-        click.echo(f"{owner.workspace_id}/{owner.secret_id}  User:{owner.created_by}")
-    click.echo(f"{'Would grant' if dry_run else 'Granted'} {len(owners)} user secrets")
-
-
-@cli.group()
 def skills():
     """Skill maintenance."""
 
@@ -525,6 +494,19 @@ async def _refresh_stub_installs(*, dry_run: bool) -> None:
     click.echo(", ".join(f"{n} {status}" for status, n in counts.items()) or "No stub installs")
     if counts["error"]:
         sys.exit(1)
+
+
+async def _grant_pending_secret_owners(db: Database) -> None:
+    """Record the creator of each user secret the graph has no owner for yet.
+
+    Cheap once done: the pass reads only unstamped rows, by a partial index.
+    """
+    from agentarea_secrets.graph_owners import grant_pending_secret_owners
+
+    async with db.async_session_factory() as session:
+        granted = await grant_pending_secret_owners(session)
+    if granted:
+        click.echo(f"Granted the owners of {granted} user secrets")
 
 
 async def _register_graph_client() -> None:
@@ -733,11 +715,12 @@ async def _reconcile(
         )
         configs.append({"name": name, "source_url": src})
 
+    await _register_graph_client()
+    await _grant_pending_secret_owners(db)
+
     if not configs and not workspace_registries:
         click.echo("No registry config provided (set REGISTRIES_CONFIG or use --source)")
         return
-
-    await _register_graph_client()
 
     # Validate up front so a malformed entry reports a clear message instead of
     # failing deep inside the per-registry loop with a bare KeyError.

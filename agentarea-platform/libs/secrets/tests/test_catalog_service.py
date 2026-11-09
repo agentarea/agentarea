@@ -438,6 +438,7 @@ class TestSecretInTheGraph:
         on_secret = {(t.relation, t.subject_id) for t in graph.recorded if t.object == str(secret.id)}
         assert ("project", f"project:{root_project_id(WORKSPACE)}") in on_secret
         assert ("manager", "User:member-a") in on_secret
+        assert secret.graph_granted_at is not None
 
     async def test_a_secret_user_grant_lets_another_member_use_it(
         self, session: AsyncSession, graph: RecordingGraph
@@ -612,3 +613,28 @@ class TestRotate:
         await catalog.rotate_user_secret(secret.id, "new-value-bbbb")
 
         assert [c.consumer_id for c in await catalog.consumers(secret.id)] == [consumer_id]
+
+
+class TestPendingGraphGrants:
+    async def test_the_reconcile_grants_a_secret_made_before_and_then_finds_nothing(
+        self, session: AsyncSession, graph: RecordingGraph
+    ) -> None:
+        from agentarea_secrets.graph_owners import grant_pending_secret_owners
+
+        legacy = EncryptedSecret(
+            id=uuid.uuid4(),
+            workspace_id=WORKSPACE,
+            secret_name="legacy-key",
+            encrypted_value="ciphertext",
+            created_by="member-a",
+        )
+        session.add(legacy)
+        await session.commit()
+
+        assert await grant_pending_secret_owners(session) >= 1
+        assert ("manager", "User:member-a") in {
+            (t.relation, t.subject_id) for t in graph.recorded if t.object == str(legacy.id)
+        }
+        member_a = _catalog(session, user_id="member-a", admin_workspaces=[])
+        assert (await member_a.get_named_for_use("legacy-key")).id == legacy.id
+        assert await grant_pending_secret_owners(session) == 0

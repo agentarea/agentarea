@@ -9,11 +9,12 @@ the link between the two is a natural key that rename and delete have to keep
 in step.
 """
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel
-from sqlalchemy import ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -46,6 +47,12 @@ class EncryptedSecret(BaseModel):
     created_by: Mapped[str] = mapped_column(nullable=False)
     updated_by: Mapped[str | None] = mapped_column(nullable=True)
 
+    # When the creator's ownership of a user secret reached the authorization
+    # graph. Null until then; the reconcile grants and stamps what is left.
+    graph_granted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     __table_args__ = (
         UniqueConstraint("workspace_id", "secret_name", name="uq_encrypted_secrets_workspace_name"),
         # The secrets list is a user-facing view of user-owned secrets, and
@@ -54,6 +61,11 @@ class EncryptedSecret(BaseModel):
             "ix_encrypted_secrets_user_owned",
             "workspace_id",
             postgresql_where=owner_type.is_(None),
+        ),
+        Index(
+            "ix_encrypted_secrets_graph_pending",
+            "id",
+            postgresql_where=owner_type.is_(None) & graph_granted_at.is_(None),
         ),
     )
 

@@ -1,15 +1,16 @@
-"""Record the owner of every user secret made before secrets were graph resources.
+"""Grant the owner of every user secret whose ownership has not reached the graph.
 
-A secret created since is granted at create. One created before has no tuples,
-so ``can_use_secret`` holds for no one but a workspace admin, and its creator
-can no longer wire it in. Granting its ``created_by`` is idempotent; run once
-after upgrading, and again harmlessly.
+Using a secret is ``can_use_secret`` on ``resource:<secret id>``. A create grants
+its creator and stamps ``graph_granted_at``; a secret made before secrets were
+graph resources, or one whose create could not stamp it, is still null. The
+reconcile grants each such secret its ``created_by`` and stamps it, so the pass
+finds nothing left once it has run.
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from agentarea_common.auth.context import Subject
 from agentarea_common.base.tenant_scope import unscoped
@@ -22,29 +23,23 @@ from .models import EncryptedSecret
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class SecretOwner:
-    workspace_id: str
-    secret_id: str
-    created_by: str
-
-
-async def grant_user_secret_owners(session: AsyncSession, *, dry_run: bool) -> list[SecretOwner]:
-    """Grant each user secret's creator ownership; return the secrets it covered."""
-    with unscoped("a one-time grant of every workspace's user secrets to their creators"):
-        rows = await session.execute(
-            select(EncryptedSecret.workspace_id, EncryptedSecret.id, EncryptedSecret.created_by)
-            .where(EncryptedSecret.owner_type.is_(None))
+async def grant_pending_secret_owners(session: AsyncSession) -> int:
+    """Grant and stamp every user secret not yet in the graph; return how many."""
+    with unscoped("user secrets of every workspace whose owner the graph does not have yet"):
+        result = await session.execute(
+            select(EncryptedSecret)
+            .where(EncryptedSecret.owner_type.is_(None), EncryptedSecret.graph_granted_at.is_(None))
             .order_by(EncryptedSecret.workspace_id, EncryptedSecret.id)
         )
-    owners = [SecretOwner(str(r.workspace_id), str(r.id), str(r.created_by)) for r in rows]
-    if dry_run:
-        return owners
-    for owner in owners:
-        await grant_resource_owner(
-            resource_id=owner.secret_id,
-            workspace_id=owner.workspace_id,
-            owner=Subject(kind="user", id=owner.created_by).graph_subject,
-        )
-    logger.info("Granted the owners of %d user secrets", len(owners))
-    return owners
+        pending = list(result.scalars().all())
+        for secret in pending:
+            await grant_resource_owner(
+                resource_id=secret.id,
+                workspace_id=secret.workspace_id,
+                owner=Subject(kind="user", id=secret.created_by).graph_subject,
+            )
+            secret.graph_granted_at = datetime.now(UTC)
+            await session.commit()
+    if pending:
+        logger.info("Granted the owners of %d user secrets", len(pending))
+    return len(pending)

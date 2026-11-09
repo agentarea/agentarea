@@ -11,6 +11,7 @@ overwrite of a live credential.
 
 import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from agentarea_common.audit import AuditService
@@ -366,6 +367,7 @@ class SecretCatalogService:
             await self._session.rollback()
             await self._secrets.delete_secret(secret.secret_name)
             raise
+        secret.graph_granted_at = datetime.now(UTC)
 
     async def _require_user_owned(self, secret_id: UUID) -> EncryptedSecret:
         secret = await self.get(secret_id)

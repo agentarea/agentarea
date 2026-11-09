@@ -285,15 +285,6 @@ Check the Job explicitly.
   </Step>
 </Steps>
 
-## One-time steps by release
-
-Some releases need a command run once after their migration applied. Each is
-idempotent, so running it twice is harmless.
-
-| Upgrading past | Run once | Why |
-|---|---|---|
-| Secrets as graph resources (`can_use_secret`) | `agentarea-api secrets grant-owners` in an API pod (`--dry-run` lists what it would grant) | A user secret created before has no owner in the authorization graph, so until this runs only a workspace admin may attach it to an MCP server, an OAuth client or an egress exit. |
-
 ## Verify
 
 Confirm the running images are the ones you pinned:
