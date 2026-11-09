@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from agentarea_agents_sdk import GoalProgressEvaluator, LLMModel, LLMRequest
-from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
+from agentarea_agents_sdk.models.provider_profiles import ProviderProfile, ReasoningSettingError
 from agentarea_agents_sdk.skills import SkillContextGuard
 from agentarea_common.analytics import count_run_refused
 from agentarea_common.auth.context import UserContext
@@ -52,6 +52,7 @@ from ...models import (
     ResolvedModelInfo,
     ResolveModelRequest,
 )
+from ...telemetry import LLMPurpose, llm_call
 from ...workflows.context_manager import (
     COMPACTION_SUMMARY_HEADER,
     compactable_prefix,
@@ -95,13 +96,14 @@ def _model_call_failure(message: str, error: Exception) -> ApplicationError:
             type=GovernanceDeniedError.__name__,
             non_retryable=True,
         )
+    if isinstance(error, ReasoningSettingError):
+        return ApplicationError(message, type=type(error).__name__, non_retryable=True)
     failure = classify_llm_failure(error)
     return ApplicationError(
         message,
         *([failure.as_detail()] if failure else []),
         type=type(error).__name__,
-        non_retryable=_is_non_retryable_error(error)
-        or (failure is not None and not failure.retryable),
+        non_retryable=not failure.retryable if failure else _is_non_retryable_error(error),
     )
 
 
@@ -207,6 +209,7 @@ def make_llm_activities(
             managed_by = getattr(model_instance.provider_config, "managed_by", None)
             display_name = getattr(model_instance.model_spec, "display_name", None)
             supports_vision = getattr(model_instance.model_spec, "supports_vision", None)
+            reasoning_efforts = getattr(model_instance.model_spec, "reasoning_efforts", None)
             provider_display_name = getattr(
                 model_instance.provider_config.provider_spec, "display_name", None
             )
@@ -227,6 +230,7 @@ def make_llm_activities(
             cache_creation_input_cost_per_token=cache_creation_input_cost_per_token,
             display_name=display_name,
             supports_vision=supports_vision,
+            reasoning_efforts=reasoning_efforts,
             provider_display_name=provider_display_name,
             provider=provider,
             resolved_at=datetime.now(UTC).isoformat(),
@@ -443,11 +447,6 @@ def make_llm_activities(
                     managed_by = getattr(model_instance.provider_config, "managed_by", None)
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
 
-            if input_cost_per_token is None or output_cost_per_token is None:
-                raise ValueError(
-                    "model pricing is not configured; compaction budget cannot be enforced"
-                )
-
             if endpoint_url:
                 local_host = dependencies.settings.app.local_host
                 endpoint_url = endpoint_url.replace("localhost", local_host).replace(
@@ -521,18 +520,23 @@ def make_llm_activities(
                     endpoint_policy=endpoint_policy_for(managed_by),
                     provider=ProviderProfile.from_mapping(provider_data),
                 )
-                async for chunk in llm_model.ainvoke_stream(summary_request):
-                    if chunk.content:
-                        complete_content += chunk.content
-                    if chunk.usage is not None:
-                        final_usage = chunk.usage
-                    if chunk.cost and chunk.cost > final_cost:
-                        final_cost = to_money(chunk.cost)
+                with llm_call(
+                    str(provider_type), str(model_name), LLMPurpose.COMPACTION
+                ) as metered:
+                    async for chunk in llm_model.ainvoke_stream(summary_request):
+                        metered.chunk()
+                        if chunk.content:
+                            complete_content += chunk.content
+                        if chunk.usage is not None:
+                            final_usage = chunk.usage
+                        if chunk.cost and chunk.cost > final_cost:
+                            final_cost = to_money(chunk.cost)
 
-                if final_usage is None or final_usage.total_tokens <= 0:
-                    raise RuntimeError(
-                        "compaction usage accounting unavailable; budget cannot be enforced"
-                    )
+                    if final_usage is None or final_usage.total_tokens <= 0:
+                        raise RuntimeError(
+                            "compaction usage accounting unavailable; budget cannot be enforced"
+                        )
+                    metered.usage(final_usage.prompt_tokens, final_usage.completion_tokens)
             except BaseException:
                 await release_model_hold(funding, "the compaction call did not complete")
                 raise

@@ -430,7 +430,7 @@ async def test_a_deny_after_the_call_ran_says_the_result_was_withheld(instance):
         if activity == Activities.EXECUTE_MCP_TOOL:
             raise _governance_failure(
                 "GovernanceDeniedError",
-                "output_sanitizer",
+                "content_filter",
                 "result contains a credential",
                 phase="post_tool_call",
             )
@@ -445,6 +445,6 @@ async def test_a_deny_after_the_call_ran_says_the_result_was_withheld(instance):
     (tool_message,) = [m for m in instance.state.messages if m.role == "tool"]
     assert tool_message.content == (
         "Tool call ran, but its result was withheld by policy: "
-        "output_sanitizer: result contains a credential"
+        "content_filter: result contains a credential"
     )
     assert "denied by policy" not in tool_message.content

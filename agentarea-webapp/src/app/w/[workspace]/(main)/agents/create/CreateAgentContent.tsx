@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
-import { listAgentPresets } from "@/lib/api";
 import { loadStreamOptions } from "@/app/w/[workspace]/(main)/triggers/create/streamOptions";
+import { listAgentPresets } from "@/lib/api";
 import { loadAgentData, loadDelegationData } from "../shared/useAgentData";
 import CreateAgentClient from "./CreateAgentClient";
 import { generateAgentName } from "./utils/agentNameGenerator";
@@ -24,6 +24,7 @@ export default async function CreateAgentContent() {
       llmModelInstances={agentData.llmModelInstances}
       mcpInstanceList={agentData.mcpInstanceList}
       builtinTools={agentData.builtinTools}
+      toolVerdicts={agentData.toolVerdicts}
       presets={presetsResponse.error ? null : (presetsResponse.data ?? [])}
       streams={streams}
       delegation={delegation}

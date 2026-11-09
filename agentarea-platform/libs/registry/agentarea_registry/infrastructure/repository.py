@@ -15,8 +15,10 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import unscoped
+from agentarea_common.constants import PLATFORM_WORKSPACE_ID
 from sqlalchemy import (
     String,
+    and_,
     case,
     cast,
     column,
@@ -32,6 +34,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
 
 from agentarea_registry.application.catalog_facets import (
@@ -227,6 +230,41 @@ class RegistryRepository:
         return True
 
 
+_ITEMS = table(
+    "registry_items",
+    column("registry_id"),
+    column("registry_type"),
+    column("installed_entity_id"),
+    column("in_source"),
+)
+_REGISTRIES = table("registries", column("id"), column("source_etag"))
+_PROVIDER_SPECS = table("provider_specs", column("id"))
+_PROVIDER_CONFIGS = table("provider_configs", column("provider_spec_id"))
+_MODEL_SPECS = table(
+    "model_specs", column("id"), column("provider_spec_id"), column("workspace_id")
+)
+_MODEL_INSTANCES = table("model_instances", column("model_spec_id"))
+
+
+def _dropped_entities(registry_id: UUID | str, registry_type: str) -> Any:
+    """What the registry's items its source no longer publishes materialized."""
+    return select(_ITEMS.c.installed_entity_id).where(
+        _ITEMS.c.registry_id == UUID(str(registry_id)),
+        _ITEMS.c.registry_type == registry_type,
+        _ITEMS.c.in_source.is_(False),
+    )
+
+
+def _published(entity_id: Any, registry_type: str) -> ColumnElement[bool]:
+    """Whether some registry's source still publishes the entity."""
+    live = _ITEMS.alias("live")
+    return exists().where(
+        live.c.installed_entity_id == entity_id,
+        live.c.registry_type == registry_type,
+        live.c.in_source.is_(True),
+    )
+
+
 class RegistryItemRepository:
     """Global (non-scoped) repository for RegistryItem rows."""
 
@@ -361,12 +399,16 @@ class RegistryItemRepository:
     ) -> int:
         """Point every use of the registry's items at the same item of a replacement.
 
-        "The same item" is the one with the same ``external_id`` that a
-        replacement registry still publishes (the first by registry weight).
-        Installs, forks, agents and connections move, in every workspace, except
-        where a workspace already holds the replacement item: one fork and one
-        install per item and workspace. Not committed, so the caller deletes
-        what is left unused in the same transaction. Returns how many moved.
+        Only items the registry no longer publishes move. "The same item" is
+        the one with the same ``external_id`` that a replacement registry still
+        publishes (the first by registry weight). Installs, forks, agents,
+        servers and connections move, in every workspace, except where a
+        workspace already holds the replacement item: one fork and one install
+        per item and workspace. The platform's own copy of an MCP server
+        (``installed_entity_id``) stays, since the replacement has its own, and
+        the instances run from it move to the replacement's copy. Not committed,
+        so the caller deletes what is left unused in the same transaction.
+        Returns how many moved.
         """
         if not replacements:
             return 0
@@ -376,12 +418,15 @@ class RegistryItemRepository:
             text(
                 """
                 WITH moves AS (
-                    SELECT DISTINCT ON (old.id) old.id AS old_id, new.id AS new_id
+                    SELECT DISTINCT ON (old.id) old.id AS old_id, new.id AS new_id,
+                           old.installed_entity_id AS old_copy,
+                           new.installed_entity_id AS new_copy
                     FROM registry_items old
                     JOIN registry_items new
                       ON new.external_id = old.external_id
                      AND new.registry_type = old.registry_type
                     WHERE old.registry_id = :registry_id
+                      AND NOT old.in_source
                       AND new.registry_id = ANY(:replacements)
                       AND new.in_source
                     ORDER BY old.id, new.registry_priority, new.registry_id
@@ -415,7 +460,16 @@ class RegistryItemRepository:
                 ),
                 servers AS (
                     UPDATE mcp_servers t SET registry_item_id = m.new_id
-                    FROM moves m WHERE t.registry_item_id = m.old_id
+                    FROM moves m
+                    WHERE t.registry_item_id = m.old_id
+                      AND t.id IS DISTINCT FROM m.old_copy
+                    RETURNING 1
+                ),
+                instances AS (
+                    UPDATE mcp_server_instances i SET server_spec_id = m.new_copy::text
+                    FROM moves m
+                    WHERE m.old_copy IS NOT NULL AND m.new_copy IS NOT NULL
+                      AND i.server_spec_id = m.old_copy::text
                     RETURNING 1
                 ),
                 connections AS (
@@ -425,7 +479,7 @@ class RegistryItemRepository:
                 )
                 SELECT (SELECT count(*) FROM forks) + (SELECT count(*) FROM installs)
                      + (SELECT count(*) FROM agents_moved) + (SELECT count(*) FROM servers)
-                     + (SELECT count(*) FROM connections)
+                     + (SELECT count(*) FROM instances) + (SELECT count(*) FROM connections)
                 """
             ),
             {
@@ -434,6 +488,163 @@ class RegistryItemRepository:
             },
         )
         return int(result.scalar_one())
+
+    async def replaced_copies(
+        self, registry_id: UUID | str, replacements: Collection[UUID | str]
+    ) -> list[tuple[UUID, str]]:
+        """``(item id, entity id)`` of the platform copies of items the registry
+        dropped whose replacement item has a copy of its own: left unused once
+        ``move_references`` ran, they are the caller's to delete.
+        """
+        if not replacements:
+            return []
+        old, new = aliased(RegistryItem), aliased(RegistryItem)
+        result = await self.session.execute(
+            select(old.id, old.installed_entity_id)
+            .join(
+                new,
+                and_(
+                    new.external_id == old.external_id,
+                    new.registry_type == old.registry_type,
+                ),
+            )
+            .where(
+                old.registry_id == registry_id,
+                old.in_source.is_(False),
+                old.installed_entity_id.is_not(None),
+                new.registry_id.in_([UUID(str(r)) for r in replacements]),
+                new.in_source.is_(True),
+                new.installed_entity_id.is_not(None),
+            )
+            .distinct()
+        )
+        return [(row[0], str(row[1])) for row in result.all()]
+
+    async def delete_unused_dropped_providers(self, registry_id: UUID | str) -> int:
+        """Delete the provider specs the registry's source dropped that no workspace uses.
+
+        A spec goes once no catalog item still publishes it and no workspace, the
+        platform's included, has a config on it, an instance on one of its models
+        or its own copy of one; its models and every catalog item naming the spec
+        or one of its models go with it. Both are locked before the check, so a
+        config or instance added meanwhile waits and then fails rather than being
+        cascaded away. Returns how many of the registry's items were deleted.
+        """
+        with unscoped("a provider spec is used from any workspace; the check must see all"):
+            candidates = await self._ids(
+                select(_PROVIDER_SPECS.c.id)
+                .where(
+                    _PROVIDER_SPECS.c.id.in_(_dropped_entities(registry_id, "llm_providers")),
+                    ~_published(_PROVIDER_SPECS.c.id, "llm_providers"),
+                )
+                .with_for_update()
+            )
+            if not candidates:
+                return 0
+            await self._ids(
+                select(_MODEL_SPECS.c.id)
+                .where(_MODEL_SPECS.c.provider_spec_id.in_(candidates))
+                .with_for_update()
+            )
+            ms = _MODEL_SPECS.alias("ms")
+            unused = await self._ids(
+                select(_PROVIDER_SPECS.c.id).where(
+                    _PROVIDER_SPECS.c.id.in_(candidates),
+                    ~exists().where(_PROVIDER_CONFIGS.c.provider_spec_id == _PROVIDER_SPECS.c.id),
+                    ~exists().where(
+                        ms.c.provider_spec_id == _PROVIDER_SPECS.c.id,
+                        or_(
+                            ms.c.workspace_id != PLATFORM_WORKSPACE_ID,
+                            exists().where(_MODEL_INSTANCES.c.model_spec_id == ms.c.id),
+                        ),
+                    ),
+                )
+            )
+            deleted = await self._delete_items(
+                registry_id,
+                or_(
+                    and_(
+                        _ITEMS.c.registry_type == "llm_providers",
+                        _ITEMS.c.installed_entity_id.in_(unused),
+                    ),
+                    and_(
+                        _ITEMS.c.registry_type == "llm_models",
+                        _ITEMS.c.installed_entity_id.in_(
+                            select(_MODEL_SPECS.c.id).where(
+                                _MODEL_SPECS.c.provider_spec_id.in_(unused)
+                            )
+                        ),
+                    ),
+                ),
+            )
+            await self.session.execute(
+                delete(_PROVIDER_SPECS).where(_PROVIDER_SPECS.c.id.in_(unused))
+            )
+        await self.session.commit()
+        return deleted
+
+    async def delete_unused_dropped_models(self, registry_id: UUID | str) -> int:
+        """Delete the model specs the registry's source dropped that no instance runs on.
+
+        The platform's spec of a model goes, with every catalog item naming it,
+        once no catalog item still publishes it and no workspace has an instance
+        on it; a workspace's own copy is a row of its own and stays. Returns how
+        many of the registry's items were deleted.
+        """
+        with unscoped("a model spec is run from any workspace; the check must see all"):
+            candidates = await self._ids(
+                select(_MODEL_SPECS.c.id)
+                .where(
+                    _MODEL_SPECS.c.id.in_(_dropped_entities(registry_id, "llm_models")),
+                    ~_published(_MODEL_SPECS.c.id, "llm_models"),
+                )
+                .with_for_update()
+            )
+            if not candidates:
+                return 0
+            unused = await self._ids(
+                select(_MODEL_SPECS.c.id).where(
+                    _MODEL_SPECS.c.id.in_(candidates),
+                    ~exists().where(_MODEL_INSTANCES.c.model_spec_id == _MODEL_SPECS.c.id),
+                )
+            )
+            deleted = await self._delete_items(
+                registry_id,
+                and_(
+                    _ITEMS.c.registry_type == "llm_models",
+                    _ITEMS.c.installed_entity_id.in_(unused),
+                ),
+            )
+            await self.session.execute(delete(_MODEL_SPECS).where(_MODEL_SPECS.c.id.in_(unused)))
+        await self.session.commit()
+        return deleted
+
+    async def _ids(self, statement: Any) -> list[UUID]:
+        return list((await self.session.execute(statement)).scalars().all())
+
+    async def _delete_items(self, registry_id: UUID | str, where: ColumnElement[bool]) -> int:
+        """Delete the items ``where`` names; how many of them were the registry's.
+
+        Another registry that lost items no longer holds what its stored ETag
+        says was applied, so its next sync reads its source in full: an
+        unchanged models file must recreate a provider's models when the
+        provider comes back.
+        """
+        returned = (
+            (
+                await self.session.execute(
+                    delete(_ITEMS).where(where).returning(_ITEMS.c.registry_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        others = {UUID(str(owner)) for owner in returned} - {UUID(str(registry_id))}
+        if others:
+            await self.session.execute(
+                update(_REGISTRIES).where(_REGISTRIES.c.id.in_(others)).values(source_etag=None)
+            )
+        return sum(1 for owner in returned if str(owner) == str(registry_id))
 
     async def delete_unreferenced_out_of_source(self, registry_id: UUID | str) -> int:
         """Delete the registry's items its source dropped that nothing uses.

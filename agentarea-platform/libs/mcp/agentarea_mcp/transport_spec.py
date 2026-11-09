@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from agentarea_mcp.domain.transport import MCPTransport
 
@@ -35,6 +35,43 @@ def _normalize_url_keys(spec: dict[str, Any]) -> dict[str, Any]:
             normalized.pop(legacy, None)
             return normalized
     return spec
+
+
+def _image_name(reference: str) -> str:
+    reference = reference.split("@", 1)[0]
+    colon = reference.rfind(":")
+    if colon > reference.rfind("/"):
+        reference = reference[:colon]
+    return reference
+
+
+def image_serves_stdio(spec: dict[str, Any]) -> bool:
+    """Whether a docker spec runs an image whose server speaks stdio, as its package declares.
+
+    Such a container has no port to reach it on, and mcp-base's bridge cannot run
+    inside an image it did not build. A declared port overrides the package.
+    Mirrors ``mcpspec.ImageServesStdio`` in mcp-manager.
+    """
+    if spec.get("port") is not None:
+        return False
+    image = spec.get("image")
+    image_name = _image_name(image) if isinstance(image, str) else None
+    packages: object = spec.get("packages")
+    images: list[dict[str, object]] = []
+    if isinstance(packages, list):
+        for package in cast(list[object], packages):
+            if isinstance(package, dict):
+                typed = cast(dict[str, object], package)
+                if typed.get("registryType") == "oci":
+                    images.append(typed)
+    chosen = images[0] if len(images) == 1 else None
+    for package in images:
+        identifier = package.get("identifier")
+        if isinstance(identifier, str) and identifier and _image_name(identifier) == image_name:
+            chosen = package
+            break
+    transport = chosen.get("transport") if chosen else None
+    return isinstance(transport, dict) and cast(dict[str, object], transport).get("type") == "stdio"
 
 
 def server_transport_spec(server: Any) -> dict[str, Any]:

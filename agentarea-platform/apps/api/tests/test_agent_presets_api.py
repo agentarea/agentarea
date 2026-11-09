@@ -113,5 +113,5 @@ async def test_toolsets_that_only_work_together_share_a_group(app):
     groups = {tool["name"]: tool["group"] for tool in response.json()}
     assert groups["agentarea/shell"] == "sandbox"
     assert groups["agentarea/files"] == "sandbox"
-    assert groups["agentarea/workspace_files"] == "sandbox"
+    assert "agentarea/workspace_files" not in groups
     assert groups["agentarea/web"] is None

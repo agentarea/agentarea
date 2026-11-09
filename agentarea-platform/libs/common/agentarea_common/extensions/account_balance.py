@@ -21,12 +21,18 @@ class AccountBalance:
 
     ``amount`` is None when the caller is not the payer: they learn that runs are
     paid by someone else and whether that money ran out, never how much it is.
+    ``spend_per_day`` and ``runway_days`` are the payer's too: everything billing
+    debited per day on average over its recent window, and how many days the
+    balance covers at that pace. ``runway_days`` is None when nothing was debited
+    in the window: no spend is no runway to measure, not an infinite one.
     """
 
     currency: str
     exhausted: bool
     viewer_is_payer: bool
     amount: Decimal | None
+    spend_per_day: Decimal | None = None
+    runway_days: Decimal | None = None
 
 
 @runtime_checkable

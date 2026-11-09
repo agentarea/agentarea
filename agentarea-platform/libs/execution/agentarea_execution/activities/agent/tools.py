@@ -10,7 +10,10 @@ from typing import TYPE_CHECKING, Any
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from agentarea_agents_sdk import ToolExecutor
+from agentarea_agents_sdk.tools.a2a_agent_tool import delegate_tool_name
+from agentarea_agents_sdk.tools.code_tools_loader import get_code_tool_class
 from agentarea_agents_sdk.tools.invocation_context import ToolInvocationContext
+from agentarea_agents_sdk.tools.mcp_app_ui import opens_app
 from agentarea_agents_sdk.tools.media_toolset import MEDIA_TOOLSET
 from agentarea_agents_sdk.tools.tool_builders import allowed_tool_names
 from agentarea_common.auth.tool_authorization import (
@@ -29,22 +32,19 @@ from agentarea_governance.tool_calls import (
     run_tool_call,
 )
 from agentarea_mcp.domain.metering import mcp_tool_connection
+from agentarea_mcp.domain.transport import MCPTransport
 from agentarea_mcp.tool_context import call_context_from_task
 from agentarea_tasks.domain.costs import tool_call_entry
 from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
 from agentarea_tasks.model_spend_caps import current_budget
 from agentarea_tasks.spend_gate import spend_cap_refusal
 from agentarea_wallet.domain.enums import settlement_status
-from prometheus_client import Counter
 from temporalio import activity
 
 from ...interfaces import ActivityDependencies
 from ...models import MCPToolRequest, MCPToolResult, McpToolRoute
-from ...workflows.helpers import (
-    mcp_tool_restricting_aliases,
-    tool_config_aliases,
-    tool_policy_aliases,
-)
+from ...telemetry import ToolCall, ToolKind, ToolOutcome, ToolPath, tool_call
+from ...workflows.helpers import tool_policy_names
 from ..heartbeat import auto_heartbeater
 from .sandbox import agent_artifact_actor, sandbox_control_auth_secret, sandbox_file_auth_secret
 from .tool_audit import TOOL_CALL_DENIED, argument_keys
@@ -102,11 +102,25 @@ def _deny_tool_result(tool_name: str, reason: str) -> MCPToolResult:
     )
 
 
-_mcp_dispatch_failed_total = Counter(
-    "mcp_dispatch_failed_total",
-    "Number of MCP dispatch failures",
-    ["reason"],
-)
+def tool_kind(request: MCPToolRequest) -> ToolKind:
+    """What kind of tool a call runs, as the tool-call metrics count it."""
+    if request.mcp_route is not None:
+        return ToolKind.MCP
+    if any(request.tool_name in names for names in request.openapi_operation_tools.values()):
+        return ToolKind.OPENAPI
+    for config in request.tools or ():
+        name = config.get("name")
+        if not isinstance(name, str):
+            continue
+        if config.get("type") == "agent" and delegate_tool_name(name) == request.tool_name:
+            return ToolKind.DELEGATION
+        if config.get("type") == "code" and name.rsplit("/", 1)[-1] == request.tool_name:
+            toolset = get_code_tool_class(name)
+            meta = getattr(toolset, "__toolset_meta__", None)
+            if getattr(meta, "category", None) == "platform":
+                return ToolKind.PLATFORM
+            return ToolKind.BUILTIN
+    return ToolKind.BUILTIN
 
 
 def _payment_call_ref(request: MCPToolRequest) -> str:
@@ -125,6 +139,25 @@ def _activity_output_id(prefix: str) -> str:
         raw = prefix
     safe = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in raw)
     return f"{prefix}_{safe}"
+
+
+def _mcp_app_tool(instance: Any, raw_name: str) -> str | None:
+    """``raw_name`` when the instance's stored tool of that name opens an MCP App.
+
+    Bundles proxy member tool calls but not the members' ``ui://`` resources.
+    """
+    if getattr(instance, "transport", None) == MCPTransport.BUNDLE:
+        return None
+    json_spec = getattr(instance, "json_spec", None)
+    tools = getattr(instance, "tools", None) or (
+        json_spec.get("available_tools") if isinstance(json_spec, dict) else None
+    )
+    if not isinstance(tools, list):
+        return None
+    for tool in tools:
+        if isinstance(tool, dict) and tool.get("name") == raw_name:
+            return raw_name if opens_app(tool) else None
+    return None
 
 
 def _server_icon_from_instance(instance: Any) -> str | None:
@@ -372,9 +405,14 @@ def make_tools_activities(
         amount for the run's budget, and says the call was metered so the event is
         not read for a wallet payment's line again.
         """
+        with tool_call(tool_kind(request), ToolPath.WORKER) as metered:
+            return await _governed_call(request, metered)
+
+    async def _governed_call(request: MCPToolRequest, metered: ToolCall) -> MCPToolResult:
         try:
             connection = await _tool_connection(request)
         except ToolCostError as error:
+            metered.outcome = ToolOutcome.DENIED
             return await _audited_denial(
                 request, f"the tool's cost declaration is invalid: {error}"
             )
@@ -384,7 +422,7 @@ def make_tools_activities(
                 await _record_denial(request, decision.reason)
 
         async def invoke() -> ToolCallOutcome:
-            result = await _dispatch(request)
+            result = await _dispatch(request, metered)
             return ToolCallOutcome(
                 success=result.success,
                 value=result,
@@ -397,6 +435,9 @@ def make_tools_activities(
         async def ledger(usages: list[ToolUsage]) -> int:
             return await _ledger(request, usages)
 
+        names = tool_policy_names(
+            request.tool_name, request.mcp_route, request.tools, request.openapi_operation_tools
+        )
         call = GovernedToolCall(
             authorization=ToolAuthorizationRequest(
                 tool_name=request.tool_name,
@@ -404,13 +445,9 @@ def make_tools_activities(
                 user_id=request.user_id,
                 workspace_id=request.workspace_id,
                 effective_policy=request.effective_policy,
-                aliases=tool_policy_aliases(request.mcp_route, request.tool_name),
-                restricting_aliases=(
-                    *mcp_tool_restricting_aliases(request.mcp_route, request.tool_name),
-                    *tool_config_aliases(
-                        request.tool_name, request.tools, request.openapi_operation_tools
-                    ),
-                ),
+                aliases=names.aliases,
+                restricting_aliases=names.restricting,
+                name_allows=names.name_allows,
             ),
             call_id=_payment_call_ref(request),
             agent_id=request.agent_id,
@@ -426,13 +463,16 @@ def make_tools_activities(
             call, invoke, audit=audit, ledger=ledger, spend_gate=spend_gate
         )
         if layered.verdict is Verdict.HELD:
+            metered.outcome = ToolOutcome.HELD
             return await _audited_denial(
                 request,
                 f"{layered.decision.reason}; approval must be resolved before activity execution",
             )
         if layered.verdict is Verdict.DENIED or layered.outcome is None:
+            metered.outcome = ToolOutcome.DENIED
             return _deny_tool_result(request.tool_name, layered.decision.reason)
         result: MCPToolResult = layered.outcome.value
+        metered.answered(result.success)
         result.cost = layered.cost
         result.cost_metered = layered.metered
         result.payer = connection.payer.value if connection else None
@@ -440,7 +480,7 @@ def make_tools_activities(
         result.attempt = _retry_attempt()
         return result
 
-    async def _dispatch(request: MCPToolRequest) -> MCPToolResult:
+    async def _dispatch(request: MCPToolRequest, metered: ToolCall) -> MCPToolResult:
         user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             mcp_server_instance_service = await ctx.get_mcp_server_instance_service()
@@ -476,7 +516,7 @@ def make_tools_activities(
 
                     # Build runtime kwargs for tools that need request context.
                     extra_kwargs: dict = {}
-                    if tool_name in ("agentarea/files", "agentarea/workspace_files"):
+                    if tool_name == "agentarea/files":
                         # The file tool must write to the same filesystem bash
                         # (agentarea/shell) runs in, so code the agent saves is
                         # visible to the commands it runs. SandboxFileStore
@@ -495,16 +535,6 @@ def make_tools_activities(
                             ),
                             "workspace_id": str(request.workspace_id),
                         }
-                        if tool_name == "agentarea/workspace_files":
-                            from agentarea_common.workspaces.lookup import workspace_slug_for
-
-                            extra_kwargs["workspace_slug"] = await workspace_slug_for(
-                                str(request.workspace_id)
-                            )
-                            # Its files are this task's, so links name the task.
-                            extra_kwargs["task_id"] = (
-                                str(request.task_id) if request.task_id else ""
-                            )
                     elif tool_name == "agentarea/context":
                         # Read-only access to the org context store (tier 1).
                         # ArtifactService is workspace-scoped, so the task can
@@ -823,6 +853,7 @@ def make_tools_activities(
 
                         delegation_tool = await AgentToolFactory.create_tool(
                             agent_name=agent_name,
+                            agent_id=settings.get("agent_id"),
                             agent_service=agent_service,
                             base_url=base_url,
                             a2a_url_override=a2a_url,
@@ -893,6 +924,7 @@ def make_tools_activities(
             if route is not None:
                 denial = mcp_route_denial(request.tools, route)
                 if denial is not None:
+                    metered.outcome = ToolOutcome.DENIED
                     return _deny_tool_result(request.tool_name, denial)
                 instance = await mcp_server_instance_service.get(UUID(route.instance_id))
                 if instance is None:
@@ -972,7 +1004,7 @@ def make_tools_activities(
                     )
                 except Exception as e:
                     logger.error("MCP tool execution failed: %s", e, exc_info=True)
-                    _mcp_dispatch_failed_total.labels(reason=type(e).__name__).inc()
+                    metered.failed(e)
                     return MCPToolResult(
                         success=False,
                         result=f"MCP tool error: {type(e).__name__}: {e}",
@@ -1019,6 +1051,7 @@ def make_tools_activities(
                     server_icon=_server_icon_from_instance(instance),
                     structured_content=mcp_result.get("structured_content"),
                     structured_content_dropped=bool(mcp_result.get("structured_content_dropped")),
+                    mcp_app_tool=_mcp_app_tool(instance, route.raw_name),
                     images=image_refs,
                 )
 
@@ -1070,7 +1103,7 @@ def make_tools_activities(
 
             except Exception as e:
                 logger.error("Tool execution failed: %s", e, exc_info=True)
-                _mcp_dispatch_failed_total.labels(reason=type(e).__name__).inc()
+                metered.failed(e)
                 return MCPToolResult(
                     success=False,
                     result=f"MCP tool error: {type(e).__name__}: {e}",

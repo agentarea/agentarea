@@ -9,15 +9,6 @@ from ..domain.models import DetectionFinding
 
 # Default pattern sets by category
 DEFAULT_PATTERNS: dict[str, list[str]] = {
-    "pii.email": [r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"],
-    "pii.phone": [r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"],
-    "pii.ssn": [r"\b\d{3}-\d{2}-\d{4}\b"],
-    "credential.api_key": [
-        r"\b(?:sk|pk|api[_-]?key)[_-][A-Za-z0-9]{16,}\b",
-        r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,}\b",
-    ],
-    "credential.bearer_token": [r"\bBearer\s+[A-Za-z0-9\-._~+/]+=*\b"],
-    "internal.file_path": [r"(?:/(?:home|Users|var|etc|tmp)/[^\s\"'<>|]+)"],
     "injection.override": [
         r"(?i)ignore\s+(?:all\s+)?(?:previous|above|prior)\s+instructions",
         r"(?i)you\s+are\s+now\s+(?:a|an)\b",

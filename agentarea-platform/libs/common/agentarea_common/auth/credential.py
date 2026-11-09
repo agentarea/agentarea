@@ -22,7 +22,7 @@ class Scope(StrEnum):
     WORKSPACES = "workspaces"
 
 
-CredentialKind = Literal["session", "oauth", "api_key"]
+CredentialKind = Literal["session", "oauth", "api_key", "turn"]
 Surface = Literal["api", "mcp"]
 
 
@@ -31,7 +31,7 @@ class Credential:
     """How a request authenticated, and on which surface."""
 
     kind: CredentialKind
-    # The API key's id when ``kind`` is ``api_key``.
+    # The API key's id when ``kind`` is ``api_key``; the turn's id when ``turn``.
     key_id: str | None = None
     surface: Surface = "api"
 
@@ -45,6 +45,8 @@ _SCOPES_BY_KIND: dict[str, frozenset[Scope]] = {
     "session": frozenset(Scope),
     "oauth": frozenset(Scope),
     "api_key": frozenset(),
+    # A runner's turn acting for its actor, until the turn ends (ADR-0051).
+    "turn": frozenset(),
 }
 
 

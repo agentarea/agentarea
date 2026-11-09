@@ -107,8 +107,7 @@ export default function PolicyInfo({
 
   const promptInjection =
     policy.content_safety?.prompt_injection_detection_enabled;
-  const outputSanitizer = policy.content_safety?.output_sanitizer_enabled;
-  const hasContentSafety = promptInjection != null || outputSanitizer != null;
+  const hasContentSafety = promptInjection != null;
 
   const hasAny =
     monthlyCap != null ||
@@ -242,20 +241,6 @@ export default function PolicyInfo({
                     }
                   >
                     {promptInjection ? t("policyOn") : t("policyOff")}
-                  </span>
-                </div>
-              )}
-              {outputSanitizer != null && (
-                <div>
-                  {t("policyOutputSanitizer")}:{" "}
-                  <span
-                    className={
-                      outputSanitizer
-                        ? "text-green-600 dark:text-green-500"
-                        : "text-muted-foreground"
-                    }
-                  >
-                    {outputSanitizer ? t("policyOn") : t("policyOff")}
                   </span>
                 </div>
               )}

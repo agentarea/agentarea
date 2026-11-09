@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { ArrowUpRight } from "lucide-react";
 import SearchInput from "@/components/SearchInput/SearchInput";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { BlueprintBadge } from "@/components/ui/blueprint-badge";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import { MenuSectionLabel } from "@/components/ui/menu-row";
@@ -217,29 +218,35 @@ export function TaskResourcePanelView({
         </SheetDescription>
       </SheetHeader>
 
-      <div className="space-y-2 border-b px-5 pb-3 pt-2">
-        <SearchInput
-          delay={150}
-          onDebouncedChange={skillSearch.setQuery}
-          placeholder={tCommon("search")}
-        />
-        <CountSegmentedControl
-          layoutId="task-attach-tabs"
-          value={tab}
-          onChange={setTab}
-          className="-ml-[3px]"
-          items={[
-            {
-              value: "skills",
-              label: t("skillsHeading"),
-              count: selectedCount(skills.length),
-            },
-            {
-              value: "mcps",
-              label: t("mcpsHeading"),
-              count: selectedCount(mcps.length),
-            },
-          ]}
+      {/* The subheader's 42px band, laid out as on a list page. */}
+      <div className="flex h-[42px] shrink-0 items-center border-b px-5">
+        <SubheaderToolbar
+          search={
+            <SearchInput
+              delay={150}
+              onDebouncedChange={skillSearch.setQuery}
+              placeholder={tCommon("search")}
+            />
+          }
+          categories={
+            <CountSegmentedControl
+              layoutId="task-attach-tabs"
+              value={tab}
+              onChange={setTab}
+              items={[
+                {
+                  value: "skills",
+                  label: t("skillsHeading"),
+                  count: selectedCount(skills.length),
+                },
+                {
+                  value: "mcps",
+                  label: t("mcpsHeading"),
+                  count: selectedCount(mcps.length),
+                },
+              ]}
+            />
+          }
         />
       </div>
 

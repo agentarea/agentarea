@@ -20,11 +20,15 @@ type ConfigSheetProps = {
   triggerIcon?: ReactNode;
   triggerComponent?: ReactNode;
   triggerClassName?: string;
+  /** The trigger button's look; a quieter one where several sit on a page. */
+  triggerVariant?: React.ComponentProps<typeof Button>["variant"];
   className?: string;
   open?: boolean; // External control of open state
   onOpenChange?: (open: boolean) => void; // Optional callback for parent component
   triggerRef?: React.RefObject<HTMLButtonElement | null>; // Optional ref to trigger button
   shortcut?: string; // Keyboard shortcut (e.g., "t" for Cmd+T)
+  /** The children are a PickerPanel, which draws its own header and padding. */
+  panel?: boolean;
 };
 
 const ConfigSheet = ({
@@ -32,6 +36,7 @@ const ConfigSheet = ({
   className,
   triggerComponent,
   triggerClassName,
+  triggerVariant,
   description,
   children,
   triggerText = "Add",
@@ -40,6 +45,7 @@ const ConfigSheet = ({
   onOpenChange,
   triggerRef,
   shortcut,
+  panel = false,
 }: ConfigSheetProps) => {
   const [internalIsOpen, setInternalIsOpen] = useState(false);
 
@@ -60,9 +66,10 @@ const ConfigSheet = ({
       if (e.altKey && e.key.toLowerCase() === shortcut.toLowerCase()) {
         // Don't trigger if user is typing in an input
         const target = e.target as HTMLElement;
-        const isInputField = target.tagName === "INPUT" ||
-                            target.tagName === "TEXTAREA" ||
-                            target.isContentEditable;
+        const isInputField =
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable;
 
         if (!isInputField) {
           e.preventDefault();
@@ -92,7 +99,12 @@ const ConfigSheet = ({
         {triggerComponent ? (
           triggerComponent
         ) : (
-          <Button size="xs" ref={triggerRef} className={cn("gap-1.5", triggerClassName)}>
+          <Button
+            size="xs"
+            variant={triggerVariant}
+            ref={triggerRef}
+            className={cn("gap-1.5", triggerClassName)}
+          >
             {triggerIcon}
             {triggerText}
             {shortcut && (
@@ -109,6 +121,9 @@ const ConfigSheet = ({
       <SheetContent
         className={cn(
           "flex w-full flex-col overflow-y-hidden pb-0 sm:w-[540px] md:min-w-[500px]",
+          // Sized like the task composer's attach sheet, which it mirrors.
+          panel &&
+            "gap-0 overflow-hidden p-0 sm:w-[420px] sm:max-w-[420px] md:min-w-0",
           className
         )}
         hideOverlay
@@ -125,10 +140,14 @@ const ConfigSheet = ({
           }
         }}
       >
-        <SheetHeader className="">
-          <SheetTitle>{title}</SheetTitle>
-          <SheetDescription className="text-xs">{description}</SheetDescription>
-        </SheetHeader>
+        {!panel && (
+          <SheetHeader className="">
+            <SheetTitle>{title}</SheetTitle>
+            <SheetDescription className="text-xs">
+              {description}
+            </SheetDescription>
+          </SheetHeader>
+        )}
         {children}
       </SheetContent>
     </Sheet>

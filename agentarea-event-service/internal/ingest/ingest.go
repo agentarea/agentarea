@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/agentarea/event-service/internal/tracing"
+	"github.com/agentarea/event-service/internal/telemetry"
 )
 
 const (
@@ -53,10 +53,10 @@ func (p *Publisher) Gap(ctx context.Context, sourceID, reason string) error {
 }
 
 func (p *Publisher) publish(ctx context.Context, sourceID, kind string, item any) (err error) {
-	ctx, span := tracing.Tracer().Start(ctx, "publish "+Topic,
+	ctx, span := telemetry.Tracer().Start(ctx, "publish "+Topic,
 		trace.WithSpanKind(trace.SpanKindProducer),
 		trace.WithAttributes(
-			tracing.AttrSourceID.String(sourceID),
+			telemetry.AttrSourceID.String(sourceID),
 			attribute.String("messaging.system", "redis"),
 			attribute.String("messaging.destination.name", Topic),
 			attribute.String("agentarea.ingest.kind", kind),
@@ -64,7 +64,7 @@ func (p *Publisher) publish(ctx context.Context, sourceID, kind string, item any
 	)
 	defer func() {
 		if err != nil {
-			tracing.RecordError(span, err)
+			telemetry.RecordError(span, err)
 		}
 		span.End()
 	}()
@@ -79,8 +79,8 @@ func (p *Publisher) publish(ctx context.Context, sourceID, kind string, item any
 		"item":        string(encoded),
 		"received_at": p.now().UTC().Format(time.RFC3339Nano),
 	}
-	if traceparent := tracing.Traceparent(ctx); traceparent != "" {
-		fields[tracing.TraceparentField] = traceparent
+	if traceparent := telemetry.Traceparent(ctx); traceparent != "" {
+		fields[telemetry.TraceparentField] = traceparent
 	}
 	if _, err := p.broker.Submit(ctx, Topic, fields, Retention); err != nil {
 		return fmt.Errorf("publish %s of source %s: %w", kind, sourceID, err)

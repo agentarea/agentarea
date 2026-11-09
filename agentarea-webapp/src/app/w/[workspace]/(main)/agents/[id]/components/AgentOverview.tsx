@@ -19,6 +19,7 @@ import {
 } from "@/lib/api-dashboard";
 import { apiErrorMessage, isApiNotFound } from "@/lib/api-errors";
 import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
+import { withReasoning } from "@/lib/runner-models";
 import { getAgentStatusPresentation } from "@/lib/status";
 import { getViewerCapabilities } from "@/lib/workspace-context";
 import { agentSkillViews } from "@/types/agent";
@@ -212,16 +213,28 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     hue,
     iconKey,
     status: getAgentStatusPresentation(agent.status || "inactive"),
-    model: {
-      label:
-        modelInstance?.model_display_name ||
-        modelInstance?.name ||
-        modelInstance?.config_name ||
-        agent.model_id ||
-        null,
-      provider: modelInstance?.provider_name || null,
-      iconUrl: modelInstance?.provider_icon_url || null,
-    },
+    // An agent on a client's runner runs the CLI's model, not a platform model instance.
+    model: agent.client
+      ? {
+          label: withReasoning(
+            agent.client.default_model,
+            agent.reasoning_effort
+          ),
+          provider: agent.client.name,
+          iconUrl: null,
+          client: agent.client,
+        }
+      : {
+          label:
+            modelInstance?.model_display_name ||
+            modelInstance?.name ||
+            modelInstance?.config_name ||
+            agent.model_id ||
+            null,
+          provider: modelInstance?.provider_name || null,
+          iconUrl: modelInstance?.provider_icon_url || null,
+          client: null,
+        },
     triggers: {
       count: triggers.length,
       titles: Array.from(new Set(triggers.map((u) => u.title).filter(Boolean))),

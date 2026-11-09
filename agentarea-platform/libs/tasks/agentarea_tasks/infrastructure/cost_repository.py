@@ -226,6 +226,23 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
         )
         return {row[0]: Decimal(row[1]) for row in rows}
 
+    async def top_agents_since(
+        self, since: datetime, *, currency: str, limit: int
+    ) -> list[tuple[UUID, Decimal]]:
+        """The agents whose current lines since a UTC instant cost the most, highest first."""
+        total = func.sum(CostEntryORM.amount)
+        rows = await self.session.execute(
+            select(CostEntryORM.agent_id, total)
+            .where(
+                *self._current_lines_since(since, currency, SpendScope()),
+                CostEntryORM.agent_id.isnot(None),
+            )
+            .group_by(CostEntryORM.agent_id)
+            .order_by(total.desc(), CostEntryORM.agent_id)
+            .limit(limit)
+        )
+        return [(row[0], Decimal(row[1])) for row in rows]
+
     async def sum_since(
         self,
         since: datetime,

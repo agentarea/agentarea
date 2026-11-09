@@ -9,8 +9,10 @@ import { NuqsAdapter } from "nuqs/adapters/next/app";
 import ConditionalLayout from "@/components/ConditionalLayout";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { BalanceProvider } from "@/hooks/useBalance";
+import { EgressExitsOfferedProvider } from "@/hooks/useEgressExitsOffered";
 import { getBalance } from "@/lib/api-dashboard";
 import type { BalanceState } from "@/lib/balance";
+import { getEgressExits, type EgressExitsState } from "@/lib/egress-exits";
 // @ory/nextjs is vendored under src/lib/ory rather than installed, so the
 // session helper comes from there. main still imported the package path; the
 // billing-URL fix below is main's and is kept.
@@ -110,6 +112,8 @@ function getRuntimeConfig() {
     // the link in the sidebar would have pointed at an internal cluster URL that no
     // browser can reach.
     CLIENT_BILLING_URL: process.env.AGENTAREA_BILLING_PAGE_URL || "",
+    // Where users ask for help; empty hides the sidebar's support link.
+    CLIENT_SUPPORT_URL: process.env.AGENTAREA_SUPPORT_URL || "",
     AGENTAREA_MCP_APPS_ORIGIN: process.env.AGENTAREA_MCP_APPS_ORIGIN || "",
     SENTRY_DSN: process.env.SENTRY_DSN || "",
     SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT || "",
@@ -133,9 +137,9 @@ export default async function RootLayout({
   const { workspaces, active } = session
     ? await getWorkspaceContext()
     : { workspaces: [], active: null };
-  const balance: BalanceState = active
-    ? await getBalance()
-    : { status: "none" };
+  const [balance, egressExits]: [BalanceState, EgressExitsState] = active
+    ? await Promise.all([getBalance(), getEgressExits()])
+    : [{ status: "none" }, { status: "none" }];
 
   return (
     <html lang={locale} suppressHydrationWarning className={inter.variable}>
@@ -152,12 +156,17 @@ export default async function RootLayout({
             <NextIntlClientProvider>
               <NuqsAdapter>
                 <BalanceProvider balance={balance}>
-                  <ConditionalLayout
-                    sidebarDefaultOpen={sidebarDefaultOpen}
-                    workspaces={workspaces}
+                  {/* A failed list still shows the entry: the page reports it. */}
+                  <EgressExitsOfferedProvider
+                    offered={egressExits.status !== "none"}
                   >
-                    {children}
-                  </ConditionalLayout>
+                    <ConditionalLayout
+                      sidebarDefaultOpen={sidebarDefaultOpen}
+                      workspaces={workspaces}
+                    >
+                      {children}
+                    </ConditionalLayout>
+                  </EgressExitsOfferedProvider>
                 </BalanceProvider>
               </NuqsAdapter>
             </NextIntlClientProvider>

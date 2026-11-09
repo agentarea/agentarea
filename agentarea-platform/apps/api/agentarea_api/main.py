@@ -31,6 +31,7 @@ from agentarea_api.api.v1.router import (
     mcp_proxy_v1_router,
     principal_v1_router,
     public_v1_router,
+    runner_v1_router,
     workspace_v1_router,
 )
 
@@ -218,21 +219,9 @@ async def app_lifespan(app: FastAPI):
 
     # NOTE: Don't override signal handlers - let uvicorn handle them for proper reload
 
-    # Startup. The metrics port first: failing to bind it must not leave the
-    # events router running with nothing to stop it.
-    from agentarea_common.config import MetricsSettings
-    from agentarea_common.observability.metrics import start_metrics_server
     from agentarea_common.utils.outbound_tls import install_outbound_trust
 
     install_outbound_trust()
-
-    metrics = MetricsSettings()
-    metrics_server = start_metrics_server(metrics.PORT) if metrics.ENABLED else None
-
-    from agentarea_common.config import get_settings
-    from agentarea_common.observability.broker_metrics import start_broker_health_metrics
-
-    broker_metrics = start_broker_health_metrics(get_settings()) if metrics.ENABLED else None
 
     get_container()
     stream_bus = await initialize_services()
@@ -251,6 +240,13 @@ async def app_lifespan(app: FastAPI):
 
     await start_analytics(get_database().async_session_factory)
 
+    from agentarea_common.config import ObservabilitySettings, get_settings
+    from agentarea_common.observability.broker_metrics import start_broker_health_metrics
+
+    broker_metrics = (
+        start_broker_health_metrics(get_settings()) if ObservabilitySettings().ENABLED else None
+    )
+
     logger.info("Application started successfully")
 
     try:
@@ -259,9 +255,6 @@ async def app_lifespan(app: FastAPI):
         await dispatch_stamps.stop()
         await stop_analytics()
 
-        if metrics_server is not None:
-            metrics_server.shutdown()
-            metrics_server.server_close()
         if broker_metrics is not None:
             await broker_metrics.aclose()
 
@@ -356,7 +349,8 @@ def create_app() -> FastAPI:
             streamable_http_path="/",
             stateless_http=True,
             transport_security=_transport_security,
-        )
+        ),
+        admit_turn=True,
     )
     _client_mcp_app = ClientMCPScopeMiddleware(_client_mcp_inner, prefix="/mcp/clients")
     _legacy_client_mcp_app = ClientMCPScopeMiddleware(_client_mcp_inner, prefix="/client-mcp")
@@ -392,11 +386,11 @@ def create_app() -> FastAPI:
         ],
     )
 
-    from agentarea_common.config import ObservabilitySettings
-    from agentarea_common.observability import setup_otel
+    from agentarea_common.observability import setup_telemetry
 
-    observability_settings = ObservabilitySettings()
-    if setup_otel("agentarea-api", observability_settings):
+    # Before any Temporal client: it installs the runtime that exports the SDK's
+    # own metrics.
+    if setup_telemetry("agentarea-api"):
         _instrument_api(app)
 
     # Add audit context middleware (runs before route handlers)
@@ -433,11 +427,6 @@ def create_app() -> FastAPI:
         max_age=_cors.CORS_MAX_AGE,
     )
 
-    # Outermost, so it times everything the middleware above adds to a request.
-    from agentarea_api.api.http_metrics_middleware import HTTPMetricsMiddleware
-
-    app.add_middleware(HTTPMetricsMiddleware)
-
     # Mount static files - this serves all files from static/ at /static/
     static_path = Path(__file__).parent / "static"
 
@@ -469,6 +458,7 @@ def create_app() -> FastAPI:
     app.include_router(workspace_v1_router, tags=["v1"])
     app.include_router(a2a_v1_router, tags=["v1"])
     app.include_router(mcp_proxy_v1_router, tags=["v1"])
+    app.include_router(runner_v1_router, tags=["v1"])
 
     # Routes contributed by installed extensions.
     #
@@ -560,7 +550,9 @@ def create_app() -> FastAPI:
     # it via the shared problem+json helper, surfacing the numbers so the UI can
     # show "you've spent $X of $Y, raise the cap or wait".
     from agentarea_agents.application.agent_service import (
+        InvalidClientError,
         InvalidDelegateError,
+        InvalidMcpToolError,
         InvalidModelIdError,
     )
     from agentarea_agents.application.approval_sync import ApprovalEnforcedByPolicyError
@@ -581,6 +573,10 @@ def create_app() -> FastAPI:
             detail=str(exc),
         )
 
+    @app.exception_handler(InvalidClientError)
+    async def _invalid_client_handler(_request: Request, exc: InvalidClientError):
+        return problem_response(status_code=400, code="invalid_client_id", detail=str(exc))
+
     # A delegate the runtime could not reach — a bad URL, a missing or managed
     # secret, an agent that is not here — is refused on write, like model_id.
     @app.exception_handler(InvalidDelegateError)
@@ -588,6 +584,14 @@ def create_app() -> FastAPI:
         return problem_response(
             status_code=400,
             code="invalid_delegate",
+            detail=str(exc),
+        )
+
+    @app.exception_handler(InvalidMcpToolError)
+    async def _invalid_mcp_tool_handler(_request: Request, exc: InvalidMcpToolError):
+        return problem_response(
+            status_code=400,
+            code="invalid_mcp_tool",
             detail=str(exc),
         )
 

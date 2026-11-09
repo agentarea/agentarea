@@ -104,6 +104,12 @@ def platform_openapi_connection_id(name: str) -> str:
     return str(uuid.uuid5(PLATFORM_ID_NAMESPACE, f"openapi_connection:{name}"))
 
 
+# MCP instances bind an exit by id in json_spec.egress_exit, so it is derived from
+# the name like a connection's.
+def platform_egress_exit_id(name: str) -> str:
+    return str(uuid.uuid5(PLATFORM_ID_NAMESPACE, f"egress_exit:{name}"))
+
+
 # Workspace-scoped resources (``spec.workspaceId`` set) get derived ids too, for
 # the same reason as platform ones: every reconcile — create, update, the hourly
 # rediscovery timer, an operator restart — has to land on the rows the previous
@@ -490,6 +496,12 @@ def sync_provider_config(
                         "display_name": em.get("displayName", em["modelName"]),
                         "description": em.get("description", ""),
                         "context_window": em.get("contextWindow", 4096),
+                        # Unset means the platform holds no output cap of its own
+                        # for the model; the policy's per-call ceiling still applies.
+                        "max_output_tokens": em.get("maxOutputTokens"),
+                        "supports_vision": em.get("supportsVision", False),
+                        "supports_reasoning": em.get("supportsReasoning", False),
+                        "reasoning_efforts": em.get("reasoningEfforts"),
                         "input_cost_per_token": em.get("inputCostPerToken"),
                         "output_cost_per_token": em.get("outputCostPerToken"),
                         "cached_input_cost_per_token": em.get("cachedInputCostPerToken"),
@@ -506,6 +518,10 @@ def sync_provider_config(
                 model_count += 1
 
     return config_id, model_count
+
+
+def _json_or_none(value: object) -> str | None:
+    return None if value is None else json.dumps(value)
 
 
 def _upsert_model_spec_and_instance(
@@ -542,6 +558,10 @@ def _upsert_model_spec_and_instance(
             text(
                 "UPDATE model_specs SET display_name = :dn, "
                 "context_window = :cw, "
+                "max_output_tokens = :mot, "
+                "supports_vision = COALESCE(:sv, supports_vision), "
+                "supports_reasoning = COALESCE(:sr, supports_reasoning), "
+                "reasoning_efforts = COALESCE(CAST(:re AS jsonb), reasoning_efforts), "
                 "input_cost_per_token = COALESCE(:icpt, input_cost_per_token), "
                 "output_cost_per_token = COALESCE(:ocpt, output_cost_per_token), "
                 "cached_input_cost_per_token = COALESCE(:cicpt, cached_input_cost_per_token), "
@@ -553,6 +573,10 @@ def _upsert_model_spec_and_instance(
                 "id": model_spec_id,
                 "dn": model.get("display_name", model_name),
                 "cw": model.get("context_window", 4096),
+                "mot": model.get("max_output_tokens"),
+                "sv": model.get("supports_vision"),
+                "sr": model.get("supports_reasoning"),
+                "re": _json_or_none(model.get("reasoning_efforts")),
                 "icpt": model.get("input_cost_per_token"),
                 "ocpt": model.get("output_cost_per_token"),
                 "cicpt": model.get("cached_input_cost_per_token"),
@@ -566,11 +590,13 @@ def _upsert_model_spec_and_instance(
             text(
                 "INSERT INTO model_specs "
                 "(id, provider_spec_id, model_name, display_name, description, "
-                "context_window, input_cost_per_token, output_cost_per_token, "
+                "context_window, max_output_tokens, supports_vision, supports_reasoning, "
+                "reasoning_efforts, input_cost_per_token, output_cost_per_token, "
                 "cached_input_cost_per_token, cache_creation_input_cost_per_token, "
                 "is_active, workspace_id, created_by, "
                 "created_at, updated_at) "
-                "VALUES (:id, :spec_id, :mn, :dn, :desc, :cw, :icpt, :ocpt, :cicpt, :ccicpt, "
+                "VALUES (:id, :spec_id, :mn, :dn, :desc, :cw, :mot, "
+                "COALESCE(:sv, false), COALESCE(:sr, false), CAST(:re AS jsonb), :icpt, :ocpt, :cicpt, :ccicpt, "
                 "true, :ws, :created_by, now(), now())"
             ),
             {
@@ -580,6 +606,10 @@ def _upsert_model_spec_and_instance(
                 "dn": model.get("display_name", model_name),
                 "desc": model.get("description", ""),
                 "cw": model.get("context_window", 4096),
+                "mot": model.get("max_output_tokens"),
+                "sv": model.get("supports_vision"),
+                "sr": model.get("supports_reasoning"),
+                "re": _json_or_none(model.get("reasoning_efforts")),
                 "icpt": model.get("input_cost_per_token"),
                 "ocpt": model.get("output_cost_per_token"),
                 "cicpt": model.get("cached_input_cost_per_token"),
@@ -1342,3 +1372,65 @@ def periodic_platform_connection_resync(spec, meta, namespace, patch, **_):
         patch.status["message"] = f"Resync failed: {e}"
         return
     _record_connection_sync(patch, connection_id, server_id, "Re-synced")
+
+
+def sync_platform_egress_exit(spec: dict) -> str:
+    """Upsert a platform exit into the platform workspace. Returns its id.
+
+    A platform exit leaves through a hop of the egress proxy's own configuration;
+    it holds no credentials. Re-running against an unchanged spec changes no row.
+    """
+    exit_id = platform_egress_exit_id(spec["name"])
+    params = {
+        "id": exit_id,
+        "name": spec["name"],
+        "desc": spec.get("description"),
+        "via": spec["via"],
+        "remote_dns": bool(spec.get("remoteDns", False)),
+        "managed_by": MANAGED_BY_PLATFORM,
+        "ws": PLATFORM_WORKSPACE_ID,
+        "created_by": PLATFORM_PRINCIPAL_ID,
+    }
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO egress_exits (id, name, description, via, remote_dns, "
+                "allow_plaintext_credentials, managed_by, workspace_id, created_by, "
+                "created_at, updated_at) "
+                "VALUES (:id, :name, :desc, :via, :remote_dns, false, :managed_by, :ws, "
+                ":created_by, now(), now()) "
+                "ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, "
+                "description = EXCLUDED.description, via = EXCLUDED.via, "
+                "remote_dns = EXCLUDED.remote_dns, updated_at = now() "
+                "WHERE egress_exits.workspace_id = EXCLUDED.workspace_id AND ("
+                "egress_exits.name, egress_exits.description, egress_exits.via, "
+                "egress_exits.remote_dns"
+                ") IS DISTINCT FROM (EXCLUDED.name, EXCLUDED.description, EXCLUDED.via, "
+                "EXCLUDED.remote_dns)"
+            ),
+            params,
+        )
+    return exit_id
+
+
+@kopf.on.create("agentarea.io", "v1alpha1", "platformegressexits")
+@kopf.on.update("agentarea.io", "v1alpha1", "platformegressexits")
+def on_platform_egress_exit_change(spec, meta, namespace, patch, **_):
+    cr_name = meta["name"]
+    logger.info("Syncing PlatformEgressExit %s/%s (via=%s)", namespace, cr_name, spec.get("via"))
+    try:
+        exit_id = sync_platform_egress_exit(spec)
+    except Exception as e:
+        logger.exception("PlatformEgressExit sync failed for %s/%s", namespace, cr_name)
+        patch.status["phase"] = "Error"
+        patch.status["message"] = str(e)
+        raise kopf.TemporaryError(str(e), delay=60) from e
+    patch.status["phase"] = "Synced"
+    patch.status["exitId"] = exit_id
+    patch.status["lastSyncedAt"] = datetime.now(timezone.utc).isoformat()
+    patch.status["message"] = "Synced"
+    logger.info("Synced PlatformEgressExit %s/%s -> exit=%s", namespace, cr_name, exit_id)
+
+
+# No delete handler, for the connection path's reasons: instances bind the exit,
+# and a resource vanishing from git is not a decision to cut them off.

@@ -6,7 +6,7 @@ endpoints, the scopes, and the origins its tokens may reach. Which OAuth client
 authorizes it is decided here, once, for all of them.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Literal
 
@@ -23,7 +23,9 @@ class OAuthProfile:
 
     ``issuer`` is set when discovery found the server (remote MCP) and absent
     for a trusted catalog template, which names endpoints instead.
-    ``resource_origins`` are where the minted tokens are sent.
+    ``resource_origins`` are where the minted tokens are sent. ``scopes`` are
+    every scope the server offers; ``default_scopes``, a subset, are what a
+    sign-in asks for when the person picks nothing (empty: all of them).
     """
 
     provider: str
@@ -33,12 +35,35 @@ class OAuthProfile:
     issuer: str | None = None
     registration_endpoint: str | None = None
     scopes: tuple[str, ...] = ()
+    default_scopes: tuple[str, ...] = ()
     # RFC 8707 resource indicator; remote MCP servers only.
     resource: str = ""
     offline_access_supported: bool = False
     authorize_params: Mapping[str, str] = field(default_factory=dict)
     authorization_scheme: str = "Bearer"
     client_auth_method: str = "client_secret_post"
+
+    def __post_init__(self) -> None:
+        """A default the server does not offer would be refused at sign-in."""
+        unoffered = _not_offered(self.default_scopes, self.scopes)
+        if unoffered:
+            raise ValueError(f"default scopes the server does not offer: {', '.join(unoffered)}")
+
+    def requested_scopes(self, chosen: Sequence[str] | None) -> tuple[str, ...]:
+        """What a sign-in asks for: the person's pick, else the default.
+
+        Raises:
+            ValueError: the pick is empty or names a scope the server does not offer.
+        """
+        if chosen is None:
+            return self.default_scopes or self.scopes
+        picked = tuple(dict.fromkeys(chosen))
+        if not picked:
+            raise ValueError("pick at least one scope")
+        unoffered = _not_offered(picked, self.scopes)
+        if unoffered:
+            raise ValueError(f"scopes the server does not offer: {', '.join(unoffered)}")
+        return picked
 
     def served_by(self, app: MCPOAuthApp) -> OAuthProfile:
         """This profile with the platform app's endpoints, which alone receive its secret."""
@@ -48,6 +73,10 @@ class OAuthProfile:
             authorization_endpoint=app.authorization_endpoint,
             token_endpoint=app.token_endpoint,
         )
+
+
+def _not_offered(scopes: tuple[str, ...], offered: tuple[str, ...]) -> list[str]:
+    return [scope for scope in scopes if scope not in offered]
 
 
 def platform_app_for(profile: OAuthProfile) -> MCPOAuthApp | None:

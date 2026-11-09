@@ -60,7 +60,11 @@ register(["ts", "tsx", "d.ts"], ICONS.typescript, "TypeScript");
 register(["js", "jsx", "mjs", "cjs"], ICONS.javascript, "JavaScript");
 register(["json", "jsonl", "geojson"], ICONS.json, "JSON");
 register(["md", "mdx", "markdown"], ICONS.markdown, "Markdown");
-register(["csv", "tsv", "xls", "xlsx", "ods", "numbers"], ICONS.table, "Spreadsheet");
+register(
+  ["csv", "tsv", "xls", "xlsx", "ods", "numbers"],
+  ICONS.table,
+  "Spreadsheet"
+);
 register(["pdf"], ICONS.pdf, "PDF");
 register(["doc", "docx", "rtf", "odt", "pages"], ICONS.word, "Document");
 register(["ppt", "pptx", "odp", "key"], ICONS.powerpoint, "Presentation");
@@ -68,20 +72,45 @@ register(["html", "htm"], ICONS.html, "HTML");
 register(["css", "scss", "sass", "less"], ICONS.css, "Stylesheet");
 register(["yaml", "yml"], ICONS.yaml, "YAML");
 register(["toml", "ini", "env", "properties"], ICONS.toml, "Configuration");
-register(["zip", "tar", "gz", "tgz", "rar", "7z", "bz2", "xz"], ICONS.zip, "Archive");
-register(["png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "ico", "avif", "heic"], ICONS.image, "Image");
-register(["mp3", "wav", "flac", "aac", "ogg", "m4a", "opus"], ICONS.audio, "Audio");
-register(["mp4", "avi", "mov", "wmv", "flv", "webm", "mkv", "m4v"], ICONS.video, "Video");
+register(
+  ["zip", "tar", "gz", "tgz", "rar", "7z", "bz2", "xz"],
+  ICONS.zip,
+  "Archive"
+);
+register(
+  ["png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "ico", "avif", "heic"],
+  ICONS.image,
+  "Image"
+);
+register(
+  ["mp3", "wav", "flac", "aac", "ogg", "m4a", "opus"],
+  ICONS.audio,
+  "Audio"
+);
+register(
+  ["mp4", "avi", "mov", "wmv", "flv", "webm", "mkv", "m4v"],
+  ICONS.video,
+  "Video"
+);
 
 const MIME_META: Array<[RegExp, FileMeta]> = [
   [/^image\//, { Icon: ICONS.image, className: "", type: "Image" }],
   [/^audio\//, { Icon: ICONS.audio, className: "", type: "Audio" }],
   [/^video\//, { Icon: ICONS.video, className: "", type: "Video" }],
   [/pdf/i, { Icon: ICONS.pdf, className: "", type: "PDF" }],
-  [/(spreadsheet|excel|csv)/i, { Icon: ICONS.table, className: "", type: "Spreadsheet" }],
+  [
+    /(spreadsheet|excel|csv)/i,
+    { Icon: ICONS.table, className: "", type: "Spreadsheet" },
+  ],
   [/(word|document)/i, { Icon: ICONS.word, className: "", type: "Document" }],
-  [/(presentation|powerpoint)/i, { Icon: ICONS.powerpoint, className: "", type: "Presentation" }],
-  [/(zip|tar|compressed|archive)/i, { Icon: ICONS.zip, className: "", type: "Archive" }],
+  [
+    /(presentation|powerpoint)/i,
+    { Icon: ICONS.powerpoint, className: "", type: "Presentation" },
+  ],
+  [
+    /(zip|tar|compressed|archive)/i,
+    { Icon: ICONS.zip, className: "", type: "Archive" },
+  ],
 ];
 
 const FALLBACK_META: FileMeta = {
@@ -156,7 +185,12 @@ export const FileChip: React.FC<{
   /** Real filename/path used for icon detection when name is a friendly label. */
   iconName?: string;
   mimeType?: string | null;
-}> = ({ name, href, className, iconName, mimeType }) => {
+  /** Off for links inside the app, which open in place. */
+  newTab?: boolean;
+  /** A plain click opens the file here instead of following `href`; a
+   * modified click (new tab, new window) still follows it. */
+  onOpen?: () => void;
+}> = ({ name, href, className, iconName, mimeType, newTab = true, onOpen }) => {
   const label = iconName ? name : fileBasename(name);
   const inner = (
     <>
@@ -169,8 +203,21 @@ export const FileChip: React.FC<{
     return (
       <a
         href={href}
-        target="_blank"
-        rel="noopener noreferrer"
+        {...(newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+        onClick={(event) => {
+          if (
+            !onOpen ||
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) {
+            return;
+          }
+          event.preventDefault();
+          onOpen();
+        }}
         className={cn(
           "inline-flex max-w-full items-center gap-1.5 align-middle text-sky-700 underline decoration-sky-700/35 underline-offset-2 hover:decoration-sky-700 dark:text-sky-400 dark:decoration-sky-400/40",
           className

@@ -7,6 +7,7 @@ import logging
 import socket
 from collections.abc import Callable, Collection
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
 
@@ -17,6 +18,10 @@ from agentarea_common.config import get_database, get_settings
 from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.errors import BadRequestError
+from agentarea_common.extensions.egress_exits import (
+    EgressExitsNotSupportedError,
+    require_egress_exits,
+)
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.rebac.ownership import grant_resource_owner
 from agentarea_common.utils.url_safety import (
@@ -46,6 +51,11 @@ from agentarea_mcp.application.mcp_client import (
 )
 from agentarea_mcp.application.mcp_session_pool import session_key, session_pool
 from agentarea_mcp.dispatch_stamps import record_dispatch
+from agentarea_mcp.domain.egress_exit_model import (
+    EGRESS_EXIT_SPEC_KEY,
+    EGRESS_SPEC_KEY,
+    egress_required,
+)
 from agentarea_mcp.domain.env_schema import normalize_env_schema
 from agentarea_mcp.domain.events import (
     MCPServerCreated,
@@ -95,7 +105,9 @@ from agentarea_mcp.tool_timeout import (
     tool_timeout_seconds,
 )
 from agentarea_mcp.transport_spec import (
+    image_serves_stdio,
     instance_transport_spec,
+    merge_transport_spec,
     server_transport,
     server_transport_spec,
 )
@@ -111,6 +123,7 @@ logger = logging.getLogger(__name__)
 SECRET_MASKED_VALUE = "*" * 6
 INSTANCE_TRANSPORT_FIELDS = {"type", "endpoint_url", "image", "command", "args"}
 INSTANCE_SYSTEM_FIELDS = INSTANCE_TRANSPORT_FIELDS | {"port", "package", "source"}
+SPEC_TRANSPORT_COLUMNS = frozenset({"json_spec", "remote_url", "cmd", "docker_image_url"})
 
 
 def _normalize_url_keys(spec: dict[str, Any]) -> dict[str, Any]:
@@ -167,6 +180,25 @@ def _spec_endpoint_refusal(remote_url: str | None, json_spec: dict[str, Any] | N
     spec = _normalize_url_keys(dict(json_spec or {}))
     return _endpoint_refusal(remote_url) or (
         _endpoint_refusal(spec.get("endpoint_url")) if spec.get("type") == "url" else None
+    )
+
+
+def _egress_requirement_refusal(spec: dict[str, Any], transport: str | None) -> str | None:
+    """A workload that must leave through an exit runs only where one is sealed for it."""
+    if not egress_required(spec):
+        return None
+    if transport not in CONTAINER_TRANSPORTS:
+        return f"{EGRESS_SPEC_KEY} applies to docker and command servers only"
+    try:
+        require_egress_exits()
+    except EgressExitsNotSupportedError as e:
+        return str(e)
+    return None
+
+
+def _server_egress_refusal(server: Any) -> str | None:
+    return _egress_requirement_refusal(
+        server.json_spec or {}, server_transport_spec(server).get("type")
     )
 
 
@@ -300,6 +332,9 @@ class MCPServerService(BaseCrudService[MCPServer]):
             json_spec=payload.json_spec,
             registry_url=payload.registry_url,
         )
+        egress_refusal = _server_egress_refusal(server)
+        if egress_refusal:
+            raise BadRequestError(egress_refusal)
         server = await self.create(server)
 
         if self.event_broker:
@@ -324,6 +359,17 @@ class MCPServerService(BaseCrudService[MCPServer]):
             refusal = _spec_endpoint_refusal(patch.get("remote_url"), patch.get("json_spec"))
             if refusal:
                 raise BadRequestError(refusal)
+        if SPEC_TRANSPORT_COLUMNS.intersection(patch):
+            egress_refusal = _server_egress_refusal(
+                SimpleNamespace(
+                    **{
+                        column: patch.get(column, getattr(server, column))
+                        for column in SPEC_TRANSPORT_COLUMNS
+                    }
+                )
+            )
+            if egress_refusal:
+                raise BadRequestError(egress_refusal)
 
         if "name" in patch:
             server.name = patch["name"]
@@ -636,6 +682,29 @@ class MCPServerInstanceService:
         config_id = auth_config_id if isinstance(auth_config_id, UUID) else UUID(auth_config_id)
         await auth_service.get_for_use(config_id)
 
+    async def _assert_may_bind_egress_exit(
+        self, spec: dict[str, Any], transport: MCPTransport
+    ) -> None:
+        """An instance leaves through an exit of its workspace, or the platform's."""
+        from agentarea_mcp.application.egress_exit_service import (
+            EgressExitNotFoundError,
+            EgressExitService,
+        )
+
+        exit_id = spec.get(EGRESS_EXIT_SPEC_KEY)
+        if exit_id is None:
+            return
+        if transport not in CONTAINER_TRANSPORTS:
+            raise MCPValidationError(
+                [f"{EGRESS_EXIT_SPEC_KEY} applies to docker and command instances only"]
+            )
+        try:
+            await EgressExitService(self.repository_factory, self.secret_manager).require_bindable(
+                exit_id
+            )
+        except (EgressExitNotFoundError, EgressExitsNotSupportedError) as e:
+            raise MCPValidationError([str(e)]) from e
+
     @audited("mcp_instance.create", resource_type="mcp_instance")
     async def _grant_creator_ownership(self, resource_id: UUID | str) -> None:
         """Record the caller as owner of a row this service committed itself.
@@ -697,9 +766,22 @@ class MCPServerInstanceService:
             context_secret = getattr(payload, "context_secret", None)
             if context_secret and instance_type != MCPTransport.URL:
                 raise MCPValidationError(["context_secret applies to URL instances only"])
+            await self._assert_may_bind_egress_exit(submitted_spec, instance_type)
 
             instance_spec = _instance_owned_spec(submitted_spec)
             instance_spec.pop(CONTEXT_SIGNING_FLAG, None)
+            merged_spec = merge_transport_spec(transport_spec, instance_spec, instance_type)
+            egress_refusal = _egress_requirement_refusal(merged_spec, instance_type)
+            if egress_refusal:
+                raise MCPValidationError([egress_refusal])
+            if instance_type == MCPTransport.DOCKER and image_serves_stdio(merged_spec):
+                image = merged_spec.get("image")
+                raise MCPValidationError(
+                    [
+                        f"Image '{image}' speaks stdio; an image runs only when it serves MCP "
+                        + "over HTTP on a port, so use the server's npm or PyPI package instead"
+                    ]
+                )
             timeout_error = tool_timeout_error(instance_spec)
             if timeout_error:
                 raise MCPValidationError([timeout_error])
@@ -861,6 +943,10 @@ class MCPServerInstanceService:
                 raise MCPValidationError([timeout_error])
             instance = await self.repository.get_by_id(id)
             if instance:
+                if json_spec.get(EGRESS_EXIT_SPEC_KEY) != (instance.json_spec or {}).get(
+                    EGRESS_EXIT_SPEC_KEY
+                ):
+                    await self._assert_may_bind_egress_exit(json_spec, instance.transport)
                 cleaned_spec, secret_env_vars = await self._extract_secrets_from_spec(
                     json_spec, instance.server_spec_id, instance.json_spec
                 )

@@ -5,7 +5,7 @@ const currency = z.enum(CURRENCIES);
 const dealStatus = z.enum(DEAL_STATUSES);
 const activityType = z.enum(ACTIVITY_TYPES);
 
-export const ownerRefSchema = z.object({ id: z.string(), name: z.string(), kind: z.enum(OWNER_KINDS) });
+export const ownerRefSchema = z.object({ id: z.string(), name: z.string(), handle: z.string(), kind: z.enum(OWNER_KINDS) });
 export const ownerSchema = ownerRefSchema.extend({ title: z.string(), email: z.string() });
 const ref = z.object({ id: z.string(), name: z.string() });
 

@@ -7,6 +7,8 @@ import type { McpTransport } from "@/api/client/types.gen";
 
 export interface CredentialFieldSpec {
   name: string;
+  /** What the person sees instead of `name`, e.g. "API key" for `Authorization`. */
+  label?: string;
   description?: string;
   isRequired?: boolean;
   /** Older spelling of `isRequired`, read only when that is absent. */
@@ -34,6 +36,20 @@ const TRANSPORT_FIELDS = new Set([
   "package",
   "source",
 ]);
+
+/**
+ * An instance's spec as an update sends it back: an update replaces the whole
+ * spec, less the transport fields the API refuses and restores itself.
+ */
+export function editableInstanceSpec(
+  instanceJsonSpec: Record<string, unknown>
+): Record<string, unknown> {
+  const spec: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(instanceJsonSpec)) {
+    if (!TRANSPORT_FIELDS.has(key)) spec[key] = value;
+  }
+  return spec;
+}
 
 export function parseFieldSpecs(value: unknown): CredentialFieldSpec[] {
   if (!Array.isArray(value)) return [];
@@ -157,10 +173,7 @@ export function credentialUpdateSpec(
     const trimmed = value.trim();
     if (trimmed) entered[name] = trimmed;
   }
-  const spec: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(instanceJsonSpec)) {
-    if (!TRANSPORT_FIELDS.has(key)) spec[key] = value;
-  }
+  const spec = editableInstanceSpec(instanceJsonSpec);
   spec[target] = { ...stringRecord(instanceJsonSpec[target]), ...entered };
   return spec;
 }
@@ -202,10 +215,7 @@ export function headersUpdateSpec(
   }
   const removed = new Set(Object.keys(stored).filter((name) => !(name in headers)));
 
-  const spec: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(instanceJsonSpec)) {
-    if (!TRANSPORT_FIELDS.has(key)) spec[key] = value;
-  }
+  const spec = editableInstanceSpec(instanceJsonSpec);
   spec.headers = headers;
   if (Array.isArray(instanceJsonSpec.env_vars)) {
     spec.env_vars = stringList(instanceJsonSpec.env_vars).filter((name) => !removed.has(name));

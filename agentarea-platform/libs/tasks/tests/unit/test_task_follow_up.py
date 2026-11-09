@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 import pytest
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_common.agent_status import AgentArchivedError, AgentStatus
+from agentarea_common.auth.context import UserContext
 from agentarea_governance.domain.policies import (
     BudgetPolicy,
     EffectivePolicy,
@@ -21,6 +22,7 @@ from agentarea_tasks.domain.models import ConversationEntry, Task
 from agentarea_tasks.infrastructure.repository import TaskConversationRepository, TaskRepository
 from agentarea_tasks.task_service import TaskService
 
+SENDER_ID = "user-sender"
 SNAPSHOT = {
     "head_seqs": [0],
     "tail_start": 1,
@@ -55,7 +57,7 @@ class _Agents:
         self.status = status
 
     async def get(self, agent_id: UUID) -> Any:
-        return MagicMock(id=agent_id, status=self.status)
+        return MagicMock(id=agent_id, status=self.status, client_id=None)
 
 
 class _Conversation:
@@ -103,7 +105,7 @@ class _Engine(BaseTaskManager):
     def __init__(self):
         self.resumed: list[tuple[Any, Any, str | None]] = []
 
-    async def resume_task(self, task, resume, message):
+    async def resume_task(self, task, resume, message, *, sender=None):
         self.resumed.append((task, resume, message))
         return task
 
@@ -163,6 +165,7 @@ def _service(
         AgentRepository: _Agents(agent_status),
     }
     factory = MagicMock()
+    factory.user_context = UserContext(user_id=SENDER_ID, workspace_id="ws")
     factory.create_repository = MagicMock(
         side_effect=lambda cls: repositories.get(cls, MagicMock())
     )
@@ -193,7 +196,13 @@ async def test_running_task_receives_the_message_as_a_signal():
 
     assert await service.queue_follow_up(task.id, "And then?") is True
 
-    assert workflows.signals == [(task.execution_id, "queue_message", {"message": "And then?"})]
+    assert workflows.signals == [
+        (
+            task.execution_id,
+            "queue_message",
+            {"message": "And then?", "sender": {"type": "user", "id": SENDER_ID}},
+        )
+    ]
     assert engine.resumed == []
 
 

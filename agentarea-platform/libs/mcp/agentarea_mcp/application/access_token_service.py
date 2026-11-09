@@ -39,8 +39,11 @@ class APIKeyService:
         name: str,
         expires_in_days: int | None = None,
         agent_id: UUID | None = None,
+        client_id: UUID | None = None,
     ) -> tuple[APIKey, str]:
         """Create a new PAT; with ``agent_id``, one that reaches only that agent over A2A.
+
+        With ``client_id``, a runner's key that reaches only that client's runner routes.
 
         Returns ``(token_record, raw_token)``.  The raw token is shown once
         to the user and MUST NOT be stored — only the hash is persisted.
@@ -59,6 +62,7 @@ class APIKeyService:
             token_prefix=token_prefix,
             expires_at=expires_at,
             agent_id=agent_id,
+            client_id=client_id,
         )
         logger.info("Created MCP access token '%s' (id=%s)", name, created.id)
         return created, raw_token
@@ -85,14 +89,21 @@ class APIKeyService:
         return await self._repo.get_by_id(token_id)
 
     async def list_tokens(
-        self, created_by: str | None = None, agent_id: UUID | None = None
+        self,
+        created_by: str | None = None,
+        agent_id: UUID | None = None,
+        client_id: UUID | None = None,
     ) -> list[APIKey]:
         filters: dict[str, Any] = {}
         if created_by is not None:
             filters["created_by"] = created_by
         if agent_id is not None:
             filters["agent_id"] = agent_id
-        return await self._repo.list_all(**filters)
+        if client_id is not None:
+            filters["client_id"] = client_id
+            return await self._repo.list_all(**filters)
+        # A runner's key belongs to its client and is listed and revoked there.
+        return [key for key in await self._repo.list_all(**filters) if key.client_id is None]
 
     async def revoke_token(self, token_id: UUID) -> bool:
         """Immediately deactivate a PAT. Returns False if not found."""

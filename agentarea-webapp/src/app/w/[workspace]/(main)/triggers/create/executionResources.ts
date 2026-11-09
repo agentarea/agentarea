@@ -58,6 +58,13 @@ export function buildExecutionResources({
         : null;
     const instance = resolved?.status === "instance" ? resolved.instance : null;
     const id = instance?.id ?? ref.id;
+    // A configured tool still naming its connection reaches nothing on its own;
+    // selecting that connection for the run binds it, keeping its restriction.
+    const named = !inherited && instance ? mcps.get(instance.name) : undefined;
+    if (instance && named?.inherited && named.unavailable && !mcps.has(id)) {
+      mcps.delete(instance.name);
+      addMcp({ id }, true, named.settings);
+    }
     const existing = mcps.get(id);
     if (existing) {
       if (!inherited && !existing.taskRefIds.includes(ref.id)) {
@@ -144,11 +151,13 @@ export function buildExecutionResources({
 
   const delegatedAgents = (agent?.tools ?? []).flatMap((tool) => {
     if (tool.type !== "agent") return [];
-    // Delegation resolves an exact agent name, not a slug or fuzzy display match.
+    // A delegate reaches the agent id it was saved with; names are not unique.
     const remote = Boolean(tool.settings?.a2a_url);
-    const target = remote
-      ? undefined
-      : agents.find((candidate) => candidate.name === tool.name);
+    const agentId = tool.settings?.agent_id;
+    const target =
+      remote || !agentId
+        ? undefined
+        : agents.find((candidate) => candidate.id === agentId);
     return [
       {
         id: target?.id ?? tool.name,

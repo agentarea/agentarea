@@ -36,6 +36,7 @@ groups:
       AGENTAREA_S3_BUCKET: '{{ .Values.global.storage.bucket }}'
       AGENTAREA_S3_ARTIFACTS_BUCKET: '{{ .Values.global.storage.bucket }}'
       AGENTAREA_S3_ENDPOINT: '{{ include "agentarea.storage.endpoint" . }}'
+      AGENTAREA_S3_CONDITIONAL_WRITES: '{{ .Values.global.storage.conditionalWrites }}'
     secrets:
       - name: AGENTAREA_S3_ACCESS_KEY
         secretName: '{{ include "agentarea.storage.credentialsSecret" . }}'
@@ -73,21 +74,21 @@ groups:
       AGENTAREA_AUTH_KRATOS_ADMIN_URL: '{{ include "agentarea.kratosAdminUrl" . }}'
       ORY_SDK_URL: '{{ include "agentarea.kratosPublicUrl" . }}'
       ORY_BROWSER_URL: '{{ include "agentarea.kratosPublicBrowserUrl" . }}'
-      AGENTAREA_METRICS_ENABLED: '{{ .Values.global.monitoring.prometheus.enabled }}'
       AGENTAREA_MCP_APPS_ORIGIN: '{{ .Values.global.webapp.appsSandboxUrl }}'
       AGENTAREA_APP_ORIGIN: '{{ include "agentarea.frontendUrl" . }}'
+      AGENTAREA_SUPPORT_URL: '{{ .Values.global.webapp.supportUrl }}'
 
   backend:
     configVars:
       PORT: '8000'
+      AGENTAREA_ENV: '{{ .Values.global.deploymentEnv }}'
       AGENTAREA_LOG_LEVEL: 'info'
       AGENTAREA_MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
       AGENTAREA_MCP_TIMEOUT: '30'
       AGENTAREA_API_URL: '{{ include "agentarea.backend.apiUrl" . }}'
       AGENTAREA_S3_PUBLIC_ENDPOINT: '{{ .Values.global.storage.publicEndpoint }}'
-      AGENTAREA_METRICS_ENABLED: '{{ .Values.global.monitoring.prometheus.enabled }}'
-      AGENTAREA_METRICS_PORT: '{{ .Values.global.monitoring.prometheus.port }}'
       AGENTAREA_ANALYTICS_ENABLED: '{{ .Values.global.analytics.enabled }}'
+      AGENTAREA_ANALYTICS_OWN_DOMAINS: '{{ join "," .Values.global.analytics.ownDomains }}'
       AGENTAREA_AUTH_ISSUER: '{{ .Values.kratos.jwt.issuer }}'
       AGENTAREA_AUTH_AUDIENCE: '{{ .Values.kratos.jwt.audience }}'
       AGENTAREA_AUTH_KRATOS_ADMIN_URL: '{{ include "agentarea.kratosAdminUrl" . }}'
@@ -174,7 +175,7 @@ groups:
       AGENTAREA_TEMPORAL_MAX_ACTIVITIES: '10'
       AGENTAREA_TEMPORAL_MAX_WORKFLOWS: '5'
       AGENTAREA_DEBUG: 'false'
-      AGENTAREA_ENV: 'production'
+      AGENTAREA_ENV: '{{ .Values.global.deploymentEnv }}'
       AGENTAREA_MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
       AGENTAREA_WORKER_HEALTH_PORT: '{{ .Values.worker.healthPort }}'
       AGENTAREA_TASK_OUTAGE_RETRY_WINDOW: '{{ .Values.worker.outageWait.retryWindow }}'

@@ -85,7 +85,7 @@ def _record_upstream(monkeypatch, *, resolves_to: str) -> list[tuple[str | None,
 
 @pytest.fixture
 def proxied_egress(monkeypatch):
-    """Egress goes through a forward proxy, as it does in RU production."""
+    """Egress goes through a forward proxy, as it does in production."""
     for var in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"):
         monkeypatch.delenv(var, raising=False)
         monkeypatch.delenv(var.lower(), raising=False)

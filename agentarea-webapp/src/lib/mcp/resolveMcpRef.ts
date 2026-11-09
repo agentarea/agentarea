@@ -8,12 +8,13 @@ import {
 /**
  * Resolves an agent's MCP tool reference to a concrete instance/server.
  *
- * An agent stores MCP tools as `{ type: "mcp", name: <ref> }`. The `<ref>` is
- * either an instance UUID (webapp create/edit flow) or an instance NAME (bundle
- * installs). The Temporal runtime resolves both — `get(UUID(ref)) ?? get_by_name(ref)`
- * in `agent_execution_activities.py` — so this is the single source of truth the
- * UI mirrors. A ref that matches neither is genuinely dangling (the runtime skips
- * it), surfaced here as `status: "unresolved"` rather than a misleading icon.
+ * An agent stores MCP tools as `{ type: "mcp", name: <ref> }`. The runtime reaches
+ * a connection by its instance UUID only (`ToolManager._discover_instance_tools`):
+ * connection names are not unique, so a name is bound to an id when the agent is
+ * saved, and only while exactly one connection carries it. A ref that is still a
+ * name reaches no connection, so it never resolves to an instance here. It may
+ * name a server spec (a catalog agent's MCP not connected yet), shown as
+ * `status: "server"`; otherwise it is `status: "unresolved"`.
  */
 
 export type McpInstance = McpServerInstanceResponse;
@@ -89,9 +90,7 @@ export function resolveMcpRef(
 ): McpRefResolution {
   const lower = ref.toLowerCase();
 
-  const instance =
-    instances.find((i) => i.id === ref) ??
-    instances.find((i) => i.name?.toLowerCase() === lower);
+  const instance = instances.find((i) => i.id === ref);
 
   if (instance) {
     const server = instance.server_spec_id

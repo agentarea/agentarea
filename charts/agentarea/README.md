@@ -55,6 +55,8 @@ The following table lists configurable parameters of the chart and their default
 | serviceAccount.name | string | `"agentarea"` |  |
 | nameOverride | string | `""` |  |
 | fullnameOverride | string | `""` |  |
+| telemetry.enabled | bool | `false` | Install tracing and metrics in every first-party process (AGENTAREA_OTEL_ENABLED). Off, nothing is emitted and nothing is required. |
+| telemetry.otlpEndpoint | string | `""` | OTLP/HTTP base URL of the collector, without a /v1/... path, e.g. http://otel-gateway.monitoring:4318. Required when telemetry.enabled. |
 | global.edition | string | `"community"` |  |
 | global.version | string | `"0.0.3"` |  |
 | global.cluster.type | string | `"kubernetes"` |  |
@@ -103,6 +105,7 @@ The following table lists configurable parameters of the chart and their default
 | global.storage.existingSecret | string | `""` |  |
 | global.storage.accessKeyKey | string | `"access-key-id"` |  |
 | global.storage.secretKeyKey | string | `"secret-access-key"` |  |
+| global.storage.conditionalWrites | string | `"native"` |  |
 | global.storage.publicEndpoint | string | `""` |  |
 | global.storage.bucket | string | `"agentarea-documents"` |  |
 | global.storage.region | string | `"us-east-1"` |  |
@@ -125,6 +128,7 @@ The following table lists configurable parameters of the chart and their default
 | global.api.auth.headerValue | string | `""` |  |
 | global.webapp.url | string | `""` |  |
 | global.webapp.appsSandboxUrl | string | `""` |  |
+| global.webapp.supportUrl | string | `"https://github.com/agentarea/agentarea/issues"` |  |
 | global.jobs.kube.namespace | string | `""` |  |
 | global.jobs.kube.serviceAccount | string | `""` |  |
 | global.jobs.kube.scheduling.spec.nodeSelectors | object | `{}` |  |
@@ -150,14 +154,12 @@ The following table lists configurable parameters of the chart and their default
 | global.workloads.resources.sidecarContainer.memory.limit | string | `"256Mi"` |  |
 | global.serviceMesh.enabled | bool | `false` |  |
 | global.serviceMesh.type | string | `"istio"` |  |
-| global.monitoring.prometheus.enabled | bool | `true` |  |
-| global.monitoring.prometheus.port | int | `9090` |  |
-| global.monitoring.prometheus.path | string | `"/metrics"` |  |
 | global.monitoring.health.enabled | bool | `true` |  |
 | global.monitoring.health.port | int | `8001` |  |
 | global.monitoring.health.path | string | `"/health"` |  |
 | global.analytics.enabled | bool | `true` | Send AgentArea anonymous usage statistics from the backend and worker: a daily count of agents, runs and connectors, never names, prompts, output or secrets. Not OpenTelemetry. false sends nothing. Field list: https://docs.agentarea.ai/self-host/analytics |
 | global.analytics.signupHookSecret | string | `""` | Existing Secret whose key `signup-hook-key` the backend reads as AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY: the key an Ory Kratos after-registration hook presents to /internal/analytics/signups to record each sign-up's channel. Empty, that endpoint answers 404. |
+| global.analytics.ownDomains | list | `[]` | Domains of this installation's own sites, read by the backend as AGENTAREA_ANALYTICS_OWN_DOMAINS: a sign-up referred from one of them or a subdomain counts as no channel rather than a referral. Empty: none. |
 | global.http.extraCaCerts | string | `""` | PEM text of CA certificates to trust on outbound TLS in addition to the public roots, for hosts whose chain those roots leave out (the Russian Trusted Root CA, a corporate CA). Rendered into a ConfigMap, mounted into the backend and worker, and named by AGENTAREA_HTTP_EXTRA_CA_CERTS. Empty: public roots only. |
 | global.security.podSecurityContext.fsGroup | int | `1000` |  |
 | global.security.podSecurityContext.runAsUser | int | `1000` |  |
@@ -526,9 +528,12 @@ The following table lists configurable parameters of the chart and their default
 | registryReconcile.registries[4].name | string | `"system-agents"` |  |
 | registryReconcile.registries[4].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/agents.json"` |  |
 | registryReconcile.registries[4].recommendation_priority | int | `10` |  |
-| registryReconcile.registries[5].name | string | `"system-source-types"` |  |
-| registryReconcile.registries[5].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/source-types.json"` |  |
+| registryReconcile.registries[5].name | string | `"system-bundles"` |  |
+| registryReconcile.registries[5].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/bundles.json"` |  |
 | registryReconcile.registries[5].recommendation_priority | int | `10` |  |
+| registryReconcile.registries[6].name | string | `"system-source-types"` |  |
+| registryReconcile.registries[6].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/source-types.json"` |  |
+| registryReconcile.registries[6].recommendation_priority | int | `10` |  |
 | openfga.enabled | bool | `true` |  |
 | openfga.replicaCount | int | `1` |  |
 | openfga.image.repository | string | `"openfga/openfga"` |  |
@@ -574,8 +579,7 @@ The following table lists configurable parameters of the chart and their default
 | kratos.identitySchema | string | `"{\n  \"$id\": \"https://schemas.ory.sh/presets/kratos/quickstart/email-password/identity.schema.json\",\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"title\": \"Person\",\n  \"type\": \"object\",\n  \"properties\": {\n    \"traits\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"email\": {\n          \"type\": \"string\",\n          \"format\": \"email\",\n          \"title\": \"Email\",\n          \"ory.sh/kratos\": {\n            \"credentials\": {\n              \"password\": {\n                \"identifier\": true\n              }\n            },\n            \"recovery\": {\n              \"via\": \"email\"\n            }\n          }\n        },\n        \"name\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"first\": {\n              \"title\": \"First Name\",\n              \"type\": \"string\"\n            },\n            \"last\": {\n              \"title\": \"Last Name\",\n              \"type\": \"string\"\n            }\n          }\n        },\n        \"username\": {\n          \"type\": \"string\",\n          \"title\": \"Username\"\n        }\n      },\n      \"required\": [\n        \"email\"\n      ],\n      \"additionalProperties\": false\n    }\n  }\n}\n"` |  |
 | kratos.config.version | string | `"v26.2.0"` |  |
 | kratos.config.serve.public.cors.enabled | bool | `true` |  |
-| kratos.config.serve.public.cors.allowed_origins[0] | string | `"https://staging-0.agentarea.ai"` |  |
-| kratos.config.serve.public.cors.allowed_origins[1] | string | `"https://*.staging-0.agentarea.ai"` |  |
+| kratos.config.serve.public.cors.allowed_origins[0] | string | `"http://localhost:3000"` |  |
 | kratos.config.serve.public.cors.allowed_methods[0] | string | `"POST"` |  |
 | kratos.config.serve.public.cors.allowed_methods[1] | string | `"GET"` |  |
 | kratos.config.serve.public.cors.allowed_methods[2] | string | `"PUT"` |  |

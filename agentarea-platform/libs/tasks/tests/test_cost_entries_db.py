@@ -184,3 +184,30 @@ async def test_the_estimated_part_of_spend_is_its_current_lines_not_yet_final(se
 
     assert estimated == Decimal("0.30")
     assert exact == Decimal("1.00") + Decimal("0.66") + Decimal("0.66")
+
+
+async def test_top_agents_rank_current_lines_and_skip_lines_of_no_agent(session):
+    workspace_id = str(uuid4())
+    first, second, third, fourth = uuid4(), uuid4(), uuid4(), uuid4()
+    repo = _repo(session, workspace_id)
+    estimate = _entry(workspace_id, fourth, "9.00")
+    await repo.record(
+        [
+            _entry(workspace_id, first, "2.00"),
+            _entry(workspace_id, first, "1.50"),
+            _entry(workspace_id, second, "3.00"),
+            _entry(workspace_id, third, "0.40"),
+            estimate,
+            _entry(workspace_id, None, "50.00", task_id=None, client_id=uuid4()),
+            _entry(workspace_id, third, "8.00", occurred_at=datetime(2026, 9, 30, tzinfo=UTC)),
+            _entry(workspace_id, third, "8.00", currency="RUB"),
+        ]
+    )
+    stored_estimate = await session.scalar(
+        text("SELECT id FROM cost_entries WHERE event_id = :id"), {"id": estimate.event_id}
+    )
+    await repo.record([_entry(workspace_id, fourth, "0.10", supersedes_id=stored_estimate)])
+
+    top = await repo.top_agents_since(MONTH_START, currency="USD", limit=3)
+
+    assert top == [(first, Decimal("3.50")), (second, Decimal("3.00")), (third, Decimal("0.40"))]

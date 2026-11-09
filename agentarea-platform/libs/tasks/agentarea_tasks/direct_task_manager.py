@@ -50,8 +50,8 @@ class _DirectModel:
     api_key_reference: str | None
     managed_by: str | None
     endpoint_url: str | None
-    input_cost_per_token: Decimal
-    output_cost_per_token: Decimal
+    input_cost_per_token: Decimal | None
+    output_cost_per_token: Decimal | None
     cached_input_cost_per_token: Decimal | None
     cache_creation_input_cost_per_token: Decimal | None
     provider: ProviderProfile
@@ -464,10 +464,6 @@ class DirectTaskManager(BaseTaskManager):
 
         provider_type = model_instance.provider_config.provider_spec.provider_type
         model_name = model_instance.model_spec.model_name
-        if model_instance.model_spec.input_cost_per_token is None or (
-            model_instance.model_spec.output_cost_per_token is None
-        ):
-            raise ValueError("model pricing is not configured; run budget cannot be enforced")
         model = _DirectModel(
             user_context=user_context,
             provider_type=provider_type,

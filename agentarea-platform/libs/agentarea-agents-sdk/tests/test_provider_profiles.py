@@ -4,6 +4,8 @@ import pytest
 
 from agentarea_agents_sdk.models.provider_profiles import (
     DEFAULT_PROFILE,
+    ReasoningSettingError,
+    check_effort_supported,
     AuthStyle,
     ModelListShape,
     ProviderProfile,
@@ -94,3 +96,60 @@ def test_an_unknown_transport_is_refused():
 )
 def test_the_key_is_presented_as_the_spec_says(auth, headers):
     assert ProviderProfile(auth=auth).build_headers("k") == headers
+
+
+@pytest.mark.parametrize(
+    ("reasoning_param", "effort", "budget", "fields"),
+    [
+        ("reasoning", "xhigh", None, {"reasoning": {"effort": "xhigh"}}),
+        ("reasoning", None, 2048, {"reasoning": {"max_tokens": 2048}}),
+        ("reasoning_effort", "none", None, {"reasoning_effort": "none"}),
+        ("reasoning_effort", None, None, {}),
+    ],
+)
+def test_reasoning_goes_in_the_providers_form(reasoning_param, effort, budget, fields):
+    profile = ProviderProfile.from_mapping({"reasoning_param": reasoning_param})
+
+    assert profile.reasoning_fields(effort, budget) == fields
+
+
+def test_a_budget_is_refused_where_the_provider_takes_only_a_level():
+    with pytest.raises(ValueError, match="not a token budget"):
+        ProviderProfile.from_mapping({}).reasoning_fields(None, 2048)
+
+
+def test_a_level_and_a_budget_together_are_refused():
+    profile = ProviderProfile.from_mapping({"reasoning_param": "reasoning"})
+
+    with pytest.raises(ValueError, match="not both"):
+        profile.reasoning_fields("low", 2048)
+
+
+def test_the_levels_a_provider_takes_round_trip_through_its_mapping():
+    profile = ProviderProfile.from_mapping({"reasoning_efforts": ["low", "high"]})
+
+    assert profile.reasoning_efforts == ("low", "high")
+    assert ProviderProfile.from_mapping(profile.as_mapping()) == profile
+
+
+def test_a_level_the_catalog_does_not_list_is_refused():
+    with pytest.raises(ReasoningSettingError, match="takes reasoning_effort low, high, not xhigh"):
+        check_effort_supported("xhigh", ["low", "high"], model_name="m")
+
+
+@pytest.mark.parametrize("levels", [None, []])
+def test_with_no_listed_levels_any_level_passes(levels):
+    check_effort_supported("xhigh", levels, model_name="m")
+
+
+def test_whether_a_provider_takes_cache_breakpoints_round_trips():
+    profile = ProviderProfile.from_mapping({"cache_breakpoints": True})
+
+    assert profile.cache_breakpoints is True
+    assert ProviderProfile.from_mapping(profile.as_mapping()) == profile
+    assert ProviderProfile.from_mapping({}).cache_breakpoints is False
+
+
+def test_a_cache_breakpoints_value_that_is_not_a_boolean_is_refused():
+    with pytest.raises(ValueError, match="cache_breakpoints"):
+        ProviderProfile.from_mapping({"cache_breakpoints": "False"})

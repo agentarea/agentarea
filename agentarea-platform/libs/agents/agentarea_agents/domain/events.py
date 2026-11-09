@@ -16,6 +16,8 @@ class AgentCreated(DomainEvent):
         tools: dict[str, Any] | list[dict[str, Any]] | None = None,
         planning: bool | None = None,
         a2ui_enabled: bool | None = None,
+        reasoning_effort: str | None = None,
+        reasoning_max_tokens: int | None = None,
     ) -> None:
         super().__init__()
         self.agent_id = agent_id
@@ -25,6 +27,8 @@ class AgentCreated(DomainEvent):
         self.tools = tools
         self.planning = planning
         self.a2ui_enabled = a2ui_enabled
+        self.reasoning_effort = reasoning_effort
+        self.reasoning_max_tokens = reasoning_max_tokens
 
 
 class AgentUpdated(DomainEvent):
@@ -39,6 +43,8 @@ class AgentUpdated(DomainEvent):
         tools: dict[str, Any] | list[dict[str, Any]] | None = None,
         planning: bool | None = None,
         a2ui_enabled: bool | None = None,
+        reasoning_effort: str | None = None,
+        reasoning_max_tokens: int | None = None,
     ) -> None:
         super().__init__()
         self.agent_id = agent_id
@@ -48,6 +54,8 @@ class AgentUpdated(DomainEvent):
         self.tools = tools
         self.planning = planning
         self.a2ui_enabled = a2ui_enabled
+        self.reasoning_effort = reasoning_effort
+        self.reasoning_max_tokens = reasoning_max_tokens
 
 
 class AgentDeleted(DomainEvent):

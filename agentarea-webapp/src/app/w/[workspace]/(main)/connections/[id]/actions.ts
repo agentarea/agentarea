@@ -7,13 +7,17 @@ import {
   createPolicy,
   deleteMCPServerInstance,
   deletePolicy,
+  getMCPServerInstance,
   listPolicies,
+  updateMCPServerInstance,
   verifyMCPServerInstance,
 } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 import { requestWorkspacePath } from "@/lib/workspace-request";
+import { egressExitUpdateSpec } from "../egress-exit";
 import {
+  parseToolPolicyChange,
   planToolPolicyChange,
   toolPolicyTarget,
   type ToolPolicy,
@@ -25,6 +29,29 @@ export async function verifyInstance(instanceId: string) {
 
 export async function deleteInstance(instanceId: string) {
   return deleteMCPServerInstance(instanceId);
+}
+
+/**
+ * Bind the exit a container connection leaves through, or unbind with null.
+ * The update replaces the whole spec, so it is built from the stored one.
+ */
+export async function bindEgressExitAction(
+  instanceId: string,
+  exitId: string | null
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const t = await getTranslations("EgressExits.section");
+  const current = await getMCPServerInstance(instanceId);
+  if (current.error || !current.data) {
+    return { ok: false, error: apiErrorMessage(current, t("saveFailed")) };
+  }
+  const result = await updateMCPServerInstance(instanceId, {
+    json_spec: egressExitUpdateSpec(current.data.json_spec ?? {}, exitId),
+  });
+  if (result.error) {
+    return { ok: false, error: apiErrorMessage(result, t("saveFailed")) };
+  }
+  revalidatePath(await requestWorkspacePath(`/connections/${instanceId}`));
+  return { ok: true };
 }
 
 // Rule writes in flight at once, so a large group does not flood the API.
@@ -43,6 +70,8 @@ export async function setToolPoliciesAction(
   policy: ToolPolicy
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const t = await getTranslations("MCPServersPage.instanceDetail.tools.policy");
+  const change = parseToolPolicyChange({ instanceId, toolNames, policy });
+  if (!change) return { ok: false, error: t("saveFailed") };
   const { active } = await getWorkspaceContext();
   if (!active) return { ok: false, error: t("saveFailed") };
 
@@ -56,8 +85,8 @@ export async function setToolPoliciesAction(
   const rules = listed.data as PolicyRuleResponse[];
 
   const apply = async (toolName: string): Promise<string | null> => {
-    const target = toolPolicyTarget(instanceId, toolName);
-    const plan = planToolPolicyChange(rules, active.id, target, policy);
+    const target = toolPolicyTarget(change.instanceId, toolName);
+    const plan = planToolPolicyChange(rules, active.id, target, change.policy);
     if (plan.create) {
       const created = await createPolicy({
         subject_type: "workspace",
@@ -76,8 +105,8 @@ export async function setToolPoliciesAction(
 
   const failed: string[] = [];
   let error: string | null = null;
-  for (let i = 0; i < toolNames.length; i += POLICY_WRITE_BATCH) {
-    const batch = toolNames.slice(i, i + POLICY_WRITE_BATCH);
+  for (let i = 0; i < change.toolNames.length; i += POLICY_WRITE_BATCH) {
+    const batch = change.toolNames.slice(i, i + POLICY_WRITE_BATCH);
     const results = await Promise.all(batch.map(apply));
     results.forEach((result, index) => {
       if (result) {
@@ -88,7 +117,7 @@ export async function setToolPoliciesAction(
   }
 
   revalidatePath(
-    await requestWorkspacePath(`/connections/${instanceId}/tools`)
+    await requestWorkspacePath(`/connections/${change.instanceId}/tools`)
   );
   if (!failed.length) return { ok: true };
   const named = failed.slice(0, FAILED_NAMES_SHOWN).join(", ");

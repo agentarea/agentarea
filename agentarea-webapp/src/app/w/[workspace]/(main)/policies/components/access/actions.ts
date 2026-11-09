@@ -31,25 +31,29 @@ function errorMessage(error: unknown, fallback: string): string {
 
 export async function resolveAccessAction(
   input: ResolveRequest
-): Promise<ResolveResponse> {
+): Promise<{ ok: true; data: ResolveResponse } | { ok: false; error: string }> {
   const body = zResolveAccessV1AccessControlResolvePostBody.parse(input);
   const { data, error } = await resolveAccessControl(body);
 
   if (error || !data) {
-    throw new Error(errorMessage(error, "Failed to resolve access"));
+    return { ok: false, error: errorMessage(error, "Failed to resolve access") };
   }
 
-  return zResolveAccessV1AccessControlResolvePostResponse.parse(data);
+  return {
+    ok: true,
+    data: zResolveAccessV1AccessControlResolvePostResponse.parse(data),
+  };
 }
 
 export async function createAccessRelationshipAction(
   input: RelationshipWriteRequest
-): Promise<void> {
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const body = zCreateRelationshipV1AccessControlRelationshipsPostBody.parse(input);
   const { error } = await createAccessControlRelationship(body);
 
   if (error) {
-    throw new Error(errorMessage(error, "Relationship rule failed"));
+    return { ok: false, error: errorMessage(error, "Relationship rule failed") };
   }
+  return { ok: true };
 }
 

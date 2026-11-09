@@ -237,3 +237,48 @@ async def test_an_error_status_carries_the_provider_message(monkeypatch):
     with pytest.raises(LLMProviderHTTPError) as raised:
         await model.complete(LLMRequest(messages=[{"role": "user", "content": "hi"}]))
     assert (raised.value.status_code, raised.value.provider_message) == (400, "prompt is too long")
+
+
+@pytest.mark.asyncio
+async def test_a_reply_stopped_at_max_tokens_reads_as_length(monkeypatch):
+    model = _claude()
+    _serve(
+        monkeypatch,
+        model,
+        [
+            {"type": "message_start", "message": {"usage": {"input_tokens": 5}}},
+            {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "pa"}},
+            {"type": "message_delta", "delta": {"stop_reason": "max_tokens"}, "usage": {"output_tokens": 9}},
+            {"type": "message_stop"},
+        ],
+        {},
+    )
+
+    response = await model.complete(LLMRequest(messages=[{"role": "user", "content": "hi"}]))
+
+    assert (response.content, response.finish_reason) == ("pa", "length")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fields", [{"reasoning_effort": "low"}, {"reasoning_max_tokens": 2048}])
+async def test_reasoning_settings_are_refused_not_dropped(fields):
+    model = LLMModel(
+        provider_type="anthropic",
+        model_name="claude",
+        endpoint_url="https://api.anthropic.com/v1",
+        provider=ProviderProfile.from_mapping({"transport": "anthropic", "auth": "api_key_header"}),
+    )
+
+    with pytest.raises(ValueError, match="does not take reasoning settings"):
+        await model.complete(LLMRequest(messages=[{"role": "user", "content": "hi"}], **fields))
+
+
+@pytest.mark.asyncio
+async def test_every_request_asks_for_the_prompt_to_be_cached(monkeypatch):
+    model = _claude()
+    captured: dict = {}
+    _serve(monkeypatch, model, STREAM, captured)
+
+    await model.complete(LLMRequest(messages=[{"role": "user", "content": "hi"}]))
+
+    assert captured["json"]["cache_control"] == {"type": "ephemeral"}

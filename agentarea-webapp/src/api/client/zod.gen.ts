@@ -105,6 +105,26 @@ export const zAgentCardSummary = z.object({
 });
 
 /**
+ * AgentClientSummary
+ */
+export const zAgentClientSummary = z.object({
+  default_model: z.string().nullable(),
+  id: z.uuid(),
+  kind: z.string(),
+  name: z.string(),
+  online: z.boolean(),
+});
+
+/**
+ * AgentSpend
+ */
+export const zAgentSpend = z.object({
+  agent_id: z.uuid(),
+  agent_name: z.string().nullish(),
+  usd: z.string(),
+});
+
+/**
  * AgentToolSettings
  *
  * Settings for an agent-to-agent (delegation) tool.
@@ -115,6 +135,7 @@ export const zAgentCardSummary = z.object({
  */
 export const zAgentToolSettings = z.object({
   a2a_url: z.string().nullish(),
+  agent_id: z.string().nullish(),
   auth_secret_name: z.string().nullish(),
   description_override: z.string().nullish(),
   requires_user_confirmation: z.boolean().nullish(),
@@ -283,6 +304,11 @@ export const zBalanceResponse = z.object({
   amount: z.string().nullable(),
   currency: z.string(),
   exhausted: z.boolean(),
+  runway_days: z
+    .string()
+    .regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)
+    .nullish(),
+  spend_per_day: z.string().nullish(),
   viewer_is_payer: z.boolean(),
 });
 
@@ -310,6 +336,31 @@ export const zBodyUploadSkillV1SkillsUploadPost = z.object({
  */
 export const zBodyUploadWorkspaceLogoV1LogoPut = z.object({
   file: z.string(),
+});
+
+/**
+ * BrokenConnection
+ */
+export const zBrokenConnection = z.object({
+  at: z.string().nullable(),
+  error: z.string().nullable(),
+  instance_id: z.uuid(),
+  name: z.string(),
+  reason: z.enum(["verification_failed", "last_call_failed"]),
+});
+
+/**
+ * BrokenTrigger
+ */
+export const zBrokenTrigger = z.object({
+  agent_id: z.uuid(),
+  agent_name: z.string().nullish(),
+  consecutive_failures: z.int(),
+  failure_threshold: z.int(),
+  last_execution_at: z.iso.datetime().nullable(),
+  name: z.string(),
+  reason: z.enum(["failing", "stopped_after_failures", "needs_owner"]),
+  trigger_id: z.uuid(),
 });
 
 /**
@@ -500,6 +551,48 @@ export const zCatalogItemUpdate = z.object({
 });
 
 /**
+ * CatalogKeyFieldResponse
+ *
+ * One value a catalog API needs before it can be called.
+ */
+export const zCatalogKeyFieldResponse = z.object({
+  description: z.string().nullish(),
+  label: z.string(),
+  location: z.enum(["header", "query"]),
+  name: z.string(),
+});
+
+/**
+ * CatalogConnectFormResponse
+ *
+ * How a catalog API is connected: by signing in, or by entering its keys.
+ */
+export const zCatalogConnectFormResponse = z.object({
+  auth: z.enum(["oauth", "api_key"]),
+  catalog_item_id: z.uuid(),
+  description: z.string().nullish(),
+  fields: z.array(zCatalogKeyFieldResponse).optional(),
+  name: z.string(),
+});
+
+/**
+ * CatalogKeyValue
+ */
+export const zCatalogKeyValue = z.object({
+  name: z.string().max(256),
+  value: z.string().max(8192),
+});
+
+/**
+ * CatalogConnectRequest
+ *
+ * The keys a catalog API asks for, one per field of its connect form.
+ */
+export const zCatalogConnectRequest = z.object({
+  credentials: z.array(zCatalogKeyValue).min(1).max(16),
+});
+
+/**
  * CatalogToolPrice
  *
  * What one unit of a tool's calls costs; ``tool`` null is the connector's default.
@@ -612,13 +705,17 @@ export const zClientRef = z.object({
  * ClientResponse
  */
 export const zClientResponse = z.object({
+  allow_domains: z.array(z.string()).optional().default([]),
   created_by: z.string(),
+  default_model: z.string().nullish(),
   description: z.string().nullable(),
   id: z.uuid(),
   kind: z.string(),
   mcp_endpoint_url: z.string().nullish(),
   mcp_instances: z.array(zClientMcpInstanceRef).optional().default([]),
+  models: z.array(z.record(z.string(), z.unknown())).nullish(),
   name: z.string(),
+  online: z.boolean().optional().default(false),
   openapi_connections: z
     .array(zClientOpenApiConnectionRef)
     .optional()
@@ -634,6 +731,8 @@ export const zClientResponse = z.object({
  * Patch payload for a client. Unset fields remain unchanged.
  */
 export const zClientUpdate = z.object({
+  allow_domains: z.array(z.string()).optional(),
+  default_model: z.string().max(255).nullish(),
   description: z.string().max(1000).nullish(),
   kind: z.string().max(32).optional(),
   name: z.string().min(1).max(255).optional(),
@@ -697,7 +796,6 @@ export const zCollectionUpdateRequest = z.object({
  */
 export const zContentSafetyPolicy = z.object({
   answer_check: zAnswerCheckPolicy.nullish(),
-  output_sanitizer_enabled: z.boolean().nullish(),
   prompt_injection_detection_enabled: z.boolean().nullish(),
 });
 
@@ -786,6 +884,52 @@ export const zDiscoverPreviewRequest = z.object({
   api_key: z.string().nullish(),
   endpoint_url: z.string().nullish(),
   provider_key: z.string(),
+});
+
+/**
+ * EgressExitCreate
+ *
+ * A proxy of the workspace's own that its MCP instances may leave through.
+ */
+export const zEgressExitCreate = z.object({
+  allow_plaintext_credentials: z.boolean().optional().default(false),
+  description: z.string().nullish(),
+  name: z.string().min(1).max(255),
+  password_secret_id: z.uuid().nullish(),
+  upstream_url: z.string().max(512),
+  username: z.string().max(255).nullish(),
+});
+
+/**
+ * EgressExitResponse
+ */
+export const zEgressExitResponse = z.object({
+  allow_plaintext_credentials: z.boolean(),
+  created_at: z.iso.datetime(),
+  created_by: z.string(),
+  description: z.string().nullable(),
+  id: z.uuid(),
+  managed_by: z.string().nullable(),
+  name: z.string(),
+  password_secret_id: z.uuid().nullable(),
+  updated_at: z.iso.datetime(),
+  upstream_url: z.string().nullable(),
+  username: z.string().nullable(),
+  via: z.string().nullable(),
+});
+
+/**
+ * EgressExitUpdate
+ *
+ * Patch an exit: only the fields sent change; null clears an optional one.
+ */
+export const zEgressExitUpdate = z.object({
+  allow_plaintext_credentials: z.boolean().nullish(),
+  description: z.string().nullish(),
+  name: z.string().min(1).max(255).nullish(),
+  password_secret_id: z.uuid().nullish(),
+  upstream_url: z.string().max(512).nullish(),
+  username: z.string().max(255).nullish(),
 });
 
 /**
@@ -1055,6 +1199,14 @@ export const zHeaderOutput = z.object({
 });
 
 /**
+ * Health
+ */
+export const zHealth = z.object({
+  connections: z.array(zBrokenConnection),
+  triggers: z.array(zBrokenTrigger),
+});
+
+/**
  * HitlBlocker
  */
 export const zHitlBlocker = z.object({
@@ -1062,6 +1214,7 @@ export const zHitlBlocker = z.object({
   agent_name: z.string().nullish(),
   created_at: z.iso.datetime(),
   description: z.string(),
+  status: z.string(),
   task_id: z.uuid(),
 });
 
@@ -1185,6 +1338,19 @@ export const zInvitationResponse = z.object({
 export const zIssueSeverity = z.enum(["block", "warn"]);
 
 /**
+ * IssuedRunnerKey
+ */
+export const zIssuedRunnerKey = z.object({
+  created_at: z.iso.datetime(),
+  created_by: z.string(),
+  id: z.uuid(),
+  key: z.string(),
+  last_used_at: z.iso.datetime().nullable(),
+  name: z.string(),
+  prefix: z.string(),
+});
+
+/**
  * MCPAuthConfigCreateRequest
  */
 export const zMcpAuthConfigCreateRequest = z.object({
@@ -1274,6 +1440,14 @@ export const zMcpInstanceToolPolicy = z.object({
  * MCPInstanceToolPolicies
  */
 export const zMcpInstanceToolPolicies = z.object({
+  tools: z.array(zMcpInstanceToolPolicy),
+});
+
+/**
+ * MCPInstanceToolPoliciesOfInstance
+ */
+export const zMcpInstanceToolPoliciesOfInstance = z.object({
+  instance_id: z.uuid(),
   tools: z.array(zMcpInstanceToolPolicy),
 });
 
@@ -1425,6 +1599,13 @@ export const zMcpServerInstanceResponse = z.object({
   transport: zMcpTransport,
   updated_at: z.iso.datetime(),
   verification: z.record(z.string(), z.unknown()),
+});
+
+/**
+ * MCPWorkspaceToolPolicies
+ */
+export const zMcpWorkspaceToolPolicies = z.object({
+  instances: z.array(zMcpInstanceToolPoliciesOfInstance),
 });
 
 /**
@@ -1829,6 +2010,7 @@ export const zOAuthAuthorizeRequest = z.object({
   credential_mode: z.enum(["auto", "custom"]).optional().default("auto"),
   instance_id: z.uuid().nullish(),
   return_to: z.string().max(2048).optional().default(""),
+  scopes: z.array(z.string()).min(1).nullish(),
 });
 
 /**
@@ -1892,6 +2074,7 @@ export const zOAuthPreflightResponse = z.object({
   authorization_endpoint: z.string().nullish(),
   connected: z.boolean(),
   credential_source: z.enum(["platform", "dynamic"]).nullish(),
+  default_scopes: z.array(z.string()).optional(),
   detail: z.string().optional().default(""),
   issuer: z.string().nullish(),
   redirect_uri: z.string(),
@@ -1953,6 +2136,8 @@ export const zAgentResponse = z.object({
   a2ui_enabled: z.boolean().nullish(),
   agent_type: z.string().optional().default("stateless"),
   answer_check: zAnswerCheckPolicy.nullish(),
+  client: zAgentClientSummary.nullish(),
+  client_id: z.uuid().nullish(),
   description: z.string().nullish(),
   id: z.uuid(),
   instruction: z.string().nullish(),
@@ -1960,6 +2145,8 @@ export const zAgentResponse = z.object({
   model_id: z.string().nullish(),
   name: z.string(),
   planning: z.boolean().nullish(),
+  reasoning_effort: z.string().nullish(),
+  reasoning_max_tokens: z.int().nullish(),
   registry_item_id: z.string().nullish(),
   skills: z.array(z.record(z.string(), z.unknown())).nullish(),
   slug: z.string(),
@@ -1987,11 +2174,14 @@ export const zAgentUpdate = z.object({
   agent_type: z.enum(["stateless", "stateful"]).optional(),
   answer_check: zAnswerCheckPolicy.nullish(),
   capabilities: z.array(z.string()).nullish(),
+  client_id: z.uuid().nullish(),
   description: z.string().max(1000).nullish(),
   instruction: z.string().max(20000).nullish(),
   model_id: z.string().nullish(),
   name: z.string().min(1).max(255).optional(),
   planning: z.boolean().nullish(),
+  reasoning_effort: z.string().nullish(),
+  reasoning_max_tokens: z.int().nullish(),
   skill_ids: z.array(z.uuid()).nullish(),
   tools: z
     .array(
@@ -2497,6 +2687,7 @@ export const zProviderSpecResponse = z.object({
   icon_url: z.string().nullable(),
   id: z.string(),
   is_builtin: z.boolean(),
+  is_first_party: z.boolean(),
   name: z.string(),
   provider_key: z.string(),
   provider_type: z.string(),
@@ -2738,6 +2929,40 @@ export const zRestoredFileResponse = z.object({
  */
 export const zRunExecutionConfig = z.object({
   max_model_turns: z.int().gt(0),
+});
+
+/**
+ * RunnerIdentity
+ */
+export const zRunnerIdentity = z.object({
+  client_id: z.uuid(),
+  kind: z.string(),
+  workspace: z.string(),
+});
+
+/**
+ * RunnerKeyResponse
+ *
+ * A runner key of a client; the key itself is shown only when issued.
+ */
+export const zRunnerKeyResponse = z.object({
+  created_at: z.iso.datetime(),
+  created_by: z.string(),
+  id: z.uuid(),
+  last_used_at: z.iso.datetime().nullable(),
+  name: z.string(),
+  prefix: z.string(),
+});
+
+/**
+ * RuntimeUsage
+ *
+ * What the workspace's runtime used this month; quantities, never a price.
+ */
+export const zRuntimeUsage = z.object({
+  cpu_core_hours: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  memory_gib_hours: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  storage_gib: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
 });
 
 /**
@@ -3399,7 +3624,7 @@ export const zSpendCard = z.object({
   not_covered: z.array(zCurrencySpend).optional(),
   pct_of_cap: z.number().nullable(),
   projected_eom_usd: z.string().nullable(),
-  projection_method: z.string().optional().default("linear-mtd"),
+  projection_method: z.string().optional().default("trailing-7d"),
   today_usd: z.string(),
 });
 
@@ -4157,11 +4382,14 @@ export const zAgentCreateRequest = z.object({
   a2ui_enabled: z.boolean().nullish(),
   agent_type: z.enum(["stateless", "stateful"]).optional().default("stateless"),
   answer_check: zAnswerCheckPolicy.nullish(),
+  client_id: z.uuid().nullish(),
   description: z.string().max(1000).optional().default(""),
   instruction: z.string().max(20000).optional().default(""),
   model_id: z.string().nullish(),
   name: z.string().min(1).max(255),
   planning: z.boolean().nullish(),
+  reasoning_effort: z.string().nullish(),
+  reasoning_max_tokens: z.int().nullish(),
   skill_ids: z.array(z.uuid()).nullish(),
   tools: z.array(
     z.union([
@@ -4422,9 +4650,12 @@ export const zDashboardResponse = z.object({
   active_tasks: z.array(zDashboardTask),
   blockers: zBlockers,
   daily_spend: z.array(zDailySpendPoint),
+  health: zHealth,
   recent_tasks: z.array(zDashboardTask),
   schedule: zSchedule,
   spend: zSpendCard,
+  top_agents: z.array(zAgentSpend),
+  usage: zRuntimeUsage.nullable(),
 });
 
 /**
@@ -4683,6 +4914,7 @@ export const zProviderSpecWithModelsResponse = z.object({
   icon_url: z.string().nullable(),
   id: z.string(),
   is_builtin: z.boolean(),
+  is_first_party: z.boolean(),
   models: z.array(zAgentareaApiApiV1ProviderSpecsModelSpecResponse),
   name: z.string(),
   provider_key: z.string(),
@@ -4848,6 +5080,22 @@ export const zOauthFinishV1OauthFinishPostResponse = zOAuthFinishResponse;
  */
 export const zGetPricingCurrencyV1PricingCurrencyGetResponse =
   zPricingCurrencyResponse;
+
+export const zUploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutPath = z.object({
+  task_id: z.uuid(),
+  file_path: z.string(),
+});
+
+/**
+ * Successful Response
+ */
+export const zUploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutResponse =
+  z.void();
+
+/**
+ * Successful Response
+ */
+export const zRunnerWhoamiV1RunnerWhoamiGetResponse = zRunnerIdentity;
 
 /**
  * Response List Workspaces V1 Workspaces Get
@@ -5548,6 +5796,40 @@ export const zRemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsTo
 export const zRemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponse =
   z.void();
 
+export const zListRunnerKeysV1ClientsClientIdRunnerKeysGetPath = z.object({
+  client_id: z.uuid(),
+});
+
+/**
+ * Response List Runner Keys V1 Clients  Client Id  Runner Keys Get
+ *
+ * Successful Response
+ */
+export const zListRunnerKeysV1ClientsClientIdRunnerKeysGetResponse =
+  z.array(zRunnerKeyResponse);
+
+export const zIssueRunnerKeyV1ClientsClientIdRunnerKeysPostPath = z.object({
+  client_id: z.uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zIssueRunnerKeyV1ClientsClientIdRunnerKeysPostResponse =
+  zIssuedRunnerKey;
+
+export const zRevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeletePath =
+  z.object({
+    client_id: z.uuid(),
+    key_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zRevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteResponse =
+  z.void();
+
 export const zAddSkillToClientV1ClientsClientIdSkillsPostBody =
   zAssociationBody;
 
@@ -5576,6 +5858,51 @@ export const zRemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponse 
  * Successful Response
  */
 export const zGetDashboardV1DashboardGetResponse = zDashboardResponse;
+
+/**
+ * Response List Egress Exits V1 Egress Exits  Get
+ *
+ * Successful Response
+ */
+export const zListEgressExitsV1EgressExitsGetResponse =
+  z.array(zEgressExitResponse);
+
+export const zCreateEgressExitV1EgressExitsPostBody = zEgressExitCreate;
+
+/**
+ * Successful Response
+ */
+export const zCreateEgressExitV1EgressExitsPostResponse = zEgressExitResponse;
+
+export const zDeleteEgressExitV1EgressExitsExitIdDeletePath = z.object({
+  exit_id: z.uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zDeleteEgressExitV1EgressExitsExitIdDeleteResponse = z.void();
+
+export const zGetEgressExitV1EgressExitsExitIdGetPath = z.object({
+  exit_id: z.uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zGetEgressExitV1EgressExitsExitIdGetResponse = zEgressExitResponse;
+
+export const zUpdateEgressExitV1EgressExitsExitIdPatchBody = zEgressExitUpdate;
+
+export const zUpdateEgressExitV1EgressExitsExitIdPatchPath = z.object({
+  exit_id: z.uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zUpdateEgressExitV1EgressExitsExitIdPatchResponse =
+  zEgressExitResponse;
 
 /**
  * Successful Response
@@ -5867,6 +6194,12 @@ export const zCheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostBo
  */
 export const zGetContainersHealthV1McpServerInstancesHealthContainersGetResponse =
   zMcpContainersHealthResponse;
+
+/**
+ * Successful Response
+ */
+export const zListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetResponse =
+  zMcpWorkspaceToolPolicies;
 
 export const zValidateInstanceSpecV1McpServerInstancesValidatePostBody =
   zValidateRequest;
@@ -6250,6 +6583,31 @@ export const zCreateConnectionV1OpenapiConnectionsPostBody =
  * Successful Response
  */
 export const zCreateConnectionV1OpenapiConnectionsPostResponse =
+  zOpenApiConnectionResponse;
+
+export const zGetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetPath =
+  z.object({
+    catalog_item_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zGetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetResponse =
+  zCatalogConnectFormResponse;
+
+export const zConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostBody =
+  zCatalogConnectRequest;
+
+export const zConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostPath =
+  z.object({
+    catalog_item_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponse =
   zOpenApiConnectionResponse;
 
 export const zPreviewSpecV1OpenapiConnectionsPreviewSpecPostBody =

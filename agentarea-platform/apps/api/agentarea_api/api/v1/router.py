@@ -5,8 +5,9 @@
   (listing/creating workspaces, previewing/accepting an invitation).
 - ``workspace_v1_router``: everything that acts in a workspace, which the path
   names by slug: ``/v1/workspaces/{workspace}/...``.
-- ``a2a_v1_router`` / ``mcp_proxy_v1_router``: addressed by an entity id whose
-  URL is a published contract; they bind the entity's workspace instead.
+- ``a2a_v1_router`` / ``mcp_proxy_v1_router`` / ``runner_v1_router``: addressed
+  by an entity id whose URL is a published contract; they bind the entity's
+  workspace instead.
 """
 
 import re
@@ -37,9 +38,11 @@ from . import (
     bundles,
     clients,
     dashboard,
+    egress_exits,
     external_identities,
     files,
     governance,
+    harness_runner,
     inbox,
     mcp_auth_configs,
     mcp_oauth_links,
@@ -157,6 +160,8 @@ workspace_v1_router.include_router(agents_tasks.global_tasks_router)
 # MCP server management
 workspace_v1_router.include_router(mcp_servers_specifications.router)
 workspace_v1_router.include_router(mcp_server_instances.router)
+# Proxies MCP instances may leave through
+workspace_v1_router.include_router(egress_exits.router)
 
 # LLM architecture routers (4-entity system)
 workspace_v1_router.include_router(provider_specs.router)
@@ -275,3 +280,8 @@ mcp_proxy_v1_router = APIRouter(
     tags=["protected"],
 )
 mcp_proxy_v1_router.include_router(mcp_proxy.router)
+
+# A client's runner: only a runner key, bound to its client's workspace.
+runner_v1_router = APIRouter(prefix="/v1", tags=["protected"])
+runner_v1_router.include_router(harness_runner.router)
+runner_v1_router.include_router(harness_runner.socket_router)

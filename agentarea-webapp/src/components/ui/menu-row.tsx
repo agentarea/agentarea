@@ -46,11 +46,16 @@ export function MenuRow({
       )}
     >
       {icon != null && (
-        <span className={selected ? "text-primary" : "text-muted-foreground"}>
+        <span
+          className={cn(
+            "shrink-0",
+            selected ? "text-primary" : "text-muted-foreground"
+          )}
+        >
           {icon}
         </span>
       )}
-      <span className="flex-1 text-left">{label}</span>
+      <span className="min-w-0 flex-1 truncate text-left">{label}</span>
       {trailing}
     </button>
   );

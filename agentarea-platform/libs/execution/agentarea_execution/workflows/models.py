@@ -114,6 +114,7 @@ class ContinueAsNewState(BaseModel):
     context_tail_start: int = 1
     last_prompt_tokens: int = 0
     seen_urls: list[str] = Field(default_factory=list)
+    truncated_reply: str = ""
     agent_config: dict[str, Any]
     available_tools: list[dict[str, Any]]
     current_iteration: int
@@ -135,6 +136,8 @@ class ContinueAsNewState(BaseModel):
     skill_tokens_used: int = 0
     # When the continue-as-new chain's execution timeout ends it, set by its first run.
     chain_expires_at: datetime | None = None
+    # When the continue-as-new chain started, set by its first run.
+    run_started_at: datetime | None = None
     # Dynamic context discovery
     context_strategy: str = "hybrid"
     history_chunk_counter: int = 0
@@ -215,6 +218,8 @@ class AgentExecutionState(BaseModel):
     # Links that reached the conversation from outside the model, comparable
     # form. The log keeps the conversation, so the web fetch gate keeps these.
     seen_urls: list[str] = Field(default_factory=list)
+    # The parts of a text reply the output limit cut off, waiting for the rest.
+    truncated_reply: str = ""
     agent_config: dict[str, Any] = Field(default_factory=dict)
     available_tools: list[dict[str, Any]] = Field(default_factory=list)
     interaction_capabilities: InteractionCapabilities = Field(
@@ -238,6 +243,8 @@ class AgentExecutionState(BaseModel):
     skill_tokens_used: int = 0
     # When the continue-as-new chain's execution timeout ends it, set by its first run.
     chain_expires_at: datetime | None = None
+    # When the run's continue-as-new chain started, for the run duration metric.
+    run_started_at: datetime | None = None
     # Dynamic context discovery
     context_strategy: str = "hybrid"
     history_chunk_counter: int = 0

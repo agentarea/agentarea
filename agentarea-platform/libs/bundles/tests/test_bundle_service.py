@@ -9,7 +9,7 @@ from agentarea_agents.application.agent_service import InvalidModelIdError
 from agentarea_bundles.application.analyzer import parse_bundle
 from agentarea_bundles.application.installer import BundleInstallError, BundleValidationError
 from agentarea_bundles.application.service import BundleService
-from agentarea_bundles.schemas.preview import EntityKind
+from agentarea_bundles.schemas.preview import EntityKind, EntityStatus
 from agentarea_bundles.schemas.result import InstallAction, InstalledEntity, InstallResult
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.permission import PermissionService
@@ -33,14 +33,6 @@ class FakeTriggerRepo:
 
     async def list_all(self):
         return self.triggers
-
-
-class FakeByName:
-    async def get_by_name(self, name):
-        return None
-
-    async def get_agent_by_name(self, name):
-        return None
 
 
 class FakeBundleRepo:
@@ -115,6 +107,11 @@ class FakeAgentSvc(Known):
         return True
 
 
+class FakeGetSvc(Known):
+    async def get(self, id):
+        return self._get(id)
+
+
 class FakeStreamSvc:
     repository_factory = SimpleNamespace(session=None)
 
@@ -165,7 +162,13 @@ class FakeMcpServerSvc:
 
 
 def _service(
-    *, record=None, agent_service=None, trigger_service=None, triggers=(), mcp_server_service=None
+    *,
+    record=None,
+    agent_service=None,
+    trigger_service=None,
+    triggers=(),
+    mcp_server_service=None,
+    skill_service=None,
 ):
     context = UserContext(user_id="u", workspace_id="w", admin_workspaces=["w"])
     bundles = FakeBundleRepo(record)
@@ -173,30 +176,125 @@ def _service(
         repository_factory=FakeFactory(
             context,
             TriggerRepository=FakeTriggerRepo(triggers),
-            AgentRepository=FakeByName(),
-            SkillRepository=FakeByName(),
             InstalledBundleRepository=bundles,
         ),
         agent_service=agent_service or FakeAgentSvc(),
         mcp_server_service=mcp_server_service or FakeMcpServerSvc(),
-        mcp_instance_service=FakeByName(),
-        skill_service=SimpleNamespace(),
+        mcp_instance_service=FakeGetSvc(),
+        skill_service=skill_service or FakeGetSvc(),
         trigger_service=trigger_service or FakeTriggerSvc(),
     )
     return service, bundles
 
 
-async def test_a_trigger_is_found_by_its_exact_name_only():
+async def test_a_trigger_is_found_by_its_name_its_agent_and_the_recorded_id():
+    agent = str(uuid4())
     service, _ = _service(
         triggers=[
-            SimpleNamespace(id="t-other", name="other:daily"),
-            SimpleNamespace(id="t-seo", name="seo:daily"),
+            SimpleNamespace(id="t-other", name="other:daily", agent_id=agent),
+            SimpleNamespace(id="t-squat", name="seo:daily", agent_id=str(uuid4())),
+            SimpleNamespace(id="t-seo", name="seo:daily", agent_id=agent),
         ]
     )
 
-    assert await service.find_trigger("seo:daily") == "t-seo"
-    assert await service.find_trigger("seo:weekly") is None
-    assert await service.find_trigger("daily") is None
+    assert await service.find_trigger("seo:daily", agent, None) == "t-seo"
+    assert await service.find_trigger("seo:daily", agent, "t-seo") == "t-seo"
+    assert await service.find_trigger("seo:daily", agent, "t-gone") is None
+    assert await service.find_trigger("seo:weekly", agent, None) is None
+    assert await service.find_trigger("daily", agent, None) is None
+
+
+SEO = """
+schema_version: "0.1.0"
+name: seo
+agents: [{key: lead, name: Lead, model: m, instruction: x}]
+skills: [{key: sk, name: Audit, source_type: content, content: "# a"}]
+automations:
+  - {key: daily, type: cron, cron: "0 9 * * *", agent: lead, prompt: go}
+"""
+
+
+def _seo_record(*entities):
+    result = InstallResult(bundle_name="seo", entities=list(entities))
+    return SimpleNamespace(
+        id=uuid4(),
+        canonical=parse_bundle(SEO).model_dump(mode="json"),
+        install_result=result.model_dump(mode="json"),
+    )
+
+
+def _entity(kind, key, action, entity_id):
+    return InstalledEntity(kind=kind, key=key, name=key, action=action, id=str(entity_id))
+
+
+async def test_the_preview_counts_only_what_the_last_install_recorded():
+    agent = SimpleNamespace(id=uuid4(), status="active")
+    namesake_skill = SimpleNamespace(id=uuid4(), name="Audit")
+    trigger = SimpleNamespace(id=uuid4(), name="seo:daily", agent_id=agent.id)
+    service, _ = _service(
+        record=_seo_record(_entity(EntityKind.AGENT, "lead", InstallAction.REUSED, agent.id)),
+        agent_service=FakeAgentSvc({agent.id: agent}),
+        skill_service=FakeGetSvc({namesake_skill.id: namesake_skill}),
+        triggers=[trigger],
+    )
+
+    preview = await service.analyze_bundle(parse_bundle(SEO))
+
+    statuses = {(e.kind, e.key): e.status for e in preview.entities}
+    assert statuses[("agent", "lead")] == EntityStatus.ALREADY_EXISTS
+    assert statuses[("skill", "sk")] == EntityStatus.WILL_CREATE
+    assert statuses[("automation", "daily")] == EntityStatus.ALREADY_EXISTS
+
+
+async def test_an_agent_the_last_install_created_is_planned_unchanged():
+    agent = SimpleNamespace(id=uuid4(), status="active")
+    service, _ = _service(
+        record=_seo_record(_entity(EntityKind.AGENT, "lead", InstallAction.CREATED, agent.id)),
+        agent_service=FakeAgentSvc({agent.id: agent}),
+    )
+
+    preview = await service.analyze_bundle(parse_bundle(SEO))
+
+    assert {(e.kind, e.key): e.status for e in preview.entities}[
+        ("agent", "lead")
+    ] == EntityStatus.UNCHANGED
+
+
+async def test_a_recorded_agent_since_archived_is_planned_to_be_created():
+    agent = SimpleNamespace(id=uuid4(), status="archived")
+    service, _ = _service(
+        record=_seo_record(_entity(EntityKind.AGENT, "lead", InstallAction.CREATED, agent.id)),
+        agent_service=FakeAgentSvc({agent.id: agent}),
+    )
+
+    preview = await service.analyze_bundle(parse_bundle(SEO))
+
+    statuses = {(e.kind, e.key): e.status for e in preview.entities}
+    assert statuses[("agent", "lead")] == EntityStatus.WILL_CREATE
+    assert EntityStatus.ORPHANED not in statuses.values()
+
+
+async def test_a_trigger_under_the_bundle_name_for_another_agent_is_not_the_bundles():
+    agent = SimpleNamespace(id=uuid4(), status="active")
+    squatter = SimpleNamespace(id=uuid4(), name="seo:daily", agent_id=uuid4())
+    service, _ = _service(
+        record=_seo_record(_entity(EntityKind.AGENT, "lead", InstallAction.REUSED, agent.id)),
+        agent_service=FakeAgentSvc({agent.id: agent}),
+        triggers=[squatter],
+    )
+
+    preview = await service.analyze_bundle(parse_bundle(SEO))
+
+    statuses = {(e.kind, e.key): e.status for e in preview.entities}
+    assert statuses[("automation", "daily")] == EntityStatus.WILL_CREATE
+
+
+async def test_nothing_recorded_means_everything_is_created():
+    service, _ = _service(triggers=[SimpleNamespace(id=uuid4(), name="seo:daily", agent_id=uuid4())])
+
+    preview = await service.analyze_bundle(parse_bundle(SEO))
+
+    assert {e.status for e in preview.entities} == {EntityStatus.WILL_CREATE}
 
 
 CHANNEL = """
@@ -228,7 +326,7 @@ def _installed(*keys):
         canonical=parse_bundle(CHANNEL).model_dump(mode="json"),
         install_result=result.model_dump(mode="json"),
     )
-    agents = FakeAgentSvc({ids["lead"]: SimpleNamespace(id=ids["lead"])})
+    agents = FakeAgentSvc({ids["lead"]: SimpleNamespace(id=ids["lead"], status="active")})
     triggers = FakeTriggerSvc(
         {ids["inbox"]: SimpleNamespace(id=ids["inbox"], is_active=False, stream_id=uuid4())}
     )

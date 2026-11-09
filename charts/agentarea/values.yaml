@@ -12,6 +12,16 @@ serviceAccount:
 nameOverride: ""
 fullnameOverride: ""
 
+# OpenTelemetry traces and metrics from every first-party process (backend,
+# worker, mcp-manager, event-service), pushed over OTLP/HTTP.
+telemetry:
+  # -- Install tracing and metrics in every first-party process
+  # (AGENTAREA_OTEL_ENABLED). Off, nothing is emitted and nothing is required.
+  enabled: false
+  # -- OTLP/HTTP base URL of the collector, without a /v1/... path, e.g.
+  # http://otel-gateway.monitoring:4318. Required when telemetry.enabled.
+  otlpEndpoint: ""
+
 # Global configuration shared across all components
 global:
   # Edition and deployment info
@@ -164,6 +174,11 @@ global:
     existingSecret: ""
     accessKeyKey: "access-key-id"
     secretKeyKey: "secret-access-key"
+    # Who enforces If-Match / If-None-Match on MCP app storage writes: "native"
+    # (the store: AWS S3, MinIO, RustFS) or "emulated" (mcp-manager, under a
+    # per-object lock) for a store without conditional writes, such as Timeweb
+    # S3. Emulated is safe only with a single mcp-manager replica.
+    conditionalWrites: "native"
     # Client-reachable endpoint used to sign presigned URLs for browser-direct
     # uploads/downloads. Leave empty to fall back to the internal endpoint
     # (works only when the object store is itself reachable from the browser,
@@ -221,6 +236,8 @@ global:
     # it to the frontend with `ingress.hosts.appsSandbox`. Empty keeps the Apps
     # page refusing to open any app.
     appsSandboxUrl: ""
+    # Where the sidebar's Support link points. Empty hides the link.
+    supportUrl: "https://github.com/agentarea/agentarea/issues"
     
   # Jobs configuration - Background task processing
   jobs:
@@ -282,13 +299,6 @@ global:
 
   # Monitoring configuration
   monitoring:
-    # Prometheus metrics. The backend serves them on this port, a listener of
-    # its own that the public API port never answers for. Needs
-    # backend.workers: 1 -- each worker process would bind the port.
-    prometheus:
-      enabled: true
-      port: 9090
-      path: "/metrics"
     # Health checks
     health:
       enabled: true
@@ -307,6 +317,10 @@ global:
     # hook presents to /internal/analytics/signups to record each sign-up's channel.
     # Empty, that endpoint answers 404.
     signupHookSecret: ""
+    # -- Domains of this installation's own sites, read by the backend as
+    # AGENTAREA_ANALYTICS_OWN_DOMAINS: a sign-up referred from one of them or a
+    # subdomain counts as no channel rather than a referral. Empty: none.
+    ownDomains: []
 
   # Outbound HTTP from the backend and worker
   http:
@@ -812,10 +826,11 @@ mcpManager:
       - 172.16.0.0/12
       - 192.168.0.0/16
     # Extra raw NetworkPolicyEgressRule entries appended as-is (e.g. to allow a
-    # specific in-cluster dependency).
+    # specific in-cluster dependency), for every instance pod, those labelled
+    # agentarea.io/egress included.
     extraEgress: []
     # Proxy that instance pods labelled agentarea.io/egress may reach; those pods
-    # get DNS and this proxy only, and DNS only while it is empty. Shape:
+    # get DNS, this proxy and extraEgress only. Shape:
     # {namespaceSelector: {matchLabels: ...}, podSelector: {matchLabels: ...}, port: 3128}
     egressProxy: {}
 
@@ -1323,6 +1338,10 @@ registryReconcile:
     - name: system-agents
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/agents.json
       recommendation_priority: 10
+    # Bundles: a team of agents with its skills and connections, installed in one step.
+    - name: system-bundles
+      source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/bundles.json
+      recommendation_priority: 10
     # Event source types (ADR-0040): webhook and poll providers, read by streams.
     - name: system-source-types
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/source-types.json
@@ -1458,8 +1477,7 @@ kratos:
         cors:
           enabled: true
           allowed_origins:
-            - https://staging-0.agentarea.ai
-            - https://*.staging-0.agentarea.ai
+            - http://localhost:3000
           allowed_methods:
             - POST
             - GET

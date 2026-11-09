@@ -42,10 +42,15 @@ import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { latestContinuationReason } from "@/lib/continuation";
 import type { Part } from "@/lib/events/contract";
 import { PartRenderer } from "@/lib/events/parts/PartRenderer";
-import { TaskFileUrlContext } from "@/lib/events/parts/TaskFileUrl";
+import {
+  TaskFileLinkContext,
+  TaskFileOpenContext,
+  TaskFileUrlContext,
+} from "@/lib/events/parts/TaskFileUrl";
 import { useTaskEvents } from "@/lib/events/useTaskEvents";
 import { getTaskStatusPresentation } from "@/lib/status";
 import { taskSandboxFileUrl } from "@/lib/task-files";
+import { prefixWorkspaceHref } from "@/lib/workspace-routes";
 
 const QUEUEABLE_STATUSES = [
   "running",
@@ -87,6 +92,9 @@ interface TaskConversationProps {
     approved: boolean,
     comment: string
   ) => Promise<ApprovalDecisionResult>;
+  /** Open a file of the task beside the conversation; without it a file link
+   * goes to the task's Files tab. */
+  onOpenFile?: (path: string) => void;
 }
 
 export function TaskConversation({
@@ -97,6 +105,7 @@ export function TaskConversation({
   onRefresh,
   onA2UIAction,
   onDecideApproval,
+  onOpenFile,
 }: TaskConversationProps) {
   const router = useWorkspaceRouter();
   const workspaceSlug = useWorkspaceSlug();
@@ -104,6 +113,14 @@ export function TaskConversation({
     (path: string) =>
       taskSandboxFileUrl(task.agent_id, task.id, path, workspaceSlug),
     [task.agent_id, task.id, workspaceSlug]
+  );
+  const taskFileLink = useCallback(
+    (path: string) =>
+      prefixWorkspaceHref(
+        `/tasks/${encodeURIComponent(task.id)}/files?file=${encodeURIComponent(path)}`,
+        workspaceSlug
+      ),
+    [task.id, workspaceSlug]
   );
   const t = useTranslations("Chat.errors");
   const tc = useTranslations("Chat.conversation");
@@ -341,26 +358,30 @@ export function TaskConversation({
             </div>
           )}
           <TaskFileUrlContext.Provider value={taskFileUrl}>
-            {activitySegments.map((segment) =>
-              segment.kind === "work" ? (
-                <ActivityGroup
-                  key={segment.run.id}
-                  run={segment.run}
-                  onFormSubmit={handleFormSubmit}
-                  isInteractionClosed={isInteractionClosed}
-                  onA2UIAction={dispatchA2UIAction}
-                  paused={streamStatus === "paused"}
-                />
-              ) : (
-                <PartRenderer
-                  key={segment.part.partId}
-                  part={segment.part}
-                  interactionClosed={isInteractionClosed(segment.part)}
-                  onFormSubmit={handleFormSubmit}
-                  onA2UIAction={dispatchA2UIAction}
-                />
-              )
-            )}
+            <TaskFileLinkContext.Provider value={taskFileLink}>
+              <TaskFileOpenContext.Provider value={onOpenFile ?? null}>
+                {activitySegments.map((segment) =>
+                  segment.kind === "work" ? (
+                    <ActivityGroup
+                      key={segment.run.id}
+                      run={segment.run}
+                      onFormSubmit={handleFormSubmit}
+                      isInteractionClosed={isInteractionClosed}
+                      onA2UIAction={dispatchA2UIAction}
+                      paused={streamStatus === "paused"}
+                    />
+                  ) : (
+                    <PartRenderer
+                      key={segment.part.partId}
+                      part={segment.part}
+                      interactionClosed={isInteractionClosed(segment.part)}
+                      onFormSubmit={handleFormSubmit}
+                      onA2UIAction={dispatchA2UIAction}
+                    />
+                  )
+                )}
+              </TaskFileOpenContext.Provider>
+            </TaskFileLinkContext.Provider>
           </TaskFileUrlContext.Provider>
           {showTerminalMessage && (
             <StatusIndicator kind={terminalKind}>

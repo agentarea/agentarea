@@ -13,10 +13,9 @@ with workflow.unsafe.imports_passed_through():
     from ..models import Message, ToolCall
 
 from ..constants import EventTypes
-from .base import AgentWorkflowBase
+from .outage import OutageWaitMixin
 
 WAIT_MIN_SECONDS = 1
-WAIT_MAX_SECONDS = 900
 
 
 class WaitWakeReason(StrEnum):
@@ -26,7 +25,7 @@ class WaitWakeReason(StrEnum):
     PAUSE = "pause"
 
 
-class WaitMixin(AgentWorkflowBase):
+class WaitMixin(OutageWaitMixin):
     """The wait tool: idling on a durable timer instead of a worker or a sandbox."""
 
     def _wait_interruption(self) -> WaitWakeReason | None:
@@ -46,14 +45,16 @@ class WaitMixin(AgentWorkflowBase):
             await self._reject_wait(tool_call, "arguments must be a JSON object")
             return
         seconds = tool_args.get("seconds")
-        if (
-            isinstance(seconds, bool)
-            or not isinstance(seconds, int)
-            or not WAIT_MIN_SECONDS <= seconds <= WAIT_MAX_SECONDS
-        ):
+        if isinstance(seconds, bool) or not isinstance(seconds, int) or seconds < WAIT_MIN_SECONDS:
             await self._reject_wait(
-                tool_call,
-                f"seconds must be an integer from {WAIT_MIN_SECONDS} to {WAIT_MAX_SECONDS}",
+                tool_call, f"seconds must be an integer of at least {WAIT_MIN_SECONDS}"
+            )
+            return
+        hard_cap = self._outage_hard_cap()
+        if hard_cap is not None and workflow.now() + timedelta(seconds=seconds) > hard_cap:
+            remaining = max(int((hard_cap - workflow.now()).total_seconds()), 0)
+            await self._reject_wait(
+                tool_call, f"this run ends in {remaining} s, so it cannot wait {seconds} s"
             )
             return
         reason = tool_args.get("reason")
@@ -140,9 +141,9 @@ class WaitMixin(AgentWorkflowBase):
                         "status": "invalid_wait_arguments",
                         "error": error,
                         "instruction": (
-                            f"Call wait again with an integer seconds from {WAIT_MIN_SECONDS} "
-                            f"to {WAIT_MAX_SECONDS} and a non-empty reason. Call it repeatedly "
-                            "for longer waits."
+                            f"Call wait again with an integer seconds of at least "
+                            f"{WAIT_MIN_SECONDS} that ends before the run does, and a non-empty "
+                            "reason."
                         ),
                     },
                     ensure_ascii=False,

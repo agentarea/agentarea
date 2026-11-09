@@ -24,6 +24,8 @@ from ...models import (
     ConversationWindow,
     LogRow,
     RecordRequest,
+    RunnerActor,
+    RunnerTurnUpdate,
     UpdateTaskStatusRequest,
     WorkflowEventsRequest,
 )
@@ -129,6 +131,26 @@ class AgentWorkflowBase:
         self._conversation_seeded = False
         # The completed status a turn stores with its turn.completed, once it ends.
         self._completed_status: UpdateTaskStatusRequest | None = None
+        # A run on a client's runner (ADR-0051): its turns run on that client's CLI.
+        self._runner_client_id: str | None = None
+        self._runner_turn_key: str | None = None
+        self._runner_actor: RunnerActor | None = None
+        self._runner_updates: list[RunnerTurnUpdate] = []
+        self._runner_last_seq = 0
+        # Messages sent into the running turn, by id, until the runner takes or refuses them.
+        self._runner_steering: dict[str, dict[str, Any]] = {}
+        # Messages the running turn refused, for the next turn.
+        self._runner_held_back: list[dict[str, Any]] = []
+        # The CLI's open approval requests: escalation id -> the runner's request id.
+        self._runner_asks: dict[str, str] = {}
+        # Every request id the running turn asked about, answered or not.
+        self._runner_seen_asks: set[str] = set()
+        # Commands of the running turn the runner reported started and not yet finished.
+        self._runner_open_tools: dict[str, str | None] = {}
+        # A pause asked the runner to stop the running turn; the resume starts the next.
+        self._runner_pausing = False
+        # What a retried run sends its first turn: the run's retry carries no message.
+        self._runner_retry_message: str | None = None
 
     @property
     def _questions_available(self) -> bool:
@@ -480,6 +502,7 @@ class AgentWorkflowBase:
 
     async def _persist_task_status(self, request: UpdateTaskStatusRequest) -> None:
         """Store the task's status: with the pending log rows on the task log, else alone."""
+        request = request.model_copy(update={"run_started_at": self.state.run_started_at})
         if self._task_log_on():
             await self._record(
                 status=request.model_copy(update={"conversation": None, "conversation_pending": []})

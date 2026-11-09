@@ -16,8 +16,11 @@ trap 'rm -f "$default_render" "$external_render"' EXIT
 helm template dup-env "$chart" >"$default_render"
 
 # The external-provider path renders the sandbox env helper into mcp-manager and
-# sandbox-runner, which is where the collision appeared.
+# sandbox-runner, which is where the collision appeared. Telemetry adds the same
+# OTEL_* block to every first-party container.
 helm template dup-env "$chart" \
+  --set telemetry.enabled=true \
+  --set telemetry.otlpEndpoint=http://otel-collector.example.com:4318 \
   --set sandboxRuntime.provider=opensandbox \
   --set sandboxRuntime.opensandbox.url=https://sandbox.example.com \
   --set sandboxRuntime.opensandbox.isolation=gvisor \

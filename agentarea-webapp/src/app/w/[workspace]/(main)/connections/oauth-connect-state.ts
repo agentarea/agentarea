@@ -129,18 +129,23 @@ export function buildAuthorizeRequest({
   target,
   state,
   credentials,
+  scopes,
   returnTo,
 }: {
   target: OAuthAuthorizeTarget;
   state: OAuthConnectState;
   credentials?: CustomOAuthAppCredentials | null;
+  /** The person's pick; omitted when there was nothing to pick. */
+  scopes?: string[] | null;
   returnTo?: string;
 }): OAuthAuthorizeRequest | null {
+  if (!canAuthorize({ state, credentials, scopes })) return null;
   const fields = credentialFields(state, credentials);
   if (!fields) return null;
   return {
     ...target,
     ...fields,
+    ...(scopes ? { scopes } : {}),
     ...(returnTo ? { return_to: returnTo } : {}),
   };
 }
@@ -152,11 +157,34 @@ export function buildAuthorizeRequest({
 export function canAuthorize({
   state,
   credentials,
+  scopes,
 }: {
   state: OAuthConnectState;
   credentials?: CustomOAuthAppCredentials | null;
+  scopes?: string[] | null;
 }): boolean {
+  if (scopes && scopes.length === 0) return false;
   return credentialFields(state, credentials) !== null;
+}
+
+/**
+ * The scopes a sign-in may pick from, and the ones ticked at the start: the
+ * API's default (the catalog's choice, or on a reconnect what the connection
+ * already has), else all of them. Null when there is nothing to choose.
+ */
+export function scopeChoice(
+  preflight: OAuthPreflight | null
+): { offered: string[]; initial: string[] } | null {
+  if (!preflight || preflight.status === "unsupported") return null;
+  const offered = preflight.scopes ?? [];
+  if (offered.length < 2) return null;
+  const defaults = preflight.default_scopes ?? [];
+  return { offered, initial: defaults.length ? defaults : offered };
+}
+
+/** `gmail.modify` for `https://www.googleapis.com/auth/gmail.modify`; other scopes as they are. */
+export function scopeShortName(scope: string): string {
+  return scope.replace(/\/+$/, "").split("/").pop() || scope;
 }
 
 function credentialFields(

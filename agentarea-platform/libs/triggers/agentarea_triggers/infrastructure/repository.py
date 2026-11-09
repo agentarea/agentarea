@@ -7,7 +7,7 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import ColumnElement, and_, desc, func, literal_column, select, update
+from sqlalchemy import ColumnElement, and_, desc, func, literal_column, or_, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -63,6 +63,26 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             )
         )
         return dict(result.tuples().all())
+
+    async def list_broken(self, limit: int) -> list[Trigger]:
+        """Triggers that stopped working: failing in a row while on, turned off at their
+        failure threshold, or left without an owner who can run their agent.
+        """
+        stopped = and_(
+            TriggerORM.is_active.is_(False),
+            TriggerORM.consecutive_failures >= TriggerORM.failure_threshold,
+        )
+        failing = and_(TriggerORM.is_active.is_(True), TriggerORM.consecutive_failures > 0)
+        result = await self.session.execute(
+            select(TriggerORM)
+            .where(
+                self._get_workspace_filter(),
+                or_(TriggerORM.needs_new_owner_at.isnot(None), stopped, failing),
+            )
+            .order_by(desc(TriggerORM.consecutive_failures), TriggerORM.name)
+            .limit(limit)
+        )
+        return [self._orm_to_domain(row) for row in result.scalars().all()]
 
     async def get_trigger(self, id: UUID) -> Trigger | None:
         """Get a trigger by ID and convert to domain model."""

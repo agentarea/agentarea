@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { notFound, redirect } from "next/navigation";
+import { CatalogKeyConnect } from "@/app/w/[workspace]/(main)/connections/components/CatalogKeyConnect";
 import { CredentialEncryptionNote } from "@/app/w/[workspace]/(main)/connections/components/CredentialFields";
 import { OAuthConnectPanel } from "@/app/w/[workspace]/(main)/connections/OAuthConnectPanel";
 import { FocusCard, FocusHeader, FocusStep } from "@/components/FocusCard";
 import FormError from "@/components/FormError";
 import { Button } from "@/components/ui/button";
 import Link from "@/components/WorkspaceLink";
-import { getCatalogItem } from "@/lib/api";
+import { getCatalogConnectForm, getCatalogItem } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 import {
   catalogServerSetupHref,
@@ -44,10 +45,12 @@ export default async function CatalogConnectLinkPage({
   const { another } = await searchParams;
   const t = await getTranslations("MCPServersPage");
 
-  const [itemResult, workspaces] = await Promise.all([
+  const [itemResult, formResult, workspaces] = await Promise.all([
     getCatalogItem(itemId),
+    getCatalogConnectForm(itemId),
     getWorkspaces(),
   ]);
+  const form = formResult.data;
   const current = workspaces.find((candidate) => candidate.slug === workspace);
   if (!current) notFound();
 
@@ -105,6 +108,13 @@ export default async function CatalogConnectLinkPage({
             </Link>
           </Button>
         </FocusStep>
+      ) : form?.auth === "api_key" ? (
+        <CatalogKeyConnect
+          itemId={itemId}
+          provider={item.name}
+          fields={form.fields ?? []}
+          returnPath={`/connect/catalog/${itemId}`}
+        />
       ) : (
         <div className="space-y-4">
           <OAuthConnectPanel

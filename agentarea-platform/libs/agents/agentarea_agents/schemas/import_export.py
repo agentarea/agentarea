@@ -2,6 +2,10 @@
 
 from typing import Annotated, Any, Literal
 
+from agentarea_common.reasoning_effort import (
+    checked_reasoning_effort,
+    checked_reasoning_max_tokens,
+)
 from pydantic import BaseModel, Field, TypeAdapter, field_validator, model_validator
 
 
@@ -114,6 +118,9 @@ class AgentToolSettings(BaseToolSettings):
     """
 
     description_override: str | None = None
+    # The workspace agent a local delegate hands its tasks to. Names are not
+    # unique, so the name is only the delegate's label; the id is what it reaches.
+    agent_id: str | None = None
     a2a_url: str | None = None
     auth_secret_name: str | None = Field(
         default=None,
@@ -195,6 +202,8 @@ class AgentYAML(BaseModel):
     tools: list[ToolConfig] | None = None
     planning: bool | None = False
     a2ui_enabled: bool | None = False
+    reasoning_effort: str | None = None
+    reasoning_max_tokens: int | None = None
     agent_type: str = Field(
         default="stateless",
         description="Agent type: 'stateful' (maintains conversation context) or 'stateless' (each request independent).",
@@ -211,6 +220,22 @@ class AgentYAML(BaseModel):
         if not v or not v.strip():
             raise ValueError("Agent name cannot be empty or whitespace")
         return v.strip()
+
+    @field_validator("reasoning_effort", mode="before")
+    @classmethod
+    def validate_reasoning_effort(cls, v: object) -> str | None:
+        return checked_reasoning_effort(v)
+
+    @field_validator("reasoning_max_tokens", mode="before")
+    @classmethod
+    def validate_reasoning_max_tokens(cls, v: object) -> int | None:
+        return checked_reasoning_max_tokens(v)
+
+    @model_validator(mode="after")
+    def validate_one_reasoning_form(self) -> AgentYAML:
+        if self.reasoning_effort and self.reasoning_max_tokens:
+            raise ValueError("set reasoning_effort or reasoning_max_tokens, not both")
+        return self
 
 
 class MCPInstanceYAML(BaseModel):

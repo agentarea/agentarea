@@ -34,7 +34,7 @@ def _authz():
 def _client(context: UserContext) -> tuple[TestClient, AsyncMock, AsyncMock]:
     service = AsyncMock()
     service.get_token.return_value = type(
-        "Key", (), {"created_by": OWNER_ID, "name": "ci deploy", "token_prefix": "aat_abc"}
+        "Key", (), {"created_by": OWNER_ID, "name": "ci deploy", "token_prefix": "aat_abc", "client_id": None}
     )()
     service.revoke_token.return_value = True
     audit = AsyncMock()

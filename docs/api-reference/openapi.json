@@ -357,6 +357,47 @@
         "title": "AgentCardSummary",
         "type": "object"
       },
+      "AgentClientSummary": {
+        "properties": {
+          "default_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Model"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "online": {
+            "title": "Online",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "online",
+          "default_model"
+        ],
+        "title": "AgentClientSummary",
+        "type": "object"
+      },
       "AgentCreateRequest": {
         "additionalProperties": false,
         "description": "``AgentCreate`` plus the triggers created with the agent.",
@@ -394,6 +435,19 @@
               }
             ],
             "description": "Check the agent's final answer for leaks (other scripts, tool names, codes, JSON, stack traces) and have the model rewrite it once before the person sees it. Null leaves it off. A governance safety rule that sets answer_check overrides this setting."
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A Codex or Claude Code client of this workspace whose runner runs the agent's tasks on the CLI's subscription; null runs them on the platform's own loop and model.",
+            "title": "Client Id"
           },
           "description": {
             "default": "",
@@ -439,6 +493,30 @@
             ],
             "description": "Enable explicit planning step before execution.",
             "title": "Planning"
+          },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A reasoning level the model takes, e.g. low or high; the catalog lists each model's levels. Unset keeps the model's default. Not together with reasoning_max_tokens.",
+            "title": "Reasoning Effort"
+          },
+          "reasoning_max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A token budget for the model's reasoning, a positive integer. Unset keeps the model's default. Not together with reasoning_effort.",
+            "title": "Reasoning Max Tokens"
           },
           "skill_ids": {
             "anyOf": [
@@ -701,6 +779,28 @@
               }
             ]
           },
+          "client": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentClientSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
           "description": {
             "anyOf": [
               {
@@ -758,6 +858,28 @@
               }
             ],
             "title": "Planning"
+          },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Effort"
+          },
+          "reasoning_max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Max Tokens"
           },
           "registry_item_id": {
             "anyOf": [
@@ -844,6 +966,36 @@
         "title": "AgentResponse",
         "type": "object"
       },
+      "AgentSpend": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
+          "usd": {
+            "title": "Usd",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_id",
+          "usd"
+        ],
+        "title": "AgentSpend",
+        "type": "object"
+      },
       "AgentToolConfig": {
         "properties": {
           "name": {
@@ -886,6 +1038,17 @@
               }
             ],
             "title": "A2A Url"
+          },
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
           },
           "auth_secret_name": {
             "anyOf": [
@@ -972,6 +1135,19 @@
             ],
             "title": "Capabilities"
           },
+          "client_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A Codex or Claude Code client of this workspace whose runner runs the agent's tasks on the CLI's subscription; null runs them on the platform's own loop and model.",
+            "title": "Client Id"
+          },
           "description": {
             "anyOf": [
               {
@@ -1023,6 +1199,30 @@
               }
             ],
             "title": "Planning"
+          },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A reasoning level the model takes, e.g. low or high; the catalog lists each model's levels. Unset keeps the model's default. Not together with reasoning_max_tokens.",
+            "title": "Reasoning Effort"
+          },
+          "reasoning_max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A token budget for the model's reasoning, a positive integer. Unset keeps the model's default. Not together with reasoning_effort.",
+            "title": "Reasoning Max Tokens"
           },
           "skill_ids": {
             "anyOf": [
@@ -1665,6 +1865,29 @@
             "title": "Exhausted",
             "type": "boolean"
           },
+          "runway_days": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runway Days"
+          },
+          "spend_per_day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spend Per Day"
+          },
           "viewer_is_payer": {
             "title": "Viewer Is Payer",
             "type": "boolean"
@@ -1809,6 +2032,127 @@
           "file"
         ],
         "title": "Body_upload_workspace_logo_v1_logo_put",
+        "type": "object"
+      },
+      "BrokenConnection": {
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "instance_id": {
+            "format": "uuid",
+            "title": "Instance Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "verification_failed",
+              "last_call_failed"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instance_id",
+          "name",
+          "reason",
+          "error",
+          "at"
+        ],
+        "title": "BrokenConnection",
+        "type": "object"
+      },
+      "BrokenTrigger": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
+          "consecutive_failures": {
+            "title": "Consecutive Failures",
+            "type": "integer"
+          },
+          "failure_threshold": {
+            "title": "Failure Threshold",
+            "type": "integer"
+          },
+          "last_execution_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Execution At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "failing",
+              "stopped_after_failures",
+              "needs_owner"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "trigger_id": {
+            "format": "uuid",
+            "title": "Trigger Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trigger_id",
+          "name",
+          "agent_id",
+          "reason",
+          "consecutive_failures",
+          "failure_threshold",
+          "last_execution_at"
+        ],
+        "title": "BrokenTrigger",
         "type": "object"
       },
       "BudgetPeriod": {
@@ -2770,6 +3114,73 @@
         "title": "CatalogComputeEstimate",
         "type": "object"
       },
+      "CatalogConnectFormResponse": {
+        "description": "How a catalog API is connected: by signing in, or by entering its keys.",
+        "properties": {
+          "auth": {
+            "enum": [
+              "oauth",
+              "api_key"
+            ],
+            "title": "Auth",
+            "type": "string"
+          },
+          "catalog_item_id": {
+            "format": "uuid",
+            "title": "Catalog Item Id",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogKeyFieldResponse"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "catalog_item_id",
+          "name",
+          "auth"
+        ],
+        "title": "CatalogConnectFormResponse",
+        "type": "object"
+      },
+      "CatalogConnectRequest": {
+        "additionalProperties": false,
+        "description": "The keys a catalog API asks for, one per field of its connect form.",
+        "properties": {
+          "credentials": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogKeyValue"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Credentials",
+            "type": "array"
+          }
+        },
+        "required": [
+          "credentials"
+        ],
+        "title": "CatalogConnectRequest",
+        "type": "object"
+      },
       "CatalogConnection": {
         "description": "One existing connection made from a catalog item.",
         "properties": {
@@ -3005,6 +3416,68 @@
           }
         },
         "title": "CatalogItemUpdate",
+        "type": "object"
+      },
+      "CatalogKeyFieldResponse": {
+        "description": "One value a catalog API needs before it can be called.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "label": {
+            "description": "What the vendor calls it, for the form.",
+            "title": "Label",
+            "type": "string"
+          },
+          "location": {
+            "enum": [
+              "header",
+              "query"
+            ],
+            "title": "Location",
+            "type": "string"
+          },
+          "name": {
+            "description": "Header or query parameter the value is sent in.",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "location",
+          "label"
+        ],
+        "title": "CatalogKeyFieldResponse",
+        "type": "object"
+      },
+      "CatalogKeyValue": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 256,
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "maxLength": 8192,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "CatalogKeyValue",
         "type": "object"
       },
       "CatalogToolPrice": {
@@ -3288,9 +3761,28 @@
       },
       "ClientResponse": {
         "properties": {
+          "allow_domains": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Allow Domains",
+            "type": "array"
+          },
           "created_by": {
             "title": "Created By",
             "type": "string"
+          },
+          "default_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Model"
           },
           "description": {
             "anyOf": [
@@ -3331,9 +3823,29 @@
             "title": "Mcp Instances",
             "type": "array"
           },
+          "models": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Models"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "online": {
+            "default": false,
+            "title": "Online",
+            "type": "boolean"
           },
           "openapi_connections": {
             "default": [],
@@ -3379,6 +3891,25 @@
         "additionalProperties": false,
         "description": "Patch payload for a client. Unset fields remain unchanged.",
         "properties": {
+          "allow_domains": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allow Domains",
+            "type": "array"
+          },
+          "default_model": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Model"
+          },
           "description": {
             "anyOf": [
               {
@@ -3633,17 +4164,6 @@
                 "type": "null"
               }
             ]
-          },
-          "output_sanitizer_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Output Sanitizer Enabled"
           },
           "prompt_injection_detection_enabled": {
             "anyOf": [
@@ -3915,6 +4435,9 @@
             "title": "Daily Spend",
             "type": "array"
           },
+          "health": {
+            "$ref": "#/components/schemas/Health"
+          },
           "recent_tasks": {
             "items": {
               "$ref": "#/components/schemas/DashboardTask"
@@ -3927,6 +4450,23 @@
           },
           "spend": {
             "$ref": "#/components/schemas/SpendCard"
+          },
+          "top_agents": {
+            "items": {
+              "$ref": "#/components/schemas/AgentSpend"
+            },
+            "title": "Top Agents",
+            "type": "array"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuntimeUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -3935,7 +4475,10 @@
           "active_tasks",
           "recent_tasks",
           "schedule",
-          "daily_spend"
+          "daily_spend",
+          "top_agents",
+          "health",
+          "usage"
         ],
         "title": "DashboardResponse",
         "type": "object"
@@ -4487,6 +5030,270 @@
           "effective_policy"
         ],
         "title": "EffectivePolicyResponse",
+        "type": "object"
+      },
+      "EgressExitCreate": {
+        "additionalProperties": false,
+        "description": "A proxy of the workspace's own that its MCP instances may leave through.",
+        "properties": {
+          "allow_plaintext_credentials": {
+            "default": false,
+            "description": "Send the credentials to an http or socks5 proxy, where they are unencrypted.",
+            "title": "Allow Plaintext Credentials",
+            "type": "boolean"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What this exit is for.",
+            "title": "Description"
+          },
+          "name": {
+            "description": "Name, unique in the workspace.",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "password_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The proxy password as a workspace secret (id from the secrets catalog). It is read when an instance starts; changing the secret's value takes effect at the instance's next start.",
+            "title": "Password Secret Id"
+          },
+          "upstream_url": {
+            "description": "The proxy as scheme://host:port: http, https or socks5, no credentials.",
+            "maxLength": 512,
+            "title": "Upstream Url",
+            "type": "string"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Proxy username, if it needs one.",
+            "title": "Username"
+          }
+        },
+        "required": [
+          "name",
+          "upstream_url"
+        ],
+        "title": "EgressExitCreate",
+        "type": "object"
+      },
+      "EgressExitResponse": {
+        "properties": {
+          "allow_plaintext_credentials": {
+            "title": "Allow Plaintext Credentials",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "managed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "\"platform\" for an exit the operator manages; null for the workspace's own.",
+            "title": "Managed By"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "password_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password Secret Id"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "upstream_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upstream Url"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The platform hop this exit leaves through, if any.",
+            "title": "Via"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "upstream_url",
+          "username",
+          "password_secret_id",
+          "via",
+          "allow_plaintext_credentials",
+          "managed_by",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "EgressExitResponse",
+        "type": "object"
+      },
+      "EgressExitUpdate": {
+        "additionalProperties": false,
+        "description": "Patch an exit: only the fields sent change; null clears an optional one.",
+        "properties": {
+          "allow_plaintext_credentials": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow Plaintext Credentials"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "password_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password Secret Id"
+          },
+          "upstream_url": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upstream Url"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "title": "EgressExitUpdate",
         "type": "object"
       },
       "EntityKind": {
@@ -5562,6 +6369,30 @@
         "title": "HeaderOutput",
         "type": "object"
       },
+      "Health": {
+        "properties": {
+          "connections": {
+            "items": {
+              "$ref": "#/components/schemas/BrokenConnection"
+            },
+            "title": "Connections",
+            "type": "array"
+          },
+          "triggers": {
+            "items": {
+              "$ref": "#/components/schemas/BrokenTrigger"
+            },
+            "title": "Triggers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "connections",
+          "triggers"
+        ],
+        "title": "Health",
+        "type": "object"
+      },
       "HitlBlocker": {
         "properties": {
           "agent_id": {
@@ -5589,6 +6420,10 @@
             "title": "Description",
             "type": "string"
           },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
           "task_id": {
             "format": "uuid",
             "title": "Task Id",
@@ -5598,6 +6433,7 @@
         "required": [
           "task_id",
           "agent_id",
+          "status",
           "description",
           "created_at"
         ],
@@ -6100,6 +6936,60 @@
         "title": "IssueSeverity",
         "type": "string"
       },
+      "IssuedRunnerKey": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "key": {
+            "description": "The runner's key for `agentarea runner register`; shown once",
+            "title": "Key",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "prefix": {
+            "title": "Prefix",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "created_by",
+          "created_at",
+          "last_used_at",
+          "key"
+        ],
+        "title": "IssuedRunnerKey",
+        "type": "object"
+      },
       "MCPAuthConfigCreateRequest": {
         "properties": {
           "auth_type": {
@@ -6376,6 +7266,28 @@
           "tools"
         ],
         "title": "MCPInstanceToolPolicies",
+        "type": "object"
+      },
+      "MCPInstanceToolPoliciesOfInstance": {
+        "properties": {
+          "instance_id": {
+            "format": "uuid",
+            "title": "Instance Id",
+            "type": "string"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/MCPInstanceToolPolicy"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "instance_id",
+          "tools"
+        ],
+        "title": "MCPInstanceToolPoliciesOfInstance",
         "type": "object"
       },
       "MCPInstanceToolPolicy": {
@@ -7145,6 +8057,22 @@
         ],
         "title": "MCPTransport",
         "type": "string"
+      },
+      "MCPWorkspaceToolPolicies": {
+        "properties": {
+          "instances": {
+            "items": {
+              "$ref": "#/components/schemas/MCPInstanceToolPoliciesOfInstance"
+            },
+            "title": "Instances",
+            "type": "array"
+          }
+        },
+        "required": [
+          "instances"
+        ],
+        "title": "MCPWorkspaceToolPolicies",
+        "type": "object"
       },
       "MPPConfigSchema": {
         "properties": {
@@ -8594,6 +9522,22 @@
             "maxLength": 2048,
             "title": "Return To",
             "type": "string"
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Scopes to ask for, among the preflight's `scopes`; omitted asks for its `default_scopes`.",
+            "title": "Scopes"
           }
         },
         "title": "OAuthAuthorizeRequest",
@@ -8791,6 +9735,13 @@
               }
             ],
             "title": "Credential Source"
+          },
+          "default_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Default Scopes",
+            "type": "array"
           },
           "detail": {
             "default": "",
@@ -11268,6 +12219,10 @@
             "title": "Is Builtin",
             "type": "boolean"
           },
+          "is_first_party": {
+            "title": "Is First Party",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -11295,6 +12250,7 @@
           "icon",
           "icon_url",
           "is_builtin",
+          "is_first_party",
           "created_at",
           "updated_at"
         ],
@@ -11349,6 +12305,10 @@
             "title": "Is Builtin",
             "type": "boolean"
           },
+          "is_first_party": {
+            "title": "Is First Party",
+            "type": "boolean"
+          },
           "models": {
             "items": {
               "$ref": "#/components/schemas/agentarea_api__api__v1__provider_specs__ModelSpecResponse"
@@ -11383,6 +12343,7 @@
           "icon",
           "icon_url",
           "is_builtin",
+          "is_first_party",
           "created_at",
           "updated_at",
           "models"
@@ -12337,6 +13298,106 @@
           "max_model_turns"
         ],
         "title": "RunExecutionConfig",
+        "type": "object"
+      },
+      "RunnerIdentity": {
+        "properties": {
+          "client_id": {
+            "format": "uuid",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "workspace": {
+            "title": "Workspace",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "workspace",
+          "kind"
+        ],
+        "title": "RunnerIdentity",
+        "type": "object"
+      },
+      "RunnerKeyResponse": {
+        "description": "A runner key of a client; the key itself is shown only when issued.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "prefix": {
+            "title": "Prefix",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "created_by",
+          "created_at",
+          "last_used_at"
+        ],
+        "title": "RunnerKeyResponse",
+        "type": "object"
+      },
+      "RuntimeUsage": {
+        "description": "What the workspace's runtime used this month; quantities, never a price.",
+        "properties": {
+          "cpu_core_hours": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cpu Core Hours",
+            "type": "string"
+          },
+          "memory_gib_hours": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Memory Gib Hours",
+            "type": "string"
+          },
+          "storage_gib": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Storage Gib",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cpu_core_hours",
+          "memory_gib_hours",
+          "storage_gib"
+        ],
+        "title": "RuntimeUsage",
         "type": "object"
       },
       "SandboxFileItem": {
@@ -14371,7 +15432,7 @@
             "title": "Projected Eom Usd"
           },
           "projection_method": {
-            "default": "linear-mtd",
+            "default": "trailing-7d",
             "title": "Projection Method",
             "type": "string"
           },
@@ -20408,6 +21469,88 @@
         ]
       }
     },
+    "/v1/runner/tasks/{task_id}/files/{file_path}": {
+      "put": {
+        "description": "Store a file the CLI made in its task folder, so the task's file links open it.",
+        "operationId": "upload_task_file_v1_runner_tasks__task_id__files__file_path__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_path",
+            "required": true,
+            "schema": {
+              "title": "File Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload Task File",
+        "tags": [
+          "v1",
+          "protected",
+          "harness runner"
+        ]
+      }
+    },
+    "/v1/runner/whoami": {
+      "get": {
+        "description": "The client this runner key serves, so `agentarea runner register` can check the key.",
+        "operationId": "runner_whoami_v1_runner_whoami_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerIdentity"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Runner Whoami",
+        "tags": [
+          "v1",
+          "protected",
+          "harness runner"
+        ]
+      }
+    },
     "/v1/workspaces": {
       "get": {
         "description": "List every workspace the current user can reach (personal + joined).\n\nProvisions the caller's personal workspace on first call, so a brand\nnew user always gets at least one entry. Baseline governance policies are\nseeded by the workspace-creation hook (see ``get_workspace_service``).",
@@ -24178,7 +25321,7 @@
     },
     "/v1/workspaces/{workspace}/api-keys/{token_id}": {
       "delete": {
-        "description": "Immediately revoke an API key.\n\nThe key's creator, or a workspace admin. The repository is scoped to the\nworkspace, not to the caller, so without this a member could cut off a\ncolleague's integrations.",
+        "description": "Immediately revoke an API key.\n\nThe key's creator, or a workspace admin. The repository is scoped to the\nworkspace, not to the caller, so without this a member could cut off a\ncolleague's integrations. A runner's key is revoked on its client's page.",
         "operationId": "revoke_api_key_v1_api_keys__token_id__delete",
         "parameters": [
           {
@@ -24233,7 +25376,7 @@
         ]
       },
       "get": {
-        "description": "Get a single API key by ID.\n\nSomeone else's key answers 404 to a member, as a missing one does, so the\nids of colleagues' keys cannot be confirmed.",
+        "description": "Get a single API key by ID.\n\nSomeone else's key answers 404 to a member, as a missing one does, so the\nids of colleagues' keys cannot be confirmed. A runner's key lives on its\nclient's page and answers 404 here too.",
         "operationId": "get_api_key_v1_api_keys__token_id__get",
         "parameters": [
           {
@@ -25466,6 +26609,203 @@
         ]
       }
     },
+    "/v1/workspaces/{workspace}/clients/{client_id}/runner-keys": {
+      "get": {
+        "description": "The live keys of this client's runners.",
+        "operationId": "list_runner_keys_v1_clients__client_id__runner_keys_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RunnerKeyResponse"
+                  },
+                  "title": "Response List Runner Keys V1 Clients  Client Id  Runner Keys Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Runner Keys",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      },
+      "post": {
+        "description": "A key for this client's runner; it reaches nothing but the client's runner routes.",
+        "operationId": "issue_runner_key_v1_clients__client_id__runner_keys_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuedRunnerKey"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Issue Runner Key",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/clients/{client_id}/runner-keys/{key_id}": {
+      "delete": {
+        "description": "Cut a runner off: its key answers 401 from the next request on.",
+        "operationId": "revoke_runner_key_v1_clients__client_id__runner_keys__key_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Key Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke Runner Key",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
     "/v1/workspaces/{workspace}/clients/{client_id}/skills": {
       "post": {
         "operationId": "add_skill_to_client_v1_clients__client_id__skills_post",
@@ -25649,6 +26989,317 @@
           "v1",
           "protected",
           "dashboard"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/egress-exits/": {
+      "get": {
+        "description": "List the workspace's own exits.",
+        "operationId": "list_egress_exits_v1_egress_exits__get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EgressExitResponse"
+                  },
+                  "title": "Response List Egress Exits V1 Egress Exits  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Egress Exits",
+        "tags": [
+          "v1",
+          "protected",
+          "egress-exits"
+        ]
+      },
+      "post": {
+        "description": "Define a proxy the workspace's MCP instances may leave through.",
+        "operationId": "create_egress_exit_v1_egress_exits__post",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EgressExitCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EgressExitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Egress Exit",
+        "tags": [
+          "v1",
+          "protected",
+          "egress-exits"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/egress-exits/{exit_id}": {
+      "delete": {
+        "description": "Delete an exit no MCP instance leaves through.",
+        "operationId": "delete_egress_exit_v1_egress_exits__exit_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "exit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Exit Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Egress Exit",
+        "tags": [
+          "v1",
+          "protected",
+          "egress-exits"
+        ]
+      },
+      "get": {
+        "description": "Get one of the workspace's exits.",
+        "operationId": "get_egress_exit_v1_egress_exits__exit_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "exit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Exit Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EgressExitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Egress Exit",
+        "tags": [
+          "v1",
+          "protected",
+          "egress-exits"
+        ]
+      },
+      "patch": {
+        "description": "Change an exit; only the fields sent change.\n\nChanging where it leads or its credentials restarts the running instances bound to it.",
+        "operationId": "update_egress_exit_v1_egress_exits__exit_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "exit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Exit Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EgressExitUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EgressExitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Egress Exit",
+        "tags": [
+          "v1",
+          "protected",
+          "egress-exits"
         ]
       }
     },
@@ -27738,6 +29389,60 @@
           }
         ],
         "summary": "Get Containers Health",
+        "tags": [
+          "v1",
+          "protected",
+          "mcp-server-instances"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/mcp-server-instances/tool-policies": {
+      "get": {
+        "description": "Each connection's tools with their workspace default and verdict, in one read.\n\nWhat the agent editor shows beside the tools of every server it can attach.",
+        "operationId": "list_mcp_server_instance_tool_policies_v1_mcp_server_instances_tool_policies_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPWorkspaceToolPolicies"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Mcp Server Instance Tool Policies",
         "tags": [
           "v1",
           "protected",
@@ -30777,6 +32482,142 @@
           }
         ],
         "summary": "Create Connection",
+        "tags": [
+          "v1",
+          "protected",
+          "openapi-connections"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/openapi-connections/from-catalog/{catalog_item_id}": {
+      "get": {
+        "description": "What connecting this catalog API asks for: a sign-in, or the keys listed in ``fields``.",
+        "operationId": "get_catalog_connect_form_v1_openapi_connections_from_catalog__catalog_item_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "catalog_item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Catalog Item Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogConnectFormResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Catalog Connect Form",
+        "tags": [
+          "v1",
+          "protected",
+          "openapi-connections"
+        ]
+      },
+      "post": {
+        "description": "Connect a catalog API with its keys; each call makes another connection.",
+        "operationId": "connect_catalog_api_v1_openapi_connections_from_catalog__catalog_item_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "catalog_item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Catalog Item Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogConnectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAPIConnectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Connect Catalog Api",
         "tags": [
           "v1",
           "protected",

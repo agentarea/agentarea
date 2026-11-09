@@ -3,6 +3,7 @@
 import React, { useId, useMemo, useState } from "react";
 import { KeyRound, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusIndicator } from "@/components/ui/status-indicator";
@@ -160,11 +161,11 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
             key={field.id}
             className="flex items-center gap-2 text-sm text-foreground"
           >
-            <input
-              type="checkbox"
+            <Checkbox
               checked={value as boolean}
-              onChange={(e) => setValue(field.id, e.target.checked)}
-              className="rounded"
+              onCheckedChange={(checked) =>
+                setValue(field.id, checked === true)
+              }
             />
             {field.question}
           </label>
@@ -206,13 +207,12 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
                     key={opt}
                     className="flex items-center gap-2 text-sm text-foreground"
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={checked}
-                      onChange={(e) =>
+                      onCheckedChange={(next) =>
                         setValue(
                           field.id,
-                          e.target.checked
+                          next === true
                             ? [...arr, opt]
                             : arr.filter((o) => o !== opt)
                         )

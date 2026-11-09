@@ -222,3 +222,198 @@ def test_a_provider_with_no_address_and_no_endpoint_is_refused():
 
     with pytest.raises(ValueError, match="no public address"):
         model._api_url("/chat/completions")
+
+
+@pytest.mark.asyncio
+async def test_a_reply_cut_off_at_the_output_limit_says_so(monkeypatch):
+    model = LLMModel(provider_type="openai", model_name="m", endpoint_url="https://x.example/v1")
+    captured: dict = {}
+    _serve_sse(
+        monkeypatch,
+        model,
+        [
+            {"choices": [{"delta": {"content": "part"}}]},
+            {"choices": [{"delta": {}, "finish_reason": "length"}]},
+        ],
+        captured,
+    )
+
+    response = await model.complete(LLMRequest(messages=[{"role": "user", "content": "hi"}]))
+
+    assert (response.content, response.finish_reason) == ("part", "length")
+    assert "think" not in captured["json"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("reasoning_param", "fields"),
+    [
+        ("reasoning_effort", {"reasoning_effort": "low"}),
+        ("reasoning", {"reasoning": {"effort": "low"}}),
+    ],
+)
+async def test_the_reasoning_effort_is_asked_for_in_the_providers_form(
+    monkeypatch, reasoning_param, fields
+):
+    from agentarea_agents_sdk.models.provider_profiles import ProviderProfile
+
+    model = LLMModel(
+        provider_type="x",
+        model_name="m",
+        endpoint_url="https://x.example/v1",
+        provider=ProviderProfile.from_mapping({"reasoning_param": reasoning_param}),
+    )
+    captured: dict = {}
+    _serve_sse(monkeypatch, model, [{"choices": [{"delta": {"content": "ok"}}]}], captured)
+
+    await model.complete(
+        LLMRequest(messages=[{"role": "user", "content": "hi"}], reasoning_effort="low")
+    )
+
+    assert {k: captured["json"][k] for k in fields} == fields
+
+
+CACHED = {"type": "ephemeral"}
+
+
+def _conversation():
+    return [
+        {"role": "system", "content": "you are on call"},
+        {"role": "user", "content": "check alerts"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "c1", "type": "function", "function": {"name": "m", "arguments": "{}"}}
+            ],
+        },
+        {"role": "tool", "tool_call_id": "c1", "content": "all green"},
+    ]
+
+
+async def _sent_messages(monkeypatch, provider, messages):
+    model = LLMModel(provider_type="x", model_name="m", provider=provider)
+    captured: dict = {}
+    _serve_sse(monkeypatch, model, [{"choices": [{"delta": {"content": "ok"}}]}], captured)
+    await model.complete(LLMRequest(messages=messages))
+    return captured["json"]["messages"]
+
+
+@pytest.mark.asyncio
+async def test_a_provider_taking_cache_breakpoints_gets_the_system_prompt_and_the_last_turn_marked(
+    monkeypatch,
+):
+    messages = _conversation()
+
+    sent = await _sent_messages(
+        monkeypatch,
+        ProviderProfile(base_url="https://openrouter.ai/api/v1", cache_breakpoints=True),
+        messages,
+    )
+
+    assert sent[0]["content"] == [
+        {"type": "text", "text": "you are on call", "cache_control": CACHED}
+    ]
+    assert sent[-1] == {
+        "role": "tool",
+        "tool_call_id": "c1",
+        "content": [{"type": "text", "text": "all green", "cache_control": CACHED}],
+    }
+    assert sent[1:3] == messages[1:3]
+    assert messages == _conversation()
+
+
+@pytest.mark.asyncio
+async def test_the_breakpoint_goes_on_the_last_part_of_a_multipart_turn(monkeypatch):
+    image = {"type": "image_url", "image_url": {"url": "https://example.com/a.png"}}
+    messages = [
+        {"role": "system", "content": ""},
+        {"role": "user", "content": [{"type": "text", "text": "what is this?"}, image]},
+    ]
+
+    sent = await _sent_messages(
+        monkeypatch,
+        ProviderProfile(base_url="https://openrouter.ai/api/v1", cache_breakpoints=True),
+        messages,
+    )
+
+    assert sent[0] == {"role": "system", "content": ""}
+    assert sent[1]["content"] == [
+        {"type": "text", "text": "what is this?"},
+        {**image, "cache_control": CACHED},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_provider_that_caches_on_its_own_gets_the_messages_unmarked(monkeypatch):
+    sent = await _sent_messages(monkeypatch, OPENAI, _conversation())
+
+    assert sent == _conversation()
+
+
+def _openrouter():
+    return LLMModel(
+        provider_type="openrouter",
+        provider=ProviderProfile(base_url="https://openrouter.ai/api/v1"),
+        model_name="vendor/model",
+        api_key="k",
+        input_cost_per_token=0.001,
+        output_cost_per_token=0.002,
+    )
+
+
+@pytest.mark.parametrize(
+    ("event", "status"),
+    [
+        (
+            {
+                "error": {"code": 502, "message": "Upstream timed out"},
+                "choices": [{"delta": {"content": ""}, "finish_reason": "error"}],
+            },
+            502,
+        ),
+        ({"error": {"code": 429, "message": "Rate limited upstream"}, "choices": []}, 429),
+        ({"choices": [{"delta": {}, "finish_reason": "error"}]}, 502),
+        # OpenRouter's documented mid-stream shape names the cause with a string code.
+        (
+            {
+                "error": {"code": "server_error", "message": "Provider disconnected unexpectedly"},
+                "choices": [{"delta": {"content": ""}, "finish_reason": "error"}],
+            },
+            502,
+        ),
+        ({"error": {"code": "invalid_api_key", "message": "Key revoked"}}, 401),
+        ({"error": {"code": "insufficient_quota", "message": "Account not active"}}, 402),
+        ({"error": {"code": "rate_limit_exceeded", "message": "Slow down"}}, 429),
+        ({"error": {"code": "context_length_exceeded", "message": "Too long"}}, 400),
+    ],
+)
+@pytest.mark.asyncio
+async def test_an_error_inside_the_stream_is_a_provider_error_not_an_empty_reply(
+    monkeypatch, event, status
+):
+    from agentarea_agents_sdk.models.llm_model import LLMProviderHTTPError
+
+    model = _openrouter()
+    _serve_sse(monkeypatch, model, [{"choices": [{"delta": {"content": "par"}}]}, event], {})
+
+    with pytest.raises(LLMProviderHTTPError) as raised:
+        async for _ in model.ainvoke_stream(LLMRequest(messages=[{"role": "user", "content": "hi"}])):
+            pass
+
+    assert raised.value.status_code == status
+
+
+@pytest.mark.asyncio
+async def test_a_stream_error_keeps_its_code_in_the_message(monkeypatch):
+    from agentarea_agents_sdk.models.llm_model import LLMProviderHTTPError
+
+    model = _openrouter()
+    event = {"error": {"code": "context_length_exceeded", "message": "Too long"}}
+    _serve_sse(monkeypatch, model, [event], {})
+
+    with pytest.raises(LLMProviderHTTPError) as raised:
+        async for _ in model.ainvoke_stream(LLMRequest(messages=[{"role": "user", "content": "hi"}])):
+            pass
+
+    assert raised.value.provider_message == "context_length_exceeded: Too long"

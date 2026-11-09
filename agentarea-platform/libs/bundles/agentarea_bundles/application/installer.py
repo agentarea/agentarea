@@ -8,8 +8,11 @@ services, in dependency order:
 The installer never re-implements domain logic (secret storage, scheduling,
 tool wiring) — it composes the services that already own it. An entity an
 earlier install of the same bundle created is resolved by its recorded id and
-updated in place when its spec changed; anything else is matched by name and
-reused unchanged.
+updated in place when its spec changed; one it reused is linked again by its
+recorded id and never changed; anything else is created. Nothing is matched by
+name: names are not unique and any member picks them, so an agent, connection
+or skill that merely carries the bundle's name is someone else's, and reusing
+it would wire the bundle's triggers, channels and policies to it.
 
 Each service commits on its own, so an install that only creates is made
 all-or-nothing by compensation: every entity it creates is recorded with how to
@@ -30,6 +33,7 @@ from collections.abc import Awaitable, Callable, Collection
 from typing import Any
 from uuid import UUID
 
+from agentarea_common.agent_status import AgentStatus
 from agentarea_common.auth.authorization import assert_workspace_admin
 
 from agentarea_bundles.application.analyzer import (
@@ -153,9 +157,7 @@ class BundleInstaller:
         mcp_server_service: Any,
         mcp_instance_service: Any,
         skill_service: Any,
-        skill_repository: Any,
         agent_service: Any,
-        agent_repository: Any,
         trigger_service: Any,
         trigger_repository: Any,
         governance_service: Any,
@@ -166,9 +168,7 @@ class BundleInstaller:
         self._mcp_server_service = mcp_server_service
         self._mcp_instance_service = mcp_instance_service
         self._skill_service = skill_service
-        self._skill_repository = skill_repository
         self._agent_service = agent_service
-        self._agent_repository = agent_repository
         self._trigger_service = trigger_service
         self._trigger_repository = trigger_repository
         self._governance_service = governance_service
@@ -188,27 +188,44 @@ class BundleInstaller:
         self.updated_in_place = False
 
     async def get_entity(self, kind: EntityKind, entity_id: str) -> Any | None:
-        """Resolve a recorded entity id through the service that owns that kind."""
+        """Resolve a recorded entity id through the service that owns that kind.
+
+        An archived agent counts as gone: it takes no edits and runs nothing.
+        """
         ref = UUID(entity_id)
         if kind is EntityKind.MCP:
             return await self._mcp_instance_service.get(ref)
         if kind is EntityKind.SKILL:
             return await self._skill_service.get(ref)
         if kind is EntityKind.AGENT:
-            return await self._agent_service.get(ref)
+            agent = await self._agent_service.get(ref)
+            return None if agent is None or agent.status == AgentStatus.ARCHIVED else agent
         if kind in (EntityKind.CHANNEL, EntityKind.AUTOMATION):
             return await self._trigger_service.get_trigger(ref)
         return await self._governance_service.get_rule(rule_id=ref)
 
     async def _owned(self, kind: EntityKind, key: str) -> tuple[UUID, Any] | None:
         """The live entity an earlier install of this bundle created for ``key``."""
-        ref = self._prior.owned(kind, key) if self._prior else None
+        return await self._live(kind, self._prior.owned(kind, key) if self._prior else None)
+
+    async def _reused(self, kind: EntityKind, key: str) -> tuple[UUID, Any] | None:
+        """The live entity an earlier install of this bundle linked for ``key``."""
+        return await self._live(kind, self._prior.reused(kind, key) if self._prior else None)
+
+    async def _live(self, kind: EntityKind, ref: InstalledEntity | None) -> tuple[UUID, Any] | None:
         if ref is None or ref.id is None:
             return None
         entity = await self.get_entity(kind, ref.id)
         if entity is None:
             return None
         return UUID(ref.id), entity
+
+    def _reused_entity(
+        self, kind: EntityKind, key: str, name: str, entity_id: UUID
+    ) -> InstalledEntity:
+        return InstalledEntity(
+            kind=kind, key=key, name=name, action=InstallAction.REUSED, id=str(entity_id)
+        )
 
     def _fingerprint(self, spec: Any) -> str:
         return spec_fingerprint(self._package, spec, self._values)
@@ -308,9 +325,9 @@ class BundleInstaller:
         self._created = []
         self.updated_in_place = False
         try:
-            mcp_tool_names = await self._install_mcps(package, result)
+            mcp_instance_ids = await self._install_mcps(package, result)
             skill_ids = await self._install_skills(package, result)
-            agent_ids = await self._install_agents(package, mcp_tool_names, skill_ids, result)
+            agent_ids = await self._install_agents(package, mcp_instance_ids, skill_ids, result)
             await self._install_channels(package, agent_ids, result)
             await self._install_automations(package, agent_ids, result)
             await self._install_policies(package, agent_ids, result)
@@ -394,8 +411,8 @@ class BundleInstaller:
     # -- MCP ----------------------------------------------------------------
 
     async def _install_mcps(self, package: Bundle, result: InstallResult) -> dict[str, str]:
-        """Returns {package mcp key -> instance name to use in agent tools}."""
-        tool_names: dict[str, str] = {}
+        """Returns {package mcp key -> the instance id an agent's MCP tool names}."""
+        instance_ids: dict[str, str] = {}
         for mcp in package.mcps:
             reason = mcp_is_unsupported(mcp)
             if reason:
@@ -405,7 +422,7 @@ class BundleInstaller:
             owned = await self._owned(EntityKind.MCP, mcp.key)
             if owned is not None:
                 instance_id, instance = owned
-                tool_names[mcp.key] = instance.name
+                instance_ids[mcp.key] = str(instance_id)
                 changed = self._needs_update(EntityKind.MCP, mcp, [])
                 # Not applied, so the record keeps what was: the change is reported until it is.
                 result.entities.append(
@@ -425,22 +442,16 @@ class BundleInstaller:
                 )
                 continue
 
-            existing = await self._mcp_instance_service.get_by_name(mcp.name)
-            if existing:
-                tool_names[mcp.key] = mcp.name
+            reused = await self._reused(EntityKind.MCP, mcp.key)
+            if reused is not None:
+                instance_ids[mcp.key] = str(reused[0])
                 result.entities.append(
-                    InstalledEntity(
-                        kind=EntityKind.MCP,
-                        key=mcp.key,
-                        name=mcp.name,
-                        action=InstallAction.REUSED,
-                        id=str(existing.id),
-                    )
+                    self._reused_entity(EntityKind.MCP, mcp.key, mcp.name, reused[0])
                 )
                 continue
 
             instance = await self._create_mcp(package, mcp)
-            tool_names[mcp.key] = mcp.name
+            instance_ids[mcp.key] = str(instance.id)
             result.entities.append(
                 InstalledEntity(
                     kind=EntityKind.MCP,
@@ -451,7 +462,7 @@ class BundleInstaller:
                     fingerprint=self._fingerprint(mcp),
                 )
             )
-        return tool_names
+        return instance_ids
 
     async def _create_mcp(self, package: Bundle, mcp: BundleMcp) -> Any:
         """Create the instance: from its catalog spec, or from a spec this install creates."""
@@ -619,17 +630,11 @@ class BundleInstaller:
                 )
                 continue
 
-            existing = await self._skill_repository.get_by_name(skill.name)
-            if existing:
-                skill_ids[skill.key] = existing.id
+            reused = await self._reused(EntityKind.SKILL, skill.key)
+            if reused is not None:
+                skill_ids[skill.key] = reused[0]
                 result.entities.append(
-                    InstalledEntity(
-                        kind=EntityKind.SKILL,
-                        key=skill.key,
-                        name=skill.name,
-                        action=InstallAction.REUSED,
-                        id=str(existing.id),
-                    )
+                    self._reused_entity(EntityKind.SKILL, skill.key, skill.name, reused[0])
                 )
                 continue
 
@@ -708,7 +713,7 @@ class BundleInstaller:
     async def _install_agents(
         self,
         package: Bundle,
-        mcp_tool_names: dict[str, str],
+        mcp_instance_ids: dict[str, str],
         skill_ids: dict[str, UUID],
         result: InstallResult,
     ) -> dict[str, UUID]:
@@ -721,9 +726,9 @@ class BundleInstaller:
             tools: list[ToolConfig] = [
                 *(CodeToolConfig(name=name) for name in agent.toolsets),
                 *(
-                    McpToolConfig(name=mcp_tool_names[ref])
+                    McpToolConfig(name=mcp_instance_ids[ref])
                     for ref in agent.mcps
-                    if ref in mcp_tool_names  # unsupported MCPs were skipped
+                    if ref in mcp_instance_ids  # unsupported MCPs were skipped
                 ),
             ]
             attached_skill_ids = [skill_ids[ref] for ref in agent.skills if ref in skill_ids]
@@ -767,17 +772,11 @@ class BundleInstaller:
                 )
                 continue
 
-            existing = await self._agent_repository.get_agent_by_name(agent.name)
-            if existing:
-                agent_ids[agent.key] = existing.id
+            reused = await self._reused(EntityKind.AGENT, agent.key)
+            if reused is not None:
+                agent_ids[agent.key] = reused[0]
                 result.entities.append(
-                    InstalledEntity(
-                        kind=EntityKind.AGENT,
-                        key=agent.key,
-                        name=agent.name,
-                        action=InstallAction.REUSED,
-                        id=str(existing.id),
-                    )
+                    self._reused_entity(EntityKind.AGENT, agent.key, agent.name, reused[0])
                 )
                 continue
 
@@ -833,7 +832,7 @@ class BundleInstaller:
 
         streams = self._trigger_service.stream_service
         catalog = CatalogSourceTypeRepository(streams.repository_factory.session)
-        existing_names = {t.name for t in await self._trigger_repository.list_all()}
+        triggers = await self._trigger_repository.list_all()
         for channel in package.channels:
             name = trigger_name(package, channel.key)
             agent_id = agent_ids.get(channel.agent)
@@ -887,14 +886,10 @@ class BundleInstaller:
                     )
                 )
                 continue
-            if name in existing_names:
+            reused = self._own_trigger(triggers, EntityKind.CHANNEL, channel.key, name, agent_id)
+            if reused is not None:
                 result.entities.append(
-                    InstalledEntity(
-                        kind=EntityKind.CHANNEL,
-                        key=channel.key,
-                        name=name,
-                        action=InstallAction.REUSED,
-                    )
+                    self._reused_entity(EntityKind.CHANNEL, channel.key, name, reused)
                 )
                 continue
             slug = "generic_webhook" if channel.type == "generic" else channel.type
@@ -960,6 +955,24 @@ class BundleInstaller:
                 )
             )
 
+    def _own_trigger(
+        self, triggers: list[Any], kind: EntityKind, key: str, name: str, agent_id: UUID
+    ) -> UUID | None:
+        """The bundle's trigger for ``key``: its name, the agent this install bound,
+        and the id the last install recorded, when it recorded one.
+
+        One that only shares the name runs someone else's agent or prompt.
+        """
+        recorded = self._prior.recorded(kind, key) if self._prior else None
+        return next(
+            (
+                t.id
+                for t in triggers
+                if t.name == name and t.agent_id == agent_id and recorded in (None, str(t.id))
+            ),
+            None,
+        )
+
     async def channel_source(self, trigger: Any) -> Any | None:
         """The webhook source feeding a channel trigger's stream."""
         stream_id = getattr(trigger, "stream_id", None)
@@ -1011,7 +1024,7 @@ class BundleInstaller:
     ) -> None:
         from agentarea_triggers.schemas.dto import TriggerUpdate
 
-        existing_names = {t.name for t in await self._trigger_repository.list_all()}
+        triggers = await self._trigger_repository.list_all()
         for auto in package.automations:
             name = trigger_name(package, auto.key)
             agent_id = agent_ids.get(auto.agent)
@@ -1058,14 +1071,10 @@ class BundleInstaller:
                     )
                 )
                 continue
-            if name in existing_names:
+            reused = self._own_trigger(triggers, EntityKind.AUTOMATION, auto.key, name, agent_id)
+            if reused is not None:
                 result.entities.append(
-                    InstalledEntity(
-                        kind=EntityKind.AUTOMATION,
-                        key=auto.key,
-                        name=name,
-                        action=InstallAction.REUSED,
-                    )
+                    self._reused_entity(EntityKind.AUTOMATION, auto.key, name, reused)
                 )
                 continue
 

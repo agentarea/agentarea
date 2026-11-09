@@ -20,9 +20,13 @@ export type CompanySize = (typeof COMPANY_SIZES)[number];
 export type Owner = {
   id: string;
   name: string;
+  /** Short unique handle, e.g. "anna"; tools accept it in place of the id. */
+  handle: string;
   title: string;
   email: string;
   kind: OwnerKind;
+  /** The platform identity this owner is, "user:<id>" or "agent:<id>"; null for someone outside it. */
+  platformId: string | null;
 };
 
 export type Company = {

@@ -112,6 +112,14 @@ class UserPrincipal:
     bound_workspace_id: str | None = None
     # An agent's key reaches that one agent over A2A and no workspace at all.
     bound_agent_id: str | None = None
+    # A runner's key reaches only its client's runner routes.
+    bound_client_id: str | None = None
+    # A turn's token reaches its client's MCP bundle and its own task's files, while the turn runs.
+    bound_task_id: str | None = None
+    # The client whose runner holds the turn a turn's token was issued for.
+    turn_client_id: str | None = None
+    # Who the graph is asked about: the turn's agent when a turn acts as it.
+    subject: Subject | None = None
     # Set by authentication; a principal built without one is granted no scopes.
     credential: Credential | None = None
     # ``None`` until resolved per request; ``[]`` means resolved and none.
@@ -125,7 +133,7 @@ class UserPrincipal:
 
     @property
     def graph_subject(self) -> str:
-        return Subject(kind="user", id=self.user_id).graph_subject
+        return (self.subject or Subject(kind="user", id=self.user_id)).graph_subject
 
     def enter(self, workspace_id: str, workspace_slug: str) -> UserContext:
         """The context for acting in ``workspace_id``, which must be reachable."""
@@ -142,6 +150,7 @@ class UserPrincipal:
             email=self.email,
             client_id=self.client_id,
             credential=self.credential,
+            subject=self.subject,
         )
 
 

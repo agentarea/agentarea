@@ -6,6 +6,7 @@ from importlib.metadata import version
 from typing import Any, cast
 
 from agentarea_agents_sdk.mcp_server import ToolsetMCPServer, create_mcp_server
+from agentarea_agents_sdk.tools.code_tools_loader import toolset_metadata
 from agentarea_common.config.app import get_app_settings
 from mcp.types import Icon
 
@@ -70,6 +71,15 @@ def client_platform_server() -> ToolsetMCPServer:
     client's workspace and narrowed to the client's attachments.
     """
     return create_platform_mcp_server(spanning=False)
+
+
+@cache
+def client_platform_toolset_metadata() -> dict[str, dict[str, Any]]:
+    """Catalog entries of the toolsets a client is served, keyed by namespace."""
+    from .tools import get_platform_tools
+
+    entries = [toolset_metadata(type(toolset)) for toolset in get_platform_tools()]
+    return {entry["namespace"]: entry for entry in entries}
 
 
 def attachable_toolset(reference: str, disabled_methods: Collection[str]) -> str:

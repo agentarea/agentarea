@@ -198,11 +198,17 @@ async def get_api_key(
     """Get a single API key by ID.
 
     Someone else's key answers 404 to a member, as a missing one does, so the
-    ids of colleagues' keys cannot be confirmed.
+    ids of colleagues' keys cannot be confirmed. A runner's key lives on its
+    client's page and answers 404 here too.
     """
     token = await service.get_token(token_id)
-    if token is None or (
-        str(token.created_by) != user_context.user_id and not await is_workspace_admin(user_context)
+    if (
+        token is None
+        or token.client_id is not None
+        or (
+            str(token.created_by) != user_context.user_id
+            and not await is_workspace_admin(user_context)
+        )
     ):
         raise HTTPException(status_code=404, detail="API key not found")
     return APIKeyResponse.model_validate(token)
@@ -228,10 +234,10 @@ async def revoke_api_key(
 
     The key's creator, or a workspace admin. The repository is scoped to the
     workspace, not to the caller, so without this a member could cut off a
-    colleague's integrations.
+    colleague's integrations. A runner's key is revoked on its client's page.
     """
     record = await service.get_token(token_id)
-    if record is None:
+    if record is None or record.client_id is not None:
         raise HTTPException(status_code=404, detail="API key not found")
     if str(record.created_by) != user_context.user_id:
         await assert_workspace_admin(user_context)

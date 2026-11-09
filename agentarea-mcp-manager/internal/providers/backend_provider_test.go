@@ -1,9 +1,11 @@
 package providers
 
 import (
+	"errors"
 	"io"
 	"log/slog"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/agentarea/mcp-manager/internal/mcpbase"
@@ -326,5 +328,39 @@ func TestConvertToInstanceSpecLeavesTheIsolationTierToTheOperator(t *testing.T) 
 				t.Fatalf("IsolationTier = %q; the provider pinned a tier the cluster may not be able to satisfy", spec.IsolationTier)
 			}
 		})
+	}
+}
+
+// An image whose server speaks stdio has no port to reach it on. Sending it to
+// the data plane with port 0 came back as an invalid Deployment, after the
+// caller had already been told the instance was being started.
+func TestBuildBackendInstanceSpecRefusesAnImageThatSpeaksStdio(t *testing.T) {
+	_, err := BuildBackendInstanceSpec(&models.MCPServerInstance{
+		InstanceID: "inst-stdio",
+		JSONSpec: map[string]interface{}{
+			"type":  "docker",
+			"image": "mcp/fetch",
+			"packages": []interface{}{map[string]interface{}{
+				"registryType": "oci",
+				"identifier":   "mcp/fetch",
+				"transport":    map[string]interface{}{"type": "stdio"},
+			}},
+		},
+	}, nil)
+	var refused interface{ FailureReason() string }
+	if !errors.As(err, &refused) || !strings.Contains(refused.FailureReason(), "speaks stdio") {
+		t.Fatalf("BuildBackendInstanceSpec() error = %v, want the stdio image refused with a reason the caller reads", err)
+	}
+}
+
+// The gateway reaches a docker instance without a declared port on 8000; its
+// container must listen there too, not on port 0.
+func TestConvertToInstanceSpecDockerTypeWithoutAPortTakesTheGatewayDefault(t *testing.T) {
+	spec := newTestBackendProvider().convertToInstanceSpec(&models.MCPServerInstance{
+		InstanceID: "inst-noport",
+		JSONSpec:   map[string]interface{}{"type": "docker", "image": "vendor/mcp:1.0"},
+	})
+	if spec.Port != 8000 {
+		t.Fatalf("Port = %d, want 8000", spec.Port)
 	}
 }

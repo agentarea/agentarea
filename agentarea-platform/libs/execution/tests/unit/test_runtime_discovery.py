@@ -50,9 +50,8 @@ async def test_fetch_and_render_runtime_manifest() -> None:
     assert result.error is None
     assert result.manifest is not None
     prompt = render_runtime_prompt(result)
-    assert "Managed environment: immutable" in prompt
+    assert "Packages cannot be installed" in prompt
     assert "Browser automation: unavailable" in prompt
-    assert "Arbitrary workspace code is supported" in prompt
     assert runtime_event_data(result) == {
         "runtime_version": "runtime-test",
         "managed_environment": "immutable",
@@ -86,10 +85,11 @@ def test_render_runtime_prompt_describes_the_workspace() -> None:
     # while selected deliverables are explicitly published.
     assert "working directory" in prompt
     assert "file tool" in prompt
-    assert "completion `artifacts`" in prompt
+    assert "`outputs/`" in prompt
+    assert "/workspace" not in prompt
     assert "artifact_id" not in prompt
-    assert "Live workspace files are ephemeral" in prompt
-    assert "/workspace/inputs" in prompt
+    assert "Everything else is scratch" in prompt
+    assert "`inputs/`" in prompt
     # binary deliverables must be produced via the shell, not the text file tool
     assert "Binary deliverables" in prompt
     assert "corrupts the file" in prompt
@@ -120,11 +120,10 @@ def test_org_library_line_is_gated_on_the_tool_being_equipped() -> None:
     assert "Organization library" not in without
     assert "read_org_file" not in without
 
-    # Equipped: the org-library line appears and names the real tools.
+    # Equipped: the org-library line appears and names the tool the model is offered.
     with_ctx = render_runtime_prompt(result, has_org_context=True)
     assert "Organization library" in with_ctx
-    assert "list_org_files" in with_ctx
-    assert "read_org_file" in with_ctx
+    assert "`context` tool" in with_ctx
 
 
 def test_browser_requirement_is_structured_blocked_result() -> None:

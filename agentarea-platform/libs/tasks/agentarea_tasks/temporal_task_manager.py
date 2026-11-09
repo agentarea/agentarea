@@ -240,7 +240,12 @@ class TemporalTaskManager(BaseTaskManager):
             raise
 
     async def resume_task(
-        self, task: AgentTask, resume: AgentExecutionResume, message: str | None
+        self,
+        task: AgentTask,
+        resume: AgentExecutionResume,
+        message: str | None,
+        *,
+        sender: dict[str, str] | None = None,
     ) -> AgentTask:
         """Start a new run of the task's workflow that continues its conversation.
 
@@ -268,7 +273,7 @@ class TemporalTaskManager(BaseTaskManager):
                 task_queue=self.task_queue,
                 retry_attempts=1,
                 start_signal="workflow_command" if message is not None else None,
-                start_signal_args=["queue_message", {"message": message}]
+                start_signal_args=["queue_message", {"message": message, "sender": sender}]
                 if message is not None
                 else [],
             ),

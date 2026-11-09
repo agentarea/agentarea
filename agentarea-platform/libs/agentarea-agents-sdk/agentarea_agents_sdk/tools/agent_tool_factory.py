@@ -9,6 +9,7 @@ targets — not the umbrella. This factory picks the binding by config:
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
+from uuid import UUID
 
 import httpx
 
@@ -16,6 +17,9 @@ from .a2a_agent_tool import A2AAgentTool, TokenProvider
 from .agent_delegation_tool import AgentDelegationTool
 from .base_tool import BaseTool
 from .delegation_tool import DelegationTool
+
+# An archived agent keeps its runs on record but takes no new work.
+_ARCHIVED = "archived"
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +53,14 @@ class AgentToolFactory:
         payment_handler: PaymentHandler | None = None,
         auth_token_provider: TokenProvider | None = None,
         http_transport: httpx.AsyncBaseTransport | None = None,
+        agent_id: str | None = None,
     ) -> BaseTool | None:
         """Create a delegation tool for a given agent.
 
         Args:
-            agent_name: Name of the target agent
+            agent_name: The delegate's label, which names the tool
+            agent_id: The workspace agent a local delegate reaches; names are not
+                unique, so a local delegate without one is not created
             agent_service: AgentService to look up agent details
             base_url: Base API URL (used for external A2A fallback)
             a2a_url_override: Explicit A2A URL → creates external A2AAgentTool
@@ -89,9 +96,14 @@ class AgentToolFactory:
                 )
                 return DelegationTool(binding, "a2a")
 
-            agent = await agent_service.get_by_name(agent_name)
-            if not agent:
-                logger.warning(f"Agent '{agent_name}' not found for delegation tool creation")
+            if not agent_id:
+                logger.warning(
+                    f"Delegate '{agent_name}' names no agent id; re-save the agent to bind it"
+                )
+                return None
+            agent = await agent_service.get(UUID(agent_id))
+            if not agent or str(getattr(agent, "status", "")) == _ARCHIVED:
+                logger.warning(f"Agent {agent_id} for delegate '{agent_name}' is not available")
                 return None
 
             description = description_override or agent.description or f"Agent: {agent_name}"
@@ -162,6 +174,7 @@ class AgentToolFactory:
                 workspace_id=workspace_id,
                 user_id=user_id,
                 payment_handler=payment_handler,
+                agent_id=settings.get("agent_id"),
             )
             if tool:
                 tools.append(tool)

@@ -16,7 +16,7 @@ import {
   type TasksData,
 } from "../shared/tasks.ts";
 import { fromRows, TABLES, toRows } from "./db.ts";
-import { TASK_ASSIGNED } from "./events.ts";
+import { TASK_ASSIGNED, TASK_COMMENTED, TASK_CREATED, TASK_STATUS_CHANGED } from "./events.ts";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const HANDLE = /^[a-z0-9][a-z0-9._-]{0,31}$/;
@@ -28,6 +28,9 @@ const PLATFORM_ID = /^(user|agent):[^\s:]+$/;
 
 /** The platform identity a caller is, as people store it. */
 export const platformIdOf = (caller: Caller) => `${caller.kind}:${caller.id}`;
+
+/** A person as every event names them. */
+const personOf = (p: Person) => ({ handle: p.handle, name: p.name, kind: p.kind });
 export type ProjectFields = { key: string; name: string; description?: string; lead: string };
 export type TrackerSetup = { people: PersonFields[]; viewer: string; projects: ProjectFields[] };
 
@@ -97,24 +100,24 @@ export class TasksStore {
     for (const event of this.#events.splice(0)) appendEvent(db, event.name, event.data);
   }
 
-  #assigned(issue: Issue, actor: Person): void {
-    const assignee = this.data.people.find((p) => p.id === issue.assigneeId)!;
+  /** The issue as its events carry it. */
+  #issueData(issue: Issue) {
+    const assignee = this.data.people.find((p) => p.id === issue.assigneeId);
     const project = this.data.projects.find((p) => p.id === issue.projectId)!;
-    const person = (p: Person) => ({ handle: p.handle, name: p.name, kind: p.kind });
-    this.#events.push({
-      name: TASK_ASSIGNED,
-      data: {
-        key: issue.key,
-        title: issue.title,
-        description: issue.description,
-        status: issue.status,
-        priority: issue.priority,
-        due: issue.dueDate,
-        project: { key: project.key, name: project.name },
-        assignee: person(assignee),
-        assignedBy: person(actor),
-      },
-    });
+    return {
+      key: issue.key,
+      title: issue.title,
+      description: issue.description,
+      status: issue.status,
+      priority: issue.priority,
+      due: issue.dueDate,
+      project: { key: project.key, name: project.name },
+      assignee: assignee ? personOf(assignee) : null,
+    };
+  }
+
+  #assigned(issue: Issue, actor: Person): void {
+    this.#events.push({ name: TASK_ASSIGNED, data: { ...this.#issueData(issue), assignedBy: personOf(actor) } });
   }
 
   /** The tracker's clock: never earlier than the dataset's own `asOf`. */
@@ -167,6 +170,7 @@ export class TasksStore {
   linkPerson(ref: string, platformId: string): Person {
     const person = this.person(ref);
     const id = checkPlatformId(platformId);
+    if (person.platformId && person.platformId !== id) throw new Error(`@${person.handle} is already ${person.platformId}.`);
     const other = this.data.people.find((p) => p.platformId === id);
     if (other && other.id !== person.id) throw new Error(`${id} is already @${other.handle}.`);
     person.platformId = id;
@@ -271,6 +275,7 @@ export class TasksStore {
     project.nextNumber += 1;
     this.#record(issue, actor.id, at, "created", null, issue.status);
     this.data.issues.push(issue);
+    this.#events.push({ name: TASK_CREATED, data: { ...this.#issueData(issue), createdBy: personOf(actor) } });
     if (issue.assigneeId) this.#assigned(issue, actor);
     return issue;
   }
@@ -297,6 +302,7 @@ export class TasksStore {
     const estimate = fields.estimate == null ? fields.estimate : checkEstimate(fields.estimate);
     const parentId = fields.parent == null ? fields.parent : this.#parent(issue, fields.parent).id;
     const labels = fields.labels && this.#labels(fields.labels);
+    const from = issue.status;
 
     if (title !== undefined) apply("title", "title", title);
     if (fields.description !== undefined) apply("description", "description", fields.description.trim(), () => null);
@@ -308,6 +314,12 @@ export class TasksStore {
     if (estimate !== undefined) apply("estimate", "estimate", estimate, (v) => (v === null ? null : String(v)));
     if (parentId !== undefined) apply("parent", "parentId", parentId);
     if (changed.length) issue.updatedAt = at;
+    if (changed.includes("status")) {
+      this.#events.push({
+        name: TASK_STATUS_CHANGED,
+        data: { ...this.#issueData(issue), from, to: issue.status, changedBy: personOf(actor) },
+      });
+    }
     if (changed.includes("assignee") && issue.assigneeId) this.#assigned(issue, actor);
     return { issue, changed };
   }
@@ -362,6 +374,11 @@ export class TasksStore {
     const comment: Comment = { id: this.#id("cmt"), authorId: author.id, body: text, createdAt: this.now() };
     issue.comments.push(comment);
     issue.updatedAt = comment.createdAt;
+    const { key, title, status, project, assignee } = this.#issueData(issue);
+    this.#events.push({
+      name: TASK_COMMENTED,
+      data: { key, title, status, project, assignee, comment: { id: comment.id, body: comment.body }, author: personOf(author) },
+    });
     return { issue, comment };
   }
 

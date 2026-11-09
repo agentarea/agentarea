@@ -7,7 +7,7 @@ from typing import Any
 
 from ..models.llm_model import LLMModel, LLMRequest
 from ..models.provider_profiles import DEFAULT_PROFILE, ProviderProfile
-from ..prompts import PromptBuilder, ToolInfo
+from ..prompts import PromptBuilder
 from ..tools.completion_tool import CompletionTool
 from ..tools.decorator_tool import ToolsetAdapter
 from ..tools.tool_executor import ToolExecutor
@@ -79,24 +79,11 @@ class Agent:
 
     def _build_system_prompt(self, goal: str, success_criteria: list[str] | None = None) -> str:
         """Build the system prompt using PromptBuilder."""
-        # Get available tools info
-        available_tools: list[ToolInfo] = []
-        for tool_instance in self.tool_executor.registry.list_tools():
-            available_tools.append(
-                {
-                    "name": tool_instance.name,
-                    "description": getattr(
-                        tool_instance, "description", f"Tool: {tool_instance.name}"
-                    ),
-                }
-            )
-
         return PromptBuilder.build_react_system_prompt(
             agent_name=self.name,
             agent_instruction=self.instruction,
             goal_description=goal,
             success_criteria=success_criteria or [],
-            available_tools=available_tools,
         )
 
     async def _execute_agent_loop(

@@ -5,6 +5,9 @@ replacing the value at ``at`` in the decoded JSON body::
 
     [{"decode": "base64", "at": "$.rawData"}, {"parse": "xml", "at": "$.rawData"}]
 
+An XML response arrives as its text, so ``{"parse": "xml", "at": "$"}`` replaces the
+whole body.
+
 Parsed XML becomes JSON the way ``xmltodict`` writes it: an element is an object
 keyed by child tag, attributes as ``@name``, text as ``#text`` (or the bare string
 when the element has nothing else), and repeated children as a list.
@@ -89,5 +92,9 @@ def apply_response_transform(steps: list[dict[str, Any]], body: Any) -> Any:
             current = json_path(body, path)
         except KeyError:
             raise ResponseTransformError(f"the response carries no {path}") from None
-        _set(body, path, _STEPS[kinds[0]](current))
+        value = _STEPS[kinds[0]](current)
+        if path == "$":
+            body = value
+        else:
+            _set(body, path, value)
     return body

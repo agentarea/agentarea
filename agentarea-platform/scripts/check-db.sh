@@ -51,6 +51,11 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     index that serves it, a property of the migrated indexes and the planner.
 #   catalog retire: a sync deletes what its source dropped unless a row of
 #     another module (install, fork, agent, connection) still references it.
+#   LLM catalog retire: a provider or model the catalog dropped is deleted, its
+#     specs cascading, unless a config, an instance or a workspace's own model
+#     copy in any workspace uses it; a kept one is offered only where it is used.
+#   first-party provider: the catalog's first_party flag is written to the
+#     migrated column on create and cleared on update, and lists that spec first.
 #   catalog visibility: a workspace registry's items reach only that workspace
 #     (browse, search, by id, the skill and agent projections), a CHECK keeps
 #     it to catalog-only types, and names are unique per scope (ADR-0044).
@@ -140,6 +145,8 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     stays in the caller's workspace and leaves updated_at alone.
 #   MCP dispatch stamps: the stamp writer runs with no workspace bound under the
 #     ENFORCE tenant scope and still stamps every workspace's instances.
+#   client runner keys: an issued key authenticates bound to its client, a
+#     revoked one does not, and deleting the client deletes its keys.
 #   owned auth configs: an auth config a connect flow minted is deleted with its
 #     connection or instance by ON DELETE CASCADE, its credential and secret
 #     references first; a shared one survives, and the backfill names owners.
@@ -167,6 +174,8 @@ PY_SUITES=(
   libs/llm/tests/test_video_generation_jobs_db.py
   libs/registry/tests/test_catalog_browse_plans_db.py
   libs/registry/tests/test_catalog_retire_db.py
+  libs/registry/tests/test_llm_catalog_retire_db.py
+  libs/registry/tests/test_llm_provider_first_party_db.py
   libs/registry/tests/test_catalog_visibility_db.py
   libs/agents/tests/test_catalog_workspace_registry_db.py
   libs/agents/tests/test_catalog_presets_db.py
@@ -221,6 +230,8 @@ libs/tasks/tests/test_a2a_context_db.py
   libs/openapi/tests/test_record_dispatch_db.py
   libs/openapi/tests/test_platform_connection_db.py
   libs/mcp/tests/test_dispatch_stamps_db.py
+  apps/api/tests/test_client_runner_keys_db.py
+  libs/mcp/tests/test_egress_exits_db.py
   apps/api/tests/test_owned_auth_configs_db.py
   libs/common/tests/test_analytics_installation_db.py
   libs/common/tests/test_analytics_pulse_db.py
@@ -235,7 +246,7 @@ GO_PACKAGES=(./internal/mcpgateway/... ./internal/secrets/...)
 
 # The operator's hand-written provider-config SQL; its unit tests mock the
 # connection away, which is how it once named a column no migration created.
-OPERATOR_SUITES=(tests/test_provider_config_sql_db.py)
+OPERATOR_SUITES=(tests/test_provider_config_sql_db.py tests/test_platform_egress_exit_sql_db.py)
 
 echo "==> alembic upgrade head, then downgrade -1 / upgrade head roundtrip"
 (

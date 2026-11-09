@@ -1,5 +1,6 @@
 """Which channel brought a sign-up, from the query its sign-up flow started with (ADR-0047)."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from urllib.parse import parse_qs, urlsplit
 
@@ -21,7 +22,6 @@ _SOCIAL = frozenset(
         "habr.com",
     }
 )
-_OWN = ("agentarea.ai", "agentarea.ru")
 _SKILLS = ("/skills/", "/ru/skills/")
 _PATTERNED = ("/ru/skills/", "/skills/", "/ru/blog/", "/blog/")
 
@@ -45,8 +45,8 @@ def _bare(host: str) -> str:
     return host.lower().removeprefix("www.")
 
 
-def _is_own(host: str) -> bool:
-    return any(host == own or host.endswith("." + own) for own in _OWN)
+def _is_own(host: str, own_domains: Iterable[str]) -> bool:
+    return any(host == own or host.endswith("." + own) for own in own_domains)
 
 
 def _is_search(host: str) -> bool:
@@ -64,13 +64,20 @@ def path_pattern(path: str | None) -> str | None:
 
 
 def classify_channel(
-    *, referrer_host: str | None, landing_path: str | None, utm_source: str | None
+    *,
+    referrer_host: str | None,
+    landing_path: str | None,
+    utm_source: str | None,
+    own_domains: Iterable[str],
 ) -> str:
-    """The channel of a visit's first touch, by the first rule of ADR-0047's table that holds."""
+    """The channel of a visit's first touch, by the first rule of ADR-0047's table that holds.
+
+    A referrer at one of ``own_domains`` or below it is the installation's own site, not a channel.
+    """
     if utm_source:
         return "campaign"
     host = _bare(referrer_host) if referrer_host else None
-    if host and not _is_own(host):
+    if host and not _is_own(host, own_domains):
         if _is_search(host):
             return "search"
         if host in _SOCIAL:
@@ -81,7 +88,9 @@ def classify_channel(
     return "direct"
 
 
-def attribution_from_request_url(request_url: str | None) -> Attribution:
+def attribution_from_request_url(
+    request_url: str | None, *, own_domains: Iterable[str]
+) -> Attribution:
     """The landing's ``aa_*``/``utm_*`` parameters; a declared channel is kept only if known."""
     try:
         query = parse_qs(urlsplit(request_url or "").query)
@@ -97,7 +106,10 @@ def attribution_from_request_url(request_url: str | None) -> Attribution:
         declared
         if declared and declared in CHANNELS
         else classify_channel(
-            referrer_host=referrer, landing_path=landing_path, utm_source=utm_source
+            referrer_host=referrer,
+            landing_path=landing_path,
+            utm_source=utm_source,
+            own_domains=own_domains,
         )
     )
     return Attribution(

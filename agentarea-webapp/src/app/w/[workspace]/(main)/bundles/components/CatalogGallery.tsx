@@ -93,13 +93,12 @@ import { BundlePlan } from "./BundlePlan";
 import {
   ALL,
   arr,
+  connectionFacets,
   DEFAULT_SORT,
   EXPLORE_VIEW_COOKIE,
   FEATURED_TAG,
   HOSTING_LABELS,
   isCatalogHosting,
-  isCatalogPricing,
-  isCatalogProtocol,
   modelNameMatchesPreferred,
   normalize,
   PROTOCOL_LABELS,
@@ -204,11 +203,7 @@ async function fetchPage(params: BrowseParams) {
     offset: params.offset,
     q: params.q || undefined,
     category: params.category === ALL ? undefined : params.category,
-    // ALL, or junk from a hand-edited URL, means "don't filter" rather than a
-    // request the server would reject.
-    protocol: isCatalogProtocol(params.protocol) ? params.protocol : undefined,
-    hosting: isCatalogHosting(params.hosting) ? params.hosting : undefined,
-    pricing: isCatalogPricing(params.pricing) ? params.pricing : undefined,
+    ...connectionFacets(params.type, params),
     sort: params.sort,
   });
 }
@@ -301,6 +296,9 @@ export function ExploreTypeTabs({ initialType }: { initialType: CatalogType }) {
     "category",
     parseAsString.withDefault(ALL)
   );
+  const [, setProtocol] = useQueryState("protocol", parseAsString);
+  const [, setHosting] = useQueryState("hosting", parseAsString);
+  const [, setPricing] = useQueryState("pricing", parseAsString);
   const [, setItemId] = useQueryState("item", parseAsString);
   const t = useTranslations("CatalogPage.types");
 
@@ -319,6 +317,9 @@ export function ExploreTypeTabs({ initialType }: { initialType: CatalogType }) {
       onChange={(next) => {
         void setType(next);
         void setCategory(ALL);
+        void setProtocol(null);
+        void setHosting(null);
+        void setPricing(null);
         void setItemId(null);
       }}
       variant="solid"
@@ -721,9 +722,9 @@ export default function CatalogGallery({
   const hasFilters =
     query.trim() !== "" ||
     category !== ALL ||
-    protocol !== ALL ||
-    hosting !== ALL ||
-    pricing !== ALL;
+    Object.values(connectionFacets(type, { protocol, hosting, pricing })).some(
+      Boolean
+    );
 
   // A type switch invalidates the current results, so they're skeletoned. A
   // filter change only narrows them: the list stays and dims, which is what

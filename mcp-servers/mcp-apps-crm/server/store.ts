@@ -1,4 +1,6 @@
 import type { Database } from "bun:sqlite";
+import type { Caller } from "@kit/context/caller.ts";
+import { appendEvent, type EventData } from "@kit/events/log.ts";
 import { insertRows, readRows, syncRows, type Rows } from "@kit/store/rows.ts";
 import {
   OWNER_KINDS,
@@ -15,12 +17,21 @@ import {
   type OwnerKind,
   type Stage,
 } from "../shared/crm.ts";
-import { fromRows, TABLES, toRows } from "./db.ts";
+import { freeHandle, fromRows, TABLES, toRows } from "./db.ts";
+import { CONTACT_CREATED, DEAL_ASSIGNED, DEAL_CREATED, DEAL_STAGE_CHANGED } from "./events.ts";
 import { Lookup } from "./lookup.ts";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const HANDLE = /^[a-z0-9][a-z0-9._-]{0,31}$/;
+const PLATFORM_ID = /^(user|agent):[^\s:]+$/;
 
-export type OwnerFields = { name: string; title?: string; email?: string; kind?: OwnerKind };
+/** The platform identity a caller is, as owners store it. */
+export const platformIdOf = (caller: Caller) => `${caller.kind}:${caller.id}`;
+
+/** An owner as every event names them. */
+const personOf = (o: Owner) => ({ handle: o.handle, name: o.name, kind: o.kind });
+
+export type OwnerFields = { name: string; handle?: string; title?: string; email?: string; kind?: OwnerKind; platformId?: string };
 
 export type CrmSetup = {
   account: string;
@@ -80,6 +91,10 @@ function parseMoment(value: string, field: string): number {
  */
 export class CrmStore {
   readonly #rows: Rows;
+  /** Events the changes since `load` produce, appended by `save` in the same transaction. */
+  readonly #events: { name: string; data: EventData }[] = [];
+  /** Who "me" is for this request: the caller the platform named, when there is one. */
+  #me: { owner: Owner } | { unknown: Caller } | null = null;
 
   private constructor(
     readonly data: CrmData,
@@ -147,14 +162,137 @@ export class CrmStore {
     if (email && this.data.owners.some((o) => o.email.toLowerCase() === email.toLowerCase())) {
       throw new Error(`An owner with ${email} already exists.`);
     }
-    const owner: Owner = { id: nextId(this.data.owners.map((o) => o.id), "own_", 2), name, title: fields.title?.trim() ?? "", email, kind };
+    const taken = (handle: string) => this.data.owners.some((o) => o.handle === handle);
+    const handle = fields.handle?.trim().replace(/^@/, "").toLowerCase() || freeHandle([email.split("@")[0] ?? "", name], taken);
+    if (!HANDLE.test(handle)) throw new Error(`"${fields.handle}" is not a handle; use up to 32 latin letters, digits, ".", "_" or "-".`);
+    if (handle === "me") throw new Error(`"${handle}" is reserved; pick another handle.`);
+    if (taken(handle)) throw new Error(`The handle "${handle}" is taken.`);
+    const platformId = fields.platformId === undefined ? null : checkPlatformId(fields.platformId);
+    if (platformId && this.data.owners.some((o) => o.platformId === platformId)) throw new Error(`${platformId} is already an owner.`);
+    const owner: Owner = {
+      id: nextId(this.data.owners.map((o) => o.id), "own_", 2),
+      name,
+      handle,
+      title: fields.title?.trim() ?? "",
+      email,
+      kind,
+      platformId,
+    };
     this.data.owners.push(owner);
+    return owner;
+  }
+
+  /**
+   * Makes `caller` "me" for this request. A caller who is no owner yet is added
+   * when `join` (a write); a read leaves them unknown, and "me" then refuses.
+   */
+  identify(caller: Caller, join: boolean): void {
+    const platformId = platformIdOf(caller);
+    const known = this.data.owners.find((o) => o.platformId === platformId);
+    if (known) {
+      this.#me = { owner: known };
+      return;
+    }
+    if (!join) {
+      this.#me = { unknown: caller };
+      return;
+    }
+    const short = caller.id.slice(0, 8);
+    const email = caller.email ?? "";
+    const handle = freeHandle([email.split("@")[0] ?? "", `${caller.kind}-${short}`], (h) => this.data.owners.some((o) => o.handle === h));
+    const owner = this.addOwner({
+      name: caller.email ?? (caller.kind === "agent" ? `Agent ${short}` : `User ${short}`),
+      handle,
+      // An owner who already has this email is someone else until link_owner says it is the caller.
+      email: this.data.owners.some((o) => o.email.toLowerCase() === email.toLowerCase()) ? "" : email,
+      kind: caller.kind === "agent" ? "agent" : "human",
+      platformId,
+    });
+    this.#me = { owner };
+  }
+
+  /** Ties an owner already in the CRM to their platform identity; an owner linked to someone else stays theirs. */
+  linkOwner(ref: string, platformId: string): Owner {
+    const owner = this.owner(ref);
+    const id = checkPlatformId(platformId);
+    if (owner.platformId && owner.platformId !== id) throw new Error(`@${owner.handle} is already ${owner.platformId}.`);
+    const other = this.data.owners.find((o) => o.platformId === id);
+    if (other && other.id !== owner.id) throw new Error(`${id} is already @${other.handle}.`);
+    owner.platformId = id;
+    return owner;
+  }
+
+  /** The caller, when the platform named one who is an owner. */
+  get me(): Owner | null {
+    return this.#me && "owner" in this.#me ? this.#me.owner : null;
+  }
+
+  /** An owner by id, handle, name or "me". */
+  owner(ref: string): Owner {
+    const needle = ref.trim().replace(/^@/, "").toLowerCase();
+    if (needle === "me") {
+      if (this.me) return this.me;
+      if (this.#me) throw new Error('"me" is no owner in this CRM yet: make a change first, or ask someone to add you.');
+      throw new Error('"me" means nobody when the call carries no caller context; name the owner by id, handle or name.');
+    }
+    const named = this.data.owners.filter((o) => o.name.toLowerCase() === needle);
+    if (named.length > 1 && !this.data.owners.some((o) => o.id === needle || o.handle === needle)) {
+      throw new Error(`${named.length} owners are named "${ref}"; name one by handle: ${named.map((o) => `@${o.handle}`).join(", ")}.`);
+    }
+    const owner =
+      this.data.owners.find((o) => o.id === needle) ??
+      this.data.owners.find((o) => o.handle === needle) ??
+      named[0];
+    if (!owner) {
+      const known = this.data.owners.map((o) => `${o.handle} (${o.name}${o.kind === "agent" ? ", agent" : ""})`).join(", ");
+      throw new Error(`No owner "${ref}". Use an owner id, handle or name: ${known}.`);
+    }
     return owner;
   }
 
   /** Writes what changed since `load` into `db`, inside the caller's transaction. */
   save(db: Database): void {
     syncRows(db, TABLES, this.#rows, toRows(this.data));
+    for (const event of this.#events.splice(0)) appendEvent(db, event.name, event.data);
+  }
+
+  /** Who made a change: the caller, or the record's owner when the call names no caller. */
+  #by(owner: Owner) {
+    return personOf(this.me ?? owner);
+  }
+
+  #ownerOf(ownerId: string): Owner {
+    return this.data.owners.find((o) => o.id === ownerId)!;
+  }
+
+  #company(companyId: string | null) {
+    const company = companyId ? this.data.companies.find((c) => c.id === companyId) : undefined;
+    return company ? { id: company.id, name: company.name } : null;
+  }
+
+  /** The deal as its events carry it. */
+  #dealData(deal: Deal) {
+    const stage = this.data.pipelines.find((p) => p.id === deal.pipelineId)!.stages.find((s) => s.id === deal.stageId)!;
+    return {
+      dealId: deal.id,
+      title: deal.title,
+      value: deal.value,
+      currency: deal.currency,
+      stage: { id: stage.id, name: stage.name },
+      status: deal.status,
+      company: this.#company(deal.companyId),
+      contacts: deal.contactIds.map((id) => {
+        const contact = this.data.contacts.find((c) => c.id === id)!;
+        return { id: contact.id, name: contact.name, email: contact.email };
+      }),
+      owner: personOf(this.#ownerOf(deal.ownerId)),
+      expectedCloseDate: deal.expectedCloseDate,
+      source: deal.source,
+    };
+  }
+
+  #assigned(deal: Deal): void {
+    this.#events.push({ name: DEAL_ASSIGNED, data: { ...this.#dealData(deal), assignedBy: this.#by(this.#ownerOf(deal.ownerId)) } });
   }
 
   /** The CRM runs on the real clock, never earlier than the moment the dataset was generated. */
@@ -171,7 +309,7 @@ export class CrmStore {
     city?: string;
   }): Company {
     const lookup = new Lookup(this.data);
-    lookup.requireOwner(input.ownerId);
+    const owner = this.owner(input.ownerId);
     const name = input.name.trim();
     if (!name) throw new Error("name must not be empty");
     const existing = this.data.companies.find((c) => c.name.toLowerCase() === name.toLowerCase());
@@ -183,7 +321,7 @@ export class CrmStore {
       industry: input.industry?.trim() ?? "",
       size: input.size ?? null,
       city: input.city?.trim() ?? "",
-      ownerId: input.ownerId,
+      ownerId: owner.id,
       createdAt: this.now(),
     };
     this.data.companies.push(company);
@@ -200,9 +338,8 @@ export class CrmStore {
   }): Contact {
     const lookup = new Lookup(this.data);
     const company = input.companyId ? lookup.requireCompany(input.companyId) : null;
-    const ownerId = input.ownerId ?? company?.ownerId;
+    const ownerId = input.ownerId ? this.owner(input.ownerId).id : (company?.ownerId ?? this.me?.id);
     if (!ownerId) throw new Error("owner_id is required when the contact has no company to inherit an owner from");
-    lookup.requireOwner(ownerId);
     const name = input.name.trim();
     if (!name) throw new Error("name must not be empty");
     const email = input.email?.trim() ?? "";
@@ -219,6 +356,20 @@ export class CrmStore {
       createdAt: this.now(),
     };
     this.data.contacts.push(contact);
+    const owner = this.#ownerOf(ownerId);
+    this.#events.push({
+      name: CONTACT_CREATED,
+      data: {
+        contactId: contact.id,
+        name: contact.name,
+        title: contact.title,
+        email: contact.email,
+        phone: contact.phone,
+        company: this.#company(contact.companyId),
+        owner: personOf(owner),
+        createdBy: this.#by(owner),
+      },
+    });
     return contact;
   }
 
@@ -238,9 +389,8 @@ export class CrmStore {
     const company = input.companyId ? lookup.requireCompany(input.companyId) : null;
     const contactIds = [...new Set(input.contactIds ?? [])];
     for (const id of contactIds) lookup.requireContact(id);
-    const ownerId = input.ownerId ?? company?.ownerId;
+    const ownerId = input.ownerId ? this.owner(input.ownerId).id : (company?.ownerId ?? this.me?.id);
     if (!ownerId) throw new Error("owner_id is required when the deal has no company to inherit an owner from");
-    lookup.requireOwner(ownerId);
     const pipeline = lookup.requirePipeline(input.pipelineId ?? this.data.pipelines[0].id);
     const stage = input.stageId
       ? lookup.requireStage(pipeline, input.stageId)
@@ -272,6 +422,8 @@ export class CrmStore {
       stageHistory: [{ stageId: stage.id, enteredAt: now, leftAt: null }],
     };
     this.data.deals.push(deal);
+    this.#events.push({ name: DEAL_CREATED, data: { ...this.#dealData(deal), createdBy: this.#by(this.#ownerOf(ownerId)) } });
+    this.#assigned(deal);
     return deal;
   }
 
@@ -316,14 +468,15 @@ export class CrmStore {
     }
 
     // Validate everything before touching the deal, so a rejected call changes nothing.
-    const owner = patch.ownerId === undefined ? null : lookup.requireOwner(patch.ownerId);
+    const owner = patch.ownerId === undefined ? null : this.owner(patch.ownerId);
     const company = patch.companyId ? lookup.requireCompany(patch.companyId) : null;
     const contactIds = patch.contactIds === undefined ? null : [...new Set(patch.contactIds)];
     for (const id of contactIds ?? []) lookup.requireContact(id);
     checkDate(patch.expectedCloseDate, "expected_close_date");
     if (patch.title !== undefined && !patch.title.trim()) throw new Error("title must not be empty");
 
-    if (target.id !== current.id) {
+    const moved = target.id !== current.id;
+    if (moved) {
       const visit = deal.stageHistory.at(-1);
       if (visit && visit.leftAt === null) visit.leftAt = now;
       deal.stageHistory.push({ stageId: target.id, enteredAt: now, leftAt: null });
@@ -357,7 +510,8 @@ export class CrmStore {
       changes.push(`currency ${deal.currency} → ${patch.currency}`);
       deal.currency = patch.currency;
     }
-    if (owner && owner.id !== deal.ownerId) {
+    const reassigned = owner !== null && owner.id !== deal.ownerId;
+    if (reassigned) {
       deal.ownerId = owner.id;
       changes.push(`owner → ${owner.name}`);
     }
@@ -378,6 +532,20 @@ export class CrmStore {
       changes.push(`source → ${deal.source}`);
     }
     if (changes.length > 0) deal.updatedAt = now;
+    if (moved) {
+      this.#events.push({
+        name: DEAL_STAGE_CHANGED,
+        data: {
+          ...this.#dealData(deal),
+          from: { id: current.id, name: current.name },
+          to: { id: target.id, name: target.name },
+          outcome: deal.status,
+          lostReason: deal.lostReason,
+          changedBy: this.#by(this.#ownerOf(deal.ownerId)),
+        },
+      });
+    }
+    if (reassigned) this.#assigned(deal);
     return { deal, changes };
   }
 
@@ -395,8 +563,7 @@ export class CrmStore {
     if (!input.dealId && !input.contactId) throw new Error("An activity needs a deal_id, a contact_id, or both");
     const deal = input.dealId ? lookup.requireDeal(input.dealId) : null;
     const contact = input.contactId ? lookup.requireContact(input.contactId) : null;
-    const ownerId = input.ownerId ?? deal?.ownerId ?? contact!.ownerId;
-    lookup.requireOwner(ownerId);
+    const ownerId = input.ownerId ? this.owner(input.ownerId).id : (deal?.ownerId ?? contact!.ownerId);
     const subject = input.subject.trim();
     if (!subject) throw new Error("subject must not be empty");
     const now = this.now();
@@ -431,4 +598,10 @@ export class CrmStore {
     if (deal) deal.updatedAt = now;
     return { activity, changed: true };
   }
+}
+
+function checkPlatformId(value: string): string {
+  const id = value.trim();
+  if (!PLATFORM_ID.test(id)) throw new Error(`"${value}" is not a platform identity; use "user:<id>" or "agent:<id>".`);
+  return id;
 }

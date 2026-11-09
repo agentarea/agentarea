@@ -30,7 +30,7 @@ import { tag } from "./tags.js";
 
 const ws = (suffix) => `${BASE_URL}/v1/workspaces/${encodeURIComponent(WORKSPACE)}${suffix}`;
 
-// Confirmed live on RU prod (2026-09-27, read-only against jamakase54): a
+// Confirmed live in production (2026-09-27, read-only): a
 // platform-managed ProviderConfig ("AgentArea"/"agentarea") makes model
 // instance kimi-k2.6 visible to every workspace with no provider key of its
 // own required (ModelInstanceRepository._get_workspace_filter widens reads

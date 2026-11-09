@@ -1,7 +1,8 @@
 /**
  * MCP Events (SEP-3415 draft, protocol 2026-07-28) served from an app's event
- * log: `events/list` and `events/poll`. Poll delivery only: an app's MCP
- * server is stateless, so it keeps no subscriptions to push to.
+ * log: `events/list` and `events/poll`. Webhook subscriptions are in
+ * subscriptions.ts; they live in the app's database, since the MCP server
+ * itself is stateless.
  *
  * Wire shapes follow the platform's own events server
  * (agentarea-platform agentarea_api/mcp_events.py) and the client that polls
@@ -20,6 +21,7 @@ export const MAX_EVENTS = 500;
 export enum EventsErrorCode {
   InvalidParams = -32602,
   NotFound = -32023,
+  CallbackError = -32027,
 }
 
 export class EventsError extends Error {
@@ -75,13 +77,18 @@ function decodeCursor(cursor: string): number {
   return Number(match[1]);
 }
 
-export function listEvents(types: readonly EventType<never>[]): { events: Record<string, unknown>[] } {
+export type DeliveryMode = "poll" | "webhook";
+
+export function listEvents(
+  types: readonly EventType<never>[],
+  delivery: readonly DeliveryMode[] = ["poll"],
+): { events: Record<string, unknown>[] } {
   return {
     events: types.map((t) => ({
       name: t.name,
       title: t.title,
       description: t.description,
-      delivery: ["poll"],
+      delivery: [...delivery],
       inputSchema: t.inputSchema,
       payloadSchema: t.payloadSchema,
     })),

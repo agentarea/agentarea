@@ -27,13 +27,11 @@ export default async function ProvidersData({
 }: ProvidersDataProps) {
   const [
     t,
-    tAdmin,
     tCommon,
     { canAdminister },
     { specs: specsResponse, configs: configsResponse },
   ] = await Promise.all([
     getTranslations("Models"),
-    getTranslations("AdminOnly"),
     getTranslations("Common"),
     getViewerCapabilities(),
     listProviderConfigsWithModelInstances(),
@@ -56,11 +54,12 @@ export default async function ProvidersData({
   const providerConfigs = (configsResponse.data || []) as ProviderConfig[];
 
   // Normalize configs to ensure model_instances is populated (fallback to models_list from API helper)
-  type RawConfig = ProviderConfig & { models_list?: ProviderConfig["model_instances"] };
+  type RawConfig = ProviderConfig & {
+    models_list?: ProviderConfig["model_instances"];
+  };
   const normalizedConfigs = (providerConfigs as RawConfig[]).map((config) => ({
     ...config,
-    model_instances:
-      config.model_instances ?? config.models_list ?? [],
+    model_instances: config.model_instances ?? config.models_list ?? [],
   }));
 
   // Create a map of provider specs for easy lookup
@@ -111,12 +110,9 @@ export default async function ProvidersData({
         title={t("empty.noModels.title")}
         description={t("empty.noModels.description")}
         hints={[
-          canAdminister
-            ? {
-                text: t("empty.noModels.hintAdd"),
-                href: "/models/create",
-              }
-            : { text: tAdmin("hints.manageProvider") },
+          ...(canAdminister
+            ? [{ text: t("empty.noModels.hintAdd"), href: "/models/create" }]
+            : []),
           { text: t("empty.noModels.hintChoose") },
           { text: t("empty.noModels.hintPick") },
         ]}

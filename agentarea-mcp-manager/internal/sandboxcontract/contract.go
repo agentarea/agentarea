@@ -14,6 +14,10 @@ const MaxCommandBodyBytes = 256 * 1024
 
 var ErrFileNotFound = errors.New("sandbox file not found")
 
+// ErrTaskWorkspaceGone signals that the ephemeral task directory does not exist:
+// reclaimed after the run, or never written yet.
+var ErrTaskWorkspaceGone = errors.New("sandbox task workspace gone")
+
 type ExecuteRequest struct {
 	ExecutorIncarnation  string                 `json:"executor_incarnation,omitempty"`
 	CommandBody          string                 `json:"command_body,omitempty"`

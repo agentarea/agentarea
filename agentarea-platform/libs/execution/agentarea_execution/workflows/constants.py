@@ -22,6 +22,14 @@ CONTINUATION_TIMEOUT: Final[timedelta] = timedelta(hours=24)
 
 # Heartbeat configuration
 HEARTBEAT_TIMEOUT: Final[timedelta] = timedelta(seconds=30)
+# A runner's turn runs as long as its CLI works; it is lost when its runner stops heartbeating.
+RUNNER_TURN_TIMEOUT: Final[timedelta] = timedelta(hours=12)
+RUNNER_TURN_HEARTBEAT_TIMEOUT: Final[timedelta] = timedelta(seconds=30)
+RUNNER_TURN_RETRY_DELAY: Final[timedelta] = timedelta(seconds=5)
+# A turn no runner of its client takes within this fails: the runner is offline.
+RUNNER_TURN_START_TIMEOUT: Final[timedelta] = timedelta(minutes=10)
+# How many runners in a row may lose one turn before it fails.
+RUNNER_TURN_MAX_ATTEMPTS: Final[int] = 5
 
 # Agent delegation: the child's own turn, token and budget limits bound its work;
 # this only stops a child that is stuck.
@@ -183,6 +191,10 @@ class Activities:
     DELEGATED_TASK_SPEND: Final[str] = "delegated_task_spend_activity"
     # Model resolution
     RESOLVE_MODEL: Final[str] = "resolve_model_activity"
+
+    # A turn on a client's CLI, run by the API process holding its runner's socket.
+    RUN_RUNNER_TURN: Final[str] = "run_runner_turn_activity"
+    DELIVER_TO_RUNNER: Final[str] = "deliver_to_runner_activity"
 
 
 # Execution statuses

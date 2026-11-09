@@ -58,6 +58,9 @@ import type {
   CheckPermissionV1AccessControlCheckPostData,
   CheckPermissionV1AccessControlCheckPostErrors,
   CheckPermissionV1AccessControlCheckPostResponses,
+  ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostData,
+  ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostErrors,
+  ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponses,
   ContinueTaskExecutionV1TasksTaskIdContinuePostData,
   ContinueTaskExecutionV1TasksTaskIdContinuePostErrors,
   ContinueTaskExecutionV1TasksTaskIdContinuePostResponses,
@@ -82,6 +85,9 @@ import type {
   CreateConnectionV1OpenapiConnectionsPostData,
   CreateConnectionV1OpenapiConnectionsPostErrors,
   CreateConnectionV1OpenapiConnectionsPostResponses,
+  CreateEgressExitV1EgressExitsPostData,
+  CreateEgressExitV1EgressExitsPostErrors,
+  CreateEgressExitV1EgressExitsPostResponses,
   CreateForwardV1StreamsStreamIdForwardsPostData,
   CreateForwardV1StreamsStreamIdForwardsPostErrors,
   CreateForwardV1StreamsStreamIdForwardsPostResponses,
@@ -184,6 +190,9 @@ import type {
   DeleteConnectionV1OpenapiConnectionsConnectionIdDeleteData,
   DeleteConnectionV1OpenapiConnectionsConnectionIdDeleteErrors,
   DeleteConnectionV1OpenapiConnectionsConnectionIdDeleteResponses,
+  DeleteEgressExitV1EgressExitsExitIdDeleteData,
+  DeleteEgressExitV1EgressExitsExitIdDeleteErrors,
+  DeleteEgressExitV1EgressExitsExitIdDeleteResponses,
   DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteData,
   DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteErrors,
   DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponses,
@@ -333,6 +342,9 @@ import type {
   GetBalanceV1BalanceGetData,
   GetBalanceV1BalanceGetErrors,
   GetBalanceV1BalanceGetResponses,
+  GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetData,
+  GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetErrors,
+  GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetResponses,
   GetCatalogItemV1RegistriesCatalogItemsItemIdGetData,
   GetCatalogItemV1RegistriesCatalogItemsItemIdGetErrors,
   GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses,
@@ -351,6 +363,9 @@ import type {
   GetDashboardV1DashboardGetData,
   GetDashboardV1DashboardGetErrors,
   GetDashboardV1DashboardGetResponses,
+  GetEgressExitV1EgressExitsExitIdGetData,
+  GetEgressExitV1EgressExitsExitIdGetErrors,
+  GetEgressExitV1EgressExitsExitIdGetResponses,
   GetEventByIdV1StreamsEventsEventIdGetData,
   GetEventByIdV1StreamsEventsEventIdGetErrors,
   GetEventByIdV1StreamsEventsEventIdGetResponses,
@@ -523,6 +538,9 @@ import type {
   InstallSkillV1SkillsSkillIdInstallPostData,
   InstallSkillV1SkillsSkillIdInstallPostErrors,
   InstallSkillV1SkillsSkillIdInstallPostResponses,
+  IssueRunnerKeyV1ClientsClientIdRunnerKeysPostData,
+  IssueRunnerKeyV1ClientsClientIdRunnerKeysPostErrors,
+  IssueRunnerKeyV1ClientsClientIdRunnerKeysPostResponses,
   ListAgentPresetsV1AgentsPresetsGetData,
   ListAgentPresetsV1AgentsPresetsGetErrors,
   ListAgentPresetsV1AgentsPresetsGetResponses,
@@ -553,6 +571,9 @@ import type {
   ListConnectionsV1OpenapiConnectionsGetData,
   ListConnectionsV1OpenapiConnectionsGetErrors,
   ListConnectionsV1OpenapiConnectionsGetResponses,
+  ListEgressExitsV1EgressExitsGetData,
+  ListEgressExitsV1EgressExitsGetErrors,
+  ListEgressExitsV1EgressExitsGetResponses,
   ListEventsV1StreamsStreamIdEventsGetData,
   ListEventsV1StreamsStreamIdEventsGetErrors,
   ListEventsV1StreamsStreamIdEventsGetResponses,
@@ -570,6 +591,9 @@ import type {
   ListMcpServerInstancesV1McpServerInstancesGetData,
   ListMcpServerInstancesV1McpServerInstancesGetErrors,
   ListMcpServerInstancesV1McpServerInstancesGetResponses,
+  ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetData,
+  ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetErrors,
+  ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetResponses,
   ListMcpServersV1McpServersGetData,
   ListMcpServersV1McpServersGetErrors,
   ListMcpServersV1McpServersGetResponses,
@@ -630,6 +654,9 @@ import type {
   ListRelationshipsV1AccessControlRelationshipsGetData,
   ListRelationshipsV1AccessControlRelationshipsGetErrors,
   ListRelationshipsV1AccessControlRelationshipsGetResponses,
+  ListRunnerKeysV1ClientsClientIdRunnerKeysGetData,
+  ListRunnerKeysV1ClientsClientIdRunnerKeysGetErrors,
+  ListRunnerKeysV1ClientsClientIdRunnerKeysGetResponses,
   ListSandboxesV1SandboxesGetData,
   ListSandboxesV1SandboxesGetErrors,
   ListSandboxesV1SandboxesGetResponses,
@@ -807,12 +834,17 @@ import type {
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteData,
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteErrors,
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteResponses,
+  RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteData,
+  RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteErrors,
+  RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteResponses,
   RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostData,
   RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostErrors,
   RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostResponses,
   RotateSecretV1SecretsSecretIdValuePutData,
   RotateSecretV1SecretsSecretIdValuePutErrors,
   RotateSecretV1SecretsSecretIdValuePutResponses,
+  RunnerWhoamiV1RunnerWhoamiGetData,
+  RunnerWhoamiV1RunnerWhoamiGetResponses,
   RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostData,
   RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostErrors,
   RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostResponses,
@@ -888,6 +920,9 @@ import type {
   UpdateConnectionV1OpenapiConnectionsConnectionIdPatchData,
   UpdateConnectionV1OpenapiConnectionsConnectionIdPatchErrors,
   UpdateConnectionV1OpenapiConnectionsConnectionIdPatchResponses,
+  UpdateEgressExitV1EgressExitsExitIdPatchData,
+  UpdateEgressExitV1EgressExitsExitIdPatchErrors,
+  UpdateEgressExitV1EgressExitsExitIdPatchResponses,
   UpdateInstalledSkillV1SkillsSkillIdUpdatePostData,
   UpdateInstalledSkillV1SkillsSkillIdUpdatePostErrors,
   UpdateInstalledSkillV1SkillsSkillIdUpdatePostResponses,
@@ -945,6 +980,9 @@ import type {
   UploadSkillV1SkillsUploadPostData,
   UploadSkillV1SkillsUploadPostErrors,
   UploadSkillV1SkillsUploadPostResponses,
+  UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutData,
+  UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutErrors,
+  UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutResponses,
   UploadWorkspaceLogoV1LogoPutData,
   UploadWorkspaceLogoV1LogoPutErrors,
   UploadWorkspaceLogoV1LogoPutResponses,
@@ -1925,6 +1963,69 @@ export const getPricingCurrencyV1PricingCurrencyGet = <
       },
     ],
     url: "/v1/pricing/currency",
+    ...options,
+  });
+
+/**
+ * Upload Task File
+ *
+ * Store a file the CLI made in its task folder, so the task's file links open it.
+ */
+export const uploadTaskFileV1RunnerTasksTaskIdFilesFilePathPut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutData,
+    ThrowOnError
+  >
+): RequestResult<
+  UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutResponses,
+  UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutResponses,
+    UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/runner/tasks/{task_id}/files/{file_path}",
+    ...options,
+  });
+
+/**
+ * Runner Whoami
+ *
+ * The client this runner key serves, so `agentarea runner register` can check the key.
+ */
+export const runnerWhoamiV1RunnerWhoamiGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<RunnerWhoamiV1RunnerWhoamiGetData, ThrowOnError>
+): RequestResult<
+  RunnerWhoamiV1RunnerWhoamiGetResponses,
+  unknown,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    RunnerWhoamiV1RunnerWhoamiGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/runner/whoami",
     ...options,
   });
 
@@ -3725,7 +3826,7 @@ export const createApiKeyV1ApiKeysPost = <ThrowOnError extends boolean = false>(
  *
  * The key's creator, or a workspace admin. The repository is scoped to the
  * workspace, not to the caller, so without this a member could cut off a
- * colleague's integrations.
+ * colleague's integrations. A runner's key is revoked on its client's page.
  */
 export const revokeApiKeyV1ApiKeysTokenIdDelete = <
   ThrowOnError extends boolean = false,
@@ -3758,7 +3859,8 @@ export const revokeApiKeyV1ApiKeysTokenIdDelete = <
  * Get a single API key by ID.
  *
  * Someone else's key answers 404 to a member, as a missing one does, so the
- * ids of colleagues' keys cannot be confirmed.
+ * ids of colleagues' keys cannot be confirmed. A runner's key lives on its
+ * client's page and answers 404 here too.
  */
 export const getApiKeyV1ApiKeysTokenIdGet = <
   ThrowOnError extends boolean = false,
@@ -4296,6 +4398,105 @@ export const removePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToo
     });
 
 /**
+ * List Runner Keys
+ *
+ * The live keys of this client's runners.
+ */
+export const listRunnerKeysV1ClientsClientIdRunnerKeysGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ListRunnerKeysV1ClientsClientIdRunnerKeysGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListRunnerKeysV1ClientsClientIdRunnerKeysGetResponses,
+  ListRunnerKeysV1ClientsClientIdRunnerKeysGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListRunnerKeysV1ClientsClientIdRunnerKeysGetResponses,
+    ListRunnerKeysV1ClientsClientIdRunnerKeysGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/clients/{client_id}/runner-keys",
+    ...options,
+  });
+
+/**
+ * Issue Runner Key
+ *
+ * A key for this client's runner; it reaches nothing but the client's runner routes.
+ */
+export const issueRunnerKeyV1ClientsClientIdRunnerKeysPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    IssueRunnerKeyV1ClientsClientIdRunnerKeysPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  IssueRunnerKeyV1ClientsClientIdRunnerKeysPostResponses,
+  IssueRunnerKeyV1ClientsClientIdRunnerKeysPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    IssueRunnerKeyV1ClientsClientIdRunnerKeysPostResponses,
+    IssueRunnerKeyV1ClientsClientIdRunnerKeysPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/clients/{client_id}/runner-keys",
+    ...options,
+  });
+
+/**
+ * Revoke Runner Key
+ *
+ * Cut a runner off: its key answers 401 from the next request on.
+ */
+export const revokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteResponses,
+  RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteResponses,
+    RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/clients/{client_id}/runner-keys/{key_id}",
+    ...options,
+  });
+
+/**
  * Add Skill To Client
  */
 export const addSkillToClientV1ClientsClientIdSkillsPost = <
@@ -4389,6 +4590,166 @@ export const getDashboardV1DashboardGet = <
     ],
     url: "/v1/workspaces/{workspace}/dashboard",
     ...options,
+  });
+
+/**
+ * List Egress Exits
+ *
+ * List the workspace's own exits.
+ */
+export const listEgressExitsV1EgressExitsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListEgressExitsV1EgressExitsGetData, ThrowOnError>
+): RequestResult<
+  ListEgressExitsV1EgressExitsGetResponses,
+  ListEgressExitsV1EgressExitsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListEgressExitsV1EgressExitsGetResponses,
+    ListEgressExitsV1EgressExitsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/egress-exits/",
+    ...options,
+  });
+
+/**
+ * Create Egress Exit
+ *
+ * Define a proxy the workspace's MCP instances may leave through.
+ */
+export const createEgressExitV1EgressExitsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<CreateEgressExitV1EgressExitsPostData, ThrowOnError>
+): RequestResult<
+  CreateEgressExitV1EgressExitsPostResponses,
+  CreateEgressExitV1EgressExitsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateEgressExitV1EgressExitsPostResponses,
+    CreateEgressExitV1EgressExitsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/egress-exits/",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Egress Exit
+ *
+ * Delete an exit no MCP instance leaves through.
+ */
+export const deleteEgressExitV1EgressExitsExitIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<DeleteEgressExitV1EgressExitsExitIdDeleteData, ThrowOnError>
+): RequestResult<
+  DeleteEgressExitV1EgressExitsExitIdDeleteResponses,
+  DeleteEgressExitV1EgressExitsExitIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteEgressExitV1EgressExitsExitIdDeleteResponses,
+    DeleteEgressExitV1EgressExitsExitIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/egress-exits/{exit_id}",
+    ...options,
+  });
+
+/**
+ * Get Egress Exit
+ *
+ * Get one of the workspace's exits.
+ */
+export const getEgressExitV1EgressExitsExitIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetEgressExitV1EgressExitsExitIdGetData, ThrowOnError>
+): RequestResult<
+  GetEgressExitV1EgressExitsExitIdGetResponses,
+  GetEgressExitV1EgressExitsExitIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetEgressExitV1EgressExitsExitIdGetResponses,
+    GetEgressExitV1EgressExitsExitIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/egress-exits/{exit_id}",
+    ...options,
+  });
+
+/**
+ * Update Egress Exit
+ *
+ * Change an exit; only the fields sent change.
+ *
+ * Changing where it leads or its credentials restarts the running instances bound to it.
+ */
+export const updateEgressExitV1EgressExitsExitIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<UpdateEgressExitV1EgressExitsExitIdPatchData, ThrowOnError>
+): RequestResult<
+  UpdateEgressExitV1EgressExitsExitIdPatchResponses,
+  UpdateEgressExitV1EgressExitsExitIdPatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).patch<
+    UpdateEgressExitV1EgressExitsExitIdPatchResponses,
+    UpdateEgressExitV1EgressExitsExitIdPatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/egress-exits/{exit_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**
@@ -5526,6 +5887,40 @@ export const getContainersHealthV1McpServerInstancesHealthContainersGet = <
     url: "/v1/workspaces/{workspace}/mcp-server-instances/health/containers",
     ...options,
   });
+
+/**
+ * List Mcp Server Instance Tool Policies
+ *
+ * Each connection's tools with their workspace default and verdict, in one read.
+ *
+ * What the agent editor shows beside the tools of every server it can attach.
+ */
+export const listMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGet =
+  <ThrowOnError extends boolean = false>(
+    options?: Options<
+      ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetResponses,
+    ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetErrors,
+    ThrowOnError
+  > =>
+    (options?.client ?? client).get<
+      ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetResponses,
+      ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/mcp-server-instances/tool-policies",
+      ...options,
+    });
 
 /**
  * Validate Instance Spec
@@ -6960,6 +7355,74 @@ export const createConnectionV1OpenapiConnectionsPost = <
       ...options.headers,
     },
   });
+
+/**
+ * Get Catalog Connect Form
+ *
+ * What connecting this catalog API asks for: a sign-in, or the keys listed in ``fields``.
+ */
+export const getCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGet =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetResponses,
+    GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).get<
+      GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetResponses,
+      GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/openapi-connections/from-catalog/{catalog_item_id}",
+      ...options,
+    });
+
+/**
+ * Connect Catalog Api
+ *
+ * Connect a catalog API with its keys; each call makes another connection.
+ */
+export const connectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPost =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponses,
+    ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).post<
+      ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponses,
+      ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/openapi-connections/from-catalog/{catalog_item_id}",
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
 
 /**
  * Preview Spec

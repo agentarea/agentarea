@@ -143,3 +143,18 @@ CHILD_STOP_IS_NOT_PARENT_STOP_PATCH = "child-stop-is-not-parent-stop-v1"
 # Activating a skill reads its SKILL.md in an activity; before, the body rode in
 # the config activity's result and activation used that copy.
 SKILL_BODY_ON_ACTIVATION_PATCH = "skill-body-on-activation-v1"
+# A text reply cut off at the output limit (finish_reason "length") asks the model
+# to continue and joins the parts; before, the cut-off reply was the run's answer.
+LENGTH_CONTINUATION_PATCH = "length-continuation-v1"
+# A connection's tool is allowed only by its connection's id: its model-facing
+# name and the names its connection's author or server chose (the connection's
+# name, the raw tool name, an OpenAPI operationId) only deny or require approval.
+# Before, an allowlist naming a connection by name admitted any connection a
+# member gave that name.
+CONNECTION_NAMES_NARROW_PATCH = "connection-names-only-narrow-v1"
+# A local delegate reaches the agent id it was saved with, and a remote one
+# (a2a_url) is never looked up among the workspace's agents. Before, every
+# delegate was resolved by name, so the newest agent under a name, or a local
+# agent sharing a remote delegate's name, took its delegations; and a
+# delegate's name could satisfy an allowlist.
+DELEGATES_BY_ID_PATCH = "delegates-by-id-v1"

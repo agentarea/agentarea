@@ -91,14 +91,25 @@ Paths use `$`, `.field` and `[index]` steps only.
 
 `x-agentarea-response-transform` on an operation is a list of steps applied, in
 order, to the decoded JSON body before the agent sees it and before the cost is read.
+An XML response (`application/xml`, `text/xml`, `+xml`) is its text, so
+`{"parse": "xml", "at": "$"}` turns the whole body into JSON. Without a transform,
+an XML response reaches the agent as text.
 
 | Step | Effect |
 |---|---|
 | `{"decode": "base64", "at": "$.rawData"}` | Replaces the base64 text at the path with the decoded UTF-8 text. |
-| `{"parse": "xml", "at": "$.rawData"}` | Replaces the XML text at the path with JSON: element → object by child tag, attribute → `@name`, text → `#text` (or the bare string), repeated children → list. |
+| `{"parse": "xml", "at": "$.rawData"}` | Replaces the XML text at the path with JSON: element → object by child tag, attribute → `@name`, text → `#text` (or the bare string), repeated children → list. `"at": "$"` replaces the whole body. |
 
 A document with a `DOCTYPE` or `ENTITY` is refused, as is one over 8 MiB. A response
 the transform does not fit is a failed call.
+
+## Errors inside a 200 (OpenAPI)
+
+Some vendors answer an error with HTTP 200 and put it in the body.
+`x-agentarea-error-path` names where (`"$.response.error"`), at the spec root for
+every operation or on one operation, which wins. When the transformed body has a
+value there, the call fails with that value as its error: the agent sees a failure
+and no cost is recorded.
 
 ## The ledger line
 

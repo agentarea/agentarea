@@ -8,6 +8,7 @@
  */
 import React from "react";
 import Image from "next/image";
+import { Checkbox } from "@/components/ui/checkbox";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useA2UIDataModel } from "../hooks/useA2UIDataModel";
 import { A2UIAction, A2UIComponent, A2UISurfaceData } from "../types";
@@ -204,10 +205,9 @@ const A2UIInput: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
   if (node.component === "CheckBox") {
     return (
       <label className="flex items-center gap-2 text-[13px] leading-5 text-foreground">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={value === true}
-          onChange={(event) => update(event.target.checked)}
+          onCheckedChange={(checked) => update(checked === true)}
         />
         {label}
       </label>
@@ -246,13 +246,21 @@ const A2UIInput: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
                 key={option.value}
                 className="flex items-center gap-2 text-[13px] leading-5"
               >
-                <input
-                  type={multiple ? "checkbox" : "radio"}
-                  name={id}
-                  value={option.value}
-                  checked={selected.includes(option.value)}
-                  onChange={() => choose(option.value)}
-                />
+                {multiple ? (
+                  <Checkbox
+                    value={option.value}
+                    checked={selected.includes(option.value)}
+                    onCheckedChange={() => choose(option.value)}
+                  />
+                ) : (
+                  <input
+                    type="radio"
+                    name={id}
+                    value={option.value}
+                    checked={selected.includes(option.value)}
+                    onChange={() => choose(option.value)}
+                  />
+                )}
                 {option.label}
               </label>
             )

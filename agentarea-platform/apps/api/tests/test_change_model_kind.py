@@ -32,6 +32,7 @@ def _instance(kind: str):
             cached_input_cost_per_token=None,
             cache_creation_input_cost_per_token=None,
             supports_vision=False,
+            reasoning_efforts=None,
             display_name="M",
         ),
     )

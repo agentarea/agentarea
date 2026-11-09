@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/subtle"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -140,6 +141,7 @@ type Gateway struct {
 	logger       *slog.Logger
 	remote       *RemoteUpstream
 	requests     RequestObserver
+	telemetry    *Telemetry
 	urlSecrets   secrets.SecretResolver
 	urlTransport http.RoundTripper
 }
@@ -215,9 +217,11 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		if err != nil {
 			var tooLarge *http.MaxBytesError
 			if errors.As(err, &tooLarge) {
+				g.telemetry.rejected(request.Context(), headerValue(request, "Mcp-Method"), http.StatusRequestEntityTooLarge)
 				http.Error(response, "MCP request body is too large", http.StatusRequestEntityTooLarge)
 				return
 			}
+			g.telemetry.rejected(request.Context(), headerValue(request, "Mcp-Method"), http.StatusBadRequest)
 			http.Error(response, "MCP request body could not be read", http.StatusBadRequest)
 			return
 		}
@@ -228,11 +232,14 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 
 	requestID := uuid.NewString()
 	var startedAt, endedAt time.Time
+	var answer GatewayAnswer
+	var coldStart *ColdStart
 	if g.requests != nil {
 		startedAt = time.Now()
 	}
 	loaded, err := g.repository.LoadTarget(request.Context(), instanceID)
 	if err != nil {
+		g.telemetry.rejected(request.Context(), headerValue(request, "Mcp-Method"), http.StatusBadGateway)
 		http.Error(response, "MCP instance is unavailable", http.StatusBadGateway)
 		return
 	}
@@ -244,6 +251,7 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		}
 		if err := g.requests.Started(request.Context(), started); err != nil {
 			g.logRequestObserverFailure("started", started, err)
+			g.telemetry.rejected(request.Context(), started.MCPMethod, http.StatusServiceUnavailable)
 			http.Error(response, "MCP request processing unavailable", http.StatusServiceUnavailable)
 			return
 		}
@@ -251,8 +259,10 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		response = observed
 		defer func() {
 			// A proxy panic (including a failed stream copy) is not a known
-			// completion. Keep the start visible rather than fabricate an end.
+			// completion. Keep the start visible to the observers rather than
+			// fabricate an end; only the gateway's own metrics close it.
 			if value := recover(); value != nil {
+				g.telemetry.aborted(context.WithoutCancel(request.Context()), started, coldStart != nil)
 				panic(value)
 			}
 			if endedAt.IsZero() {
@@ -261,6 +271,7 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 			completed := RequestCompleted{
 				RequestStarted: started, EndedAt: endedAt,
 				StatusCode: observed.status, Canceled: request.Context().Err() != nil,
+				Answer: answer, ColdStart: coldStart,
 			}
 			if err := g.requests.Completed(context.WithoutCancel(request.Context()), completed); err != nil {
 				g.logRequestObserverFailure("completed", started, err)
@@ -283,10 +294,12 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 	// probe cannot report ready before ~8s — every attempt created and deleted a
 	// workload and container-backed MCP could never come up at all.
 	// StartupTimeout is now the only bound on a cold start.
+	report := &ColdStart{}
 	startCtx, cancelStart := context.WithTimeout(
-		context.WithoutCancel(request.Context()), g.policy.StartupTimeout,
+		withColdStart(context.WithoutCancel(request.Context()), report), g.policy.StartupTimeout,
 	)
 	err = g.repository.WithInstanceLock(startCtx, instanceID, func(lockCtx context.Context) error {
+		defer func(began time.Time) { report.Total = time.Since(began) }(time.Now())
 		// The desired instance was resolved before waiting for the lifecycle
 		// lock so concurrent callers also retain an independent request fact.
 		if err := g.repository.MarkStarting(lockCtx, instanceID); err != nil {
@@ -308,6 +321,7 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		if err := g.repository.MarkReadyAndBeginRequest(
 			lockCtx, instanceID, requestID, g.policy.RequestLeaseTTL,
 		); err != nil {
+			report.fail(stepAdmission)
 			failureCtx, cancel := context.WithTimeout(context.WithoutCancel(lockCtx), 10*time.Second)
 			defer cancel()
 			cleanupErr := g.runtime.Delete(failureCtx, instance)
@@ -317,17 +331,20 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		return nil
 	})
 	cancelStart()
+	coldStart = report.settle(err)
 	if errors.Is(err, ErrStartInProgress) {
 		// Another caller holds the lifecycle and is bringing this workload up.
 		// Answering "unavailable" would be wrong twice over: nothing failed, and
 		// the start this caller wanted is already running. Ask it to come back
 		// instead — that retry is what completes the cold start.
+		answer = AnswerStarting
 		response.Header().Set("Retry-After", "1")
 		response.Header().Set(StartingHeader, "1")
 		http.Error(response, "MCP instance is starting", http.StatusServiceUnavailable)
 		return
 	}
 	if err != nil {
+		answer = AnswerStartFailed
 		g.writeDemandFailure(response, instanceID, err)
 		return
 	}
@@ -378,15 +395,75 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 			// by an MCP workload response.
 			upstreamResponse.Header.Del(StartingHeader)
 			upstreamResponse.Header.Del(StartFailureHeader)
+			g.observeUpstream(upstreamResponse, coldStart != nil, instanceID, requestID)
 			return nil
 		},
 		ErrorHandler: func(writer http.ResponseWriter, _ *http.Request, proxyErr error) {
+			g.telemetry.upstreamAnswered(request.Context(), 0)
 			g.logger.Warn("MCP upstream request failed", slog.String("instance_id", instanceID), slog.String("error", proxyErr.Error()))
 			http.Error(writer, "MCP upstream request failed", http.StatusBadGateway)
 		},
 	}
 	proxy.ServeHTTP(response, request.WithContext(proxyCtx))
 
+}
+
+// refusedBodyLimit bounds the response body a refused first request reads;
+// refusedLogLimit bounds what of it reaches the log.
+const (
+	refusedBodyLimit = 2048
+	refusedLogLimit  = 256
+)
+
+// observeUpstream counts a workload response and warns when a workload
+// answers the request that started it with a 4xx: a fresh workload that
+// refuses a request the previous one accepted is otherwise invisible. The
+// body read is put back so the caller still receives all of it.
+func (g *Gateway) observeUpstream(response *http.Response, cold bool, instanceID, requestID string) {
+	g.telemetry.upstreamAnswered(response.Request.Context(), response.StatusCode)
+	if !cold || response.StatusCode < 400 || response.StatusCode > 499 {
+		return
+	}
+	snippet, err := io.ReadAll(io.LimitReader(response.Body, refusedBodyLimit))
+	response.Body = struct {
+		io.Reader
+		io.Closer
+	}{io.MultiReader(bytes.NewReader(snippet), response.Body), response.Body}
+	attrs := append([]any{
+		slog.String("instance_id", instanceID), slog.String("request_id", requestID),
+		slog.Int("status", response.StatusCode), slog.String("mcp_method", response.Request.Header.Get("Mcp-Method")),
+	}, refusalDetail(snippet)...)
+	if err != nil {
+		attrs = append(attrs, slog.String("body_error", err.Error()))
+	}
+	g.logger.Warn("MCP workload refused the first request after its cold start", attrs...)
+}
+
+// refusalDetail is what a refused request logs of the response body: the
+// JSON-RPC error code and message when the body is a JSON-RPC error, else its
+// first bytes. Error bodies echo tool arguments, so neither is logged whole.
+func refusalDetail(body []byte) []any {
+	var message struct {
+		JSONRPC string `json:"jsonrpc"`
+		Error   *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &message) == nil && message.JSONRPC == "2.0" && message.Error != nil {
+		return []any{
+			slog.Int("rpc_error_code", message.Error.Code),
+			slog.String("rpc_error_message", truncate(message.Error.Message, refusedLogLimit)),
+		}
+	}
+	return []any{slog.String("body", truncate(string(body), refusedLogLimit))}
+}
+
+func truncate(value string, limit int) string {
+	if len(value) <= limit {
+		return value
+	}
+	return strings.ToValidUTF8(value[:limit], "")
 }
 
 func (g *Gateway) writeDemandFailure(response http.ResponseWriter, instanceID string, err error) {
@@ -578,6 +655,7 @@ func (g *Gateway) Reap(ctx context.Context) (int, error) {
 		}
 		if removed {
 			reaped++
+			g.telemetry.reaped(ctx)
 		}
 	}
 	return reaped, nil

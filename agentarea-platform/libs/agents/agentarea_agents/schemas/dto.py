@@ -12,13 +12,30 @@ from __future__ import annotations
 from typing import Annotated, Literal
 from uuid import UUID
 
+from agentarea_common.reasoning_effort import (
+    checked_reasoning_effort,
+    checked_reasoning_max_tokens,
+)
 from agentarea_common.utils.types import NotNull
 from agentarea_governance.domain.policies import AnswerCheckPolicy
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from agentarea_agents.schemas.import_export import ToolConfig
 
 AgentTypeLiteral = Literal["stateless", "stateful"]
+
+REASONING_EFFORT_DESCRIPTION = (
+    "A reasoning level the model takes, e.g. low or high; the catalog lists each "
+    "model's levels. Unset keeps the model's default. Not together with reasoning_max_tokens."
+)
+CLIENT_ID_DESCRIPTION = (
+    "A Codex or Claude Code client of this workspace whose runner runs the agent's tasks "
+    "on the CLI's subscription; null runs them on the platform's own loop and model."
+)
+REASONING_MAX_TOKENS_DESCRIPTION = (
+    "A token budget for the model's reasoning, a positive integer. Unset keeps the "
+    "model's default. Not together with reasoning_effort."
+)
 
 
 class AgentCreate(BaseModel):
@@ -54,6 +71,7 @@ class AgentCreate(BaseModel):
             "Null means no model is bound yet and the agent cannot be run."
         ),
     )
+    client_id: UUID | None = Field(default=None, description=CLIENT_ID_DESCRIPTION)
     tools: list[ToolConfig] = Field(
         description=(
             "Tools attached to the agent (code/mcp/agent/openapi). Required: pass [] "
@@ -68,6 +86,14 @@ class AgentCreate(BaseModel):
     a2ui_enabled: bool | None = Field(
         default=None,
         description="Expose this agent over the A2UI protocol.",
+    )
+    reasoning_effort: str | None = Field(
+        default=None,
+        description=REASONING_EFFORT_DESCRIPTION,
+    )
+    reasoning_max_tokens: int | None = Field(
+        default=None,
+        description=REASONING_MAX_TOKENS_DESCRIPTION,
     )
     answer_check: AnswerCheckPolicy | None = Field(
         default=None,
@@ -101,6 +127,22 @@ class AgentCreate(BaseModel):
             raise ValueError("name cannot be empty or whitespace")
         return v
 
+    @field_validator("reasoning_effort", mode="before")
+    @classmethod
+    def _check_reasoning_effort(cls, v: object) -> str | None:
+        return checked_reasoning_effort(v)
+
+    @field_validator("reasoning_max_tokens", mode="before")
+    @classmethod
+    def _check_reasoning_max_tokens(cls, v: object) -> int | None:
+        return checked_reasoning_max_tokens(v)
+
+    @model_validator(mode="after")
+    def _one_reasoning_form(self) -> AgentCreate:
+        if self.reasoning_effort and self.reasoning_max_tokens:
+            raise ValueError("set reasoning_effort or reasoning_max_tokens, not both")
+        return self
+
 
 class AgentUpdate(BaseModel):
     """Patch payload for an agent. All fields optional — unset = unchanged."""
@@ -112,12 +154,27 @@ class AgentUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=1000)
     instruction: str | None = Field(default=None, max_length=20000)
     model_id: str | None = None
+    client_id: UUID | None = Field(default=None, description=CLIENT_ID_DESCRIPTION)
     tools: list[ToolConfig] | None = None
     planning: bool | None = None
     a2ui_enabled: bool | None = None
+    reasoning_effort: str | None = Field(default=None, description=REASONING_EFFORT_DESCRIPTION)
+    reasoning_max_tokens: int | None = Field(
+        default=None, description=REASONING_MAX_TOKENS_DESCRIPTION
+    )
     answer_check: AnswerCheckPolicy | None = None
     skill_ids: list[UUID] | None = None
     agent_type: Annotated[AgentTypeLiteral | None, NotNull] = None
+
+    @field_validator("reasoning_effort", mode="before")
+    @classmethod
+    def _check_reasoning_effort(cls, v: object) -> str | None:
+        return checked_reasoning_effort(v)
+
+    @field_validator("reasoning_max_tokens", mode="before")
+    @classmethod
+    def _check_reasoning_max_tokens(cls, v: object) -> int | None:
+        return checked_reasoning_max_tokens(v)
 
 
 class AgentSummary(BaseModel):

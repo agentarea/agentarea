@@ -1,15 +1,14 @@
-"""Discovered models are not executable until runtime metadata is explicit.
+"""A discovered model becomes a spec once it can run: it needs a context window.
 
-The guarantee is that an incomplete entry never becomes a model spec. It is
-enforced by keeping such an entry out of the usable half of the batch (and
-reporting it), rather than by failing the whole discovery.
+An entry without one is kept out of the usable half of the batch and reported,
+rather than failing the whole discovery. A price is optional.
 """
 
 from agentarea_api.api.v1.provider_configs import _partition_discovered
 from agentarea_llm.application.model_discovery_service import DiscoveredModel
 
 
-def test_incomplete_discovered_model_is_rejected_before_persistence():
+def test_a_discovered_model_without_a_context_window_is_rejected_before_persistence():
     model = DiscoveredModel(
         model_name="unknown-limits",
         display_name="Unknown limits",
@@ -19,20 +18,13 @@ def test_incomplete_discovered_model_is_rejected_before_persistence():
 
     assert usable == []
     assert [s.model_name for s in skipped] == ["unknown-limits"]
-    assert "context_window" in skipped[0].missing
-    assert "input_cost_per_token" in skipped[0].missing
+    assert skipped[0].missing == ["context_window"]
 
 
-def test_complete_discovered_model_is_accepted():
-    model = DiscoveredModel(
-        model_name="configured",
-        display_name="Configured",
-        context_window=8192,
-        input_cost_per_token=0,
-        output_cost_per_token=0,
-    )
+def test_a_discovered_model_without_a_price_is_accepted():
+    model = DiscoveredModel(model_name="local", display_name="Local", context_window=8192)
 
     usable, skipped = _partition_discovered([model])
 
-    assert [m.model_name for m in usable] == ["configured"]
+    assert [m.model_name for m in usable] == ["local"]
     assert skipped == []

@@ -12,7 +12,7 @@ import { DAY, Lookup } from "./lookup.ts";
 
 const ownerRef = (lookup: Lookup, id: string) => {
   const owner = lookup.requireOwner(id);
-  return { id: owner.id, name: owner.name, kind: owner.kind };
+  return { id: owner.id, name: owner.name, handle: owner.handle, kind: owner.kind };
 };
 
 export const money = (value: number, currency: string) => `${Math.round(value).toLocaleString("en-US")} ${currency}`;

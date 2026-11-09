@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  parseToolPolicyChange,
   planToolPolicyChange,
   sharedToolPolicy,
   toolPolicyTarget,
@@ -118,5 +119,31 @@ describe("sharedToolPolicy", () => {
     expect(sharedToolPolicy({ a: deny, b: deny }, ["a", "b"])).toBe("deny");
     expect(sharedToolPolicy({}, ["a", "b"])).toBe("allow");
     expect(sharedToolPolicy({ a: deny }, ["a", "b"])).toBeNull();
+  });
+});
+
+describe("parseToolPolicyChange", () => {
+  const instanceId = "7c891d71-6750-43e6-a561-fb1b1901b802";
+
+  it("takes a policy for named tools of one connection", () => {
+    expect(
+      parseToolPolicyChange({ instanceId, toolNames: ["send"], policy: "deny" })
+    ).toEqual({ instanceId, toolNames: ["send"], policy: "deny" });
+  });
+
+  it("refuses a connection pattern, an effect it does not set, or no tools", () => {
+    expect(
+      parseToolPolicyChange({
+        instanceId: "*",
+        toolNames: ["send"],
+        policy: "deny",
+      })
+    ).toBeNull();
+    expect(
+      parseToolPolicyChange({ instanceId, toolNames: ["send"], policy: "cap" })
+    ).toBeNull();
+    expect(
+      parseToolPolicyChange({ instanceId, toolNames: [], policy: "deny" })
+    ).toBeNull();
   });
 });

@@ -226,6 +226,31 @@ export type AgentCardSummary = {
     skills: Array<AgentCardSkill>;
 };
 /**
+ * AgentClientSummary
+ */
+export type AgentClientSummary = {
+    /**
+     * Default Model
+     */
+    default_model: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Online
+     */
+    online: boolean;
+};
+/**
  * AgentCreateRequest
  *
  * ``AgentCreate`` plus the triggers created with the agent.
@@ -249,6 +274,12 @@ export type AgentCreateRequest = {
      * Check the agent's final answer for leaks (other scripts, tool names, codes, JSON, stack traces) and have the model rewrite it once before the person sees it. Null leaves it off. A governance safety rule that sets answer_check overrides this setting.
      */
     answer_check?: AnswerCheckPolicy | null;
+    /**
+     * Client Id
+     *
+     * A Codex or Claude Code client of this workspace whose runner runs the agent's tasks on the CLI's subscription; null runs them on the platform's own loop and model.
+     */
+    client_id?: string | null;
     /**
      * Description
      *
@@ -279,6 +310,18 @@ export type AgentCreateRequest = {
      * Enable explicit planning step before execution.
      */
     planning?: boolean | null;
+    /**
+     * Reasoning Effort
+     *
+     * A reasoning level the model takes, e.g. low or high; the catalog lists each model's levels. Unset keeps the model's default. Not together with reasoning_max_tokens.
+     */
+    reasoning_effort?: string | null;
+    /**
+     * Reasoning Max Tokens
+     *
+     * A token budget for the model's reasoning, a positive integer. Unset keeps the model's default. Not together with reasoning_effort.
+     */
+    reasoning_max_tokens?: number | null;
     /**
      * Skill Ids
      *
@@ -395,6 +438,11 @@ export type AgentResponse = {
      */
     agent_type?: string;
     answer_check?: AnswerCheckPolicy | null;
+    client?: AgentClientSummary | null;
+    /**
+     * Client Id
+     */
+    client_id?: string | null;
     /**
      * Description
      */
@@ -424,6 +472,14 @@ export type AgentResponse = {
      */
     planning?: boolean | null;
     /**
+     * Reasoning Effort
+     */
+    reasoning_effort?: string | null;
+    /**
+     * Reasoning Max Tokens
+     */
+    reasoning_max_tokens?: number | null;
+    /**
      * Registry Item Id
      */
     registry_item_id?: string | null;
@@ -449,6 +505,23 @@ export type AgentResponse = {
      * Update Available
      */
     update_available?: boolean;
+};
+/**
+ * AgentSpend
+ */
+export type AgentSpend = {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Agent Name
+     */
+    agent_name?: string | null;
+    /**
+     * Usd
+     */
+    usd: string;
 };
 /**
  * AgentToolConfig
@@ -478,6 +551,10 @@ export type AgentToolSettings = {
      * A2A Url
      */
     a2a_url?: string | null;
+    /**
+     * Agent Id
+     */
+    agent_id?: string | null;
     /**
      * Auth Secret Name
      *
@@ -513,6 +590,12 @@ export type AgentUpdate = {
      */
     capabilities?: Array<string> | null;
     /**
+     * Client Id
+     *
+     * A Codex or Claude Code client of this workspace whose runner runs the agent's tasks on the CLI's subscription; null runs them on the platform's own loop and model.
+     */
+    client_id?: string | null;
+    /**
      * Description
      */
     description?: string | null;
@@ -532,6 +615,18 @@ export type AgentUpdate = {
      * Planning
      */
     planning?: boolean | null;
+    /**
+     * Reasoning Effort
+     *
+     * A reasoning level the model takes, e.g. low or high; the catalog lists each model's levels. Unset keeps the model's default. Not together with reasoning_max_tokens.
+     */
+    reasoning_effort?: string | null;
+    /**
+     * Reasoning Max Tokens
+     *
+     * A token budget for the model's reasoning, a positive integer. Unset keeps the model's default. Not together with reasoning_effort.
+     */
+    reasoning_max_tokens?: number | null;
     /**
      * Skill Ids
      */
@@ -876,6 +971,14 @@ export type BalanceResponse = {
      */
     exhausted: boolean;
     /**
+     * Runway Days
+     */
+    runway_days?: string | null;
+    /**
+     * Spend Per Day
+     */
+    spend_per_day?: string | null;
+    /**
      * Viewer Is Payer
      */
     viewer_is_payer: boolean;
@@ -955,6 +1058,68 @@ export type BodyUploadWorkspaceLogoV1LogoPut = {
      * PNG, JPEG or WebP image, at most 1 MB
      */
     file: Blob | File;
+};
+/**
+ * BrokenConnection
+ */
+export type BrokenConnection = {
+    /**
+     * At
+     */
+    at: string | null;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Instance Id
+     */
+    instance_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Reason
+     */
+    reason: 'verification_failed' | 'last_call_failed';
+};
+/**
+ * BrokenTrigger
+ */
+export type BrokenTrigger = {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Agent Name
+     */
+    agent_name?: string | null;
+    /**
+     * Consecutive Failures
+     */
+    consecutive_failures: number;
+    /**
+     * Failure Threshold
+     */
+    failure_threshold: number;
+    /**
+     * Last Execution At
+     */
+    last_execution_at: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Reason
+     */
+    reason: 'failing' | 'stopped_after_failures' | 'needs_owner';
+    /**
+     * Trigger Id
+     */
+    trigger_id: string;
 };
 /**
  * BudgetPeriod
@@ -1529,6 +1694,44 @@ export type CatalogComputeEstimate = {
     vcpu: string;
 };
 /**
+ * CatalogConnectFormResponse
+ *
+ * How a catalog API is connected: by signing in, or by entering its keys.
+ */
+export type CatalogConnectFormResponse = {
+    /**
+     * Auth
+     */
+    auth: 'oauth' | 'api_key';
+    /**
+     * Catalog Item Id
+     */
+    catalog_item_id: string;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Fields
+     */
+    fields?: Array<CatalogKeyFieldResponse>;
+    /**
+     * Name
+     */
+    name: string;
+};
+/**
+ * CatalogConnectRequest
+ *
+ * The keys a catalog API asks for, one per field of its connect form.
+ */
+export type CatalogConnectRequest = {
+    /**
+     * Credentials
+     */
+    credentials: Array<CatalogKeyValue>;
+};
+/**
  * CatalogConnection
  *
  * One existing connection made from a catalog item.
@@ -1643,6 +1846,46 @@ export type CatalogItemUpdate = {
      * Version
      */
     version?: string | null;
+};
+/**
+ * CatalogKeyFieldResponse
+ *
+ * One value a catalog API needs before it can be called.
+ */
+export type CatalogKeyFieldResponse = {
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Label
+     *
+     * What the vendor calls it, for the form.
+     */
+    label: string;
+    /**
+     * Location
+     */
+    location: 'header' | 'query';
+    /**
+     * Name
+     *
+     * Header or query parameter the value is sent in.
+     */
+    name: string;
+};
+/**
+ * CatalogKeyValue
+ */
+export type CatalogKeyValue = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Value
+     */
+    value: string;
 };
 /**
  * CatalogToolPrice
@@ -1814,9 +2057,17 @@ export type ClientRef = {
  */
 export type ClientResponse = {
     /**
+     * Allow Domains
+     */
+    allow_domains?: Array<string>;
+    /**
      * Created By
      */
     created_by: string;
+    /**
+     * Default Model
+     */
+    default_model?: string | null;
     /**
      * Description
      */
@@ -1838,9 +2089,19 @@ export type ClientResponse = {
      */
     mcp_instances?: Array<ClientMcpInstanceRef>;
     /**
+     * Models
+     */
+    models?: Array<{
+        [key: string]: unknown;
+    }> | null;
+    /**
      * Name
      */
     name: string;
+    /**
+     * Online
+     */
+    online?: boolean;
     /**
      * Openapi Connections
      */
@@ -1864,6 +2125,14 @@ export type ClientResponse = {
  * Patch payload for a client. Unset fields remain unchanged.
  */
 export type ClientUpdate = {
+    /**
+     * Allow Domains
+     */
+    allow_domains?: Array<string>;
+    /**
+     * Default Model
+     */
+    default_model?: string | null;
     /**
      * Description
      */
@@ -1998,10 +2267,6 @@ export type CollectionUpdateRequest = {
 export type ContentSafetyPolicy = {
     answer_check?: AnswerCheckPolicy | null;
     /**
-     * Output Sanitizer Enabled
-     */
-    output_sanitizer_enabled?: boolean | null;
-    /**
      * Prompt Injection Detection Enabled
      */
     prompt_injection_detection_enabled?: boolean | null;
@@ -2134,12 +2399,18 @@ export type DashboardResponse = {
      * Daily Spend
      */
     daily_spend: Array<DailySpendPoint>;
+    health: Health;
     /**
      * Recent Tasks
      */
     recent_tasks: Array<DashboardTask>;
     schedule: Schedule;
     spend: SpendCard;
+    /**
+     * Top Agents
+     */
+    top_agents: Array<AgentSpend>;
+    usage: RuntimeUsage | null;
 };
 /**
  * DashboardTask
@@ -2395,6 +2666,137 @@ export type EffectivePolicyPreviewRequest = {
  */
 export type EffectivePolicyResponse = {
     effective_policy: EffectivePolicy;
+};
+/**
+ * EgressExitCreate
+ *
+ * A proxy of the workspace's own that its MCP instances may leave through.
+ */
+export type EgressExitCreate = {
+    /**
+     * Allow Plaintext Credentials
+     *
+     * Send the credentials to an http or socks5 proxy, where they are unencrypted.
+     */
+    allow_plaintext_credentials?: boolean;
+    /**
+     * Description
+     *
+     * What this exit is for.
+     */
+    description?: string | null;
+    /**
+     * Name
+     *
+     * Name, unique in the workspace.
+     */
+    name: string;
+    /**
+     * Password Secret Id
+     *
+     * The proxy password as a workspace secret (id from the secrets catalog). It is read when an instance starts; changing the secret's value takes effect at the instance's next start.
+     */
+    password_secret_id?: string | null;
+    /**
+     * Upstream Url
+     *
+     * The proxy as scheme://host:port: http, https or socks5, no credentials.
+     */
+    upstream_url: string;
+    /**
+     * Username
+     *
+     * Proxy username, if it needs one.
+     */
+    username?: string | null;
+};
+/**
+ * EgressExitResponse
+ */
+export type EgressExitResponse = {
+    /**
+     * Allow Plaintext Credentials
+     */
+    allow_plaintext_credentials: boolean;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Created By
+     */
+    created_by: string;
+    /**
+     * Description
+     */
+    description: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Managed By
+     *
+     * "platform" for an exit the operator manages; null for the workspace's own.
+     */
+    managed_by: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Password Secret Id
+     */
+    password_secret_id: string | null;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Upstream Url
+     */
+    upstream_url: string | null;
+    /**
+     * Username
+     */
+    username: string | null;
+    /**
+     * Via
+     *
+     * The platform hop this exit leaves through, if any.
+     */
+    via: string | null;
+};
+/**
+ * EgressExitUpdate
+ *
+ * Patch an exit: only the fields sent change; null clears an optional one.
+ */
+export type EgressExitUpdate = {
+    /**
+     * Allow Plaintext Credentials
+     */
+    allow_plaintext_credentials?: boolean | null;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Password Secret Id
+     */
+    password_secret_id?: string | null;
+    /**
+     * Upstream Url
+     */
+    upstream_url?: string | null;
+    /**
+     * Username
+     */
+    username?: string | null;
 };
 /**
  * EntityKind
@@ -3050,6 +3452,19 @@ export type HeaderOutput = {
     value?: string | null;
 };
 /**
+ * Health
+ */
+export type Health = {
+    /**
+     * Connections
+     */
+    connections: Array<BrokenConnection>;
+    /**
+     * Triggers
+     */
+    triggers: Array<BrokenTrigger>;
+};
+/**
  * HitlBlocker
  */
 export type HitlBlocker = {
@@ -3069,6 +3484,10 @@ export type HitlBlocker = {
      * Description
      */
     description: string;
+    /**
+     * Status
+     */
+    status: string;
     /**
      * Task Id
      */
@@ -3354,6 +3773,41 @@ export type InvitationResponse = {
  */
 export type IssueSeverity = 'block' | 'warn';
 /**
+ * IssuedRunnerKey
+ */
+export type IssuedRunnerKey = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Created By
+     */
+    created_by: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Key
+     *
+     * The runner's key for `agentarea runner register`; shown once
+     */
+    key: string;
+    /**
+     * Last Used At
+     */
+    last_used_at: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Prefix
+     */
+    prefix: string;
+};
+/**
  * MCPAuthConfigCreateRequest
  */
 export type McpAuthConfigCreateRequest = {
@@ -3527,6 +3981,19 @@ export type McpInstanceHealthResponse = {
  * MCPInstanceToolPolicies
  */
 export type McpInstanceToolPolicies = {
+    /**
+     * Tools
+     */
+    tools: Array<McpInstanceToolPolicy>;
+};
+/**
+ * MCPInstanceToolPoliciesOfInstance
+ */
+export type McpInstanceToolPoliciesOfInstance = {
+    /**
+     * Instance Id
+     */
+    instance_id: string;
     /**
      * Tools
      */
@@ -3980,6 +4447,15 @@ export type McpServerUpdate = {
  * How a connection is reached: the instance's ``transport`` column, set once at creation.
  */
 export type McpTransport = 'url' | 'docker' | 'command' | 'bundle';
+/**
+ * MCPWorkspaceToolPolicies
+ */
+export type McpWorkspaceToolPolicies = {
+    /**
+     * Instances
+     */
+    instances: Array<McpInstanceToolPoliciesOfInstance>;
+};
 /**
  * MPPConfigSchema
  */
@@ -4684,6 +5160,12 @@ export type OAuthAuthorizeRequest = {
      * Return To
      */
     return_to?: string;
+    /**
+     * Scopes
+     *
+     * Scopes to ask for, among the preflight's `scopes`; omitted asks for its `default_scopes`.
+     */
+    scopes?: Array<string> | null;
 };
 /**
  * OAuthAuthorizeResponse
@@ -4809,6 +5291,10 @@ export type OAuthPreflightResponse = {
      * Credential Source
      */
     credential_source?: 'platform' | 'dynamic' | null;
+    /**
+     * Default Scopes
+     */
+    default_scopes?: Array<string>;
     /**
      * Detail
      */
@@ -6142,6 +6628,10 @@ export type ProviderSpecResponse = {
      */
     is_builtin: boolean;
     /**
+     * Is First Party
+     */
+    is_first_party: boolean;
+    /**
      * Name
      */
     name: string;
@@ -6186,6 +6676,10 @@ export type ProviderSpecWithModelsResponse = {
      * Is Builtin
      */
     is_builtin: boolean;
+    /**
+     * Is First Party
+     */
+    is_first_party: boolean;
     /**
      * Models
      */
@@ -6711,6 +7205,73 @@ export type RunExecutionConfig = {
      * Maximum LLM/model turns requested for this run.
      */
     max_model_turns: number;
+};
+/**
+ * RunnerIdentity
+ */
+export type RunnerIdentity = {
+    /**
+     * Client Id
+     */
+    client_id: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Workspace
+     */
+    workspace: string;
+};
+/**
+ * RunnerKeyResponse
+ *
+ * A runner key of a client; the key itself is shown only when issued.
+ */
+export type RunnerKeyResponse = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Created By
+     */
+    created_by: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Last Used At
+     */
+    last_used_at: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Prefix
+     */
+    prefix: string;
+};
+/**
+ * RuntimeUsage
+ *
+ * What the workspace's runtime used this month; quantities, never a price.
+ */
+export type RuntimeUsage = {
+    /**
+     * Cpu Core Hours
+     */
+    cpu_core_hours: string;
+    /**
+     * Memory Gib Hours
+     */
+    memory_gib_hours: string;
+    /**
+     * Storage Gib
+     */
+    storage_gib: string;
 };
 /**
  * SandboxFileItem
@@ -11023,6 +11584,48 @@ export type GetPricingCurrencyV1PricingCurrencyGetResponses = {
     200: PricingCurrencyResponse;
 };
 export type GetPricingCurrencyV1PricingCurrencyGetResponse = GetPricingCurrencyV1PricingCurrencyGetResponses[keyof GetPricingCurrencyV1PricingCurrencyGetResponses];
+export type UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutData = {
+    body?: never;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+        /**
+         * File Path
+         */
+        file_path: string;
+    };
+    query?: never;
+    url: '/v1/runner/tasks/{task_id}/files/{file_path}';
+};
+export type UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutError = UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutErrors[keyof UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutErrors];
+export type UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutResponse = UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutResponses[keyof UploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutResponses];
+export type RunnerWhoamiV1RunnerWhoamiGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/runner/whoami';
+};
+export type RunnerWhoamiV1RunnerWhoamiGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: RunnerIdentity;
+};
+export type RunnerWhoamiV1RunnerWhoamiGetResponse = RunnerWhoamiV1RunnerWhoamiGetResponses[keyof RunnerWhoamiV1RunnerWhoamiGetResponses];
 export type ListWorkspacesV1WorkspacesGetData = {
     body?: never;
     path?: never;
@@ -12930,6 +13533,87 @@ export type RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsTool
     204: void;
 };
 export type RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponse = RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponses[keyof RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponses];
+export type ListRunnerKeysV1ClientsClientIdRunnerKeysGetData = {
+    body?: never;
+    path: {
+        /**
+         * Client Id
+         */
+        client_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/clients/{client_id}/runner-keys';
+};
+export type ListRunnerKeysV1ClientsClientIdRunnerKeysGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListRunnerKeysV1ClientsClientIdRunnerKeysGetError = ListRunnerKeysV1ClientsClientIdRunnerKeysGetErrors[keyof ListRunnerKeysV1ClientsClientIdRunnerKeysGetErrors];
+export type ListRunnerKeysV1ClientsClientIdRunnerKeysGetResponses = {
+    /**
+     * Response List Runner Keys V1 Clients  Client Id  Runner Keys Get
+     *
+     * Successful Response
+     */
+    200: Array<RunnerKeyResponse>;
+};
+export type ListRunnerKeysV1ClientsClientIdRunnerKeysGetResponse = ListRunnerKeysV1ClientsClientIdRunnerKeysGetResponses[keyof ListRunnerKeysV1ClientsClientIdRunnerKeysGetResponses];
+export type IssueRunnerKeyV1ClientsClientIdRunnerKeysPostData = {
+    body?: never;
+    path: {
+        /**
+         * Client Id
+         */
+        client_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/clients/{client_id}/runner-keys';
+};
+export type IssueRunnerKeyV1ClientsClientIdRunnerKeysPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type IssueRunnerKeyV1ClientsClientIdRunnerKeysPostError = IssueRunnerKeyV1ClientsClientIdRunnerKeysPostErrors[keyof IssueRunnerKeyV1ClientsClientIdRunnerKeysPostErrors];
+export type IssueRunnerKeyV1ClientsClientIdRunnerKeysPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: IssuedRunnerKey;
+};
+export type IssueRunnerKeyV1ClientsClientIdRunnerKeysPostResponse = IssueRunnerKeyV1ClientsClientIdRunnerKeysPostResponses[keyof IssueRunnerKeyV1ClientsClientIdRunnerKeysPostResponses];
+export type RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Client Id
+         */
+        client_id: string;
+        /**
+         * Key Id
+         */
+        key_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/clients/{client_id}/runner-keys/{key_id}';
+};
+export type RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteError = RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteErrors[keyof RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteErrors];
+export type RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteResponse = RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteResponses[keyof RevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteResponses];
 export type AddSkillToClientV1ClientsClientIdSkillsPostData = {
     body: AssociationBody;
     path: {
@@ -13004,6 +13688,123 @@ export type GetDashboardV1DashboardGetResponses = {
     200: DashboardResponse;
 };
 export type GetDashboardV1DashboardGetResponse = GetDashboardV1DashboardGetResponses[keyof GetDashboardV1DashboardGetResponses];
+export type ListEgressExitsV1EgressExitsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/egress-exits/';
+};
+export type ListEgressExitsV1EgressExitsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListEgressExitsV1EgressExitsGetError = ListEgressExitsV1EgressExitsGetErrors[keyof ListEgressExitsV1EgressExitsGetErrors];
+export type ListEgressExitsV1EgressExitsGetResponses = {
+    /**
+     * Response List Egress Exits V1 Egress Exits  Get
+     *
+     * Successful Response
+     */
+    200: Array<EgressExitResponse>;
+};
+export type ListEgressExitsV1EgressExitsGetResponse = ListEgressExitsV1EgressExitsGetResponses[keyof ListEgressExitsV1EgressExitsGetResponses];
+export type CreateEgressExitV1EgressExitsPostData = {
+    body: EgressExitCreate;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/egress-exits/';
+};
+export type CreateEgressExitV1EgressExitsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateEgressExitV1EgressExitsPostError = CreateEgressExitV1EgressExitsPostErrors[keyof CreateEgressExitV1EgressExitsPostErrors];
+export type CreateEgressExitV1EgressExitsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: EgressExitResponse;
+};
+export type CreateEgressExitV1EgressExitsPostResponse = CreateEgressExitV1EgressExitsPostResponses[keyof CreateEgressExitV1EgressExitsPostResponses];
+export type DeleteEgressExitV1EgressExitsExitIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Exit Id
+         */
+        exit_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/egress-exits/{exit_id}';
+};
+export type DeleteEgressExitV1EgressExitsExitIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DeleteEgressExitV1EgressExitsExitIdDeleteError = DeleteEgressExitV1EgressExitsExitIdDeleteErrors[keyof DeleteEgressExitV1EgressExitsExitIdDeleteErrors];
+export type DeleteEgressExitV1EgressExitsExitIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type DeleteEgressExitV1EgressExitsExitIdDeleteResponse = DeleteEgressExitV1EgressExitsExitIdDeleteResponses[keyof DeleteEgressExitV1EgressExitsExitIdDeleteResponses];
+export type GetEgressExitV1EgressExitsExitIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Exit Id
+         */
+        exit_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/egress-exits/{exit_id}';
+};
+export type GetEgressExitV1EgressExitsExitIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetEgressExitV1EgressExitsExitIdGetError = GetEgressExitV1EgressExitsExitIdGetErrors[keyof GetEgressExitV1EgressExitsExitIdGetErrors];
+export type GetEgressExitV1EgressExitsExitIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: EgressExitResponse;
+};
+export type GetEgressExitV1EgressExitsExitIdGetResponse = GetEgressExitV1EgressExitsExitIdGetResponses[keyof GetEgressExitV1EgressExitsExitIdGetResponses];
+export type UpdateEgressExitV1EgressExitsExitIdPatchData = {
+    body: EgressExitUpdate;
+    path: {
+        /**
+         * Exit Id
+         */
+        exit_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/egress-exits/{exit_id}';
+};
+export type UpdateEgressExitV1EgressExitsExitIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UpdateEgressExitV1EgressExitsExitIdPatchError = UpdateEgressExitV1EgressExitsExitIdPatchErrors[keyof UpdateEgressExitV1EgressExitsExitIdPatchErrors];
+export type UpdateEgressExitV1EgressExitsExitIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: EgressExitResponse;
+};
+export type UpdateEgressExitV1EgressExitsExitIdPatchResponse = UpdateEgressExitV1EgressExitsExitIdPatchResponses[keyof UpdateEgressExitV1EgressExitsExitIdPatchResponses];
 export type ExportWorkspaceConfigV1ExportGetData = {
     body?: never;
     path?: never;
@@ -13774,6 +14575,26 @@ export type GetContainersHealthV1McpServerInstancesHealthContainersGetResponses 
     200: McpContainersHealthResponse;
 };
 export type GetContainersHealthV1McpServerInstancesHealthContainersGetResponse = GetContainersHealthV1McpServerInstancesHealthContainersGetResponses[keyof GetContainersHealthV1McpServerInstancesHealthContainersGetResponses];
+export type ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/mcp-server-instances/tool-policies';
+};
+export type ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetError = ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetErrors[keyof ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetErrors];
+export type ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: McpWorkspaceToolPolicies;
+};
+export type ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetResponse = ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetResponses[keyof ListMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGetResponses];
 export type ValidateInstanceSpecV1McpServerInstancesValidatePostData = {
     body: ValidateRequest;
     path?: never;
@@ -14872,6 +15693,56 @@ export type CreateConnectionV1OpenapiConnectionsPostResponses = {
     201: OpenApiConnectionResponse;
 };
 export type CreateConnectionV1OpenapiConnectionsPostResponse = CreateConnectionV1OpenapiConnectionsPostResponses[keyof CreateConnectionV1OpenapiConnectionsPostResponses];
+export type GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Catalog Item Id
+         */
+        catalog_item_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/openapi-connections/from-catalog/{catalog_item_id}';
+};
+export type GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetError = GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetErrors[keyof GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetErrors];
+export type GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogConnectFormResponse;
+};
+export type GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetResponse = GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetResponses[keyof GetCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGetResponses];
+export type ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostData = {
+    body: CatalogConnectRequest;
+    path: {
+        /**
+         * Catalog Item Id
+         */
+        catalog_item_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/openapi-connections/from-catalog/{catalog_item_id}';
+};
+export type ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostError = ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostErrors[keyof ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostErrors];
+export type ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: OpenApiConnectionResponse;
+};
+export type ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponse = ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponses[keyof ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponses];
 export type PreviewSpecV1OpenapiConnectionsPreviewSpecPostData = {
     body: SpecPreviewRequest;
     path?: never;

@@ -1,8 +1,11 @@
 import React from "react";
+import { useTranslations } from "next-intl";
 import { ShieldCheck } from "lucide-react";
+import { EFFECT_STYLES } from "@/app/w/[workspace]/(main)/policies/components/policy-effects";
 import { Checkbox } from "@/components/ui/checkbox";
-import { cn } from "@/lib/utils";
 import Divider from "@/components/ui/divider";
+import { cn } from "@/lib/utils";
+import type { WorkspaceToolVerdict } from "../../shared/workspaceToolPolicy";
 
 export interface Method {
   name: string;
@@ -21,8 +24,45 @@ export interface MethodsListProps {
   /** Optional per-item approval state. When provided, shows approval toggle. */
   approvalStates?: Record<string, boolean>;
   onApprovalToggle?: (methodName: string, requiresApproval: boolean) => void;
-  /** Label override (default: "Available Methods:") */
+  /** Label override (default: "Available methods") */
   label?: string;
+  /** Two columns on a wide screen, where the list has the room. */
+  wide?: boolean;
+  /**
+   * What the workspace denies or holds for approval, by item name. Such an
+   * item shows the workspace's verdict instead of its own approval toggle:
+   * the agent cannot loosen it.
+   */
+  workspaceVerdicts?: Record<string, WorkspaceToolVerdict>;
+}
+
+/**
+ * The workspace's verdict on a tool, where the approval toggle would be: set on
+ * the connection's Tools tab or in Govern, and stronger than the agent's own.
+ */
+function WorkspaceVerdictChip({ verdict }: { verdict: WorkspaceToolVerdict }) {
+  const t = useTranslations("MethodsList");
+  const Icon = EFFECT_STYLES[verdict.effective].icon;
+  const denied = verdict.effective === "deny";
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 cursor-default items-center gap-1 rounded-full px-2 py-0.5 text-[10px]",
+        denied
+          ? "bg-muted text-muted-foreground"
+          : "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+      )}
+      title={[
+        denied ? t("workspaceDeniedHint") : t("workspaceApprovalHint"),
+        verdict.reason,
+      ]
+        .filter(Boolean)
+        .join("\n")}
+    >
+      <Icon className="h-3 w-3" />
+      {denied ? t("workspaceDenied") : t("workspaceApproval")}
+    </span>
+  );
 }
 
 export const MethodsList: React.FC<MethodsListProps> = ({
@@ -35,8 +75,12 @@ export const MethodsList: React.FC<MethodsListProps> = ({
   showSelectAll = false,
   approvalStates,
   onApprovalToggle,
-  label = "Available Methods:",
+  label,
+  wide = false,
+  workspaceVerdicts,
 }) => {
+  const t = useTranslations("MethodsList");
+
   if (!methods || methods.length === 0) {
     return null;
   }
@@ -49,93 +93,99 @@ export const MethodsList: React.FC<MethodsListProps> = ({
   const someSelected = selectedCount > 0 && selectedCount < totalCount;
 
   return (
-    <div className={cn(`space-y-1`, className)}>
-        <p className="text-xs font-medium text-foreground">
-          {label}
-        </p>
-        {showSelectAll && onSelectAll && (
-        <div className="flex items-center gap-2 pl-1">
+    <div className={className}>
+      <p className="text-xs font-medium text-foreground">
+        {label ?? t("availableMethods")}
+      </p>
+      {showSelectAll && onSelectAll && (
+        <div className="mt-1.5 flex items-center gap-2 px-1.5">
           <Checkbox
             id={`${toolName}-select-all`}
             checked={allSelected}
-            ref={(el) => {
-              if (el) {
-                const input = el.querySelector("input");
-                if (input) {
-                  input.indeterminate = someSelected;
-                }
-              }
-            }}
-            onCheckedChange={onSelectAll}
-            className="h-4 w-4 data-[state=checked]:border-primary data-[state=checked]:bg-primary"
-            aria-label="Select all"
+            indeterminate={someSelected}
+            onCheckedChange={(checked) => onSelectAll(checked === true)}
           />
           <label
             htmlFor={`${toolName}-select-all`}
             className="cursor-pointer text-xs text-foreground"
           >
-            Select all
+            {t("selectAll")}
           </label>
         </div>
+      )}
+      <Divider className="my-2" />
+      <div
+        className={cn(
+          "max-h-60 space-y-0.5 overflow-y-auto",
+          wide && "lg:grid lg:grid-cols-2 lg:gap-x-4 lg:gap-y-0.5 lg:space-y-0"
         )}
-      <Divider />
-      <div className="max-h-60 space-y-1 overflow-y-auto pr-2">
+      >
         {methods.map((method) => {
           const methodId = `${toolName}-${method.name}`;
           const isChecked = selectedMethods[method.name] === true;
           const needsApproval = approvalStates?.[method.name] === true;
+          const verdict = workspaceVerdicts?.[method.name];
 
           return (
             <div
               key={method.name}
-              className={cn(
-                "flex items-center gap-2 rounded p-1",
-                isChecked ? "bg-muted/30" : "bg-muted/10 opacity-60"
-              )}
+              className="flex items-start gap-2 rounded-md px-1.5 py-1.5 transition-colors hover:bg-muted/50"
             >
               <Checkbox
                 id={methodId}
                 checked={isChecked}
                 onCheckedChange={(checked) =>
-                  onMethodToggle(method.name, checked as boolean)
+                  onMethodToggle(method.name, checked === true)
                 }
-                className="h-4 w-4 data-[state=checked]:border-primary data-[state=checked]:bg-primary"
+                className="mt-px"
               />
+              {/* Name over its description, so a long name never runs into it. */}
               <label
                 htmlFor={methodId}
-                className="flex flex-1 cursor-pointer items-center gap-2"
+                className="min-w-0 flex-1 cursor-pointer"
               >
-                <span className={cn(
-                  "text-xs",
-                  isChecked ? "text-foreground" : "text-muted-foreground line-through"
-                )}>
+                <span
+                  className={cn(
+                    "block text-xs font-medium leading-4",
+                    isChecked
+                      ? "text-foreground"
+                      : "text-muted-foreground line-through"
+                  )}
+                >
                   {method.display_name || method.name}
                 </span>
-                {!onApprovalToggle && (
-                  <span className="ml-auto text-xs text-muted-foreground line-clamp-1">
+                {method.description && (
+                  <span className="mt-0.5 block truncate text-[11px] leading-4 text-muted-foreground">
                     {method.description}
                   </span>
                 )}
               </label>
-              {onApprovalToggle && isChecked && (
-                <button
-                  type="button"
-                  className={cn(
-                    "ml-auto flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] transition-colors",
-                    needsApproval
-                      ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                      : "bg-muted/40 text-muted-foreground hover:bg-primary/10 hover:text-primary"
-                  )}
-                  onClick={() => onApprovalToggle(method.name, !needsApproval)}
-                  title={
-                    needsApproval
-                      ? "Requires human approval — click to auto-approve"
-                      : "Auto-approved — click to require approval"
-                  }
-                >
-                  <ShieldCheck className="h-3 w-3" />
-                  {needsApproval ? "Approval required" : "Auto"}
-                </button>
+              {verdict ? (
+                <WorkspaceVerdictChip verdict={verdict} />
+              ) : (
+                onApprovalToggle &&
+                isChecked && (
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] transition-colors",
+                      needsApproval
+                        ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                        : "bg-muted/40 text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                    )}
+                    onClick={() =>
+                      onApprovalToggle(method.name, !needsApproval)
+                    }
+                    title={
+                      needsApproval
+                        ? t("approvalRequiredHint")
+                        : t("autoApprovedHint")
+                    }
+                  >
+                    <ShieldCheck className="h-3 w-3" />
+                    {needsApproval ? t("approvalRequired") : t("autoApproved")}
+                  </button>
+                )
               )}
             </div>
           );

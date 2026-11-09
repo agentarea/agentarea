@@ -16,19 +16,14 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.tenant_scope import unscoped
-from prometheus_client import Counter
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.domain.verification_types import VERIFICATION_SCHEMA_VERSION
+from agentarea_mcp.telemetry import dispatch_stamp_dropped
 
 logger = logging.getLogger(__name__)
-
-_dropped_total = Counter(
-    "mcp_last_dispatch_dropped_total",
-    "Number of last_dispatch writes dropped due to full queue",
-)
 
 _pending: asyncio.Queue[tuple[str, dict[str, Any]]] = asyncio.Queue(maxsize=1000)
 
@@ -47,7 +42,7 @@ def record_dispatch(instance_id: UUID | str, error: str | None = None) -> None:
     try:
         _pending.put_nowait((str(instance_id), stamp))
     except asyncio.QueueFull:
-        _dropped_total.inc()
+        dispatch_stamp_dropped.add(1)
 
 
 class DispatchStampWriter:

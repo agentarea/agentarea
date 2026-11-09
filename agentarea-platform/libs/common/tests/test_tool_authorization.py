@@ -206,3 +206,44 @@ async def test_invocation_request_keeps_restricting_aliases_out_of_the_allowlist
     )
 
     assert decision.action is ToolAuthorizationAction.DENY
+
+
+def test_a_tool_name_someone_else_chose_only_narrows():
+    # An MCP tool's model-facing name carries its connection's name, which any
+    # member who adds a connection picks; it must not let them into an allowlist.
+    by_name = decide_tool_policy(
+        {"tools": {"allowed": ["mcp__github__search"]}},
+        "mcp__github__search",
+        aliases=("mcp:i1:search",),
+        name_allows=False,
+    )
+    by_id = decide_tool_policy(
+        {"tools": {"allowed": ["mcp:i1:search"]}},
+        "mcp__github__search",
+        aliases=("mcp:i1:search",),
+        name_allows=False,
+    )
+    denied = decide_tool_policy(
+        {"tools": {"denied": ["mcp__github__search"]}},
+        "mcp__github__search",
+        aliases=("mcp:i1:search",),
+        name_allows=False,
+    )
+
+    assert by_name.action is ToolAuthorizationAction.DENY
+    assert by_id.action is ToolAuthorizationAction.ALLOW
+    assert denied.action is ToolAuthorizationAction.DENY
+
+
+@pytest.mark.asyncio
+async def test_invocation_request_carries_whether_the_name_may_allow():
+    decision = await authorize_tool_invocation(
+        ToolAuthorizationRequest(
+            tool_name="mcp__github__search",
+            tool_args={},
+            effective_policy={"tools": {"allowed": ["mcp__github__search"]}},
+            name_allows=False,
+        )
+    )
+
+    assert decision.action is ToolAuthorizationAction.DENY

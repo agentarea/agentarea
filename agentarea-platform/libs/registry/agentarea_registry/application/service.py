@@ -86,6 +86,9 @@ PROVIDER_CONTRACT_FIELDS = (
     "models_path",
     "list_shape",
     "models_query",
+    "reasoning_param",
+    "reasoning_efforts",
+    "cache_breakpoints",
 )
 
 # Per-socket-operation timeout for fetching a catalog over HTTP. urllib applies
@@ -96,7 +99,11 @@ PROVIDER_CONTRACT_FIELDS = (
 SOURCE_FETCH_TIMEOUT_SECONDS = 30
 # Part of the stored ETag: bump it when parsing or facets change, so the next
 # sync re-applies every source instead of skipping the unchanged ones.
-SYNC_FORMAT = "3"
+SYNC_FORMAT = "7"
+# The platform's own catalog rows: an item that changes in the source is applied
+# to its entity on sync. Other types install copies a workspace may have changed,
+# so a changed item only flags an update for someone to take.
+APPLY_ON_CHANGE_TYPES = frozenset({"llm_providers", "llm_models"})
 # A workspace's index is a member-supplied URL: read within these bounds, so a
 # hostile or broken one costs one bounded request and no more.
 MAX_SOURCE_BYTES = 5 * 1024 * 1024
@@ -979,6 +986,7 @@ class RegistryService:
             return {
                 "new_specs": 0,
                 "updates_flagged": 0,
+                "applied": 0,
                 "unchanged": registry.item_count,
                 "total": registry.item_count,
                 "skipped": 0,
@@ -1027,6 +1035,7 @@ class RegistryService:
 
         new_specs = 0
         updates_flagged = 0
+        applied = 0
         unchanged = 0
         skipped = 0
         skipped_items: list[dict[str, str]] = []
@@ -1051,6 +1060,7 @@ class RegistryService:
 
                 if existing:
                     previous_spec = dict(existing.spec or {})
+                    previous_text = (existing.name, existing.description)
                     for field in (
                         "name",
                         "description",
@@ -1079,7 +1089,18 @@ class RegistryService:
                         new_version = existing.version or new_version
                     existing.version = new_version
 
-                    if existing.installed_version and existing.installed_version != new_version:
+                    content_changed = previous_spec != (existing.spec or {}) or previous_text != (
+                        existing.name,
+                        existing.description,
+                    )
+                    apply_now = (
+                        registry.registry_type in APPLY_ON_CHANGE_TYPES
+                        and existing.installed_entity_id is not None
+                        and content_changed
+                    )
+                    if apply_now:
+                        applied += 1
+                    elif existing.installed_version and existing.installed_version != new_version:
                         existing.update_available = True
                         updates_flagged += 1
                     else:
@@ -1089,6 +1110,10 @@ class RegistryService:
                         await self._drop_platform_skill(existing)
 
                     await self.item_repo.session.commit()
+                    if apply_now:
+                        await self._update_entity(
+                            registry.registry_type, existing, registry_url=registry.source_url
+                        )
                     if registry.registry_type == "llm_models":
                         await self._resync_model_cache_prices(previous_spec, existing.spec)
 
@@ -1168,10 +1193,12 @@ class RegistryService:
                         if item.external_id not in published:
                             await self._drop_platform_skill(item)
                     await self.item_repo.session.commit()
-                deleted = await self.item_repo.delete_unreferenced_out_of_source(registry_id)
+                await self._move_uses(registry, await self._sibling_registries(registry))
+                deleted = await self._delete_unused_llm_entities(registry)
+                deleted += await self.item_repo.delete_unreferenced_out_of_source(registry_id)
                 out_of_source -= deleted
 
-        total = new_specs + updates_flagged + unchanged
+        total = new_specs + updates_flagged + applied + unchanged
         await self.registry_repo.update(
             registry_id,
             last_synced_at=datetime.utcnow(),
@@ -1185,6 +1212,7 @@ class RegistryService:
         return {
             "new_specs": new_specs,
             "updates_flagged": updates_flagged,
+            "applied": applied,
             "unchanged": unchanged,
             "total": len(parsed_items),
             "skipped": skipped,
@@ -1261,10 +1289,60 @@ class RegistryService:
             for item in (await self._items_by_external_id(registry_id)).values():
                 await self._drop_platform_skill(item)
             await self.item_repo.session.commit()
-        moved = await self.item_repo.move_references(registry_id, replacements)
+        await self._move_uses(registry, replacements)
+        deleted = await self._delete_unused_llm_entities(registry)
+        return deleted + await self.item_repo.delete_unreferenced_out_of_source(registry_id)
+
+    async def _delete_unused_llm_entities(self, registry: Registry) -> int:
+        """Delete the provider and model specs the registry dropped that nothing uses.
+
+        Every synced LLM item has its spec as ``installed_entity_id``, which the
+        generic cleanup reads as a use, so a dropped provider stayed listed
+        forever. Returns how many of the registry's items went with them.
+        """
+        if registry.registry_type == "llm_providers":
+            deleted = await self.item_repo.delete_unused_dropped_providers(registry.id)
+        elif registry.registry_type == "llm_models":
+            deleted = await self.item_repo.delete_unused_dropped_models(registry.id)
+        else:
+            return 0
+        if deleted:
+            logger.info(
+                "Deleted %d %s registry %s dropped that no workspace uses",
+                deleted,
+                registry.registry_type,
+                registry.id,
+            )
+        return deleted
+
+    async def _move_uses(self, registry: Registry, replacements: Collection[UUID]) -> None:
+        """Move what uses the registry's dropped items onto their replacements.
+
+        The platform's own copy of a dropped MCP server goes once its instances
+        run from the replacement's copy, so the item can be deleted with the rest.
+        """
+        moved = await self.item_repo.move_references(registry.id, replacements)
         if moved:
-            logger.info("Moved %d uses of retired registry %s's items", moved, registry_id)
-        return await self.item_repo.delete_unreferenced_out_of_source(registry_id)
+            logger.info("Moved %d uses of items registry %s dropped", moved, registry.id)
+        if registry.registry_type != "mcp_servers" or self.server_repo is None:
+            return
+        for item_id, server_id in await self.item_repo.replaced_copies(registry.id, replacements):
+            await self.server_repo.delete(server_id)
+            await self.item_repo.update(item_id, installed_entity_id=None, installed_version=None)
+
+    async def _sibling_registries(self, registry: Registry) -> list[UUID]:
+        """The other active platform registries of the same type.
+
+        An item one of them publishes under the same id is where the uses of an
+        item this registry dropped go: an entry moved to another catalog file.
+        """
+        if registry.scope != "platform":
+            return []
+        return [
+            other.id
+            for other in await self.registry_repo.list_active(registry.registry_type)
+            if other.scope == "platform" and other.id != registry.id
+        ]
 
     async def _items_by_external_id(self, registry_id: UUID) -> dict[str, RegistryItem]:
         # One read for the whole registry: a lookup per item was a query per
@@ -1563,6 +1641,7 @@ class RegistryService:
             provider_type=spec.get("provider_type", spec["provider_key"]),
             icon=spec.get("icon"),
             is_builtin=spec.get("is_builtin", True),
+            is_first_party=spec.get("first_party", False),
         )
         created = await self.provider_spec_repo.upsert_by_provider_key(
             entity, self._provider_contract(spec)
@@ -1582,6 +1661,7 @@ class RegistryService:
             provider_type=spec.get("provider_type", spec["provider_key"]),
             icon=spec.get("icon"),
             is_builtin=spec.get("is_builtin", True),
+            is_first_party=spec.get("first_party", False),
         )
         return await self.provider_spec_repo.upsert_by_provider_key(
             entity, self._provider_contract(spec)
@@ -1659,6 +1739,7 @@ class RegistryService:
             supports_function_calling=spec.get("supports_function_calling", False),
             supports_vision=spec.get("supports_vision", False),
             supports_reasoning=spec.get("supports_reasoning", False),
+            reasoning_efforts=spec.get("reasoning_efforts"),
             is_active=spec.get("is_active", True),
         )
         return str(model.id)
@@ -2160,6 +2241,11 @@ class RegistryService:
             provider_key = entry.get("provider_key")
             if not provider_key:
                 continue
+            first_party = entry.get("first_party", False)
+            if not isinstance(first_party, bool):
+                raise ValueError(
+                    f"Provider '{provider_key}' has first_party {first_party!r}; expected a bool"
+                )
             items.append(
                 {
                     "external_id": provider_key,
@@ -2171,6 +2257,7 @@ class RegistryService:
                         "provider_type": entry.get("provider_type", provider_key),
                         "icon": entry.get("icon"),
                         "is_builtin": entry.get("is_builtin", True),
+                        "first_party": first_party,
                         **{
                             field: entry[field]
                             for field in PROVIDER_CONTRACT_FIELDS
@@ -2218,6 +2305,7 @@ class RegistryService:
                         "supports_function_calling": entry.get("supports_function_calling", False),
                         "supports_vision": entry.get("supports_vision", False),
                         "supports_reasoning": entry.get("supports_reasoning", False),
+                        "reasoning_efforts": entry.get("reasoning_efforts"),
                         "is_active": entry.get("is_active", True),
                     },
                     "tags": entry.get("tags", []),

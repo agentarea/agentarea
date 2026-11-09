@@ -152,10 +152,14 @@ class MCPAuthMiddleware:
     are protected because MCP authorization requires an access token on every
     HTTP request.  Every other method requires a valid Bearer token on the
     same request.
+
+    ``admit_turn`` lets a runner turn's token in: only on the client endpoint,
+    whose handlers hold it to its own client.
     """
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, *, admit_turn: bool = False) -> None:
         self.app = app
+        self.admit_turn = admit_turn
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -214,7 +218,9 @@ class MCPAuthMiddleware:
         try:
             from agentarea_common.auth.dependencies import resolve_principal_from_token
 
-            principal = await resolve_principal_from_token(bearer_token, request)
+            principal = await resolve_principal_from_token(
+                bearer_token, request, admit_turn=self.admit_turn
+            )
             if principal is None:
                 logger.debug("MCP auth: token validation failed (no provider accepted)")
                 return False

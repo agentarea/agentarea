@@ -1,5 +1,5 @@
-from typing import Any
-from uuid import UUID
+from typing import Any, NamedTuple
+from uuid import UUID, uuid4
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import unscoped
@@ -21,6 +21,11 @@ from agentarea_llm.infrastructure.catalog_model_spec_repository import (
 
 # Prices the catalog carries that a workspace's copy did not get when it was added.
 CACHE_PRICE_COLUMNS = ("cached_input_cost_per_token", "cache_creation_input_cost_per_token")
+
+
+class UpsertedSpec(NamedTuple):
+    id: UUID
+    is_new: bool
 
 
 class ModelPricingNotConfiguredError(AppError):
@@ -63,6 +68,7 @@ def _project_catalog_model_spec(item: CatalogModelSpecItem) -> ModelSpec:
         supports_function_calling=spec.get("supports_function_calling", False),
         supports_vision=spec.get("supports_vision", False),
         supports_reasoning=spec.get("supports_reasoning", False),
+        reasoning_efforts=spec.get("reasoning_efforts"),
         is_active=spec.get("is_active", True),
     )
     model.id = UUID(item.id)
@@ -306,6 +312,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
                 supports_function_calling=preferred.supports_function_calling,
                 supports_vision=preferred.supports_vision,
                 supports_reasoning=preferred.supports_reasoning,
+                reasoning_efforts=preferred.reasoning_efforts,
                 is_active=preferred.is_active,
             )
             .on_conflict_do_nothing(constraint="uq_model_specs_workspace_provider_model")
@@ -373,6 +380,64 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
             updated = await self.update(existing.id, **update_fields)
             return updated or existing
         return await self.create(**kwargs)
+
+    async def upsert_many_by_provider_and_model(
+        self, provider_spec_id: UUID, rows: list[dict[str, Any]]
+    ) -> dict[str, UpsertedSpec]:
+        """Upsert a provider's model list into this workspace in one transaction.
+
+        Same semantics as ``upsert_by_provider_and_model_kwargs`` per row: a row
+        is keyed on its ``model_name``, a new one is inserted whole, and an
+        existing one takes only the fields that are not ``None``. A name listed
+        twice keeps its last entry. The statement count is fixed, not one round
+        trip chain per model.
+        """
+        by_name = {row["model_name"]: row for row in rows}
+        if not by_name:
+            return {}
+        result = await self.session.execute(
+            select(ModelSpec.model_name, ModelSpec.id).where(
+                self._get_workspace_filter(),
+                ModelSpec.provider_spec_id == provider_spec_id,
+                ModelSpec.model_name.in_(by_name),
+            )
+        )
+        existing: dict[str, UUID] = dict(result.tuples().all())
+
+        written: dict[str, UpsertedSpec] = {}
+        inserts: list[dict[str, Any]] = []
+        updates: list[dict[str, Any]] = []
+        for name, row in by_name.items():
+            if name in existing:
+                written[name] = UpsertedSpec(id=existing[name], is_new=False)
+                fields = {
+                    k: v
+                    for k, v in row.items()
+                    if k not in ("provider_spec_id", "model_name") and v is not None
+                }
+                updates.append({"id": existing[name], **fields})
+            else:
+                spec_id = uuid4()
+                written[name] = UpsertedSpec(id=spec_id, is_new=True)
+                inserts.append(
+                    {
+                        **row,
+                        "id": spec_id,
+                        "provider_spec_id": provider_spec_id,
+                        "workspace_id": self.user_context.workspace_id,
+                        "created_by": self.user_context.user_id,
+                    }
+                )
+        try:
+            if inserts:
+                await self.session.execute(insert(ModelSpec), inserts)
+            if updates:
+                await self.session.execute(update(ModelSpec), updates)
+            await self.session.commit()
+        except Exception:
+            await self.session.rollback()
+            raise
+        return written
 
     async def upsert_by_provider_and_model(self, entity: ModelSpec) -> ModelSpec:
         """Upsert model spec by provider and model name - used in bootstrap"""

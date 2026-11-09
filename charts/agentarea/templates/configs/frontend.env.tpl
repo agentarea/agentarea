@@ -10,9 +10,9 @@ AGENTAREA_API_URL: "{{ include "agentarea.backend.url" . }}"
 AGENTAREA_AUTH_KRATOS_ADMIN_URL: "{{ include "agentarea.kratosAdminUrl" . }}"
 ORY_SDK_URL: "{{ include "agentarea.kratosPublicUrl" . }}"
 ORY_BROWSER_URL: "{{ include "agentarea.kratosPublicBrowserUrl" . }}"
-AGENTAREA_METRICS_ENABLED: "{{ .Values.global.monitoring.prometheus.enabled }}"
 AGENTAREA_MCP_APPS_ORIGIN: "{{ .Values.global.webapp.appsSandboxUrl }}"
 AGENTAREA_APP_ORIGIN: "{{ include "agentarea.frontendUrl" . }}"
+AGENTAREA_SUPPORT_URL: "{{ .Values.global.webapp.supportUrl }}"
 {{- end }}
 
 {{- define "agentarea.frontend.envs" }}
@@ -46,11 +46,6 @@ AGENTAREA_APP_ORIGIN: "{{ include "agentarea.frontendUrl" . }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-frontend
       key: ORY_BROWSER_URL
-- name: AGENTAREA_METRICS_ENABLED
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-frontend
-      key: AGENTAREA_METRICS_ENABLED
 - name: AGENTAREA_MCP_APPS_ORIGIN
   valueFrom:
     configMapKeyRef:
@@ -61,4 +56,9 @@ AGENTAREA_APP_ORIGIN: "{{ include "agentarea.frontendUrl" . }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-frontend
       key: AGENTAREA_APP_ORIGIN
+- name: AGENTAREA_SUPPORT_URL
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-frontend
+      key: AGENTAREA_SUPPORT_URL
 {{- end }}

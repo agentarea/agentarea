@@ -24,6 +24,7 @@ class ProviderSpecResponse(BaseModel):
     icon: str | None
     icon_url: str | None
     is_builtin: bool
+    is_first_party: bool
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -44,6 +45,7 @@ class ProviderSpecResponse(BaseModel):
             icon=provider_spec.icon,
             icon_url=icon_url,
             is_builtin=provider_spec.is_builtin,
+            is_first_party=provider_spec.is_first_party,
             created_at=provider_spec.created_at,
             updated_at=provider_spec.updated_at,
         )
@@ -102,6 +104,7 @@ class ProviderSpecWithModelsResponse(BaseModel):
     icon: str | None
     icon_url: str | None
     is_builtin: bool
+    is_first_party: bool
     created_at: UtcDatetime
     updated_at: UtcDatetime
     models: list[ModelSpecResponse]
@@ -123,6 +126,7 @@ class ProviderSpecWithModelsResponse(BaseModel):
             icon=provider_spec.icon,
             icon_url=icon_url,
             is_builtin=provider_spec.is_builtin,
+            is_first_party=provider_spec.is_first_party,
             created_at=provider_spec.created_at,
             updated_at=provider_spec.updated_at,
             models=[ModelSpecResponse.from_domain(model) for model in provider_spec.model_specs],
@@ -143,8 +147,7 @@ async def list_provider_specs(
 ):
     """List all provider specifications."""
     provider_specs = await provider_service.list_provider_specs(is_builtin=is_builtin)
-    sorted_specs = sorted(provider_specs, key=lambda spec: spec.name.lower())
-    return [ProviderSpecResponse.from_domain(spec, request) for spec in sorted_specs]
+    return [ProviderSpecResponse.from_domain(spec, request) for spec in provider_specs]
 
 
 @router.get(
@@ -160,8 +163,7 @@ async def list_provider_specs_with_models(
 ):
     """List all provider specifications with their available models."""
     provider_specs = await provider_service.list_provider_specs(is_builtin=is_builtin)
-    sorted_specs = sorted(provider_specs, key=lambda spec: spec.name.lower())
-    return [ProviderSpecWithModelsResponse.from_domain(spec, request) for spec in sorted_specs]
+    return [ProviderSpecWithModelsResponse.from_domain(spec, request) for spec in provider_specs]
 
 
 @router.get(

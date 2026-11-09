@@ -17,7 +17,7 @@ from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.exceptions import TemporalError
 
 from agentarea_common.config import ObservabilitySettings, temporal_connect_config
-from agentarea_common.observability import get_temporal_plugins, setup_otel
+from agentarea_common.observability import get_temporal_plugins
 from agentarea_common.workflow.executor import (
     TaskExecutorInterface,
     WorkflowConfig,
@@ -109,7 +109,6 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
         if not self._connected and self.client is None:
             try:
                 observability_settings = ObservabilitySettings()
-                setup_otel("agentarea-temporal-client", observability_settings)
                 connect_config = temporal_connect_config()
                 logger.info(
                     f"Connecting to Temporal server at {connect_config.get('target_host')} "

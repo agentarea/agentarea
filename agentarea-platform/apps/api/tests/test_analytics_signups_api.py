@@ -16,8 +16,8 @@ BODY = {
     "identity_id": "identity-1",
     "created_at": "2026-10-28T09:30:00.123456Z",
     "request_url": (
-        "https://auth.agentarea.ru/self-service/registration/browser"
-        "?aa_ref=www.google.com&aa_lh=agentarea.ai&aa_lp=%2Fskills%2Fa%2F"
+        "https://auth.example.com/self-service/registration/browser"
+        "?aa_ref=www.google.com&aa_lh=example.com&aa_lp=%2Fskills%2Fa%2F"
     ),
 }
 
@@ -121,7 +121,7 @@ async def test_a_sign_up_is_stored_and_sent_once(settings, stored, sender):
             "properties": {
                 "channel": "search",
                 "method": "password",
-                "landing_host": "agentarea.ai",
+                "landing_host": "example.com",
                 "landing_path": "/skills/*",
                 "referrer_host": "www.google.com",
                 "utm_source": None,

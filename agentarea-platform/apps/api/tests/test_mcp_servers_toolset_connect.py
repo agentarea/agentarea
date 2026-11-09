@@ -7,6 +7,7 @@ and verify tools ask it to open the link directly.
 
 from __future__ import annotations
 
+import inspect
 import json
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
@@ -18,12 +19,14 @@ import agentarea_mcp.application.service as mcp_service
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
 from agentarea_agents_sdk.mcp_server.elicitation import mcp_call_context
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.api.v1 import _catalog_connections
 from agentarea_api.api.v1._catalog_connections import CatalogConnection
 from agentarea_api.oauth_connect import pages as oauth_pages
 from agentarea_api.tools import mcp_servers_toolset
 from agentarea_api.tools.mcp_servers_toolset import MCPServersToolset
 from agentarea_common.auth.context import UserContext
+from agentarea_mcp.application.validation_service import MCPValidationError
 from mcp.server.mcpserver import Context
 from mcp.types import (
     ClientCapabilities,
@@ -380,3 +383,25 @@ async def test_verify_of_an_instance_needing_nothing_reports_what_verification_r
     result = json.loads(await MCPServersToolset().verify(str(instance.id)))
 
     assert result == succeeded
+
+
+REFUSAL = "Image 'mcp/fetch' speaks stdio; use the server's npm or PyPI package instead"
+
+
+@pytest.mark.asyncio
+async def test_create_tells_the_caller_why_the_instance_was_refused(harness):
+    harness.create_instance = AsyncMock(side_effect=MCPValidationError([REFUSAL]))
+
+    with pytest.raises(ToolError, match="speaks stdio"):
+        await MCPServersToolset().create(
+            name="fetch", json_spec_json="{}", server_spec_id=str(uuid4())
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_tells_the_caller_why_the_change_was_refused(harness):
+    harness.update_instance = AsyncMock(side_effect=MCPValidationError([REFUSAL]))
+    update = inspect.unwrap(MCPServersToolset.update)
+
+    with pytest.raises(ToolError, match="speaks stdio"):
+        await update(MCPServersToolset(), instance_id=str(uuid4()), name="fetch")

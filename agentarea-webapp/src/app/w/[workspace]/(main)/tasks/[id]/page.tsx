@@ -6,6 +6,7 @@ import {
   TaskConversation,
   type TaskConversationActivity,
 } from "@/components/Chat/TaskConversation";
+import { TaskFilePane } from "@/components/Chat/TaskFilePane";
 import EmptyState from "@/components/EmptyState";
 import TaskInfoPanel from "@/components/TaskInfoPanel/TaskInfoPanel";
 import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
@@ -29,6 +30,8 @@ export default function TaskDetailsPage() {
   } = useTaskContext();
   const t = useTranslations("TaskInfoPanel");
   const [, setRefreshing] = useState(false);
+  // A file the conversation linked to, open beside it in place of the info panel.
+  const [openFile, setOpenFile] = useState<string | null>(null);
   const [conversationActivity, setConversationActivity] =
     useState<TaskConversationActivity | null>(null);
   const streamStatus =
@@ -140,43 +143,52 @@ export default function TaskDetailsPage() {
             currentStatus={currentStatus}
             onActivityChange={handleActivityChange}
             onRefresh={refresh}
+            onOpenFile={setOpenFile}
           />
         </div>
 
-        <TaskInfoPanelDock
-          storageKey="task-info-panel"
-          panel={
-            <TaskInfoPanel
-              task={{
-                id: task.id,
-                description: task.description || "",
-                agent_id: task.agent_id,
-                agent_name: task.agent_name,
-                agent_description: task.agent_description,
-                created_at: task.created_at || "",
-                execution_id: task.execution_id || null,
-                result: task.result,
-                provenance: task.provenance,
-                requester,
-              }}
-              currentStatus={currentStatus}
-              executionStatus={executionStatus}
-              isActive={currentStatus === "running"}
-              startTime={startTime}
-              endTime={endTime}
-              executionTime={executionTime}
-              activitySummary={conversationActivity?.activitySummary}
-              artifacts={taskStatus?.artifacts}
-              totalCost={totalCost}
-              budgetLimit={budgetLimit}
-              policy={policy}
-              policyError={policyError}
-              statusError={statusError}
-            />
-          }
-        />
+        {openFile ? (
+          <TaskFilePane
+            agentId={task.agent_id}
+            taskId={task.id}
+            path={openFile}
+            onClose={() => setOpenFile(null)}
+          />
+        ) : (
+          <TaskInfoPanelDock
+            storageKey="task-info-panel"
+            panel={
+              <TaskInfoPanel
+                task={{
+                  id: task.id,
+                  description: task.description || "",
+                  agent_id: task.agent_id,
+                  agent_name: task.agent_name,
+                  agent_description: task.agent_description,
+                  created_at: task.created_at || "",
+                  execution_id: task.execution_id || null,
+                  result: task.result,
+                  provenance: task.provenance,
+                  requester,
+                }}
+                currentStatus={currentStatus}
+                executionStatus={executionStatus}
+                isActive={currentStatus === "running"}
+                startTime={startTime}
+                endTime={endTime}
+                executionTime={executionTime}
+                activitySummary={conversationActivity?.activitySummary}
+                artifacts={taskStatus?.artifacts}
+                totalCost={totalCost}
+                budgetLimit={budgetLimit}
+                policy={policy}
+                policyError={policyError}
+                statusError={statusError}
+              />
+            }
+          />
+        )}
       </div>
-
     </>
   );
 }

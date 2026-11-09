@@ -1,4 +1,6 @@
 import type { Database } from "bun:sqlite";
+import { EVENT_LOG_MIGRATION } from "@kit/events/log.ts";
+import { EVENT_SUBSCRIPTIONS_MIGRATION } from "@kit/events/subscriptions.ts";
 import { insertRows, type Row, type Rows, type Table } from "@kit/store/rows.ts";
 import type { Migration } from "@kit/store/store.ts";
 import demo from "../data/crm.json" with { type: "json" };
@@ -14,6 +16,19 @@ import type {
 } from "../shared/crm.ts";
 
 export const DB_FILE = "crm.sqlite";
+
+/**
+ * A handle no owner has yet, made from the first of `sources` that has latin
+ * letters or digits in it (else "owner"): "Anna.Sokolova" is "anna.sokolova",
+ * and a taken one gets "-2", "-3" and so on.
+ */
+export function freeHandle(sources: string[], taken: (handle: string) => boolean): string {
+  const slugs = sources.map((s) => s.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[^a-z0-9]+/, "").replace(/-+$/, ""));
+  const base = (slugs.find(Boolean) ?? "owner").slice(0, 28);
+  let handle = base;
+  for (let n = 2; handle === "me" || taken(handle); n++) handle = `${base}-${n}`;
+  return handle;
+}
 
 /** Migration `i` brings the schema to version `i + 1`. Never edit one that has shipped: append. */
 export const MIGRATIONS: Migration[] = [
@@ -136,6 +151,27 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX activities_deal ON activities (deal_id, done, due_at);
       CREATE INDEX activities_contact ON activities (contact_id);
     `),
+  // Owners get a handle, from their email or name, and the platform identity the caller context names.
+  (db) => {
+    db.run(`
+      ALTER TABLE owners ADD COLUMN handle TEXT NOT NULL DEFAULT '';
+      ALTER TABLE owners ADD COLUMN platform_id TEXT;
+    `);
+    const taken = new Set<string>();
+    for (const owner of db.query<{ id: string; name: string; email: string }, []>("SELECT id, name, email FROM owners ORDER BY id").all()) {
+      const handle = freeHandle([owner.email.split("@")[0] ?? "", owner.name], (h) => taken.has(h));
+      taken.add(handle);
+      db.run("UPDATE owners SET handle = ? WHERE id = ?", [handle, owner.id]);
+    }
+    db.run(`
+      CREATE UNIQUE INDEX owners_handle ON owners (handle COLLATE NOCASE);
+      CREATE UNIQUE INDEX owners_platform_id ON owners (platform_id) WHERE platform_id IS NOT NULL;
+    `);
+  },
+  // Outgoing MCP Events (deal.created, deal.stage_changed, deal.assigned, contact.created), served by events/poll.
+  EVENT_LOG_MIGRATION,
+  // Webhook subscriptions to those events (events/subscribe).
+  EVENT_SUBSCRIPTIONS_MIGRATION,
 ];
 
 export const TABLES: Table[] = [
@@ -143,7 +179,7 @@ export const TABLES: Table[] = [
   { name: "fx_rates", columns: ["currency", "rate"], key: ["currency"] },
   { name: "lost_reasons", columns: ["position", "reason"], key: ["position"], orderBy: "position" },
   { name: "sources", columns: ["position", "name"], key: ["position"], orderBy: "position" },
-  { name: "owners", columns: ["id", "name", "title", "email", "kind"], key: ["id"] },
+  { name: "owners", columns: ["id", "name", "handle", "title", "email", "kind", "platform_id"], key: ["id"] },
   { name: "pipelines", columns: ["id", "name"], key: ["id"] },
   {
     name: "stages",
@@ -181,7 +217,9 @@ export function toRows(data: CrmData): Rows {
     fx_rates: Object.entries(data.fxRates).map(([currency, rate]) => ({ currency, rate })),
     lost_reasons: data.lostReasons.map((reason, position) => ({ position, reason })),
     sources: data.sources.map((name, position) => ({ position, name })),
-    owners: data.owners.map((o) => ({ id: o.id, name: o.name, title: o.title, email: o.email, kind: o.kind })),
+    owners: data.owners.map((o) => ({
+      id: o.id, name: o.name, handle: o.handle, title: o.title, email: o.email, kind: o.kind, platform_id: o.platformId ?? null,
+    })),
     pipelines: data.pipelines.map((p) => ({ id: p.id, name: p.name })),
     stages: data.pipelines.flatMap((p) =>
       p.stages.map((s, position) => ({
@@ -248,7 +286,8 @@ export function fromRows(rows: Rows): CrmData {
     lostReasons: rows.lost_reasons.map((r) => str(r.reason)),
     sources: rows.sources.map((r) => str(r.name)),
     owners: rows.owners.map((o) => ({
-      id: str(o.id), name: str(o.name), title: str(o.title), email: str(o.email), kind: o.kind as OwnerKind,
+      id: str(o.id), name: str(o.name), handle: str(o.handle), title: str(o.title), email: str(o.email), kind: o.kind as OwnerKind,
+      platformId: opt(o.platform_id),
     })),
     pipelines: rows.pipelines.map(
       (p): Pipeline => ({

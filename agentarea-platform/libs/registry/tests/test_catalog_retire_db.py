@@ -1,6 +1,6 @@
 """A source that stops publishing an item removes it, unless something uses it.
 
-Every reconcile used to keep what the source dropped forever: on RU prod 217k
+Every reconcile used to keep what the source dropped forever: in production 217k
 of 220k skill rows were items no source published any more, 1.2 GB of the 2.7 GB
 database. Only an item a workspace installed, forked or connected to has to
 stay. "Uses it" spans tables of other modules, so this runs on the migrated
@@ -39,7 +39,14 @@ async def engine() -> AsyncGenerator[AsyncEngine, None]:
     eng = create_async_engine(TEST_DATABASE_URL, echo=False)
     yield eng
     async with eng.begin() as conn:
-        for table in ("skills", "agents", "openapi_connections", "registry_item_installs"):
+        for table in (
+            "skills",
+            "agents",
+            "openapi_connections",
+            "registry_item_installs",
+            "mcp_server_instances",
+            "mcp_servers",
+        ):
             await conn.execute(
                 text(f"DELETE FROM {table} WHERE workspace_id LIKE :w"), {"w": f"{WORKSPACE}%"}
             )
@@ -220,7 +227,7 @@ async def enforced(engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
 async def test_the_reference_check_sees_every_workspace_under_an_enforced_scope(
     session: AsyncSession, enforced: AsyncSession
 ):
-    # RU runs AGENTAREA_DB_TENANT_SCOPE=enforce and every sync binds a workspace.
+    # Production runs AGENTAREA_DB_TENANT_SCOPE=enforce and every sync binds a workspace.
     # The DELETE names other modules' scoped tables; it must run, and it must
     # still see a fork made in a workspace other than the one bound.
     from agentarea_common.base.tenant_scope import workspace_scope
@@ -379,3 +386,136 @@ async def test_retiring_a_registry_moves_its_uses_onto_the_replacements_items(
     assert sorted(installs.tuples().all()) == sorted(
         [(WORKSPACE, new.id), (other_ws, clash.id), (other_ws, new_clash.id)]
     )
+
+
+async def test_an_item_another_platform_registry_now_publishes_takes_its_uses_along(
+    session: AsyncSession, monkeypatch
+):
+    # A regional entry leaves the global catalog for its region's file: the same
+    # id, published by a second registry. What a workspace connected moves with it,
+    # and the global copy, now unused, goes.
+    payloads = {
+        "global": {"bundles": [{"name": n, "schema_version": "0.1.0"} for n in ("moved", "kept")]},
+        "region": {"bundles": []},
+    }
+    monkeypatch.setattr(RegistryService, "_fetch_source", staticmethod(lambda url: payloads[url]))
+    monkeypatch.setattr(RegistryService, "_source_etag", staticmethod(lambda _url: None))
+    glob = Registry(name=f"{PREFIX}global", registry_type="bundles", source_type="url", source_url="global")
+    region = Registry(name=f"{PREFIX}region", registry_type="bundles", source_type="url", source_url="region")
+    session.add_all([glob, region])
+    await session.commit()
+    repo = RegistryItemRepository(session)
+    service = RegistryService(RegistryRepository(session), repo, server_repo=None)  # type: ignore[arg-type]
+    await service.sync_registry(glob.id)
+    old = (
+        await session.execute(
+            text("SELECT id FROM registry_items WHERE registry_id = :r AND external_id = 'moved'"),
+            {"r": glob.id},
+        )
+    ).scalar_one()
+    await session.execute(
+        text(
+            "INSERT INTO registry_item_installs (id, workspace_id, registry_item_id, installed_entity_id) "
+            "VALUES (:id, :w, :item, :entity)"
+        ),
+        {"id": uuid.uuid4(), "w": WORKSPACE, "item": old, "entity": uuid.uuid4()},
+    )
+    await session.commit()
+
+    payloads["global"] = {"bundles": [{"name": "kept", "schema_version": "0.1.0"}]}
+    payloads["region"] = {"bundles": [{"name": "moved", "schema_version": "0.1.0"}]}
+    await service.sync_registry(region.id)
+    await service.sync_registry(glob.id)
+
+    new = (
+        await session.execute(
+            text("SELECT id FROM registry_items WHERE registry_id = :r AND external_id = 'moved'"),
+            {"r": region.id},
+        )
+    ).scalar_one()
+    install = await session.execute(
+        text("SELECT registry_item_id FROM registry_item_installs WHERE workspace_id = :w"),
+        {"w": WORKSPACE},
+    )
+    assert install.scalars().all() == [new]
+    left = await session.execute(
+        text("SELECT external_id FROM registry_items WHERE registry_id = :r"), {"r": glob.id}
+    )
+    assert left.scalars().all() == ["kept"]
+
+
+async def _mcp_copy(session: AsyncSession, item_id: uuid.UUID, workspace: str = WORKSPACE) -> uuid.UUID:
+    server = uuid.uuid4()
+    await session.execute(
+        text(
+            "INSERT INTO mcp_servers (id, workspace_id, created_by, name, slug, description, "
+            "version, tags, is_public, status, registry_item_id) VALUES (:id, :w, 'u', 'srv', "
+            ":slug, '', '1', '[]', false, 'active', :item)"
+        ),
+        {"id": server, "w": workspace, "slug": f"srv-{server.hex[:8]}", "item": item_id},
+    )
+    return server
+
+
+async def test_a_moved_mcp_server_keeps_one_platform_copy_and_its_instances_follow(
+    session: AsyncSession,
+):
+    # Both registries mirror the server: each item has the platform's own copy.
+    # The dropped item's copy must not move onto the new item (two copies of one
+    # server); its instances move to the new copy and the old copy goes.
+    repo = RegistryItemRepository(session)
+    glob = Registry(
+        name=f"{PREFIX}mcp-global", registry_type="mcp_servers", source_type="url", source_url="g"
+    )
+    region = Registry(
+        name=f"{PREFIX}mcp-region", registry_type="mcp_servers", source_type="url", source_url="r"
+    )
+    session.add_all([glob, region])
+    await session.commit()
+    old = await repo.create(registry_id=glob.id, external_id="srv", name="srv")
+    still = await repo.create(registry_id=glob.id, external_id="both", name="both")
+    new = await repo.create(registry_id=region.id, external_id="srv", name="srv")
+    await repo.create(registry_id=region.id, external_id="both", name="both")
+    old_copy = await _mcp_copy(session, old.id)
+    new_copy = await _mcp_copy(session, new.id)
+    still_copy = await _mcp_copy(session, still.id)
+    user_server = await _mcp_copy(session, old.id, workspace=f"{WORKSPACE}-b")
+    for item, copy in ((old, old_copy), (new, new_copy), (still, still_copy)):
+        await repo.update(item.id, installed_entity_id=copy)
+    instance = uuid.uuid4()
+    await session.execute(
+        text(
+            "INSERT INTO mcp_server_instances (id, name, server_spec_id, transport, workspace_id, "
+            "created_by) VALUES (:id, 'i', :spec, 'docker', :w, 'u')"
+        ),
+        {"id": instance, "spec": str(old_copy), "w": WORKSPACE},
+    )
+    await session.commit()
+    await repo.mark_in_source(glob.id, {"both"})
+
+    deleted: list[str] = []
+
+    class Servers:
+        async def delete(self, server_id: str) -> bool:
+            deleted.append(server_id)
+            await session.execute(text("DELETE FROM mcp_servers WHERE id = :id"), {"id": server_id})
+            return True
+
+    service = RegistryService(RegistryRepository(session), repo, server_repo=Servers())  # type: ignore[arg-type]
+    await service._move_uses(glob, [region.id])
+    assert await repo.delete_unreferenced_out_of_source(glob.id) == 1
+
+    assert deleted == [str(old_copy)]
+    spec = await session.execute(
+        text("SELECT server_spec_id FROM mcp_server_instances WHERE id = :id"), {"id": instance}
+    )
+    assert spec.scalar_one() == str(new_copy)
+    owners = await session.execute(
+        text("SELECT id, registry_item_id FROM mcp_servers WHERE id IN (:a, :b, :c)"),
+        {"a": new_copy, "b": still_copy, "c": user_server},
+    )
+    assert dict(owners.tuples().all()) == {new_copy: new.id, still_copy: still.id, user_server: new.id}
+    left = await session.execute(
+        text("SELECT external_id FROM registry_items WHERE registry_id = :r"), {"r": glob.id}
+    )
+    assert left.scalars().all() == ["both"]

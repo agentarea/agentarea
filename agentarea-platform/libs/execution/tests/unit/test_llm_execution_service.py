@@ -222,6 +222,7 @@ async def test_trailing_metadata_and_cumulative_tools_produce_one_final_result(
             },
         },
         "interrupted": False,
+        "finish_reason": None,
     }
     assert result.cost == to_money("0.02")
     assert without_sink == result
@@ -286,17 +287,49 @@ async def test_unaccounted_response_fails_without_success_marker_or_retry(
 
 
 @pytest.mark.parametrize("missing_rate", ["input_cost_per_token", "output_cost_per_token"])
-async def test_unknown_pricing_rejects_before_provider_io(
+async def test_a_model_without_a_price_runs_on_the_members_own_key(
     provider, make_service, user_context, missing_rate
 ):
     request = _request()
     request.resolved_model[missing_rate] = None
 
-    with pytest.raises(ValueError, match="model pricing is not configured"):
+    result = await make_service().execute(request, user_context=user_context)
+
+    assert result.content == "hello"
+    assert result.provider_cost_usd == to_money("0.02")
+    provider.ainvoke_stream.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    ("model_levels", "provider_levels"), [(["low", "high"], None), (None, ["low", "high"])]
+)
+async def test_a_level_the_catalog_does_not_list_is_refused_before_provider_io(
+    provider, make_service, user_context, model_levels, provider_levels
+):
+    request = _request(reasoning_effort="xhigh")
+    request.resolved_model["reasoning_efforts"] = model_levels
+    request.resolved_model["provider"]["reasoning_efforts"] = provider_levels
+
+    with pytest.raises(ValueError, match="takes reasoning_effort low, high, not xhigh"):
         await make_service().execute(request, user_context=user_context)
 
     provider.ainvoke_stream.assert_not_called()
-    provider.complete.assert_not_awaited()
+
+
+async def test_the_models_levels_win_over_the_providers(provider, make_service, user_context):
+    request = _request(reasoning_effort="xhigh")
+    request.resolved_model["reasoning_efforts"] = ["xhigh"]
+    request.resolved_model["provider"]["reasoning_efforts"] = ["low"]
+
+    await make_service().execute(request, user_context=user_context)
+
+    assert provider.ainvoke_stream.call_args.args[0].reasoning_effort == "xhigh"
+
+
+async def test_a_reasoning_budget_reaches_the_request(provider, make_service, user_context):
+    await make_service().execute(_request(reasoning_max_tokens=2048), user_context=user_context)
+
+    assert provider.ainvoke_stream.call_args.args[0].reasoning_max_tokens == 2048
 
 
 @pytest.mark.parametrize("stream", [True, False], ids=["streamed", "completed"])
@@ -498,6 +531,7 @@ async def test_cancellation_closes_iterator_and_next_call_has_no_partial_state(
                 },
             },
             "interrupted": False,
+            "finish_reason": None,
         }
         assert result.cost == to_money("0.02")
     finally:
@@ -808,6 +842,20 @@ async def test_activity_maps_missing_usage_to_nonretryable_error_once(provider, 
     assert raised.value.non_retryable is True
     assert raised.value.type == "RuntimeError"
     assert isinstance(raised.value.__cause__, RuntimeError)
+
+
+async def test_activity_refuses_a_reasoning_setting_once_without_retry(
+    provider, activity_boundary
+):
+    request = _activity_request(reasoning_effort="ultra")
+    request.resolved_model["provider"]["reasoning_efforts"] = ["low", "high"]
+
+    with pytest.raises(ApplicationError) as raised:
+        await ActivityEnvironment().run(activity_boundary.call, request)
+
+    assert raised.value.non_retryable is True
+    assert raised.value.type == "ReasoningSettingError"
+    provider.ainvoke_stream.assert_not_called()
 
 
 async def test_activity_preserves_retryable_rate_limit(provider, activity_boundary):

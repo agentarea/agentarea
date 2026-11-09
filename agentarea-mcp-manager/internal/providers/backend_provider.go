@@ -172,6 +172,9 @@ func BuildBackendInstanceSpec(instance *models.MCPServerInstance, resolver secre
 	if instance == nil {
 		return nil, fmt.Errorf("MCP instance is required")
 	}
+	if err := refuseStdioImage(instance.JSONSpec); err != nil {
+		return nil, err
+	}
 	resolvedJSON, err := resolveInstanceSpecSecrets(resolver, instance.InstanceID, instance.JSONSpec)
 	if err != nil {
 		return nil, err
@@ -222,12 +225,40 @@ func applyTransportSpec(spec *BackendInstanceSpec, jsonSpec map[string]any) {
 	if image, ok := jsonSpec["image"].(string); ok {
 		spec.Image = image
 	}
+	spec.Port = defaultDockerPort
 	if port, ok := jsonSpec["port"].(float64); ok {
 		spec.Port = int(port)
 	} else if port, ok := jsonSpec["port"].(int); ok {
 		spec.Port = port
 	}
 	spec.Command = mcpspec.DockerArgv(jsonSpec)
+}
+
+// defaultDockerPort is where the gateway reaches a docker instance that
+// declares no port, so its container listens there too.
+const defaultDockerPort = 8000
+
+// SpecRefusedError is an instance spec no workload can be started from. Its
+// reason is what the caller is told.
+type SpecRefusedError struct {
+	reason string
+}
+
+func (e *SpecRefusedError) Error() string {
+	return "MCP instance spec refused: " + e.reason
+}
+
+func (e *SpecRefusedError) FailureReason() string {
+	return e.reason
+}
+
+func refuseStdioImage(jsonSpec map[string]any) error {
+	if jsonSpec["type"] != "docker" || !mcpspec.ImageServesStdio(jsonSpec) {
+		return nil
+	}
+	image, _ := jsonSpec["image"].(string)
+	return &SpecRefusedError{reason: fmt.Sprintf(
+		"image %s speaks stdio; an image runs only when it serves MCP over HTTP on a port, so use the server's npm or PyPI package instead", image)}
 }
 
 func applyResourceLimits(spec *BackendInstanceSpec, jsonSpec map[string]any) {

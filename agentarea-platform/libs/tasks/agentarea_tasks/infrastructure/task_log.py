@@ -84,6 +84,14 @@ class TaskOutcome:
         return {}
 
 
+def changes_status(current: str | None, outcome: TaskOutcome | None) -> bool:
+    """Whether writing ``outcome`` moves the task to a status it does not have yet.
+
+    A retried write of the status the task already has is no new transition.
+    """
+    return outcome is not None and outcome.status != current
+
+
 @dataclass(frozen=True)
 class AuditLine:
     """One audit row a run's record stands for, stored once under its event's id."""
@@ -170,10 +178,11 @@ class TaskLog:
         outcome: TaskOutcome | None = None,
         costs: Sequence[CostEntry] = (),
         audits: Sequence[AuditLine] = (),
-    ) -> None:
+    ) -> bool:
         """Write the rows, the outcome, the spend lines and the audit rows; each once.
 
-        The rows carry the task's ``correlation_id`` and ``causation_id``.
+        The rows carry the task's ``correlation_id`` and ``causation_id``. True when
+        the outcome moved the task to a new status.
         """
         task = (
             await self.session.execute(
@@ -182,6 +191,7 @@ class TaskLog:
                     TaskORM.correlation_id,
                     TaskORM.causation_id,
                     TaskORM.task_metadata,
+                    TaskORM.status,
                 ).where(
                     TaskORM.id == task_id, TaskORM.workspace_id == self.user_context.workspace_id
                 )
@@ -208,6 +218,7 @@ class TaskLog:
                     event_metadata=pg_storable(line.event_metadata),
                 )
         await self.session.flush()
+        return changes_status(task.status, outcome)
 
     async def window(self, task_id: UUID, end_seq: int) -> list[ConversationEntry]:
         """The model's window over the rows before ``end_seq``, read in one query."""

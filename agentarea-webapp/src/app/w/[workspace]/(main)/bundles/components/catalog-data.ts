@@ -198,6 +198,25 @@ export function isCatalogPricing(v: unknown): v is CatalogPricing {
   );
 }
 
+// Protocol, hosting and pricing exist only on connections, and the backend
+// rejects them on any other type. A value left in the URL by another tab, or
+// junk from a hand-edited one, means "don't filter".
+export function connectionFacets(
+  type: CatalogType,
+  raw: { protocol?: unknown; hosting?: unknown; pricing?: unknown }
+): {
+  protocol?: CatalogProtocol;
+  hosting?: CatalogHosting;
+  pricing?: CatalogPricing;
+} {
+  if (type !== "connections") return {};
+  return {
+    protocol: isCatalogProtocol(raw.protocol) ? raw.protocol : undefined,
+    hosting: isCatalogHosting(raw.hosting) ? raw.hosting : undefined,
+    pricing: isCatalogPricing(raw.pricing) ? raw.pricing : undefined,
+  };
+}
+
 export function str(v: unknown): string | null {
   return typeof v === "string" && v ? v : null;
 }

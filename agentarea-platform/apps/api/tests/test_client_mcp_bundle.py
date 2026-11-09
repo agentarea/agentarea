@@ -40,13 +40,18 @@ class _Proxy:
     def __init__(self) -> None:
         self.instance_names: dict[str, str] = {}
 
-    async def list_namespaced_tools(self):
+    async def list_app_tools(self):
         return [{"name": "gh__create_issue", "description": "", "inputSchema": {"type": "object"}}]
 
     def owner_of(self, name):
         if name == "gh__create_issue":
             return AggregatedMember(mcp_instance_id="gh"), "create_issue"
         return None
+
+    async def resolve_tool(self, name):
+        if self.owner_of(name) is None:
+            raise ValueError(f"No member owns tool {name}")
+        return name
 
     async def call_namespaced_tool_result(self, name, arguments):
         raise ValueError(f"No member owns tool {name}")

@@ -150,7 +150,7 @@ is the agent, not the deployment.
     |---|---|
     | Redirected to `localhost:4433` in production | `kratos.urls.public` unset, so the internal service URL was used |
     | Login succeeds, next request is anonymous | `kratos.session.cookieDomain` still `localhost` |
-    | CORS error in the browser console | `kratos.config.serve.public.cors.allowed_origins` still points at the shipped staging domain |
+    | CORS error in the browser console | `kratos.config.serve.public.cors.allowed_origins` still allows only the shipped `http://localhost:3000` |
     | Token rejected with a signature error | `AGENTAREA_AUTH_JWKS_B64` differs between Kratos and the API |
 
     `ORY_SDK_URL` is for server-side calls from the frontend container;
@@ -280,10 +280,10 @@ Failures that look like one problem and are another:
     logging defect and a secret-leak risk, not a cosmetic one.
   </Accordion>
   <Accordion title="A Prometheus scrape returns 404">
-    Only the API serves `/metrics`, and only on
-    `global.monitoring.prometheus.port` (9090) while
-    `global.monitoring.prometheus.enabled` is set; the API port answers 404.
-    See [observability](/self-host/observability).
+    No process serves `/metrics` by default: metrics are pushed over OTLP. To scrape
+    instead, set `OTEL_METRICS_EXPORTER=prometheus` and scrape
+    `OTEL_EXPORTER_PROMETHEUS_HOST`:`OTEL_EXPORTER_PROMETHEUS_PORT` (default
+    `localhost:9464`). See [observability](/self-host/observability).
   </Accordion>
   <Accordion title="Provider icons are broken and OAuth callbacks fail">
     Both are served from `AGENTAREA_API_URL` . When `global.api.publicUrl` is empty

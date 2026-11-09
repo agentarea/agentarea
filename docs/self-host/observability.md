@@ -1,43 +1,51 @@
 ---
-title: Collect logs and traces
+title: Collect logs, traces and metrics
 type: guide
-description: "Read AgentArea's structured JSON logs, enable OpenTelemetry tracing, and understand which parts of the monitoring surface do not exist yet."
+description: "Read AgentArea's structured JSON logs, enable OpenTelemetry traces and metrics, and understand which parts of the monitoring surface do not exist yet."
 prerequisites:
   - /self-host/configuration
 related:
   - /self-host/troubleshooting
   - /self-host/configuration
   - /self-host/kubernetes
-last_updated: 2026-07-29
+last_updated: 2026-10-29
 ---
 
 AgentArea emits structured JSON logs on stdout from every Python service, and
-optional OpenTelemetry traces over OTLP. Both are real and configurable.
+optional OpenTelemetry traces and metrics, pushed over OTLP to a collector you
+run. Both are real and configurable.
 
-Metrics are limited to the API. While `global.monitoring.prometheus.enabled` is
-set (the chart default), the API serves Prometheus metrics at `/metrics` on
-`global.monitoring.prometheus.port` (9090), a port of its own that the public
-API port never answers for. Outside the chart, set `METRICS_ENABLED=true`
-(`AGENTAREA_METRICS_PORT` defaults to 9090):
+With telemetry on, the API and the worker export, among others:
 
-- `agentarea_http_request_duration_seconds{method, route, status}` — request
-  latency. `route` is the route template (`/v1/workspaces/{workspace}/mcp-servers/`),
-  `<unmatched>` when nothing matched; `status` is the class (`2xx`, `4xx`, `5xx`).
-- `agentarea_http_requests_in_progress{method, route}` — requests in flight.
-- `agentarea_authz_duration_seconds{operation}` — time spent on authorization:
-  `resolve_access`, `openfga_read`, `openfga_check`, `openfga_list_objects`,
-  `openfga_write`.
+- `http.server.request.duration` (API) — request latency by `http.request.method`,
+  `http.route` (the route template) and `http.response.status_code`.
+- `agentarea.authz.duration{operation}` — time spent on authorization.
+- `agentarea.broker.group.lag`, `.pending`, `.oldest_pending`,
+  `agentarea.broker.dlq.length`, `agentarea.broker.health` (API) — consumer-group health.
+  Read from Redis only: with `AGENTAREA_BROKER=kafka` the API starts without these
+  gauges and logs one warning saying so.
+- `agentarea.run.transitions{status, failure_reason}`, `agentarea.run.duration{status}`.
+- `gen_ai.client.operation.duration`, `gen_ai.client.token.usage`,
+  `gen_ai.client.operation.time_to_first_chunk`, `agentarea.llm.in_flight` — model calls
+  by provider, model spec, purpose and `error.type`.
+- `agentarea.tool.calls`, `agentarea.tool.call.duration`, `agentarea.tool.in_flight`,
+  `agentarea.tool.oldest_in_flight` — tool calls by `agentarea.tool.kind` (`mcp`,
+  `builtin`, `openapi`, `platform`, `delegation`, `skill`), `outcome` (`ok`,
+  `tool_error`, `transport_error`, `timeout`, `denied`, `held`, `cancelled`) and
+  path (`worker` or `api`).
+- `mcp.client.operation.duration`, `agentarea.mcp.client.era_renegotiated`.
+- Temporal SDK metrics (`temporal_*`) from the worker and the API.
+- `agentarea.process.uptime` — a heartbeat from every process.
 
-The metrics port needs `backend.workers: 1`; the API refuses to start with more
-worker processes while metrics are on. The worker and the MCP Manager expose no
-metrics. Read the section below before wiring a scrape config against them.
+Attributes never carry workspace, task, tool or instance ids; every instrument has
+a fixed attribute allowlist enforced by the SDK.
 
 ## Prerequisites
 
 <Info>
 - A running deployment
 - A log collector that reads container stdout — Loki, Elasticsearch, CloudWatch, or `kubectl logs` for one-off work
-- For tracing: an OTLP collector endpoint
+- For traces and metrics: an OTLP/HTTP collector endpoint
 </Info>
 
 ## Steps
@@ -122,39 +130,38 @@ metrics. Read the section below before wiring a scrape config against them.
     ```
   </Step>
 
-  <Step title="Enable tracing">
-    Tracing is off by default and gated by one variable. `setup_otel()` returns
-    immediately when `AGENTAREA_OTEL_ENABLED` is false, so the SDK is never installed.
+  <Step title="Enable traces and metrics">
+    Telemetry is off by default and gated by one variable. `setup_telemetry()`
+    returns immediately when `AGENTAREA_OTEL_ENABLED` is false, so the SDK is never
+    installed. In the chart, one switch wires every first-party Deployment
+    (backend, worker, mcp-manager, event-service):
 
     ```yaml
-    backend:
-      extraEnv:
-        - name: AGENTAREA_OTEL_ENABLED
-          value: "true"
-        - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: http://otel-collector.observability:4317
-        - name: OTEL_EXPORTER_OTLP_PROTOCOL
-          value: grpc
-
-    worker:
-      extraEnv:
-        - name: AGENTAREA_OTEL_ENABLED
-          value: "true"
-        - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: http://otel-collector.observability:4317
-        - name: OTEL_EXPORTER_OTLP_PROTOCOL
-          value: grpc
+    telemetry:
+      enabled: true
+      otlpEndpoint: http://otel-collector.observability:4318
     ```
+
+    That sets `AGENTAREA_OTEL_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`,
+    `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`, `OTEL_SEMCONV_STABILITY_OPT_IN=http`
+    and `OTEL_RESOURCE_ATTRIBUTES` with the pod's name and namespace and
+    `service.version` set to the Deployment's image tag.
 
     | Variable | Default | Meaning |
     |---|---|---|
     | `AGENTAREA_OTEL_ENABLED` | `false` | AgentArea's own gate. Nothing is installed unless this is true. |
+    | `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | Required when enabled (or both `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` and `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`); the process refuses to start without it. |
+    | `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | Or `grpc`. |
+    | `OTEL_METRICS_EXPORTER` | `otlp` | `otlp`, `prometheus` (a scrape endpoint on `OTEL_EXPORTER_PROMETHEUS_HOST`:`OTEL_EXPORTER_PROMETHEUS_PORT`, default `localhost:9464`, one process per pod), or `none`. |
+    | `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | Push interval in milliseconds. |
+    | `OTEL_SEMCONV_STABILITY_OPT_IN` | unset | The process sets `http` itself when unset. A value without `http`, or with `http/dup`, stops it at startup. |
     | `OTEL_SERVICE_NAME` | `""` | Overrides the built-in name — `agentarea-api` or `agentarea-worker`. |
-    | `OTEL_EXPORTER_OTLP_PROTOCOL` | `grpc` | `grpc`, or `http/protobuf` to use the HTTP exporter. |
 
-    Every other `OTEL_EXPORTER_OTLP_*` variable is read by the OpenTelemetry SDK
-    itself, not by AgentArea. `OTEL_EXPORTER_OTLP_ENDPOINT` in particular is the
-    SDK's, which is why it does not appear in the chart.
+    Every process identifies itself with `service.name`, `service.namespace=agentarea`,
+    `service.version` (from `OTEL_RESOURCE_ATTRIBUTES` when set there, else the package
+    version), `service.instance.id` (`<pod>-<pid>`, so several uvicorn
+    workers in one pod never overwrite each other) and `deployment.environment.name`
+    (`AGENTAREA_ENV`). Metrics are cumulative and flushed on exit.
 
     When enabled on the API, FastAPI, asyncpg, redis, and httpx are instrumented, so
     spans cover inbound requests, database queries, cache calls, and outbound HTTP.
@@ -165,6 +172,54 @@ metrics. Read the section below before wiring a scrape config against them.
     Once tracing is on, `trace_id` and `span_id` appear in the log records, so a
     trace in your collector and the logs for the same request join on those two
     fields.
+  </Step>
+
+  <Step title="Enable MCP Manager and event service telemetry">
+    The two Go services read the same `AGENTAREA_OTEL_ENABLED` gate, and it turns
+    on traces and metrics together. In the chart, `telemetry.enabled` and
+    `telemetry.otlpEndpoint` wire them along with the API and the worker. Outside
+    the chart, set the variables on each service:
+
+    ```bash
+    AGENTAREA_OTEL_ENABLED=true
+    OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability:4318
+    ```
+
+    Their defaults differ from the API's and the worker's:
+
+    | Variable | Default | Meaning |
+    |---|---|---|
+    | `OTEL_EXPORTER_OTLP_ENDPOINT` | required | The service refuses to start while the gate is on and a signal exported over OTLP has neither this nor its own `OTEL_EXPORTER_OTLP_{TRACES,METRICS}_ENDPOINT`. |
+    | `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | The SDK default, port 4318. Set `grpc` for a collector on 4317. The event service defaulted to `grpc` before; see [Changed defaults](/self-host/env-migration#changed-defaults). |
+    | `OTEL_METRICS_EXPORTER` | `otlp` | `prometheus` or `none` hand metrics to the SDK's own exporter instead. |
+    | `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | Push interval in milliseconds. |
+
+    Both services export `agentarea.process.uptime`; a series that stops while
+    the pod runs means the exporter is failing, not that the service is idle.
+
+    MCP Manager:
+
+    - `agentarea.mcp.gateway.requests{mcp.method.name, status, cold}` and
+      `agentarea.mcp.gateway.request.duration` — requests through the gateway,
+      cold start included. `status` is the class (`2xx`, `4xx`, `5xx`), or
+      `503_starting`, `502_start_failed`, `503_start_failed`, `canceled`, or
+      `aborted` when the proxied stream broke mid-copy.
+    - `agentarea.mcp.gateway.in_flight` and `agentarea.mcp.gateway.oldest_in_flight`
+      — requests served now, and the age of the oldest. A `GET` is a standing
+      MCP stream, so it counts in flight but never ages the oldest.
+    - `agentarea.mcp.cold_starts{outcome, reason, plane}` and
+      `agentarea.mcp.cold_start.duration{phase, outcome, plane}`.
+    - `agentarea.mcp.upstream.responses{status}` and `agentarea.mcp.idle_reaps`.
+    - `agentarea.mcp.instances{state}` — instances by lifecycle state, counted
+      in the database. Every replica reports the same global count, so aggregate
+      it across replicas with `max`, never `sum`.
+    - `http.server.request.duration` for the HTTP API, plus the Go runtime
+      metrics.
+
+    Event service: `agentarea.event.polls{transport, outcome}`,
+    `agentarea.event.poll.duration{transport}`,
+    `agentarea.event.items_published{transport}`, `agentarea.event.pollers{state}`,
+    and the Go runtime metrics.
   </Step>
 
   <Step title="Use the health endpoints">
@@ -235,9 +290,7 @@ metrics. Read the section below before wiring a scrape config against them.
   <Step title="What does not exist">
     State this plainly before building on it:
 
-    - **No Prometheus metrics outside the API.** The worker and the MCP Manager expose no `/metrics`.
-    - **Two Prometheus counters are defined but not exported.** `mcp_last_dispatch_dropped_total` and `mcp_dispatch_failed_total` (labelled by `reason`) are declared in the execution library and incremented at runtime, but no process serves the `prometheus_client` registry over HTTP. They are unreachable without adding an exposition endpoint yourself.
-    - **No first-party Go metrics.** `prometheus/client_golang` is an indirect dependency of the MCP Manager. There is no `promhttp` handler.
+    - **No Prometheus endpoint by default.** Every service pushes OTLP; `OTEL_METRICS_EXPORTER=prometheus` serves `/metrics` for scraping instead.
     - **No bundled Grafana, Prometheus, Alertmanager, or Jaeger.** The chart deploys none of these and has no `monitoring.enabled` switch that does.
     - **No shipped dashboards or alert rules.**
 
@@ -264,14 +317,14 @@ kubectl logs -n agentarea -l app.kubernetes.io/component=backend \
   | jq -c 'select(.workspace_id != null) | {level, logger, workspace_id}' | head
 ```
 
-Confirm tracing initialized. `setup_otel` logs once when it succeeds:
+Confirm telemetry initialized. `setup_telemetry` logs once when it succeeds:
 
 ```bash
-kubectl logs -n agentarea -l app.kubernetes.io/component=backend | grep "OpenTelemetry tracing enabled"
+kubectl logs -n agentarea -l app.kubernetes.io/component=backend | grep "OpenTelemetry enabled"
 ```
 
 ```text
-OpenTelemetry tracing enabled for agentarea-api
+OpenTelemetry enabled for agentarea-api (metrics exporter: otlp)
 ```
 
 Absence of that line with `AGENTAREA_OTEL_ENABLED=true` means the variable did not reach
@@ -300,22 +353,18 @@ curl -s http://localhost:8000/health | jq .
     handler.
   </Accordion>
   <Accordion title="`AGENTAREA_OTEL_ENABLED=true` and no spans arrive">
-    Check the startup line first — if `OpenTelemetry tracing enabled` is absent,
+    Check the startup line first — if `OpenTelemetry enabled` is absent,
     the process never got the variable. If it is present, the exporter is
     failing: the endpoint comes from `OTEL_EXPORTER_OTLP_ENDPOINT` , which the
     SDK reads directly, and a mismatch between `OTEL_EXPORTER_OTLP_PROTOCOL` and
     your collector's port is the usual cause — 4317 for gRPC, 4318 for
-    `http/protobuf` .
+    `http/protobuf` . The API and the worker default to gRPC; the MCP Manager
+    and the event service default to `http/protobuf` .
   </Accordion>
   <Accordion title="Traces stop at the workflow boundary">
     The worker does not have `AGENTAREA_OTEL_ENABLED` set. Context propagation across
     activities comes from the Temporal plugin, which is only registered on the
     worker.
-  </Accordion>
-  <Accordion title="A Prometheus scrape of the API returns 404">
-    The scrape went to the API port. Metrics are served only on
-    `global.monitoring.prometheus.port` (9090), and only while
-    `global.monitoring.prometheus.enabled` is set.
   </Accordion>
   <Accordion title="Setting `global.monitoring.health.port` did not move the health endpoint">
     It names a container and Service port only; nothing in the API reads it.

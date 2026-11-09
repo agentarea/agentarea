@@ -212,3 +212,23 @@ func TestResolveInstanceEnvVarsRefusesUnknownInstance(t *testing.T) {
 		t.Fatal("ResolveInstanceEnvVars() error = nil, want a failure for an instance that does not exist")
 	}
 }
+
+// A reference names a secret inside one workspace's catalog; the same name in
+// another workspace is a different secret and must not answer for it.
+func TestResolveWorkspaceSecretReadsOnlyThatWorkspace(t *testing.T) {
+	db := resolverTestDB(t)
+	resolver, key := newSchemaBackedResolver(t, db)
+	insertSecret(t, db, "ws-exit-owner", "proxy-password", fernetEncrypt(t, key, "owner-value"))
+	insertSecret(t, db, "ws-exit-other", "proxy-password", fernetEncrypt(t, key, "other-value"))
+
+	value, err := resolver.ResolveWorkspaceSecret(context.Background(), "ws-exit-owner", "proxy-password")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if value != "owner-value" {
+		t.Fatalf("resolved %q, want the owner workspace's value", value)
+	}
+	if _, err := resolver.ResolveWorkspaceSecret(context.Background(), "ws-exit-none", "proxy-password"); err == nil {
+		t.Fatal("a workspace without the secret resolved another workspace's value")
+	}
+}

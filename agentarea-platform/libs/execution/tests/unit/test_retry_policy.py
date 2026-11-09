@@ -91,12 +91,6 @@ def test_accounting_contract_errors_fail_fast_after_paid_call():
         )
         is True
     )
-    assert (
-        _is_non_retryable_error(
-            ValueError("remote model pricing is not configured; run budget cannot be enforced")
-        )
-        is True
-    )
 
 
 def test_governance_decisions_are_not_retried():
@@ -128,3 +122,14 @@ def test_model_calls_ride_out_minutes_of_provider_outage():
         waits.append(min(interval, policy.maximum_interval.total_seconds()))
         interval *= policy.backoff_coefficient
     assert sum(waits) >= 120
+
+
+def test_a_classified_cause_decides_the_retry_over_the_message_wording():
+    from agentarea_agents_sdk.models.llm_model import LLMProviderHTTPError
+    from agentarea_execution.activities.agent.llm import _model_call_failure
+
+    upstream = LLMProviderHTTPError(502, "Upstream error: model returned an invalid response")
+    assert _model_call_failure("LLM call failed", upstream).non_retryable is False
+
+    assert _model_call_failure("LLM call failed", LLMProviderHTTPError(401, "bad key")).non_retryable
+    assert _model_call_failure("LLM call failed", Exception("model gpt-x does not exist")).non_retryable

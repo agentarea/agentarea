@@ -23,6 +23,8 @@ from agentarea_common.testing import install_graph_ownership_stub
 from agentarea_governance.domain.rules import PolicyEffect, PolicySubjectType
 from agentarea_governance.infrastructure.orm import PolicyRuleORM
 from agentarea_governance.infrastructure.repository import PolicyRuleRepository
+from agentarea_mcp.domain.auth_models import MCPAuthConfig
+from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 
@@ -49,6 +51,8 @@ async def session_factory():
                     agent_skills_table,
                     PolicyRuleORM.__table__,
                     AuditEventORM.__table__,
+                    MCPAuthConfig.__table__,
+                    MCPServerInstance.__table__,
                 ],
             )
         )

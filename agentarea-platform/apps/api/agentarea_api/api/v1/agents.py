@@ -5,7 +5,7 @@ from contextlib import suppress
 from typing import Annotated, Any, Literal, cast
 from uuid import UUID
 
-from agentarea_agents.application.agent_service import AgentService
+from agentarea_agents.application.agent_service import AgentService, ReasoningConflictError
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.schemas.dto import (
     AgentCreate,
@@ -34,11 +34,14 @@ from agentarea_common.config.database import get_db_session
 from agentarea_common.rebac import owner_relations
 from agentarea_governance.domain.policies import AnswerCheckPolicy
 from agentarea_mcp.application.service import MCPServerInstanceService
+from agentarea_mcp.domain.client_models import Client
+from agentarea_mcp.infrastructure.runner_presence import runner_presence
 from agentarea_triggers.domain.models import Trigger
 from agentarea_triggers.schemas.dto import TriggerSpec
 from agentarea_triggers.trigger_service import TriggerService, TriggerValidationError
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, ValidationError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ._access_control_grants import grant_resource_owner
@@ -56,6 +59,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
+class AgentClientSummary(BaseModel):
+    id: UUID
+    name: str
+    kind: str
+    online: bool
+    default_model: str | None
+
+
 class AgentResponse(BaseModel):
     id: UUID
     slug: str
@@ -64,9 +75,14 @@ class AgentResponse(BaseModel):
     description: str | None = None
     instruction: str | None = None
     model_id: str | None = None
+    # The client whose runner runs the agent's tasks, when not the platform's loop (ADR-0051).
+    client_id: UUID | None = None
+    client: AgentClientSummary | None = None
     tools: list[ToolConfig] | None = None
     planning: bool | None = None
     a2ui_enabled: bool | None = None
+    reasoning_effort: str | None = None
+    reasoning_max_tokens: int | None = None
     answer_check: AnswerCheckPolicy | None = None
     agent_type: str = "stateless"
     skills: list[dict] | None = None
@@ -118,9 +134,12 @@ class AgentResponse(BaseModel):
             description=cast(str | None, agent.description),
             instruction=cast(str | None, agent.instruction),
             model_id=cast(str | None, agent.model_id),
+            client_id=agent.client_id,
             tools=tools,
             planning=cast(bool | None, agent.planning),
             a2ui_enabled=cast(bool | None, agent.a2ui_enabled),
+            reasoning_effort=agent.reasoning_effort,
+            reasoning_max_tokens=agent.reasoning_max_tokens,
             answer_check=(
                 AnswerCheckPolicy.model_validate(agent.answer_check) if agent.answer_check else None
             ),
@@ -194,6 +213,34 @@ async def _overlay_approval_flags(
             continue
         applied = apply_approval_targets([t.model_dump() for t in response.tools], targets)
         response.tools = [TOOL_CONFIG_ADAPTER.validate_python(t) for t in applied]
+
+
+async def _overlay_runner_clients(
+    session: AsyncSession, user_context: UserContext, responses: list[AgentResponse]
+) -> None:
+    """Name each response's client, online when its runner's socket is connected."""
+    ids = {response.client_id for response in responses if response.client_id is not None}
+    if not ids:
+        return
+    clients = {
+        client.id: client
+        for client in await session.scalars(
+            select(Client).where(
+                Client.id.in_(ids), Client.workspace_id == user_context.workspace_id
+            )
+        )
+    }
+    online = await runner_presence().online(clients)
+    for response in responses:
+        client = clients.get(response.client_id) if response.client_id else None
+        if client is not None:
+            response.client = AgentClientSummary(
+                id=client.id,
+                name=client.name,
+                kind=client.kind,
+                online=client.id in online,
+                default_model=client.default_model,
+            )
 
 
 # Stands in for the agent id while a trigger's configuration is checked before
@@ -275,6 +322,7 @@ async def create_agent(
     await _grant_agent_owner(agent.id, user_context.user_id, user_context.workspace_id)
     response = AgentResponse.from_domain(agent)
     await _overlay_approval_flags(session, user_context, [response])
+    await _overlay_runner_clients(session, user_context, [response])
     return response
 
 
@@ -500,6 +548,7 @@ async def get_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
     response = AgentResponse.from_domain(agent, include_skills=True)
     await _overlay_approval_flags(session, user_context, [response])
+    await _overlay_runner_clients(session, user_context, [response])
     return response
 
 
@@ -570,6 +619,7 @@ async def list_agents(
     ]
     responses = [AgentResponse.from_domain(agent) for agent in agents]
     await _overlay_approval_flags(session, user_context, responses)
+    await _overlay_runner_clients(session, user_context, responses)
     return responses
 
 
@@ -597,6 +647,8 @@ async def update_agent(
         agent = await agent_service.update_agent(id=resolved_id, payload=data)
     except AgentArchivedError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ReasoningConflictError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     await _reassert_creator_ownership(agent, user_context)
@@ -605,6 +657,7 @@ async def update_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
     response = AgentResponse.from_domain(agent, include_skills=True)
     await _overlay_approval_flags(session, user_context, [response])
+    await _overlay_runner_clients(session, user_context, [response])
     return response
 
 
@@ -659,4 +712,5 @@ async def restore_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
     response = AgentResponse.from_domain(agent, include_skills=True)
     await _overlay_approval_flags(session, user_context, [response])
+    await _overlay_runner_clients(session, user_context, [response])
     return response

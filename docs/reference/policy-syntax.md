@@ -99,7 +99,29 @@ at parse time.
 | `registry_trust` | `registry_trust:<level>`, level one of `official`, `verified`, `community`, `private` | Yes, with `allow` or `deny` on a `workspace` or `user` subject only | **No.** Decided on catalog install |
 
 Tool names are matched with `fnmatch` glob semantics against the LLM-facing tool
-name.
+name and the tool's other names below.
+
+A tool that comes from a connection is allowed only by its connection's id.
+Every other name it has only denies it or holds it for approval: an `allow`
+naming one of those does not admit it, and in a workspace with any `allow` on
+tools the tool is then denied.
+
+| Tool | Names an `allow` matches | Names that only `deny` or require `approval` |
+|---|---|---|
+| MCP | `mcp:<instance id>:<tool>` | The LLM-facing `mcp__<server>__<tool>`, `mcp:<instance name>:<tool>`, the raw `<tool>` the server advertises |
+| OpenAPI operation | `openapi:<connection id>:<tool>` | The LLM-facing operation name, the spec's `operationId`, the connection's name and its id alone |
+| Delegate to a workspace agent | `agent:<agent id>` | The LLM-facing `delegate_to_<name>` and the delegate's name |
+| Delegate to a remote agent | `a2a:<agent address>` | The LLM-facing `delegate_to_<name>` and the delegate's name |
+| Built-in or platform tool | The LLM-facing name | Its config name (a code toolset's namespace) |
+
+Connection names are not unique, and any workspace member can add a connection
+and choose its name, its server's tool names and its OpenAPI `operationId`s. An
+`allow` that matched those names would admit every connection that reused them.
+To allow a connection tool, name it as `tool:mcp:<instance id>:<tool>` or
+`tool:openapi:<connection id>:<tool>`; the connection's page shows the id.
+A delegate's tool name comes from an agent name, which any member chooses and
+which is not unique either, so a delegate is allowed as
+`tool:agent:<agent id>`, or a remote one as `tool:a2a:<agent address>`.
 
 ### Params by effect
 
@@ -118,7 +140,6 @@ name.
 | `approval` | `*`, `tool:*` | `approvers` | array of subject refs | Optional. Empty means any caller may approve. |
 | `approval` | `tool:<name>` | `approvers` | array of subject refs | Optional. Stored under `approvers_by_tool[<name>]`. |
 | `safety` | `content` | `prompt_injection` | boolean | Coerced with `bool()`. |
-| `safety` | `content` | `output_sanitizer` | boolean | Coerced with `bool()`. |
 | `safety` | `content` | `answer_check` | object | `{enabled?: bool = true, language?: string, rewrite_instruction?: string (≤4000)}`; unknown keys are refused. See [Answer check](#answer-check). |
 | `egress` | `mcp:<id>` | `allowed_hosts` | array of strings | A non-list value skips the rule. |
 
@@ -167,7 +188,7 @@ Applied per layer in order. A lower layer may only tighten.
 | `approval.escalation_rules` | union | — |
 | `approval.approvers` | union | — |
 | `approval.approvers_by_tool` | union per tool key | — |
-| `content_safety.prompt_injection_detection_enabled`, `content_safety.output_sanitizer_enabled` | logical OR | sets `false` where a higher layer set `true` |
+| `content_safety.prompt_injection_detection_enabled` | logical OR | sets `false` where a higher layer set `true` |
 | `content_safety.answer_check` | the lowest layer that sets it wins (an agent's over the workspace's); any rule that sets it overrides the agent's own setting | — |
 
 A rejected chain raises a validation error, surfaced as HTTP 422.
@@ -250,7 +271,7 @@ and the API returns it while the runtime never sees it.
 | `deny` on `tool:<name>` | Enforced |
 | `allow` on `tool:<name>` | Enforced |
 | `approval` on `*`, `tool:*`, `tool:<name>` | Enforced in the agent workflow only |
-| `safety` on `content` | `prompt_injection` and `output_sanitizer` by the two registered content filters; `answer_check` by the agent workflow on its final answer |
+| `safety` on `content` | `prompt_injection` by the registered content filter; `answer_check` by the agent workflow on its final answer |
 | `condition` on any rule | **Inert.** No resolver, compiler or gate reads it. |
 | `subject_type: group` | **Inert.** The resolver reads workspace, agent and user layers only. |
 | `priority` | **Inert.** Stored and returned; not used in ordering. |
@@ -301,7 +322,7 @@ already has is left untouched.
 | `spend` | `cap` | `amount_usd: "500.00"`, `period: month` |
 | `spend` | `cap` | `amount_usd: "50.00"`, `period: run` |
 | `tokens` | `cap` | `max_tokens: 20000000`, `max_tokens_per_call: 100000` |
-| `content` | `safety` | `prompt_injection: true`, `output_sanitizer: true` |
+| `content` | `safety` | `prompt_injection: true` |
 
 No approval rule is seeded.
 

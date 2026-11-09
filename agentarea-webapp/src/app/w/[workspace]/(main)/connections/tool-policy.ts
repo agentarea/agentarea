@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type {
   McpInstanceToolPolicy,
   PolicyRuleResponse,
@@ -122,4 +123,20 @@ export function sharedToolPolicy(
     toolNames.map((name) => states[name]?.default ?? "allow")
   );
   return found.size === 1 ? [...found][0] : null;
+}
+
+// What a server action is asked to change: anything else is refused before a
+// rule is read, so a crafted call cannot target another connection by pattern.
+const toolPolicyChange = z.object({
+  instanceId: z.string().uuid(),
+  toolNames: z.array(z.string().min(1)).min(1).max(1000),
+  policy: z.enum(["allow", "approval", "deny"]),
+});
+
+export type ToolPolicyChange = z.infer<typeof toolPolicyChange>;
+
+/** The change a server action was asked for, or `null` when it is not one. */
+export function parseToolPolicyChange(input: unknown): ToolPolicyChange | null {
+  const parsed = toolPolicyChange.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

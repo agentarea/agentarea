@@ -105,26 +105,26 @@ async def test_agent_without_model_blocks():
 
 
 class _AllExist:
-    async def find_agent(self, name):
+    async def ref_exists(self, kind, entity_id):
+        return True
+
+    async def find_trigger(self, name, agent_id, recorded):
         return "x"
 
-    async def find_mcp_instance(self, name):
-        return "x"
+    async def find_policy(self, policy, agent_id):
+        return None
 
-    async def find_skill(self, name):
-        return "x"
-
-    async def find_trigger(self, name):
-        return "x"
+    async def channel_credential_keys(self, entity_id):
+        return None
 
 
-async def test_existence_marks_already_exists():
+async def test_without_a_record_of_an_earlier_install_nothing_already_exists():
     preview = await BundleAnalyzer(existence=_AllExist()).analyze(parse_bundle(GOOD))
     statuses = {(e.kind, e.key): e.status for e in preview.entities}
-    # mcp existence is by name; supported mcp should be ALREADY_EXISTS
-    assert statuses[("skill", "sk")] == EntityStatus.ALREADY_EXISTS
-    assert statuses[("agent", "lead")] == EntityStatus.ALREADY_EXISTS
-    assert statuses[("automation", "daily")] == EntityStatus.ALREADY_EXISTS
+    assert statuses[("skill", "sk")] == EntityStatus.WILL_CREATE
+    assert statuses[("agent", "lead")] == EntityStatus.WILL_CREATE
+    # its agent is new, so no trigger can be the bundle's yet
+    assert statuses[("automation", "daily")] == EntityStatus.WILL_CREATE
 
 
 async def test_policy_preview_entities():
@@ -250,11 +250,13 @@ def _prior(text=DEPLOYED, action=InstallAction.CREATED):
 class _Refs:
     """Every previously installed id still resolves; nothing else exists by name."""
 
-    def __init__(self, gone=(), by_name=False, named=None, no_credentials=()):
+    def __init__(self, gone=(), no_credentials=(), triggers=(), rules=None):
         self.gone = set(gone)
-        self.by_name = by_name
-        self.named = named or {}
         self.no_credentials = set(no_credentials)
+        # (name, agent id, trigger id) of the workspace's triggers
+        self.triggers = list(triggers)
+        # {(policy key, subject agent id or None) -> rule id}
+        self.rules = rules or {}
 
     async def ref_exists(self, kind, entity_id):
         return entity_id not in self.gone
@@ -262,20 +264,18 @@ class _Refs:
     async def channel_credential_keys(self, entity_id):
         return set() if entity_id in self.no_credentials else {"bot_token"}
 
-    def _find(self, name):
-        return self.named.get(name, f"id-by-name-{name}" if self.by_name else None)
+    async def find_trigger(self, name, agent_id, recorded):
+        return next(
+            (
+                t
+                for n, a, t in self.triggers
+                if n == name and a == agent_id and recorded in (None, t)
+            ),
+            None,
+        )
 
-    async def find_agent(self, name):
-        return self._find(name)
-
-    async def find_mcp_instance(self, name):
-        return self._find(name)
-
-    async def find_skill(self, name):
-        return self._find(name)
-
-    async def find_trigger(self, name):
-        return self._find(name)
+    async def find_policy(self, policy, agent_id):
+        return self.rules.get((policy.key, agent_id))
 
 
 def _statuses(preview):
@@ -349,17 +349,24 @@ async def test_an_installed_entity_deleted_since_is_created_again():
     assert s[("agent", "lead")] == EntityStatus.WILL_UPDATE
 
 
-async def test_entities_reused_by_name_stay_already_exists():
-    # The previous install linked a same-name entity it did not create; that one
-    # is not this bundle's to update, so it is reported as it was before.
+async def test_entities_the_last_install_reused_stay_already_exists():
+    # The previous install linked an entity it did not create; that one is not
+    # this bundle's to update, so it is linked again by its recorded id.
     prior = _prior(action=InstallAction.REUSED)
     edited = DEPLOYED.replace("instruction: x", "instruction: y")
-    preview = await BundleAnalyzer(existence=_Refs(by_name=True), prior=prior).analyze(
-        parse_bundle(edited)
-    )
+    preview = await BundleAnalyzer(existence=_Refs(), prior=prior).analyze(parse_bundle(edited))
     s = _statuses(preview)
     assert s[("agent", "lead")] == EntityStatus.ALREADY_EXISTS
+    assert s[("skill", "sk")] == EntityStatus.ALREADY_EXISTS
     assert EntityStatus.ORPHANED not in s.values()
+
+
+async def test_a_reused_entity_gone_since_will_be_created():
+    prior = _prior(action=InstallAction.REUSED)
+    preview = await BundleAnalyzer(existence=_Refs(gone={"id-sk"}), prior=prior).analyze(
+        parse_bundle(DEPLOYED)
+    )
+    assert _statuses(preview)[("skill", "sk")] == EntityStatus.WILL_CREATE
 
 
 async def test_changed_mcp_reports_changes_not_applied():
@@ -389,26 +396,42 @@ async def test_prior_install_is_read_from_the_stored_record():
     assert prior.owned(EntityKind.SKILL, "sk") is None
 
 
-class _ByExactName(_Refs):
-    def __init__(self, names):
-        super().__init__(named=dict.fromkeys(names, "id-x"))
-
-
-async def test_trigger_existence_is_by_the_exact_trigger_name():
-    pkg = parse_bundle(
-        GOOD + "channels:\n  - {key: inbox, name: Inbox, agent: lead}\n"
+async def test_a_trigger_is_the_bundles_only_with_its_name_its_agent_and_the_recorded_id():
+    pkg = parse_bundle(DEPLOYED + "channels:\n  - {key: inbox, name: Inbox, agent: lead}\n")
+    prior = PriorInstall(
+        bundle=pkg,
+        result=InstallResult(
+            bundle_name="seo",
+            entities=[
+                InstalledEntity(
+                    kind=EntityKind.AGENT,
+                    key="lead",
+                    name="Lead",
+                    action=InstallAction.REUSED,
+                    id="id-lead",
+                ),
+                InstalledEntity(
+                    kind=EntityKind.CHANNEL,
+                    key="inbox",
+                    name="seo:inbox",
+                    action=InstallAction.REUSED,
+                    id="id-inbox",
+                ),
+            ],
+        ),
     )
-    preview = await BundleAnalyzer(existence=_ByExactName({"seo:daily", "seo:inbox"})).analyze(pkg)
-    s = _statuses(preview)
-    assert s[("automation", "daily")] == EntityStatus.ALREADY_EXISTS
-    assert s[("channel", "inbox")] == EntityStatus.ALREADY_EXISTS
 
-    other = await BundleAnalyzer(existence=_ByExactName({"other:daily", "other:inbox"})).analyze(
-        pkg
-    )
-    s = _statuses(other)
-    assert s[("automation", "daily")] == EntityStatus.WILL_CREATE
-    assert s[("channel", "inbox")] == EntityStatus.WILL_CREATE
+    async def statuses(*triggers):
+        preview = await BundleAnalyzer(existence=_Refs(triggers=triggers), prior=prior).analyze(pkg)
+        s = _statuses(preview)
+        return s[("automation", "daily")], s[("channel", "inbox")]
+
+    ours = await statuses(("seo:daily", "id-lead", "t1"), ("seo:inbox", "id-lead", "id-inbox"))
+    assert ours == (EntityStatus.ALREADY_EXISTS, EntityStatus.ALREADY_EXISTS)
+    squatted = await statuses(("seo:daily", "id-other", "t1"), ("seo:inbox", "id-lead", "t2"))
+    assert squatted == (EntityStatus.WILL_CREATE, EntityStatus.WILL_CREATE)
+    elsewhere = await statuses(("other:daily", "id-lead", "t1"))
+    assert elsewhere[0] == EntityStatus.WILL_CREATE
 
 
 MODEL_SETUP = """
@@ -444,16 +467,16 @@ async def test_a_changed_setup_value_will_update_what_uses_it():
     assert await status({}) == EntityStatus.UNCHANGED
 
 
-async def test_a_reused_dependency_replaced_by_another_id_updates_the_agent():
+async def test_a_reused_dependency_gone_since_is_created_and_updates_the_agent():
     prior = _prior()
     prior.result.entities[1] = prior.result.entities[1].model_copy(
         update={"action": InstallAction.REUSED, "id": "id-old-skill"}
     )
-    preview = await BundleAnalyzer(
-        existence=_Refs(named={"Audit": "id-new-skill"}), prior=prior
-    ).analyze(parse_bundle(DEPLOYED))
+    preview = await BundleAnalyzer(existence=_Refs(gone={"id-old-skill"}), prior=prior).analyze(
+        parse_bundle(DEPLOYED)
+    )
     s = _statuses(preview)
-    assert s[("skill", "sk")] == EntityStatus.ALREADY_EXISTS
+    assert s[("skill", "sk")] == EntityStatus.WILL_CREATE
     assert s[("agent", "lead")] == EntityStatus.WILL_UPDATE
 
 
@@ -462,9 +485,7 @@ async def test_the_same_reused_dependency_leaves_the_agent_unchanged():
     prior.result.entities[1] = prior.result.entities[1].model_copy(
         update={"action": InstallAction.REUSED, "id": "id-same"}
     )
-    preview = await BundleAnalyzer(existence=_Refs(named={"Audit": "id-same"}), prior=prior).analyze(
-        parse_bundle(DEPLOYED)
-    )
+    preview = await BundleAnalyzer(existence=_Refs(), prior=prior).analyze(parse_bundle(DEPLOYED))
     assert _statuses(preview)[("agent", "lead")] == EntityStatus.UNCHANGED
 
 
@@ -653,11 +674,20 @@ async def test_a_changed_github_skill_is_reported_not_reimported():
     assert any(i.severity is IssueSeverity.WARN and i.entity_key == "sk" for i in preview.issues)
 
 
-async def test_a_github_skill_found_by_name_is_reused():
-    preview = await BundleAnalyzer(existence=_Refs(named={"Audit": "id-x"})).analyze(
-        parse_bundle(GITHUB_SKILL)
+async def test_a_rule_the_install_would_reuse_is_planned_as_already_existing():
+    pkg = parse_bundle(
+        DEPLOYED + '  - {key: deny, subject: lead, target: "tool:send_email", effect: deny}\n'
     )
-    assert _statuses(preview)[("skill", "sk")] == EntityStatus.ALREADY_EXISTS
+    rules = {("cap", None): "rule-cap", ("deny", "id-lead"): "rule-deny"}
+
+    first = await BundleAnalyzer(existence=_Refs(rules=rules)).analyze(pkg)
+    # the workspace rule exists; the agent one cannot, its agent is new
+    assert _statuses(first)[("policy", "cap")] == EntityStatus.ALREADY_EXISTS
+    assert _statuses(first)[("policy", "deny")] == EntityStatus.WILL_CREATE
+
+    prior = _prior(DEPLOYED.split("policies:")[0])
+    again = await BundleAnalyzer(existence=_Refs(rules=rules), prior=prior).analyze(pkg)
+    assert _statuses(again)[("policy", "deny")] == EntityStatus.ALREADY_EXISTS
 
 
 async def test_a_channel_without_stored_credentials_will_update_and_needs_its_secret():

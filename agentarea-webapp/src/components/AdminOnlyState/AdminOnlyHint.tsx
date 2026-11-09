@@ -8,7 +8,6 @@ export type AdminOnlyAction =
   | "createSecret"
   | "manageSecret"
   | "invitePeople"
-  | "manageProvider"
   | "manageMcpAuth"
   | "importPolicies";
 

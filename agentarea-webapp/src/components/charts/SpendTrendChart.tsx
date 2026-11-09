@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  Area,
-  AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   ResponsiveContainer,
   Tooltip,
@@ -23,9 +23,9 @@ const fmtDateShort = (iso: string, locale: string) => {
 type Point = { date: string; usd: number };
 
 /**
- * Hero spend chart — a cumulative violet area with horizontal gridlines,
- * a dollar Y axis and a date X axis. Hovering shows the running total with a
- * dashed cursor. Distinct from the compact inline `Sparkline`.
+ * Hero spend chart — one violet bar per day with horizontal gridlines, a money
+ * Y axis and a date X axis, so a day that spent more than usual stands out.
+ * Hovering shows that day's spend. Distinct from the compact inline `Sparkline`.
  *
  * `locale` is passed explicitly (rather than read from browser defaults) so the
  * month labels follow the app's active language, not the OS locale.
@@ -36,42 +36,23 @@ export function SpendTrendChart({
   locale = "en",
   currency = null,
   seriesLabel = "Spend",
-  cumulativeLabel = "cumulative",
 }: {
   data: Point[];
   height?: number | `${number}%`;
   locale?: string;
   currency?: string | null;
   seriesLabel?: string;
-  cumulativeLabel?: string;
 }) {
-  let running = 0;
-  const cumulative = (data ?? []).map((p) => {
-    running += p.usd;
-    return { date: p.date, cum: +running.toFixed(2) };
-  });
-
-  const total = cumulative.length ? cumulative[cumulative.length - 1].cum : 0;
-  const maxY = Math.max(10, Math.ceil(total / 10) * 10);
-  const ticks = [0, maxY / 2, maxY];
-  // Every tick here is a whole number (0, maxY/2, maxY are all multiples of
-  // 5), so `compact` always drops the decimals — and formatMoney's
-  // null-currency handling means the axis never guesses a currency either.
   const fmtAxis = (v: number) =>
     formatMoney(v, currency, locale, { compact: true });
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart
-        data={cumulative}
+      <BarChart
+        data={data ?? []}
         margin={{ top: 10, right: 8, bottom: 0, left: 24 }}
+        barCategoryGap="18%"
       >
-        <defs>
-          <linearGradient id="spendTrendFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--violet)" stopOpacity={0.2} />
-            <stop offset="100%" stopColor="var(--violet)" stopOpacity={0} />
-          </linearGradient>
-        </defs>
         <CartesianGrid
           vertical={false}
           stroke="currentColor"
@@ -79,8 +60,8 @@ export function SpendTrendChart({
           className="text-muted-foreground"
         />
         <YAxis
-          domain={[0, maxY]}
-          ticks={ticks}
+          domain={[0, "auto"]}
+          tickCount={3}
           tickFormatter={(v) => fmtAxis(Number(v))}
           tick={{ fontSize: 10.5, fill: "currentColor", opacity: 0.5 }}
           axisLine={false}
@@ -96,7 +77,6 @@ export function SpendTrendChart({
           tickLine={false}
           interval="preserveStartEnd"
           minTickGap={44}
-          padding={{ left: 4, right: 4 }}
           className="text-muted-foreground [&_text]:font-mono"
         />
         <Tooltip
@@ -110,37 +90,20 @@ export function SpendTrendChart({
           }}
           labelStyle={{ color: "hsl(var(--muted-foreground))", fontSize: 11 }}
           itemStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
-          labelFormatter={(label) =>
-            `${fmtDateShort(String(label), locale)} · ${cumulativeLabel}`
-          }
+          labelFormatter={(label) => fmtDateShort(String(label), locale)}
           formatter={(v) => [
             formatMoney(Number(v), currency, locale),
             seriesLabel,
           ]}
-          cursor={{
-            stroke: "var(--violet)",
-            strokeOpacity: 0.5,
-            strokeWidth: 1.3,
-            strokeDasharray: "4 4",
-          }}
+          cursor={{ fill: "var(--violet)", fillOpacity: 0.08 }}
         />
-        <Area
-          type="monotone"
-          dataKey="cum"
-          stroke="var(--violet)"
-          strokeWidth={2.2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="url(#spendTrendFill)"
-          activeDot={{
-            r: 4,
-            stroke: "hsl(var(--background))",
-            strokeWidth: 2.5,
-            fill: "var(--violet)",
-          }}
+        <Bar
+          dataKey="usd"
+          fill="var(--violet)"
+          radius={[3, 3, 0, 0]}
           isAnimationActive={false}
         />
-      </AreaChart>
+      </BarChart>
     </ResponsiveContainer>
   );
 }

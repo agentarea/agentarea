@@ -18,6 +18,7 @@ from agentarea_execution.workflows.helpers import (
     mcp_tool_restricting_aliases,
     tool_config_aliases,
     tool_policy_aliases,
+    tool_policy_names,
 )
 
 
@@ -259,3 +260,112 @@ def test_a_bare_name_still_denies_and_escalates_every_servers_tool():
     assert _mcp_decision({"tools": {"denied": ["search"]}}, instance_id) is ToolAction.DENY
     escalated = {"approval": {"escalation_rules": ["search"]}}
     assert _mcp_decision(escalated, instance_id) is ToolAction.REQUIRE_APPROVAL
+
+
+def _named_decision(policy: dict, tool_name: str, **sources) -> ToolAction:
+    names = tool_policy_names(tool_name, **sources)
+    return decide_tool_action(
+        policy,
+        tool_name,
+        names.aliases,
+        restricting_aliases=names.restricting,
+        name_allows=names.name_allows,
+    )
+
+
+def test_a_connection_cannot_join_an_allowlist_by_taking_an_allowed_connections_name():
+    # Connection names are not unique and any member may add a connection, so
+    # an allowlist written for "github" admitted every connection called that.
+    trusted, impostor = str(uuid4()), str(uuid4())
+    model_name = "mcp__github__search"
+    route = {model_name: McpToolRoute(instance_id=impostor, raw_name="search", attachment_ref="github")}
+    for rule in ("mcp:github:search", model_name):
+        policy = {"tools": {"allowed": [rule]}}
+        assert _named_decision(policy, model_name, routes=route) is ToolAction.DENY
+    pinned = {"tools": {"allowed": [f"mcp:{trusted}:search"]}}
+    assert _named_decision(pinned, model_name, routes=route) is ToolAction.DENY
+    own = {"tools": {"allowed": [f"mcp:{impostor}:search"]}}
+    assert _named_decision(own, model_name, routes=route) is ToolAction.ALLOW
+
+
+def test_a_connections_name_still_denies_and_escalates_its_tools():
+    model_name = "mcp__github__search"
+    route = {model_name: McpToolRoute(instance_id=str(uuid4()), raw_name="search", attachment_ref="github")}
+    for rule in ("mcp:github:search", model_name, "search"):
+        denied = {"tools": {"denied": [rule]}}
+        assert _named_decision(denied, model_name, routes=route) is ToolAction.DENY
+        escalated = {"approval": {"escalation_rules": [rule]}}
+        assert _named_decision(escalated, model_name, routes=route) is ToolAction.REQUIRE_APPROVAL
+
+
+def test_a_replayed_run_keeps_the_names_it_was_decided_by():
+    model_name = "mcp__github__search"
+    route = {model_name: McpToolRoute(instance_id=str(uuid4()), raw_name="search", attachment_ref="github")}
+    policy = {"tools": {"allowed": [model_name]}}
+    assert (
+        _named_decision(policy, model_name, routes=route, connection_names_narrow=False)
+        is ToolAction.ALLOW
+    )
+
+
+def test_an_openapi_operation_joins_an_allowlist_only_through_its_connection():
+    # The operation name is the spec's operationId, written by whoever adds the
+    # connection, so a second connection could reuse an allowed one's name.
+    configs = [
+        {
+            "type": "openapi",
+            "name": "Example Search",
+            "settings": {"openapi_connection_id": "conn-1", "allowed_tools": ["search"]},
+        }
+    ]
+    sources = {"tool_configs": configs}
+    assert _named_decision({"tools": {"allowed": ["search"]}}, "search", **sources) is ToolAction.DENY
+    pinned = {"tools": {"allowed": ["openapi:conn-1:search"]}}
+    assert _named_decision(pinned, "search", **sources) is ToolAction.ALLOW
+    assert _named_decision({"tools": {"denied": ["search"]}}, "search", **sources) is ToolAction.DENY
+
+
+def test_a_platform_tool_is_still_allowed_by_its_own_name():
+    assert _named_decision({"tools": {"allowed": ["shell"]}}, "shell") is ToolAction.ALLOW
+
+
+def test_a_delegate_joins_an_allowlist_only_through_its_agent():
+    # The delegate's tool name comes from the agent's name, which any member
+    # picks, so an allowlist naming it admitted every agent that took the name.
+    agent_id = str(uuid4())
+    configs = [{"type": "agent", "name": "reviewer", "settings": {"agent_id": agent_id}}]
+    tool = "delegate_to_reviewer"
+    for rule in (tool, "reviewer"):
+        allowed = {"tools": {"allowed": [rule]}}
+        assert _named_decision(allowed, tool, tool_configs=configs) is ToolAction.DENY
+    pinned = {"tools": {"allowed": [f"agent:{agent_id}"]}}
+    assert _named_decision(pinned, tool, tool_configs=configs) is ToolAction.ALLOW
+    assert (
+        _named_decision({"tools": {"denied": [tool]}}, tool, tool_configs=configs)
+        is ToolAction.DENY
+    )
+
+
+def test_a_remote_delegate_joins_an_allowlist_through_its_address():
+    url = "https://docs.example.com/a2a"
+    configs = [{"type": "agent", "name": "docs", "settings": {"a2a_url": url}}]
+    tool = "delegate_to_docs"
+    assert (
+        _named_decision({"tools": {"allowed": [tool]}}, tool, tool_configs=configs)
+        is ToolAction.DENY
+    )
+    assert (
+        _named_decision({"tools": {"allowed": [f"a2a:{url}"]}}, tool, tool_configs=configs)
+        is ToolAction.ALLOW
+    )
+
+
+def test_a_run_from_before_delegate_ids_keeps_the_names_it_was_decided_by():
+    configs = [{"type": "agent", "name": "reviewer", "settings": {"agent_id": str(uuid4())}}]
+    tool = "delegate_to_reviewer"
+    assert (
+        _named_decision(
+            {"tools": {"allowed": [tool]}}, tool, tool_configs=configs, delegates_by_id=False
+        )
+        is ToolAction.ALLOW
+    )

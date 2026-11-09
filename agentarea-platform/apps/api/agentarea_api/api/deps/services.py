@@ -29,6 +29,7 @@ from agentarea_llm.infrastructure.model_instance_repository import ModelInstance
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
 from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
+from agentarea_mcp.application.egress_exit_service import EgressExitService
 from agentarea_mcp.application.service import MCPServerInstanceService, MCPServerService
 from agentarea_openapi.application.service import OpenAPIConnectionService
 from agentarea_registry.application.service import RegistryService
@@ -284,6 +285,13 @@ async def get_mcp_server_instance_service(
         event_broker=event_broker,
         secret_manager=secret_manager,
     )
+
+
+async def get_egress_exit_service(
+    repository_factory: RepositoryFactoryDep,
+    secret_manager: BaseSecretManagerDep,
+) -> EgressExitService:
+    return EgressExitService(repository_factory, secret_manager)
 
 
 async def get_skill_service(

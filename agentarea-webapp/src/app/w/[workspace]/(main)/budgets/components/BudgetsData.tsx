@@ -10,6 +10,7 @@ import { apiErrorMessage } from "@/lib/api-errors";
 import { BudgetCapPanel } from "./BudgetCapPanel";
 import { BudgetsBoard } from "./BudgetsBoard";
 import { MonthOutlook } from "./MonthOutlook";
+import { RuntimeUsageStats } from "./RuntimeUsageStats";
 
 export async function BudgetsData() {
   const failed = (label: string) => (e: unknown) => {
@@ -53,6 +54,7 @@ export async function BudgetsData() {
         <SpendCard
           spend={data.spend}
           trend={data.daily_spend}
+          topAgents={data.top_agents}
           currency={currency}
           compact
         />
@@ -62,10 +64,11 @@ export async function BudgetsData() {
           today={Number(data.spend.today_usd)}
           projected={amount(data.spend.projected_eom_usd)}
           cap={cap}
-          runRateDays={data.daily_spend?.length ?? 30}
+          runRateDays={7}
           currency={currency}
         />
       }
+      usage={data.usage ? <RuntimeUsageStats usage={data.usage} /> : null}
       capCard={
         <BudgetCapPanel
           initialCap={cap}

@@ -174,7 +174,6 @@ def _is_non_retryable_error(error: Exception) -> bool:
     accounting_contract_error = (
         "usage accounting unavailable" in error_str
         or "returned no usage" in error_str
-        or "pricing is not configured" in error_str
         or "effective policy is missing required runtime limit" in error_str
     )
     return (

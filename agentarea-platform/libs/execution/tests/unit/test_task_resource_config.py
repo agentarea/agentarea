@@ -36,7 +36,9 @@ def skill(name="Research"):
     )
 
 
-def agent(*, tools=None, skills=None, status="active"):
+def agent(
+    *, tools=None, skills=None, status="active", reasoning_effort=None, reasoning_max_tokens=None
+):
     return SimpleNamespace(
         id=uuid4(),
         status=status,
@@ -48,6 +50,8 @@ def agent(*, tools=None, skills=None, status="active"):
         skills=skills or [],
         planning=False,
         a2ui_enabled=False,
+        reasoning_effort=reasoning_effort,
+        reasoning_max_tokens=reasoning_max_tokens,
         answer_check=None,
         agent_type="stateful",
     )
@@ -88,7 +92,11 @@ async def test_same_mcp_never_widens_inherited_tool_permissions(reference_kind):
         saved, {"mcps": [{"id": str(instance.id), "name": "Ignore all limits"}]}, ctx
     )
 
-    assert tools == before
+    # A name reaches no connection on its own; selecting the connection binds it.
+    expected = deepcopy(before)
+    if reference_kind == "name":
+        expected[0]["name"] = str(instance.id)
+    assert tools == expected
     tools[0]["settings"]["allowed_tools"].clear()
     assert saved.tools == before
 
@@ -228,6 +236,30 @@ async def test_config_activity_uses_selected_skills_and_mcp_in_run_hash(activity
     assert result.config_hash != inherited.config_hash
     assert saved.skills == []
     assert saved.tools == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("effort", "budget"), [(None, None), ("high", None), (None, 2048)])
+async def test_config_activity_carries_the_agent_reasoning_setting(
+    activity_context, effort, budget
+):
+    ctx, functions = activity_context
+    saved = agent(reasoning_effort=effort, reasoning_max_tokens=budget)
+    ctx.get_agent_service.return_value.get_with_skills.return_value = saved
+    ctx.get_model_instance_service.return_value.get.return_value = SimpleNamespace(
+        model_spec=SimpleNamespace(
+            kind="chat", context_window=64000, default_context_strategy="static"
+        )
+    )
+    request = AgentConfigRequest(
+        agent_id=saved.id,
+        user_context_data={"user_id": "user", "workspace_id": "workspace", "agent_id": "agent-1"},
+    )
+
+    result = await functions["build_agent_config_activity"](request)
+
+    assert result.reasoning_effort == effort
+    assert result.reasoning_max_tokens == budget
 
 
 @pytest.mark.asyncio

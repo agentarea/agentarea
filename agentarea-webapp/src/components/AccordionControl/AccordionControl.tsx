@@ -1,4 +1,4 @@
-import { HelpCircle, Plus } from "lucide-react";
+import { ChevronRight, HelpCircle, Plus } from "lucide-react";
 import {
   Accordion,
   AccordionContent,
@@ -28,6 +28,8 @@ type DropdownItem = {
 
 type DropdownControlProps = {
   addText?: string;
+  /** The add button's look; a quieter one where several sit on a page. */
+  addVariant?: React.ComponentProps<typeof Button>["variant"];
   onAdd: (id: string) => void;
   dropdownItems: DropdownItem[];
 };
@@ -46,6 +48,10 @@ type AccordionControlProps = {
   triggerClassName?: string;
   chevron?: React.ReactNode;
   itemClassName?: string;
+  /** How many items the section holds, read even while it is collapsed. */
+  count?: number;
+  /** The note as a muted line under the title, instead of behind a "?". */
+  noteInline?: boolean;
 } & (DropdownControlProps | CustomControlProps);
 
 export default function AccordionControl({
@@ -58,6 +64,8 @@ export default function AccordionControl({
   triggerClassName,
   chevron,
   itemClassName,
+  count,
+  noteInline = false,
   ...props
 }: AccordionControlProps) {
   const isDropdown = "dropdownItems" in props;
@@ -74,10 +82,11 @@ export default function AccordionControl({
         <AccordionItem value={id} className={cn(itemClassName)}>
           <AccordionTrigger
             className={cn("label justify-start py-0", triggerClassName)}
-            chevron={chevron}
+            // Drawn below, right after the title, so a count reads apart from it.
+            chevron={null}
             controls={
               <div className="flex flex-row items-center gap-2">
-                {note && (
+                {note && !noteInline && (
                   <TooltipProvider>
                     <Tooltip delayDuration={300}>
                       <TooltipTrigger asChild>
@@ -92,12 +101,14 @@ export default function AccordionControl({
                 {isDropdown ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
+                      {/* Sized like the ConfigSheet trigger beside it. */}
                       <Button
-                        className="focus-visible:ring-0"
+                        className="gap-1.5 focus-visible:ring-0"
                         type="button"
-                        size="sm"
+                        size="xs"
+                        variant={props.addVariant}
                       >
-                        <Plus />
+                        <Plus className="h-4 w-4" />
                         {isDropdown && props.addText ? props.addText : "Add"}
                       </Button>
                     </DropdownMenuTrigger>
@@ -124,7 +135,19 @@ export default function AccordionControl({
             }
           >
             {title}
+            {chevron ?? (
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-90" />
+            )}
+            {!!count && (
+              <span className="rounded-full bg-muted px-1.5 text-[11px] font-medium leading-4 tabular-nums text-muted-foreground no-underline dark:bg-zinc-700 dark:text-zinc-300">
+                {count}
+              </span>
+            )}
           </AccordionTrigger>
+          {note && noteInline && (
+            // Read even while the section is collapsed, like its count.
+            <div className="note mt-1 space-y-0.5">{note}</div>
+          )}
           <AccordionContent className="pt-4">{children}</AccordionContent>
         </AccordionItem>
       </Accordion>

@@ -8,10 +8,14 @@ import type {
   AgentUpdate,
   AnalyzeRequest,
   TaskResponse as ApiTaskResponse,
+  CatalogConnectRequest,
+  ClientUpdate,
   ContinueTaskPayload,
   CreateInvitationBody,
   CreateWalletRequest,
   CreateWorkspaceDirectoryRequest,
+  EgressExitCreate,
+  EgressExitUpdate,
   FundWalletRequest,
   GetAllTasksV1TasksGetData,
   GetInboxItemsV1InboxGetData,
@@ -218,6 +222,44 @@ export const syncWorkspaceRegistry = async (registryId: string) => {
       client: serverClient,
       path: { registry_id: registryId },
     });
+  return withStatus(result);
+};
+
+// Egress exits: the proxies a workspace's container MCP instances leave
+// through. A deployment without them answers every route 404; read the list
+// through getEgressExits (@/lib/egress-exits), which says so.
+export const listEgressExits = async () => {
+  const result = await sdk.listEgressExitsV1EgressExitsGet({
+    client: serverClient,
+  });
+  return withStatus(result);
+};
+
+export const createEgressExit = async (body: EgressExitCreate) => {
+  const result = await sdk.createEgressExitV1EgressExitsPost({
+    client: serverClient,
+    body,
+  });
+  return withStatus(result);
+};
+
+export const updateEgressExit = async (
+  exitId: string,
+  body: EgressExitUpdate
+) => {
+  const result = await sdk.updateEgressExitV1EgressExitsExitIdPatch({
+    client: serverClient,
+    path: { exit_id: exitId },
+    body,
+  });
+  return withStatus(result);
+};
+
+export const deleteEgressExit = async (exitId: string) => {
+  const result = await sdk.deleteEgressExitV1EgressExitsExitIdDelete({
+    client: serverClient,
+    path: { exit_id: exitId },
+  });
   return withStatus(result);
 };
 
@@ -1678,6 +1720,29 @@ export const createOpenAPIConnection = async (
   return { data, error };
 };
 
+export const getCatalogConnectForm = async (itemId: string) => {
+  const result =
+    await sdk.getCatalogConnectFormV1OpenapiConnectionsFromCatalogCatalogItemIdGet(
+      { client: serverClient, path: { catalog_item_id: itemId } }
+    );
+  return withStatus(result);
+};
+
+export const connectCatalogApi = async (
+  itemId: string,
+  body: CatalogConnectRequest
+) => {
+  const result =
+    await sdk.connectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPost(
+      {
+        client: serverClient,
+        path: { catalog_item_id: itemId },
+        body,
+      }
+    );
+  return withStatus(result);
+};
+
 export const deleteOpenAPIConnection = async (connectionId: string) => {
   const result =
     await sdk.deleteConnectionV1OpenapiConnectionsConnectionIdDelete({
@@ -1870,20 +1935,38 @@ export const createClient = async (payload: {
   return { data, error };
 };
 
-export const updateClient = async (
-  clientId: string,
-  payload: {
-    name?: string;
-    description?: string | null;
-    kind?: string;
-  }
-) => {
+export const updateClient = async (clientId: string, payload: ClientUpdate) => {
   const { data, error } = await sdk.updateClientV1ClientsClientIdPatch({
     client: serverClient,
     path: { client_id: clientId },
     body: payload,
   });
   return { data, error };
+};
+
+export const issueRunnerKey = async (clientId: string) => {
+  const result = await sdk.issueRunnerKeyV1ClientsClientIdRunnerKeysPost({
+    client: serverClient,
+    path: { client_id: clientId },
+  });
+  return withStatus(result);
+};
+
+export const listRunnerKeys = async (clientId: string) => {
+  const result = await sdk.listRunnerKeysV1ClientsClientIdRunnerKeysGet({
+    client: serverClient,
+    path: { client_id: clientId },
+  });
+  return withStatus(result);
+};
+
+export const revokeRunnerKey = async (clientId: string, keyId: string) => {
+  const result =
+    await sdk.revokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDelete({
+      client: serverClient,
+      path: { client_id: clientId, key_id: keyId },
+    });
+  return withStatus(result);
 };
 
 export const deleteClient = async (clientId: string) => {
@@ -2185,6 +2268,14 @@ export const listPolicies = async (
     client: serverClient,
     query: params,
   });
+  return withStatus(result);
+};
+
+export const listMCPInstanceToolPolicies = async () => {
+  const result =
+    await sdk.listMcpServerInstanceToolPoliciesV1McpServerInstancesToolPoliciesGet(
+      { client: serverClient }
+    );
   return withStatus(result);
 };
 

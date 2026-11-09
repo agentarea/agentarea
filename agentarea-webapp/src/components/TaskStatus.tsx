@@ -16,13 +16,10 @@ interface TaskStatusProps {
   size?: StatusIndicatorSize;
   /**
    * `always` — caption is always rendered.
-   * `auto` — caption is dropped for the check, which needs no words; the dot
-   * statuses keep theirs, since several of them share a tone and would be
-   * indistinguishable as bare markers.
    * `never` — caption is never rendered; for dense rows that name the task
    * themselves.
    */
-  caption?: "always" | "auto" | "never";
+  caption?: "always" | "never";
   className?: string;
 }
 
@@ -43,9 +40,7 @@ export function TaskStatus({
 }: TaskStatusProps) {
   const presentation = getTaskStatusPresentation(status);
   const label = useTaskStatusLabel(status);
-  const showCaption =
-    caption === "always" ||
-    (caption === "auto" && presentation.kind !== "done");
+  const showCaption = caption === "always";
 
   return (
     <StatusIndicator
@@ -54,7 +49,9 @@ export function TaskStatus({
       className={className}
       // The marker itself is aria-hidden, so a captionless indicator has to
       // carry the name on the root; the tooltip comes along for free.
-      {...(showCaption ? {} : { role: "img", "aria-label": label, title: label })}
+      {...(showCaption
+        ? {}
+        : { role: "img", "aria-label": label, title: label })}
     >
       {showCaption ? label : null}
     </StatusIndicator>

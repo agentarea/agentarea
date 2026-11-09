@@ -378,6 +378,8 @@ services:
       AGENTAREA_REDIS_URL: redis://valkey:6379
       AGENTAREA_EVENT_NAMESPACE: agentarea
       AGENTAREA_API_URL: http://agentarea-backend:8000
+      # Handed to MCP servers that opt into storage, to reach it back here.
+      AGENTAREA_MCP_MANAGER_URL: http://mcp-manager:80
       AGENTAREA_MCP_RUNTIME: docker
       # Where MCP servers and agent sandboxes run.
       #

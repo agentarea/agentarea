@@ -115,7 +115,8 @@ class AuditService:
             metadata.setdefault("credential", credential.kind)
             metadata.setdefault("surface", credential.surface)
             if credential.key_id is not None:
-                metadata.setdefault("api_key_id", credential.key_id)
+                key = "turn_id" if credential.kind == "turn" else "api_key_id"
+                metadata.setdefault(key, credential.key_id)
         return AuditEventORM(
             actor_id=actor_id or self._user_context.user_id,
             actor_type=actor_type,

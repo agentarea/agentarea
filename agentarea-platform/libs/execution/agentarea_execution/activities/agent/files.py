@@ -34,6 +34,7 @@ from ...models import (
     MaterializeSkillFilesRequest,
     MaterializeSkillFilesResult,
 )
+from ...telemetry import ToolKind, ToolOutcome, ToolPath, tool_call
 from ...workflows.constants import TOKENS_PER_MESSAGE_OVERHEAD
 from ...workflows.helpers import SEEN_URLS_LIMIT, external_urls
 from ..artifact_validation import validate_published_artifacts
@@ -213,9 +214,7 @@ def make_files_activities(
     async def validate_artifacts_activity(
         request: ArtifactValidationRequest,
     ) -> ArtifactValidationResult:
-        """Completion barrier: persist the declared files before the task is done."""
-        if not request.declared_paths:
-            return ArtifactValidationResult(state="passed", generation=0)
+        """Completion barrier: persist the delivered files before the task is done."""
         return await validate_published_artifacts(
             request,
             manager_url=dependencies.settings.mcp.MANAGER_URL,
@@ -235,25 +234,35 @@ def make_files_activities(
         unreachable service (object storage, the database, GitHub) is retried;
         anything else is final and the model hears it as a tool error.
         """
-        try:
-            return await _activate_skill(request)
-        except ApplicationError:
-            raise
-        except Exception as exc:
-            service = unreachable_service(exc)
-            if service is None:
-                logger.error("Activating skill %s failed", request.skill_name, exc_info=True)
+        with tool_call(ToolKind.SKILL, ToolPath.WORKER) as metered:
+            try:
+                return await _activate_skill(request)
+            except ApplicationError as error:
+                metered.outcome = (
+                    ToolOutcome.DENIED
+                    if error.type == "SkillActivationRefused"
+                    else ToolOutcome.TOOL_ERROR
+                )
+                raise
+            except Exception as exc:
+                service = unreachable_service(exc)
+                if service is None:
+                    metered.outcome = ToolOutcome.TOOL_ERROR
+                    logger.error("Activating skill %s failed", request.skill_name, exc_info=True)
+                    raise ApplicationError(
+                        f"Skill '{request.skill_name}' could not be activated: {exc}",
+                        type="SkillActivationFailed",
+                        non_retryable=True,
+                    ) from exc
+                metered.failed(exc)
+                logger.warning(
+                    "%s is unreachable for skill %s", service, request.skill_name, exc_info=True
+                )
                 raise ApplicationError(
-                    f"Skill '{request.skill_name}' could not be activated: {exc}",
-                    type="SkillActivationFailed",
-                    non_retryable=True,
+                    f"{service} is unreachable: {exc}",
+                    {"service": service},
+                    type="ServiceUnreachable",
                 ) from exc
-            logger.warning(
-                "%s is unreachable for skill %s", service, request.skill_name, exc_info=True
-            )
-            raise ApplicationError(
-                f"{service} is unreachable: {exc}", {"service": service}, type="ServiceUnreachable"
-            ) from exc
 
     async def _activate_skill(request: ActivateSkillRequest) -> ActivateSkillResult:
         name = request.skill_name

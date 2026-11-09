@@ -132,7 +132,7 @@ class TestGetAuthHeaders:
         repo.get_by_id.return_value = _oauth_config(
             client_id=None,
             credential_mode="managed",
-            platform_oauth_issuer="https://oauth.yandex.ru",
+            platform_oauth_issuer="https://oauth.example.com",
         )
         repo_factory = MagicMock()
         repo_factory.create_repository.return_value = repo
@@ -372,7 +372,7 @@ class TestCreateDelete:
                     "token_url": "https://attacker.example/token",
                     "client_id": "ignored",
                     "credential_mode": "managed",
-                    "platform_oauth_issuer": "https://oauth.yandex.ru",
+                    "platform_oauth_issuer": "https://oauth.example.com",
                 },
                 credentials={"client_secret": placeholder_credential},
             )
@@ -402,7 +402,7 @@ class TestCreateDelete:
         managed = _oauth_config(
             client_id=None,
             credential_mode="managed",
-            platform_oauth_issuer="https://oauth.yandex.ru",
+            platform_oauth_issuer="https://oauth.example.com",
         )
         repo.get.return_value = managed
 
@@ -850,7 +850,7 @@ class TestAuthorizationCodeExchange:
             await svc.complete_authorization(
                 config,
                 code="the-code",
-                redirect_uri="https://api.agentarea.ru/v1/oauth/callback",
+                redirect_uri="https://api.example.com/v1/oauth/callback",
                 code_verifier="the-verifier",
             )
         return client, sm
@@ -866,7 +866,7 @@ class TestAuthorizationCodeExchange:
         assert client.posted == {
             "grant_type": "authorization_code",
             "code": "the-code",
-            "redirect_uri": "https://api.agentarea.ru/v1/oauth/callback",
+            "redirect_uri": "https://api.example.com/v1/oauth/callback",
             "code_verifier": "the-verifier",
             "client_id": "cid",
             "client_secret": "dcr-secret",  # pragma: allowlist secret

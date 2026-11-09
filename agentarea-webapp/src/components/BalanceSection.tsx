@@ -1,14 +1,17 @@
 "use client";
 
-import { CreditCard } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import { CreditCard } from "lucide-react";
 import { BoardSectionHeader } from "@/components/board";
 import { Button } from "@/components/ui/button";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import Link from "@/components/WorkspaceLink";
 import { useBalance } from "@/hooks/useBalance";
 import { formatMoney } from "@/lib/money";
 import { useWorkspaceBillingUrl } from "@/lib/use-billing-url";
 import { cn } from "@/lib/utils";
+
+const LOW_RUNWAY_DAYS = 3;
 
 /** The payer's balance as its own board section; nothing on a deployment that sells none. */
 export function BalanceSection({ className }: { className?: string }) {
@@ -31,6 +34,27 @@ export function BalanceSection({ className }: { className?: string }) {
   } else {
     value = formatMoney(Number(balance.amount), balance.currency, locale);
     if (balance.exhausted) hint = t("exhaustedHint");
+  }
+
+  let runway: { text: string; low: boolean } | null = null;
+  if (
+    balance?.runway_days != null &&
+    balance.spend_per_day != null &&
+    !balance.exhausted
+  ) {
+    const days = Number(balance.runway_days);
+    const perDay = formatMoney(
+      Number(balance.spend_per_day),
+      balance.currency,
+      locale
+    );
+    runway = {
+      text:
+        days < 1
+          ? t("runwayUnderDay", { perDay })
+          : t("runway", { days: Math.floor(days), perDay }),
+      low: days < LOW_RUNWAY_DAYS,
+    };
   }
 
   return (
@@ -68,6 +92,21 @@ export function BalanceSection({ className }: { className?: string }) {
           <span className="text-[12.5px] text-muted-foreground">{hint}</span>
         ) : null}
       </div>
+      {runway ? (
+        <div className="mt-1.5 text-[12.5px] tabular-nums text-muted-foreground">
+          {runway.low ? (
+            <StatusIndicator
+              kind="attention"
+              size="sm"
+              className="text-[12.5px] text-foreground"
+            >
+              {runway.text}
+            </StatusIndicator>
+          ) : (
+            runway.text
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

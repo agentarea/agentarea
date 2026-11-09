@@ -132,18 +132,18 @@ class TestE2EFullPipeline:
         assert result.interceptor_name == "prompt_injection_detector"
 
     @pytest.mark.asyncio
-    async def test_output_sanitizer_redacts_pii(self):
+    @pytest.mark.parametrize("phase", [Phase.POST_LLM_CALL, Phase.POST_TOOL_CALL])
+    async def test_output_reaches_the_model_unchanged(self, phase):
         pipeline = create_governance_pipeline()
         ctx = _ctx(
-            phase=Phase.POST_LLM_CALL,
+            phase=phase,
             action_type="llm_call",
             action_name="gpt-4",
-            content="Contact john@example.com for help",
+            content="Contact john@example.com or 555-123-4567, key sk-1234567890abcdefgh",
         )
-        result = await pipeline.run(Phase.POST_LLM_CALL, ctx)
-        assert result.action == InterceptorAction.MODIFY
-        assert "[EMAIL_REDACTED]" in result.modified_content
-        assert "john@example.com" not in result.modified_content
+        result = await pipeline.run(phase, ctx)
+        assert result.action == InterceptorAction.ALLOW
+        assert result.modified_content is None
 
     @pytest.mark.asyncio
     async def test_clean_output_passes_through(self):

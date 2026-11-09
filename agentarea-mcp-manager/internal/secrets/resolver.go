@@ -202,6 +202,25 @@ func (sr *InfisicalSecretResolver) ResolveInstanceEnvVars(instanceID string, env
 	return resolved, nil
 }
 
+// ResolveWorkspaceSecret reads secretName from the workspace's own path, where the
+// platform's Infisical secret manager keeps every catalog secret.
+func (sr *InfisicalSecretResolver) ResolveWorkspaceSecret(_ context.Context, workspaceID, secretName string) (string, error) {
+	if sr.client == nil {
+		return "", errors.New("secret resolution unavailable")
+	}
+	secret, err := sr.client.Secrets().Retrieve(infisical.RetrieveSecretOptions{
+		SecretKey:   secretName,
+		ProjectID:   sr.projectID,
+		Environment: sr.environment,
+		SecretPath:  "/workspaces/" + workspaceID,
+	})
+	if err != nil {
+		sr.logger.Error("Failed to retrieve workspace secret from Infisical", slog.String("workspace_id", workspaceID))
+		return "", errors.New("secret retrieval failed")
+	}
+	return secret.SecretValue, nil
+}
+
 // Close closes the secret resolver. The Infisical SDK client holds no
 // connection or goroutine of its own, so there is nothing to release.
 func (sr *InfisicalSecretResolver) Close() error {

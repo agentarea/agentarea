@@ -5,7 +5,6 @@ from typing import Any, cast
 from uuid import UUID
 
 from agentarea_api.api.deps.services import (
-    get_model_spec_repository,
     get_model_spec_service,
     get_provider_service,
 )
@@ -23,7 +22,7 @@ from agentarea_llm.domain.models import (
     ModelKind,
     ProviderConfig,
 )
-from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
+from agentarea_llm.infrastructure.model_spec_repository import UpsertedSpec
 from agentarea_llm.schemas.dto import ProviderConfigCreate, ProviderConfigUpdate
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -320,8 +319,7 @@ class SkippedModelResponse(BaseModel):
 def _missing_runtime_metadata(model: DiscoveredModel) -> list[str]:
     """Names of the runtime fields a model must carry before it can be run.
 
-    Only chat and embedding runs are billed from per-token prices over a context
-    window; the other kinds are billed at the cost the provider reports per call.
+    Only chat and embedding runs need a context window; a price is optional.
     """
     if model.kind is None:
         return ["kind"]
@@ -334,10 +332,6 @@ def _missing_runtime_metadata(model: DiscoveredModel) -> list[str]:
         or model.context_window <= 0
     ):
         missing.append("context_window")
-    if model.input_cost_per_token is None:
-        missing.append("input_cost_per_token")
-    if model.output_cost_per_token is None:
-        missing.append("output_cost_per_token")
     return missing
 
 
@@ -391,6 +385,32 @@ def _require_any_usable_model(
         )
 
 
+async def _persist_discovered(
+    model_spec_service: ModelSpecService, provider_spec_id: UUID, usable: list[DiscoveredModel]
+) -> dict[str, UpsertedSpec]:
+    return await model_spec_service.upsert_many(
+        provider_spec_id,
+        [
+            {
+                "model_name": model.model_name,
+                "display_name": model.display_name or model.model_name,
+                "description": model.description or None,
+                "context_window": model.context_window,
+                "max_output_tokens": model.max_output_tokens,
+                "input_cost_per_token": model.input_cost_per_token,
+                "output_cost_per_token": model.output_cost_per_token,
+                "cached_input_cost_per_token": model.cached_input_cost_per_token,
+                "cache_creation_input_cost_per_token": model.cache_creation_input_cost_per_token,
+                "supports_function_calling": model.supports_function_calling,
+                "supports_vision": model.supports_vision,
+                "supports_reasoning": model.supports_reasoning,
+                "kind": cast(ModelKind, model.kind).value,
+            }
+            for model in usable
+        ],
+    )
+
+
 @router.post(
     "/discover-preview",
     response_model=DiscoverPreviewResponse,
@@ -400,7 +420,6 @@ async def discover_models_preview(
     data: DiscoverPreviewRequest,
     user_context: UserContextDep,
     provider_service: ProviderService = Depends(get_provider_service),
-    model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
     model_spec_service: ModelSpecService = Depends(get_model_spec_service),
 ):
     """Discover models from a provider API using the provided API key, without requiring a saved config.
@@ -411,8 +430,6 @@ async def discover_models_preview(
     provider_spec = await provider_service.get_provider_spec_by_key(data.provider_key)
     if not provider_spec:
         raise HTTPException(status_code=404, detail=f"Provider '{data.provider_key}' not found")
-
-    provider_spec_id = str(provider_spec.id)
 
     discovery_service = ModelDiscoveryService(
         allow_private_endpoints=get_settings().http.ALLOW_PRIVATE,
@@ -435,35 +452,11 @@ async def discover_models_preview(
     _log_skipped_models(data.provider_key, skipped)
     _require_any_usable_model(data.provider_key, usable, skipped)
 
+    written = await _persist_discovered(model_spec_service, provider_spec.id, usable)
     results = []
-    new_count = 0
     for model in usable:
         kind = cast(ModelKind, model.kind)
-        existing = await model_spec_repo.get_by_provider_and_model(
-            UUID(str(provider_spec_id)), model.model_name
-        )
-        is_new = existing is None
-
-        spec = await model_spec_service.upsert(
-            provider_spec_id=provider_spec_id,
-            model_name=model.model_name,
-            display_name=model.display_name or model.model_name,
-            description=model.description or None,
-            context_window=model.context_window,
-            max_output_tokens=model.max_output_tokens,
-            input_cost_per_token=model.input_cost_per_token,
-            output_cost_per_token=model.output_cost_per_token,
-            cached_input_cost_per_token=model.cached_input_cost_per_token,
-            cache_creation_input_cost_per_token=model.cache_creation_input_cost_per_token,
-            supports_function_calling=model.supports_function_calling,
-            supports_vision=model.supports_vision,
-            supports_reasoning=model.supports_reasoning,
-            kind=kind.value,
-        )
-
-        if is_new:
-            new_count += 1
-
+        spec = written[model.model_name]
         results.append(
             DiscoverPreviewModelResponse(
                 id=str(spec.id),
@@ -480,9 +473,10 @@ async def discover_models_preview(
                 supports_vision=model.supports_vision,
                 supports_reasoning=model.supports_reasoning,
                 description=model.description or None,
-                is_new=is_new,
+                is_new=spec.is_new,
             )
         )
+    new_count = sum(spec.is_new for spec in written.values())
 
     logger.info(
         "Discovery preview for provider %s: %d found, %d new",
@@ -603,7 +597,6 @@ async def discover_models(
     config_id: UUID,
     user_context: UserContextDep,
     provider_service: ProviderService = Depends(get_provider_service),
-    model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
     model_spec_service: ModelSpecService = Depends(get_model_spec_service),
 ):
     """Discover available models from the provider API and sync to model specs."""
@@ -630,7 +623,6 @@ async def discover_models(
         api_key = await provider_service.secret_manager.get_secret(config.api_key)
 
     provider_key = config.provider_spec.provider_key
-    provider_spec_id = str(config.provider_spec_id)
 
     discovery_service = ModelDiscoveryService()
     discovered = await discovery_service.discover(
@@ -651,37 +643,12 @@ async def discover_models(
     _log_skipped_models(provider_key, skipped)
     _require_any_usable_model(provider_key, usable, skipped)
 
-    # Upsert discovered models as ModelSpec entries
+    written = await _persist_discovered(
+        model_spec_service, UUID(str(config.provider_spec_id)), usable
+    )
     results = []
-    new_count = 0
     for model in usable:
         kind = cast(ModelKind, model.kind)
-        # Check if model already exists
-        existing = await model_spec_repo.get_by_provider_and_model(
-            UUID(str(provider_spec_id)), model.model_name
-        )
-        is_new = existing is None
-
-        await model_spec_service.upsert(
-            provider_spec_id=provider_spec_id,
-            model_name=model.model_name,
-            display_name=model.display_name or model.model_name,
-            description=model.description or None,
-            context_window=model.context_window,
-            max_output_tokens=model.max_output_tokens,
-            input_cost_per_token=model.input_cost_per_token,
-            output_cost_per_token=model.output_cost_per_token,
-            cached_input_cost_per_token=model.cached_input_cost_per_token,
-            cache_creation_input_cost_per_token=model.cache_creation_input_cost_per_token,
-            supports_function_calling=model.supports_function_calling,
-            supports_vision=model.supports_vision,
-            supports_reasoning=model.supports_reasoning,
-            kind=kind.value,
-        )
-
-        if is_new:
-            new_count += 1
-
         results.append(
             DiscoveredModelResponse(
                 model_name=model.model_name,
@@ -697,9 +664,10 @@ async def discover_models(
                 supports_vision=model.supports_vision,
                 supports_reasoning=model.supports_reasoning,
                 description=model.description or None,
-                is_new=is_new,
+                is_new=written[model.model_name].is_new,
             )
         )
+    new_count = sum(spec.is_new for spec in written.values())
 
     logger.info(
         "Discovery for provider %s: %d found, %d new",

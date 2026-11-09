@@ -63,8 +63,8 @@ New workspaces are seeded from `config/default_policies.yaml` (packaged inside
 the governance library, at
 `agentarea-platform/libs/governance/agentarea_governance/config/`), which is data
 rather than a code constant: a 500.00 USD monthly spend cap, a 50.00 USD per-run
-cap, 20,000,000 total tokens, 100,000 tokens per call, and both content-safety
-filters on. Seeding is idempotent per dimension — a cap the user already set is
+cap, 20,000,000 total tokens, 100,000 tokens per call, and prompt-injection
+detection on. Seeding is idempotent per dimension — a cap the user already set is
 left alone while the rest of the baseline is filled in — and no approval rule is
 included, so human-in-the-loop is opt-in.
 
@@ -136,9 +136,9 @@ model sees, and an `EscalationRequired` into a human approval request.
 
 The registered set today is: `CostBudgetGuard` (priority 100, pre-LLM and
 pre-tool), `ServiceBudgetGuard` (105, pre-tool), `TokenBudgetGuard` (110,
-pre-LLM), `PromptInjectionDetector` (300, pre-LLM), `OutputSanitizer` (300,
-post-LLM and post-tool), and the metrics observer at 800 on every
-phase. Enterprise builds can inject an entitlement guard at 120 through the
+pre-LLM), `PromptInjectionDetector` (300, pre-LLM), and the metrics observer at
+800 on every phase. Nothing rewrites a model reply or a tool result: the model sees
+what the tool returned. Enterprise builds can inject an entitlement guard at 120 through the
 extension registry.
 
 ## Why not a general policy language
@@ -189,8 +189,7 @@ precisely because that limit is felt — see below.
   The interceptor list that endpoint returns is a static constant in the API, not
   a reading of the pipeline the worker builds. It advertises `escalation_guard`
   and `content_policy_enforcer`, neither of which exists, and its phase
-  lists disagree with the real registrations for `prompt_injection_detector` and
-  `output_sanitizer`. Treat
+  list disagrees with the real registration for `prompt_injection_detector`. Treat
   it as a diagram, never as evidence that a control is running.
 - **The observer records nothing outside the process.** `MetricsObserver`
   increments an in-memory dictionary that nothing exports. The `SecurityFinding` event type is defined and never emitted by any

@@ -41,16 +41,10 @@ class ModelSpecCreate(BaseModel):
 
     @model_validator(mode="after")
     def _billable(self) -> ModelSpecCreate:
-        # A chat or embedding run is billed from these; the other kinds at the cost
-        # the provider reports per call.
-        if self.kind.priced_per_token:
-            missing = [
-                name
-                for name in ("context_window", "input_cost_per_token", "output_cost_per_token")
-                if getattr(self, name) is None
-            ]
-            if missing:
-                raise ValueError(f"a {self.kind.value} model requires {', '.join(missing)}")
+        # A chat or embedding run is sized by its context window. A price is optional:
+        # without one, a call costs what the provider reports.
+        if self.kind.priced_per_token and self.context_window is None:
+            raise ValueError(f"a {self.kind.value} model requires context_window")
         return self
 
 

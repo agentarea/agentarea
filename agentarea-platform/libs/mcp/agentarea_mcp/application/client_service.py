@@ -7,10 +7,12 @@ from collections.abc import Callable
 from typing import Any
 from uuid import UUID
 
+from agentarea_agents.domain.models import Agent
 from agentarea_agents.infrastructure.skill_repository import SkillRepository
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from agentarea_common.exceptions.errors import NotFoundError
+from agentarea_common.exceptions.errors import ConflictError, NotFoundError
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_mcp.domain.client_models import (
@@ -58,6 +60,18 @@ class ClientService:
         return await self.repository.list_all(limit=limit, offset=offset, ids=ids)
 
     async def delete(self, client_id: UUID | str) -> bool:
+        """Delete a client no agent runs on: an agent's tasks keep running on its client."""
+        client = await self.repository.get_by_id(client_id)
+        if client is None:
+            return False
+        agents = await self.repository.session.scalar(
+            select(func.count()).select_from(Agent).where(Agent.client_id == client.id)
+        )
+        if agents:
+            raise ConflictError(
+                f"{agents} agent(s) run on this client; move them to a model or another "
+                + "client before deleting it"
+            )
         return await self.repository.delete(client_id)
 
     # --- Associations ---

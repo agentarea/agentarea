@@ -16,6 +16,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     or_,
     select,
     true,
@@ -77,6 +78,11 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
     provider_type: Mapped[str] = mapped_column(String, nullable=False)
     icon: Mapped[str | None] = mapped_column(String, nullable=True)
     is_builtin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # The provider the platform itself hosts, as the catalog marks it: listed
+    # first and badged as ours.
+    is_first_party: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     # Whether this provider type authenticates at all. False for the local ones
     # (Ollama and friends), which listen on an unauthenticated endpoint — asking
     # for a key there leaves the user with a required field they can only satisfy
@@ -96,6 +102,13 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
         String(16), nullable=False, default="data_id", server_default="data_id"
     )
     models_query: Mapped[str | None] = mapped_column(String, nullable=True)
+    reasoning_param: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="reasoning_effort", server_default="reasoning_effort"
+    )
+    reasoning_efforts: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    cache_breakpoints: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
 
     def profile(self) -> ProviderProfile:
         return ProviderProfile.from_mapping(
@@ -106,6 +119,9 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
                 "models_path": self.models_path,
                 "list_shape": self.list_shape,
                 "models_query": self.models_query,
+                "reasoning_param": self.reasoning_param,
+                "reasoning_efforts": self.reasoning_efforts,
+                "cache_breakpoints": self.cache_breakpoints,
             }
         )
 
@@ -251,6 +267,8 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
     )
     supports_vision: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
     supports_reasoning: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
+    # The reasoning levels this model takes; None defers to its provider's list.
+    reasoning_efforts: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     default_context_strategy: Mapped[str | None] = mapped_column(
         String, nullable=True, default=None
     )  # "static", "hybrid", "dynamic" — resolved per agent execution

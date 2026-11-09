@@ -31,7 +31,7 @@ class TestAgentToolSettings:
 
     def test_remote_agent_names_its_credential_by_secret(self):
         settings = AgentToolSettings(
-            a2a_url="https://x.a2a.agentarea.ru", auth_secret_name="aadocs-key"
+            a2a_url="https://x.a2a.example.com", auth_secret_name="aadocs-key"
         )
         assert settings.auth_secret_name == "aadocs-key"
 

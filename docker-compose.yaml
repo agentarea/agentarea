@@ -135,7 +135,7 @@ services:
     command: ["agentarea-api", "migrate"]
     working_dir: /app/apps/api
 
-  # Populates the built-in MCP catalog once the API answers. Idempotent, so it
+  # Populates the built-in catalog (model providers, models, MCP servers) once the API answers. Idempotent, so it
   # re-runs harmlessly on every `up` and picks up catalog additions; run it on
   # demand with `docker compose run --rm app_catalog`. Registry data lives in
   # the database, not on disk, which is why a load step exists at all.
@@ -166,7 +166,11 @@ services:
         "agentarea-api",
         "reconcile",
         "--source",
-        "${CATALOG_MCP_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/mcp-servers.json}",
+        "${CATALOG_PROVIDERS_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json}",
+        "--source",
+        "${CATALOG_MODELS_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json}",
+        "--source",
+        "${CATALOG_MCP_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json}",
       ]
     working_dir: /app/apps/api
     restart: "no"
@@ -218,6 +222,7 @@ services:
       # MCP Apps run in an iframe on a different origin than the webapp.
       - AGENTAREA_MCP_APPS_ORIGIN=${AGENTAREA_MCP_APPS_ORIGIN:-http://127.0.0.1:3000}
       - AGENTAREA_APP_ORIGIN=${AGENTAREA_APP_ORIGIN:-http://localhost:3000}
+      - AGENTAREA_SUPPORT_URL=${AGENTAREA_SUPPORT_URL:-https://github.com/agentarea/agentarea/issues}
     networks:
       - default
       - auth-network

@@ -34,7 +34,7 @@ import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { createClientAction, listClientsAction } from "@/lib/server-actions";
 import { ClientsListSkeleton } from "./ClientsSkeleton";
-import { HARNESS_OPTIONS, HarnessBadge, HarnessIcon } from "./harnesses";
+import { HARNESS_OPTIONS, HarnessBadge, HarnessIcon } from "@/components/harnesses";
 
 const McpIcon = ENTITY_ICONS.mcp;
 const SkillIcon = ENTITY_ICONS.skill;

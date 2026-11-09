@@ -1,4 +1,17 @@
 {
+  "MethodsList": {
+    "availableMethods": "Available methods",
+    "availableTools": "Available tools ({enabled}/{total})",
+    "selectAll": "Select all",
+    "approvalRequired": "Approval required",
+    "autoApproved": "Auto",
+    "approvalRequiredHint": "Requires human approval — click to auto-approve",
+    "autoApprovedHint": "Auto-approved — click to require approval",
+    "workspaceDenied": "Denied in workspace",
+    "workspaceApproval": "Approval in workspace",
+    "workspaceDeniedHint": "The workspace policy denies this tool for every agent; the agent cannot call it. Set on the connection's Tools tab or in Govern.",
+    "workspaceApprovalHint": "The workspace policy holds every call of this tool for approval; the agent cannot turn it off. Set on the connection's Tools tab or in Govern."
+  },
   "404": {
     "title": "Page not found",
     "description": "The page you are looking for does not exist.",
@@ -53,6 +66,7 @@
     "openFiles": "Open files",
     "closeTab": "Close {name}",
     "download": "Download",
+    "closePreview": "Close",
     "copyContents": "Copy contents",
     "copied": "Copied",
     "emptyFile": "Empty file",
@@ -129,8 +143,6 @@
     "confirm": "Confirm",
     "display": "Display",
     "skipToContent": "Skip to content",
-    "switchToDarkTheme": "Switch to dark theme",
-    "switchToLightTheme": "Switch to light theme",
     "scrollToLatestMessage": "Scroll to latest message",
     "previousPage": "Previous",
     "nextPage": "Next",
@@ -139,7 +151,12 @@
     "hidePassword": "Hide password",
     "previousMonth": "Previous month",
     "nextMonth": "Next month",
-    "newValue": "new"
+    "newValue": "new",
+    "unsavedChanges": {
+      "title": "Leave without saving?",
+      "description": "The changes on this page are not saved yet. If you leave, they are lost.",
+      "leave": "Leave"
+    }
   },
   "admin": {
     "title": "Admin Dashboard",
@@ -183,6 +200,9 @@
     }
   },
   "Sidebar": {
+    "search": "Search",
+    "searchPlaceholder": "Search…",
+    "searchEmpty": "Nothing found",
     "dashboard": "Dashboard",
     "newTask": "New task",
     "inbox": "Inbox",
@@ -351,7 +371,17 @@
   "NavUser": {
     "settings": "Settings",
     "billing": "Billing",
-    "logout": "Log out"
+    "logout": "Log out",
+    "theme": "Theme",
+    "themeSystem": "System",
+    "themeLight": "Light",
+    "themeDark": "Dark"
+  },
+  "NavHelp": {
+    "title": "Help & support",
+    "support": "Contact support",
+    "docs": "Documentation",
+    "discord": "Join our Discord"
   },
   "SettingsSidebar": {
     "title": "Settings",
@@ -363,7 +393,8 @@
     "apiKeys": "API Keys",
     "auditLog": "Audit Log",
     "workspaceSettings": "Workspace settings",
-    "registries": "Registries"
+    "registries": "Registries",
+    "egressExits": "Egress exits"
   },
   "LlmBrowsePage": {
     "title": "LLM Models",
@@ -611,6 +642,16 @@
       "remove": "Remove",
       "tool": "Tool",
       "activeMcpServers": "Active MCP Servers",
+      "toolsTabBuiltin": "Platform",
+      "noBuiltinTools": "No built-in tools available.",
+      "noOpenapiConnections": "No OpenAPI connections yet",
+      "noOpenapiConnectionsHint": "Connect an API by its OpenAPI spec, then give its operations to any agent.",
+      "connectOpenapi": "Add a connection",
+      "openapiOperations": "{count, plural, one {# operation} other {# operations}}",
+      "manageConnections": "Manage connections",
+      "openapiOperationsLabel": "Operations",
+      "configureMcp": "Configure",
+      "noMcpServers": "No MCP servers yet",
       "builtinTools": "Built-in Tools",
       "codeToolModels": {
         "placeholder": "Select a model",
@@ -643,46 +684,58 @@
       "trigger": "Trigger",
       "agentTools": "Tools",
       "agentToolsDescription": "Add MCP servers to enable tools for your agent.",
-      "agentToolsNote": "You can add multiple servers and configure them individually.",
       "agentName": "Name",
       "agentNamePlaceholder": "Enter agent name",
       "description": "Description / Goal",
       "descriptionPlaceholder": "Describe the agent's purpose, personality, and main goal...",
       "instruction": "Instruction",
       "instructionPlaceholder": "Provide specific instructions for this agent...",
+      "a2ui": "Interactive UI (A2UI)",
+      "a2uiDescription": "Let the agent show forms, buttons and cards in the web chat instead of plain text.",
       "answerCheck": "Check the final answer",
       "answerCheckDescription": "Before the answer is shown, look for tool names, codes, JSON, error texts and other scripts, and have the model rewrite it once. The reply then appears only after the check.",
       "answerCheckLanguage": "Answer language",
       "answerCheckLanguagePlaceholder": "ru, en, zh… (empty: any)",
       "answerCheckHint": "Models sometimes leak their internals into the reply: Chinese characters, tool names like web_search, internal codes, chunks of JSON, error texts, stray English words in a Russian answer. Chinese models do this more often.\n\nThe check looks for these traces in the final answer. If it finds any, the agent's model rewrites the answer once. The extra model call happens only when something is found.",
-      "loadMode": "How the model sees the tools",
-      "loadModeExplicit": "All at once",
-      "loadModeSearchable": "On demand",
       "loadModeHint": "All at once: on every step the model gets the full description of every tool of this connection. It never misses a tool, but each call spends more tokens.\n\nOn demand: the model sees only tool names with a short description and loads the full description of a tool when it needs it. Use it for connections with many tools.",
       "llmModel": "LLM Model",
+      "runsOn": "Runs on",
+      "runsOnPlatform": "AgentArea",
+      "runsOnOffline": "offline",
+      "runsOnHint": "AgentArea runs the agent on a platform model. A Codex or Claude Code client runs it on that CLI's own subscription, through the client's runner, with the client's tools.",
+      "runnerModel": "Model",
+      "runnerModelsPending": "The client's runner has not reported its models yet",
+      "runnerModelHint": "Every agent on this client runs with this model unless a task names another.",
+      "reasoningLevel": "Reasoning level",
+      "reasoningModelDefault": "Model default",
+      "reasoningModelDefaultLevel": "Model default ({level})",
+      "reasoningLevelHint": "This agent reasons at this level unless a task names another.",
       "selectModel": "Select a model",
       "noConfigurationsYet": "No configurations yet",
       "createAndUseProviderConfiguration": "Create and use a provider configuration",
       "createConfiguration": "Create Configuration",
       "triggerEnabled": "Enabled",
+      "triggerOff": "Off",
       "removeTrigger": "Remove trigger",
       "noTriggers": "No triggers. The agent runs only when a task is started for it.",
       "triggersManagedElsewhere": "Schedules and channels of this agent are managed in Automation.",
       "openTriggers": "Open Automation",
       "presets": {
         "title": "Start from",
-        "empty": "Empty",
-        "emptyDescription": "No tools, skills or triggers",
         "loadFailed": "Could not load agent presets. Refresh the page or try again later.",
-        "unavailableSkills": "This preset expects skills the catalog does not have: {skills}"
-      },
-      "skills": {
-        "title": "Skills",
-        "description": "Add skills to enhance your agent's capabilities.",
-        "trigger": "Skill",
-        "note": "Skills extend agent capabilities with specialized behaviors and knowledge.",
-        "empty": "No skills assigned. Add skills to enhance this agent's capabilities.",
-        "remove": "Remove skill"
+        "unavailableSkills": "This preset expects skills the catalog does not have: {skills}",
+        "hint": "A preset fills in the instruction, tools, skills and triggers; you can change all of it.",
+        "filledInstruction": "the instruction",
+        "filled": {
+          "tools": "{count, plural, one {# tool} other {# tools}}",
+          "skills": "{count, plural, one {# skill} other {# skills}}",
+          "triggers": "{count, plural, one {# trigger} other {# triggers}}"
+        },
+        "reset": "Start from scratch",
+        "willFill": "Fills in {items}.",
+        "emptyDescription": "No tools, skills or triggers",
+        "showAll": "Show all ({count})",
+        "showLess": "Show less"
       },
       "toolGroups": {
         "sandbox": {
@@ -694,7 +747,26 @@
       "loadingOpenapiConnections": "Loading OpenAPI connections...",
       "loadInstanceFailed": "Couldn't load the MCP connection for editing",
       "updateInstanceFailed": "Couldn't update the MCP connection",
-      "triggerStreamRequired": "Pick the stream this trigger listens to"
+      "triggerStreamRequired": "Pick the stream this trigger listens to",
+      "removeTool": "Remove {name}",
+      "editTool": "Edit {name}",
+      "loadMode": {
+        "label": "How the agent sees operations",
+        "explicit": "Explicit",
+        "searchable": "Searchable",
+        "explicitHint": "Every operation's schema goes into every LLM call: simplest, but the context grows with the spec.",
+        "searchableHint": "Only names and descriptions go into the prompt; the agent loads the schemas it needs. Keeps cost flat for a large spec."
+      },
+      "behavior": {
+        "title": "Behavior",
+        "note": "How the agent answers: rich UI in the chat, and a check of its answer before it is sent."
+      },
+      "nameRequired": "Give the agent a name.",
+      "modelRequired": "Pick the model the agent runs on.",
+      "configureInstanceTitle": "Set up {name}",
+      "editInstanceTitle": "Edit {name}",
+      "configureMcpServer": "Set up an MCP server",
+      "agentToolsLead": "What the agent can call: platform toolsets, MCP servers and OpenAPI connections."
     },
     "browseCatalog": "Browse the catalog",
     "newTask": "New task",
@@ -704,7 +776,9 @@
       "validationFailed": "Some fields are invalid.",
       "createFailed": "Couldn't create the agent",
       "testAgent": "Test agent",
-      "closeTest": "Close test chat"
+      "closeTest": "Close test chat",
+      "newAgent": "New agent",
+      "chatPlaceholder": "Write a task for {name}"
     },
     "delegationConfig": {
       "title": "Delegation",
@@ -713,8 +787,9 @@
       "add": "Agent",
       "available": "Agents in this workspace",
       "noOtherAgents": "No other agents in this workspace to delegate to.",
+      "tabWorkspace": "Agents",
+      "tabExternal": "A2A",
       "createAgent": "Create an agent",
-      "external": "External agent (A2A)",
       "externalHint": "Any agent that speaks A2A, including one in another AgentArea workspace: enter its address, read its card, and pick the secret holding a key issued for that agent.",
       "name": "Name",
       "namePlaceholder": "e.g. docs-writer",
@@ -731,11 +806,18 @@
       "when": "When to delegate",
       "whenPlaceholder": "What this agent should hand over, and when",
       "whenHintLocal": "Leave empty to use the agent's own description.",
-      "addExternal": "Add external agent",
       "nameRequired": "Give the agent a name.",
       "nameTaken": "Another delegate already has this name.",
       "urlInvalid": "Enter an http(s) URL.",
       "empty": "No delegates. Add agents this agent can hand tasks to.",
+      "remove": "Remove {name}"
+    },
+    "skillsConfig": {
+      "title": "Skills",
+      "note": "Skills extend the agent with specialized behaviors and knowledge.",
+      "sheetDescription": "Add skills to extend what your agent can do",
+      "add": "Skill",
+      "empty": "No skills. Add skills to extend what this agent can do.",
       "remove": "Remove {name}"
     },
     "a2aAccess": {
@@ -801,7 +883,9 @@
       "breadcrumb": "Connect",
       "breadcrumbWithName": "Connect {name}",
       "back": "Back to catalog",
-      "loadFailed": "Could not load this catalog connection"
+      "loadFailed": "Could not load this catalog connection",
+      "keysTitle": "Add your {provider} {count, plural, one {key} other {keys}}",
+      "keysDetail": "Copy {count, plural, one {it} other {them}} from your {provider} account. Each time you connect, a separate connection is made."
     },
     "createInstance": {
       "breadcrumb": "Create instance",
@@ -936,7 +1020,10 @@
         "useOwnApp": "Use your own OAuth app",
         "usePlatformApp": "Use AgentArea's OAuth app",
         "ownAppTitle": "Your own OAuth app",
-        "ownAppDetail": "Sign in through an OAuth app you registered with the provider instead of AgentArea's."
+        "ownAppDetail": "Sign in through an OAuth app you registered with the provider instead of AgentArea's.",
+        "scopesSummary": "Access: {picked} of {total} scopes",
+        "scopesHint": "What this connection may do at the provider. Untick what its agents do not need: the provider's consent screen asks only for what stays ticked.",
+        "scopesNone": "Pick at least one scope."
       },
       "status": {
         "stopped": "Stopped",
@@ -1006,7 +1093,6 @@
           "saveFailed": "Couldn't change the tool policy",
           "groupLabel": "Policy for every tool in the group",
           "mixed": "Mixed",
-          "scope": "The policy is the workspace default for every agent and client that calls these tools; an agent's own rules can only tighten it. Called through the connection's own MCP address, a tool that needs approval is refused: nobody is there to approve it.",
           "adminOnly": "Only a workspace admin can change it.",
           "allPrefix": "All:",
           "failedMore": "{names} and {count} more",
@@ -1028,10 +1114,7 @@
         "notSet": "not set"
       },
       "details": {
-        "title": "Details",
-        "id": "Connection ID",
-        "created": "Created",
-        "updated": "Updated"
+        "id": "Connection ID"
       },
       "confirm": {
         "deleteTitle": "Delete instance?",
@@ -1284,6 +1367,7 @@
     "providerConfigsSection": "Provider Configs",
     "platformProviderConfigsSection": "Provided by the platform",
     "platformManagedBadge": "No setup needed",
+    "firstPartyBadge": "By AgentArea",
     "createConfig": "Create Configuration",
     "table": {
       "name": "Name",
@@ -1371,7 +1455,20 @@
     "testAndDiscoverTooltip": "Validate API key and discover models from provider",
     "discoveredCount": "Discovered {totalCount} models ({newCount} new)",
     "discoveredCountNoNew": "Discovered {totalCount} models (no new models)",
-    "discoveredSkipped": "{skippedCount} skipped — no context window or pricing published, so they cannot be run: {names}",
+    "discoveredSkipped": "{skippedCount} skipped — no context window published, so they cannot be run: {names}. Add them by hand with their context window.",
+    "addModelManually": "Add model by hand",
+    "addModel": "Add model",
+    "addingModel": "Adding...",
+    "failedToAddModel": "Failed to add the model",
+    "manualModelName": "Model ID",
+    "manualModelNameInvalid": "Enter the model ID the provider expects",
+    "manualContextWindow": "Context window, tokens",
+    "manualContextWindowInvalid": "Enter a whole number of tokens",
+    "manualInputPrice": "Input, $ per 1M tokens",
+    "manualInputPriceInvalid": "Enter a price like 0.15, or leave it empty",
+    "manualOutputPrice": "Output, $ per 1M tokens",
+    "manualOutputPriceInvalid": "Enter a price like 0.60, or leave it empty",
+    "manualPriceHint": "Leave the price empty for a self-hosted model: its runs are not counted in spend. Enter 0 for a free one.",
     "failedToDiscover": "Failed to discover models",
     "failedToDiscoverCheckKey": "Failed to discover models. Check API key.",
     "selectProviderFirst": "Select a provider first",
@@ -1406,7 +1503,16 @@
       "runAt": "Run at",
       "runNowAction": "Run now",
       "done": "Done",
-      "scheduleTask": "Schedule task"
+      "scheduleTask": "Schedule task",
+      "date": "Date",
+      "time": "Time",
+      "invalidTime": "Type a date and time like {example}",
+      "timePassed": "This time has already passed",
+      "presets": {
+        "inOneHour": "In an hour",
+        "tomorrowMorning": "Tomorrow morning",
+        "mondayMorning": "Monday morning"
+      }
     },
     "Messages": {
       "toolCall": "Tool Call",
@@ -2003,7 +2109,6 @@
     "policyPerCall": "per call",
     "policyContentSafety": "Content safety",
     "policyPromptInjection": "Prompt-injection detection",
-    "policyOutputSanitizer": "Output sanitizer",
     "policyMonthlyCap": "Monthly cap",
     "policyAgentMonthlyCap": "Agent monthly cap",
     "policyServiceBudget": "Service budget",
@@ -2024,7 +2129,9 @@
     "executionAwaitingFollowUp": "Awaiting follow-up",
     "startsAt": "Starts",
     "builtinTools": "Built-in tools",
-    "toolFailed": "{count} failed"
+    "toolFailed": "{count} failed",
+    "ranOn": "Ran on",
+    "runsOn": "Runs on"
   },
   "Workplace": {
     "hero": {
@@ -2405,6 +2512,19 @@
       "enableFailed": "Failed to enable trigger",
       "disableFailed": "Failed to disable trigger",
       "runFailed": "Couldn't run the trigger"
+    },
+    "schedule": {
+      "custom": "Custom schedule",
+      "everyMinute": "Every minute",
+      "everyMinutes": "Every {n} minutes",
+      "everyHour": "Every hour",
+      "everyHourAt": "Every hour at :{minute}",
+      "everyHours": "Every {n} hours",
+      "weekdays": "Weekdays at {time}",
+      "weekends": "Weekends at {time}",
+      "weekly": "Every {day, select, 0 {Sunday} 1 {Monday} 2 {Tuesday} 3 {Wednesday} 4 {Thursday} 5 {Friday} 6 {Saturday} other {day}} at {time}",
+      "daily": "Every day at {time}",
+      "monthly": "Monthly on the {day, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} at {time}"
     }
   },
   "EventsPage": {
@@ -2558,11 +2678,6 @@
     },
     "streamsTitle": "Streams",
     "streamsDescription": "Named event streams, their sources and forwards",
-    "live": {
-      "on": "Live",
-      "connecting": "Connecting",
-      "off": "Reconnecting"
-    },
     "streamsMenu": {
       "button": "Streams",
       "all": "All streams",
@@ -3148,27 +3263,19 @@
     "couldntLoadTitle": "Couldn't load dashboard",
     "spend": "Spend",
     "monthToDate": "Month to date",
-    "cumulative": "cumulative",
     "today": "Today",
+    "topAgents": "Top spenders this month",
+    "deletedAgent": "Deleted agent",
     "vsPrevDay": "vs prev day",
     "budgetUsage": "{pct}% of {cap} budget",
-    "blockers": "Blockers",
-    "nothingBlocking": "Nothing blocking work right now.",
-    "allClearHint": "Every agent is running smoothly.",
-    "awaitingInput": "Awaiting input",
-    "awaitingContinuation": "Waiting to continue",
     "blocked": "Blocked",
-    "walletExhausted": "Wallet exhausted",
-    "failed24h": "Failed (24h)",
-    "budgetExhausted": "Budget exhausted — {amount} / {period}",
+    "budgetExhausted": "Budget exhausted — {amount} / {period, select, daily {day} monthly {month} execution {run} other {{period}}}",
     "taskFailed": "Task failed",
     "taskBlocked": "Task is blocked",
-    "timeAgo": "{time} ago",
     "relJustNow": "just now",
     "relMinutes": "{count}m",
     "relHours": "{count}h",
     "relDays": "{count}d",
-    "tasks": "Tasks",
     "allTasks": "All tasks",
     "runningNow": "Running now",
     "recentlyFinished": "Recently finished",
@@ -3176,14 +3283,39 @@
     "noTasks": "No tasks yet.",
     "noTasksHint": "Start a task or set up a trigger and it shows up here.",
     "schedule": "Schedule",
-    "scheduleMeta": "Next {days} days",
     "nothingScheduled": "Nothing scheduled — add a trigger",
     "throughoutTheDay": "All day:",
     "perDay": "×{count}/day",
     "fromDate": "from {date}",
     "moreRuns": "+{count} more",
     "runCount": "Scheduled runs: {count}",
-    "estimatePart": "incl. ≈ {amount} estimated"
+    "estimatePart": "incl. ≈ {amount} estimated",
+    "broken": "Broken",
+    "failed": "Failed",
+    "connectionReason": {
+      "verification_failed": "Verification failed",
+      "last_call_failed": "Last call failed"
+    },
+    "triggerReason": {
+      "failing": "Failed {count, plural, one {# time} other {# times}} in a row (stops at {threshold})",
+      "stopped_after_failures": "Stopped after {count, plural, one {# failure} other {# failures}}",
+      "needs_owner": "Needs a new owner"
+    },
+    "projectedEom": "≈ {amount} by month end",
+    "attention": "Needs your attention",
+    "allClearTitle": "Nothing needs you right now",
+    "allClearHint": "Approvals, stopped runs and broken connections will show up here.",
+    "waitingForDecision": "Waiting for your decision",
+    "waitingFor": "{status, select, waiting_for_approval {Waiting for approval} waiting_for_continuation {Waiting to continue} other {Waiting for an answer}}",
+    "stopped": "Stopped",
+    "activity": "Activity",
+    "scheduleView": {
+      "today": "Today",
+      "week": "Week",
+      "month": "Month"
+    },
+    "nextRun": "Next run: {title}, {when}",
+    "nothingInView": "{view, select, today {Nothing scheduled today} week {Nothing scheduled this week} other {Nothing scheduled this month}}"
   },
   "BudgetsPage": {
     "couldntLoadTitle": "Couldn't load budget data",
@@ -3213,7 +3345,21 @@
     "capUpdated": "Workspace monthly cap updated.",
     "capInvalid": "Enter a positive number, or leave it empty to remove the cap.",
     "capUpdateFailed": "Failed to update workspace cap",
-    "settingsLoadFailed": "Couldn't load workspace settings"
+    "settingsLoadFailed": "Couldn't load workspace settings",
+    "runtime": {
+      "title": "Workspace resources",
+      "hint": "What runs and files of this workspace use; billed from the balance",
+      "compute": "Compute",
+      "memory": "Memory",
+      "storage": "Storage",
+      "monthToDate": "This month",
+      "now": "Now",
+      "cpuUnit": "vCPU·h",
+      "memoryUnit": "GiB·h",
+      "computeSub": "CPU reserved for sandboxes and MCP servers",
+      "memorySub": "Memory reserved for sandboxes and MCP servers",
+      "storageSub": "Files and artifacts the workspace keeps"
+    }
   },
   "AgentOverviewPage": {
     "showMore": "Show more",
@@ -3505,7 +3651,6 @@
       "createSecret": "Only a workspace admin can add a secret.",
       "manageSecret": "Only a workspace admin can edit, rotate or delete a secret.",
       "invitePeople": "Only a workspace admin can invite people.",
-      "manageProvider": "Only a workspace admin can add or edit a model provider.",
       "importPolicies": "Only a workspace admin can import policies.",
       "manageMcpAuth": "Only a workspace admin can pick or create an authentication config.",
       "viewPolicies": "Only a workspace admin can view policies.",
@@ -3651,8 +3796,7 @@
         "removeValue": "Remove {value}"
       },
       "safety": {
-        "promptInjection": "Prompt-injection detection",
-        "outputSanitizer": "Output sanitizer"
+        "promptInjection": "Prompt-injection detection"
       },
       "validation": {
         "agentRequired": "Add at least one agent for this policy.",
@@ -3663,7 +3807,6 @@
         "amountMustNotBeNegative": "The amount can't be negative.",
         "atLeastOneToolRequired": "Add at least one tool.",
         "toolRequired": "Add a tool.",
-        "safetyCheckRequired": "Enable at least one safety check.",
         "approverUnsupported": "Only workspace members can approve; remove role and group approvers.",
         "ruleInvalid": "Rule {number} ({effect}): {error}",
         "installTargetRequired": "Pick at least one registry or trust level.",
@@ -3761,9 +3904,7 @@
   },
   "ClientsPage": {
     "loadFailed": "Couldn’t load harnesses",
-    "loadOneFailed": "Couldn’t load the harness",
     "createFailed": "Couldn’t add the harness",
-    "updateFailed": "Couldn’t save the harness",
     "title": "Harnesses",
     "description": "Connect external agent harnesses to your workspace's tools and skills.",
     "add": "Add harness",
@@ -3782,13 +3923,128 @@
     "connectionsCount": "{count, plural, one {# connection} other {# connections}}",
     "skillsCount": "{count, plural, one {# skill} other {# skills}}",
     "deleteTitle": "Delete harness",
-    "deleteDescription": "Delete \"{name}\"? The scoped MCP endpoint stops working for any harness connected to it. This cannot be undone."
+    "deleteDescription": "Delete \"{name}\"? The scoped MCP endpoint stops working for any harness connected to it. This cannot be undone.",
+    "runner": {
+      "title": "Runner",
+      "description": "This client's CLI can run agents' turns on its own subscription. Start a runner on the machine where the CLI is signed in; agents set to run on this client execute there, with this client's tools.",
+      "online": "Online",
+      "offline": "Offline",
+      "model": "Default model",
+      "modelHint": "Agents on this client run with this model unless a task names another. Each agent sets its own reasoning level in its settings.",
+      "modelsPending": "The runner has not reported its models yet.",
+      "domains": "Allowed domains",
+      "domainsHint": "Hosts the CLI's sandbox may reach during a turn, one per line, besides those the runner itself allows.",
+      "save": "Save",
+      "connect": {
+        "title": "Connect a runner",
+        "description": "Issue a key and run the command on the machine where the CLI is signed in. The key reaches only this client's runner.",
+        "issue": "Issue a key",
+        "register": "Run this on the machine where the CLI is signed in",
+        "shownOnce": "Copy it now: the key is not shown again.",
+        "then": "Then start it:",
+        "done": "Done"
+      },
+      "keys": {
+        "title": "Runner keys",
+        "empty": "No runner key yet.",
+        "revoke": "Revoke",
+        "issued": "Issued {when}",
+        "used": "last used {when}",
+        "neverUsed": "never used"
+      }
+    },
+    "agents": {
+      "title": "Agents on this harness",
+      "description": "Agents set to run on this harness. Their turns execute on its runner, with its tools.",
+      "empty": "No agent runs on this harness yet. Pick it under “Runs on” in an agent's settings."
+    },
+    "tabs": {
+      "label": "Harness sections",
+      "overview": "Overview",
+      "tools": "Tools",
+      "runner": "Runner"
+    },
+    "overview": {
+      "defaultDescription": "A governed, scoped tool bundle an external harness connects to over MCP.",
+      "showMore": "Show more",
+      "showLess": "Show less",
+      "stats": {
+        "mcp": "MCP servers",
+        "toolsets": "Platform toolsets",
+        "skills": "Skills",
+        "agents": "Agents",
+        "allTools": "every tool served",
+        "none": "none attached",
+        "narrowed": "{count, plural, one {# with a tool subset} other {# with a tool subset}}",
+        "skillsSub": "through activate_skill",
+        "agentsSub": "run on its runner",
+        "agentsNone": "none assigned yet"
+      },
+      "connection": {
+        "title": "Connection",
+        "endpoint": "MCP endpoint",
+        "endpointHint": "Point the harness's MCP client here. It serves this bundle and nothing else.",
+        "sync": "Sync command",
+        "syncHint": "Writes the endpoint into the harness's own MCP config."
+      },
+      "runner": {
+        "manage": "Manage",
+        "status": "Status",
+        "noModel": "Not set",
+        "keyCount": "{count, plural, =0 {No keys} one {# key} other {# keys}}"
+      },
+      "agentSub": "Runs on this harness",
+      "details": {
+        "id": "Harness ID"
+      }
+    },
+    "tools": {
+      "add": "Add",
+      "servedTitle": "Served tools",
+      "servedEmpty": "Nothing served yet. Add an MCP server or a platform toolset to choose which of its tools the harness sees.",
+      "served": "Served tools ({selected}/{total})",
+      "openConnection": "Open",
+      "allServed": "All tools served",
+      "someServed": "{count, plural, one {# tool served} other {# tools served}}",
+      "someOff": "{count, plural, one {# method hidden} other {# methods hidden}}",
+      "saveFailed": "Couldn’t save the tool selection",
+      "toolsetGone": "The platform no longer serves this toolset. Remove it from the harness.",
+      "mcpToolsFailed": "Couldn’t load the instance’s tools",
+      "mcpNoTools": "This instance has not reported any tools yet, so the harness serves whatever it exposes.",
+      "catalogFailed": "Couldn’t load platform toolsets",
+      "mcp": {
+        "title": "MCP servers",
+        "sheetDescription": "Instances exposed through this harness's endpoint. Tools keep the namespace prefix set on the instance.",
+        "available": "Active MCP server instances",
+        "empty": "No MCP servers. Add one to expose its tools through the endpoint.",
+        "noneAvailable": "No MCP server instances yet. Create one under Connections first."
+      },
+      "toolsets": {
+        "title": "Platform tools",
+        "sheetDescription": "AgentArea toolsets served through the endpoint, in this harness's workspace and with the caller's own permissions.",
+        "available": "Platform toolsets",
+        "empty": "No platform toolsets. Add the ones this harness should manage AgentArea with.",
+        "noneAvailable": "The platform serves no toolsets."
+      },
+      "skills": {
+        "title": "Skills",
+        "sheetDescription": "Skills reachable through the endpoint's activate_skill tool.",
+        "available": "Available skills",
+        "empty": "No skills. Add the ones the harness should be able to activate.",
+        "noneAvailable": "No skills available. Create one under Skills."
+      }
+    }
   },
   "AttachmentSection": {
     "addFailed": "Couldn’t add {item}",
     "removeFailed": "Couldn’t remove {item}",
     "remove": "Remove {item}",
     "loading": "Loading…"
+  },
+  "DetailsCard": {
+    "title": "Details",
+    "created": "Created",
+    "updated": "Updated"
   },
   "CatalogPage": {
     "title": "Catalog",
@@ -4155,6 +4411,78 @@
       "bundles": "Bundles"
     }
   },
+  "EgressExits": {
+    "title": "Egress exits",
+    "description": "Proxies that container connections (Docker and command) reach the internet through, so their traffic comes from the proxy's address.",
+    "add": "Add exit",
+    "loadFailed": "Couldn't load the egress exits",
+    "noCredentials": "None",
+    "passwordFromSecret": "Password from a workspace secret",
+    "table": {
+      "name": "Name",
+      "proxy": "Proxy",
+      "credentials": "Username"
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "delete": {
+      "title": "Delete exit",
+      "description": "Delete {name}? A connection that still leaves through it has to be moved to another exit first."
+    },
+    "empty": {
+      "title": "No egress exits yet",
+      "description": "Add a proxy, then pick it on a Docker or command connection to send its traffic out from that proxy's address."
+    },
+    "errors": {
+      "invalid": "Check the highlighted fields",
+      "createFailed": "Couldn't add the exit",
+      "updateFailed": "Couldn't save the exit",
+      "deleteFailed": "Couldn't delete the exit"
+    },
+    "form": {
+      "createTitle": "Add egress exit",
+      "editTitle": "Edit egress exit",
+      "description": "A proxy the workspace's container connections can reach the internet through.",
+      "create": "Add exit",
+      "save": "Save",
+      "createFailed": "Couldn't add the exit",
+      "updateFailed": "Couldn't save the exit",
+      "name": "Name",
+      "namePlaceholder": "office-proxy",
+      "nameRequired": "Name the exit",
+      "descriptionLabel": "Description",
+      "upstreamUrl": "Proxy address",
+      "upstreamUrlRequired": "Enter the proxy address",
+      "upstreamUrlHint": "scheme://host:port, where the scheme is http, https or socks5. Credentials go in the fields below, not in the address.",
+      "username": "Username",
+      "password": "Password",
+      "passwordHint": "A workspace secret holding the proxy password. The exit keeps a reference, never a copy; a changed value applies at the connection's next start.",
+      "passwordNone": "None",
+      "passwordLoading": "Loading secrets…",
+      "passwordSearch": "Search secrets…",
+      "passwordEmpty": "No secrets found.",
+      "passwordCreate": "Create a secret",
+      "passwordClear": "Clear",
+      "passwordLoadFailed": "Couldn't load the workspace secrets",
+      "allowPlaintext": "Send the sign-in unencrypted",
+      "allowPlaintextHint": "An http or socks5 proxy receives the username and password in plain text. Turn this on only if you accept that, or use an https proxy."
+    },
+    "picker": {
+      "label": "Egress exit",
+      "hint": "The proxy this connection reaches the internet through. Exits are managed in Settings.",
+      "direct": "None: leave directly"
+    },
+    "section": {
+      "title": "Egress exit",
+      "save": "Save egress exit",
+      "saveFailed": "Couldn't change the egress exit",
+      "restartHint": "A running connection stops; the next call starts it through the new exit.",
+      "direct": "None: it reaches the internet directly.",
+      "unknown": "An exit that is no longer listed ({id})"
+    }
+  },
   "CatalogFetchErrors": {
     "removedUpstream": "Removed upstream",
     "moved": "Moved or changed upstream",
@@ -4180,7 +4508,9 @@
     "paidByOwner": "Paid by the owner",
     "unavailable": "Unavailable",
     "topUp": "Top up",
-    "bannerPayer": "Agents on AgentArea models do not start. Top up to get them running again.",
-    "bannerMember": "Agents on AgentArea models do not start. Ask the workspace owner to top up."
+    "ownKey": "Use your own API key",
+    "bannerMember": "Agents on AgentArea models do not start. Ask the workspace owner to top up.",
+    "runway": "Enough for ~{days, plural, one {# day} other {# days}} at {perDay}/day",
+    "runwayUnderDay": "Enough for less than a day at {perDay}/day"
   }
 }

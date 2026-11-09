@@ -67,7 +67,7 @@ def _code(*names: str) -> list[dict[str, Any]]:
 
 
 # The toolsets the UI switches on and off together as "Sandbox".
-_SANDBOX = ("agentarea/shell", "agentarea/files", "agentarea/workspace_files")
+_SANDBOX = ("agentarea/shell", "agentarea/files")
 
 # Presets are catalog agents tagged "preset": the starting points offered on the
 # agent-create form. Applying one fills tools, skills, triggers and instruction.
@@ -81,7 +81,7 @@ PRESETS: list[dict[str, Any]] = [
         access to the workspace's file library. Do the work instead of
         describing it: run commands, write files, look things up.
 
-        Your sandbox starts empty on every run; nothing saved there is kept.
+        Your sandbox starts empty on every run.
 
         Before anything destructive or hard to undo, say what you are about to do.
         """,
@@ -94,7 +94,7 @@ PRESETS: list[dict[str, Any]] = [
         "Researches a question on the web and writes up cited findings.",
         """
         You are a research assistant. Break the question into parts, search and
-        read primary sources, and keep notes in your workspace files. Answer with
+        read primary sources, and keep notes in files in your sandbox. Answer with
         a concise write-up that cites every claim and flags what is uncertain.
         """,
         tools=_code(*_SANDBOX, "agentarea/web", "agentarea/context"),

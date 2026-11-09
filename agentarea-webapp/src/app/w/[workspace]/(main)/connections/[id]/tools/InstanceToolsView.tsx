@@ -195,12 +195,8 @@ export default function InstanceToolsView({
           <SectionLoadError message={toolPolicies.error} />
         )}
         {policyError && <FormError>{policyError}</FormError>}
-        {hasPolicies && tools.length > 0 && (
-          <p className="note">
-            {toolPolicies.canEdit
-              ? t("tools.policy.scope")
-              : `${t("tools.policy.scope")} ${t("tools.policy.adminOnly")}`}
-          </p>
+        {hasPolicies && tools.length > 0 && !toolPolicies.canEdit && (
+          <p className="note">{t("tools.policy.adminOnly")}</p>
         )}
 
         {tools.length > 0 ? (

@@ -1,10 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import { useTranslations } from "next-intl";
+import Image from "next/image";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
+import { FirstPartyBadge } from "./FirstPartyBadge";
 import ModelsList from "./ModelsList";
 import { PlatformProviderConfigCard } from "./ProviderItem";
 import { ModelInstance, ProviderConfig } from "./types";
@@ -48,6 +49,12 @@ export default function PlatformProviderConfigsView({
     {
       accessor: "provider_spec_name",
       header: t("provider"),
+      render: (value: string | null, item: ProviderConfig) => (
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate">{value}</span>
+          {item.spec?.is_first_party && <FirstPartyBadge />}
+        </div>
+      ),
     },
     {
       accessor: "model_instances",

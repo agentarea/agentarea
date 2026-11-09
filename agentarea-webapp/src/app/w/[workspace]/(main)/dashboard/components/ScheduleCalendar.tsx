@@ -3,28 +3,29 @@
 import { useSyncExternalStore } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { CalendarDays, Repeat } from "lucide-react";
+import { parseAsStringLiteral, useQueryState } from "nuqs";
 import type { FrequentSchedule, Schedule, ScheduledRun } from "@/api/client";
-import { AgentAvatar } from "@/components/AgentAvatar";
 import { BoardSectionHeader } from "@/components/board";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "@/components/WorkspaceLink";
-import { cn } from "@/lib/utils";
-import { buildCalendarWeeks, dayKey, type CalendarDay } from "./calendar";
+import {
+  addDays,
+  buildMonthWeeks,
+  buildTodayAgenda,
+  buildWeekDays,
+  dayKey,
+  firstRunFrom,
+} from "./calendar";
+import { DayGrid, UpcomingList } from "./DayGrid";
+import { TimeGrid, type TimeGridFormats } from "./TimeGrid";
 
-const MAX_CHIPS_PER_DAY = 2;
+const VIEWS = ["today", "week", "month"] as const;
+type View = (typeof VIEWS)[number];
 
 const noopSubscribe = () => () => {};
 
-/** A run is either a cron trigger firing or a task booked for later. */
-function runHref(run: ScheduledRun) {
-  return run.task_id ? `/tasks/${run.task_id}` : `/triggers/${run.trigger_id}`;
-}
-
-function runKey(run: ScheduledRun) {
-  return `${run.task_id ?? run.trigger_id}-${run.fires_at}`;
-}
-
-/** Days are the viewer's local days, so the grid renders only in the browser. */
+/** Days are the viewer's local days, so the views render only in the browser. */
 function useIsClient() {
   return useSyncExternalStore(
     noopSubscribe,
@@ -33,49 +34,12 @@ function useIsClient() {
   );
 }
 
-function RunChip({
-  run,
-  time,
-  date,
-  withAgent = false,
-}: {
-  run: ScheduledRun;
-  time: (iso: string) => string;
-  /** The run's full date: the chip alone shows only the time. */
-  date: string;
-  /** The grid cell is too narrow for the avatar; the tooltip names the agent. */
-  withAgent?: boolean;
-}) {
-  const name = run.agent_name ? `${run.title} · ${run.agent_name}` : run.title;
-  return (
-    <Link
-      href={runHref(run)}
-      className="flex min-w-0 items-center gap-1.5 rounded-md border border-zinc-200 bg-background px-1.5 py-0.5 text-[11.5px] leading-[18px] transition-colors hover:bg-muted dark:border-zinc-700"
-      title={name}
-      aria-label={`${date} ${time(run.fires_at)} ${name}`}
-    >
-      {withAgent && (
-        <AgentAvatar
-          agent={{ id: run.agent_id, name: run.agent_name ?? "" }}
-          size="xs"
-        />
-      )}
-      <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">
-        {time(run.fires_at)}
-      </span>
-      <span className="min-w-0 truncate font-medium text-foreground">
-        {run.title}
-      </span>
-    </Link>
-  );
-}
-
 function FrequentChip({
   item,
   firstDate,
 }: {
   item: FrequentSchedule;
-  /** The day of the next run, in the viewer's zone; null until hydrated. */
+  /** The day of the next run when it is not today. */
   firstDate: string | null;
 }) {
   const t = useTranslations("DashboardPage");
@@ -99,61 +63,167 @@ function FrequentChip({
   );
 }
 
-function DayCell({
-  day,
-  time,
-  dayLabel,
+/** Schedules that fire through the day, above the hours like all-day events. */
+function FrequentStrip({
+  items,
+  firstDate,
 }: {
-  day: CalendarDay<ScheduledRun>;
-  time: (iso: string) => string;
-  dayLabel: (d: Date) => string;
+  items: FrequentSchedule[];
+  firstDate: (item: FrequentSchedule) => string | null;
 }) {
   const t = useTranslations("DashboardPage");
-  const date = dayLabel(day.date);
-  const shown = day.items.slice(0, MAX_CHIPS_PER_DAY);
-  const hidden = day.items.length - shown.length;
+  if (items.length === 0) return null;
   return (
-    <div
-      className={cn(
-        "flex min-h-0 min-w-0 flex-col gap-1 overflow-hidden border-b border-r border-zinc-200 p-1.5 dark:border-zinc-700",
-        day.isPast && "bg-muted/40"
-      )}
-    >
-      <div className="flex items-center justify-between px-0.5">
-        <span
-          aria-hidden
-          className={cn(
-            "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[12px] font-semibold tabular-nums",
-            day.isToday && "bg-foreground text-background",
-            day.isPast && "text-muted-foreground"
-          )}
-        >
-          {day.date.getDate()}
-        </span>
-        <span className="sr-only">{date}</span>
-        {day.items.length > 0 && (
-          <span className="text-[11px] tabular-nums text-muted-foreground">
-            <span aria-hidden>{day.items.length}</span>
-            <span className="sr-only">
-              {t("runCount", { count: day.items.length })}
-            </span>
-          </span>
-        )}
-      </div>
-      {shown.map((run) => (
-        <RunChip
-          key={runKey(run)}
-          run={run}
-          time={time}
-          date={date}
+    <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-zinc-200 px-6 py-2.5 dark:border-zinc-700">
+      <span className="mr-1 shrink-0 text-[11.5px] text-muted-foreground">
+        {t("throughoutTheDay")}
+      </span>
+      {items.map((item) => (
+        <FrequentChip
+          key={item.trigger_id}
+          item={item}
+          firstDate={firstDate(item)}
         />
       ))}
-      {hidden > 0 && (
-        <span className="px-1 text-[11px] text-muted-foreground">
-          {t("moreRuns", { count: hidden })}
-        </span>
-      )}
     </div>
+  );
+}
+
+/** What an empty view says: nothing here, and when the next run is. */
+function EmptyNote({
+  view,
+  hasSchedule,
+  next,
+  formats,
+}: {
+  view: View;
+  hasSchedule: boolean;
+  next: ScheduledRun | FrequentSchedule | null;
+  formats: TimeGridFormats;
+}) {
+  const t = useTranslations("DashboardPage");
+  if (!hasSchedule) {
+    return (
+      <Link href="/triggers/create" className="hover:text-foreground">
+        {t("nothingScheduled")}
+      </Link>
+    );
+  }
+  const nextAt =
+    next && ("fires_at" in next ? next.fires_at : next.next_run_at);
+  return (
+    <>
+      <div className="font-medium text-foreground">
+        {t("nothingInView", { view })}
+      </div>
+      {next && nextAt && (
+        <div className="mt-0.5">
+          {t("nextRun", {
+            title: next.title,
+            when: `${formats.dayLabel(new Date(nextAt))} ${formats.time(nextAt)}`,
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+function ScheduleBody({
+  view,
+  schedule,
+  formats,
+}: {
+  view: View;
+  schedule: Schedule;
+  formats: TimeGridFormats;
+}) {
+  const now = new Date();
+  const hasSchedule = schedule.runs.length > 0 || schedule.frequent.length > 0;
+  const laterFrequent = (item: FrequentSchedule) =>
+    dayKey(new Date(item.next_run_at)) > dayKey(now)
+      ? formats.dayLabel(new Date(item.next_run_at))
+      : null;
+
+  if (view === "today") {
+    const agenda = buildTodayAgenda(schedule.runs, schedule.frequent, now);
+    const empty = agenda.runs.length === 0 && agenda.frequent.length === 0;
+    return (
+      <>
+        <FrequentStrip items={agenda.frequent} firstDate={() => null} />
+        <TimeGrid
+          runs={agenda.runs}
+          formats={formats}
+          note={
+            empty ? (
+              <EmptyNote
+                view="today"
+                hasSchedule={hasSchedule}
+                next={agenda.next}
+                formats={formats}
+              />
+            ) : null
+          }
+        />
+      </>
+    );
+  }
+
+  if (view === "week") {
+    const days = buildWeekDays(schedule.runs, now);
+    const note = (
+      <EmptyNote
+        view="week"
+        hasSchedule={hasSchedule}
+        next={firstRunFrom(
+          schedule.runs,
+          schedule.frequent,
+          addDays(days[6].date, 1)
+        )}
+        formats={formats}
+      />
+    );
+    return (
+      <>
+        <FrequentStrip items={schedule.frequent} firstDate={laterFrequent} />
+        <div className="hidden min-h-0 flex-1 flex-col md:flex">
+          <DayGrid
+            weeks={[days]}
+            maxChips={12}
+            muteOutsideMonth={false}
+            formats={formats}
+          />
+        </div>
+        <div className="md:hidden">
+          <UpcomingList days={days} formats={formats} empty={note} />
+        </div>
+      </>
+    );
+  }
+
+  const weeks = buildMonthWeeks(schedule.runs, now);
+  const note = (
+    <EmptyNote
+      view="month"
+      hasSchedule={hasSchedule}
+      next={null}
+      formats={formats}
+    />
+  );
+  return (
+    <>
+      <FrequentStrip items={schedule.frequent} firstDate={laterFrequent} />
+      <div className="hidden min-h-0 flex-1 flex-col md:flex">
+        <DayGrid
+          weeks={weeks}
+          maxChips={3}
+          muteOutsideMonth
+          formats={formats}
+        />
+      </div>
+      <div className="md:hidden">
+        <UpcomingList days={weeks.flat()} formats={formats} empty={note} />
+      </div>
+    </>
   );
 }
 
@@ -161,21 +231,28 @@ export function ScheduleCalendar({ schedule }: { schedule: Schedule }) {
   const t = useTranslations("DashboardPage");
   const locale = useLocale();
   const isClient = useIsClient();
+  const [view, setView] = useQueryState(
+    "schedule",
+    parseAsStringLiteral(VIEWS).withDefault("today")
+  );
 
   const timeFmt = new Intl.DateTimeFormat(locale, {
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
   });
-  const time = (iso: string) => timeFmt.format(new Date(iso));
   const weekdayFmt = new Intl.DateTimeFormat(locale, { weekday: "short" });
   const dayFmt = new Intl.DateTimeFormat(locale, {
     weekday: "short",
     day: "numeric",
     month: "short",
   });
-
-  const isEmpty = schedule.runs.length === 0 && schedule.frequent.length === 0;
+  const formats: TimeGridFormats = {
+    time: (iso) => timeFmt.format(new Date(iso)),
+    hour: (h) => timeFmt.format(new Date(2000, 0, 1, h)),
+    weekday: (d) => weekdayFmt.format(d),
+    dayLabel: (d) => dayFmt.format(d),
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -185,120 +262,26 @@ export function ScheduleCalendar({ schedule }: { schedule: Schedule }) {
           color="hsl(var(--foreground))"
           title={t("schedule")}
           meta={
-            isEmpty ? (
-              <Link href="/triggers/create" className="hover:text-foreground">
-                {t("nothingScheduled")}
-              </Link>
-            ) : (
-              t("scheduleMeta", { days: schedule.horizon_days })
-            )
+            <SegmentedControl<View>
+              layoutId="dashboard-schedule-view"
+              value={view}
+              onChange={(v) => void setView(v)}
+              itemClassName="min-w-0 px-3"
+              items={VIEWS.map((v) => ({
+                value: v,
+                label: t(`scheduleView.${v}`),
+              }))}
+            />
           }
         />
-        {schedule.frequent.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <span className="mr-1 text-[11.5px] text-muted-foreground">
-              {t("throughoutTheDay")}
-            </span>
-            {schedule.frequent.map((item) => (
-              <FrequentChip
-                key={item.trigger_id}
-                item={item}
-                firstDate={
-                  isClient ? dayFmt.format(new Date(item.next_run_at)) : null
-                }
-              />
-            ))}
-          </div>
+      </div>
+      <div className="flex flex-col md:h-[500px] lg:h-auto lg:min-h-0 lg:flex-1">
+        {isClient ? (
+          <ScheduleBody view={view} schedule={schedule} formats={formats} />
+        ) : (
+          <Skeleton className="m-4 h-[460px] rounded-md md:h-auto md:flex-1" />
         )}
       </div>
-
-      {!isClient ? (
-        <Skeleton className="m-4 flex-1 rounded-md" />
-      ) : (
-        <CalendarBody
-          schedule={schedule}
-          time={time}
-          weekday={(d) => weekdayFmt.format(d)}
-          dayLabel={(d) => dayFmt.format(d)}
-        />
-      )}
     </div>
-  );
-}
-
-function CalendarBody({
-  schedule,
-  time,
-  weekday,
-  dayLabel,
-}: {
-  schedule: Schedule;
-  time: (iso: string) => string;
-  weekday: (d: Date) => string;
-  dayLabel: (d: Date) => string;
-}) {
-  const weeks = buildCalendarWeeks(
-    schedule.runs,
-    new Date(),
-    schedule.horizon_days
-  );
-  const upcomingDays = weeks
-    .flat()
-    .filter((d) => !d.isPast && d.items.length > 0);
-
-  return (
-    <>
-      <div className="hidden min-h-0 flex-1 flex-col overflow-y-auto md:flex">
-        <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-700">
-          {weeks[0].map((d) => (
-            <div
-              key={dayKey(d.date)}
-              className="px-2 py-1.5 text-[11.5px] font-medium capitalize text-muted-foreground"
-            >
-              {weekday(d.date)}
-            </div>
-          ))}
-        </div>
-        <div
-          className="grid min-h-0 flex-1 grid-cols-7"
-          style={{
-            gridTemplateRows: `repeat(${weeks.length}, minmax(96px, 1fr))`,
-          }}
-        >
-          {weeks.flat().map((day) => (
-            <DayCell
-              key={dayKey(day.date)}
-              day={day}
-              time={time}
-              dayLabel={dayLabel}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div className="md:hidden">
-        {upcomingDays.map((day) => (
-          <div
-            key={dayKey(day.date)}
-            className="border-b border-zinc-200 px-6 py-2.5 dark:border-zinc-700"
-          >
-            <div className="mb-1.5 text-[12px] font-medium capitalize text-muted-foreground">
-              {dayLabel(day.date)}
-            </div>
-            <div className="flex flex-col gap-1">
-              {day.items.map((run) => (
-                <RunChip
-                  key={runKey(run)}
-                  run={run}
-                  time={time}
-                  date={dayLabel(day.date)}
-                  withAgent
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </>
   );
 }

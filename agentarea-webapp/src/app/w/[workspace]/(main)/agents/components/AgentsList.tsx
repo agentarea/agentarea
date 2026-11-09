@@ -1,13 +1,13 @@
 import { getTranslations } from "next-intl/server";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
-import ModelBadge from "@/components/ui/model-badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { cn } from "@/lib/utils";
-import { agentPath, type Agent, type ModelInfo } from "@/types";
+import { agentPath, type Agent } from "@/types";
 import type { AgentToolIcon } from "@/utils/agentToolIcons";
 import AgentCard from "./AgentCard";
 import { AGENT_COLUMNS, AGENTS_GRID_CLASS } from "./agentColumns";
+import { AgentModel } from "./AgentModel";
 import { AgentToolIcons } from "./AgentToolIcons";
 
 type AgentWithToolIcons = Agent & { tool_icons?: AgentToolIcon[] };
@@ -35,14 +35,7 @@ export default async function AgentsList({
         {value || "-"}
       </span>
     ),
-    model_info: (value: ModelInfo | null | undefined) => (
-      <ModelBadge
-        providerName={value?.provider_name}
-        iconUrl={value?.provider_icon_url}
-        modelDisplayName={value?.model_display_name}
-        configName={value?.config_name}
-      />
-    ),
+    model_info: (_value: unknown, item: Agent) => <AgentModel agent={item} />,
     active_task_count: (value: number) =>
       value > 0 ? (
         <StatusIndicator

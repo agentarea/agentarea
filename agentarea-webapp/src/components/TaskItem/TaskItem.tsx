@@ -34,7 +34,7 @@ export default function TaskItem({
       title={task.description}
       type="view"
       topRight={
-        <TaskStatus status={task.status} className="whitespace-nowrap" />
+        <TaskStatus status={task.status} caption="never" />
       }
     >
       <div className="flex flex-col gap-2 text-xs text-muted-foreground">

@@ -73,11 +73,14 @@ export async function updatePolicyRuleAction(
   };
 }
 
-export async function deletePolicyRuleAction(id: string): Promise<void> {
+export async function deletePolicyRuleAction(
+  id: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const { error } = await deletePolicy(id);
 
   if (error) {
     const t = await getTranslations("PoliciesPage.editor");
-    throw new Error(errorMessage(error, t("actions.deleteFailed")));
+    return { ok: false, error: errorMessage(error, t("actions.deleteFailed")) };
   }
+  return { ok: true };
 }

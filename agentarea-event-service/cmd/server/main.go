@@ -22,7 +22,7 @@ import (
 	"github.com/agentarea/event-service/internal/polling"
 	"github.com/agentarea/event-service/internal/secrets"
 	"github.com/agentarea/event-service/internal/source"
-	"github.com/agentarea/event-service/internal/tracing"
+	"github.com/agentarea/event-service/internal/telemetry"
 	"github.com/agentarea/event-service/internal/transport"
 )
 
@@ -65,16 +65,16 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	shutdownTracing, err := tracing.Setup(ctx, cfg.OTelEnabled)
+	shutdownTelemetry, err := telemetry.Setup(ctx, cfg.OTelEnabled, version)
 	if err != nil {
-		slog.Error("failed to set up tracing", "error", err)
+		slog.Error("failed to set up telemetry", "error", err)
 		os.Exit(1)
 	}
 	defer func() {
 		flushCtx, flushCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer flushCancel()
-		if err := shutdownTracing(flushCtx); err != nil {
-			slog.Error("tracing shutdown failed", "error", err)
+		if err := shutdownTelemetry(flushCtx); err != nil {
+			slog.Error("telemetry shutdown failed", "error", err)
 		}
 	}()
 

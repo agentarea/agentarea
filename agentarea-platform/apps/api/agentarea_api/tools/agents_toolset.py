@@ -8,11 +8,22 @@ in ``agentarea_agents.schemas.dto``. The contract test in
 
 import builtins
 import json
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 from uuid import UUID
 
-from agentarea_agents.application.agent_service import AgentService
-from agentarea_agents.schemas.dto import AgentCreate, AgentTypeLiteral, AgentUpdate
+from agentarea_agents.application.agent_service import (
+    AgentService,
+    InvalidClientError,
+    ReasoningConflictError,
+)
+from agentarea_agents.schemas.dto import (
+    CLIENT_ID_DESCRIPTION,
+    REASONING_EFFORT_DESCRIPTION,
+    REASONING_MAX_TOKENS_DESCRIPTION,
+    AgentCreate,
+    AgentTypeLiteral,
+    AgentUpdate,
+)
 from agentarea_agents.schemas.import_export import ToolConfig
 from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
@@ -24,6 +35,7 @@ from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.di.container import resolve
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, TypeAdapter
+from pydantic.experimental.missing_sentinel import MISSING
 
 from ..api.v1._agent_tools import validate_code_tool_names
 from .base import platform_context, platform_read_context
@@ -34,7 +46,7 @@ _AGENT_ID = "Agent id (UUID), from `agents_list` or `agents_create`."
 _TOOLS = (
     'Tool configs, each {"type": "code"|"mcp"|"agent"|"openapi", "name": str, '
     '"settings"?: object}. Built-in toolsets are {"type": "code", "name": "agentarea/shell"}; '
-    "an MCP server is its instance name with type mcp."
+    "an MCP server is its connection id with type mcp."
 )
 
 
@@ -50,6 +62,10 @@ class AgentDetailOutput(AgentSummaryOutput):
     )
     instruction: str | None = Field(default=None, description="The agent's system prompt.")
     agent_type: str = Field(description="stateless or stateful.")
+    reasoning_effort: str | None = Field(default=None, description=REASONING_EFFORT_DESCRIPTION)
+    reasoning_max_tokens: int | None = Field(
+        default=None, description=REASONING_MAX_TOKENS_DESCRIPTION
+    )
 
 
 class AgentRefOutput(BaseModel):
@@ -122,6 +138,8 @@ class AgentsToolset(Toolset):
                     "model_id": agent.model_id,
                     "instruction": agent.instruction,
                     "agent_type": agent.agent_type,
+                    "reasoning_effort": agent.reasoning_effort,
+                    "reasoning_max_tokens": agent.reasoning_max_tokens,
                 },
                 default=str,
             )
@@ -134,9 +152,10 @@ class AgentsToolset(Toolset):
             str, Field(description="Agent name, 1-255 characters, unique in the workspace.")
         ],
         model_id: Annotated[
-            str,
+            str | None,
             Field(
-                description="Model instance id (UUID) the agent runs on, from `models_list_instances`."
+                description="Model instance id (UUID) the agent runs on, from "
+                "`models_list_instances`; null when `client_id` runs it on a CLI."
             ),
         ],
         tools: Annotated[
@@ -155,6 +174,16 @@ class AgentsToolset(Toolset):
                 "stateless treats each run independently."
             ),
         ] = "stateless",
+        reasoning_effort: Annotated[
+            str | None, Field(description=REASONING_EFFORT_DESCRIPTION)
+        ] = None,
+        reasoning_max_tokens: Annotated[
+            int | None, Field(description=REASONING_MAX_TOKENS_DESCRIPTION)
+        ] = None,
+        client_id: Annotated[
+            str | None,
+            Field(description=f"{CLIENT_ID_DESCRIPTION} Client ids come from `clients_list`."),
+        ] = None,
     ) -> str:
         """Create a new agent.
 
@@ -169,6 +198,9 @@ class AgentsToolset(Toolset):
             model_id=model_id,
             tools=_TOOL_LIST.validate_python(tools),
             agent_type=agent_type,
+            reasoning_effort=reasoning_effort,
+            reasoning_max_tokens=reasoning_max_tokens,
+            client_id=UUID(client_id) if client_id else None,
         )
         try:
             validate_code_tool_names(payload.tools)
@@ -176,7 +208,10 @@ class AgentsToolset(Toolset):
             raise ToolError(exc.detail) from exc
         async with platform_context() as (_s, _u, repo_factory, event_broker, _):
             service = _build_service(repo_factory, event_broker)
-            agent = await service.create_agent(payload)
+            try:
+                agent = await service.create_agent(payload)
+            except InvalidClientError as exc:
+                raise ToolError(str(exc)) from exc
             return json.dumps({"id": str(agent.id), "name": agent.name}, default=str)
 
     @tool_method(
@@ -205,6 +240,27 @@ class AgentsToolset(Toolset):
             builtins.list[dict[str, Any]] | None,
             Field(description=f"{_TOOLS} Replaces the whole list; omit to keep the current tools."),
         ] = None,
+        reasoning_effort: Annotated[
+            str | None,
+            Field(
+                description=f"{REASONING_EFFORT_DESCRIPTION} Omit to keep the current setting; "
+                'pass "" to go back to the model\'s default.'
+            ),
+        ] = None,
+        reasoning_max_tokens: Annotated[
+            int | None,
+            Field(
+                description=f"{REASONING_MAX_TOKENS_DESCRIPTION} Omit to keep the current "
+                "setting; pass null to go back to the model's default."
+            ),
+        ] = cast(Any, MISSING),
+        client_id: Annotated[
+            str | None,
+            Field(
+                description=f"{CLIENT_ID_DESCRIPTION} Client ids come from `clients_list`. "
+                "Omit to keep the current one; pass null to run on the platform."
+            ),
+        ] = cast(Any, MISSING),
     ) -> str:
         """Update an existing agent.
 
@@ -222,6 +278,12 @@ class AgentsToolset(Toolset):
             patch["model_id"] = model_id
         if tools is not None:
             patch["tools"] = _TOOL_LIST.validate_python(tools)
+        if reasoning_effort is not None:
+            patch["reasoning_effort"] = reasoning_effort
+        if reasoning_max_tokens is not MISSING:
+            patch["reasoning_max_tokens"] = reasoning_max_tokens
+        if client_id is not MISSING:
+            patch["client_id"] = client_id
         payload = AgentUpdate.model_validate(patch)
         try:
             validate_code_tool_names(payload.tools)
@@ -232,7 +294,7 @@ class AgentsToolset(Toolset):
             service = _build_service(repo_factory, event_broker)
             try:
                 agent = await service.update_agent(UUID(agent_id), payload)
-            except AgentArchivedError as exc:
+            except (AgentArchivedError, ReasoningConflictError, InvalidClientError) as exc:
                 raise ToolError(str(exc)) from exc
             if not agent:
                 raise ToolError("Agent not found")

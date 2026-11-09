@@ -115,6 +115,42 @@ export function apiErrorDetail(result: ApiResultLike, label: string) {
     : apiErrorMessage(result, label);
 }
 
+/**
+ * The response a gateway would give for a request the API never answered: it
+ * timed out, or the connection failed. The generated client then hands the
+ * caller an ordinary error body with a status. Left as the thrown `Error`, it
+ * would reach the browser from a server action with its message replaced by
+ * "Minified React error #441" in a production build.
+ *
+ * A request its caller aborted is not a failure to report: `null`.
+ */
+export function unreachableApiResponse(
+  error: unknown,
+  timeoutMs: number
+): Response | null {
+  const name =
+    error instanceof Error || error instanceof DOMException ? error.name : "";
+  if (name === "AbortError") return null;
+  if (name === "TimeoutError") {
+    return Response.json(
+      { detail: `The API did not answer within ${timeoutMs / 1000} s` },
+      { status: 504 }
+    );
+  }
+  const cause = error instanceof Error ? error.cause : undefined;
+  const code =
+    cause &&
+    typeof cause === "object" &&
+    "code" in cause &&
+    typeof cause.code === "string"
+      ? cause.code
+      : null;
+  return Response.json(
+    { detail: `The API could not be reached${code ? ` (${code})` : ""}` },
+    { status: 502 }
+  );
+}
+
 /** The machine-readable `code` of a problem+json error body, when it has one. */
 export function apiErrorCode(result: ApiResultLike): string | null {
   const error = result?.error;

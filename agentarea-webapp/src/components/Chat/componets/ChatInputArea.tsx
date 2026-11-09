@@ -441,15 +441,17 @@ export function ChatInputArea({
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-hidden sm:flex-nowrap sm:gap-2">
                 {leadingControls}
                 {currentAgent && availableAgents?.length && onAgentChange ? (
-                  <div className="min-w-0 basis-full sm:basis-auto">
+                  <div className="flex min-w-0 basis-full sm:max-w-[12rem] sm:basis-auto">
                     {/* Trigger and options share one avatar. Rendering a bare
                         icon on the trigger dropped the hue, which is the part
                         that differs per agent — so picking another one left
                         the composer looking unchanged. */}
                     <ContextSelect
-                      // Narrower than the other chips: agent names run long,
-                      // and the project/policy defaults must stay readable.
-                      className="min-w-0 sm:max-w-[12rem] sm:shrink"
+                      // Narrower than the other chips (the wrapper caps it):
+                      // agent names run long, and the project/policy defaults
+                      // must stay readable. The trigger fills no more than the
+                      // wrapper, so a squeezed row truncates the name.
+                      className="min-w-0 sm:max-w-full"
                       icon={FolderKanban}
                       label={t("agent")}
                       value={currentAgent.id}

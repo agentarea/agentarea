@@ -1,8 +1,7 @@
 .PHONY: smoke baseline stress env-check journey-smoke journey-nightly journey-stress
 
 # No default: a wrong-but-plausible slug silently hits someone else's
-# workspace instead of failing loudly (the old default, "user", stopped being
-# the owner's workspace once it was renamed to "jamakase54").
+# workspace instead of failing loudly.
 #
 # AGENTAREA_TOKEN and AGENTAREA_API_URL are deliberately NOT passed via -e:
 # `k6 run` forwards the whole process environment into __ENV on its own
@@ -11,7 +10,7 @@
 # plaintext to anyone with local process-list access. -e stays reserved for
 # non-secret knobs like WORKSPACE.
 env-check:
-	@test -n "$(AGENTAREA_TOKEN)" || (echo "AGENTAREA_TOKEN is not set — run: set -a; . ~/.config/agentarea/ru.env; set +a" >&2; exit 1)
+	@test -n "$(AGENTAREA_TOKEN)" || (echo "AGENTAREA_TOKEN is not set — run: set -a; . ~/.config/agentarea/perf.env; set +a" >&2; exit 1)
 	@test -n "$(WORKSPACE)" || (echo "WORKSPACE is not set — pass it explicitly: WORKSPACE=<slug> make smoke" >&2; exit 1)
 
 smoke: env-check

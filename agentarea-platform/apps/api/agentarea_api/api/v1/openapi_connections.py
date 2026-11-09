@@ -2,14 +2,23 @@
 
 import json
 import logging
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
-from agentarea_api.api.deps.services import get_openapi_connection_service
+from agentarea_api.api.deps.services import DatabaseSessionDep, get_openapi_connection_service
+from agentarea_api.catalog_api import CatalogApiItem, load_catalog_api_item
+from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import requires, unrestricted
 from agentarea_common.base.pagination import MAX_OFFSET
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_common.utils.url_safety import OutboundPolicy
+from agentarea_openapi.application.catalog_key_template import (
+    CatalogKeyTemplate,
+    CatalogKeyTemplateError,
+    catalog_key_credentials,
+    catalog_key_template,
+)
 from agentarea_openapi.application.service import OpenAPIConnectionService, fetch_and_parse_spec
 from agentarea_openapi.application.spec_parser import openapi_spec_info, parse_openapi_spec
 from agentarea_openapi.application.url_validator import validate_url
@@ -22,6 +31,7 @@ from agentarea_openapi.schemas.dto import (
 )
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +192,122 @@ async def create_connection(
         raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+class CatalogKeyFieldResponse(BaseModel):
+    """One value a catalog API needs before it can be called."""
+
+    name: str = Field(description="Header or query parameter the value is sent in.")
+    location: Literal["header", "query"]
+    label: str = Field(description="What the vendor calls it, for the form.")
+    description: str | None = None
+
+
+class CatalogConnectFormResponse(BaseModel):
+    """How a catalog API is connected: by signing in, or by entering its keys."""
+
+    catalog_item_id: UUID
+    name: str
+    description: str | None = None
+    auth: Literal["oauth", "api_key"]
+    fields: list[CatalogKeyFieldResponse] = Field(default_factory=list)
+
+
+class CatalogKeyValue(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(max_length=256)
+    value: str = Field(max_length=8192)
+
+
+class CatalogConnectRequest(BaseModel):
+    """The keys a catalog API asks for, one per field of its connect form."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    credentials: list[CatalogKeyValue] = Field(min_length=1, max_length=16)
+
+
+async def _catalog_key_item(
+    catalog_item_id: UUID, user_context: UserContext, session: AsyncSession
+) -> tuple[CatalogApiItem, CatalogKeyTemplate | None]:
+    catalog = await load_catalog_api_item(catalog_item_id, user_context, session)
+    try:
+        return catalog, catalog_key_template(catalog.spec)
+    except CatalogKeyTemplateError as e:
+        logger.exception("Catalog item %s has a malformed key template", catalog_item_id)
+        raise HTTPException(
+            status_code=500, detail="This catalog connection is misconfigured"
+        ) from e
+
+
+@router.get(
+    "/from-catalog/{catalog_item_id}",
+    response_model=CatalogConnectFormResponse,
+    dependencies=[
+        unrestricted("workspace member; the catalog item is read through the scoped registry")
+    ],
+)
+async def get_catalog_connect_form(
+    catalog_item_id: UUID, user_context: UserContextDep, db_session: DatabaseSessionDep
+) -> CatalogConnectFormResponse:
+    """What connecting this catalog API asks for: a sign-in, or the keys listed in ``fields``."""
+    catalog, template = await _catalog_key_item(catalog_item_id, user_context, db_session)
+    return CatalogConnectFormResponse(
+        catalog_item_id=catalog.id,
+        name=catalog.name,
+        description=catalog.description,
+        auth="api_key" if template else "oauth",
+        fields=[
+            CatalogKeyFieldResponse(
+                name=f.name, location=f.location, label=f.label, description=f.description
+            )
+            for f in (template.fields if template else ())
+        ],
+    )
+
+
+@router.post(
+    "/from-catalog/{catalog_item_id}",
+    response_model=OpenAPIConnectionResponse,
+    status_code=201,
+    dependencies=[
+        unrestricted("workspace member; the connection is created for the caller, in scope")
+    ],
+)
+async def connect_catalog_api(
+    catalog_item_id: UUID,
+    request: CatalogConnectRequest,
+    user_context: UserContextDep,
+    db_session: DatabaseSessionDep,
+    service: OpenAPIConnectionService = Depends(get_openapi_connection_service),
+):
+    """Connect a catalog API with its keys; each call makes another connection."""
+    catalog, template = await _catalog_key_item(catalog_item_id, user_context, db_session)
+    if template is None:
+        raise HTTPException(status_code=400, detail="This catalog API connects by signing in")
+    values = {c.name: c.value for c in request.credentials}
+    if len(values) != len(request.credentials):
+        raise HTTPException(status_code=400, detail="A field was given twice")
+    try:
+        headers, params = catalog_key_credentials(template, values)
+        conn = await service.create_connection(
+            OpenAPIConnectionCreate(
+                name=catalog.name,
+                description=catalog.description,
+                base_url=str(catalog.spec.get("base_url") or ""),
+                spec_url=catalog.spec.get("spec_url"),
+                spec_content=catalog.spec.get("spec_content"),
+                custom_headers=headers or None,
+                custom_query_params=params or None,
+            ),
+            registry_item_id=catalog.id,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return _connection_response(conn)
 
 
 @router.get(

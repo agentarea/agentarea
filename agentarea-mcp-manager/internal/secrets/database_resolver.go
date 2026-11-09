@@ -235,6 +235,33 @@ func (dr *DatabaseSecretResolver) ResolveInstanceEnvVars(instanceID string, envV
 	return resolved, nil
 }
 
+// ResolveWorkspaceSecret reads the secret named secretName in workspaceID's catalog.
+func (dr *DatabaseSecretResolver) ResolveWorkspaceSecret(ctx context.Context, workspaceID, secretName string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	var encryptedValue string
+	err := dr.db.QueryRowContext(ctx,
+		`SELECT encrypted_value FROM encrypted_secrets WHERE workspace_id = $1 AND secret_name = $2`,
+		workspaceID, secretName).Scan(&encryptedValue)
+	if err == sql.ErrNoRows {
+		return "", errors.New("secret not found")
+	}
+	if err != nil {
+		// The driver error can carry the connection string, so keep it local.
+		dr.logger.Error("Workspace secret lookup failed",
+			slog.String("workspace_id", workspaceID),
+			slog.String("error_type", fmt.Sprintf("%T", err)))
+		return "", errors.New("secret lookup failed")
+	}
+	value, err := dr.fernetDecrypt(encryptedValue)
+	if err != nil {
+		dr.logger.Error("Workspace secret decryption failed", slog.String("workspace_id", workspaceID))
+		return "", errors.New("failed to decrypt secret")
+	}
+	return value, nil
+}
+
 // Close closes the database connection
 func (dr *DatabaseSecretResolver) Close() error {
 	dr.logger.Info("Closing database secret resolver")

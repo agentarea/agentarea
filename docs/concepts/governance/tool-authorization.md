@@ -101,9 +101,8 @@ governance pipeline around the tool activity:
 |---|---|---|---|
 | `pre_tool_call` | `CostBudgetGuard` | 100 | warn at 80% of run budget, deny when exhausted |
 | `pre_tool_call` | `ServiceBudgetGuard` | 105 | warn at 80% of service budget, deny when exhausted |
-| `post_tool_call` | `OutputSanitizer` | 300 | rewrite matched content in the result |
 
-These meter spend and rewrite output; none of them looks at a call's arguments to
+These meter spend; neither looks at a call's arguments to
 decide whether it may run. That decision is the policy's alone, so anything a
 policy permits, including a destructive shell command, is not taken back here.
 

@@ -11,6 +11,7 @@ with workflow.unsafe.imports_passed_through():
     from agentarea_agents_sdk.skills import SkillCatalogBuilder
     from agentarea_agents_sdk.tools.disclosure import DisclosureContext, ToolCandidate
     from agentarea_common.money import serialize_money
+    from agentarea_common.reasoning_effort import reasoning_settings
 
     from ..context_manager import estimate_tokens_for_messages, messages_payload_bytes
     from ..helpers import MessageBuilder, ToolCallExtractor
@@ -29,6 +30,7 @@ from .patches import (
     ANSWER_CHECK_BEFORE_REPLY_PATCH,
     COMPACTION_BOUNDS_PAYLOAD_PATCH,
     GOVERNANCE_DENIAL_BLOCKS_RUN_PATCH,
+    LENGTH_CONTINUATION_PATCH,
     PAID_CALL_PERSISTED_BEFORE_LIMITS_PATCH,
     PAID_REPLY_KEPT_AT_LIMIT_PATCH,
     RUN_INPUT_IN_FIRST_MESSAGE_PATCH,
@@ -37,10 +39,12 @@ from .patches import (
     THINKING_ONLY_REPLY_PATCH,
     TURN_ABORTED_EVENT_PATCH,
 )
+from .runner_turn import RunnerTurnMixin
 from .tool_dispatch import ToolDispatchMixin
 
 FIRST_MESSAGE_IS_THE_TASK = (
-    "The task is the first user message of this conversation. It stays in view for the whole run."
+    "The user's messages in this conversation are the task. The first one stays in view for "
+    "the whole run; act on the latest one, with the earlier ones as its context."
 )
 
 
@@ -96,7 +100,7 @@ def _render_workspace_attachment_prompt(value: Any) -> str:
     )
 
 
-class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
+class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin, RunnerTurnMixin):
     """One iteration of the agent loop: the model call and its response."""
 
     async def _execute_iteration(self) -> None:
@@ -115,7 +119,10 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
         await self._publish_events_immediately()
 
         try:
-            await self._execute_traditional_iteration()
+            if self._runner_client_id is not None:
+                await self._execute_runner_turn()
+            else:
+                await self._execute_traditional_iteration()
 
             # Check budget warnings
             await self._check_budget_status()
@@ -329,7 +336,6 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 if input_in_first_message
                 else self.state.goal.description,
                 success_criteria=self.state.goal.success_criteria,
-                available_tools=self.state.available_tools,
                 a2ui_enabled=self._a2ui_available,
             )
 
@@ -465,6 +471,11 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 ]
 
             # Create Pydantic request model
+            reasoning_effort, reasoning_max_tokens = reasoning_settings(
+                self.state.goal.context if self.state.goal else {},
+                self.state.agent_config.get("reasoning_effort"),
+                self.state.agent_config.get("reasoning_max_tokens"),
+            )
             llm_request = LLMCallRequest(
                 messages=self._conversation_payload(),
                 conversation=self._conversation_window(),
@@ -474,6 +485,8 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 user_context_data=self.state.user_context_data,
                 temperature=None,
                 max_tokens=None,
+                reasoning_effort=reasoning_effort,
+                reasoning_max_tokens=reasoning_max_tokens,
                 task_id=self.state.task_id,
                 agent_id=self.state.agent_id,
                 execution_id=self.state.execution_id,
@@ -500,6 +513,7 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 content_value = response.get("content", "")
                 thinking_value = response.get("thinking", "")
                 tool_calls_value = response.get("tool_calls")
+                finish_value = response.get("finish_reason")
             else:
                 raw_usage = getattr(response, "usage", None)
                 cost_value = getattr(response, "cost", 0.0)
@@ -509,6 +523,7 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 content_value = getattr(response, "content", "")
                 thinking_value = getattr(response, "thinking", "")
                 tool_calls_value = getattr(response, "tool_calls", None)
+                finish_value = getattr(response, "finish_reason", None)
 
             # Extract usage info and update budget
             if raw_usage is None:
@@ -613,6 +628,7 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                     "thinking": thinking_value,
                     "tool_calls": tool_calls_value or [],
                     "role": role_value,
+                    "finish_reason": finish_value,
                 },
             )
             await self._publish_events_immediately()
@@ -625,6 +641,7 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 "tool_calls": tool_calls_value,
                 "usage": usage_info,
                 "cost": cost_value,
+                "finish_reason": finish_value,
                 "answer_checked": answer_checked,
                 # The model that answered, as the call was made.
                 "model": {
@@ -817,6 +834,27 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
 
         if tool_calls:
             await self._execute_tool_calls(tool_calls)
+        elif (
+            effective_content.strip()
+            and response.get("finish_reason") == "length"
+            and workflow.patched(LENGTH_CONTINUATION_PATCH)
+        ):
+            # Cut off at the output limit: the answer is not done. Keep the part and
+            # ask for the rest; the turn budget ends a reply that never finishes.
+            workflow.logger.warning(
+                f"Reply cut off at the output limit in iteration {self.state.current_iteration}; "
+                "asking the model to continue"
+            )
+            self.state.truncated_reply += effective_content
+            self.state.messages.append(
+                Message(
+                    role="user",
+                    content=(
+                        "Your reply was cut off at the output limit. Continue exactly where "
+                        "it stopped, without repeating anything already written."
+                    ),
+                )
+            )
         elif effective_content.strip():
             # LLM responded with text but no tool calls.
             # This IS the agent's response — treat it as implicit completion.
@@ -827,9 +865,15 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 id=str(workflow.uuid4()),
                 function={
                     "name": "completion",
-                    "arguments": json.dumps({"result": effective_content.strip(), "artifacts": []}),
+                    "arguments": json.dumps(
+                        {
+                            "result": (self.state.truncated_reply + effective_content).strip(),
+                            "artifacts": [],
+                        }
+                    ),
                 },
             )
+            self.state.truncated_reply = ""
             await self._handle_task_completion(
                 completion_call, answer_checked=bool(response.get("answer_checked"))
             )

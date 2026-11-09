@@ -22,6 +22,7 @@ type gatewayRepositoryStub struct {
 	mu            sync.Mutex
 	instance      *models.MCPServerInstance
 	target        *Target
+	loadErr       error
 	lockErr       error
 	starting      int
 	failed        int
@@ -41,6 +42,9 @@ func (r *gatewayRepositoryStub) WithInstanceLock(ctx context.Context, _ string, 
 	return fn(ctx)
 }
 func (r *gatewayRepositoryStub) LoadTarget(context.Context, string) (Target, error) {
+	if r.loadErr != nil {
+		return Target{}, r.loadErr
+	}
 	if r.target != nil {
 		return *r.target, nil
 	}

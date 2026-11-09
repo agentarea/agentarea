@@ -1,5 +1,6 @@
 import builtins
 import logging
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, cast
 from urllib.parse import urlsplit
@@ -63,8 +64,23 @@ class InvalidModelIdError(ValueError):
     """Raised when ``model_id`` does not resolve to a usable model instance."""
 
 
+class InvalidClientError(ValueError):
+    """Raised when ``client_id`` names no client the caller may run agents on."""
+
+
 class InvalidDelegateError(ValueError):
     """Raised when an agent tool names a delegate the runtime could not use."""
+
+
+class InvalidMcpToolError(ValueError):
+    """Raised when an agent's MCP tool names a connection by a name that binds to none."""
+
+
+class ReasoningConflictError(ValueError):
+    """Raised when an edit leaves an agent with both a reasoning level and a token budget."""
+
+    def __init__(self) -> None:
+        super().__init__("set reasoning_effort or reasoning_max_tokens, not both")
 
 
 def _credential_bindings(tools: list[dict] | None) -> set[tuple[str, str, str]]:
@@ -81,6 +97,14 @@ def _credential_bindings(tools: list[dict] | None) -> set[tuple[str, str, str]]:
                 )
             )
     return bindings
+
+
+def _is_uuid(value: Any) -> bool:
+    try:
+        UUID(str(value))
+    except ValueError:
+        return False
+    return True
 
 
 # The model settings each code toolset takes, and the kind each must be. A
@@ -188,6 +212,30 @@ class AgentService(BaseCrudService[Agent]):
             resolved.append(installed.id)
         return resolved
 
+    async def _validate_client_id(self, client_id: UUID | None) -> UUID | None:
+        """A runner's client of this workspace the caller may use, or None for the platform loop."""
+        if client_id is None:
+            return None
+        from agentarea_common.auth.permission import PermissionService
+        from agentarea_common.di.container import resolve
+        from agentarea_mcp.domain.client_models import RUNNER_KINDS
+        from agentarea_mcp.infrastructure.client_repository import ClientRepository
+
+        client = await self.repository_factory.create_repository(ClientRepository).get_by_id(
+            client_id
+        )
+        if (
+            client is None
+            or client.kind not in RUNNER_KINDS
+            or not await resolve(PermissionService).check(
+                self._user_context.graph_subject, "use", "client", str(client_id)
+            )
+        ):
+            raise InvalidClientError(
+                f"Client '{client_id}' is no Codex or Claude Code client of this workspace"
+            )
+        return client.id
+
     async def _validate_model_id(self, model_id: str | None) -> str | None:
         """Resolve ``model_id`` to a model instance, or reject it.
 
@@ -282,6 +330,11 @@ class AgentService(BaseCrudService[Agent]):
             seen[tool_name] = name
             settings = tool.get("settings") or {}
             url = settings.get("a2a_url")
+            if url is not None and settings.get("agent_id"):
+                raise InvalidDelegateError(
+                    f"Delegate '{name}': agent_id names a workspace agent, and a remote "
+                    "delegate is reached at its a2a_url; give one of them."
+                )
             if url is not None:
                 # Stored as the agent's address, however it was pasted.
                 url = settings["a2a_url"] = agent_address(url)
@@ -294,8 +347,11 @@ class AgentService(BaseCrudService[Agent]):
                 raise InvalidDelegateError(
                     f"Delegate '{name}': auth_secret_name is only sent to an a2a_url."
                 )
-            elif await self.get_by_name(name) is None:
-                raise InvalidDelegateError(f"No agent named '{name}' in this workspace.")
+            else:
+                tool["settings"] = {
+                    **settings,
+                    "agent_id": await self._delegate_agent_id(name, settings.get("agent_id")),
+                }
 
         new_bindings = _credential_bindings(delegates) - _credential_bindings(previous)
         if not new_bindings:
@@ -309,6 +365,78 @@ class AgentService(BaseCrudService[Agent]):
             )
         for name, _url, secret_name in sorted(new_bindings):
             await self._require_delegate_secret(name, secret_name)
+
+    async def _bind_mcp_tools(
+        self, tools: builtins.list[dict] | None, *, refuse_unbound: bool = True
+    ) -> None:
+        """Every MCP tool names its connection by id, which is all the runtime reads.
+
+        A tool given a connection name is bound to the one connection carrying
+        it, when that connection is the caller's own or the platform's. Names
+        are not unique and any member picks them, so a name several connections
+        carry, or only someone else's, is refused rather than resolved: a member
+        could add a connection under the name a catalog agent expects and take
+        its calls. A name no connection carries yet is kept: the editor offers
+        to connect it, and the save after that binds it.
+        """
+        named = [
+            tool
+            for tool in tools or []
+            if tool.get("type") == "mcp" and tool.get("name") and not _is_uuid(tool["name"])
+        ]
+        if not named:
+            return
+        from agentarea_common.constants import MANAGED_BY_PLATFORM
+        from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
+
+        repository = self.repository_factory.create_repository(MCPServerInstanceRepository)
+        for tool in named:
+            name = str(tool["name"])
+            matches = await repository.list_all(name=name)
+            if not matches:
+                continue
+            (match, *others) = matches
+            if not others and (
+                match.managed_by == MANAGED_BY_PLATFORM
+                or match.created_by == self._user_context.user_id
+            ):
+                tool["name"] = str(match.id)
+            elif refuse_unbound:
+                reason = (
+                    f"{len(matches)} MCP connections here are named '{name}'"
+                    if others
+                    else f"the MCP connection named '{name}' was added by someone else"
+                )
+                raise InvalidMcpToolError(f"{reason}; name the one to use by its id.")
+
+    async def _delegate_agent_id(self, name: str, agent_id: Any) -> str:
+        """The id of the workspace agent a local delegate reaches.
+
+        Given, the id must name a live agent here. Without one, the name binds
+        only when exactly one live agent carries it: names are not unique, and a
+        delegate that took the newest of several would follow whoever last
+        created an agent under that name.
+        """
+        repository = self._get_agent_repository()
+        if agent_id:
+            try:
+                agent = await repository.get_by_id(UUID(str(agent_id)))
+            except ValueError:
+                agent = None
+            if agent is None or agent.status == AgentStatus.ARCHIVED:
+                raise InvalidDelegateError(
+                    f"Delegate '{name}': no agent {agent_id} in this workspace."
+                )
+            return str(agent.id)
+        matches = await repository.list_all(name=name)
+        if not matches:
+            raise InvalidDelegateError(f"No agent named '{name}' in this workspace.")
+        if len(matches) > 1:
+            raise InvalidDelegateError(
+                f"{len(matches)} agents here are named '{name}'; pass the one to delegate "
+                "to as settings.agent_id."
+            )
+        return str(matches[0].id)
 
     async def _require_delegate_secret(self, delegate: str, secret_name: str) -> None:
         from agentarea_secrets.catalog_service import find_secret
@@ -417,7 +545,13 @@ class AgentService(BaseCrudService[Agent]):
             await self.install_guard.require_allowed(
                 registry_id=item.registry_id, trust=item.registry_trust
             )
-        return _project_catalog_item(item)
+        agent = _project_catalog_item(item)
+        if to_run and isinstance(agent.tools, list):
+            # The runtime reads MCP connections by id; a catalog definition names them.
+            tools = deepcopy(agent.tools)
+            await self._bind_mcp_tools(tools, refuse_unbound=False)
+            agent.tools = tools
+        return agent
 
     async def _resolve_unique_slug(self, name: str) -> str:
         """Generate a workspace-unique slug from ``name``.
@@ -440,12 +574,14 @@ class AgentService(BaseCrudService[Agent]):
     @audited("agent.create", resource_type="agent")
     async def create_agent(self, payload: AgentCreate) -> Agent:
         tools = [t.model_dump(exclude_none=True) for t in payload.tools]
+        await self._bind_mcp_tools(tools)
         approval_targets, tools = self._lift_approval_toggles(tools)
         await self._validate_tool_models(tools)
         await self._validate_delegates(tools)
 
         slug = await self._resolve_unique_slug(payload.name)
         model_id = await self._validate_model_id(payload.model_id)
+        client_id = await self._validate_client_id(payload.client_id)
         skill_ids = await self._resolve_skills(payload.skill_ids)
 
         agent = Agent(
@@ -454,9 +590,12 @@ class AgentService(BaseCrudService[Agent]):
             description=payload.description,
             instruction=payload.instruction,
             model_id=model_id,
+            client_id=client_id,
             tools=tools,
             planning=payload.planning,
             a2ui_enabled=payload.a2ui_enabled,
+            reasoning_effort=payload.reasoning_effort,
+            reasoning_max_tokens=payload.reasoning_max_tokens,
             answer_check=(
                 payload.answer_check.model_dump(exclude_none=True) if payload.answer_check else None
             ),
@@ -481,6 +620,8 @@ class AgentService(BaseCrudService[Agent]):
                 tools=agent.tools,
                 planning=agent.planning,
                 a2ui_enabled=agent.a2ui_enabled,
+                reasoning_effort=agent.reasoning_effort,
+                reasoning_max_tokens=agent.reasoning_max_tokens,
             )
         )
 
@@ -502,6 +643,8 @@ class AgentService(BaseCrudService[Agent]):
         tools = spec.get("tools")
         if not isinstance(tools, list):
             raise ValueError(f"catalog agent {item.name!r} has no tools list in its spec")
+        tools = deepcopy(tools)
+        await self._bind_mcp_tools(tools, refuse_unbound=False)
         approval_targets, tools = self._lift_approval_toggles(tools)
 
         # The catalog never binds a concrete model — that is a per-workspace
@@ -599,9 +742,15 @@ class AgentService(BaseCrudService[Agent]):
             raise AgentArchivedError(agent.id)
 
         patch = payload.model_dump(exclude_unset=True)
+        if {"reasoning_effort", "reasoning_max_tokens"} & patch.keys() and (
+            patch.get("reasoning_effort", agent.reasoning_effort)
+            and patch.get("reasoning_max_tokens", agent.reasoning_max_tokens)
+        ):
+            raise ReasoningConflictError()
         tools_edited = "tools" in patch and payload.tools is not None
         edited_tools = [t.model_dump(exclude_none=True) for t in (payload.tools or [])]
         if tools_edited:
+            await self._bind_mcp_tools(edited_tools)
             await self._validate_tool_models(edited_tools)
             await self._validate_delegates(
                 edited_tools,
@@ -611,7 +760,7 @@ class AgentService(BaseCrudService[Agent]):
                 self.repository_factory.session,
                 self.repository_factory.user_context,
                 agent.id,
-                [t.model_dump(exclude_none=True) for t in (payload.tools or [])],
+                edited_tools,
             )
 
         if "name" in patch:
@@ -624,6 +773,8 @@ class AgentService(BaseCrudService[Agent]):
             agent.instruction = patch["instruction"]
         if "model_id" in patch:
             agent.model_id = await self._validate_model_id(patch["model_id"])
+        if "client_id" in patch:
+            agent.client_id = await self._validate_client_id(patch["client_id"])
         approval_targets: set[str] = set()
         if tools_edited:
             approval_targets, agent.tools = self._lift_approval_toggles(edited_tools)
@@ -631,6 +782,10 @@ class AgentService(BaseCrudService[Agent]):
             agent.planning = patch["planning"]
         if "a2ui_enabled" in patch:
             agent.a2ui_enabled = patch["a2ui_enabled"]
+        if "reasoning_effort" in patch:
+            agent.reasoning_effort = patch["reasoning_effort"]
+        if "reasoning_max_tokens" in patch:
+            agent.reasoning_max_tokens = patch["reasoning_max_tokens"]
         if "answer_check" in patch:
             agent.answer_check = (
                 payload.answer_check.model_dump(exclude_none=True) if payload.answer_check else None
@@ -656,6 +811,8 @@ class AgentService(BaseCrudService[Agent]):
                 tools=agent.tools,
                 planning=agent.planning,
                 a2ui_enabled=agent.a2ui_enabled,
+                reasoning_effort=agent.reasoning_effort,
+                reasoning_max_tokens=agent.reasoning_max_tokens,
             )
         )
 

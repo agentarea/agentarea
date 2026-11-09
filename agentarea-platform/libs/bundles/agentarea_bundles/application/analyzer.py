@@ -59,13 +59,15 @@ class BundleParseError(ValueError):
 
 
 class ExistenceChecker(Protocol):
-    """Workspace lookups used to compute per-entity status; ``find_*`` return the id."""
+    """Workspace lookups used to compute per-entity status; ``find_*`` return the id.
 
-    async def find_agent(self, name: str) -> str | None: ...
-    async def find_mcp_instance(self, name: str) -> str | None: ...
-    async def find_skill(self, name: str) -> str | None: ...
-    async def find_trigger(self, name: str) -> str | None: ...
+    Nothing is found by name alone: names are not unique and any member picks
+    them, so a same-named entity is someone else's.
+    """
+
     async def ref_exists(self, kind: EntityKind, entity_id: str) -> bool: ...
+    async def find_trigger(self, name: str, agent_id: str, recorded: str | None) -> str | None: ...
+    async def find_policy(self, policy: BundlePolicy, agent_id: str | None) -> str | None: ...
     async def channel_credential_keys(self, entity_id: str) -> set[str] | None: ...
 
 
@@ -252,6 +254,24 @@ class PriorInstall:
         """What the last install declared for ``key``."""
         return next((i for i in bundle_entities(self.bundle, kind) if i.key == key), None)
 
+    def reused(self, kind: EntityKind, key: str) -> InstalledEntity | None:
+        """The entity this bundle linked for ``key`` without creating it."""
+        return next(
+            (
+                e
+                for e in self.result.entities
+                if e.kind is kind and e.key == key and e.id and e.action is InstallAction.REUSED
+            ),
+            None,
+        )
+
+    def recorded(self, kind: EntityKind, key: str) -> str | None:
+        """The id the last install recorded for ``key``, whatever it did with it."""
+        return next(
+            (e.id for e in self.result.entities if e.kind is kind and e.key == key and e.id),
+            None,
+        )
+
     def owned_entities(self) -> list[InstalledEntity]:
         return [e for e in self.result.entities if e.id and e.action in _OWNED_ACTIONS]
 
@@ -285,20 +305,14 @@ class PriorInstall:
 class _NoExistence:
     """Default checker: nothing pre-exists (everything will be created)."""
 
-    async def find_agent(self, name: str) -> str | None:
-        return None
-
-    async def find_mcp_instance(self, name: str) -> str | None:
-        return None
-
-    async def find_skill(self, name: str) -> str | None:
-        return None
-
-    async def find_trigger(self, name: str) -> str | None:
-        return None
-
     async def ref_exists(self, kind: EntityKind, entity_id: str) -> bool:
         return False
+
+    async def find_trigger(self, name: str, agent_id: str, recorded: str | None) -> str | None:
+        return None
+
+    async def find_policy(self, policy: BundlePolicy, agent_id: str | None) -> str | None:
+        return None
 
     async def channel_credential_keys(self, entity_id: str) -> set[str] | None:
         return None
@@ -498,14 +512,15 @@ class BundleAnalyzer:
         self,
         kind: EntityKind,
         spec: Any,
-        find_by_name: Callable[[], Awaitable[str | None]] | None = None,
         depends_on: list[tuple[EntityKind, str]] | None = None,
+        find_existing: Callable[[], Awaitable[str | None]] | None = None,
     ) -> EntityStatus:
         """Status of one entity against the previous install of this bundle.
 
         An entity the bundle created before is updated when its resolved spec
-        changed or something it points at now resolves to another id; one it
-        never created is reused by name, as on a first install.
+        changed or something it points at now resolves to another id. One it
+        reused is linked again by the id it recorded, or by ``find_existing``
+        when given; anything else is created.
         """
         prior = self._prior
         owned = prior.owned(kind, spec.key) if prior else None
@@ -524,7 +539,9 @@ class BundleAnalyzer:
             else:
                 status = EntityStatus.UNCHANGED
         else:
-            found = await find_by_name() if find_by_name is not None else None
+            found = await (
+                find_existing() if find_existing is not None else self._reused(kind, spec.key)
+            )
             if found is not None:
                 status = EntityStatus.ALREADY_EXISTS
                 self._ids[(kind, spec.key)] = found
@@ -533,6 +550,27 @@ class BundleAnalyzer:
                 self._ids[(kind, spec.key)] = _NOT_YET_CREATED
         self._planned[(kind, spec.key)] = status
         return status
+
+    async def _reused(self, kind: EntityKind, key: str) -> str | None:
+        ref = self._prior.reused(kind, key) if self._prior else None
+        if ref is None or ref.id is None or not await self._existence.ref_exists(kind, ref.id):
+            return None
+        return ref.id
+
+    def _planned_id(self, kind: EntityKind, key: str) -> str | None:
+        """The id ``key`` resolves to, None when this deploy creates it."""
+        entity_id = self._ids.get((kind, key))
+        return None if entity_id in (None, _NOT_YET_CREATED) else entity_id
+
+    async def _find_trigger(self, kind: EntityKind, key: str, agent_key: str) -> str | None:
+        """The bundle's trigger: its name, the agent this deploy binds, the id last recorded."""
+        agent_id = self._planned_id(EntityKind.AGENT, agent_key)
+        if agent_id is None:
+            return None
+        recorded = self._prior.recorded(kind, key) if self._prior else None
+        return await self._existence.find_trigger(
+            trigger_name(self._package, key), agent_id, recorded
+        )
 
     async def _check_writes(
         self, package: Bundle, checks: DeployChecks, issues: list[PreviewIssue]
@@ -779,11 +817,7 @@ class BundleAnalyzer:
                     )
                 )
             else:
-                status = await self._plan(
-                    EntityKind.MCP,
-                    mcp,
-                    lambda name=mcp.name: self._existence.find_mcp_instance(name),
-                )
+                status = await self._plan(EntityKind.MCP, mcp)
                 detail = None
                 if status is EntityStatus.WILL_UPDATE:
                     status = EntityStatus.CHANGES_NOT_APPLIED
@@ -819,11 +853,7 @@ class BundleAnalyzer:
                         entity_key=skill.key,
                     )
                 )
-            status = await self._plan(
-                EntityKind.SKILL,
-                skill,
-                lambda name=skill.name: self._existence.find_skill(name),
-            )
+            status = await self._plan(EntityKind.SKILL, skill)
             detail = None
             if status is EntityStatus.WILL_UPDATE and skill.source_type == "github":
                 status = EntityStatus.CHANGES_NOT_APPLIED
@@ -908,7 +938,6 @@ class BundleAnalyzer:
             status = await self._plan(
                 EntityKind.AGENT,
                 agent,
-                lambda name=agent.name: self._existence.find_agent(name),
                 depends_on=[
                     *((EntityKind.MCP, ref) for ref in agent.mcps),
                     *((EntityKind.SKILL, ref) for ref in agent.skills),
@@ -934,12 +963,13 @@ class BundleAnalyzer:
                         entity_key=auto.key,
                     )
                 )
-            name = trigger_name(package, auto.key)
             status = await self._plan(
                 EntityKind.AUTOMATION,
                 auto,
-                lambda name=name: self._existence.find_trigger(name),
                 depends_on=[(EntityKind.AGENT, auto.agent)],
+                find_existing=lambda auto=auto: self._find_trigger(
+                    EntityKind.AUTOMATION, auto.key, auto.agent
+                ),
             )
             entities.append(
                 PreviewEntity(
@@ -993,12 +1023,13 @@ class BundleAnalyzer:
                         entity_key=channel.key,
                     )
                 )
-            name = trigger_name(package, channel.key)
             status = await self._plan(
                 EntityKind.CHANNEL,
                 channel,
-                lambda name=name: self._existence.find_trigger(name),
                 depends_on=[(EntityKind.AGENT, channel.agent)],
+                find_existing=lambda channel=channel: self._find_trigger(
+                    EntityKind.CHANNEL, channel.key, channel.agent
+                ),
             )
             if status in (EntityStatus.UNCHANGED, EntityStatus.WILL_UPDATE) and channel.bindings:
                 if await self._unfinished(channel):
@@ -1066,7 +1097,10 @@ class BundleAnalyzer:
                     )
                 )
             status = await self._plan(
-                EntityKind.POLICY, policy, depends_on=[(EntityKind.AGENT, policy.subject)]
+                EntityKind.POLICY,
+                policy,
+                depends_on=[(EntityKind.AGENT, policy.subject)],
+                find_existing=lambda policy=policy: self._find_policy(policy),
             )
             entities.append(
                 PreviewEntity(
@@ -1077,6 +1111,13 @@ class BundleAnalyzer:
                     detail=f"{policy.effect} {policy.target} on {policy.subject}",
                 )
             )
+
+    async def _find_policy(self, policy: BundlePolicy) -> str | None:
+        """A rule with the policy's subject, target and effect, which the install reuses."""
+        if policy.subject == "workspace":
+            return await self._existence.find_policy(policy, None)
+        agent_id = self._planned_id(EntityKind.AGENT, policy.subject)
+        return None if agent_id is None else await self._existence.find_policy(policy, agent_id)
 
 
 def required_setup_errors(

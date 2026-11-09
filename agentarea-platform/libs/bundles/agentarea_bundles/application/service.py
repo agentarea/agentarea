@@ -2,7 +2,8 @@
 
 Wires the pure analyzer/installer to the workspace's repositories and domain
 services, implements the existence checker for preview status, and records an
-``InstalledBundle`` row for provenance/idempotency.
+``InstalledBundle`` row: the ids an install created or reused, which is how the
+next install of the same bundle finds its own entities.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ from agentarea_bundles.application.installer import (
 )
 from agentarea_bundles.domain.models import InstalledBundle
 from agentarea_bundles.infrastructure.repository import InstalledBundleRepository
-from agentarea_bundles.schemas.bundle import Bundle, BundleAutomation
+from agentarea_bundles.schemas.bundle import Bundle, BundleAutomation, BundlePolicy
 from agentarea_bundles.schemas.preview import (
     EntityKind,
     EntityStatus,
@@ -51,10 +52,6 @@ _RESOURCE_TYPES = {
     EntityKind.CHANNEL: "trigger",
     EntityKind.AUTOMATION: "trigger",
 }
-
-
-def _id_of(entity: Any) -> str | None:
-    return None if entity is None else str(entity.id)
 
 
 class BundleService:
@@ -81,14 +78,9 @@ class BundleService:
         self._secret_manager = secret_manager
         self._catalog_mcps: dict[str, CatalogMcp | None] = {}
 
-        # Repositories for existence checks / idempotency.
-        from agentarea_agents.infrastructure.repository import AgentRepository
-        from agentarea_agents.infrastructure.skill_repository import SkillRepository
         from agentarea_governance.application.service import GovernancePolicyService
         from agentarea_triggers.infrastructure.repository import TriggerRepository
 
-        self._agent_repository = repository_factory.create_repository(AgentRepository)
-        self._skill_repository = repository_factory.create_repository(SkillRepository)
         self._trigger_repository = repository_factory.create_repository(TriggerRepository)
         self._bundle_repository = repository_factory.create_repository(InstalledBundleRepository)
         # Governance service owns PolicyRule creation; built from the same factory.
@@ -213,9 +205,7 @@ class BundleService:
             mcp_server_service=self._mcp_server_service,
             mcp_instance_service=self._mcp_instance_service,
             skill_service=self._skill_service,
-            skill_repository=self._skill_repository,
             agent_service=self._agent_service,
-            agent_repository=self._agent_repository,
             trigger_service=self._trigger_service,
             trigger_repository=self._trigger_repository,
             governance_service=self._governance_service,
@@ -254,18 +244,31 @@ class BundleService:
 
     # -- ExistenceChecker ---------------------------------------------------
 
-    async def find_agent(self, name: str) -> str | None:
-        return _id_of(await self._agent_repository.get_agent_by_name(name))
-
-    async def find_mcp_instance(self, name: str) -> str | None:
-        return _id_of(await self._mcp_instance_service.get_by_name(name))
-
-    async def find_skill(self, name: str) -> str | None:
-        return _id_of(await self._skill_repository.get_by_name(name))
-
-    async def find_trigger(self, name: str) -> str | None:
+    async def find_trigger(self, name: str, agent_id: str, recorded: str | None) -> str | None:
         triggers = await self._trigger_repository.list_all()
-        return next((str(t.id) for t in triggers if t.name == name), None)
+        return next(
+            (
+                str(t.id)
+                for t in triggers
+                if t.name == name and str(t.agent_id) == agent_id and recorded in (None, str(t.id))
+            ),
+            None,
+        )
+
+    async def find_policy(self, policy: BundlePolicy, agent_id: str | None) -> str | None:
+        from agentarea_governance.domain.rules import PolicyEffect, PolicySubjectType
+
+        if policy.subject == "workspace":
+            subject_type, subject_id = PolicySubjectType.WORKSPACE, self._user_context.workspace_id
+        else:
+            subject_type, subject_id = PolicySubjectType.AGENT, agent_id
+        rules = await self._governance_service.list_rules(
+            subject_type=subject_type,
+            subject_id=subject_id,
+            target=policy.target,
+            effect=PolicyEffect(policy.effect),
+        )
+        return str(rules[0].id) if rules and rules[0].id else None
 
     async def ref_exists(self, kind: EntityKind, entity_id: str) -> bool:
         return await self._installer().get_entity(kind, entity_id) is not None

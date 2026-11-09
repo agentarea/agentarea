@@ -12,7 +12,7 @@ which is what makes ``requires_endpoint_url`` true.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import Any
@@ -42,6 +42,15 @@ class Transport(StrEnum):
     """Anthropic's native Messages API, ``/messages``."""
 
 
+class ReasoningParam(StrEnum):
+    """How a request states the reasoning effort it wants."""
+
+    EFFORT = "reasoning_effort"
+    """Top-level ``reasoning_effort``: OpenAI and most compatible APIs."""
+    OBJECT = "reasoning"
+    """``reasoning: {"effort": ...}``: OpenRouter, and gateways in front of it."""
+
+
 class ModelListShape(StrEnum):
     """The payload shape a provider's model-list endpoint returns."""
 
@@ -53,6 +62,36 @@ class ModelListShape(StrEnum):
 
 
 _ANTHROPIC_API_VERSION = "2023-06-01"
+
+
+class ReasoningSettingError(ValueError):
+    """A reasoning level or budget this model or provider cannot take; retrying cannot help."""
+
+
+def check_effort_supported(
+    effort: str | None, levels: Sequence[str] | None, *, model_name: str
+) -> None:
+    """Refuse a level the catalog says this model does not take; no stated levels, no check."""
+    if effort and levels and effort not in levels:
+        raise ReasoningSettingError(
+            f"model {model_name} takes reasoning_effort {', '.join(levels)}, not {effort}"
+        )
+
+
+def _levels(value: Any) -> tuple[str, ...] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list | tuple) or not all(isinstance(v, str) and v for v in value):
+        raise ValueError("reasoning_efforts must be a list of level names")
+    return tuple(value)
+
+
+def _flag(name: str, value: Any) -> bool:
+    if value is None:
+        return False
+    if not isinstance(value, bool):
+        raise ValueError(f"{name} must be true or false")
+    return value
 
 
 def _with_scheme(url: str) -> str:
@@ -77,6 +116,13 @@ class ProviderProfile:
         models_query: Query string for the model list. OpenRouter's lists only
             text models unless asked for every output modality, which is where
             its image, video and decision models are.
+        reasoning_param: How a request states its reasoning effort.
+        reasoning_efforts: The reasoning levels its models take, unless a model
+            states its own; ``None`` when the catalog does not say.
+        cache_breakpoints: The API takes Anthropic-style ``cache_control``
+            breakpoints on message content and hands them to the models that
+            cache only what a request marks (Claude, Qwen); models that cache on
+            their own ignore them. OpenRouter and gateways in front of it.
     """
 
     base_url: str | None = None
@@ -85,6 +131,9 @@ class ProviderProfile:
     models_path: str | None = None
     list_shape: ModelListShape = ModelListShape.DATA_ID
     models_query: str | None = None
+    reasoning_param: ReasoningParam = ReasoningParam.EFFORT
+    reasoning_efforts: tuple[str, ...] | None = None
+    cache_breakpoints: bool = False
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any] | None) -> ProviderProfile:
@@ -97,12 +146,20 @@ class ProviderProfile:
             models_path=data.get("models_path") or None,
             list_shape=ModelListShape(data.get("list_shape") or ModelListShape.DATA_ID),
             models_query=data.get("models_query") or None,
+            reasoning_param=ReasoningParam(data.get("reasoning_param") or ReasoningParam.EFFORT),
+            reasoning_efforts=_levels(data.get("reasoning_efforts")),
+            cache_breakpoints=_flag("cache_breakpoints", data.get("cache_breakpoints")),
         )
 
     def as_mapping(self) -> dict[str, Any]:
-        return {
+        mapping: dict[str, Any] = {
             key: str(value) if value is not None else None for key, value in asdict(self).items()
         }
+        mapping["reasoning_efforts"] = (
+            list(self.reasoning_efforts) if self.reasoning_efforts is not None else None
+        )
+        mapping["cache_breakpoints"] = self.cache_breakpoints
+        return mapping
 
     @property
     def requires_endpoint_url(self) -> bool:
@@ -143,6 +200,22 @@ class ProviderProfile:
                 return None
             url = f"{root}/models"
         return f"{url}?{self.models_query}" if self.models_query else url
+
+    def reasoning_fields(self, effort: str | None, max_tokens: int | None) -> dict[str, object]:
+        """The request fields that ask for a reasoning level or budget, empty when neither is set."""
+        if effort and max_tokens:
+            raise ReasoningSettingError("set reasoning_effort or reasoning_max_tokens, not both")
+        if self.reasoning_param is ReasoningParam.OBJECT:
+            if effort:
+                return {"reasoning": {"effort": effort}}
+            if max_tokens:
+                return {"reasoning": {"max_tokens": max_tokens}}
+            return {}
+        if max_tokens:
+            raise ReasoningSettingError(
+                "this provider takes a reasoning level (reasoning_effort), not a token budget"
+            )
+        return {"reasoning_effort": effort} if effort else {}
 
     def build_headers(self, api_key: str | None) -> dict[str, str]:
         """Auth headers for this provider, empty when there is nothing to send."""

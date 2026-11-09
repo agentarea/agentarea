@@ -21,7 +21,7 @@ from .messages import (
 from .messages import (
     UserMessage as SDKUserMessage,
 )
-from .provider_profiles import DEFAULT_PROFILE, ProviderProfile, Transport
+from .provider_profiles import DEFAULT_PROFILE, ProviderProfile, ReasoningSettingError, Transport
 
 if TYPE_CHECKING:
     from agentarea_common.utils.url_safety import OutboundPolicy
@@ -36,6 +36,9 @@ ENDPOINT_REFUSED = "the endpoint URL points to an address this deployment does n
 # Anthropic requires max_tokens on every request.
 ANTHROPIC_DEFAULT_MAX_TOKENS = 4096
 
+# A prompt-cache breakpoint: everything up to the marked block is cached for five minutes.
+CACHE_BREAKPOINT = {"type": "ephemeral"}
+
 # Anthropic reports a failure inside an open stream as an event, not a status.
 _ANTHROPIC_STREAM_ERROR_STATUS = {
     "invalid_request_error": 400,
@@ -48,6 +51,25 @@ _ANTHROPIC_STREAM_ERROR_STATUS = {
     "overloaded_error": 529,
 }
 
+# OpenAI-compatible providers name a mid-stream failure with a string code.
+_STREAM_ERROR_CODE_STATUS = {
+    "invalid_api_key": 401,
+    "insufficient_quota": 402,
+    "rate_limit_exceeded": 429,
+    "context_length_exceeded": 400,
+    "content_filter": 400,
+    "server_error": 502,
+}
+
+# Anthropic's stop_reason in OpenAI's finish_reason vocabulary.
+_ANTHROPIC_FINISH_REASON = {
+    "end_turn": "stop",
+    "stop_sequence": "stop",
+    "max_tokens": "length",
+    "tool_use": "tool_calls",
+    "refusal": "content_filter",
+}
+
 ChunkPublisher = Callable[[str, int, bool], Awaitable[Any]]
 
 
@@ -58,6 +80,34 @@ class LLMProviderHTTPError(RuntimeError):
         super().__init__(f"Provider returned HTTP {status_code}: {provider_message}")
         self.status_code = status_code
         self.provider_message = provider_message
+
+
+def _raise_stream_error(chunk: dict[str, Any]) -> None:
+    """Raise for a chunk that reports the call failed after the stream opened.
+
+    OpenRouter relays an upstream failure as an `error` object or finish_reason "error"
+    in a chunk. That is a failed call, not an empty reply. Its status is the numeric
+    code, or the one a known string code stands for, else a 502 from upstream; a
+    string code stays in the message for the failure classifier.
+    """
+    error = chunk.get("error")
+    choices = chunk.get("choices") or []
+    if not error and not (choices and choices[0].get("finish_reason") == "error"):
+        return
+    details = error if isinstance(error, dict) else {}
+    code = details.get("code")
+    if isinstance(code, int) and 400 <= code <= 599:
+        status = code
+    else:
+        status = _STREAM_ERROR_CODE_STATUS.get(code, 502) if isinstance(code, str) else 502
+    message = str(
+        details.get("message")
+        or (error if isinstance(error, str) else None)
+        or "the provider ended the stream with an error"
+    )
+    if isinstance(code, str) and code:
+        message = f"{code}: {message}"
+    raise LLMProviderHTTPError(status, message)
 
 
 def _error_body_message(body: bytes) -> str:
@@ -85,6 +135,9 @@ class LLMRequest:
     tools: list[dict[str, Any]] | None = None
     temperature: float | None = None
     max_tokens: int | None = None
+    # How hard the model reasons first: a level or a token budget; unset = its default.
+    reasoning_effort: str | None = None
+    reasoning_max_tokens: int | None = None
 
 
 @dataclass
@@ -161,7 +214,9 @@ def usage_from_provider(raw: Any) -> LLMUsage:
         completion_tokens=completion,
         total_tokens=_tokens(fields.get("total_tokens")) or prompt + completion,
         cached_prompt_tokens=min(cached, prompt),
-        cache_creation_tokens=_tokens(details.get("cache_creation_tokens")) or cache_write,
+        cache_creation_tokens=_tokens(details.get("cache_creation_tokens"))
+        or _tokens(details.get("cache_write_tokens"))
+        or cache_write,
     )
 
 
@@ -175,6 +230,40 @@ class LLMResponse:
     cost: Decimal = Decimal(0)
     usage: LLMUsage | None = None
     reasoning_content: str = ""
+    # Why the model stopped, in OpenAI's words: "stop", "length", "tool_calls", ...
+    # "length" means the reply was cut off at the output limit.
+    finish_reason: str | None = None
+
+
+def _marked(message: dict[str, Any]) -> dict[str, Any]:
+    content = message.get("content")
+    if isinstance(content, str) and content:
+        parts = [{"type": "text", "text": content}]
+    elif isinstance(content, list) and content and isinstance(content[-1], dict):
+        parts = list(content)
+    else:
+        return message
+    parts[-1] = {**parts[-1], "cache_control": CACHE_BREAKPOINT}
+    return {**message, "content": parts}
+
+
+def with_cache_breakpoints(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The messages with a cache breakpoint on the system prompt and on the last turn.
+
+    The first caches the tools and instructions every call repeats; the second
+    moves with the conversation, so each call reads the previous call's whole
+    prompt from the cache. An empty turn is left unmarked: an empty block cannot
+    be cached.
+    """
+    marked = list(messages)
+    targets = {len(marked) - 1} if marked else set()
+    system = [i for i, m in enumerate(marked) if isinstance(m, dict) and m.get("role") == "system"]
+    if system:
+        targets.add(system[-1])
+    for i in targets:
+        if isinstance(marked[i], dict):
+            marked[i] = _marked(marked[i])
+    return marked
 
 
 def _text_of(content: Any) -> str:
@@ -517,6 +606,8 @@ class LLMModel:
         url = self._api_url("/chat/completions")
 
         normalized_messages = self._normalize_messages(request.messages)
+        if self._profile.cache_breakpoints:
+            normalized_messages = with_cache_breakpoints(normalized_messages)
 
         payload: dict[str, Any] = {
             "model": self.model_name,
@@ -531,6 +622,9 @@ class LLMModel:
             payload["temperature"] = request.temperature
         if request.max_tokens is not None:
             payload["max_tokens"] = request.max_tokens
+        payload.update(
+            self._profile.reasoning_fields(request.reasoning_effort, request.reasoning_max_tokens)
+        )
 
         headers: dict[str, str] = {
             "Content-Type": "application/json",
@@ -542,21 +636,13 @@ class LLMModel:
         final_cost = Decimal(0)
 
         async with self._http_client(httpx.Timeout(300.0)) as client:
-            # Try with thinking enabled first; fall back without if provider rejects it
-            use_payload = {**payload, "think": True}
             resp = await self._send(
-                client, client.build_request("POST", url, json=use_payload, headers=headers)
+                client, client.build_request("POST", url, json=payload, headers=headers)
             )
             if resp.status_code >= 400:
+                body = await resp.aread()
                 await resp.aclose()
-                logger.info("Provider rejected 'think' param, retrying without it")
-                resp = await self._send(
-                    client, client.build_request("POST", url, json=payload, headers=headers)
-                )
-                if resp.status_code >= 400:
-                    body = await resp.aread()
-                    await resp.aclose()
-                    raise LLMProviderHTTPError(resp.status_code, _error_body_message(body))
+                raise LLMProviderHTTPError(resp.status_code, _error_body_message(body))
 
             try:
                 async for line in resp.aiter_lines():
@@ -570,6 +656,8 @@ class LLMModel:
                         chunk = json.loads(data_str)
                     except json.JSONDecodeError:
                         continue
+
+                    _raise_stream_error(chunk)
 
                     usage_data = chunk.get("usage")
                     if usage_data:
@@ -591,6 +679,7 @@ class LLMModel:
                         continue
 
                     delta = choices[0].get("delta", {})
+                    finish_reason = choices[0].get("finish_reason") or None
 
                     # Extract content
                     delta_content = delta.get("content") or ""
@@ -633,7 +722,13 @@ class LLMModel:
 
                     usage_delta = final_usage if usage_data else None
 
-                    if delta_content or delta_reasoning or delta_tool_calls or usage_delta:
+                    if (
+                        delta_content
+                        or delta_reasoning
+                        or delta_tool_calls
+                        or usage_delta
+                        or finish_reason
+                    ):
                         yield LLMResponse(
                             content=delta_content,
                             role="assistant",
@@ -641,12 +736,19 @@ class LLMModel:
                             reasoning_content=delta_reasoning,
                             cost=final_cost if usage_delta is not None else Decimal(0),
                             usage=usage_delta,
+                            finish_reason=finish_reason,
                         )
             finally:
                 await resp.aclose()
 
     async def _stream_anthropic(self, request: LLMRequest) -> AsyncIterator[LLMResponse]:
         """Stream from Anthropic's Messages API, yielding the same deltas as the OpenAI path."""
+        if request.reasoning_effort or request.reasoning_max_tokens:
+            # Extended thinking needs each thinking block, signed, sent back with the
+            # tool results that follow it, which the conversation does not keep.
+            raise ReasoningSettingError(
+                "the Anthropic transport does not take reasoning settings yet"
+            )
         url = self._api_url("/messages")
         system, turns = to_anthropic_messages(self._normalize_messages(request.messages))
 
@@ -655,6 +757,8 @@ class LLMModel:
             "messages": turns,
             "max_tokens": request.max_tokens or ANTHROPIC_DEFAULT_MAX_TOKENS,
             "stream": True,
+            # Anthropic moves this breakpoint to the last block of every request.
+            "cache_control": CACHE_BREAKPOINT,
         }
         if system:
             payload["system"] = system
@@ -670,6 +774,7 @@ class LLMModel:
         }
 
         usage_fields: dict[str, Any] = {}
+        finish_reason: str | None = None
         tool_calls: list[dict[str, Any]] = []
         tool_at_block: dict[int, dict[str, Any]] = {}
 
@@ -723,6 +828,9 @@ class LLMModel:
                                 )
                     elif kind == "message_delta":
                         usage_fields.update(event.get("usage") or {})
+                        stop_reason = (event.get("delta") or {}).get("stop_reason")
+                        if stop_reason:
+                            finish_reason = _ANTHROPIC_FINISH_REASON.get(stop_reason, stop_reason)
                     elif kind == "error":
                         error = event.get("error") or {}
                         raise LLMProviderHTTPError(
@@ -734,13 +842,14 @@ class LLMModel:
             finally:
                 await resp.aclose()
 
-        if usage_fields:
-            usage = usage_from_provider(usage_fields)
+        if usage_fields or finish_reason:
+            usage = usage_from_provider(usage_fields) if usage_fields else None
             yield LLMResponse(
                 content="",
                 role="assistant",
-                cost=self._configured_cost(usage),
+                cost=self._configured_cost(usage) if usage else Decimal(0),
                 usage=usage,
+                finish_reason=finish_reason,
             )
 
     async def _complete_from_stream(
@@ -751,6 +860,7 @@ class LLMModel:
         tool_calls: list[dict[str, Any]] | None = None
         usage: LLMUsage | None = None
         cost = Decimal(0)
+        finish_reason: str | None = None
         async for chunk in self._stream(request):
             if event_publisher and chunk.content:
                 await event_publisher(chunk.content, len(content), False)
@@ -761,6 +871,8 @@ class LLMModel:
             if chunk.usage is not None:
                 usage = chunk.usage
                 cost = chunk.cost
+            if chunk.finish_reason:
+                finish_reason = chunk.finish_reason
         if event_publisher:
             await event_publisher("", len(content), True)
         return LLMResponse(
@@ -770,6 +882,7 @@ class LLMModel:
             cost=cost,
             usage=usage,
             reasoning_content="".join(reasoning),
+            finish_reason=finish_reason,
         )
 
     def _log_failure(self, error: Exception, *, streaming: bool) -> None:

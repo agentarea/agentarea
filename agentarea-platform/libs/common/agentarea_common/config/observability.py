@@ -6,7 +6,7 @@ from .base import BaseAppSettings
 
 
 class ObservabilitySettings(BaseAppSettings):
-    """OpenTelemetry tracing.
+    """OpenTelemetry traces and metrics.
 
     AGENTAREA_OTEL_ENABLED is our process-level gate for installing
     instrumentation. Everything else is the OpenTelemetry spec's own OTEL_*
@@ -16,16 +16,3 @@ class ObservabilitySettings(BaseAppSettings):
     model_config = SettingsConfigDict(env_prefix="AGENTAREA_OTEL_")
 
     ENABLED: bool = False
-
-
-class MetricsSettings(BaseAppSettings):
-    """Prometheus metrics.
-
-    Served on a listener of their own so the public API port never answers
-    ``/metrics``.
-    """
-
-    model_config = SettingsConfigDict(env_prefix="AGENTAREA_METRICS_")
-
-    ENABLED: bool = False
-    PORT: int = 9090

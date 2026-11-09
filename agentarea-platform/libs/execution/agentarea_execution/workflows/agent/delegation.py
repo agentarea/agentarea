@@ -42,6 +42,7 @@ from ..retry import make_retry_policy
 from .approval import ToolApprovalMixin
 from .patches import (
     CHILD_STOP_IS_NOT_PARENT_STOP_PATCH,
+    DELEGATES_BY_ID_PATCH,
     DELEGATION_CHILD_EXECUTION_ID_PATCH,
     DELEGATION_ON_OWN_QUEUE_PATCH,
     DELEGATION_STOP_RECORDED_PATCH,
@@ -61,17 +62,27 @@ class DelegationMixin(ToolApprovalMixin):
         routing through the activity-level polling delegation.
         """
         tools_config = self.state.agent_config.get("tools", [])
-        agent_names = [
-            str(tc.get("name"))
+        delegates = [
+            tc
             for tc in tools_config
             if isinstance(tc, dict) and tc.get("type") == "agent" and tc.get("name")
         ]
+        agent_ids: dict[str, str] = {}
+        if workflow.patched(DELEGATES_BY_ID_PATCH):
+            # Remote delegates are reached at their a2a_url, never as a local agent.
+            delegates = [tc for tc in delegates if not (tc.get("settings") or {}).get("a2a_url")]
+            for tc in delegates:
+                agent_id = (tc.get("settings") or {}).get("agent_id")
+                if isinstance(agent_id, str) and agent_id:
+                    agent_ids[str(tc["name"])] = agent_id
+        agent_names = [str(tc["name"]) for tc in delegates]
 
         if not agent_names:
             return
 
         resolve_request = ResolveAgentToolsRequest(
             agent_names=agent_names,
+            agent_ids=agent_ids,
             workspace_id=self.state.workspace_id,
             user_context_data=self.state.user_context_data,
         )

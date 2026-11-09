@@ -33,3 +33,19 @@ def test_the_largest_cost_the_column_holds_is_accepted():
     spec = _create(input_cost_per_token="99999999.999999999999")
 
     assert str(spec.input_cost_per_token) == "99999999.999999999999"
+
+
+def test_a_model_is_created_without_a_price():
+    spec = ModelSpecCreate(
+        provider_spec_id=uuid4(),
+        model_name="llama3.1:8b",
+        display_name="Llama 3.1 8B",
+        context_window=131072,
+    )
+
+    assert (spec.input_cost_per_token, spec.output_cost_per_token) == (None, None)
+
+
+def test_a_chat_model_still_needs_a_context_window():
+    with pytest.raises(ValidationError, match="context_window"):
+        ModelSpecCreate(provider_spec_id=uuid4(), model_name="m", display_name="M")

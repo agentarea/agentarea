@@ -1,14 +1,14 @@
 "use client";
 
-import type {
-  ApiKeyCreateResponse,
-  ApiKeyResponse,
-} from "@/api/client/types.gen";
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { formatDistanceToNow } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Globe, Key, Loader2 } from "lucide-react";
+import type {
+  ApiKeyCreateResponse,
+  ApiKeyResponse,
+} from "@/api/client/types.gen";
 import AccordionControl from "@/components/AccordionControl";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { OneTimeSecretField } from "@/components/SuccessModal";
@@ -19,8 +19,8 @@ import { Label } from "@/components/ui/label";
 import Note from "@/components/ui/note";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { formatDate } from "@/utils/dateUtils";
-import { RevokeKeyAction } from "../../settings/api-keys/APIKeysClient";
 import { createAPIKeyAction } from "../../settings/api-keys/actions";
+import { RevokeKeyAction } from "../../settings/api-keys/APIKeysClient";
 
 type A2AAccessConfigProps = {
   agentId: string;
@@ -77,6 +77,7 @@ export default function A2AAccessConfig({
           {t("title")}
         </FormLabel>
       }
+      noteInline
       note={t("note")}
       mainControl={null}
     >
@@ -112,7 +113,9 @@ export default function A2AAccessConfig({
                     <p className="text-muted-foreground">
                       <span className="font-mono">{key.token_prefix}…</span>
                       {" · "}
-                      {t("created", { date: formatDate(key.created_at, locale) })}
+                      {t("created", {
+                        date: formatDate(key.created_at, locale),
+                      })}
                       {" · "}
                       {key.last_accessed_at
                         ? t("lastUsed", {

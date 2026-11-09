@@ -8,6 +8,11 @@ the fly: its MCP instances' tools (aggregated, each narrowed to the tools the
 client allows), its OpenAPI connections' operations (likewise), its platform toolsets (minus their disabled methods, run in the
 client's workspace), and ``activate_skill`` over its skills.
 
+The MCP Apps its instances carry pass through to the host: tools keep their
+``_meta.ui`` with the ``ui://`` resource namespaced, ``resources/read`` routes
+that URI back to its instance, and an app's calls by raw tool name resolve to
+the one instance serving it.
+
 Every tool the client carries is still governed by the workspace policy: the
 caller's workspace+user policy is resolved with the resolver task snapshots use
 and judged by the one tool PDP (``decide_tool_policy``). A tool the policy denies
@@ -35,10 +40,11 @@ from agentarea_agents_sdk.mcp_server.auth import (
     use_mcp_user_context,
 )
 from agentarea_agents_sdk.tools.mcp_tool_identity import (
+    mcp_tool_narrowing_names,
     mcp_tool_policy_aliases,
     server_label,
 )
-from agentarea_agents_sdk.tools.openapi_tool import _slugify_name
+from agentarea_agents_sdk.tools.openapi_tool import _slugify_name, openapi_tool_target
 from agentarea_api.mcp_events import ClientScope as EventsClientScope
 from agentarea_api.mcp_events import install_mcp_events
 from agentarea_api.platform_mcp import client_platform_server, server_identity
@@ -50,6 +56,7 @@ from agentarea_common.auth.tool_authorization import (
 )
 from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.tool_cost import ToolConnection, ToolCostError
+from agentarea_execution.telemetry import ToolCall, ToolKind, ToolOutcome, ToolPath, tool_call
 from agentarea_execution.workflows.helpers import approvers_for_tool
 from agentarea_governance.domain.tool_call_approvals import GateVerdict, ToolCallRequest
 from agentarea_governance.tool_calls import (
@@ -69,11 +76,18 @@ from agentarea_mcp.domain.transport import MCPTransport
 from agentarea_mcp.tool_context import CallerContext, context_header
 from agentarea_openapi.application.metering import openapi_tool_connection
 from mcp.server import Server
+from mcp.server.apps import EXTENSION_ID as APPS_EXTENSION_ID
+from mcp.shared.exceptions import MCPError
 from mcp.types import (
+    INVALID_PARAMS,
     CallToolRequestParams,
     CallToolResult,
+    ListResourcesResult,
+    ListResourceTemplatesResult,
     ListToolsResult,
     PaginatedRequestParams,
+    ReadResourceRequestParams,
+    ReadResourceResult,
     TextContent,
     Tool,
 )
@@ -100,10 +114,15 @@ async def _authorize_client_access(user_ctx, client_id: str) -> None:
     """Enforce that the authenticated principal may use this client's bundle.
 
     A client-credentials principal (token subject IS the client) is trusted for
-    its own bundle; any other principal must hold the `use` relation in the
-    access-control graph. Raises ``ClientAccessDeniedError`` otherwise.
+    its own bundle, and so is the token of a turn the client's runner holds, for
+    that client's bundle only; any other principal must hold the `use` relation
+    in the access-control graph. Raises ``ClientAccessDeniedError`` otherwise.
     """
     if getattr(user_ctx, "client_id", None) == client_id:
+        return
+    if getattr(user_ctx, "bound_task_id", None) is not None:
+        if getattr(user_ctx, "turn_client_id", None) != client_id:
+            raise ClientAccessDeniedError(client_id)
         return
     from agentarea_common.auth.permission import PermissionService
     from agentarea_common.di.container import resolve
@@ -289,6 +308,8 @@ async def _effective_tool_policy(session: AsyncSession, user_ctx: UserContext) -
 def _actor_type(principal, client_id: str) -> str:
     if principal.client_id == client_id:
         return "client"
+    if principal.subject is not None and principal.subject.kind == "agent":
+        return "agent"
     credential = principal.credential
     return "api_key" if credential is not None and credential.kind == "api_key" else "user"
 
@@ -483,43 +504,51 @@ async def _aggregate_instances(
 
 
 def _policy_aliases(scope: ClientScope, tool_name: str) -> tuple[str, ...]:
-    """The other names a policy rule may give one of the client's instance tools.
+    """The names that may allow one of the client's connection tools: its connection's id.
 
-    The same names an agent's call to that tool answers to (see
-    ``McpToolIdentity.policy_names``): the canonical ``mcp:<instance id>:<raw>``,
-    the server referenced by name and the ``mcp__<server>__<raw>`` an agent calls
-    it by — so a rule written against an agent's use of the tool governs the
-    client's use of it too.
+    ``mcp:<instance id>:<raw>`` or ``openapi:<connection id>:<tool>``, the names
+    an agent's call to the same tool is allowed by.
     """
     if tool_name in scope.platform_tools:
         return ()
     if operation := (scope.openapi or {}).get(tool_name):
-        return (operation.tool_name,)
+        return (openapi_tool_target(operation.connection_id, operation.tool_name),)
     owner = scope.proxy.owner_of(tool_name)
     if owner is None:
         return ()
     member, raw_name = owner
-    instance_id = str(member.mcp_instance_id)
-    return mcp_tool_policy_aliases(
-        instance_id, scope.proxy.instance_names.get(instance_id), raw_name
-    )
+    return mcp_tool_policy_aliases(str(member.mcp_instance_id), raw_name)
 
 
 def _restricting_aliases(scope: ClientScope, tool_name: str) -> tuple[str, ...]:
     """Names that may only narrow, as for an agent.
 
-    An OpenAPI operation's names, or the raw name an instance tool's server advertises.
+    Every name of a connection tool its connection's author or server chose: an
+    OpenAPI operation's, or an instance tool's server name, agent-facing name and
+    raw name. A deny or approval rule written against an agent's use of the tool
+    governs the client's use of it too.
     """
     operation = (scope.openapi or {}).get(tool_name)
     if operation is not None:
-        return (operation.operation, operation.connection_name, operation.connection_id)
+        return (
+            operation.tool_name,
+            operation.operation,
+            operation.connection_name,
+            operation.connection_id,
+        )
     if tool_name in scope.platform_tools:
         return ()
     owner = scope.proxy.owner_of(tool_name)
     if owner is None:
         return ()
-    _member, raw_name = owner
-    return (raw_name,)
+    member, raw_name = owner
+    instance_id = str(member.mcp_instance_id)
+    return mcp_tool_narrowing_names(scope.proxy.instance_names.get(instance_id), raw_name)
+
+
+def _name_allows(scope: ClientScope, tool_name: str) -> bool:
+    """Whether the client-facing name may allow the tool: not when a connection's names make it."""
+    return not _policy_aliases(scope, tool_name)
 
 
 def _client_tool_decision(scope: ClientScope, tool_name: str) -> ToolAuthorizationDecision:
@@ -529,6 +558,7 @@ def _client_tool_decision(scope: ClientScope, tool_name: str) -> ToolAuthorizati
         tool_name,
         aliases=_policy_aliases(scope, tool_name),
         restricting_aliases=_restricting_aliases(scope, tool_name),
+        name_allows=_name_allows(scope, tool_name),
     )
 
 
@@ -784,6 +814,7 @@ async def _governed_call(
     resource_id: str,
     restricting_aliases: Sequence[str] = (),
     connection: ToolConnection | None = None,
+    kind: ToolKind,
 ) -> CallToolResult | ApprovalRequired:
     """Run one call through the tool-call layer, as a run's tool activity does.
 
@@ -791,6 +822,35 @@ async def _governed_call(
     balance, runs it and writes its cost lines, with this client and no task. A held
     call is passed to its approval here and, once approved, through the layer again.
     """
+    with tool_call(kind, ToolPath.API) as metered:
+        result = await _layered_call(
+            scope,
+            tool_name,
+            arguments,
+            invoke,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            restricting_aliases=restricting_aliases,
+            connection=connection,
+            metered=metered,
+        )
+        if isinstance(result, CallToolResult):
+            metered.answered(not result.is_error)
+        return result
+
+
+async def _layered_call(
+    scope: ClientScope,
+    tool_name: str,
+    arguments: dict,
+    invoke: Callable[[], Awaitable[ToolCallOutcome]],
+    *,
+    resource_type: str,
+    resource_id: str,
+    restricting_aliases: Sequence[str],
+    connection: ToolConnection | None,
+    metered: ToolCall,
+) -> CallToolResult | ApprovalRequired:
     user_ctx = scope.user_context
     call = GovernedToolCall(
         authorization=ToolAuthorizationRequest(
@@ -803,6 +863,7 @@ async def _governed_call(
             restricting_aliases=tuple(
                 dict.fromkeys((*restricting_aliases, *_restricting_aliases(scope, tool_name)))
             ),
+            name_allows=_name_allows(scope, tool_name),
         ),
         call_id=str(uuid4()),
         agent_id=None,
@@ -843,6 +904,9 @@ async def _governed_call(
             resource_id=resource_id,
         )
         if held is not None:
+            metered.outcome = (
+                ToolOutcome.HELD if isinstance(held, ApprovalRequired) else ToolOutcome.DENIED
+            )
             return held
         # The approval is already on record; only a later refusal is new.
         layered = await run_tool_call(
@@ -853,6 +917,7 @@ async def _governed_call(
             spend_gate=spend_gate,
         )
     if layered.verdict is not Verdict.RAN or layered.outcome is None:
+        metered.outcome = ToolOutcome.DENIED
         return _refusal(layered.decision.reason)
     return layered.outcome.value
 
@@ -909,6 +974,7 @@ async def call_instance_tool(
         resource_type="mcp_instance",
         resource_id=str(instance.id),
         connection=connection,
+        kind=ToolKind.MCP,
     )
 
 
@@ -971,6 +1037,7 @@ async def _run_openapi_operation(
         resource_id=resource_id,
         restricting_aliases=(operation, connection.name, str(connection.id)),
         connection=tool_connection,
+        kind=ToolKind.OPENAPI,
     )
 
 
@@ -1084,8 +1151,9 @@ async def _list_tools(_ctx: object, _params: PaginatedRequestParams | None) -> L
             name=t["name"],
             description=t["description"],
             input_schema=t.get("input_schema") or t["inputSchema"],
+            _meta=t.get("_meta"),
         )
-        for t in await scope.proxy.list_namespaced_tools()
+        for t in await scope.proxy.list_app_tools()
     )
     tools.extend(
         Tool(name=name, description=operation.description, input_schema=operation.input_schema)
@@ -1129,9 +1197,9 @@ async def _call_tool(_ctx: object, params: CallToolRequestParams) -> CallToolRes
         return _answer(await _call_client_openapi(scope, params.name, operation, arguments))
 
     is_platform_tool = params.name in scope.platform_tools
-    if not is_platform_tool and scope.proxy.owner_of(params.name) is None:
-        # Not a tool of this client: nothing to judge, nothing ran.
-        raise ValueError(f"No member owns tool {params.name}")
+    # An MCP App calls its own tools by their raw names. A name no tool of this
+    # client answers to raises: nothing to judge, nothing ran.
+    name = params.name if is_platform_tool else await scope.proxy.resolve_tool(params.name)
 
     async def invoke() -> ToolCallOutcome:
         if is_platform_tool:
@@ -1139,27 +1207,63 @@ async def _call_tool(_ctx: object, params: CallToolRequestParams) -> CallToolRes
             # authorization checks apply exactly as on /mcp/w/{workspace}.
             with use_mcp_user_context(scope.user_context), selected_tools(scope.platform_tools):
                 return _call_outcome(
-                    await client_platform_server().call_tool_result(params.name, arguments)
+                    await client_platform_server().call_tool_result(name, arguments)
                 )
-        with call_headers(_caller_headers(scope, params.name)):
-            return _call_outcome(
-                await scope.proxy.call_namespaced_tool_result(params.name, arguments)
-            )
+        with call_headers(_caller_headers(scope, name)):
+            return _call_outcome(await scope.proxy.call_namespaced_tool_result(name, arguments))
 
     try:
-        connection = await _scope_tool_connection(scope, params.name)
+        connection = await _scope_tool_connection(scope, name)
     except ToolCostError as error:
         return _refusal(f"the tool's cost declaration is invalid: {error}")
     result = await _governed_call(
         scope,
-        params.name,
+        name,
         arguments,
         invoke,
         resource_type="client",
         resource_id=client_id,
         connection=connection,
+        kind=ToolKind.PLATFORM if is_platform_tool else ToolKind.MCP,
     )
     return _answer(result)
+
+
+async def _request_scope() -> ClientScope:
+    client_id = _client_id_var.get()
+    if not client_id:
+        raise ValueError("No client scope on request")
+    try:
+        scope = await _resolve_client_scope(client_id)
+    except ClientAccessDeniedError:
+        raise ValueError("Not authorized for this client") from None
+    if scope is None:
+        raise ValueError("Client not found")
+    return scope
+
+
+async def _list_resources(
+    _ctx: object, _params: PaginatedRequestParams | None
+) -> ListResourcesResult:
+    """The ``ui://`` resources of the MCP Apps the client carries, namespaced."""
+    scope = await _request_scope()
+    return ListResourcesResult(resources=await scope.proxy.list_app_resources())
+
+
+async def _list_resource_templates(
+    _ctx: object, _params: PaginatedRequestParams | None
+) -> ListResourceTemplatesResult:
+    return ListResourceTemplatesResult(resource_templates=[])
+
+
+async def _read_resource(_ctx: object, params: ReadResourceRequestParams) -> ReadResourceResult:
+    scope = await _request_scope()
+    result = await scope.proxy.read_app_resource(params.uri)
+    if result is None:
+        raise MCPError(
+            code=INVALID_PARAMS, message=f"Unknown resource: {params.uri}", data={"uri": params.uri}
+        )
+    return result
 
 
 def _answer(result: CallToolResult | ApprovalRequired) -> CallToolResult:
@@ -1178,7 +1282,11 @@ client_mcp_server = Server(
     **server_identity(),
     on_list_tools=_list_tools,
     on_call_tool=_call_tool,
+    on_list_resources=_list_resources,
+    on_list_resource_templates=_list_resource_templates,
+    on_read_resource=_read_resource,
 )
+client_mcp_server.extensions[APPS_EXTENSION_ID] = {}
 install_mcp_events(client_mcp_server, EventsClientScope(client_events_context))
 
 

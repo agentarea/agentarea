@@ -16,7 +16,7 @@ from agentarea_execution.activities import agent_execution_activities as activit
 from agentarea_execution.activities.agent import tools as tool_activities
 from agentarea_execution.activities.agent.tool_progress import make_tool_progress_relay
 from agentarea_execution.models import MCPToolRequest, McpToolRoute
-from agentarea_execution.workflows.agent.tools import structured_content_field
+from agentarea_execution.workflows.agent.tools import mcp_app_field, structured_content_field
 from temporalio.testing import ActivityEnvironment
 
 
@@ -157,3 +157,61 @@ def test_tool_result_carries_structured_content_only_when_present():
         "structured_content_dropped": True
     }
     assert structured_content_field({"result": "text"}) == {}
+
+
+def _app_request(instance_id: str, raw_name: str) -> MCPToolRequest:
+    return MCPToolRequest(
+        tool_name=f"app__{raw_name}",
+        tool_args={},
+        workspace_id="ws-1",
+        user_id="user-1",
+        user_context_data={"user_id": "user-1", "workspace_id": "ws-1", "agent_id": "agent-1"},
+        task_id=str(uuid4()),
+        tool_call_id="call-1",
+        mcp_route=McpToolRoute(
+            instance_id=instance_id, raw_name=raw_name, attachment_ref=instance_id
+        ),
+        tools=[{"type": "mcp", "name": instance_id}],
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("transport", "raw_name", "opens"),
+    [
+        ("url", "show_chart", "show_chart"),
+        ("url", "plain", None),
+        ("url", "app_only", None),
+        ("bundle", "show_chart", None),
+    ],
+)
+async def test_result_names_the_mcp_app_a_call_opens(harness, transport, raw_name, opens):
+    ui = {"resourceUri": "ui://chart/view"}
+    instance = SimpleNamespace(
+        id=uuid4(),
+        name="Charts",
+        transport=transport,
+        json_spec={},
+        tools=[
+            {"name": "show_chart", "_meta": {"ui": ui}},
+            {"name": "plain"},
+            {"name": "app_only", "_meta": {"ui": {**ui, "visibility": ["app"]}}},
+        ],
+        server_spec_id="spec",
+        managed_by=None,
+    )
+    mcp_service = harness.ctx.get_mcp_server_instance_service.return_value
+    mcp_service.get = AsyncMock(return_value=instance)
+    mcp_service.mcp_server_repository.catalog_json_spec = AsyncMock(return_value=None)
+    mcp_service.execute_tool = AsyncMock(return_value={"success": True, "result": "ok"})
+
+    result = await ActivityEnvironment().run(
+        harness.activity, _app_request(str(instance.id), raw_name)
+    )
+
+    assert result.mcp_app_tool == opens
+
+
+def test_tool_result_names_the_mcp_app_only_when_one_opens():
+    assert mcp_app_field({"mcp_app_tool": "show_chart"}) == {"mcp_app_tool": "show_chart"}
+    assert mcp_app_field({"mcp_app_tool": None}) == {}

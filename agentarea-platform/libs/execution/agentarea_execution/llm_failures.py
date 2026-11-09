@@ -147,14 +147,6 @@ def classify_llm_failure(error: BaseException) -> LLMFailure | None:
             "UsageUnavailable",
             retryable=False,
         )
-    if "pricing is not configured" in text:
-        return LLMFailure(
-            "model_unpriced",
-            "This model has no price configured, so the run's budget cannot be enforced. "
-            "Set the model's pricing or choose a different model.",
-            "ModelUnpriced",
-            retryable=False,
-        )
     if "effective policy is missing required runtime limit" in text:
         return LLMFailure(
             "policy_incomplete",

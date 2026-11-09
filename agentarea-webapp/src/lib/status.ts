@@ -60,6 +60,15 @@ function fallbackStatusPresentation(status: string): StatusPresentation {
   return { label: status, kind: "draft" };
 }
 
+/** A client's runner is online while its socket to the platform is connected. */
+export function getRunnerStatusPresentation(
+  online: boolean
+): StatusPresentation {
+  return online
+    ? { label: "Online", labelKey: "online", kind: "active" }
+    : { label: "Offline", labelKey: "offline", kind: "off" };
+}
+
 export function getMcpVerificationStatusPresentation(
   status: string
 ): StatusPresentation {
@@ -248,6 +257,37 @@ export function getTriggerStatusPresentation(
       };
     default:
       return fallbackStatusPresentation(status);
+  }
+}
+
+/** Why the dashboard lists a trigger as broken. A stopped trigger reads as off,
+ * as it does in the trigger list. */
+export function getBrokenTriggerStatusPresentation(
+  reason: string
+): StatusPresentation {
+  switch (normalizeStatus(reason)) {
+    case "failing":
+      return { label: "Failing", kind: "failed" };
+    case "stopped_after_failures":
+      return { label: "Stopped after failures", kind: "off" };
+    case "needs_owner":
+      return { label: "Needs a new owner", kind: "attention" };
+    default:
+      return fallbackStatusPresentation(reason);
+  }
+}
+
+/** Why the dashboard lists a connection as broken. */
+export function getBrokenConnectionStatusPresentation(
+  reason: string
+): StatusPresentation {
+  switch (normalizeStatus(reason)) {
+    case "verification_failed":
+      return { label: "Verification failed", kind: "failed" };
+    case "last_call_failed":
+      return { label: "Last call failed", kind: "failed" };
+    default:
+      return fallbackStatusPresentation(reason);
   }
 }
 
