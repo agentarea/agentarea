@@ -285,6 +285,20 @@ Check the Job explicitly.
   </Step>
 </Steps>
 
+## What the reconcile does after an upgrade
+
+`agentarea-api reconcile` — the chart's registry reconcile Job and CronJob,
+and Compose's reconcile service — also brings the authorization graph up to
+date with rows a release added state for. Nothing here is a manual step:
+
+- Every user secret whose creator's ownership has not reached the graph yet
+  (`encrypted_secrets.graph_granted_at` is null — all secrets created before
+  secrets became graph resources) is granted to its creator and stamped. Until
+  that run, only a workspace admin may attach such a secret to an MCP server, an
+  OAuth client or an egress exit. The pass is idempotent and reads only
+  unstamped rows; if the graph refuses a grant, the reconcile fails rather than
+  skipping it, so the Job shows the failure.
+
 ## Verify
 
 Confirm the running images are the ones you pinned:

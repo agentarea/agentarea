@@ -134,3 +134,22 @@ async def test_every_reconcile_grants_the_owners_of_secrets_the_graph_lacks(monk
     await cli._reconcile(None, (), None)
 
     assert order == ["graph", "secrets"]
+
+
+async def test_a_secret_owner_grant_that_fails_fails_the_reconcile(monkeypatch):
+    from agentarea_api import cli
+    from agentarea_common.rebac.ownership import ResourceOwnershipError
+
+    async def register() -> None:
+        return None
+
+    async def grant(db) -> None:
+        raise ResourceOwnershipError("OpenFGA grant write failed")
+
+    monkeypatch.setattr(cli, "_register_graph_client", register)
+    monkeypatch.setattr(cli, "_grant_pending_secret_owners", grant)
+    monkeypatch.setattr(cli, "Database", lambda settings: object())
+    monkeypatch.setattr(cli, "get_db_settings", lambda: None)
+
+    with pytest.raises(ResourceOwnershipError):
+        await cli._reconcile(None, (), None)
