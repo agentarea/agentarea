@@ -36,7 +36,9 @@ from agentarea_bundles.schemas.bundle import (
     BundlePolicy,
     BundleSkill,
     SetupFieldType,
+    mentions_secret,
     resolve_placeholders,
+    secret_binding,
     setup_refs,
 )
 from agentarea_bundles.schemas.preview import (
@@ -93,6 +95,7 @@ class DeployChecks(Protocol):
         self, package: Bundle, automation: BundleAutomation
     ) -> str | None: ...
     async def may_edit(self, kind: EntityKind, entity_id: str) -> bool: ...
+    async def secret_problem(self, secret_name: str) -> str | None: ...
 
 
 # Entities whose update needs per-object edit permission. A policy write is
@@ -814,14 +817,47 @@ class BundleAnalyzer:
         unsupported: set[str] = set()
         for mcp in package.mcps:
             reason = mcp_is_unsupported(mcp)
-            # bindings must reference declared setup fields
+            # bindings reference declared setup fields or, whole, a workspace secret
+            secret_refs: list[str] = []
             for env_name, ref in mcp.bindings.items():
+                secret_name = secret_binding(ref)
+                if secret_name is not None:
+                    secret_refs.append(f"{env_name} from secret '{secret_name}'")
+                    problem = (
+                        await self._checks.secret_problem(secret_name)
+                        if self._checks is not None
+                        else None
+                    )
+                    if problem:
+                        issues.append(
+                            PreviewIssue(
+                                severity=IssueSeverity.BLOCK,
+                                message=f"mcp '{mcp.key}' binding '{env_name}' {problem}",
+                                entity_key=mcp.key,
+                            )
+                        )
+                    continue
+                if mentions_secret(ref):
+                    issues.append(
+                        PreviewIssue(
+                            severity=IssueSeverity.BLOCK,
+                            message=(
+                                f"mcp '{mcp.key}' binding '{env_name}' must be ${{secret.<name>}} "
+                                "alone; put any prefix such as 'Bearer ' into the secret's value"
+                            ),
+                            entity_key=mcp.key,
+                        )
+                    )
+                    continue
                 refs = setup_refs(ref)
                 if not refs:
                     issues.append(
                         PreviewIssue(
                             severity=IssueSeverity.BLOCK,
-                            message=f"mcp '{mcp.key}' binding '{env_name}' must reference ${{setup.<key>}}",
+                            message=(
+                                f"mcp '{mcp.key}' binding '{env_name}' must reference "
+                                "${setup.<key>} or ${secret.<name>}"
+                            ),
                             entity_key=mcp.key,
                         )
                     )
@@ -880,7 +916,7 @@ class BundleAnalyzer:
                 )
             else:
                 status = await self._plan(EntityKind.MCP, mcp)
-                detail = None
+                detail = "; ".join(secret_refs) or None
                 if status is EntityStatus.WILL_UPDATE:
                     status = EntityStatus.CHANGES_NOT_APPLIED
                     detail = MCP_NOT_APPLIED

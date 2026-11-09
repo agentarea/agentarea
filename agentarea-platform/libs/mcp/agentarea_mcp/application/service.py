@@ -30,6 +30,11 @@ from agentarea_common.utils.url_safety import (
     safe_async_client,
     validate_outbound_url,
 )
+from agentarea_secrets.catalog_service import (
+    ManagedSecretError,
+    SecretCatalogService,
+    SecretNotFoundError,
+)
 from mcp import MCPError
 from mcp_types import INVALID_REQUEST, REQUEST_TIMEOUT
 
@@ -66,12 +71,6 @@ from agentarea_mcp.domain.events import (
     MCPServerInstanceUpdated,
     MCPServerUpdated,
 )
-from agentarea_secrets.catalog_service import (
-    ManagedSecretError,
-    SecretCatalogService,
-    SecretNotFoundError,
-)
-
 from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.domain.secret_refs import (
@@ -671,7 +670,7 @@ class MCPServerInstanceService:
             secret_manager=self.secret_manager,
         )
 
-    async def _assert_may_use_secret_refs(self, refs: dict[str, str]) -> dict[str, UUID]:
+    async def assert_may_use_secret_refs(self, refs: dict[str, str]) -> dict[str, UUID]:
         """The id of every workspace secret ``refs`` names, each one the caller may use.
 
         Referencing a secret sends its value wherever the connection points, so
@@ -882,7 +881,7 @@ class MCPServerInstanceService:
                 instance_spec, server_spec_id
             )
             secret_refs = spec_secret_refs(spec)
-            secret_ref_ids = await self._assert_may_use_secret_refs(secret_refs)
+            secret_ref_ids = await self.assert_may_use_secret_refs(secret_refs)
             if context_secret:
                 spec[CONTEXT_SIGNING_FLAG] = True
 
@@ -1049,7 +1048,7 @@ class MCPServerInstanceService:
                     json_spec, instance.server_spec_id, instance.json_spec
                 )
                 secret_refs = spec_secret_refs(cleaned_spec)
-                secret_ref_ids = await self._assert_may_use_secret_refs(secret_refs)
+                secret_ref_ids = await self.assert_may_use_secret_refs(secret_refs)
                 if secret_refs or has_secret_refs(instance.json_spec or {}):
                     refs_to_record = (secret_refs, secret_ref_ids)
                 replaced_copies = [

@@ -34,6 +34,7 @@ from uuid import UUID
 
 from agentarea_common.agent_status import AgentStatus
 from agentarea_common.auth.authorization import assert_workspace_admin
+from agentarea_mcp.domain.secret_refs import secret_ref
 
 from agentarea_bundles.application.analyzer import (
     EDIT_GUARDED,
@@ -66,6 +67,7 @@ from agentarea_bundles.schemas.bundle import (
     BundleSkill,
     SetupFieldType,
     resolve_placeholders,
+    secret_binding,
     setup_refs,
 )
 from agentarea_bundles.schemas.preview import EntityKind, IssueSeverity, PreviewIssue
@@ -514,11 +516,12 @@ class BundleInstaller:
             spec_id = created_spec.id
 
         target = "headers" if transport == "url" else "environment"
-        resolved = {
-            env_name: value
-            for env_name, ref in mcp.bindings.items()
-            if not setup_refs(value := resolve_placeholders(ref, self._values))
-        }
+        resolved: dict[str, Any] = {}
+        for env_name, ref in mcp.bindings.items():
+            if (secret_name := secret_binding(ref)) is not None:
+                resolved[env_name] = secret_ref(secret_name)
+            elif not setup_refs(value := resolve_placeholders(ref, self._values)):
+                resolved[env_name] = value
         instance_json: dict[str, Any] = {}
         for field in ("environment", "headers"):
             values = _plain_config(mcp.json_spec, field)
@@ -543,6 +546,8 @@ class BundleInstaller:
             raise BundleValidationError(
                 f"MCP '{mcp.key}' was refused: {'; '.join(exc.errors)}"
             ) from exc
+        except PermissionError as exc:
+            raise BundleValidationError(f"MCP '{mcp.key}' was refused: {exc}") from exc
         if instance is None:
             raise BundleInstallError(f"failed to create MCP instance '{mcp.name}'")
         copied_spec_id = getattr(instance, "server_spec_id", None)
@@ -571,7 +576,9 @@ class BundleInstaller:
         for env_name, ref in mcp.bindings.items():
             refs = setup_refs(ref)
             field = package.setup_field(refs[0]) if refs else None
-            is_secret = bool(field and field.type is SetupFieldType.SECRET)
+            is_secret = secret_binding(ref) is not None or bool(
+                field and field.type is SetupFieldType.SECRET
+            )
             env_schema.append(
                 {
                     "name": env_name,

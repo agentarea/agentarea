@@ -38,12 +38,14 @@ def secret_ref_name(field: str, value: Any) -> str | None:
     name = value.get(SECRET_REF_KEY)
     if set(value) != {SECRET_REF_KEY} or not isinstance(name, str) or not name.strip():
         raise InvalidSecretRefError(
-            f"{field} must be a string or {{\"{SECRET_REF_KEY}\": \"<workspace secret>\"}}"
+            f'{field} must be a string or {{"{SECRET_REF_KEY}": "<workspace secret>"}}'
         )
     return name
 
 
-def spec_secret_refs(spec: dict[str, Any], fields: tuple[str, ...] = SECRET_REF_FIELDS) -> dict[str, str]:
+def spec_secret_refs(
+    spec: dict[str, Any], fields: tuple[str, ...] = SECRET_REF_FIELDS
+) -> dict[str, str]:
     """Every env var or header name in ``spec`` that references a secret, and the secret."""
     refs: dict[str, str] = {}
     for field in fields:
