@@ -155,8 +155,7 @@ class BundleMcp(BaseModel):
         default_factory=dict,
         description=(
             "Maps an env var / header name the server needs to a ${setup.x} "
-            "reference, e.g. {'GITHUB_TOKEN': '${setup.github_token}'}, or to "
-            "${secret.<name>}, a workspace secret the instance reads at use."
+            "reference, e.g. {'GITHUB_TOKEN': '${setup.github_token}'}."
         ),
     )
     context_secret: str | None = Field(
