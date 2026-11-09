@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..rebac.models import RelationTuple
+from ..rebac.models import RelationQuery, RelationTuple
 
 
 @dataclass
@@ -27,6 +27,14 @@ class RecordingGraph:
 
     async def delete_tuple(self, tuple_: RelationTuple) -> None:
         self.recorded = [t for t in self.recorded if t != tuple_]
+
+    async def query_all_tuples(self, query: RelationQuery) -> list[RelationTuple]:
+        return [
+            t
+            for t in self.recorded
+            if (query.namespace is None or t.namespace == query.namespace)
+            and (query.object is None or t.object == query.object)
+        ]
 
     def objects_with(self, relation: str) -> set[str]:
         return {t.object for t in self.recorded if t.relation == relation}
@@ -56,6 +64,18 @@ class AllowAllPermissions:
         self, user_id: str, permission: str, resource_type: str, resource_id: str
     ) -> bool:
         return True
+
+
+class GrantedPermissions:
+    """A PDP that allows exactly the ``(subject, permission, resource id)`` it was given."""
+
+    def __init__(self, *grants: tuple[str, str, str]) -> None:
+        self.grants = set(grants)
+
+    async def check(
+        self, user_id: str, permission: str, resource_type: str, resource_id: str
+    ) -> bool:
+        return (user_id, permission, resource_id) in self.grants
 
 
 def allow_all_permissions() -> AllowAllPermissions:

@@ -49,3 +49,9 @@ type resource
     # reading or administering the workspace does not let anyone invoke it.
     define invoker: [User, Agent, Workspace#members]
     define can_invoke: invoker
+    # Who may wire a secret's value into something: an MCP env var or header, an
+    # OAuth client, an egress exit. Its creator (manager), whoever manages its
+    # project (a workspace admin through the root project), or an explicit
+    # grant. Reading or writing a secret's metadata does not imply it.
+    define secret_user: [User, Agent]
+    define can_use_secret: secret_user or manager or can_manage from project

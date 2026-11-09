@@ -304,6 +304,37 @@ def reconcile(
 
 
 @cli.group()
+def secrets():
+    """Secret maintenance."""
+
+
+@secrets.command("grant-owners")
+@click.option("--dry-run", is_flag=True, help="List the secrets it would grant; write nothing.")
+def grant_secret_owners(dry_run: bool):
+    """Make each user secret's creator its owner in the authorization graph.
+
+    Secrets became graph resources with ``can_use_secret``; one created before
+    has no tuples, so only a workspace admin may wire it in until this runs.
+    Idempotent: run once after upgrading.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    asyncio.run(_grant_secret_owners(dry_run=dry_run))
+
+
+async def _grant_secret_owners(*, dry_run: bool) -> None:
+    from agentarea_secrets.graph_owners import grant_user_secret_owners
+
+    if not dry_run:
+        await _register_graph_client()
+    db = Database(get_db_settings())
+    async with db.async_session_factory() as session:
+        owners = await grant_user_secret_owners(session, dry_run=dry_run)
+    for owner in owners:
+        click.echo(f"{owner.workspace_id}/{owner.secret_id}  User:{owner.created_by}")
+    click.echo(f"{'Would grant' if dry_run else 'Granted'} {len(owners)} user secrets")
+
+
+@cli.group()
 def skills():
     """Skill maintenance."""
 

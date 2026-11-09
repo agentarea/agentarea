@@ -36,6 +36,16 @@ async def test_mcp_view_maps_to_resource_read_bit():
 
 
 @pytest.mark.asyncio
+async def test_using_a_secret_checks_its_own_bit_not_read():
+    svc, openfga = _svc(check_return=False)
+    allowed = await svc.check("User:u1", "use_secret", "secret", "s1")
+    assert allowed is False
+    openfga.check.assert_awaited_once_with(
+        namespace="resource", object="s1", relation="can_use_secret", subject_id="User:u1"
+    )
+
+
+@pytest.mark.asyncio
 async def test_ungoverned_resource_type_allows_without_calling_openfga():
     svc, openfga = _svc(check_return=False)
     allowed = await svc.check("User:u1", "view", "model_instance", "x")

@@ -6,6 +6,7 @@ to avoid duplication across test files.
 
 from .graph import (
     AllowAllPermissions,
+    GrantedPermissions,
     RecordingGraph,
     allow_all_permissions,
     install_graph_ownership_stub,
@@ -14,6 +15,7 @@ from .mocks import TestEventBroker, TestSecretManager
 
 __all__ = [
     "AllowAllPermissions",
+    "GrantedPermissions",
     "RecordingGraph",
     "TestEventBroker",
     "TestSecretManager",

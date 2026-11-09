@@ -15,8 +15,14 @@ from uuid import UUID, uuid4
 
 from agentarea_common.audit import AuditService
 from agentarea_common.auth import UserContext
-from agentarea_common.auth.authorization import is_workspace_admin
+from agentarea_common.auth.permission import PermissionService
+from agentarea_common.di.container import resolve
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.rebac.ownership import (
+    ResourceOwnershipError,
+    grant_resource_owner,
+    revoke_resource,
+)
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,7 +55,7 @@ class ManagedSecretError(PermissionError):
 
 
 class SecretAccessDeniedError(PermissionError):
-    """Only the secret's creator or a workspace admin may put it to use."""
+    """The caller holds no ``can_use_secret`` on the secret."""
 
 
 class SecretInUseError(RuntimeError):
@@ -89,6 +95,9 @@ SURFACED_OWNER_TYPES: tuple[str, ...] = (
     "trigger",
     "agent",  # wallet credentials, supplied in the request body like the rest
 )
+
+
+USE_SECRET = "use_secret"  # noqa: S105 - a permission verb, not a credential
 
 
 class SecretCatalogService:
@@ -159,9 +168,11 @@ class SecretCatalogService:
         """A user-owned secret the caller may wire into a connection.
 
         Using a secret sends its value somewhere the caller chooses -- an OAuth
-        authorize URL handed back to them, a mailbox host they named -- so
-        workspace membership is not enough to select one. Only whoever created
-        it, or a workspace admin, may.
+        authorize URL handed back to them, a mailbox host they named, an MCP
+        server's environment -- so workspace membership is not enough to select
+        one, and neither is reading it. The graph decides: ``can_use_secret`` on
+        ``resource:<secret id>``, held by its creator, whoever manages its
+        project (a workspace admin), and anyone granted ``secret_user``.
         """
         return await self._require_usable(await self._require_user_owned(secret_id))
 
@@ -176,11 +187,13 @@ class SecretCatalogService:
         return await self._require_usable(secret)
 
     async def _require_usable(self, secret: EncryptedSecret) -> EncryptedSecret:
-        if secret.created_by != self._user_context.user_id and not await is_workspace_admin(
-            self._user_context
-        ):
+        allowed = await resolve(PermissionService).check(
+            self._user_context.graph_subject, USE_SECRET, "secret", str(secret.id)
+        )
+        if not allowed:
             raise SecretAccessDeniedError(
-                f"Secret '{secret.secret_name}' can only be used by its creator or a workspace admin."
+                f"You may not use secret '{secret.secret_name}': it is used by its creator, "
+                "a workspace admin, or someone it is shared with."
             )
         return secret
 
@@ -263,6 +276,7 @@ class SecretCatalogService:
                 )
             )
         secret = await self.get_by_name(name)
+        await self._grant_owner(secret)
         await self._audit("secret.create", secret)
         await self._session.commit()
 
@@ -328,8 +342,30 @@ class SecretCatalogService:
             # value. Otherwise the credential is still sitting in the backend
             # with nothing left pointing at it.
             await self._secrets.delete_secret(secret.secret_name)
+        try:
+            await revoke_resource(secret.id)
+        except Exception:
+            # The row is gone; tuples on an id that no longer exists grant nothing.
+            logger.exception("Deleted secret %s but could not remove its graph tuples", secret.id)
 
         logger.info("Deleted user secret from workspace %s", self._workspace_id)
+
+    async def _grant_owner(self, secret: EncryptedSecret) -> None:
+        """Make the creator the secret's manager under the workspace's root project.
+
+        The value is already stored, so a failed grant takes it back out: a
+        secret no one may use would only block its own name.
+        """
+        try:
+            await grant_resource_owner(
+                resource_id=secret.id,
+                workspace_id=self._workspace_id,
+                owner=self._user_context.graph_subject,
+            )
+        except ResourceOwnershipError:
+            await self._session.rollback()
+            await self._secrets.delete_secret(secret.secret_name)
+            raise
 
     async def _require_user_owned(self, secret_id: UUID) -> EncryptedSecret:
         secret = await self.get(secret_id)
