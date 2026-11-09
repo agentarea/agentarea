@@ -2,7 +2,8 @@
 
 The folder root is one agent::
 
-    agent.yaml              name, display_name, description, model, toolsets, setup
+    agent.yaml              name, display_name, description, model, toolsets,
+                            reasoning_effort | reasoning_max_tokens, client, setup
     instructions.md         the agent instruction
     skills/<key>/           a skill: SKILL.md and any files it ships
     mcp/<key>.yaml          an MCP server, attached to the agent: a catalog id or a spec
@@ -50,6 +51,9 @@ class _AgentFile(BaseModel):
     description: str = ""
     model: str | None = None
     toolsets: list[str] = Field(default_factory=list)
+    reasoning_effort: Any = None
+    reasoning_max_tokens: Any = None
+    client: str | None = None
     setup: list[SetupField] = Field(default_factory=list)
 
 
@@ -186,6 +190,9 @@ def load_folder(files: dict[str, str]) -> tuple[Bundle, list[PreviewIssue]]:
                 "instruction": files.get("instructions.md", ""),
                 "model": spec.model,
                 "toolsets": spec.toolsets,
+                "reasoning_effort": spec.reasoning_effort,
+                "reasoning_max_tokens": spec.reasoning_max_tokens,
+                "client": spec.client,
                 "mcps": [m.key for m in mcps],
                 "skills": [s.key for s in skills],
             }

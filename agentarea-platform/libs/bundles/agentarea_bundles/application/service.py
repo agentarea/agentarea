@@ -27,6 +27,7 @@ from agentarea_bundles.application.analyzer import (
 from agentarea_bundles.application.folder import load_folder
 from agentarea_bundles.application.installer import (
     BundleInstaller,
+    BundleInstallError,
     BundleValidationError,
     automation_trigger,
 )
@@ -54,6 +55,10 @@ _RESOURCE_TYPES = {
 }
 
 
+class BundlePlanChangedError(BundleInstallError):
+    """The plan install would carry out is not the one the caller approved."""
+
+
 class BundleService:
     """Analyze package source and install canonical packages into a workspace."""
 
@@ -66,7 +71,7 @@ class BundleService:
         mcp_instance_service: Any,
         skill_service: Any,
         trigger_service: Any,
-        secret_manager: Any = None,
+        secret_manager: Any,
     ) -> None:
         self._repository_factory = repository_factory
         self._user_context = repository_factory.user_context
@@ -141,8 +146,14 @@ class BundleService:
 
     # -- install ------------------------------------------------------------
 
-    async def install(self, package: Bundle, setup_values: dict[str, Any]) -> InstallResult:
-        """Plan, refuse anything the plan blocks, then write.
+    async def install(
+        self, package: Bundle, setup_values: dict[str, Any], plan_digest: str
+    ) -> InstallResult:
+        """Plan, refuse a plan other than the approved one or anything it blocks, then write.
+
+        ``plan_digest`` is the digest of the plan analyze showed. Anything that
+        changed the plan since, here or in the request, refuses the install
+        before it writes, so it never carries out what nobody approved.
 
         All or nothing for what the install creates: a failure removes it again
         and leaves the record of the last install as it was, so the next deploy
@@ -155,6 +166,11 @@ class BundleService:
             existence=self, prior=prior, setup_values=setup_values, checks=self
         )
         preview = await analyzer.analyze(package)
+        if preview.plan_digest != plan_digest:
+            raise BundlePlanChangedError(
+                "the deploy plan changed since it was shown; analyze the bundle again and "
+                "review the new plan"
+            )
         values = effective_setup(package, setup_values, prior)
         block = [
             *preview.block_issues,
@@ -273,15 +289,14 @@ class BundleService:
     async def ref_exists(self, kind: EntityKind, entity_id: str) -> bool:
         return await self._installer().get_entity(kind, entity_id) is not None
 
-    async def channel_credential_keys(self, entity_id: str) -> set[str] | None:
-        if self._secret_manager is None:
-            return None
+    async def channel_credential_keys(self, entity_id: str) -> dict[str, bool] | None:
         installer = self._installer()
         trigger = await self._trigger_service.get_trigger(UUID(entity_id))
         source = await installer.channel_source(trigger) if trigger else None
         if source is None:
             return None
-        return set(await installer.channel_credentials_stored(source))
+        stored = await installer.channel_credentials_stored(source)
+        return {key: isinstance(value, dict) for key, value in stored.items()}
 
     # -- DeployChecks -------------------------------------------------------
 
@@ -303,8 +318,13 @@ class BundleService:
             self._catalog_mcps[catalog_id] = found
         return self._catalog_mcps[catalog_id]
 
-    async def agent_problem(self, model_id: str, toolsets: list[str]) -> str | None:
-        from agentarea_agents.application.agent_service import InvalidModelIdError
+    async def agent_problem(
+        self, model_id: str, toolsets: list[str], client_id: str | None
+    ) -> str | None:
+        from agentarea_agents.application.agent_service import (
+            InvalidClientError,
+            InvalidModelIdError,
+        )
         from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
 
         known = get_code_tools_metadata()
@@ -312,10 +332,14 @@ class BundleService:
         if unknown:
             return f"unknown toolset(s): {', '.join(unknown)}"
         try:
+            client = UUID(client_id) if client_id else None
+        except ValueError:
+            return "client must be the id of a Codex or Claude Code client"
+        try:
             await self._agent_service.validate_config(
-                model_id, [{"type": "code", "name": name} for name in toolsets]
+                model_id, [{"type": "code", "name": name} for name in toolsets], client
             )
-        except InvalidModelIdError as exc:
+        except (InvalidModelIdError, InvalidClientError) as exc:
             return str(exc)
         return None
 

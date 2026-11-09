@@ -1579,10 +1579,12 @@ export const analyzeBundleV1BundlesAnalyzePost = <ThrowOnError extends boolean =
  *
  * A bundle installed here before is redeployed: what it created is updated in
  * place where the plan says so, and what it no longer declares is kept.
- * All or nothing: a failure removes whatever this install had created. A
- * bundle or setup value that is invalid answers 422 (``code: bundle_invalid``);
- * any other install failure answers 400 (``code: bundle_install_failed``). Both
- * are problem+json with the message in ``detail`` and the blocking ``issues``.
+ * All or nothing: a failure removes whatever this install had created. A plan
+ * other than the one ``plan_digest`` names answers 409
+ * (``code: bundle_plan_changed``) and writes nothing. A bundle or setup value
+ * that is invalid answers 422 (``code: bundle_invalid``); any other install
+ * failure answers 400 (``code: bundle_install_failed``). All are problem+json
+ * with the message in ``detail`` and the blocking ``issues``.
  */
 export const installBundleV1BundlesInstallPost = <ThrowOnError extends boolean = false>(options: Options<InstallBundleV1BundlesInstallPostData, ThrowOnError>): RequestResult<InstallBundleV1BundlesInstallPostResponses, InstallBundleV1BundlesInstallPostErrors, ThrowOnError> => (options.client ?? client).post<InstallBundleV1BundlesInstallPostResponses, InstallBundleV1BundlesInstallPostErrors, ThrowOnError>({
     security: [{

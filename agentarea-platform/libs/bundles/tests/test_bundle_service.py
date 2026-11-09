@@ -8,7 +8,7 @@ import pytest
 from agentarea_agents.application.agent_service import InvalidModelIdError
 from agentarea_bundles.application.analyzer import parse_bundle
 from agentarea_bundles.application.installer import BundleInstallError, BundleValidationError
-from agentarea_bundles.application.service import BundleService
+from agentarea_bundles.application.service import BundlePlanChangedError, BundleService
 from agentarea_bundles.schemas.preview import EntityKind, EntityStatus
 from agentarea_bundles.schemas.result import InstallAction, InstalledEntity, InstallResult
 from agentarea_common.auth.context import UserContext
@@ -88,7 +88,13 @@ class FakeAgentSvc(Known):
     async def get(self, id):
         return self._get(id)
 
-    async def validate_config(self, model_id, tools):
+    async def get_with_skills(self, id):
+        return self._get(id)
+
+    async def with_approval_flags(self, agent_id, tools):
+        return tools
+
+    async def validate_config(self, model_id, tools, client_id=None):
         if self.refuse:
             raise self.refuse
 
@@ -161,6 +167,23 @@ class FakeMcpServerSvc:
         return self.catalog.get(external_id)
 
 
+class FakeSecretManager:
+    def __init__(self):
+        self.secrets: dict[str, str] = {}
+
+    async def get_secret(self, name):
+        return self.secrets.get(name)
+
+    async def set_secret(self, name, value):
+        self.secrets[name] = value
+
+
+async def _install(service, package, setup_values):
+    """Install by the plan analyze shows for the same bundle and values."""
+    preview = await service.analyze_bundle(package, setup_values)
+    return await service.install(package, setup_values, preview.plan_digest or "")
+
+
 def _service(
     *,
     record=None,
@@ -183,6 +206,7 @@ def _service(
         mcp_instance_service=FakeGetSvc(),
         skill_service=skill_service or FakeGetSvc(),
         trigger_service=trigger_service or FakeTriggerSvc(),
+        secret_manager=FakeSecretManager(),
     )
     return service, bundles
 
@@ -290,7 +314,9 @@ async def test_a_trigger_under_the_bundle_name_for_another_agent_is_not_the_bund
 
 
 async def test_nothing_recorded_means_everything_is_created():
-    service, _ = _service(triggers=[SimpleNamespace(id=uuid4(), name="seo:daily", agent_id=uuid4())])
+    service, _ = _service(
+        triggers=[SimpleNamespace(id=uuid4(), name="seo:daily", agent_id=uuid4())]
+    )
 
     preview = await service.analyze_bundle(parse_bundle(SEO))
 
@@ -326,7 +352,9 @@ def _installed(*keys):
         canonical=parse_bundle(CHANNEL).model_dump(mode="json"),
         install_result=result.model_dump(mode="json"),
     )
-    agents = FakeAgentSvc({ids["lead"]: SimpleNamespace(id=ids["lead"], status="active")})
+    agents = FakeAgentSvc(
+        {ids["lead"]: SimpleNamespace(id=ids["lead"], status="active", tools=[], skills=[])}
+    )
     triggers = FakeTriggerSvc(
         {ids["inbox"]: SimpleNamespace(id=ids["inbox"], is_active=False, stream_id=uuid4())}
     )
@@ -337,7 +365,7 @@ async def test_a_redeploy_that_writes_no_secret_does_not_demand_it():
     record, agents, triggers = _installed("lead", "inbox")
     service, _ = _service(record=record, agent_service=agents, trigger_service=triggers)
 
-    await service.install(parse_bundle(CHANNEL.replace("instruction: x", "instruction: y")), {})
+    await _install(service, parse_bundle(CHANNEL.replace("instruction: x", "instruction: y")), {})
 
     assert len(agents.updates) == 1
 
@@ -347,7 +375,7 @@ async def test_a_redeploy_that_creates_a_channel_demands_its_secret():
     service, bundles = _service(record=record, agent_service=agents, trigger_service=triggers)
 
     with pytest.raises(BundleValidationError) as refused:
-        await service.install(parse_bundle(CHANNEL), {})
+        await _install(service, parse_bundle(CHANNEL), {})
 
     assert str(refused.value) == "package is not installable: required setup field 'bot' is missing"
     assert [i.entity_key for i in refused.value.issues] == ["bot"]
@@ -371,7 +399,7 @@ async def test_a_model_the_workspace_refuses_blocks_before_any_write():
     service, bundles = _service(agent_service=agents, trigger_service=triggers)
 
     with pytest.raises(BundleValidationError) as refused:
-        await service.install(parse_bundle(CRON), {})
+        await _install(service, parse_bundle(CRON), {})
 
     assert str(refused.value).startswith("package is not installable: agent 'lead'")
     assert any("does not exist" in i.message for i in refused.value.issues)
@@ -398,7 +426,7 @@ async def test_a_cron_the_trigger_service_refuses_blocks_before_any_write():
     service, _ = _service(agent_service=agents, trigger_service=triggers)
 
     with pytest.raises(BundleValidationError) as refused:
-        await service.install(parse_bundle(CRON.replace("0 9 * * *", "0 9 * *")), {})
+        await _install(service, parse_bundle(CRON.replace("0 9 * * *", "0 9 * *")), {})
 
     assert any(i.entity_key == "daily" and "5 or 6" in i.message for i in refused.value.issues)
     assert agents.calls == []
@@ -422,8 +450,8 @@ async def test_an_update_the_caller_may_not_edit_fails_the_whole_deploy():
     service, bundles = _service(record=record, agent_service=agents, trigger_service=triggers)
 
     with pytest.raises(BundleValidationError) as refused:
-        await service.install(
-            parse_bundle(CHANNEL.replace("instruction: x", "instruction: y")), {"bot": "t"}
+        await _install(
+            service, parse_bundle(CHANNEL.replace("instruction: x", "instruction: y")), {"bot": "t"}
         )
 
     assert [i.entity_key for i in refused.value.issues] == ["lead"]
@@ -439,7 +467,7 @@ async def test_a_failed_install_records_nothing_and_reraises():
     service, bundles = _service(agent_service=agents, trigger_service=triggers)
 
     with pytest.raises(RuntimeError, match="scheduler down"):
-        await service.install(parse_bundle(CRON), {})
+        await _install(service, parse_bundle(CRON), {})
 
     assert bundles.writes == []
     [created] = agents.calls
@@ -455,7 +483,7 @@ async def test_a_failed_install_that_updated_nothing_leaves_the_previous_record_
     edited = CHANNEL.replace("agent: lead,", "agent: lead, prompt: hello,")
 
     with pytest.raises(RuntimeError, match="db gone"):
-        await service.install(parse_bundle(edited), {})
+        await _install(service, parse_bundle(edited), {})
 
     assert agents.updates == []
     assert bundles.writes == []
@@ -471,7 +499,7 @@ async def test_a_redeploy_that_fails_after_updating_in_place_records_what_it_wro
     )
 
     with pytest.raises(RuntimeError, match="db gone"):
-        await service.install(parse_bundle(edited), {})
+        await _install(service, parse_bundle(edited), {})
 
     assert len(agents.updates) == 1
     [written] = bundles.writes
@@ -498,7 +526,7 @@ async def test_an_unknown_catalog_mcp_blocks_before_any_write():
     service, bundles = _service(agent_service=agents, mcp_server_service=servers)
 
     with pytest.raises(BundleValidationError) as refused:
-        await service.install(parse_bundle(CATALOG), {"signing": "s" * 40})
+        await _install(service, parse_bundle(CATALOG), {"signing": "s" * 40})
 
     assert str(refused.value).startswith(
         "package is not installable: mcp 'pay' names catalog server 'ru.yookassa/mcp'"
@@ -528,14 +556,15 @@ async def test_a_catalog_mcp_is_looked_up_once_per_service():
 
 
 class EditableOnlyOnce(PermissionService):
-    """Allows the plan's check, then refuses: the edit right was revoked before the write."""
+    """Allows the plans' checks, then refuses: the edit right was revoked before the write."""
 
     def __init__(self):
         self.asked = 0
 
     async def check(self, user_id, permission, resource_type, resource_id):
         self.asked += 1
-        return self.asked == 1
+        # the plan analyze showed, and the one install makes again
+        return self.asked <= 2
 
 
 async def test_the_installer_rechecks_edit_permission_right_before_an_update():
@@ -544,7 +573,9 @@ async def test_the_installer_rechecks_edit_permission_right_before_an_update():
     service, _ = _service(record=record, agent_service=agents, trigger_service=triggers)
 
     with pytest.raises(BundleInstallError):
-        await service.install(parse_bundle(CHANNEL.replace("instruction: x", "instruction: y")), {})
+        await _install(
+            service, parse_bundle(CHANNEL.replace("instruction: x", "instruction: y")), {}
+        )
 
     assert agents.updates == []
 
@@ -558,5 +589,29 @@ async def test_a_stored_install_that_no_longer_validates_blocks_instead_of_dupli
     assert any("tg" in i.message for i in preview.block_issues)
 
     with pytest.raises(BundleInstallError):
-        await service.install(parse_bundle(CHANNEL), {"bot": "t"})
+        await _install(service, parse_bundle(CHANNEL), {"bot": "t"})
     assert bundles.writes == []
+
+
+async def test_an_install_by_a_plan_other_than_the_one_shown_is_refused_before_any_write():
+    record, agents, triggers = _installed("lead", "inbox")
+    service, bundles = _service(record=record, agent_service=agents, trigger_service=triggers)
+    shown = await service.analyze_bundle(parse_bundle(CHANNEL), {})
+
+    edited = parse_bundle(CHANNEL.replace("instruction: x", "instruction: y"))
+    with pytest.raises(BundlePlanChangedError):
+        await service.install(edited, {}, shown.plan_digest or "")
+
+    assert agents.updates == []
+    assert bundles.writes == []
+
+
+async def test_a_setup_value_that_changes_the_plan_needs_its_own_analyze():
+    record, agents, triggers = _installed("lead", "inbox")
+    service, _ = _service(record=record, agent_service=agents, trigger_service=triggers)
+    without = await service.analyze_bundle(parse_bundle(CHANNEL), {})
+    supplied = await service.analyze_bundle(parse_bundle(CHANNEL), {"bot": "t"})
+
+    assert without.plan_digest != supplied.plan_digest
+    with pytest.raises(BundlePlanChangedError):
+        await service.install(parse_bundle(CHANNEL), {"bot": "t"}, without.plan_digest or "")

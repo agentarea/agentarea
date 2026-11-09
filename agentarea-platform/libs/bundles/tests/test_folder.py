@@ -179,7 +179,10 @@ def test_missing_agent_yaml_fails():
         ("agent.yaml", "description: no name\n"),
         ("agent.yaml", ": [ not yaml"),
         ("mcp/gh.yaml", "name: GitHub\n"),
-        ("mcp/gh.yaml", "catalog: io.github/github\njson_spec: {type: url, url: 'https://x.test'}\n"),
+        (
+            "mcp/gh.yaml",
+            "catalog: io.github/github\njson_spec: {type: url, url: 'https://x.test'}\n",
+        ),
         ("schedules/daily.md", "no frontmatter at all\n"),
         ("schedules/daily.md", "---\ntimezone: UTC\n---\nprompt\n"),
         ("policies/p.yaml", "target: spend\neffect: nuke\n"),
@@ -274,3 +277,29 @@ def test_a_merge_key_bomb_in_a_folder_file_is_refused():
 
     with pytest.raises(BundleParseError, match=r"mcp/m\.yaml: .*aliases"):
         load_folder(_files(**{"mcp/m.yaml": "\n".join(lines)}))
+
+
+def test_agent_yaml_sets_reasoning_and_a_client_by_id():
+    client = "0b1c2d3e-0000-4000-8000-000000000001"
+    agent_yaml = AGENT_YAML + f"reasoning_effort: high\nclient: '{client}'\n"
+    bundle, _ = load_folder({"agent.yaml": agent_yaml})
+
+    [agent] = bundle.agents
+    assert (agent.reasoning_effort, agent.reasoning_max_tokens, agent.client) == (
+        "high",
+        None,
+        client,
+    )
+
+
+@pytest.mark.parametrize(
+    ("extra", "match"),
+    [
+        ("reasoning_effort: high\nreasoning_max_tokens: 100\n", "not both"),
+        ("reasoning_max_tokens: -1\n", "positive integer"),
+        ("client: my-codex\n", "client must be the id"),
+    ],
+)
+def test_agent_yaml_refuses_a_bad_reasoning_or_client(extra, match):
+    with pytest.raises(BundleParseError, match=rf"(?s)agent\.yaml: .*{match}"):
+        load_folder({"agent.yaml": AGENT_YAML + extra})

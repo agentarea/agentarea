@@ -1329,8 +1329,19 @@
         "type": "object"
       },
       "AnalyzeRequest": {
-        "description": "Analyze a bundle into an import preview.\n\nProvide exactly one of ``source`` (pasted text), ``source_url`` (a URL the\nserver fetches behind the SSRF guard) or ``files`` (an agent folder).\n``source_url`` is what a landing-page deep-link (`/bundles/import?src=<url>`)\nuses for one-click installs; ``files`` is what ``agentarea deploy`` sends.",
+        "description": "Analyze a bundle into an import preview.\n\nProvide exactly one of ``source`` (pasted text), ``source_url`` (a URL the\nserver fetches behind the SSRF guard), ``files`` (an agent folder) or\n``bundle`` (a canonical bundle, e.g. one edited after an earlier analyze).\n``source_url`` is what a landing-page deep-link (`/bundles/import?src=<url>`)\nuses for one-click installs; ``files`` is what ``agentarea deploy`` sends.",
         "properties": {
+          "bundle": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Bundle-Input"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A canonical bundle, as an earlier analyze returned it."
+          },
           "files": {
             "anyOf": [
               {
@@ -1348,7 +1359,7 @@
           },
           "setup_values": {
             "additionalProperties": true,
-            "description": "Setup values the install will be given, so a redeploy plan shows what a changed value updates.",
+            "description": "Setup values the install will be given, so a redeploy plan shows what a changed value updates. The plan_digest holds only for these values.",
             "title": "Setup Values",
             "type": "object"
           },
@@ -2525,6 +2536,18 @@
         "additionalProperties": false,
         "description": "An agent to create for the package.",
         "properties": {
+          "client": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The id of a Codex or Claude Code client of the workspace whose runner runs the agent's tasks, or a ${setup.x} reference to one. Unset runs them on the platform.",
+            "title": "Client"
+          },
           "description": {
             "default": "",
             "maxLength": 1000,
@@ -2566,6 +2589,30 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A reasoning level the model takes, e.g. low or high. Not with reasoning_max_tokens.",
+            "title": "Reasoning Effort"
+          },
+          "reasoning_max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A token budget for the model's reasoning. Not with reasoning_effort.",
+            "title": "Reasoning Max Tokens"
           },
           "skills": {
             "description": "BundleSkill keys to attach.",
@@ -6466,6 +6513,18 @@
             "title": "Issues",
             "type": "array"
           },
+          "plan_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Names this plan: the bundle and what it does with each entity. Install takes it and refuses with 409 when the plan it would carry out is no longer this one. Null when there is no plan to install.",
+            "title": "Plan Digest"
+          },
           "setup": {
             "items": {
               "$ref": "#/components/schemas/SetupField"
@@ -6553,10 +6612,16 @@
         "type": "string"
       },
       "InstallRequest": {
-        "description": "Install a (previously analyzed, possibly edited) canonical bundle.",
+        "description": "Install a canonical bundle by the plan analyze showed for it.",
         "properties": {
           "bundle": {
             "$ref": "#/components/schemas/Bundle-Input"
+          },
+          "plan_digest": {
+            "description": "The plan_digest analyze returned for this bundle and these setup values: the plan the caller approved.",
+            "minLength": 1,
+            "title": "Plan Digest",
+            "type": "string"
           },
           "setup_values": {
             "additionalProperties": true,
@@ -6566,7 +6631,8 @@
           }
         },
         "required": [
-          "bundle"
+          "bundle",
+          "plan_digest"
         ],
         "title": "InstallRequest",
         "type": "object"
@@ -25763,7 +25829,7 @@
     },
     "/v1/workspaces/{workspace}/bundles/install": {
       "post": {
-        "description": "Install a canonical bundle: MCP instances, skills, agents and automations.\n\nA bundle installed here before is redeployed: what it created is updated in\nplace where the plan says so, and what it no longer declares is kept.\nAll or nothing: a failure removes whatever this install had created. A\nbundle or setup value that is invalid answers 422 (``code: bundle_invalid``);\nany other install failure answers 400 (``code: bundle_install_failed``). Both\nare problem+json with the message in ``detail`` and the blocking ``issues``.",
+        "description": "Install a canonical bundle: MCP instances, skills, agents and automations.\n\nA bundle installed here before is redeployed: what it created is updated in\nplace where the plan says so, and what it no longer declares is kept.\nAll or nothing: a failure removes whatever this install had created. A plan\nother than the one ``plan_digest`` names answers 409\n(``code: bundle_plan_changed``) and writes nothing. A bundle or setup value\nthat is invalid answers 422 (``code: bundle_invalid``); any other install\nfailure answers 400 (``code: bundle_install_failed``). All are problem+json\nwith the message in ``detail`` and the blocking ``issues``.",
         "operationId": "install_bundle_v1_bundles_install_post",
         "parameters": [
           {

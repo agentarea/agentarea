@@ -9,7 +9,7 @@ related:
   - /guides/agents/attach-skills
   - /guides/triggers/schedule-an-agent
   - /guides/governance/set-a-budget
-last_updated: 2026-10-21
+last_updated: 2026-11-09
 ---
 
 An agent folder is a directory of plain files — `agent.yaml`, an instruction
@@ -32,7 +32,7 @@ local files at all.
 
 | Path | Produces | Required |
 |---|---|---|
-| `agent.yaml` | name, display name, description, model, toolsets, setup fields | Yes |
+| `agent.yaml` | name, display name, description, model, reasoning, harness client, toolsets, setup fields | Yes |
 | `instructions.md` | the agent's instruction | No — empty instruction if omitted |
 | `skills/<key>/` | a skill attached to the agent: `SKILL.md` and any files it ships | No |
 | `mcp/<key>.yaml` | an MCP server attached to the agent: a catalog server or a spec | No |
@@ -84,6 +84,21 @@ into `${setup.<key>}`.
     key a redeploy matches against, so renaming it starts a new agent rather
     than updating this one. `model` takes a literal model instance id or, as
     above, a `${setup.<key>}` reference resolved from `--set` at deploy time.
+
+    Three more settings are optional:
+
+    ```yaml
+    reasoning_effort: high
+    client: ${setup.runner_client_id}
+    ```
+
+    `reasoning_effort` is a level the model takes, such as `low` or `high`;
+    `reasoning_max_tokens` is a token budget instead. Set one or neither,
+    never both. `client` runs the agent's tasks through the runner of a Codex
+    or Claude Code client of the workspace, named by the client's id — a
+    literal id or a `${setup.<key>}` reference. A client's name is not unique,
+    so a name is refused; a client you may not use, or one that is no runner's,
+    blocks the deploy.
   </Step>
 
   <Step title="Attach an MCP server">
@@ -208,6 +223,11 @@ into `${setup.<key>}`.
     same plan as `--dry-run` and asks for confirmation before it writes; add
     `--yes` to skip the prompt in a script or CI job. `--workspace` can instead
     be set once with `agentarea workspace use acme`.
+
+    The install carries out exactly the plan you confirmed. If anything
+    changed it in between — a teammate's deploy, an entity deleted by hand —
+    the install refuses with `the deploy plan changed since it was shown` and
+    writes nothing; run `deploy` again to see the new plan.
   </Step>
 </Steps>
 
@@ -231,15 +251,28 @@ re-creating everything:
   `schedules/daily.md` and redeploy, and the schedule it created keeps
   running — the plan shows it as `orphaned`, not deleted. There is no prune
   flag; removing an entity for real is a manual step today.
-- An entity with the same name that this folder did not create — an agent
-  someone else made by hand, for instance — is reused, not duplicated, and
-  shows as `already exists`.
+- Nothing is matched by name. An agent, MCP server, skill or schedule that
+  only carries the same name — one a teammate made by hand, for instance — is
+  not this folder's, and the deploy creates its own. Something an earlier
+  install linked instead of creating shows as `already exists` and is never
+  changed. A rule with the same subject, target and effect as a policy file
+  is the one exception: the deploy reuses it rather than writing a second,
+  and the plan says `already exists`.
+- An agent this folder created and someone has since archived counts as
+  gone: the deploy creates the agent again.
+- A redeploy changes only the agent's tools and skills the folder declares or
+  the last deploy attached. A tool, delegate or skill added to the agent in
+  the workspace stays, a declared tool keeps the settings it was given there,
+  and every approval on the agent's tools stays as it was. `reasoning_effort`,
+  `reasoning_max_tokens` and `client` are set only when `agent.yaml` names
+  them, or named them last time and no longer does, which clears them.
 - A redeploy does not ask for a secret again. Repeat a `--set` only for a
   value an entity needs for the first time (it is being created) or one you
   are intentionally replacing. A channel's stored credentials — a bot token,
   for instance — are rewritten only when you pass a new value for them;
   leave `--set telegram_bot_token=...` out and the one already stored keeps
-  working.
+  working. A credential that names a workspace secret is never replaced by a
+  value: passing one for it blocks the deploy, so change that secret instead.
 - Updating an entity this folder owns needs edit permission on it. If a
   teammate changed its permissions, or someone else now owns it by hand, the
   deploy stops on that entity instead of silently skipping it.

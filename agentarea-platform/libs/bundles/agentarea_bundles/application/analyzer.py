@@ -68,7 +68,9 @@ class ExistenceChecker(Protocol):
     async def ref_exists(self, kind: EntityKind, entity_id: str) -> bool: ...
     async def find_trigger(self, name: str, agent_id: str, recorded: str | None) -> str | None: ...
     async def find_policy(self, policy: BundlePolicy, agent_id: str | None) -> str | None: ...
-    async def channel_credential_keys(self, entity_id: str) -> set[str] | None: ...
+    async def channel_credential_keys(self, entity_id: str) -> dict[str, bool] | None:
+        """The channel's stored credential keys, each True when it names a workspace secret."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -83,7 +85,9 @@ class DeployChecks(Protocol):
     """Questions only the workspace can answer, asked of every write a plan makes."""
 
     async def catalog_mcp(self, catalog_id: str) -> CatalogMcp | None: ...
-    async def agent_problem(self, model_id: str, toolsets: list[str]) -> str | None: ...
+    async def agent_problem(
+        self, model_id: str, toolsets: list[str], client_id: str | None
+    ) -> str | None: ...
     async def automation_problem(
         self, package: Bundle, automation: BundleAutomation
     ) -> str | None: ...
@@ -211,6 +215,19 @@ def _refs_in(value: Any) -> set[str]:
     return set()
 
 
+def secret_reference_issue(channel_key: str, keys: list[str]) -> PreviewIssue:
+    """A supplied value would replace a credential that names a workspace secret."""
+    return PreviewIssue(
+        severity=IssueSeverity.BLOCK,
+        message=(
+            f"channel '{channel_key}': {', '.join(keys)} name a workspace secret, which a "
+            "deploy never replaces with a value; change that secret, or leave the setup "
+            "value out"
+        ),
+        entity_key=channel_key,
+    )
+
+
 def linked_id(result: InstallResult, kind: EntityKind, key: str) -> str | None:
     """The id dependants of ``key`` were pointed at by ``result``, if any."""
     return next(
@@ -314,7 +331,7 @@ class _NoExistence:
     async def find_policy(self, policy: BundlePolicy, agent_id: str | None) -> str | None:
         return None
 
-    async def channel_credential_keys(self, entity_id: str) -> set[str] | None:
+    async def channel_credential_keys(self, entity_id: str) -> dict[str, bool] | None:
         return None
 
 
@@ -482,7 +499,18 @@ class BundleAnalyzer:
             entities=entities,
             issues=issues,
             installable=installable,
+            plan_digest=self._digest(package, entities),
         )
+
+    def _digest(self, package: Bundle, entities: list[PreviewEntity]) -> str:
+        """sha256 of the bundle and what the plan does with each entity, and to which id."""
+        plan: list[list[str | None]] = [
+            [e.kind.value, e.key, e.status.value, self._ids.get((e.kind, e.key))] for e in entities
+        ]
+        canonical = {"bundle": package.model_dump(mode="json"), "plan": sorted(plan, key=str)}
+        return hashlib.sha256(
+            json.dumps(canonical, sort_keys=True, default=str).encode()
+        ).hexdigest()
 
     # -- plan -----------------------------------------------------------------
 
@@ -503,7 +531,7 @@ class BundleAnalyzer:
                 if status is EntityStatus.WILL_CREATE:
                     needed |= _refs_in(item.model_dump(mode="json"))
                 elif status is EntityStatus.WILL_UPDATE and kind is EntityKind.AGENT:
-                    needed |= set(setup_refs(item.model))
+                    needed |= set(setup_refs(item.model)) | set(setup_refs(item.client))
                 elif kind is EntityKind.CHANNEL and item.key in self._unfinished_channels:
                     needed |= _refs_in(item.bindings)
         return needed
@@ -580,25 +608,29 @@ class BundleAnalyzer:
             if self._planned.get((EntityKind.AGENT, agent.key)) not in _WRITES:
                 continue
             model_id = resolve_placeholders(agent.model or "", self._values)
-            optional = [
-                key
-                for key in setup_refs(model_id)
-                if (field := package.setup_field(key)) is not None and not field.required
-            ]
-            if optional:
-                issues.append(
-                    PreviewIssue(
-                        severity=IssueSeverity.BLOCK,
-                        message=(
-                            f"agent '{agent.key}': model needs setup field(s) "
-                            f"{', '.join(optional)}, which have no value"
-                        ),
-                        entity_key=agent.key,
+            client = resolve_placeholders(agent.client, self._values) if agent.client else None
+            unresolved = False
+            for setting, value in (("model", model_id), ("client", client or "")):
+                optional = [
+                    key
+                    for key in setup_refs(value)
+                    if (field := package.setup_field(key)) is not None and not field.required
+                ]
+                if optional:
+                    issues.append(
+                        PreviewIssue(
+                            severity=IssueSeverity.BLOCK,
+                            message=(
+                                f"agent '{agent.key}': {setting} needs setup field(s) "
+                                f"{', '.join(optional)}, which have no value"
+                            ),
+                            entity_key=agent.key,
+                        )
                     )
-                )
-            if not model_id or setup_refs(model_id):
+                unresolved = unresolved or bool(setup_refs(value))
+            if not model_id or unresolved:
                 continue
-            problem = await checks.agent_problem(model_id, agent.toolsets)
+            problem = await checks.agent_problem(model_id, agent.toolsets, client)
             if problem:
                 issues.append(
                     PreviewIssue(
@@ -644,6 +676,7 @@ class BundleAnalyzer:
                 continue
             if ref.id is None or not await self._existence.ref_exists(ref.kind, ref.id):
                 continue
+            self._ids[(ref.kind, ref.key)] = ref.id
             entities.append(
                 PreviewEntity(
                     kind=ref.kind,
@@ -920,13 +953,13 @@ class BundleAnalyzer:
                         entity_key=agent.key,
                     )
                 )
-            else:
-                for key in setup_refs(agent.model):
+            for setting, value in (("model", agent.model), ("client", agent.client)):
+                for key in setup_refs(value):
                     if key not in setup_keys:
                         issues.append(
                             PreviewIssue(
                                 severity=IssueSeverity.BLOCK,
-                                message=f"agent '{agent.key}' model references unknown setup field '{key}'",
+                                message=f"agent '{agent.key}' {setting} references unknown setup field '{key}'",
                                 entity_key=agent.key,
                             )
                         )
@@ -1032,11 +1065,19 @@ class BundleAnalyzer:
                 ),
             )
             if status in (EntityStatus.UNCHANGED, EntityStatus.WILL_UPDATE) and channel.bindings:
-                if await self._unfinished(channel):
+                entity_id = self._ids.get((EntityKind.CHANNEL, channel.key))
+                stored = (
+                    await self._existence.channel_credential_keys(entity_id) if entity_id else None
+                )
+                if stored is not None and not (set(channel.bindings) & stored.keys()):
+                    # Nothing stored yet, so a redeploy writes every credential it resolves.
                     self._unfinished_channels.add(channel.key)
                     status = EntityStatus.WILL_UPDATE
-                elif channel_credentials(channel, self._values, self._supplied_keys()):
+                elif rewrite := channel_credentials(channel, self._values, self._supplied_keys()):
                     status = EntityStatus.WILL_UPDATE
+                    referenced = sorted(k for k in rewrite if (stored or {}).get(k))
+                    if referenced:
+                        issues.append(secret_reference_issue(channel.key, referenced))
                 self._planned[(EntityKind.CHANNEL, channel.key)] = status
             entities.append(
                 PreviewEntity(
@@ -1047,14 +1088,6 @@ class BundleAnalyzer:
                     detail=f"{channel.type}, enabled={channel.enabled}",
                 )
             )
-
-    async def _unfinished(self, channel: BundleChannel) -> bool:
-        """The channel holds no credentials yet, so a redeploy writes every one it resolves."""
-        entity_id = self._ids[(EntityKind.CHANNEL, channel.key)]
-        if entity_id is None:
-            return True
-        stored = await self._existence.channel_credential_keys(entity_id)
-        return stored is not None and not (set(channel.bindings) & stored)
 
     async def _analyze_policies(
         self,

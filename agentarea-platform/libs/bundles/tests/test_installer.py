@@ -132,13 +132,28 @@ class FakeSkillSvc:
 
 
 class FakeAgentSvc:
-    def __init__(self, known=None):
+    def __init__(self, known=None, approvals=None):
         self.known = _by_id(known)
+        # {tool name -> ticked} the agent's approval rules set
+        self.approvals = approvals or {}
         self.calls = []
         self.updates = []
 
     async def get(self, id):
         return self.known.get(str(id))
+
+    async def get_with_skills(self, id):
+        return self.known.get(str(id))
+
+    async def with_approval_flags(self, agent_id, tools):
+        flagged = []
+        for tool in tools:
+            if tool["name"] in self.approvals:
+                settings = {**(tool.get("settings") or {})}
+                settings["requires_user_confirmation"] = self.approvals[tool["name"]]
+                tool = {**tool, "settings": settings}
+            flagged.append(tool)
+        return flagged
 
     async def create_agent(self, payload):
         self.calls.append(payload)
@@ -261,6 +276,7 @@ def _installer(**overrides):
         "trigger_repository": FakeTriggerRepo(),
         "governance_service": FakeGovernanceSvc(),
         "user_context": UserContext(user_id="u", workspace_id="w", admin_workspaces=["w"]),
+        "secret_manager": FakeSecretManager(),
     }
     deps.update(overrides)
     return BundleInstaller(**deps), deps
@@ -455,6 +471,9 @@ class FakeSecretManager:
     async def get_secret(self, name):
         return self.secrets.get(name)
 
+    async def delete_secret(self, name):
+        self.secrets.pop(name, None)
+
 
 CHANNEL = """
 schema_version: "0.1.0"
@@ -517,15 +536,6 @@ async def test_a_channel_type_the_catalog_lacks_refuses_the_install(monkeypatch)
     assert deps["trigger_service"].created == []
 
 
-async def test_channel_created_without_secret_manager():
-    # No secret manager → trigger still provisioned; credential just isn't stored.
-    inst, deps = _installer(secret_manager=None)
-    res = await inst.install(parse_bundle(CHANNEL), {"bot": "x"})
-    actions = {(e.kind, e.key): e.action for e in res.entities}
-    assert actions[("channel", "inbox")] == InstallAction.CREATED
-    assert len(deps["trigger_service"].created) == 1
-
-
 async def test_channel_on_a_missing_agent_refuses_the_install():
     pkg = parse_bundle(
         """
@@ -552,7 +562,9 @@ def _reused_before():
         result=InstallResult(
             bundle_name="seo",
             entities=[
-                InstalledEntity(kind=kind, key=key, name=key, action=InstallAction.REUSED, id=str(i))
+                InstalledEntity(
+                    kind=kind, key=key, name=key, action=InstallAction.REUSED, id=str(i)
+                )
                 for kind, key, i in (
                     (EntityKind.MCP, "gh", instance.id),
                     (EntityKind.SKILL, "sk", skill.id),
@@ -1202,7 +1214,7 @@ def _deployed(action=InstallAction.CREATED, text=DEPLOYED):
     def entity(key, **fields):
         return {ids[key]: SimpleNamespace(id=ids[key], **fields)}
 
-    agents = FakeAgentSvc(known=entity("lead", name="Lead", status="active"))
+    agents = FakeAgentSvc(known=entity("lead", name="Lead", status="active", tools=[], skills=[]))
 
     triggers = FakeTriggerSvc(
         known={
@@ -1443,7 +1455,9 @@ async def test_a_redeploy_sets_enabled_only_when_the_file_changed_it():
     prior, ids, services = _deployed()
     inst, deps = _installer(**services)
 
-    pkg = parse_bundle(DEPLOYED.replace("params: {amount_usd: 50}}", "params: {amount_usd: 50}, enabled: false}"))
+    pkg = parse_bundle(
+        DEPLOYED.replace("params: {amount_usd: 50}}", "params: {amount_usd: 50}, enabled: false}")
+    )
     await inst.install(pkg, {}, prior=prior, approved_updates=_every(pkg))
 
     [(_, fields)] = deps["governance_service"].updates
@@ -1975,3 +1989,157 @@ async def test_a_partial_failure_removes_only_the_entity_it_interrupted():
     await inst._undo_created(unfinished_only=True)
 
     assert deleted == ["secret", "stream"]
+
+
+# -- a redeploy manages only what the folder declares --------------------------
+
+
+def _agent_with(services, ids, *, tools, skills=(), approvals=None):
+    agent = services["agent_service"].known[str(ids["lead"])]
+    agent.tools = tools
+    agent.skills = [SimpleNamespace(id=i) for i in skills]
+    services["agent_service"].approvals = approvals or {}
+
+
+async def test_a_redeploy_keeps_the_tools_and_skills_added_in_the_workspace():
+    prior, ids, services = _deployed()
+    ui_skill = uuid4()
+    _agent_with(
+        services,
+        ids,
+        tools=[
+            {
+                "type": "mcp",
+                "name": str(ids["gh"]),
+                "settings": {"allowed_tools": [{"tool_name": "push"}]},
+            },
+            {"type": "code", "name": "agentarea/shell"},
+            {"type": "agent", "name": "helper", "settings": {"agent_id": str(uuid4())}},
+        ],
+        skills=[ids["sk"], ui_skill],
+    )
+    inst, deps = _installer(**services)
+
+    pkg = parse_bundle(
+        DEPLOYED.replace("instruction: x", "instruction: y, toolsets: [agentarea/files]")
+    )
+    await inst.install(pkg, {}, prior=prior, approved_updates=_every(pkg))
+
+    [(_, payload)] = deps["agent_service"].updates
+    tools = [t.model_dump(exclude_none=True) for t in payload.tools]
+    assert [(t["type"], t["name"]) for t in tools] == [
+        ("mcp", str(ids["gh"])),
+        ("code", "agentarea/shell"),
+        ("agent", "helper"),
+        ("code", "agentarea/files"),
+    ]
+    # the settings the workspace gave a declared tool stay
+    assert tools[0]["settings"]["allowed_tools"][0]["tool_name"] == "push"
+    assert payload.skill_ids == [ids["sk"], ui_skill]
+
+
+async def test_a_redeploy_drops_what_the_folder_no_longer_declares():
+    previous = DEPLOYED.replace("instruction: x,", "instruction: x, toolsets: [agentarea/shell],")
+    prior, ids, services = _deployed(text=previous)
+    _agent_with(
+        services,
+        ids,
+        tools=[
+            {"type": "mcp", "name": str(ids["gh"])},
+            {"type": "code", "name": "agentarea/shell"},
+            {"type": "code", "name": "agentarea/web"},
+        ],
+        skills=[ids["sk"]],
+    )
+    inst, deps = _installer(**services)
+
+    pkg = parse_bundle(DEPLOYED.replace("mcps: [gh], skills: [sk]", "mcps: [], skills: []"))
+    await inst.install(pkg, {}, prior=prior, approved_updates=_every(pkg))
+
+    [(_, payload)] = deps["agent_service"].updates
+    assert [t.name for t in payload.tools] == ["agentarea/web"]
+    assert payload.skill_ids == []
+
+
+async def test_a_redeploy_keeps_every_approval_the_agent_has():
+    prior, ids, services = _deployed()
+    _agent_with(
+        services,
+        ids,
+        tools=[{"type": "code", "name": "agentarea/web"}],
+        approvals={"agentarea/web": True, "agentarea/shell": True},
+    )
+    inst, deps = _installer(**services)
+
+    pkg = parse_bundle(
+        DEPLOYED.replace("instruction: x,", "instruction: y, toolsets: [agentarea/shell],")
+    )
+    await inst.install(pkg, {}, prior=prior, approved_updates=_every(pkg))
+
+    [(_, payload)] = deps["agent_service"].updates
+    flags = {
+        t.name: t.settings.requires_user_confirmation for t in payload.tools if t.type == "code"
+    }
+    assert flags == {"agentarea/web": True, "agentarea/shell": True}
+
+
+async def test_an_agent_is_created_with_its_reasoning_and_client():
+    client = uuid4()
+    pkg = parse_bundle(
+        FULL.replace(
+            "model: gpt-4o,", f'model: gpt-4o, reasoning_effort: high, client: "{client}",'
+        )
+    )
+    inst, deps = _installer()
+    await inst.install(pkg, {"token": "t"})
+
+    (created,) = deps["agent_service"].calls
+    assert (created.reasoning_effort, created.reasoning_max_tokens, created.client_id) == (
+        "high",
+        None,
+        client,
+    )
+
+
+async def test_a_redeploy_sets_reasoning_and_client_only_when_the_folder_names_them():
+    prior, _, services = _deployed()
+    inst, deps = _installer(**services)
+    pkg = parse_bundle(DEPLOYED.replace("instruction: x", "instruction: y"))
+    await inst.install(pkg, {}, prior=prior, approved_updates=_every(pkg))
+
+    [(_, untouched)] = deps["agent_service"].updates
+    assert {"reasoning_effort", "reasoning_max_tokens", "client_id"}.isdisjoint(
+        untouched.model_dump(exclude_unset=True)
+    )
+
+    declared = DEPLOYED.replace("model: gpt-4o,", "model: gpt-4o, reasoning_max_tokens: 2048,")
+    prior, _, services = _deployed()
+    inst, deps = _installer(**services)
+    pkg = parse_bundle(declared)
+    await inst.install(pkg, {}, prior=prior, approved_updates=_every(pkg))
+
+    [(_, payload)] = deps["agent_service"].updates
+    assert payload.model_dump(exclude_unset=True)["reasoning_effort"] is None
+    assert payload.reasoning_max_tokens == 2048
+
+    # dropped from the folder, the setting is cleared again
+    prior, _, services = _deployed(text=declared)
+    inst, deps = _installer(**services)
+    await inst.install(
+        parse_bundle(DEPLOYED), {}, prior=prior, approved_updates=_every(parse_bundle(DEPLOYED))
+    )
+    [(_, cleared)] = deps["agent_service"].updates
+    assert cleared.model_dump(exclude_unset=True)["reasoning_max_tokens"] is None
+
+
+async def test_a_credential_that_names_a_secret_is_never_replaced_by_a_value():
+    prior, ids, services = _deployed()
+    stored = '{"bot_token": {"secret_name": "tg-bot"}}'
+    sm = FakeSecretManager({ids["credentials"]: stored})
+    inst, _ = _installer(**services, secret_manager=sm)
+
+    pkg = parse_bundle(DEPLOYED)
+    with pytest.raises(BundleValidationError, match="bot_token name a workspace secret"):
+        await inst.install(pkg, {"bot": "literal"}, prior=prior, approved_updates=_every(pkg))
+
+    assert sm.secrets == {ids["credentials"]: stored}

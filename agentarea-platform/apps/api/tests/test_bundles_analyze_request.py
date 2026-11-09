@@ -10,6 +10,11 @@ def test_files_is_a_source_of_its_own():
     assert body.files == {"agent.yaml": "name: a\n"}
 
 
+def test_a_canonical_bundle_is_a_source_of_its_own():
+    body = AnalyzeRequest(bundle={"name": "a"})
+    assert body.bundle is not None and body.bundle.name == "a"
+
+
 def test_setup_values_ride_along_so_the_plan_sees_them():
     body = AnalyzeRequest(files={"agent.yaml": "name: a\n"}, setup_values={"model": "m2"})
     assert body.setup_values == {"model": "m2"}
@@ -23,6 +28,7 @@ def test_setup_values_ride_along_so_the_plan_sees_them():
         {"files": {}},
         {"source": "name: a", "files": {"agent.yaml": "name: a"}},
         {"source_url": "https://x.test/b.yaml", "files": {"agent.yaml": "name: a"}},
+        {"source": "name: a", "bundle": {"name": "a"}},
     ],
 )
 def test_exactly_one_source(payload):

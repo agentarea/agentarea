@@ -169,6 +169,10 @@ export async function runDeploy(
 		return 1;
 	}
 
+	// Install gets exactly the values the shown plan was made for; the server
+	// fills in defaults itself.
+	const sent: Record<string, unknown> = {...given};
+
 	if (setup.missing.length > 0 && !flags['dryRun']) {
 		if (!interactive()) {
 			console.error(
@@ -187,10 +191,10 @@ export async function runDeploy(
 				return 1;
 			}
 
-			setup.values[field.key] = value;
+			sent[field.key] = value;
 		}
 
-		preview = await analyze(setup.values);
+		preview = await analyze(sent);
 		if (!preview) {
 			return 1;
 		}
@@ -224,8 +228,17 @@ export async function runDeploy(
 		}
 	}
 
+	if (!preview.plan_digest) {
+		console.error('The plan cannot be installed; nothing was deployed.');
+		return 1;
+	}
+
 	const installed = await installBundleV1BundlesInstallPost({
-		body: {bundle: preview.bundle, setup_values: setup.values},
+		body: {
+			bundle: preview.bundle,
+			setup_values: sent,
+			plan_digest: preview.plan_digest,
+		},
 	});
 	if (installed.error ?? !installed.data) {
 		console.error(`Install failed: ${describeApiError(installed.error)}`);

@@ -21,6 +21,8 @@ from agentarea_llm.domain.models import ModelKind
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 
 from agentarea_agents.application.approval_sync import (
+    apply_approval_targets,
+    approval_targets_for_agents,
     approval_targets_from_tools,
     release_unticked_approvals,
     strip_confirmation_flags,
@@ -258,10 +260,26 @@ class AgentService(BaseCrudService[Agent]):
             )
         return model_id
 
-    async def validate_config(self, model_id: str | None, tools: list[dict[str, Any]]) -> None:
-        """Refuse what create_agent would refuse about the model and code tools, writing nothing."""
+    async def validate_config(
+        self, model_id: str | None, tools: list[dict[str, Any]], client_id: UUID | None = None
+    ) -> None:
+        """Refuse what create_agent would refuse about the model, code tools and client, writing nothing."""
         await self._validate_tool_models(tools)
         await self._validate_model_id(model_id)
+        await self._validate_client_id(client_id)
+
+    async def with_approval_flags(
+        self, agent_id: UUID, tools: builtins.list[dict]
+    ) -> builtins.list[dict]:
+        """``tools`` with the approval flags the agent's rules set, as its editor shows them.
+
+        An update that saves them keeps every approval as it is: a tool sent
+        without its flag reads as unticked, which removes the rule.
+        """
+        targets = await approval_targets_for_agents(
+            self.repository_factory.session, self._user_context, [agent_id]
+        )
+        return apply_approval_targets(tools, targets.get(agent_id, set()))
 
     async def _model_instance_kind(self, model_id: str, setting: str) -> str:
         """The kind of the workspace's model instance ``model_id``, or reject it."""

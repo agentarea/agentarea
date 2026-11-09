@@ -1,5 +1,7 @@
 """Analyzer / import-preview tests."""
 
+from uuid import UUID
+
 import pytest
 from agentarea_bundles.application.analyzer import (
     BundleAnalyzer,
@@ -250,9 +252,11 @@ def _prior(text=DEPLOYED, action=InstallAction.CREATED):
 class _Refs:
     """Every previously installed id still resolves; nothing else exists by name."""
 
-    def __init__(self, gone=(), no_credentials=(), triggers=(), rules=None):
+    def __init__(self, gone=(), no_credentials=(), triggers=(), rules=None, referenced=()):
         self.gone = set(gone)
         self.no_credentials = set(no_credentials)
+        # channels whose stored bot_token names a workspace secret
+        self.referenced = set(referenced)
         # (name, agent id, trigger id) of the workspace's triggers
         self.triggers = list(triggers)
         # {(policy key, subject agent id or None) -> rule id}
@@ -262,7 +266,9 @@ class _Refs:
         return entity_id not in self.gone
 
     async def channel_credential_keys(self, entity_id):
-        return set() if entity_id in self.no_credentials else {"bot_token"}
+        if entity_id in self.no_credentials:
+            return {}
+        return {"bot_token": entity_id in self.referenced}
 
     async def find_trigger(self, name, agent_id, recorded):
         return next(
@@ -297,9 +303,7 @@ async def test_edited_entities_will_update():
         .replace('content: "# a"', 'content: "# b"')
         .replace("amount_usd: 50", "amount_usd: 60")
     )
-    preview = await BundleAnalyzer(existence=_Refs(), prior=_prior()).analyze(
-        parse_bundle(edited)
-    )
+    preview = await BundleAnalyzer(existence=_Refs(), prior=_prior()).analyze(parse_bundle(edited))
     s = _statuses(preview)
     assert s[("agent", "lead")] == EntityStatus.WILL_UPDATE
     assert s[("skill", "sk")] == EntityStatus.WILL_UPDATE
@@ -312,9 +316,7 @@ async def test_new_key_will_create_and_dependent_agent_will_update():
     added = DEPLOYED.replace(
         "skills:\n", 'skills:\n  - {key: sk2, name: Extra, source_type: content, content: "# e"}\n'
     ).replace("skills: [sk]", "skills: [sk, sk2]")
-    preview = await BundleAnalyzer(existence=_Refs(), prior=_prior()).analyze(
-        parse_bundle(added)
-    )
+    preview = await BundleAnalyzer(existence=_Refs(), prior=_prior()).analyze(parse_bundle(added))
     s = _statuses(preview)
     assert s[("skill", "sk2")] == EntityStatus.WILL_CREATE
     assert s[("agent", "lead")] == EntityStatus.WILL_UPDATE
@@ -322,9 +324,7 @@ async def test_new_key_will_create_and_dependent_agent_will_update():
 
 async def test_removed_keys_are_orphaned_not_deleted():
     trimmed = DEPLOYED.split("automations:")[0]
-    preview = await BundleAnalyzer(existence=_Refs(), prior=_prior()).analyze(
-        parse_bundle(trimmed)
-    )
+    preview = await BundleAnalyzer(existence=_Refs(), prior=_prior()).analyze(parse_bundle(trimmed))
     s = _statuses(preview)
     assert s[("automation", "daily")] == EntityStatus.ORPHANED
     assert s[("policy", "cap")] == EntityStatus.ORPHANED
@@ -371,9 +371,7 @@ async def test_a_reused_entity_gone_since_will_be_created():
 
 async def test_changed_mcp_reports_changes_not_applied():
     edited = DEPLOYED.replace('args: ["-y", "gh"]', 'args: ["-y", "gh@2"]')
-    preview = await BundleAnalyzer(existence=_Refs(), prior=_prior()).analyze(
-        parse_bundle(edited)
-    )
+    preview = await BundleAnalyzer(existence=_Refs(), prior=_prior()).analyze(parse_bundle(edited))
     mcp = next(e for e in preview.entities if e.key == "gh")
     assert mcp.status == EntityStatus.CHANGES_NOT_APPLIED
     assert "not applied" in (mcp.detail or "")
@@ -542,8 +540,11 @@ async def test_a_first_install_requires_every_required_field():
 
 
 class _Checks:
-    def __init__(self, bad_models=(), bad_toolsets=(), bad_crons=(), denied=(), catalog=None):
+    def __init__(
+        self, bad_models=(), bad_toolsets=(), bad_crons=(), denied=(), catalog=None, bad_clients=()
+    ):
         self.bad_models = set(bad_models)
+        self.bad_clients = set(bad_clients)
         self.bad_toolsets = set(bad_toolsets)
         self.bad_crons = set(bad_crons)
         self.denied = set(denied)
@@ -554,8 +555,10 @@ class _Checks:
         transport = self.catalog.get(catalog_id)
         return CatalogMcp(spec_id=f"spec-{catalog_id}", transport=transport) if transport else None
 
-    async def agent_problem(self, model_id, toolsets):
+    async def agent_problem(self, model_id, toolsets, client_id):
         self.asked.append(model_id)
+        if client_id in self.bad_clients:
+            return f"bad client {client_id}"
         unknown = [t for t in toolsets if t in self.bad_toolsets]
         if unknown:
             return f"unknown toolset {unknown[0]}"
@@ -895,9 +898,9 @@ async def test_a_context_secret_on_a_catalog_command_server_blocks():
     url = await BundleAnalyzer(checks=_Checks(catalog={"ru.yookassa/mcp": "url"})).analyze(
         parse_bundle(source)
     )
-    command = await BundleAnalyzer(
-        checks=_Checks(catalog={"ru.yookassa/mcp": "command"})
-    ).analyze(parse_bundle(source))
+    command = await BundleAnalyzer(checks=_Checks(catalog={"ru.yookassa/mcp": "command"})).analyze(
+        parse_bundle(source)
+    )
     assert url.installable is True
     assert any("url MCPs only" in i.message for i in command.block_issues)
 
@@ -945,15 +948,17 @@ async def test_a_github_skill_installs_on_a_first_deploy():
 
 async def test_a_blank_setup_value_is_not_a_supplied_one():
     prior = _prior(CHANNELED)
-    preview = await BundleAnalyzer(existence=_Refs(), prior=prior, setup_values={"bot": " "}).analyze(
-        parse_bundle(CHANNELED)
-    )
+    preview = await BundleAnalyzer(
+        existence=_Refs(), prior=prior, setup_values={"bot": " "}
+    ).analyze(parse_bundle(CHANNELED))
     assert _statuses(preview)[("channel", "inbox")] == EntityStatus.UNCHANGED
 
 
 async def test_a_channel_whose_type_changed_blocks():
     prior = _prior(CHANNELED)
-    changed = CHANNELED.replace("{key: inbox, name: Inbox,", "{key: inbox, type: generic, name: Inbox,")
+    changed = CHANNELED.replace(
+        "{key: inbox, name: Inbox,", "{key: inbox, type: generic, name: Inbox,"
+    )
     preview = await BundleAnalyzer(existence=_Refs(), prior=prior).analyze(parse_bundle(changed))
     assert any(
         i.entity_key == "inbox" and "changes type" in i.message for i in preview.block_issues
@@ -970,3 +975,81 @@ async def test_a_catalog_server_without_a_transport_blocks():
     checks.catalog_mcp = catalog_mcp
     preview = await BundleAnalyzer(checks=checks).analyze(parse_bundle(CATALOG_MCP))
     assert any("declares no transport" in i.message for i in preview.block_issues)
+
+
+async def test_a_supplied_value_for_a_credential_that_names_a_secret_blocks():
+    prior = _prior(CHANNELED)
+    analyzer = BundleAnalyzer(
+        existence=_Refs(referenced={"id-inbox"}), prior=prior, setup_values={"bot": "t"}
+    )
+    preview = await analyzer.analyze(parse_bundle(CHANNELED))
+    assert any(k == "inbox" and "bot_token" in m for k, m in _blocks(preview))
+
+    left_out = await BundleAnalyzer(existence=_Refs(referenced={"id-inbox"}), prior=prior).analyze(
+        parse_bundle(CHANNELED)
+    )
+    assert left_out.installable is True
+
+
+CLIENT = str(UUID(int=7))
+
+
+async def test_an_agent_names_its_client_by_id_and_the_workspace_checks_it():
+    pkg = parse_bundle(GOOD.replace("model: gpt-4o,", f'model: gpt-4o, client: "{CLIENT}",'))
+    checks = _Checks(bad_clients={CLIENT})
+    preview = await BundleAnalyzer(checks=checks).analyze(pkg)
+    assert any(k == "lead" and f"bad client {CLIENT}" in m for k, m in _blocks(preview))
+
+
+def test_a_client_named_by_anything_but_its_id_is_refused():
+    with pytest.raises(BundleParseError, match="client must be the id"):
+        parse_bundle(GOOD.replace("model: gpt-4o,", "model: gpt-4o, client: my-codex,"))
+
+
+async def test_a_client_from_an_optional_setup_field_left_empty_blocks():
+    pkg = parse_bundle(
+        GOOD.replace("setup:\n", "setup:\n  - {key: runner, label: Runner}\n", 1).replace(
+            "model: gpt-4o,", 'model: gpt-4o, client: "${setup.runner}",'
+        )
+    )
+    unset = await BundleAnalyzer(checks=_Checks()).analyze(pkg)
+    given = await BundleAnalyzer(checks=_Checks(), setup_values={"runner": CLIENT}).analyze(pkg)
+    assert any(k == "lead" and "client needs setup field" in m for k, m in _blocks(unset))
+    assert given.installable is True
+
+
+def test_reasoning_takes_one_form():
+    with pytest.raises(BundleParseError, match="not both"):
+        parse_bundle(
+            GOOD.replace(
+                "model: gpt-4o,", "model: gpt-4o, reasoning_effort: high, reasoning_max_tokens: 9,"
+            )
+        )
+
+
+async def test_a_reasoning_change_will_update_the_agent():
+    edited = DEPLOYED.replace("model: gpt-4o,", "model: gpt-4o, reasoning_effort: high,")
+    preview = await BundleAnalyzer(existence=_Refs(), prior=_prior()).analyze(parse_bundle(edited))
+    assert _statuses(preview)[("agent", "lead")] == EntityStatus.WILL_UPDATE
+
+
+async def test_the_plan_digest_names_the_plan():
+    async def digest(text, **kwargs):
+        preview = await BundleAnalyzer(existence=_Refs(), prior=_prior(), **kwargs).analyze(
+            parse_bundle(text)
+        )
+        return preview.plan_digest
+
+    same = await digest(DEPLOYED)
+    assert same == await digest(DEPLOYED)
+    assert same != await digest(DEPLOYED.replace("instruction: x", "instruction: y"))
+    # the same plan reaching another entity is another plan
+    other = await BundleAnalyzer(existence=_Refs(), prior=_prior()).analyze(parse_bundle(DEPLOYED))
+    moved = _prior()
+    moved.result.entities[2] = moved.result.entities[2].model_copy(update={"id": "id-lead-2"})
+    assert (
+        other.plan_digest
+        != (
+            await BundleAnalyzer(existence=_Refs(), prior=moved).analyze(parse_bundle(DEPLOYED))
+        ).plan_digest
+    )

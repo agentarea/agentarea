@@ -27,7 +27,6 @@ from __future__ import annotations
 import io
 import json
 import logging
-import secrets
 import zipfile
 from collections.abc import Awaitable, Callable, Collection
 from typing import Any
@@ -52,12 +51,14 @@ from agentarea_bundles.application.analyzer import (
     policy_as_rule,
     remembered_setup,
     required_setup_errors,
+    secret_reference_issue,
     spec_fingerprint,
     supplied_keys,
     trigger_name,
 )
 from agentarea_bundles.schemas.bundle import (
     Bundle,
+    BundleAgent,
     BundleAutomation,
     BundleChannel,
     BundleMcp,
@@ -162,8 +163,8 @@ class BundleInstaller:
         trigger_repository: Any,
         governance_service: Any,
         user_context: Any,
+        secret_manager: Any,
         may_edit: Callable[[EntityKind, str], Awaitable[bool]] | None = None,
-        secret_manager: Any = None,
     ) -> None:
         self._mcp_server_service = mcp_server_service
         self._mcp_instance_service = mcp_instance_service
@@ -736,7 +737,7 @@ class BundleInstaller:
 
             owned = await self._owned(EntityKind.AGENT, agent.key)
             if owned is not None:
-                agent_id, _ = owned
+                agent_id, current = owned
                 agent_ids[agent.key] = agent_id
                 action = InstallAction.UNCHANGED
                 depends_on = [
@@ -745,6 +746,17 @@ class BundleInstaller:
                 ]
                 if self._needs_update(EntityKind.AGENT, agent, depends_on):
                     await self._authorize_update(EntityKind.AGENT, agent.key, agent_id)
+                    before = self._prior.spec(EntityKind.AGENT, agent.key) if self._prior else None
+                    managed: dict[str, Any] = {}
+                    if (
+                        agent.reasoning_effort
+                        or agent.reasoning_max_tokens
+                        or (before and (before.reasoning_effort or before.reasoning_max_tokens))
+                    ):
+                        managed["reasoning_effort"] = agent.reasoning_effort
+                        managed["reasoning_max_tokens"] = agent.reasoning_max_tokens
+                    if agent.client or (before and before.client):
+                        managed["client_id"] = self._client_id(agent)
                     updated = await self._agent_service.update_agent(
                         agent_id,
                         AgentUpdate(
@@ -752,8 +764,11 @@ class BundleInstaller:
                             description=agent.description,
                             instruction=agent.instruction,
                             model_id=model_id,
-                            tools=tools,
-                            skill_ids=attached_skill_ids,
+                            tools=await self._merged_tools(agent_id, current, before, tools),
+                            skill_ids=await self._merged_skills(
+                                agent_id, before, attached_skill_ids
+                            ),
+                            **managed,
                         ),
                     )
                     if updated is None:
@@ -786,8 +801,11 @@ class BundleInstaller:
                     description=agent.description,
                     instruction=agent.instruction,
                     model_id=model_id,
+                    client_id=self._client_id(agent),
                     tools=tools,
                     skill_ids=attached_skill_ids or None,
+                    reasoning_effort=agent.reasoning_effort,
+                    reasoning_max_tokens=agent.reasoning_max_tokens,
                 )
             )
             self._track(
@@ -807,6 +825,68 @@ class BundleInstaller:
             )
         return agent_ids
 
+    def _client_id(self, agent: BundleAgent) -> UUID | None:
+        if agent.client is None:
+            return None
+        resolved = resolve_placeholders(agent.client, self._values)
+        try:
+            return UUID(resolved)
+        except ValueError as exc:
+            raise BundleValidationError(
+                f"agent '{agent.key}': client must be the id of a Codex or Claude Code client"
+            ) from exc
+
+    def _linked_before(self, kind: EntityKind, refs: list[str]) -> set[str]:
+        """The ids the last install pointed ``refs`` at."""
+        if self._prior is None:
+            return set()
+        return {i for ref in refs if (i := linked_id(self._prior.result, kind, ref))}
+
+    async def _merged_tools(
+        self, agent_id: UUID, current: Any, before: BundleAgent | None, declared: list[Any]
+    ) -> list[Any]:
+        """The agent's tools with the folder's applied: its own replaced, the rest kept.
+
+        The folder manages the toolsets and MCP connections it declares or the
+        last install attached; a tool added in the workspace stays, and a
+        declared one keeps the settings it was given there. Approval flags are
+        read back from the agent's rules so the update leaves every approval as
+        it was.
+        """
+        from agentarea_agents.schemas.import_export import TOOL_CONFIG_ADAPTER
+
+        wanted = [tool.model_dump(exclude_none=True) for tool in declared]
+        managed = {
+            *(("code", name) for name in (before.toolsets if before else [])),
+            *(
+                ("mcp", i)
+                for i in self._linked_before(EntityKind.MCP, before.mcps if before else [])
+            ),
+            *((tool["type"], tool["name"]) for tool in wanted),
+        }
+        existing = current.tools if isinstance(current.tools, list) else []
+        by_ref = {(tool["type"], tool["name"]): tool for tool in wanted}
+        merged = [
+            tool
+            for tool in existing
+            if (ref := (tool.get("type"), tool.get("name"))) in by_ref or ref not in managed
+        ]
+        present = {(tool.get("type"), tool.get("name")) for tool in merged}
+        merged += [tool for ref, tool in by_ref.items() if ref not in present]
+        flagged = await self._agent_service.with_approval_flags(agent_id, merged)
+        return [TOOL_CONFIG_ADAPTER.validate_python(tool) for tool in flagged]
+
+    async def _merged_skills(
+        self, agent_id: UUID, before: BundleAgent | None, declared: list[UUID]
+    ) -> list[UUID]:
+        """The agent's skills with the folder's applied; one attached in the workspace stays."""
+        with_skills = await self._agent_service.get_with_skills(agent_id)
+        current = [skill.id for skill in (with_skills.skills if with_skills else [])]
+        managed = self._linked_before(EntityKind.SKILL, before.skills if before else [])
+        managed |= {str(i) for i in declared}
+        kept = [i for i in current if str(i) not in managed or i in declared]
+        return kept + [i for i in declared if i not in kept]
+
     # -- channels -----------------------------------------------------------
 
     async def _install_channels(
@@ -823,7 +903,10 @@ class BundleInstaller:
         to it, merged into the stored ones, or every one it resolves when none
         were stored. Imported disabled by default.
         """
-        from agentarea_streams.application.source_credentials import credential_secret_name
+        from agentarea_streams.application.source_credentials import (
+            credential_secret_name,
+            issue_credential,
+        )
         from agentarea_streams.domain.enums import SourceKind
         from agentarea_streams.infrastructure.catalog_source_types import (
             CatalogSourceTypeRepository,
@@ -900,7 +983,7 @@ class BundleInstaller:
             credentials: dict[str, Any] = channel_credentials(channel, self._values)
             for field in entry.credentials:
                 if field.issued and field.key not in credentials:
-                    credentials[field.key] = secrets.token_urlsafe(32)
+                    credentials[field.key] = issue_credential(field)
 
             stream = await streams.create_stream(name=name, description=channel.name)
             self._track(
@@ -914,13 +997,12 @@ class BundleInstaller:
                 webhook_config={},
                 event_templates=None,
             )
-            if self._secret_manager is not None:
-                secret_name = credential_secret_name(entry.slug, source.id)
-                await self._secret_manager.set_secret(secret_name, json.dumps(credentials))
-                self._track(
-                    f"channel credential of '{name}'",
-                    lambda name=secret_name, store=self._secret_manager: store.delete_secret(name),
-                )
+            secret_name = credential_secret_name(entry.slug, source.id)
+            await self._secret_manager.set_secret(secret_name, json.dumps(credentials))
+            self._track(
+                f"channel credential of '{name}'",
+                lambda name=secret_name, store=self._secret_manager: store.delete_secret(name),
+            )
 
             dto = TriggerCreate(
                 name=name,
@@ -985,7 +1067,7 @@ class BundleInstaller:
         """The credentials stored for a channel's source, as written; empty when none."""
         from agentarea_streams.application.source_credentials import credential_secret_name
 
-        if self._secret_manager is None or source is None:
+        if source is None:
             return {}
         raw = await self._secret_manager.get_secret(
             credential_secret_name(source.webhook_type, source.credential_key)
@@ -994,13 +1076,20 @@ class BundleInstaller:
         return stored if isinstance(stored, dict) else {}
 
     async def _channel_rewrite(self, channel: BundleChannel, source: Any | None) -> dict[str, Any]:
-        """Credentials a redeploy stores: the supplied ones merged in, or all when none were stored."""
-        if self._secret_manager is None or source is None or not channel.bindings:
+        """Credentials a redeploy stores: the supplied ones merged in, or all when none were stored.
+
+        A credential that names a workspace secret is never replaced by a value.
+        """
+        if source is None or not channel.bindings:
             return {}
         stored = await self.channel_credentials_stored(source)
         bound = set(channel.bindings)
         unfinished = not (bound & set(stored))
         rewrite = channel_credentials(channel, self._values, None if unfinished else self._supplied)
+        referenced = sorted(k for k in rewrite if isinstance(stored.get(k), dict))
+        if referenced:
+            issue = secret_reference_issue(channel.key, referenced)
+            raise BundleValidationError(issue.message, issues=[issue])
         return {**stored, **rewrite} if rewrite else {}
 
     def _enabled_changed(self, kind: EntityKind, spec: Any) -> bool:

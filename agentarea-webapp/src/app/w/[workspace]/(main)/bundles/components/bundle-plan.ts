@@ -314,12 +314,15 @@ export function openIssues(
   );
 }
 
+/** What /install is sent but the plan digest, which an analyze of exactly this gives. */
+export type InstallDraft = Omit<InstallRequest, "plan_digest">;
+
 /** The bundle and setup values to send to /install, with every choice applied. */
 export function buildInstallRequest(
   preview: ImportPreview,
   edit: BundleEdit,
   canAdminister: boolean
-): InstallRequest {
+): InstallDraft {
   const bundle = preview.bundle;
   const agents: BundleAgent[] = (bundle.agents ?? [])
     .filter((a) => !edit.agentOff.has(a.key))
@@ -443,7 +446,7 @@ export type LaunchPlan = {
  * connection on the launch screen would stop nearly all of them for nothing.
  */
 export function launchPlan(
-  request: InstallRequest,
+  request: InstallDraft,
   result: InstallResult
 ): LaunchPlan {
   const declared = new Map<string, { name: string; enabled: boolean }>();

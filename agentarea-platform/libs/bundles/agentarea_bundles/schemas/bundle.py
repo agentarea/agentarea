@@ -24,7 +24,12 @@ from __future__ import annotations
 import re
 from enum import StrEnum
 from typing import Any, Literal
+from uuid import UUID
 
+from agentarea_common.reasoning_effort import (
+    checked_reasoning_effort,
+    checked_reasoning_max_tokens,
+)
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 SCHEMA_VERSION = "0.1.0"
@@ -225,6 +230,21 @@ class BundleAgent(BaseModel):
         default_factory=list,
         description='Built-in toolsets to attach, e.g. ["agentarea/shell", "agentarea/files"].',
     )
+    reasoning_effort: str | None = Field(
+        default=None,
+        description="A reasoning level the model takes, e.g. low or high. Not with reasoning_max_tokens.",
+    )
+    reasoning_max_tokens: int | None = Field(
+        default=None,
+        description="A token budget for the model's reasoning. Not with reasoning_effort.",
+    )
+    client: str | None = Field(
+        default=None,
+        description=(
+            "The id of a Codex or Claude Code client of the workspace whose runner runs the "
+            "agent's tasks, or a ${setup.x} reference to one. Unset runs them on the platform."
+        ),
+    )
 
     @field_validator("key")
     @classmethod
@@ -232,6 +252,36 @@ class BundleAgent(BaseModel):
         if not _ENTITY_KEY_RE.match(v):
             raise ValueError(f"agent key '{v}' must match [a-zA-Z][a-zA-Z0-9_-]*")
         return v
+
+    @field_validator("reasoning_effort", mode="before")
+    @classmethod
+    def _check_reasoning_effort(cls, v: object) -> str | None:
+        return checked_reasoning_effort(v)
+
+    @field_validator("reasoning_max_tokens", mode="before")
+    @classmethod
+    def _check_reasoning_max_tokens(cls, v: object) -> int | None:
+        return checked_reasoning_max_tokens(v)
+
+    @field_validator("client")
+    @classmethod
+    def _client_is_an_id(cls, v: str | None) -> str | None:
+        # A client's name is not unique and any member picks it, so only its id names it.
+        if v is None or setup_refs(v):
+            return v
+        try:
+            return str(UUID(v))
+        except ValueError as exc:
+            raise ValueError(
+                "client must be the id of a Codex or Claude Code client, or a ${setup.x} "
+                "reference to one"
+            ) from exc
+
+    @model_validator(mode="after")
+    def _one_reasoning_form(self) -> BundleAgent:
+        if self.reasoning_effort and self.reasoning_max_tokens:
+            raise ValueError("set reasoning_effort or reasoning_max_tokens, not both")
+        return self
 
 
 class BundleAutomation(BaseModel):

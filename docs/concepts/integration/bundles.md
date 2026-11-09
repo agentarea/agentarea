@@ -165,13 +165,18 @@ policies:
 ### Analyze, then install
 
 `POST /v1/workspaces/{workspace}/bundles/analyze` parses the source and returns an `ImportPreview` —
-every entity tagged `CREATE`, `REUSE`, or `SKIPPED` with a reason, plus a list
-of issues. It writes nothing. This is where a missing setup field, an agent
-pointing at a nonexistent MCP key, or a command runtime the platform cannot run
-is surfaced.
+the plan: every entity tagged `will_create`, `will_update`, `unchanged`,
+`orphaned`, `changes_not_applied`, `already_exists` or `unsupported`, plus a
+list of issues and a `plan_digest` naming the plan. It writes nothing. This is
+where a missing setup field, an agent pointing at a nonexistent MCP key, or a
+command runtime the platform cannot run is surfaced. Pass the setup values the
+install will be given: a plan depends on them.
 
-`POST /v1/workspaces/{workspace}/bundles/install` takes the canonical bundle and the setup values.
-Missing required setup blocks the whole install before anything is written.
+`POST /v1/workspaces/{workspace}/bundles/install` takes the canonical bundle, the setup values and
+the `plan_digest` analyze returned for them. It plans again and refuses with
+**409** (`code` `bundle_plan_changed`) when that plan is not the one the digest
+names, so an install never carries out a plan nobody was shown. Missing
+required setup blocks the whole install before anything is written.
 
 Inline skill content is parsed with the same `SKILL.md` parser the skill service
 uses, so a frontmatter that is not valid YAML (an unquoted value containing
@@ -185,8 +190,10 @@ install step fails for another reason, such as a GitHub skill that cannot be
 fetched. Both are problem+json: the message in `detail`, `code`
 `bundle_invalid` or `bundle_install_failed`, and the blocking `issues`.
 
-Analyze accepts exactly one of `source` (pasted text) or `source_url` (fetched
-server-side behind an SSRF guard, capped at 5 MB).
+Analyze accepts exactly one of `source` (pasted text), `source_url` (fetched
+server-side behind an SSRF guard, capped at 5 MB), `files` (an
+[agent folder](/guides/agents/deploy-from-a-folder)) or `bundle` (a canonical
+bundle, such as one edited after an earlier analyze).
 
 ### Install order is dependency order
 
@@ -198,12 +205,21 @@ with that reason recorded, rather than failing the install.
 ### Idempotency follows what the last install recorded
 
 An `InstalledBundle` row is upserted by bundle name, recording the canonical
-document and the full install result: each entity's key, action and id. The next
-install of the same bundle reuses an MCP instance, skill or agent only by the id
-that result recorded for its key, and only while it still exists (an archived
-agent is installed again). It is marked `REUSED` and not duplicated. Triggers are
-named `{bundle_name}:{key}`; one is reused only when it carries that name and runs
-the agent this install bound.
+document and the full install result: each entity's key, action, id and the
+fingerprint of what was applied. The next install of the same bundle is a
+redeploy against it. An entity the bundle created is updated in place when its
+resolved spec changed, and left alone otherwise; MCP servers and GitHub skills
+are not updated. An entity it linked without creating is linked again by the id
+it recorded, marked `REUSED`, and never changed. Either is found only while it
+still exists (an archived agent is installed again). Triggers are named
+`{bundle_name}:{key}`; one the bundle did not record as its own is reused only
+when it carries that name, runs the agent this install bound and is the one
+recorded. A policy is reused when a rule with its subject, target and effect
+exists, and the plan says so.
+
+An agent update changes only the tools and skills the bundle declares or the
+last install attached; whatever was added to the agent in the workspace, and
+every approval on its tools, stays.
 
 An entity that merely carries a name from the bundle is never reused. Names are
 not unique and any member picks them, so an agent called `Triage Bot` that the
@@ -289,9 +305,9 @@ preview, moves those failures to a point where nothing has been created yet.
   workspace.
 - **There is no uninstall.** `InstalledBundle` records what was installed, and
   removing those resources is manual. The API surface is analyze and install.
-- **A reused entity is not reconciled.** An agent the bundle installed before is
-  reused as it is now, edits included; its configuration is not brought back to
-  the document.
+- **A reused entity is not reconciled.** An entity the bundle linked without
+  creating is used as it is now, edits included; its configuration is not
+  brought back to the document.
 - **`extra="forbid"` everywhere.** An unrecognized field anywhere in the document
   is a validation error, not a warning. A bundle authored against a newer schema
   version is rejected outright rather than partially understood.

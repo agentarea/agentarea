@@ -224,7 +224,28 @@ export function BundlePlan({
     setInstall({ kind: "installing" });
     try {
       const request = buildInstallRequest(preview, edit, canAdminister);
-      const installed = await installBundleAction(request);
+      // Install carries out one plan only: the plan of exactly what it is
+      // sent, edits and setup values included.
+      const planned = await analyzeBundleAction(request);
+      if (planned.error || !planned.data) {
+        setInstall({
+          kind: "error",
+          message: apiErrorMessage(planned, t("analyzeFailed")),
+        });
+        return;
+      }
+      const blocked = planned.data.issues?.find((i) => i.severity === "block");
+      if (blocked || !planned.data.plan_digest) {
+        setInstall({
+          kind: "error",
+          message: blocked?.message ?? t("installFailed"),
+        });
+        return;
+      }
+      const installed = await installBundleAction({
+        ...request,
+        plan_digest: planned.data.plan_digest,
+      });
       if (installed.error || !installed.data) {
         setInstall({
           kind: "error",

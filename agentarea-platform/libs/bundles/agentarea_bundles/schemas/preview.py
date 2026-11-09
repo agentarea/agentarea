@@ -67,6 +67,14 @@ class ImportPreview(BaseModel):
     installable: bool = Field(
         description="True when there are no blocking issues (setup may still be required)."
     )
+    plan_digest: str | None = Field(
+        default=None,
+        description=(
+            "Names this plan: the bundle and what it does with each entity. Install takes it "
+            "and refuses with 409 when the plan it would carry out is no longer this one. "
+            "Null when there is no plan to install."
+        ),
+    )
 
     @property
     def block_issues(self) -> list[PreviewIssue]:
