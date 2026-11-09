@@ -631,10 +631,10 @@ class TestPendingGraphGrants:
         session.add(legacy)
         await session.commit()
 
-        assert await grant_pending_secret_owners(session) >= 1
+        assert (await grant_pending_secret_owners(session)).granted >= 1
         assert ("manager", "User:member-a") in {
             (t.relation, t.subject_id) for t in graph.recorded if t.object == str(legacy.id)
         }
         member_a = _catalog(session, user_id="member-a", admin_workspaces=[])
         assert (await member_a.get_named_for_use("legacy-key")).id == legacy.id
-        assert await grant_pending_secret_owners(session) == 0
+        assert (await grant_pending_secret_owners(session)).granted == 0
