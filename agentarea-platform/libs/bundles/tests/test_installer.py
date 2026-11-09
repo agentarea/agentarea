@@ -1366,7 +1366,7 @@ async def test_a_supplied_secret_is_merged_into_the_stored_credentials():
     assert deps["trigger_service"].updates == []
     assert json.loads(sm.secrets[ids["credentials"]]) == {
         "bot_token": "new",
-        "secret_token": "kept",
+        "secret_token": "kept",  # pragma: allowlist secret
     }
     assert next(e for e in res.entities if e.key == "inbox").action == InstallAction.UPDATED
 
@@ -1388,7 +1388,7 @@ async def test_a_channel_whose_stored_credentials_lack_every_bound_key_gets_all_
     await inst.install(pkg, {"bot": "new"}, prior=prior, approved_updates=_every(pkg))
 
     assert json.loads(sm.secrets[ids["credentials"]]) == {
-        "secret_token": "kept",
+        "secret_token": "kept",  # pragma: allowlist secret
         "bot_token": "new",
         "chat_id": "42",
     }
@@ -1428,7 +1428,7 @@ async def test_an_unresolved_placeholder_is_never_written_on_a_redeploy():
     pkg = parse_bundle(DEPLOYED)
     await inst.install(pkg, {}, prior=prior, approved_updates=_every(pkg))
 
-    assert sm.secrets == {ids["credentials"]: '{"secret_token": "kept"}'}
+    assert sm.secrets == {ids["credentials"]: '{"secret_token": "kept"}'}  # pragma: allowlist secret
 
 
 async def test_a_redeploy_does_not_demand_secrets_it_does_not_write():
@@ -2144,7 +2144,7 @@ async def test_a_redeploy_sets_reasoning_and_client_only_when_the_folder_names_t
 
 async def test_a_credential_that_names_a_secret_is_never_replaced_by_a_value():
     prior, ids, services = _deployed()
-    stored = '{"bot_token": {"secret_name": "tg-bot"}}'
+    stored = '{"bot_token": {"secret_name": "tg-bot"}}'  # pragma: allowlist secret
     sm = FakeSecretManager({ids["credentials"]: stored})
     inst, _ = _installer(**services, secret_manager=sm)
 

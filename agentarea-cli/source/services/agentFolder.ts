@@ -113,6 +113,13 @@ export async function readAgentFolder(root: string): Promise<AgentFolder> {
 	const skipped: string[] = [];
 	let total = 0;
 
+	const overCap = (relative: string) =>
+		new Error(
+			`Agent folder is over the ${megabytes(
+				MAX_FOLDER_BYTES,
+			)} limit (reached at ${relative}). Move large files out of ${root}.`,
+		);
+
 	async function walk(dir: string): Promise<void> {
 		const entries = await fs.readdir(dir, {withFileTypes: true});
 		entries.sort((a, b) => a.name.localeCompare(b.name));
@@ -134,41 +141,52 @@ export async function readAgentFolder(root: string): Promise<AgentFolder> {
 			}
 
 			// eslint-disable-next-line no-await-in-loop
-			const stats = await fs.stat(absolute);
-
-			// eslint-disable-next-line no-await-in-loop
-			if (await isBinaryFile(absolute)) {
-				skipped.push(relative);
-				continue;
-			}
-
-			// The file's on-disk size is the exact UTF-8 byte count once decoded
-			// (decoding and re-encoding valid UTF-8 round-trips byte for byte), so
-			// the cap can be enforced from `stats.size` before reading the file.
-			if (total + Buffer.byteLength(relative) + stats.size > MAX_FOLDER_BYTES) {
-				// A file that would not have been sent cannot be what crosses the cap.
+			const handle = await fs.open(absolute, 'r');
+			try {
 				// eslint-disable-next-line no-await-in-loop
-				if (!(await isTextFile(absolute))) {
+				const stats = await handle.stat();
+
+				// eslint-disable-next-line no-await-in-loop
+				if (await isBinaryFile(absolute)) {
 					skipped.push(relative);
 					continue;
 				}
 
-				throw new Error(
-					`Agent folder is over the ${megabytes(
-						MAX_FOLDER_BYTES,
-					)} limit (reached at ${relative}). Move large files out of ${root}.`,
-				);
-			}
+				// The file's on-disk size is the exact UTF-8 byte count once decoded
+				// (decoding and re-encoding valid UTF-8 round-trips byte for byte), so
+				// the cap can be enforced from `stats.size` before reading the file.
+				if (
+					total + Buffer.byteLength(relative) + stats.size >
+					MAX_FOLDER_BYTES
+				) {
+					// A file that would not have been sent cannot be what crosses the cap.
+					// eslint-disable-next-line no-await-in-loop
+					if (!(await isTextFile(absolute))) {
+						skipped.push(relative);
+						continue;
+					}
 
-			// eslint-disable-next-line no-await-in-loop
-			const text = decodeText(await fs.readFile(absolute));
-			if (text === undefined) {
-				skipped.push(relative);
-				continue;
-			}
+					throw overCap(relative);
+				}
 
-			total += Buffer.byteLength(relative) + Buffer.byteLength(text);
-			files[relative] = text;
+				// eslint-disable-next-line no-await-in-loop
+				const text = decodeText(await handle.readFile());
+				if (text === undefined) {
+					skipped.push(relative);
+					continue;
+				}
+
+				const size = Buffer.byteLength(relative) + Buffer.byteLength(text);
+				if (total + size > MAX_FOLDER_BYTES) {
+					throw overCap(relative);
+				}
+
+				total += size;
+				files[relative] = text;
+			} finally {
+				// eslint-disable-next-line no-await-in-loop
+				await handle.close();
+			}
 		}
 	}
 
