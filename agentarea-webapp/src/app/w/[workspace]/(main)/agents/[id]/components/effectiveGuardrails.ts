@@ -38,7 +38,6 @@ export function summarizeEffectivePolicy(
     cap: caps,
     allow: tools?.allowed?.length ?? 0,
     safety: [
-      content_safety?.output_sanitizer_enabled,
       content_safety?.prompt_injection_detection_enabled,
       content_safety?.answer_check?.enabled,
     ].filter(Boolean).length,

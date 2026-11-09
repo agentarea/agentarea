@@ -22,7 +22,6 @@ describe("summarizeEffectivePolicy", () => {
       tokens: { max_tokens: 50000 },
       content_safety: {
         prompt_injection_detection_enabled: true,
-        output_sanitizer_enabled: false,
         answer_check: { enabled: true },
       },
     });
