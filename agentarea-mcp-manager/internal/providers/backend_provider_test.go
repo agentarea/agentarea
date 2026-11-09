@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -335,7 +336,7 @@ func TestConvertToInstanceSpecLeavesTheIsolationTierToTheOperator(t *testing.T) 
 // the data plane with port 0 came back as an invalid Deployment, after the
 // caller had already been told the instance was being started.
 func TestBuildBackendInstanceSpecRefusesAnImageThatSpeaksStdio(t *testing.T) {
-	_, err := BuildBackendInstanceSpec(&models.MCPServerInstance{
+	_, err := BuildBackendInstanceSpec(context.Background(), &models.MCPServerInstance{
 		InstanceID: "inst-stdio",
 		JSONSpec: map[string]interface{}{
 			"type":  "docker",
@@ -346,7 +347,7 @@ func TestBuildBackendInstanceSpecRefusesAnImageThatSpeaksStdio(t *testing.T) {
 				"transport":    map[string]interface{}{"type": "stdio"},
 			}},
 		},
-	}, nil)
+	}, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	var refused interface{ FailureReason() string }
 	if !errors.As(err, &refused) || !strings.Contains(refused.FailureReason(), "speaks stdio") {
 		t.Fatalf("BuildBackendInstanceSpec() error = %v, want the stdio image refused with a reason the caller reads", err)

@@ -130,10 +130,11 @@ func acquireInstanceLock(ctx context.Context, conn *sql.Conn, instanceID string)
 }
 
 // URLServer is a url-transport instance as the gateway reaches it: the merged
-// endpoint, the plain headers, and the names of the secret headers it resolves.
+// endpoint, the headers (a plain value or a workspace secret reference), and the
+// names of the copied secret headers it resolves.
 type URLServer struct {
 	EndpointURL  string
-	Headers      map[string]string
+	Headers      map[string]any
 	EnvVars      []string
 	AuthConfigID string
 	ManagedBy    string
@@ -244,13 +245,14 @@ func urlServerSpec(serverJSON, instanceJSON []byte, remoteURL string) (*URLServe
 	switch headers := server["headers"].(type) {
 	case nil:
 	case map[string]any:
-		result.Headers = make(map[string]string, len(headers))
+		result.Headers = make(map[string]any, len(headers))
 		for name, value := range headers {
-			text, ok := value.(string)
-			if !ok {
-				return nil, fmt.Errorf("header %q must be a string", name)
+			switch value.(type) {
+			case string, map[string]any:
+			default:
+				return nil, fmt.Errorf("header %q must be a string or a secret reference", name)
 			}
-			result.Headers[name] = text
+			result.Headers[name] = value
 		}
 	default:
 		return nil, fmt.Errorf("headers must be an object")

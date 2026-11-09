@@ -1,6 +1,7 @@
 package mcpgateway
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -17,10 +18,23 @@ import (
 const urlInstanceID = "5f0c8e4e-7a43-4a8e-9b51-2b9f6f3f1c11"
 
 type secretResolverStub struct {
-	mu     sync.Mutex
-	values map[string]string
-	err    error
-	asked  [][]string
+	mu              sync.Mutex
+	values          map[string]string
+	workspaceValues map[[2]string]string
+	err             error
+	asked           [][]string
+	askedWorkspaces []string
+}
+
+func (s *secretResolverStub) ResolveWorkspaceSecret(_ context.Context, workspaceID, secretName string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.askedWorkspaces = append(s.askedWorkspaces, workspaceID)
+	value, ok := s.workspaceValues[[2]string{workspaceID, secretName}]
+	if !ok {
+		return "", errors.New("secret not found")
+	}
+	return value, nil
 }
 
 func (s *secretResolverStub) ResolveInstanceEnvVars(instanceID string, names []string) (map[string]string, error) {
@@ -97,7 +111,7 @@ func TestURLInstanceIsProxiedWithItsOwnCredentials(t *testing.T) {
 	secrets := &secretResolverStub{values: map[string]string{"X-Api-Key": "from-the-secret-store"}}
 	gateway, repository, runtime := urlGateway(t, &URLServer{
 		EndpointURL: upstream.URL + "/v1/mcp?tenant=acme",
-		Headers:     map[string]string{"X-Api-Key": "plain-value", "X-Region": "eu"},
+		Headers:     map[string]any{"X-Api-Key": "plain-value", "X-Region": "eu"},
 		EnvVars:     []string{"X-Api-Key"},
 	}, secrets, []string{"127.0.0.1"})
 	observer := &requestObserverStub{}
@@ -298,5 +312,53 @@ func TestNewRequiresASecretResolverForURLInstances(t *testing.T) {
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, URLUpstream{})
 	if err == nil {
 		t.Fatal("New() accepted a gateway that cannot resolve URL instance credentials")
+	}
+}
+
+func TestURLInstanceReferencedHeaderIsResolvedInItsOwnWorkspace(t *testing.T) {
+	var seen http.Header
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		seen = request.Header.Clone()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+	secrets := &secretResolverStub{workspaceValues: map[[2]string]string{
+		{"ws-url", "gh-token"}:   "Bearer own",
+		{"ws-other", "gh-token"}: "Bearer other",
+	}}
+	gateway, _, _ := urlGateway(t, &URLServer{
+		EndpointURL: upstream.URL,
+		Headers:     map[string]any{"Authorization": map[string]any{"secret_name": "gh-token"}, "X-Region": "eu"},
+	}, secrets, []string{"127.0.0.1"})
+
+	recorder := httptest.NewRecorder()
+	gateway.ServeHTTP(recorder, urlRequest())
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d %q", recorder.Code, recorder.Body.String())
+	}
+	if seen.Get("Authorization") != "Bearer own" || seen.Get("X-Region") != "eu" {
+		t.Fatalf("upstream headers = %v, want the instance workspace's secret and the plain header", seen)
+	}
+	if len(secrets.askedWorkspaces) != 1 || secrets.askedWorkspaces[0] != "ws-url" {
+		t.Fatalf("secret store asked workspaces %v, want only the instance's ws-url", secrets.askedWorkspaces)
+	}
+}
+
+func TestURLInstanceMissingReferencedSecretIsNotProxied(t *testing.T) {
+	hit := false
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { hit = true }))
+	defer upstream.Close()
+	secrets := &secretResolverStub{workspaceValues: map[[2]string]string{{"ws-other", "gh-token"}: "Bearer other"}}
+	gateway, _, _ := urlGateway(t, &URLServer{
+		EndpointURL: upstream.URL,
+		Headers:     map[string]any{"Authorization": map[string]any{"secret_name": "gh-token"}},
+	}, secrets, []string{"127.0.0.1"})
+
+	recorder := httptest.NewRecorder()
+	gateway.ServeHTTP(recorder, urlRequest())
+
+	if recorder.Code != http.StatusBadGateway || hit {
+		t.Fatalf("status = %d hit = %v, want 502 and no upstream call", recorder.Code, hit)
 	}
 }

@@ -140,7 +140,7 @@ func (s *Service) Import(ctx context.Context, instanceID string) (ImportResponse
 	if err != nil {
 		return ImportResponse{}, newHTTPError(http.StatusUnprocessableEntity, err.Error(), nil)
 	}
-	backendSpec, err := providers.BuildBackendInstanceSpec(instance, s.secrets)
+	backendSpec, err := providers.BuildBackendInstanceSpec(ctx, instance, s.secrets, s.logger)
 	if err != nil {
 		return ImportResponse{}, newHTTPError(http.StatusUnprocessableEntity, "resolve connection environment: "+err.Error(), nil)
 	}

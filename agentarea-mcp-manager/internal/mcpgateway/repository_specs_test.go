@@ -130,11 +130,22 @@ func TestURLServerSpecHeadersAndSecretNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("urlServerSpec() error = %v", err)
 	}
-	if !reflect.DeepEqual(server.Headers, map[string]string{"X-Instance": "i"}) {
+	if !reflect.DeepEqual(server.Headers, map[string]any{"X-Instance": "i"}) {
 		t.Fatalf("Headers = %#v, want the instance's object replacing the server's", server.Headers)
 	}
 	if !reflect.DeepEqual(server.EnvVars, []string{"X-Api-Key"}) {
 		t.Fatalf("EnvVars = %#v, want the instance's own names only", server.EnvVars)
+	}
+}
+
+func TestURLServerSpecKeepsASecretReference(t *testing.T) {
+	server, err := urlServerSpec([]byte(`{}`), []byte(`{"headers":{"Authorization":{"secret_name":"gh-token"}}}`), "https://remote.example")
+	if err != nil {
+		t.Fatalf("urlServerSpec() error = %v", err)
+	}
+	want := map[string]any{"Authorization": map[string]any{"secret_name": "gh-token"}}
+	if !reflect.DeepEqual(server.Headers, want) {
+		t.Fatalf("Headers = %#v, want the reference kept for resolution", server.Headers)
 	}
 }
 

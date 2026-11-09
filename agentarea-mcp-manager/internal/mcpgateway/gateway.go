@@ -279,7 +279,7 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		}()
 	}
 	if loaded.URL != nil {
-		g.serveURL(response, request, instanceID, loaded.URL)
+		g.serveURL(response, request, instanceID, loaded.WorkspaceID, loaded.URL)
 		return
 	}
 	instance := loaded.Container
