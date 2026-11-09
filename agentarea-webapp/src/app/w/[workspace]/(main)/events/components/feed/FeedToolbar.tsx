@@ -28,7 +28,6 @@ import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { EntityIcon } from "@/lib/entity-icons";
 import {
   FEED_ORIGINS,
-  feedHref,
   feedOrigin,
   originPatch,
   parseFeedState,
@@ -38,6 +37,7 @@ import {
 } from "@/lib/eventFeed";
 import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
 import EventsSectionTabs from "../EventsSectionTabs";
+import { useFeedHref, useFeedPath } from "./FeedPath";
 import { useResultFilter } from "./useResultFilter";
 
 const ALL = "all";
@@ -173,6 +173,8 @@ export default function FeedToolbar({
     (slug, index, all) =>
       slug !== PLATFORM_SOURCE_TYPE && all.indexOf(slug) === index
   );
+  const feedPath = useFeedPath();
+  const feedHref = useFeedHref();
   const go = (patch: Partial<FeedState>) =>
     router.push(
       feedHref(state, { ...patch, event: undefined, before: undefined }),
@@ -295,7 +297,7 @@ export default function FeedToolbar({
         search={
           <SearchInput
             urlParamName="kind"
-            urlPath="/events"
+            urlPath={feedPath.base}
             resetParamNames={["event", "before"]}
             placeholder={t("toolbar.kindPlaceholder")}
           />
