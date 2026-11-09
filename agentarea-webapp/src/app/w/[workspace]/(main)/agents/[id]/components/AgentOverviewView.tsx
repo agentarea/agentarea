@@ -93,13 +93,13 @@ export type AgentOverviewModel = {
   pendingApprovals: TaskResponse[];
   skills: string[];
   connections: string[];
+  /** The merged policy the agent runs under (workspace + agent rules). */
   policies:
     | {
         status: "ok";
-        count: number;
+        sources: number;
         effectCounts: Partial<Record<PolicyEffect, number>>;
       }
-    | { status: "adminOnly" }
     | { status: "error"; message: string };
   /** Sections whose data failed to load, with the reason. */
   loadErrors: {
@@ -180,7 +180,6 @@ export async function AgentOverviewView({
   model: AgentOverviewModel;
 }) {
   const t = await getTranslations("AgentOverviewPage");
-  const tAdmin = await getTranslations("AdminOnly");
   const { policies, currency } = model;
   const { agentRef, stats, loadErrors } = model;
   const locale = await getLocale();
@@ -617,20 +616,16 @@ export async function AgentOverviewView({
                 href="/policies"
                 tile={<SoftTile icon={<Shield />} />}
                 title={
-                  policies.status === "adminOnly"
-                    ? tAdmin("areas.policies.title")
-                    : policies.status === "error"
-                      ? t("guardrailsLoadFailed")
-                      : policies.count > 0
-                        ? t("effectiveGuardrails", { count: policies.count })
-                        : t("noGuardrails")
+                  policies.status === "error"
+                    ? t("guardrailsLoadFailed")
+                    : policies.sources > 0
+                      ? t("effectiveGuardrails", { count: policies.sources })
+                      : t("noGuardrails")
                 }
                 sub={
-                  policies.status === "adminOnly" ? (
-                    tAdmin("hints.viewPolicies")
-                  ) : policies.status === "error" ? (
+                  policies.status === "error" ? (
                     policies.message
-                  ) : policies.count > 0 ? (
+                  ) : Object.keys(policies.effectCounts).length > 0 ? (
                     <span className="flex flex-wrap gap-x-2.5">
                       {EFFECT_ORDER.filter((e) => policies.effectCounts[e]).map(
                         (e) => (
@@ -654,7 +649,7 @@ export async function AgentOverviewView({
                       )}
                     </span>
                   ) : (
-                    t("waitingOnInput")
+                    t("noGuardrailsHint")
                   )
                 }
               />
