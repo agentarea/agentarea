@@ -322,6 +322,7 @@ export function BundlePlan({
   const planBlocking = (planned?.preview.issues ?? []).filter(
     (i) => i.severity === "block"
   );
+  const ready = planned !== null && planBlocking.length === 0 ? planned : null;
 
   return (
     <div className="space-y-4">
@@ -393,7 +394,7 @@ export function BundlePlan({
             <StartAgentButton
               size="xs"
               onClick={() =>
-                planned ? runInstall(draft, planned) : plan(draft, false)
+                ready ? runInstall(draft, ready) : plan(draft, false)
               }
               isLoading={
                 install.kind === "planning" || install.kind === "installing"
@@ -402,11 +403,10 @@ export function BundlePlan({
                 blocking.length > 0 ||
                 missing.length > 0 ||
                 modelless.length > 0 ||
-                planBlocking.length > 0 ||
-                (planned !== null && !planned.preview.plan_digest)
+                (ready !== null && !ready.preview.plan_digest)
               }
             >
-              {!planned
+              {!ready
                 ? t("reviewPlan")
                 : agentsKept
                   ? t("start")

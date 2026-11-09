@@ -11,6 +11,7 @@ import type {
   PreviewIssue,
   SetupField,
 } from "@/api/client/types.gen";
+import { apiErrorCode } from "@/lib/api-errors";
 import { defaultModelId } from "@/lib/default-model";
 import { agentPath } from "@/types/agent";
 import type { Policy } from "@/types/policies";
@@ -340,12 +341,8 @@ export function planKey(draft: InstallDraft): string {
 
 /** Install refused the plan it was sent: the workspace changed since it was shown. */
 export function isPlanChanged(result: { error?: unknown; status?: number }) {
-  const error = result.error;
   return (
-    result.status === 409 &&
-    typeof error === "object" &&
-    error !== null &&
-    (error as Record<string, unknown>).code === "bundle_plan_changed"
+    result.status === 409 && apiErrorCode(result) === "bundle_plan_changed"
   );
 }
 
