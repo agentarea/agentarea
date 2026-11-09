@@ -59,6 +59,26 @@ describe("apiErrorMessage", () => {
     );
   });
 
+  it("appends the issues a problem body carries after its detail", () => {
+    const message = apiErrorMessage(
+      {
+        error: {
+          detail: "package is not installable",
+          issues: [
+            { severity: "block", message: "model 'x' does not exist" },
+            { severity: "block", message: "required setup field 'bot' is missing" },
+          ],
+        },
+        status: 400,
+      },
+      "Install failed"
+    );
+
+    expect(message).toBe(
+      "Install failed (400): package is not installable: model 'x' does not exist, required setup field 'bot' is missing"
+    );
+  });
+
   it("passes a plain string error through", () => {
     expect(apiErrorMessage({ error: "boom" }, "Failed")).toBe("Failed: boom");
   });

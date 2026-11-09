@@ -4,6 +4,13 @@ import logging
 from typing import Annotated, Any
 
 import httpx
+from agentarea_agents.application.agent_service import (
+    InvalidClientError,
+    InvalidDelegateError,
+    InvalidMcpToolError,
+    InvalidModelIdError,
+    ReasoningConflictError,
+)
 from agentarea_api.api.deps.services import (
     AgentServiceDep,
     BaseSecretManagerDep,
@@ -13,16 +20,19 @@ from agentarea_api.api.deps.services import (
     get_trigger_service,
 )
 from agentarea_bundles.application.analyzer import BundleParseError
+from agentarea_bundles.application.folder import check_folder_path
 from agentarea_bundles.application.installer import BundleInstallError, BundleValidationError
-from agentarea_bundles.application.service import BundleService
+from agentarea_bundles.application.service import BundlePlanChangedError, BundleService
 from agentarea_bundles.schemas.bundle import Bundle
 from agentarea_bundles.schemas.preview import ImportPreview
 from agentarea_bundles.schemas.result import InstallResult
+from agentarea_common.agent_status import AgentArchivedError
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.exceptions.errors import AppError
 from agentarea_common.utils.url_safety import OutboundPolicy, safe_async_client
 from agentarea_openapi.application.url_validator import validate_url
+from agentarea_triggers.logging_utils import TriggerValidationError
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
@@ -108,31 +118,67 @@ BundleServiceDep = Annotated[BundleService, Depends(get_bundle_service)]
 class AnalyzeRequest(BaseModel):
     """Analyze a bundle into an import preview.
 
-    Provide exactly one of ``source`` (pasted text) or ``source_url`` (a URL the
-    server fetches behind the SSRF guard). ``source_url`` is what a landing-page
-    deep-link (`/bundles/import?src=<url>`) uses for one-click installs.
+    Provide exactly one of ``source`` (pasted text), ``source_url`` (a URL the
+    server fetches behind the SSRF guard), ``files`` (an agent folder) or
+    ``bundle`` (a canonical bundle, e.g. one edited after an earlier analyze).
+    ``source_url`` is what a landing-page deep-link (`/bundles/import?src=<url>`)
+    uses for one-click installs; ``files`` is what ``agentarea deploy`` sends.
     """
 
     source: str | None = Field(default=None, description="Raw bundle source text (YAML or JSON).")
     source_url: str | None = Field(
         default=None, description="URL to fetch raw bundle source from (YAML or JSON)."
     )
+    files: dict[str, str] | None = Field(
+        default=None,
+        description=(
+            "An agent folder: relative POSIX path -> UTF-8 file text, rooted at agent.yaml. "
+            "5MB total."
+        ),
+    )
+    bundle: Bundle | None = Field(
+        default=None, description="A canonical bundle, as an earlier analyze returned it."
+    )
+    setup_values: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Setup values the install will be given, so a redeploy plan shows what a changed "
+            "value updates. The plan_digest holds only for these values."
+        ),
+    )
 
     @model_validator(mode="after")
     def _exactly_one_source(self) -> AnalyzeRequest:
         provided = [s for s in (self.source, self.source_url) if s and s.strip()]
+        if self.files:
+            provided.append("files")
+        if self.bundle is not None:
+            provided.append("bundle")
         if len(provided) != 1:
-            raise ValueError("provide exactly one of 'source' or 'source_url'")
+            raise ValueError("provide exactly one of 'source', 'source_url', 'files' or 'bundle'")
+        if self.files:
+            for path in self.files:
+                check_folder_path(path)
+            size = sum(len(p.encode()) + len(t.encode()) for p, t in self.files.items())
+            if size > _MAX_BUNDLE_BYTES:
+                raise ValueError("agent folder exceeds 5MB limit")
         return self
 
 
 class InstallRequest(BaseModel):
-    """Install a (previously analyzed, possibly edited) canonical bundle."""
+    """Install a canonical bundle by the plan analyze showed for it."""
 
     bundle: Bundle
     setup_values: dict[str, Any] = Field(
         default_factory=dict,
         description="Values for the bundle's setup fields, keyed by setup field key.",
+    )
+    plan_digest: str = Field(
+        min_length=1,
+        description=(
+            "The plan_digest analyze returned for this bundle and these setup values: the plan "
+            "the caller approved."
+        ),
     )
 
 
@@ -152,7 +198,20 @@ async def analyze_bundle(
     body: AnalyzeRequest,
     service: BundleServiceDep,
 ) -> ImportPreview:
-    """Parse and analyze a bundle source, returning a non-destructive preview."""
+    """Parse and analyze a bundle source, returning a non-destructive preview.
+
+    For a bundle installed here before, each entity's status is a plan against
+    that install: will_create, will_update, unchanged, orphaned (kept, not
+    deleted), or changes_not_applied for a changed MCP server or GitHub skill.
+    """
+    if body.bundle is not None:
+        return await service.analyze_bundle(body.bundle, body.setup_values)
+    if body.files:
+        try:
+            return await service.analyze_files(body.files, body.setup_values)
+        except BundleParseError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     source = body.source
     if body.source_url:
         try:
@@ -174,7 +233,7 @@ async def analyze_bundle(
             ) from exc
 
     try:
-        return await service.analyze_text(source or "")
+        return await service.analyze_text(source or "", body.setup_values)
     except BundleParseError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -184,8 +243,9 @@ async def analyze_bundle(
     response_model=InstallResult,
     dependencies=[
         enforced_in_handler(
-            "workspace member; a bundle carrying policies needs workspace admin, "
-            "checked by BundleInstaller before anything is written"
+            "workspace member; before anything is written, BundleService checks edit "
+            "permission on every entity the plan updates, and BundleInstaller requires "
+            "workspace admin for a bundle carrying policies"
         )
     ],
 )
@@ -195,13 +255,21 @@ async def install_bundle(
 ) -> InstallResult:
     """Install a canonical bundle: MCP instances, skills, agents and automations.
 
-    All or nothing: a failure removes whatever this install had created. A
-    bundle or setup value that is invalid answers 422 (``code: bundle_invalid``);
-    any other install failure answers 400 (``code: bundle_install_failed``). Both
-    are problem+json with the message in ``detail`` and the blocking ``issues``.
+    A bundle installed here before is redeployed: what it created is updated in
+    place where the plan says so, and what it no longer declares is kept.
+    All or nothing: a failure removes whatever this install had created. A plan
+    other than the one ``plan_digest`` names answers 409
+    (``code: bundle_plan_changed``) and writes nothing. A bundle or setup value
+    that is invalid answers 422 (``code: bundle_invalid``); any other install
+    failure answers 400 (``code: bundle_install_failed``). All are problem+json
+    with the message in ``detail`` and the blocking ``issues``.
     """
     try:
-        return await service.install(body.bundle, body.setup_values)
+        return await service.install(body.bundle, body.setup_values, body.plan_digest)
+    except BundlePlanChangedError as exc:
+        raise AppError(
+            str(exc), status_code=409, code="bundle_plan_changed", extra={"issues": []}
+        ) from exc
     except BundleInstallError as exc:
         invalid = isinstance(exc, BundleValidationError)
         raise AppError(
@@ -209,4 +277,16 @@ async def install_bundle(
             status_code=422 if invalid else 400,
             code="bundle_invalid" if invalid else "bundle_install_failed",
             extra={"issues": [i.model_dump(mode="json") for i in exc.issues]},
+        ) from exc
+    except (
+        InvalidModelIdError,
+        InvalidClientError,
+        InvalidDelegateError,
+        InvalidMcpToolError,
+        ReasoningConflictError,
+        AgentArchivedError,
+        TriggerValidationError,
+    ) as exc:
+        raise AppError(
+            str(exc), status_code=400, code="bundle_install_failed", extra={"issues": []}
         ) from exc

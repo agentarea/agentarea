@@ -161,20 +161,6 @@ export const zAnalyticsResponse = z.object({
 });
 
 /**
- * AnalyzeRequest
- *
- * Analyze a bundle into an import preview.
- *
- * Provide exactly one of ``source`` (pasted text) or ``source_url`` (a URL the
- * server fetches behind the SSRF guard). ``source_url`` is what a landing-page
- * deep-link (`/bundles/import?src=<url>`) uses for one-click installs.
- */
-export const zAnalyzeRequest = z.object({
-  source: z.string().nullish(),
-  source_url: z.string().nullish(),
-});
-
-/**
  * AnswerCheckPolicy
  *
  * Check an agent's final answer and have the model rewrite it once if it leaks.
@@ -373,11 +359,15 @@ export const zBudgetPeriod = z.enum(["execution", "daily", "monthly"]);
  * An agent to create for the package.
  */
 export const zBundleAgent = z.object({
+  client: z.string().nullish(),
+  description: z.string().max(1000).optional().default(""),
   instruction: z.string().max(20000).optional().default(""),
   key: z.string().min(1),
   mcps: z.array(z.string()).optional(),
   model: z.string().nullish(),
   name: z.string().min(1).max(255),
+  reasoning_effort: z.string().nullish(),
+  reasoning_max_tokens: z.int().nullish(),
   skills: z.array(z.string()).optional(),
   toolsets: z.array(z.string()).optional(),
 });
@@ -430,8 +420,9 @@ export const zBundleChannel = z.object({
  */
 export const zBundleMcp = z.object({
   bindings: z.record(z.string(), z.string()).optional(),
+  catalog: z.string().max(255).nullish(),
   context_secret: z.string().nullish(),
-  json_spec: z.record(z.string(), z.unknown()),
+  json_spec: z.record(z.string(), z.unknown()).nullish(),
   key: z.string().min(1),
   name: z.string().min(1).max(255),
 });
@@ -480,9 +471,13 @@ export const zBundlePolicy = z.object({
  */
 export const zBundleSkill = z.object({
   content: z.string().nullish(),
+  files: z.record(z.string(), z.string()).nullish(),
   key: z.string().min(1),
   name: z.string().min(1).max(255),
-  source_type: z.enum(["content", "github"]).optional().default("content"),
+  source_type: z
+    .enum(["content", "files", "github"])
+    .optional()
+    .default("content"),
   source_url: z.string().nullish(),
 });
 
@@ -940,6 +935,10 @@ export const zEntityKind = z.enum([
  */
 export const zEntityStatus = z.enum([
   "will_create",
+  "will_update",
+  "unchanged",
+  "orphaned",
+  "changes_not_applied",
   "already_exists",
   "unsupported",
 ]);
@@ -1218,7 +1217,14 @@ export const zInputSecretValue = z.object({
 /**
  * InstallAction
  */
-export const zInstallAction = z.enum(["created", "reused", "skipped"]);
+export const zInstallAction = z.enum([
+  "created",
+  "updated",
+  "unchanged",
+  "orphaned",
+  "reused",
+  "skipped",
+]);
 
 /**
  * InstalledEntity
@@ -1226,6 +1232,7 @@ export const zInstallAction = z.enum(["created", "reused", "skipped"]);
 export const zInstalledEntity = z.object({
   action: zInstallAction,
   detail: z.string().nullish(),
+  fingerprint: z.string().nullish(),
   id: z.string().nullish(),
   key: z.string(),
   kind: zEntityKind,
@@ -1239,6 +1246,7 @@ export const zInstallResult = z.object({
   bundle_name: z.string(),
   entities: z.array(zInstalledEntity).optional(),
   installed_bundle_id: z.string().nullish(),
+  setup_values: z.record(z.string(), z.unknown()).optional(),
 });
 
 /**
@@ -3230,6 +3238,25 @@ export const zBundleInput = z.object({
 });
 
 /**
+ * AnalyzeRequest
+ *
+ * Analyze a bundle into an import preview.
+ *
+ * Provide exactly one of ``source`` (pasted text), ``source_url`` (a URL the
+ * server fetches behind the SSRF guard), ``files`` (an agent folder) or
+ * ``bundle`` (a canonical bundle, e.g. one edited after an earlier analyze).
+ * ``source_url`` is what a landing-page deep-link (`/bundles/import?src=<url>`)
+ * uses for one-click installs; ``files`` is what ``agentarea deploy`` sends.
+ */
+export const zAnalyzeRequest = z.object({
+  bundle: zBundleInput.nullish(),
+  files: z.record(z.string(), z.string()).nullish(),
+  setup_values: z.record(z.string(), z.unknown()).optional(),
+  source: z.string().nullish(),
+  source_url: z.string().nullish(),
+});
+
+/**
  * Bundle
  *
  * The canonical, fully-inlined package object.
@@ -3259,16 +3286,18 @@ export const zImportPreview = z.object({
   entities: z.array(zPreviewEntity).optional(),
   installable: z.boolean(),
   issues: z.array(zPreviewIssue).optional(),
+  plan_digest: z.string().nullish(),
   setup: z.array(zSetupField).optional(),
 });
 
 /**
  * InstallRequest
  *
- * Install a (previously analyzed, possibly edited) canonical bundle.
+ * Install a canonical bundle by the plan analyze showed for it.
  */
 export const zInstallRequest = z.object({
   bundle: zBundleInput,
+  plan_digest: z.string().min(1),
   setup_values: z.record(z.string(), z.unknown()).optional(),
 });
 

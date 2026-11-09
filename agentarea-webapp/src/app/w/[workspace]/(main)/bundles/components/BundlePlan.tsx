@@ -5,13 +5,18 @@
 // uses. "Use this bundle" does not swap in a different screen — the same
 // sections gain their switches, the model pickers and the setup fields, and a
 // footer that installs exactly what is on screen.
-import React, { useEffect, useMemo, useReducer, useState } from "react";
+import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Puzzle, Send, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import {
+  ListChecks,
+  Puzzle,
+  Send,
+  ShieldCheck,
+  SlidersHorizontal,
+} from "lucide-react";
 import type {
   BundleAgent,
   ImportPreview,
-  InstallResult,
   ModelInstanceResponse,
   SetupField,
 } from "@/api/client/types.gen";
@@ -24,6 +29,7 @@ import ConfigSheet from "@/components/ConfigSheet";
 import FormError from "@/components/FormError";
 import {
   FactRow,
+  GlanceRow,
   SectionCard,
   SectionCardHead,
   SoftTile,
@@ -44,7 +50,6 @@ import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { cn } from "@/lib/utils";
-import { agentPath } from "@/types";
 import {
   analyzeBundleAction,
   installBundleAction,
@@ -59,33 +64,54 @@ import {
   initialEdit,
   installedMcpKeys,
   isAgentMcpOn,
+  isPlanChanged,
+  launchPlan,
   missingRequiredSetup,
   openIssues,
+  planKey,
   setupFieldPlacement,
   suggestedModel,
   type BundleEdit,
   type BundleEditAction,
+  type InstallDraft,
+  type LaunchPlan,
 } from "./bundle-plan";
+import { BUNDLE_KIND_ICONS, DeployPlan } from "./DeployPlan";
 
 type Load =
   | { kind: "loading" }
   | { kind: "error"; message: string }
   | { kind: "ready"; preview: ImportPreview };
 
+// The plan analyze made of one draft; `key` is the draft's planKey.
+type Planned = { key: string; preview: ImportPreview };
+
+// Install sends the digest of the plan on screen, so a plan is shown first.
+// `changed` marks one made again after install found the workspace had moved on.
 type Install =
   | { kind: "idle" }
-  | { kind: "installing" }
+  | { kind: "planning" }
+  | { kind: "planned"; planned: Planned; changed: boolean }
+  | { kind: "installing"; planned: Planned }
   | { kind: "error"; message: string }
-  | { kind: "done"; result: InstallResult };
+  | { kind: "done"; name: string; plan: LaunchPlan };
 
+/**
+ * The bundle is read from `source` (its text) or `sourceUrl` (fetched by the
+ * server). `onLoaded` hands the analyzed bundle to a page that titles it.
+ */
 export function BundlePlan({
   source,
+  sourceUrl,
   configuring,
   onCancel,
+  onLoaded,
 }: {
-  source: string;
+  source?: string;
+  sourceUrl?: string;
   configuring: boolean;
   onCancel: () => void;
+  onLoaded?: (preview: ImportPreview) => void;
 }) {
   const { canAdminister } = useViewerCapabilities();
   const router = useWorkspaceRouter();
@@ -107,12 +133,18 @@ export function BundlePlan({
     policyOff: new Set<string>(),
     policyEnabled: {},
   }));
+  // A callback prop must not re-run the analysis when the parent re-renders.
+  const onLoadedRef = useRef(onLoaded);
+  onLoadedRef.current = onLoaded;
 
   useEffect(() => {
     let active = true;
     setLoad({ kind: "loading" });
+    setInstall({ kind: "idle" });
     Promise.all([
-      analyzeBundleAction({ source }),
+      analyzeBundleAction(
+        sourceUrl ? { source_url: sourceUrl } : { source: source ?? "" }
+      ),
       listActiveModelInstancesAction().then(
         (result) => ({
           ms: result.data ?? [],
@@ -142,6 +174,7 @@ export function BundlePlan({
         setModelsError(error);
         dispatch({ type: "reset", edit: initialEdit(analyzed.data, ms) });
         setLoad({ kind: "ready", preview: analyzed.data });
+        onLoadedRef.current?.(analyzed.data);
       })
       .catch((e: unknown) => {
         if (!active) return;
@@ -154,7 +187,7 @@ export function BundlePlan({
     return () => {
       active = false;
     };
-  }, [source, t]);
+  }, [source, sourceUrl, t]);
 
   // Re-pull workspace models after the quick provider sheet creates one, so it
   // is pickable without leaving the page.
@@ -186,12 +219,44 @@ export function BundlePlan({
 
   const preview = load.preview;
 
-  async function runInstall() {
-    setInstall({ kind: "installing" });
+  async function plan(draft: InstallDraft, changed: boolean) {
+    setInstall({ kind: "planning" });
     try {
-      const installed = await installBundleAction(
-        buildInstallRequest(preview, edit, canAdminister)
-      );
+      const planned = await analyzeBundleAction(draft);
+      if (planned.error || !planned.data) {
+        setInstall({
+          kind: "error",
+          message: apiErrorMessage(planned, t("analyzeFailed")),
+        });
+        return;
+      }
+      setInstall({
+        kind: "planned",
+        planned: { key: planKey(draft), preview: planned.data },
+        changed,
+      });
+    } catch (e) {
+      console.error("Failed to plan the bundle install", e);
+      setInstall({
+        kind: "error",
+        message: `${t("analyzeFailed")}: ${formatApiError(e)}`,
+      });
+    }
+  }
+
+  async function runInstall(draft: InstallDraft, planned: Planned) {
+    const digest = planned.preview.plan_digest;
+    if (!digest) return;
+    setInstall({ kind: "installing", planned });
+    try {
+      const installed = await installBundleAction({
+        ...draft,
+        plan_digest: digest,
+      });
+      if (isPlanChanged(installed)) {
+        await plan(draft, true);
+        return;
+      }
       if (installed.error || !installed.data) {
         setInstall({
           kind: "error",
@@ -199,17 +264,23 @@ export function BundlePlan({
         });
         return;
       }
-      // A bundle that ships an agent is started, not just installed: open the
-      // first one on its new-task page. Agentless bundles get the summary.
-      const agent = (installed.data.entities ?? []).find(
-        (e) => e.kind === "agent" && e.id
-      );
-      if (agent?.id) {
-        router.push(agentPath({ id: agent.id }, "/new-task"));
+      // A lone agent with nothing left to finish is started right away; an
+      // organisation lands on its launch screen. The button keeps spinning
+      // until the route changes.
+      const launch = launchPlan(draft, installed.data);
+      if (launch.openNow) {
+        router.push(launch.openNow);
         router.refresh();
         return;
       }
-      setInstall({ kind: "done", result: installed.data });
+      setInstall({
+        kind: "done",
+        name:
+          preview.bundle.display_name ||
+          installed.data.bundle_name ||
+          preview.bundle.name,
+        plan: launch,
+      });
     } catch (e) {
       console.error("Failed to install bundle", e);
       setInstall({
@@ -221,9 +292,10 @@ export function BundlePlan({
 
   if (install.kind === "done") {
     return (
-      <InstallSummary
-        result={install.result}
-        onBack={() => {
+      <BundleLaunch
+        name={install.name}
+        plan={install.plan}
+        onDone={() => {
           setInstall({ kind: "idle" });
           onCancel();
         }}
@@ -239,6 +311,18 @@ export function BundlePlan({
   const agentsKept = (preview.bundle.agents ?? []).some(
     (a) => !edit.agentOff.has(a.key)
   );
+  const draft = buildInstallRequest(preview, edit, canAdminister);
+  const draftKey = planKey(draft);
+  // A plan made of another draft no longer says what install would do.
+  const shown =
+    install.kind === "planned" || install.kind === "installing"
+      ? install.planned
+      : null;
+  const planned = shown?.key === draftKey ? shown : null;
+  const planBlocking = (planned?.preview.issues ?? []).filter(
+    (i) => i.severity === "block"
+  );
+  const ready = planned !== null && planBlocking.length === 0 ? planned : null;
 
   return (
     <div className="space-y-4">
@@ -275,6 +359,26 @@ export function BundlePlan({
 
       {configuring && (
         <div className="flex flex-col gap-2 border-t border-border/60 pt-5">
+          {planned && <DeployPlan plan={planned.preview} />}
+          {install.kind === "planned" && install.changed && planned && (
+            <StatusIndicator kind="attention" size="sm" className="text-xs">
+              {t("planChanged")}
+            </StatusIndicator>
+          )}
+          {shown && !planned && (
+            <StatusIndicator kind="attention" size="sm" className="text-xs">
+              {t("planStale")}
+            </StatusIndicator>
+          )}
+          {planBlocking.length > 0 && (
+            <FormError>
+              {planBlocking.map((i) => (
+                <span key={i.message} className="block">
+                  {i.message}
+                </span>
+              ))}
+            </FormError>
+          )}
           {install.kind === "error" && <FormError>{install.message}</FormError>}
           {modelless.length > 0 && (
             <StatusIndicator kind="attention" size="sm" className="text-xs">
@@ -289,15 +393,24 @@ export function BundlePlan({
           <div className="flex items-center gap-2">
             <StartAgentButton
               size="xs"
-              onClick={runInstall}
-              isLoading={install.kind === "installing"}
+              onClick={() =>
+                ready ? runInstall(draft, ready) : plan(draft, false)
+              }
+              isLoading={
+                install.kind === "planning" || install.kind === "installing"
+              }
               disabled={
                 blocking.length > 0 ||
                 missing.length > 0 ||
-                modelless.length > 0
+                modelless.length > 0 ||
+                (ready !== null && !ready.preview.plan_digest)
               }
             >
-              {agentsKept ? t("start") : t("installBundle")}
+              {!ready
+                ? t("reviewPlan")
+                : agentsKept
+                  ? t("start")
+                  : t("installBundle")}
             </StartAgentButton>
             <Button variant="ghost" size="sm" onClick={onCancel}>
               {tCommon("cancel")}
@@ -436,8 +549,11 @@ function BundleSections({
             />
             {mcps.map((m) => {
               const kept = !edit.mcpOff.has(m.key);
-              const transport =
-                typeof m.json_spec?.type === "string" ? m.json_spec.type : null;
+              const source =
+                m.catalog ??
+                (typeof m.json_spec?.type === "string"
+                  ? m.json_spec.type
+                  : null);
               const needs = boundSetupKeys(m.bindings).map(setupLabel);
               return (
                 <div key={m.key} className={cn(!kept && "opacity-60")}>
@@ -446,7 +562,7 @@ function BundleSections({
                     title={m.name}
                     sub={
                       [
-                        transport,
+                        source,
                         needs.length > 0 ? `needs ${needs.join(", ")}` : null,
                         editing && kept && !installed.has(m.key)
                           ? "no agent uses it"
@@ -946,55 +1062,142 @@ function SetupFieldInput({
   );
 }
 
-function InstallSummary({
-  result,
-  onBack,
+function BundleLaunch({
+  name,
+  plan,
+  onDone,
 }: {
-  result: InstallResult;
-  onBack: () => void;
+  name: string;
+  plan: LaunchPlan;
+  onDone: () => void;
 }) {
-  const entities = result.entities ?? [];
-  const created = entities.filter((e) => e.action === "created");
-  const reused = entities.filter((e) => e.action === "reused");
-  const skipped = entities.filter((e) => e.action === "skipped");
+  const t = useTranslations("BundleInstall.launch");
 
   return (
-    <SectionCard>
-      <SectionCardHead
-        icon={<Puzzle />}
-        title={`Installed ${result.bundle_name}`}
-      />
-      <div className="border-b border-border/60 px-[15px] py-[11px]">
-        <StatusIndicator kind="done" size="sm" className="text-sm">
-          {created.length} created
-          {reused.length > 0 ? `, ${reused.length} reused` : ""}
-          {skipped.length > 0 ? `, ${skipped.length} skipped` : ""}.
-        </StatusIndicator>
+    <div className="space-y-4">
+      <StatusIndicator kind="done" size="sm" className="text-sm">
+        {t("installed", { name })}
+      </StatusIndicator>
+
+      {plan.agents.length > 0 && (
+        <SectionCard>
+          <SectionCardHead
+            icon={<ENTITY_ICONS.agent />}
+            title={t("agentsTitle", { count: plan.agents.length })}
+          />
+          <p className="border-b border-border/60 px-[15px] py-[9px] text-xs text-muted-foreground">
+            {t("agentsHint")}
+          </p>
+          {plan.agents.map((agent, index) => (
+            <FactRow
+              key={agent.key}
+              tile={
+                <AgentAvatar
+                  agent={{ id: agent.id, name: agent.name }}
+                  size="sm"
+                />
+              }
+              title={agent.name}
+              trailing={
+                <StartAgentButton
+                  asChild
+                  size="2xs"
+                  light={index > 0}
+                  className="w-auto"
+                >
+                  <Link href={agent.href}>{t("openChat")}</Link>
+                </StartAgentButton>
+              }
+            />
+          ))}
+        </SectionCard>
+      )}
+
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        {plan.todo.length > 0 && (
+          <SectionCard>
+            <SectionCardHead
+              icon={<ListChecks />}
+              title={t("todoTitle", { count: plan.todo.length })}
+            />
+            {plan.todo.map((item) => (
+              <GlanceRow
+                key={item.key}
+                href={item.href}
+                tile={
+                  <SoftTile
+                    icon={
+                      item.kind === "channel" ? (
+                        <Send />
+                      ) : (
+                        <ENTITY_ICONS.trigger />
+                      )
+                    }
+                  />
+                }
+                title={item.name}
+                sub={
+                  item.kind === "channel"
+                    ? t("off_channel")
+                    : t("off_automation")
+                }
+                trailing={t("open")}
+              />
+            ))}
+          </SectionCard>
+        )}
+
+        {plan.skipped.length > 0 && (
+          <SectionCard>
+            <SectionCardHead
+              icon={<Puzzle />}
+              title={t("skippedTitle", { count: plan.skipped.length })}
+            />
+            {plan.skipped.map((item) => {
+              const Icon = BUNDLE_KIND_ICONS[item.kind];
+              return (
+                <FactRow
+                  key={item.key}
+                  tile={<SoftTile icon={<Icon />} />}
+                  title={item.name}
+                  sub={item.detail}
+                />
+              );
+            })}
+          </SectionCard>
+        )}
+
+        {plan.connections.length > 0 && (
+          <SectionCard>
+            <SectionCardHead
+              icon={<ENTITY_ICONS.mcp />}
+              title={t("connectionsTitle", { count: plan.connections.length })}
+            />
+            <p className="border-b border-border/60 px-[15px] py-[9px] text-xs text-muted-foreground">
+              {t("connectionsHint")}
+            </p>
+            {plan.connections.map((c) => (
+              <GlanceRow
+                key={c.key}
+                href={c.href}
+                tile={<SoftTile icon={<ENTITY_ICONS.mcp />} />}
+                title={c.name}
+                sub={null}
+                trailing={t("open")}
+              />
+            ))}
+          </SectionCard>
+        )}
       </div>
-      {entities.map((e) => (
-        <FactRow
-          key={`${e.kind}-${e.key}`}
-          title={e.name}
-          sub={e.kind}
-          trailing={
-            <Badge
-              variant={e.action === "created" ? "blue" : "light"}
-              size="sm"
-              className="capitalize"
-            >
-              {e.action}
-            </Badge>
-          }
-        />
-      ))}
-      <div className="flex items-center gap-2 px-[15px] py-[11px]">
-        <Button asChild size="sm">
-          <Link href="/agents">Go to Agents</Link>
+
+      <div className="flex items-center gap-2">
+        <Button asChild variant="outline" size="sm">
+          <Link href="/agents">{t("allAgents")}</Link>
         </Button>
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          Done
+        <Button variant="ghost" size="sm" onClick={onDone}>
+          {t("done")}
         </Button>
       </div>
-    </SectionCard>
+    </div>
   );
 }

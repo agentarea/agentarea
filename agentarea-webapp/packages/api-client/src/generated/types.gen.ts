@@ -685,11 +685,33 @@ export type AnalyticsResponse = {
  *
  * Analyze a bundle into an import preview.
  *
- * Provide exactly one of ``source`` (pasted text) or ``source_url`` (a URL the
- * server fetches behind the SSRF guard). ``source_url`` is what a landing-page
- * deep-link (`/bundles/import?src=<url>`) uses for one-click installs.
+ * Provide exactly one of ``source`` (pasted text), ``source_url`` (a URL the
+ * server fetches behind the SSRF guard), ``files`` (an agent folder) or
+ * ``bundle`` (a canonical bundle, e.g. one edited after an earlier analyze).
+ * ``source_url`` is what a landing-page deep-link (`/bundles/import?src=<url>`)
+ * uses for one-click installs; ``files`` is what ``agentarea deploy`` sends.
  */
 export type AnalyzeRequest = {
+    /**
+     * A canonical bundle, as an earlier analyze returned it.
+     */
+    bundle?: BundleInput | null;
+    /**
+     * Files
+     *
+     * An agent folder: relative POSIX path -> UTF-8 file text, rooted at agent.yaml. 5MB total.
+     */
+    files?: {
+        [key: string]: string;
+    } | null;
+    /**
+     * Setup Values
+     *
+     * Setup values the install will be given, so a redeploy plan shows what a changed value updates. The plan_digest holds only for these values.
+     */
+    setup_values?: {
+        [key: string]: unknown;
+    };
     /**
      * Source
      *
@@ -1337,6 +1359,16 @@ export type BundleOutput = {
  */
 export type BundleAgent = {
     /**
+     * Client
+     *
+     * The id of a Codex or Claude Code client of the workspace whose runner runs the agent's tasks, or a ${setup.x} reference to one. Unset runs them on the platform.
+     */
+    client?: string | null;
+    /**
+     * Description
+     */
+    description?: string;
+    /**
      * Instruction
      */
     instruction?: string;
@@ -1358,6 +1390,18 @@ export type BundleAgent = {
      * Name
      */
     name: string;
+    /**
+     * Reasoning Effort
+     *
+     * A reasoning level the model takes, e.g. low or high. Not with reasoning_max_tokens.
+     */
+    reasoning_effort?: string | null;
+    /**
+     * Reasoning Max Tokens
+     *
+     * A token budget for the model's reasoning. Not with reasoning_effort.
+     */
+    reasoning_max_tokens?: number | null;
     /**
      * Skills
      *
@@ -1484,6 +1528,12 @@ export type BundleMcp = {
         [key: string]: string;
     };
     /**
+     * Catalog
+     *
+     * Id of a catalog MCP server, e.g. 'ru.yookassa/mcp' or 'io.github.owner/server/command'. Set this or json_spec.
+     */
+    catalog?: string | null;
+    /**
      * Context Secret
      *
      * URL MCPs only. A ${setup.x} reference to a secret setup field whose value becomes the instance's context_secret: the key AgentArea signs each tool call's context with. Write-only, like a header secret.
@@ -1494,9 +1544,9 @@ export type BundleMcp = {
      *
      * Native MCP runtime spec. Must include 'type' (command|docker|url).
      */
-    json_spec: {
+    json_spec?: {
         [key: string]: unknown;
-    };
+    } | null;
     /**
      * Key
      *
@@ -1627,6 +1677,14 @@ export type BundleSkill = {
      */
     content?: string | null;
     /**
+     * Files
+     *
+     * Package files for source_type=files: relative path -> UTF-8 text, SKILL.md at the root.
+     */
+    files?: {
+        [key: string]: string;
+    } | null;
+    /**
      * Key
      */
     key: string;
@@ -1637,7 +1695,7 @@ export type BundleSkill = {
     /**
      * Source Type
      */
-    source_type?: 'content' | 'github';
+    source_type?: 'content' | 'files' | 'github';
     /**
      * Source Url
      *
@@ -2873,7 +2931,7 @@ export type EntityKind = 'mcp' | 'skill' | 'agent' | 'channel' | 'automation' | 
 /**
  * EntityStatus
  */
-export type EntityStatus = 'will_create' | 'already_exists' | 'unsupported';
+export type EntityStatus = 'will_create' | 'will_update' | 'unchanged' | 'orphaned' | 'changes_not_applied' | 'already_exists' | 'unsupported';
 
 /**
  * EscalationResolution
@@ -3610,6 +3668,12 @@ export type ImportPreview = {
      */
     issues?: Array<PreviewIssue>;
     /**
+     * Plan Digest
+     *
+     * Names this plan: the bundle and what it does with each entity. Install takes it and refuses with 409 when the plan it would carry out is no longer this one. Null when there is no plan to install.
+     */
+    plan_digest?: string | null;
+    /**
      * Setup
      */
     setup?: Array<SetupField>;
@@ -3656,15 +3720,21 @@ export type InputSecretValue = {
 /**
  * InstallAction
  */
-export type InstallAction = 'created' | 'reused' | 'skipped';
+export type InstallAction = 'created' | 'updated' | 'unchanged' | 'orphaned' | 'reused' | 'skipped';
 
 /**
  * InstallRequest
  *
- * Install a (previously analyzed, possibly edited) canonical bundle.
+ * Install a canonical bundle by the plan analyze showed for it.
  */
 export type InstallRequest = {
     bundle: BundleInput;
+    /**
+     * Plan Digest
+     *
+     * The plan_digest analyze returned for this bundle and these setup values: the plan the caller approved.
+     */
+    plan_digest: string;
     /**
      * Setup Values
      *
@@ -3691,6 +3761,14 @@ export type InstallResult = {
      * Installed Bundle Id
      */
     installed_bundle_id?: string | null;
+    /**
+     * Setup Values
+     *
+     * Non-secret setup values supplied to installs of this bundle, reused on redeploy.
+     */
+    setup_values?: {
+        [key: string]: unknown;
+    };
 };
 
 /**
@@ -3702,6 +3780,12 @@ export type InstalledEntity = {
      * Detail
      */
     detail?: string | null;
+    /**
+     * Fingerprint
+     *
+     * sha256 of the resolved non-secret spec last applied; a redeploy diffs on it.
+     */
+    fingerprint?: string | null;
     /**
      * Id
      *

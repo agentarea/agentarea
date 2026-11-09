@@ -1,9 +1,9 @@
 """BundleService: analyze + install entry point.
 
 Wires the pure analyzer/installer to the workspace's repositories and domain
-services, and records an ``InstalledBundle`` row: the ids an install created or
-reused, which is how the next install of the same bundle finds its own entities
-(and how the preview says which already exist).
+services, implements the existence checker for preview status, and records an
+``InstalledBundle`` row: the ids an install created or reused, which is how the
+next install of the same bundle finds its own entities.
 """
 
 from __future__ import annotations
@@ -13,20 +13,52 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from agentarea_common.agent_status import AgentStatus
+from pydantic import ValidationError
 
 from agentarea_bundles.application.analyzer import (
     BundleAnalyzer,
+    CatalogMcp,
+    PriorInstall,
+    context_secret_errors,
+    effective_setup,
+    matching_rule,
     parse_bundle,
+    policy_as_rule,
+    required_setup_errors,
 )
-from agentarea_bundles.application.installer import BundleInstaller
+from agentarea_bundles.application.folder import load_folder
+from agentarea_bundles.application.installer import (
+    BundleInstaller,
+    BundleInstallError,
+    BundleValidationError,
+    automation_trigger,
+)
 from agentarea_bundles.domain.models import InstalledBundle
 from agentarea_bundles.infrastructure.repository import InstalledBundleRepository
-from agentarea_bundles.schemas.bundle import Bundle
-from agentarea_bundles.schemas.preview import EntityKind, ImportPreview
-from agentarea_bundles.schemas.result import InstallAction, InstallResult
+from agentarea_bundles.schemas.bundle import Bundle, BundleAgent, BundleAutomation, BundlePolicy
+from agentarea_bundles.schemas.preview import (
+    EntityKind,
+    EntityStatus,
+    ImportPreview,
+    IssueSeverity,
+    PreviewIssue,
+)
+from agentarea_bundles.schemas.result import InstallResult
 
 logger = logging.getLogger(__name__)
+
+
+# The resource type each kind's update route checks edit permission on.
+_RESOURCE_TYPES = {
+    EntityKind.SKILL: "skill",
+    EntityKind.AGENT: "agent",
+    EntityKind.CHANNEL: "trigger",
+    EntityKind.AUTOMATION: "trigger",
+}
+
+
+class BundlePlanChangedError(BundleInstallError):
+    """The plan install would carry out is not the one the caller approved."""
 
 
 class BundleService:
@@ -41,7 +73,7 @@ class BundleService:
         mcp_instance_service: Any,
         skill_service: Any,
         trigger_service: Any,
-        secret_manager: Any = None,
+        secret_manager: Any,
     ) -> None:
         self._repository_factory = repository_factory
         self._user_context = repository_factory.user_context
@@ -51,15 +83,11 @@ class BundleService:
         self._skill_service = skill_service
         self._trigger_service = trigger_service
         self._secret_manager = secret_manager
+        self._catalog_mcps: dict[str, CatalogMcp | None] = {}
 
-        # Repositories for existence checks / idempotency.
-        from agentarea_agents.infrastructure.repository import AgentRepository
-        from agentarea_agents.infrastructure.skill_repository import SkillRepository
         from agentarea_governance.application.service import GovernancePolicyService
         from agentarea_triggers.infrastructure.repository import TriggerRepository
 
-        self._agent_repository = repository_factory.create_repository(AgentRepository)
-        self._skill_repository = repository_factory.create_repository(SkillRepository)
         self._trigger_repository = repository_factory.create_repository(TriggerRepository)
         self._bundle_repository = repository_factory.create_repository(InstalledBundleRepository)
         # Governance service owns PolicyRule creation; built from the same factory.
@@ -67,38 +95,146 @@ class BundleService:
 
     # -- analyze ------------------------------------------------------------
 
-    async def analyze_text(self, text: str) -> ImportPreview:
+    async def analyze_text(
+        self, text: str, setup_values: dict[str, Any] | None = None
+    ) -> ImportPreview:
         """Parse source text into a package and produce an import preview."""
         package = await asyncio.to_thread(parse_bundle, text)
-        return await self.analyze_bundle(package)
+        return await self.analyze_bundle(package, setup_values)
 
-    async def analyze_bundle(self, package: Bundle) -> ImportPreview:
-        installed = await self._installed_ids(package.name)
-        analyzer = BundleAnalyzer(existence=_InstalledBefore(self, package.name, installed))
+    async def analyze_files(
+        self, files: dict[str, str], setup_values: dict[str, Any] | None = None
+    ) -> ImportPreview:
+        """Load an agent folder into a package and produce an import preview."""
+        package, folder_issues = await asyncio.to_thread(load_folder, files)
+        preview = await self.analyze_bundle(package, setup_values)
+        preview.issues = [*folder_issues, *preview.issues]
+        return preview
+
+    async def analyze_bundle(
+        self, package: Bundle, setup_values: dict[str, Any] | None = None
+    ) -> ImportPreview:
+        prior, unreadable = await self._prior(package.name)
+        if unreadable is not None:
+            return ImportPreview(
+                bundle=package, setup=package.setup, issues=[unreadable], installable=False
+            )
+        analyzer = BundleAnalyzer(
+            existence=self, prior=prior, setup_values=setup_values, checks=self
+        )
         return await analyzer.analyze(package)
+
+    async def _prior(self, name: str) -> tuple[PriorInstall | None, PreviewIssue | None]:
+        """The last install of this package in the workspace, the base a redeploy diffs on.
+
+        A stored record that no longer validates is a blocking issue, never "no
+        prior install": that would create everything it owns a second time.
+        """
+        record = await self._bundle_repository.get_by_name(name)
+        if record is None:
+            return None, None
+        try:
+            return PriorInstall.from_record(record.canonical, record.install_result), None
+        except ValidationError as exc:
+            logger.error("Stored install of bundle '%s' no longer validates", name, exc_info=True)
+            return None, PreviewIssue(
+                severity=IssueSeverity.BLOCK,
+                message=(
+                    f"the record of the last install of '{name}' no longer validates "
+                    f"({exc.error_count()} errors), so what it created cannot be matched; "
+                    "nothing is planned"
+                ),
+            )
 
     # -- install ------------------------------------------------------------
 
-    async def install(self, package: Bundle, setup_values: dict[str, Any]) -> InstallResult:
-        installer = BundleInstaller(
+    async def install(
+        self, package: Bundle, setup_values: dict[str, Any], plan_digest: str
+    ) -> InstallResult:
+        """Plan, refuse a plan other than the approved one or anything it blocks, then write.
+
+        ``plan_digest`` is the digest of the plan analyze showed. Anything that
+        changed the plan since, here or in the request, refuses the install
+        before it writes, so it never carries out what nobody approved.
+
+        All or nothing for what the install creates: a failure removes it again
+        and leaves the record of the last install as it was, so the next deploy
+        plans the same changes.
+        """
+        prior, unreadable = await self._prior(package.name)
+        if unreadable is not None:
+            raise BundleValidationError(unreadable.message, issues=[unreadable])
+        analyzer = BundleAnalyzer(
+            existence=self, prior=prior, setup_values=setup_values, checks=self
+        )
+        preview = await analyzer.analyze(package)
+        if preview.plan_digest != plan_digest:
+            raise BundlePlanChangedError(
+                "the deploy plan changed since it was shown; analyze the bundle again and "
+                "review the new plan"
+            )
+        values = effective_setup(package, setup_values, prior)
+        block = [
+            *preview.block_issues,
+            *required_setup_errors(package, values, analyzer.needed_setup),
+            *context_secret_errors(package, values),
+        ]
+        if block:
+            raise BundleValidationError(
+                f"package is not installable: {block[0].message}"
+                + (f" (and {len(block) - 1} more)" if len(block) > 1 else ""),
+                issues=block,
+            )
+
+        approved = {
+            (e.kind, e.key) for e in preview.entities if e.status is EntityStatus.WILL_UPDATE
+        }
+        writes_policies = any(
+            e.kind is EntityKind.POLICY
+            and e.status in (EntityStatus.WILL_CREATE, EntityStatus.WILL_UPDATE)
+            for e in preview.entities
+        )
+        installer = self._installer()
+        try:
+            result = await installer.install(
+                package,
+                setup_values,
+                prior=prior,
+                approved_updates=approved,
+                writes_policies=writes_policies,
+            )
+        except Exception:
+            if installer.updated_in_place:
+                await self._record_partial(package, installer)
+            raise
+        result.installed_bundle_id = await self._record(package, result)
+        return result
+
+    async def _record_partial(self, package: Bundle, installer: BundleInstaller) -> None:
+        """Keep ownership of what a redeploy wrote before it failed, so the next one finishes it."""
+        try:
+            await self._repository_factory.session.rollback()
+            await self._record(package, installer.partial_result(), status="failed")
+        except Exception:
+            logger.exception("Could not record the failed redeploy of bundle '%s'", package.name)
+
+    def _installer(self) -> BundleInstaller:
+        return BundleInstaller(
             mcp_server_service=self._mcp_server_service,
             mcp_instance_service=self._mcp_instance_service,
             skill_service=self._skill_service,
-            skill_repository=self._skill_repository,
             agent_service=self._agent_service,
-            agent_repository=self._agent_repository,
             trigger_service=self._trigger_service,
             trigger_repository=self._trigger_repository,
             governance_service=self._governance_service,
             user_context=self._user_context,
+            may_edit=self.may_edit,
             secret_manager=self._secret_manager,
-            installed=await self._installed_ids(package.name),
         )
-        result = await installer.install(package, setup_values)
-        result.installed_bundle_id = await self._record(package, result)
-        return result
 
-    async def _record(self, package: Bundle, result: InstallResult) -> str:
+    async def _record(
+        self, package: Bundle, result: InstallResult, *, status: str = "installed"
+    ) -> str:
         """Upsert the InstalledBundle provenance row (idempotent by name)."""
         existing = await self._bundle_repository.get_by_name(package.name)
         install_result = result.model_dump(mode="json")
@@ -108,7 +244,7 @@ class BundleService:
                 display_name=package.display_name,
                 description=package.description,
                 schema_version=package.schema_version,
-                status="installed",
+                status=status,
                 canonical=package.model_dump(mode="json"),
                 install_result=install_result,
             )
@@ -118,69 +254,125 @@ class BundleService:
             display_name=package.display_name,
             description=package.description,
             schema_version=package.schema_version,
-            status="installed",
+            status=status,
             canonical=package.model_dump(mode="json"),
             install_result=install_result,
         )
         return str(created.id)
 
-    async def _installed_ids(self, bundle_name: str) -> dict[tuple[str, str], str]:
-        """{(entity kind, bundle key) -> id} the last install of this bundle recorded."""
-        record = await self._bundle_repository.get_by_name(bundle_name)
-        entities = (record.install_result or {}).get("entities") if record else None
-        installed: dict[tuple[str, str], str] = {}
-        for entity in entities or []:
-            if not isinstance(entity, dict) or not entity.get("id"):
-                continue
-            if entity.get("action") in (InstallAction.CREATED, InstallAction.REUSED):
-                installed[(str(entity.get("kind")), str(entity.get("key")))] = str(entity["id"])
-        return installed
+    # -- ExistenceChecker ---------------------------------------------------
 
-    async def _recorded(self, installed: dict[tuple[str, str], str], kind: EntityKind, key: str):
-        recorded = installed.get((kind.value, key))
-        if not recorded:
+    async def find_trigger(self, name: str, agent_id: str, recorded: str | None) -> str | None:
+        triggers = await self._trigger_repository.list_all()
+        return next(
+            (
+                str(t.id)
+                for t in triggers
+                if t.name == name and str(t.agent_id) == agent_id and recorded in (None, str(t.id))
+            ),
+            None,
+        )
+
+    async def find_policy(self, policy: BundlePolicy, agent_id: str | None) -> str | None:
+        from agentarea_governance.domain.rules import PolicyEffect, PolicySubjectType
+
+        if policy.subject == "workspace":
+            subject_type, subject_id = PolicySubjectType.WORKSPACE, self._user_context.workspace_id
+        else:
+            subject_type, subject_id = PolicySubjectType.AGENT, agent_id
+        rules = await self._governance_service.list_rules(
+            subject_type=subject_type,
+            subject_id=subject_id,
+            target=policy.target,
+            effect=PolicyEffect(policy.effect),
+        )
+        found = matching_rule(rules, policy_as_rule(policy, str(subject_id)))
+        return str(found.id) if found is not None and found.id else None
+
+    async def ref_exists(self, kind: EntityKind, entity_id: str) -> bool:
+        return await self._installer().get_entity(kind, entity_id) is not None
+
+    async def channel_credential_keys(self, entity_id: str) -> dict[str, bool] | None:
+        installer = self._installer()
+        trigger = await self._trigger_service.get_trigger(UUID(entity_id))
+        source = await installer.channel_source(trigger) if trigger else None
+        if source is None:
             return None
+        stored = await installer.channel_credentials_stored(source)
+        return {key: isinstance(value, dict) for key, value in stored.items()}
+
+    # -- DeployChecks -------------------------------------------------------
+
+    async def catalog_mcp(self, catalog_id: str) -> CatalogMcp | None:
+        from agentarea_mcp.transport_spec import server_transport
+
+        if catalog_id not in self._catalog_mcps:
+            spec = await self._mcp_server_service.get_catalog_server(catalog_id)
+            found = None
+            if spec is not None:
+                try:
+                    transport: str | None = server_transport(spec).value
+                except ValueError:
+                    logger.warning(
+                        "Catalog server '%s' declares no transport", catalog_id, exc_info=True
+                    )
+                    transport = None
+                found = CatalogMcp(spec_id=str(spec.id), transport=transport)
+            self._catalog_mcps[catalog_id] = found
+        return self._catalog_mcps[catalog_id]
+
+    async def agent_problem(
+        self, agent: BundleAgent, model_id: str, client_id: str | None
+    ) -> str | None:
+        from agentarea_agents.application.agent_service import (
+            InvalidClientError,
+            InvalidModelIdError,
+            ReasoningConflictError,
+        )
+        from agentarea_agents_sdk.models.provider_profiles import ReasoningSettingError
+        from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
+
+        known = get_code_tools_metadata()
+        unknown = [name for name in agent.toolsets if name not in known]
+        if unknown:
+            return f"unknown toolset(s): {', '.join(unknown)}"
         try:
-            entity_id = UUID(recorded)
+            client = UUID(client_id) if client_id else None
         except ValueError:
-            return None
-        if kind is EntityKind.AGENT:
-            agent = await self._agent_repository.get(entity_id)
-            return agent if agent is not None and agent.status != AgentStatus.ARCHIVED else None
-        if kind is EntityKind.MCP:
-            return await self._mcp_instance_service.get(entity_id)
-        if kind is EntityKind.SKILL:
-            return await self._skill_repository.get(entity_id)
+            return "client must be the id of a Codex or Claude Code client"
+        try:
+            await self._agent_service.validate_config(
+                model_id,
+                [{"type": "code", "name": name} for name in agent.toolsets],
+                client,
+                agent.reasoning_effort,
+                agent.reasoning_max_tokens,
+            )
+        except (
+            InvalidModelIdError,
+            InvalidClientError,
+            ReasoningConflictError,
+            ReasoningSettingError,
+        ) as exc:
+            return str(exc)
         return None
 
+    async def automation_problem(self, package: Bundle, automation: BundleAutomation) -> str | None:
+        from agentarea_triggers.logging_utils import TriggerValidationError
 
-class _InstalledBefore:
-    """Preview status: what an earlier install of this bundle put here and is still here."""
+        # The agent may not exist yet; the configuration check never reads it.
+        trigger = automation_trigger(package, automation, UUID(int=0), self._user_context)
+        try:
+            await self._trigger_service.validate_configuration(trigger)
+        except TriggerValidationError as exc:
+            return str(exc)
+        return None
 
-    def __init__(
-        self, service: BundleService, bundle_name: str, installed: dict[tuple[str, str], str]
-    ) -> None:
-        self._service = service
-        self._bundle_name = bundle_name
-        self._installed = installed
+    async def may_edit(self, kind: EntityKind, entity_id: str) -> bool:
+        """The per-object edit check the entity's own update route makes."""
+        from agentarea_common.auth.permission import PermissionService
+        from agentarea_common.di.container import resolve
 
-    async def agent_exists(self, key: str) -> bool:
-        return await self._service._recorded(self._installed, EntityKind.AGENT, key) is not None
-
-    async def mcp_instance_exists(self, key: str) -> bool:
-        return await self._service._recorded(self._installed, EntityKind.MCP, key) is not None
-
-    async def skill_exists(self, key: str) -> bool:
-        return await self._service._recorded(self._installed, EntityKind.SKILL, key) is not None
-
-    async def trigger_exists(self, key: str, agent_key: str) -> bool:
-        agent = await self._service._recorded(self._installed, EntityKind.AGENT, agent_key)
-        if agent is None:
-            return False
-        name = f"{self._bundle_name}:{key}"
-        recorded = self._installed.get((EntityKind.AUTOMATION.value, key))
-        triggers = await self._service._trigger_repository.list_all()
-        return any(
-            t.name == name and t.agent_id == agent.id and recorded in (None, str(t.id))
-            for t in triggers
+        return await resolve(PermissionService).check(
+            self._user_context.graph_subject, "edit", _RESOURCE_TYPES[kind], entity_id
         )

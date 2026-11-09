@@ -125,16 +125,16 @@ export async function fetchCatalogPageAction(params: {
     error,
     status,
   } = await browseCatalog({
-      registryType: REGISTRY_TYPE[assertCatalogType(params.type)],
-      q: params.q,
-      category: params.category,
-      protocol: params.protocol,
-      hosting: params.hosting,
-      pricing: params.pricing,
-      sort: params.sort,
-      limit: PAGE,
-      offset: params.offset,
-    });
+    registryType: REGISTRY_TYPE[assertCatalogType(params.type)],
+    q: params.q,
+    category: params.category,
+    protocol: params.protocol,
+    hosting: params.hosting,
+    pricing: params.pricing,
+    sort: params.sort,
+    limit: PAGE,
+    offset: params.offset,
+  });
   if (error) return { error, status };
   const parsed = checked(
     zBrowseCatalogV1RegistriesCatalogBrowseGetResponse,

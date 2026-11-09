@@ -4,12 +4,16 @@ import type {
   BundleChannel,
   BundleMcp,
   BundlePolicy,
+  EntityKind,
   ImportPreview,
   InstallRequest,
+  InstallResult,
   PreviewIssue,
   SetupField,
 } from "@/api/client/types.gen";
+import { apiErrorCode } from "@/lib/api-errors";
 import { defaultModelId } from "@/lib/default-model";
+import { agentPath } from "@/types/agent";
 import type { Policy } from "@/types/policies";
 
 // ${setup.<key>} reference used by an agent's model or a connection binding.
@@ -311,12 +315,43 @@ export function openIssues(
   );
 }
 
+/** What /install is sent but the plan digest, which an analyze of exactly this gives. */
+export type InstallDraft = Omit<InstallRequest, "plan_digest">;
+
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, v]) => v !== undefined)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([k, v]) => [k, canonical(v)])
+    );
+  }
+  return value;
+}
+
+/**
+ * Names a draft: two drafts with the same key install the same thing, so a plan
+ * shown for one is the plan of the other. Any edit or setup value changes it.
+ */
+export function planKey(draft: InstallDraft): string {
+  return JSON.stringify(canonical(draft));
+}
+
+/** Install refused the plan it was sent: the workspace changed since it was shown. */
+export function isPlanChanged(result: { error?: unknown; status?: number }) {
+  return (
+    result.status === 409 && apiErrorCode(result) === "bundle_plan_changed"
+  );
+}
+
 /** The bundle and setup values to send to /install, with every choice applied. */
 export function buildInstallRequest(
   preview: ImportPreview,
   edit: BundleEdit,
   canAdminister: boolean
-): InstallRequest {
+): InstallDraft {
   const bundle = preview.bundle;
   const agents: BundleAgent[] = (bundle.agents ?? [])
     .filter((a) => !edit.agentOff.has(a.key))
@@ -333,9 +368,17 @@ export function buildInstallRequest(
   const automations: BundleAutomation[] = (bundle.automations ?? [])
     .filter((a) => keptAgents.has(a.agent))
     .map((a) => ({ ...a, enabled: edit.autoEnabled[a.key] ?? false }));
+  // A policy bound to an agent left out has nothing to govern; sent anyway it
+  // comes back skipped as "agent 'x' was not created".
   const policies: BundlePolicy[] = canAdminister
     ? (bundle.policies ?? [])
-        .filter((p) => !edit.policyOff.has(p.key))
+        .filter(
+          (p) =>
+            !edit.policyOff.has(p.key) &&
+            (!p.subject ||
+              p.subject === "workspace" ||
+              keptAgents.has(p.subject))
+        )
         .map((p) => ({ ...p, enabled: edit.policyEnabled[p.key] !== false }))
     : [];
 
@@ -381,4 +424,121 @@ export function bundlePolicyAsPolicy(
     params: policy.params ?? {},
     condition: policy.condition ?? null,
   };
+}
+
+// ── After install ───────────────────────────────────────────────────────────
+
+export type LaunchLink = {
+  key: string;
+  id: string;
+  name: string;
+  href: string;
+};
+
+/** A channel or schedule this install created switched off. */
+export type LaunchTodo = {
+  key: string;
+  kind: "channel" | "automation";
+  name: string;
+  href: string;
+};
+
+/** Something the install could not create; nothing to finish, only to know. */
+export type LaunchSkipped = {
+  key: string;
+  kind: EntityKind;
+  name: string;
+  detail: string | null;
+};
+
+export type LaunchPlan = {
+  agents: LaunchLink[];
+  connections: LaunchLink[];
+  todo: LaunchTodo[];
+  skipped: LaunchSkipped[];
+  /** The one chat to open right away, when nothing else is left to do. */
+  openNow: string | null;
+};
+
+/**
+ * What an installed bundle needs before it runs, and where to start it.
+ *
+ * A bundle with one agent and nothing left over opens that agent's chat at
+ * once. An organisation — several agents, channels and schedules still
+ * switched off, or parts that did not install — lands on a launch screen that
+ * lists its agents and what is left. Only what this install created is judged:
+ * a reused trigger comes back without an id and kept its own state, and what
+ * the bundle no longer declares is not offered.
+ *
+ * Connections do not hold the chat back: the install result does not say
+ * whether one still needs authorizing, so holding every bundle with a
+ * connection on the launch screen would stop nearly all of them for nothing.
+ */
+export function launchPlan(
+  request: InstallDraft,
+  result: InstallResult
+): LaunchPlan {
+  const declared = new Map<string, { name: string; enabled: boolean }>();
+  for (const c of request.bundle.channels ?? [])
+    declared.set(`channel:${c.key}`, {
+      name: c.name,
+      enabled: Boolean(c.enabled),
+    });
+  for (const a of request.bundle.automations ?? [])
+    declared.set(`automation:${a.key}`, {
+      name: a.prompt || a.key,
+      enabled: Boolean(a.enabled),
+    });
+
+  const agents: LaunchLink[] = [];
+  const connections: LaunchLink[] = [];
+  const todo: LaunchTodo[] = [];
+  const skipped: LaunchSkipped[] = [];
+  for (const e of result.entities ?? []) {
+    if (e.action === "skipped") {
+      skipped.push({
+        key: `${e.kind}:${e.key}`,
+        kind: e.kind,
+        name: e.name,
+        detail: e.detail ?? null,
+      });
+      continue;
+    }
+    if (!e.id || e.action === "orphaned") continue;
+    if (e.kind === "agent") {
+      agents.push({
+        key: e.key,
+        id: e.id,
+        name: e.name,
+        href: agentPath({ id: e.id }, "/new-task"),
+      });
+    } else if (e.kind === "mcp") {
+      connections.push({
+        key: e.key,
+        id: e.id,
+        name: e.name,
+        href: `/connections/${e.id}`,
+      });
+    } else if (
+      (e.kind === "channel" || e.kind === "automation") &&
+      e.action === "created"
+    ) {
+      // The trigger is named "<bundle>:<key>"; show what the bundle calls it.
+      const own = declared.get(`${e.kind}:${e.key}`);
+      if (own && !own.enabled) {
+        todo.push({
+          key: `${e.kind}:${e.key}`,
+          kind: e.kind,
+          name: own.name,
+          href: `/triggers/${e.id}`,
+        });
+      }
+    }
+  }
+
+  const openNow =
+    agents.length === 1 && todo.length === 0 && skipped.length === 0
+      ? agents[0].href
+      : null;
+  return { agents, connections, todo, skipped, openNow };
 }
