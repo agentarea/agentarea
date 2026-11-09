@@ -506,6 +506,9 @@ import type {
   HandleWebhookWebhooksWebhookIdPostData,
   HandleWebhookWebhooksWebhookIdPostErrors,
   HandleWebhookWebhooksWebhookIdPostResponses,
+  HarnessAgentV1ClientsClientIdAgentPostData,
+  HarnessAgentV1ClientsClientIdAgentPostErrors,
+  HarnessAgentV1ClientsClientIdAgentPostResponses,
   HealthHealthGetData,
   HealthHealthGetResponses,
   HydraAuthRedirectOauth2AuthGetData,
@@ -4201,6 +4204,39 @@ export const updateClientV1ClientsClientIdPatch = <
       "Content-Type": "application/json",
       ...options.headers,
     },
+  });
+
+/**
+ * Harness Agent
+ *
+ * The agent a task given to this Codex or Claude Code client itself runs as.
+ *
+ * Made on first use, with no instructions or tools of its own: the client's
+ * CLI brings them. It is not listed among the workspace's agents.
+ */
+export const harnessAgentV1ClientsClientIdAgentPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<HarnessAgentV1ClientsClientIdAgentPostData, ThrowOnError>
+): RequestResult<
+  HarnessAgentV1ClientsClientIdAgentPostResponses,
+  HarnessAgentV1ClientsClientIdAgentPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    HarnessAgentV1ClientsClientIdAgentPostResponses,
+    HarnessAgentV1ClientsClientIdAgentPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/clients/{client_id}/agent",
+    ...options,
   });
 
 /**

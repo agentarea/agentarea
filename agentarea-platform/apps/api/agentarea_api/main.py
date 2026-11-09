@@ -559,7 +559,7 @@ def create_app() -> FastAPI:
     from agentarea_common.exceptions import problem_response
     from agentarea_common.rebac import ResourceOwnershipError
     from agentarea_llm.application.provider_service import PlatformManagedConfigError
-    from agentarea_tasks.domain.exceptions import BudgetCapExceededError, InvalidRunnerClientError
+    from agentarea_tasks.domain.exceptions import BudgetCapExceededError
     from fastapi import Request
 
     # A model_id the runtime cannot resolve is a client mistake, not a server
@@ -576,10 +576,6 @@ def create_app() -> FastAPI:
     @app.exception_handler(InvalidClientError)
     async def _invalid_client_handler(_request: Request, exc: InvalidClientError):
         return problem_response(status_code=400, code="invalid_client_id", detail=str(exc))
-
-    @app.exception_handler(InvalidRunnerClientError)
-    async def _invalid_runner_client_handler(_request: Request, exc: InvalidRunnerClientError):
-        return problem_response(status_code=400, code="invalid_runner_client_id", detail=str(exc))
 
     # A delegate the runtime could not reach — a bad URL, a missing or managed
     # secret, an agent that is not here — is refused on write, like model_id.

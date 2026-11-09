@@ -1915,6 +1915,15 @@ export const listClients = async () => {
   return { data, error };
 };
 
+/** The agent a task given to this Codex or Claude Code client itself runs as; made on first use. */
+export const getHarnessAgent = async (clientId: string) => {
+  const result = await sdk.harnessAgentV1ClientsClientIdAgentPost({
+    client: serverClient,
+    path: { client_id: clientId },
+  });
+  return withStatus(result);
+};
+
 export const getClient = async (clientId: string) => {
   const result = await sdk.getClientV1ClientsClientIdGet({
     client: serverClient,

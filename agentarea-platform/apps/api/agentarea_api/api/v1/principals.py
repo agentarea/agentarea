@@ -88,7 +88,8 @@ async def resolve_principals(
     agent_names: dict[str, str] = {}
     if candidates:
         agent_names = {
-            str(agent.id): agent.name for agent in await agent_service.list(include_archived=True)
+            str(agent.id): agent.name
+            for agent in await agent_service.list(include_archived=True, include_harness=True)
         }
 
     directory_lookups = [pid for pid in candidates if pid not in agent_names]

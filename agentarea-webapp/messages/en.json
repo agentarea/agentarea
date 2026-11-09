@@ -1498,9 +1498,6 @@
       "taskPolicy": "Task policy",
       "noProject": "No project",
       "defaultPolicy": "Default policy",
-      "runsOn": "Runs on",
-      "onPlatform": "Platform",
-      "cliDefaultModel": "CLI default model",
       "runnerOffline": "offline",
       "when": "When",
       "runNow": "Now",
@@ -1516,7 +1513,13 @@
         "inOneHour": "In an hour",
         "tomorrowMorning": "Tomorrow morning",
         "mondayMorning": "Monday morning"
-      }
+      },
+      "agents": "Agents",
+      "harnesses": "Harnesses",
+      "add": "Add",
+      "attachFiles": "Files",
+      "mcpsAndSkills": "MCP and skills",
+      "runLater": "Run later"
     },
     "Messages": {
       "toolCall": "Tool Call",
@@ -1602,7 +1605,8 @@
       "agentFallback": "agent",
       "compacted": "Context compacted: {count, plural, one {# earlier message was} other {# earlier messages were}} summarized",
       "messageStoredSeparately": "The message is stored separately and is not shown here."
-    }
+    },
+    "runnerOffline": "{name} is offline: the task waits up to 10 minutes for it to come back."
   },
   "TasksPage": {
     "title": "Tasks",

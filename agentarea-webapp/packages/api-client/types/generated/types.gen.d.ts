@@ -7451,12 +7451,6 @@ export type ScheduleTaskCreate = {
      */
     requires_human_approval?: boolean | null;
     /**
-     * Runner Client Id
-     *
-     * Run on this Codex or Claude Code client's runner instead of where the agent runs. Omit to run where the agent runs.
-     */
-    runner_client_id?: string | null;
-    /**
      * Scheduled At
      */
     scheduled_at: string;
@@ -8938,12 +8932,6 @@ export type TaskCreate = {
      * Requires Human Approval
      */
     requires_human_approval?: boolean | null;
-    /**
-     * Runner Client Id
-     *
-     * Run on this Codex or Claude Code client's runner instead of where the agent runs. Omit to run where the agent runs.
-     */
-    runner_client_id?: string | null;
     task_policy?: PolicyDocument | null;
     /**
      * POSTed on task.completed, task.failed and task.cancelled with the task's total_cost, tokens_used, end_user_id and metadata. Only API keys and service clients may set it.
@@ -13418,6 +13406,31 @@ export type UpdateClientV1ClientsClientIdPatchResponses = {
     200: ClientResponse;
 };
 export type UpdateClientV1ClientsClientIdPatchResponse = UpdateClientV1ClientsClientIdPatchResponses[keyof UpdateClientV1ClientsClientIdPatchResponses];
+export type HarnessAgentV1ClientsClientIdAgentPostData = {
+    body?: never;
+    path: {
+        /**
+         * Client Id
+         */
+        client_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/clients/{client_id}/agent';
+};
+export type HarnessAgentV1ClientsClientIdAgentPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type HarnessAgentV1ClientsClientIdAgentPostError = HarnessAgentV1ClientsClientIdAgentPostErrors[keyof HarnessAgentV1ClientsClientIdAgentPostErrors];
+export type HarnessAgentV1ClientsClientIdAgentPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgentResponse;
+};
+export type HarnessAgentV1ClientsClientIdAgentPostResponse = HarnessAgentV1ClientsClientIdAgentPostResponses[keyof HarnessAgentV1ClientsClientIdAgentPostResponses];
 export type AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostData = {
     body: McpInstanceAssociationBody;
     path: {
