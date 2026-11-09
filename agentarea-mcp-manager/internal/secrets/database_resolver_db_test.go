@@ -232,3 +232,41 @@ func TestResolveWorkspaceSecretReadsOnlyThatWorkspace(t *testing.T) {
 		t.Fatal("a workspace without the secret resolved another workspace's value")
 	}
 }
+
+func insertOwnedSecret(t *testing.T, db *sql.DB, workspaceID, name, ownerType, encrypted string) {
+	t.Helper()
+	_, err := db.Exec(`
+		INSERT INTO encrypted_secrets
+			(id, workspace_id, secret_name, encrypted_value, owner_type, owner_id, created_by, created_at, updated_at)
+		VALUES (gen_random_uuid(), $1, $2, $3, $4, 'owner-under-test', 'resolver-test', now(), now())`,
+		workspaceID, name, encrypted, ownerType)
+	if err != nil {
+		t.Fatalf("insert %s-owned secret %s in %s: %v", ownerType, name, workspaceID, err)
+	}
+	t.Cleanup(func() {
+		_, _ = db.Exec(`DELETE FROM encrypted_secrets WHERE workspace_id = $1 AND secret_name = $2 AND owner_type = $3`,
+			workspaceID, name, ownerType)
+	})
+}
+
+// A reference reads the workspace's own catalog. A row the platform minted for
+// one of its owners is not in that catalog, whatever it is named, so a
+// reference must never reach it.
+func TestResolveWorkspaceSecretIgnoresAPlatformOwnedSecret(t *testing.T) {
+	db := resolverTestDB(t)
+	resolver, key := newSchemaBackedResolver(t, db)
+	insertOwnedSecret(t, db, "ws-owned-only", "owned-key", "provider_config", fernetEncrypt(t, key, "platform-value"))
+
+	if value, err := resolver.ResolveWorkspaceSecret(context.Background(), "ws-owned-only", "owned-key"); err == nil {
+		t.Fatalf("ResolveWorkspaceSecret() = %q, want a failure: the only row is platform-owned", value)
+	}
+
+	insertSecret(t, db, "ws-owned-only", "user-key", fernetEncrypt(t, key, "user-value"))
+	value, err := resolver.ResolveWorkspaceSecret(context.Background(), "ws-owned-only", "user-key")
+	if err != nil {
+		t.Fatalf("ResolveWorkspaceSecret() error = %v, want the user's secret", err)
+	}
+	if value != "user-value" {
+		t.Fatalf("ResolveWorkspaceSecret() = %q, want the user-owned row", value)
+	}
+}

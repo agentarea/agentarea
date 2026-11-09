@@ -165,3 +165,90 @@ func TestResolveValuesLogsTheReferenceButNotTheValue(t *testing.T) {
 		t.Fatalf("logs exposed the secret value: %s", logs.String())
 	}
 }
+
+func TestResolveValuesRefusesAPlatformReservedSecretName(t *testing.T) {
+	for _, secretName := range []string{
+		"provider_config_x",
+		"mcp_instance_11111111-1111-4111-8111-111111111111_API_KEY",
+		"mcp_auth_cred:x",
+		"channel_cred:x",
+		"wallet_creds_x",
+		"openapi:x",
+		"task-input/x",
+		"a2a_push_token:x",
+		"task_webhook:x",
+	} {
+		t.Run(secretName, func(t *testing.T) {
+			stub := &workspaceSecretStub{values: map[workspaceSecret]string{{"ws-own", secretName}: "platform-value"}}
+			got, err := ResolveValues(context.Background(), stub, discardLogger(), "ws-own", "inst-1", map[string]any{
+				"API_KEY": map[string]any{"secret_name": secretName},
+			})
+			if err == nil {
+				t.Fatalf("ResolveValues() = %#v, want a refusal of a platform-reserved name", got)
+			}
+			if len(stub.asked) != 0 {
+				t.Fatalf("resolver asked %#v for a platform-reserved name", stub.asked)
+			}
+		})
+	}
+}
+
+func TestResolveValuesRefusesAnEmptySecretValue(t *testing.T) {
+	stub := &workspaceSecretStub{values: map[workspaceSecret]string{{"ws-own", "openai-key"}: ""}}
+
+	got, err := ResolveValues(context.Background(), stub, discardLogger(), "ws-own", "inst-1", map[string]any{
+		"API_KEY": map[string]any{"secret_name": "openai-key"},
+	})
+	if err == nil || got != nil {
+		t.Fatalf("ResolveValues() = %#v, %v; want no values and an error for an empty secret", got, err)
+	}
+	for _, want := range []string{"API_KEY", "openai-key"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q does not name %q", err, want)
+		}
+	}
+}
+
+func TestRefuseReferencesRejectsAReferenceInEitherField(t *testing.T) {
+	for field, spec := range map[string]map[string]any{
+		"environment.API_KEY":   {"environment": map[string]any{"API_KEY": map[string]any{"secret_name": "PROD_KEY"}, "PLAIN": "x"}},
+		"headers.Authorization": {"headers": map[string]any{"Authorization": map[string]any{"secret_name": "PROD_KEY"}}},
+	} {
+		t.Run(field, func(t *testing.T) {
+			err := RefuseReferences("server spec", spec)
+			if err == nil {
+				t.Fatal("RefuseReferences() error = nil, want a refusal")
+			}
+			if !strings.Contains(err.Error(), "server spec "+field) {
+				t.Fatalf("error %q does not name %q", err, "server spec "+field)
+			}
+		})
+	}
+}
+
+func TestRefuseReferencesAcceptsLiterals(t *testing.T) {
+	for _, spec := range []map[string]any{
+		nil,
+		{},
+		{"environment": map[string]any{"PLAIN": "x", "PORT": float64(8080)}, "headers": map[string]any{"X-Region": "eu"}},
+	} {
+		if err := RefuseReferences("server spec", spec); err != nil {
+			t.Fatalf("RefuseReferences(%#v) error = %v", spec, err)
+		}
+	}
+}
+
+func TestResolversRefuseAPlatformReservedNameBeforeAnyLookup(t *testing.T) {
+	const name = "mcp_instance_11111111-1111-4111-8111-111111111111_API_KEY"
+	for resolverName, resolver := range map[string]WorkspaceSecretResolver{
+		"database":  &DatabaseSecretResolver{logger: discardLogger()},
+		"infisical": &InfisicalSecretResolver{logger: discardLogger()},
+	} {
+		t.Run(resolverName, func(t *testing.T) {
+			_, err := resolver.ResolveWorkspaceSecret(context.Background(), "ws-own", name)
+			if err == nil || !strings.Contains(err.Error(), "reserved") {
+				t.Fatalf("ResolveWorkspaceSecret() error = %v, want a reserved-name refusal", err)
+			}
+		})
+	}
+}

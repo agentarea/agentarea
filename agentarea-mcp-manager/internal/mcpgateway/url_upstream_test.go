@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/egress"
+	"github.com/agentarea/mcp-manager/internal/secrets"
 )
 
 const urlInstanceID = "5f0c8e4e-7a43-4a8e-9b51-2b9f6f3f1c11"
@@ -360,5 +361,67 @@ func TestURLInstanceMissingReferencedSecretIsNotProxied(t *testing.T) {
 
 	if recorder.Code != http.StatusBadGateway || hit {
 		t.Fatalf("status = %d hit = %v, want 502 and no upstream call", recorder.Code, hit)
+	}
+}
+
+// A server spec is shared and editable by anyone who can edit it, while the
+// platform authorizes a secret reference only against the instance spec that
+// carries it. A reference planted in the server spec must stop the load before
+// any secret is read, for both the started container and the proxied URL.
+func TestServerSpecSecretReferenceNeverReachesTheResolver(t *testing.T) {
+	stub := &secretResolverStub{workspaceValues: map[[2]string]string{{"ws-url", "PROD_KEY"}: "prod-value"}}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	spec, err := mergeLoadedSpecs(
+		[]byte(`{"type":"docker","image":"example:1","environment":{"API_KEY":{"secret_name":"PROD_KEY"}}}`),
+		[]byte(`{}`), "docker", nil, "")
+	if err == nil {
+		environment, _ := spec["environment"].(map[string]any)
+		_, err = secrets.ResolveValues(context.Background(), stub, logger, "ws-url", urlInstanceID, environment)
+		t.Fatalf("mergeLoadedSpecs() accepted a server-spec reference (resolve error %v)", err)
+	}
+	if !strings.Contains(err.Error(), "environment.API_KEY") {
+		t.Fatalf("mergeLoadedSpecs() error = %q, want it to name environment.API_KEY", err)
+	}
+
+	server, err := urlServerSpec([]byte(`{"headers":{"Authorization":{"secret_name":"PROD_KEY"}}}`), []byte(`{}`), "https://remote.example")
+	if err == nil {
+		gateway, _, _ := urlGateway(t, server, stub, []string{"127.0.0.1"})
+		_, err = gateway.urlHeaders(context.Background(), urlInstanceID, "ws-url", server)
+		t.Fatalf("urlServerSpec() accepted a server-spec reference (resolve error %v)", err)
+	}
+	if !strings.Contains(err.Error(), "headers.Authorization") {
+		t.Fatalf("urlServerSpec() error = %q, want it to name headers.Authorization", err)
+	}
+
+	if len(stub.askedWorkspaces) != 0 {
+		t.Fatalf("secret store asked %v for a server-spec reference", stub.askedWorkspaces)
+	}
+}
+
+// The merge is per key, so an instance environment replaces the server's
+// wholesale; the server spec still may not carry a reference at all.
+func TestServerSpecSecretReferenceIsRefusedEvenWhenTheInstanceOverridesIt(t *testing.T) {
+	if _, err := mergeLoadedSpecs(
+		[]byte(`{"type":"command","command":"npx","environment":{"API_KEY":{"secret_name":"PROD_KEY"}}}`),
+		[]byte(`{"environment":{"API_KEY":"own"}}`), "command", nil, ""); err == nil {
+		t.Fatal("mergeLoadedSpecs() error = nil, want a refusal of the server-spec reference")
+	}
+	if _, err := urlServerSpec(
+		[]byte(`{"headers":{"Authorization":{"secret_name":"PROD_KEY"}}}`),
+		[]byte(`{"headers":{"Authorization":"own"}}`), "https://remote.example"); err == nil {
+		t.Fatal("urlServerSpec() error = nil, want a refusal of the server-spec reference")
+	}
+}
+
+func TestInstanceSpecSecretReferenceStillLoads(t *testing.T) {
+	spec, err := mergeLoadedSpecs(
+		[]byte(`{"type":"docker","image":"example:1","environment":{"PLAIN":"x"}}`),
+		[]byte(`{"environment":{"API_KEY":{"secret_name":"own-key"}}}`), "docker", nil, "")
+	if err != nil {
+		t.Fatalf("mergeLoadedSpecs() error = %v", err)
+	}
+	if _, ok := spec["environment"].(map[string]any)["API_KEY"].(map[string]any); !ok {
+		t.Fatalf("environment = %#v, want the instance's reference kept for resolution", spec["environment"])
 	}
 }

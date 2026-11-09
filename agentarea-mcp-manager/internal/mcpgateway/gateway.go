@@ -239,6 +239,7 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 	}
 	loaded, err := g.repository.LoadTarget(request.Context(), instanceID)
 	if err != nil {
+		g.logger.Error("MCP instance could not be loaded", slog.String("instance_id", instanceID), slog.String("error", err.Error()))
 		g.telemetry.rejected(request.Context(), headerValue(request, "Mcp-Method"), http.StatusBadGateway)
 		http.Error(response, "MCP instance is unavailable", http.StatusBadGateway)
 		return

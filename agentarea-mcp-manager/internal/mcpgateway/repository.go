@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/models"
+	"github.com/agentarea/mcp-manager/internal/secrets"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -206,7 +207,8 @@ WHERE i.id = $1::uuid
 // urlServerSpec mirrors agentarea_mcp/transport_spec.py for a url instance:
 // the server row's transport spec (remote_url as the endpoint default) under
 // the instance spec, each normalized from the legacy url keys. The secret
-// names are the instance's own env_vars, as get_configured_env_vars reads them.
+// names are the instance's own env_vars, as get_configured_env_vars reads them,
+// and only the instance spec may carry a secret reference.
 func urlServerSpec(serverJSON, instanceJSON []byte, remoteURL string) (*URLServer, error) {
 	server := map[string]any{}
 	if err := json.Unmarshal(serverJSON, &server); err != nil {
@@ -214,6 +216,9 @@ func urlServerSpec(serverJSON, instanceJSON []byte, remoteURL string) (*URLServe
 	}
 	if server == nil {
 		server = map[string]any{}
+	}
+	if err := secrets.RefuseReferences("server spec", server); err != nil {
+		return nil, err
 	}
 	if remoteURL != "" {
 		if _, exists := server["type"]; !exists {
@@ -289,7 +294,8 @@ func normalizeURLKeys(spec map[string]any) {
 	}
 }
 
-// decodeSpecs merges the instance spec over the server spec.
+// decodeSpecs merges the instance spec over the server spec, which may not
+// carry a secret reference.
 //
 // Both columns can hold the JSON literal `null` rather than SQL NULL -- the
 // control plane writes it whenever a spec field was omitted -- and COALESCE
@@ -308,6 +314,9 @@ func decodeSpecs(serverJSON, instanceJSON []byte) (map[string]any, error) {
 	}
 	if serverSpec == nil {
 		serverSpec = map[string]any{}
+	}
+	if err := secrets.RefuseReferences("server spec", serverSpec); err != nil {
+		return nil, err
 	}
 	for key, value := range instanceSpec {
 		serverSpec[key] = value

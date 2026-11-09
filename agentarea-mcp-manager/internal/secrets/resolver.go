@@ -205,6 +205,9 @@ func (sr *InfisicalSecretResolver) ResolveInstanceEnvVars(instanceID string, env
 // ResolveWorkspaceSecret reads secretName from the workspace's own path, where the
 // platform's Infisical secret manager keeps every catalog secret.
 func (sr *InfisicalSecretResolver) ResolveWorkspaceSecret(_ context.Context, workspaceID, secretName string) (string, error) {
+	if err := RefuseReservedName(secretName); err != nil {
+		return "", err
+	}
 	if sr.client == nil {
 		return "", errors.New("secret resolution unavailable")
 	}
