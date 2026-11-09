@@ -324,7 +324,12 @@ class WorkspaceExportService:
                 for name, value in values.items():
                     if name in bindings:
                         continue
-                    if _is_credential_name(name) or (
+                    referenced = value.get("secret_name") if isinstance(value, dict) else None
+                    if isinstance(referenced, str):
+                        # A workspace secret is named, never read; the importing
+                        # workspace resolves the same name.
+                        bindings[name] = f"${{secret.{referenced}}}"
+                    elif _is_credential_name(name) or (
                         isinstance(value, str) and _value_carries_credentials(value)
                     ):
                         bindings[name] = secret_ref(f"{key}_{name}", name)
