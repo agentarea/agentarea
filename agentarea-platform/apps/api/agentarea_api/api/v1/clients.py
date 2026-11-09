@@ -121,10 +121,12 @@ class ClientResponse(BaseModel):
     platform_toolsets: list[ClientPlatformToolsetRef] = []
     mcp_endpoint_url: str | None = None
     # Its runner (a Codex or Claude Code client's): the models it reported, the
-    # one turns use by default, the hosts its CLI reaches, and whether it is connected.
+    # one turns use by default, the hosts its CLI reaches, whether its commands run
+    # sandboxed, and whether it is connected.
     models: list[dict[str, Any]] | None = None
     default_model: str | None = None
     allow_domains: list[str] = []
+    sandbox: bool = True
     online: bool = False
 
     model_config = {"from_attributes": True}

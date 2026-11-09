@@ -707,6 +707,7 @@ export const zClientResponse = z.object({
     .optional()
     .default([]),
   platform_toolsets: z.array(zClientPlatformToolsetRef).optional().default([]),
+  sandbox: z.boolean().optional().default(true),
   skills: z.array(zClientRef).optional().default([]),
   workspace_id: z.string(),
 });
@@ -722,6 +723,7 @@ export const zClientUpdate = z.object({
   description: z.string().max(1000).nullish(),
   kind: z.string().max(32).optional(),
   name: z.string().min(1).max(255).optional(),
+  sandbox: z.boolean().optional(),
 });
 
 /**

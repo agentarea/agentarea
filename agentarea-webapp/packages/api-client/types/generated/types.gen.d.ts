@@ -2134,6 +2134,10 @@ export type ClientResponse = {
      */
     platform_toolsets?: Array<ClientPlatformToolsetRef>;
     /**
+     * Sandbox
+     */
+    sandbox?: boolean;
+    /**
      * Skills
      */
     skills?: Array<ClientRef>;
@@ -2168,6 +2172,10 @@ export type ClientUpdate = {
      * Name
      */
     name?: string;
+    /**
+     * Sandbox
+     */
+    sandbox?: boolean;
 };
 /**
  * CodeToolConfig

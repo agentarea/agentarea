@@ -153,6 +153,11 @@ class Client(BaseModel, WorkspaceScopedMixin):
     allow_domains: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list, server_default="[]"
     )
+    # Whether the CLI's commands run sandboxed: the task's folder and the allowed
+    # hosts only. Off, they run unconfined on the runner's machine.
+    sandbox: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, default=True, server_default=sa.true()
+    )
 
     skills: Mapped[list[Skill]] = relationship(
         "Skill",

@@ -3910,6 +3910,11 @@
             "title": "Platform Toolsets",
             "type": "array"
           },
+          "sandbox": {
+            "default": true,
+            "title": "Sandbox",
+            "type": "boolean"
+          },
           "skills": {
             "default": [],
             "items": {
@@ -3979,6 +3984,10 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "sandbox": {
+            "title": "Sandbox",
+            "type": "boolean"
           }
         },
         "title": "ClientUpdate",
