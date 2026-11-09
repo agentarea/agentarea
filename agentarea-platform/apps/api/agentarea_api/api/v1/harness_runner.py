@@ -647,6 +647,7 @@ class RunnerConnection:
                 "reasoning_effort": effort,
                 "instructions": instructions,
                 "allow_domains": list(client.allow_domains),
+                "sandbox": client.sandbox,
                 "task_user_id": task.created_by,
             }
         return assign, actor

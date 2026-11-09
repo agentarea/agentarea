@@ -183,6 +183,14 @@ class ClientsToolset(Toolset):
                 "omit to keep it."
             ),
         ] = None,
+        sandbox: Annotated[
+            bool | None,
+            Field(
+                description="Whether the runner's CLI runs its commands sandboxed (the task's "
+                "folder and the allowed hosts only); false runs them unconfined on the "
+                "runner's machine. Omit to keep it."
+            ),
+        ] = None,
     ) -> str:
         """Update a client's fields. Only fields explicitly set are written."""
         patch: dict[str, object] = {}
@@ -196,6 +204,8 @@ class ClientsToolset(Toolset):
             patch["default_model"] = default_model
         if allow_domains is not None:
             patch["allow_domains"] = allow_domains
+        if sandbox is not None:
+            patch["sandbox"] = sandbox
         payload = ClientUpdate.model_validate(patch)
 
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):

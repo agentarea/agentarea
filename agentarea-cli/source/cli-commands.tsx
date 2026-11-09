@@ -11,8 +11,10 @@ import {connectClient} from './commands/connect.js';
 import {
 	defaultRunnerRoot,
 	loadRunnerConfig,
+	CODEX_REQUIREMENTS_FILE,
 	registerRunner,
 	runRunner,
+	setupCodexRequirements,
 } from './commands/runner.js';
 import {loadAccessToken, runLogin, runLogout} from './commands/login.js';
 import {
@@ -112,9 +114,26 @@ export async function handleCliCommand(
 			await flushAndExit(0);
 		}
 
+		if (subcommand === 'setup') {
+			const result = setupCodexRequirements();
+			console.error(
+				result === 'already'
+					? `${CODEX_REQUIREMENTS_FILE} already turns on Codex's managed network proxy`
+					: `Turned on Codex's managed network proxy in ${CODEX_REQUIREMENTS_FILE}`,
+			);
+			await flushAndExit(0);
+		}
+
+		if (rawFlags['sandbox'] !== undefined) {
+			console.error(
+				"--sandbox is gone: whether a runner's turns run sandboxed is the client's setting, on its Runner tab.",
+			);
+			return false;
+		}
+
 		if (subcommand !== 'codex' && subcommand !== 'claude') {
 			console.error(
-				'Usage: agentarea runner codex|claude [--root <dir>] [--login-from <dir>] [--sandbox none] [--allow-domain <host,...>] [--capacity <turns>]',
+				'Usage: agentarea runner codex|claude [--root <dir>] [--login-from <dir>] [--allow-domain <host,...>] [--capacity <turns>]\n       agentarea runner setup',
 			);
 			return false;
 		}
@@ -138,7 +157,6 @@ export async function handleCliCommand(
 			harness: subcommand,
 			root,
 			loginFrom,
-			sandbox: rawFlags['sandbox'] === 'none' ? 'none' : 'profile',
 			allowDomains: ([] as unknown[])
 				.concat(rawFlags['allowDomain'] ?? [])
 				.flatMap(value => String(value).split(','))

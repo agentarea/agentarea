@@ -55,6 +55,21 @@ export async function saveAllowDomainsAction(
   return { error: null };
 }
 
+/** Whether the client's runner runs its CLI's commands sandboxed. */
+export async function setRunnerSandboxAction(
+  clientId: string,
+  sandbox: boolean
+): Promise<{ error: string | null }> {
+  const result = await updateClient(clientId, { sandbox });
+  if (result.error) {
+    return {
+      error: apiErrorMessage(result, "The sandbox setting could not be saved"),
+    };
+  }
+  await revalidateClient(clientId);
+  return { error: null };
+}
+
 /** A new key for the client's runner; the key is in the result only, once. */
 export async function issueRunnerKeyAction(
   clientId: string

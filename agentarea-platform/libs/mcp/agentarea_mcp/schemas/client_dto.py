@@ -43,6 +43,8 @@ class ClientUpdate(BaseModel):
     default_model: str | None = Field(default=None, max_length=255)
     # Hosts the CLI's sandbox reaches during its runner's turns.
     allow_domains: Annotated[list[str] | None, NotNull] = None
+    # Off runs the CLI's commands unconfined on the runner's machine.
+    sandbox: Annotated[bool | None, NotNull] = None
 
     @field_validator("allow_domains")
     @classmethod

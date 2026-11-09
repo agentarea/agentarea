@@ -3959,7 +3959,10 @@
         "issued": "Issued {when}",
         "used": "last used {when}",
         "neverUsed": "never used"
-      }
+      },
+      "sandbox": "Sandbox",
+      "sandboxOn": "The CLI's commands see only the task's folder and reach only the allowed hosts; anything else waits for a person. Codex needs `agentarea runner setup` once on the runner's machine.",
+      "sandboxOff": "The CLI's commands run unconfined on the runner's machine: every file and every host it can reach."
     },
     "agents": {
       "title": "Agents on this harness",
