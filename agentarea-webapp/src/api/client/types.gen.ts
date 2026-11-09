@@ -7764,6 +7764,12 @@ export type ScheduleTaskCreate = {
    */
   requires_human_approval?: boolean | null;
   /**
+   * Runner Client Id
+   *
+   * Run on this Codex or Claude Code client's runner instead of where the agent runs. Omit to run where the agent runs.
+   */
+  runner_client_id?: string | null;
+  /**
    * Scheduled At
    */
   scheduled_at: string;
@@ -9304,6 +9310,12 @@ export type TaskCreate = {
    * Requires Human Approval
    */
   requires_human_approval?: boolean | null;
+  /**
+   * Runner Client Id
+   *
+   * Run on this Codex or Claude Code client's runner instead of where the agent runs. Omit to run where the agent runs.
+   */
+  runner_client_id?: string | null;
   task_policy?: PolicyDocument | null;
   /**
    * POSTed on task.completed, task.failed and task.cancelled with the task's total_cost, tokens_used, end_user_id and metadata. Only API keys and service clients may set it.

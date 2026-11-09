@@ -62,6 +62,7 @@ from agentarea_secrets.naming import has_reserved_prefix
 from agentarea_tasks.domain.exceptions import (
     AgentModelNotConfiguredError,
     BudgetCapExceededError,
+    InvalidRunnerClientError,
     RunStillClosingError,
     SchedulingNotSupportedError,
 )
@@ -164,6 +165,13 @@ class TaskCreate(BaseModel):
     requires_human_approval: bool | None = False
     project_id: str | None = None
     task_policy: PolicyDocument | None = None
+    runner_client_id: UUID | None = Field(
+        default=None,
+        description=(
+            "Run on this Codex or Claude Code client's runner instead of where the "
+            "agent runs. Omit to run where the agent runs."
+        ),
+    )
     # staging refs from a presigned POST /v1/files/upload-url
     attachments: list[str] | None = None
     # Trusted context for the task's tool calls, asserted by the API caller (an
@@ -966,6 +974,7 @@ async def create_task_for_agent_with_stream(
                 requires_human_approval=data.requires_human_approval or False,
                 project_id=data.project_id,
                 task_policy=data.task_policy,
+                runner_client_id=data.runner_client_id,
             )
         except ValidationError as exc:
             raise RequestValidationError(exc.errors()) from exc
@@ -1016,6 +1025,7 @@ async def create_task_for_agent_with_stream(
                 requires_human_approval=data.requires_human_approval or False,
                 project_id=data.project_id,
                 task_policy=data.task_policy,
+                runner_client_id=data.runner_client_id,
             )
         except ValidationError as exc:
             raise RequestValidationError(exc.errors()) from exc
@@ -1033,6 +1043,8 @@ async def create_task_for_agent_with_stream(
             creation_error = ("Agent model is not configured", "model_not_configured")
         except AgentArchivedError as exc:
             creation_error = (str(exc), "agent_archived")
+        except InvalidRunnerClientError as exc:
+            creation_error = (str(exc), "invalid_runner_client")
         except BudgetCapExceededError as exc:
             scope = "Agent" if exc.agent_id else "Workspace"
             spend = "LLM spend" if exc.kind == "llm" else "spend"
@@ -1178,6 +1190,7 @@ async def create_task_for_agent_sync(
                 requires_human_approval=data.requires_human_approval or False,
                 project_id=data.project_id,
                 task_policy=data.task_policy,
+                runner_client_id=data.runner_client_id,
             )
             task = await task_service.reserve_run(
                 payload,
@@ -1203,6 +1216,7 @@ async def create_task_for_agent_sync(
                 requires_human_approval=data.requires_human_approval or False,
                 project_id=data.project_id,
                 task_policy=data.task_policy,
+                runner_client_id=data.runner_client_id,
             )
             task = await task_service.start_run(
                 payload,
@@ -1216,7 +1230,7 @@ async def create_task_for_agent_sync(
         # Convert to API response format
         return TaskResponse.from_agent_task(task, user_context)
 
-    except HTTPException, BudgetCapExceededError:
+    except HTTPException, BudgetCapExceededError, InvalidRunnerClientError:
         raise
     except PolicyValidationError as exc:
         raise HTTPException(status_code=422, detail="Task policy rejected") from exc
@@ -1280,6 +1294,7 @@ async def schedule_task_for_agent(
                 requires_human_approval=data.requires_human_approval or False,
                 project_id=data.project_id,
                 task_policy=data.task_policy,
+                runner_client_id=data.runner_client_id,
                 scheduled_at=data.scheduled_at,
             )
             task = await task_service.reserve_run(
@@ -1306,6 +1321,7 @@ async def schedule_task_for_agent(
                 requires_human_approval=data.requires_human_approval or False,
                 project_id=data.project_id,
                 task_policy=data.task_policy,
+                runner_client_id=data.runner_client_id,
                 scheduled_at=data.scheduled_at,
             )
             task = await task_service.start_run(
@@ -1319,7 +1335,7 @@ async def schedule_task_for_agent(
         await data.store_webhook_secret(secret_manager, task.id)
         return TaskResponse.from_agent_task(task, user_context)
 
-    except HTTPException, BudgetCapExceededError:
+    except HTTPException, BudgetCapExceededError, InvalidRunnerClientError:
         raise
     except SchedulingNotSupportedError as exc:
         raise HTTPException(

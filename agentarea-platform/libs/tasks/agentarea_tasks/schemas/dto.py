@@ -99,6 +99,13 @@ class RunCreate(BaseModel):
         default=None,
         description="Optional task-scoped governance policy that may only tighten higher scopes.",
     )
+    runner_client_id: UUID | None = Field(
+        default=None,
+        description=(
+            "Run on this Codex or Claude Code client's runner instead of where the "
+            "agent runs. Omit to run where the agent runs."
+        ),
+    )
     scheduled_at: datetime | None = Field(
         default=None,
         description=(

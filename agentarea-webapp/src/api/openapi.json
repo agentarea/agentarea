@@ -13713,6 +13713,19 @@
             "default": false,
             "title": "Requires Human Approval"
           },
+          "runner_client_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run on this Codex or Claude Code client's runner instead of where the agent runs. Omit to run where the agent runs.",
+            "title": "Runner Client Id"
+          },
           "scheduled_at": {
             "format": "date-time",
             "title": "Scheduled At",
@@ -16401,6 +16414,19 @@
             ],
             "default": false,
             "title": "Requires Human Approval"
+          },
+          "runner_client_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run on this Codex or Claude Code client's runner instead of where the agent runs. Omit to run where the agent runs.",
+            "title": "Runner Client Id"
           },
           "task_policy": {
             "anyOf": [

@@ -218,21 +218,10 @@ class AgentService(BaseCrudService[Agent]):
         """A runner's client of this workspace the caller may use, or None for the platform loop."""
         if client_id is None:
             return None
-        from agentarea_common.auth.permission import PermissionService
-        from agentarea_common.di.container import resolve
-        from agentarea_mcp.domain.client_models import RUNNER_KINDS
-        from agentarea_mcp.infrastructure.client_repository import ClientRepository
+        from agentarea_mcp.application.client_service import usable_runner_client
 
-        client = await self.repository_factory.create_repository(ClientRepository).get_by_id(
-            client_id
-        )
-        if (
-            client is None
-            or client.kind not in RUNNER_KINDS
-            or not await resolve(PermissionService).check(
-                self._user_context.graph_subject, "use", "client", str(client_id)
-            )
-        ):
+        client = await usable_runner_client(self.repository_factory, client_id)
+        if client is None:
             raise InvalidClientError(
                 f"Client '{client_id}' is no Codex or Claude Code client of this workspace"
             )

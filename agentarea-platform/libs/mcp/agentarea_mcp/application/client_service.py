@@ -10,12 +10,14 @@ from uuid import UUID
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.infrastructure.skill_repository import SkillRepository
 from agentarea_common.auth.context import UserContext
+from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from agentarea_common.exceptions.errors import ConflictError, NotFoundError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_mcp.domain.client_models import (
+    RUNNER_KINDS,
     Client,
     ClientMcpInstanceLink,
     ClientOpenAPIConnectionLink,
@@ -26,6 +28,22 @@ from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
 from agentarea_mcp.schemas.client_dto import ClientCreate, ClientUpdate
 
 logger = logging.getLogger(__name__)
+
+
+async def usable_runner_client(
+    repository_factory: RepositoryFactory, client_id: UUID
+) -> Client | None:
+    """The workspace's Codex or Claude Code client ``client_id`` names, if the caller may use it."""
+    from agentarea_common.auth.permission import PermissionService
+    from agentarea_common.di.container import resolve
+
+    client = await repository_factory.create_repository(ClientRepository).get_by_id(client_id)
+    if client is None or client.kind not in RUNNER_KINDS:
+        return None
+    subject = repository_factory.user_context.graph_subject
+    if not await resolve(PermissionService).check(subject, "use", "client", str(client_id)):
+        return None
+    return client
 
 
 class ClientService:
