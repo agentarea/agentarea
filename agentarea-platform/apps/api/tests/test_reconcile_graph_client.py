@@ -8,6 +8,8 @@ for WorkflowSettings"), then, once the client was registered up front, the
 whole run.
 """
 
+from unittest.mock import AsyncMock
+
 import pytest
 from agentarea_api.cli import _register_graph_client
 from agentarea_common.config import get_settings
@@ -95,6 +97,7 @@ async def test_a_retired_manifest_entry_retires_its_registry_without_syncing(
         return object()
 
     monkeypatch.setattr(cli, "_register_graph_client", register)
+    monkeypatch.setattr(cli, "_grant_pending_secret_owners", AsyncMock())
     monkeypatch.setattr(cli, "Database", _Database)
     monkeypatch.setattr(cli, "_registry_sync_lock", _always_held)
     monkeypatch.setattr(cli, "get_db_settings", lambda: None)
@@ -110,3 +113,24 @@ async def test_a_retired_manifest_entry_retires_its_registry_without_syncing(
     calls.clear()
     await cli._reconcile(retired, (), None)
     assert calls == [("retire", live.id)]
+
+
+async def test_every_reconcile_grants_the_owners_of_secrets_the_graph_lacks(monkeypatch):
+    from agentarea_api import cli
+
+    order: list[str] = []
+
+    async def register() -> None:
+        order.append("graph")
+
+    async def grant(db) -> None:
+        order.append("secrets")
+
+    monkeypatch.setattr(cli, "_register_graph_client", register)
+    monkeypatch.setattr(cli, "_grant_pending_secret_owners", grant)
+    monkeypatch.setattr(cli, "Database", lambda settings: object())
+    monkeypatch.setattr(cli, "get_db_settings", lambda: None)
+
+    await cli._reconcile(None, (), None)
+
+    assert order == ["graph", "secrets"]
