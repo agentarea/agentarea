@@ -59,6 +59,20 @@ def spec_secret_refs(
     return refs
 
 
+def carries_secret_ref(value: Any) -> bool:
+    """Whether ``value`` holds a secret reference at any depth.
+
+    A server spec is shared and editable by whoever may edit it, while a
+    reference is authorized against the instance that carries it; so no layer
+    but an instance's own environment and headers may hold one.
+    """
+    if isinstance(value, dict):
+        return SECRET_REF_KEY in value or any(carries_secret_ref(v) for v in value.values())
+    if isinstance(value, list):
+        return any(carries_secret_ref(v) for v in value)
+    return False
+
+
 def has_secret_refs(spec: dict[str, Any]) -> bool:
     """Whether a stored spec references any secret; never raises on a row read back."""
     return any(

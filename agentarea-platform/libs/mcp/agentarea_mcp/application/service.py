@@ -34,7 +34,9 @@ from agentarea_secrets.catalog_service import (
     ManagedSecretError,
     SecretCatalogService,
     SecretNotFoundError,
+    named_secret_for_use,
 )
+from agentarea_secrets.naming import RESERVED_PREFIXES
 from mcp import MCPError
 from mcp_types import INVALID_REQUEST, REQUEST_TIMEOUT
 
@@ -75,9 +77,13 @@ from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.domain.secret_refs import (
     SECRET_REF_CONSUMER,
+    SECRET_REF_FIELDS,
+    SECRET_REF_KEY,
     InvalidSecretRefError,
     SecretRefUnresolvedError,
+    carries_secret_ref,
     has_secret_refs,
+    is_secret_ref,
     secret_ref_name,
     spec_secret_refs,
 )
@@ -305,6 +311,11 @@ def derive_bundle_verification(bundle: MCPServerInstance, members: list[MCPServe
     }
 
 
+SPEC_REFERENCE_REFUSAL = (
+    "A server spec may not reference a workspace secret; an instance references it"
+)
+
+
 class MCPServerService(BaseCrudService[MCPServer]):
     def __init__(self, repository_factory: Any, event_broker: EventBroker | None = None):
         repository = repository_factory.create_repository(MCPServerRepository)
@@ -329,6 +340,8 @@ class MCPServerService(BaseCrudService[MCPServer]):
         refusal = _spec_endpoint_refusal(payload.remote_url, payload.json_spec)
         if refusal:
             raise BadRequestError(refusal)
+        if carries_secret_ref(payload.json_spec):
+            raise BadRequestError(SPEC_REFERENCE_REFUSAL)
         slug = await self._resolve_unique_slug(payload.name)
 
         server = MCPServer(
@@ -372,6 +385,8 @@ class MCPServerService(BaseCrudService[MCPServer]):
             refusal = _spec_endpoint_refusal(patch.get("remote_url"), patch.get("json_spec"))
             if refusal:
                 raise BadRequestError(refusal)
+        if carries_secret_ref(patch.get("json_spec")):
+            raise BadRequestError(SPEC_REFERENCE_REFUSAL)
         if SPEC_TRANSPORT_COLUMNS.intersection(patch):
             egress_refusal = _server_egress_refusal(
                 SimpleNamespace(
@@ -383,6 +398,11 @@ class MCPServerService(BaseCrudService[MCPServer]):
             )
             if egress_refusal:
                 raise BadRequestError(egress_refusal)
+        if any(
+            column in patch and patch[column] != getattr(server, column)
+            for column in SPEC_TRANSPORT_COLUMNS
+        ):
+            await self._assert_may_redirect_secret_refs(server)
 
         if "name" in patch:
             server.name = patch["name"]
@@ -417,6 +437,36 @@ class MCPServerService(BaseCrudService[MCPServer]):
             )
 
         return server
+
+    async def _assert_may_redirect_secret_refs(self, server: MCPServer) -> None:
+        """Changing where a spec's instances connect sends their referenced secrets there.
+
+        So it takes ``can_use_secret`` on every workspace secret an instance of
+        the spec references, not only edit on the spec. A secret that is gone
+        or no longer a user secret has no value to send and is not asked about.
+        """
+        instances = await self.repository_factory.create_repository(
+            MCPServerInstanceRepository
+        ).list_by_server_spec(str(server.id))
+        names = {
+            value[SECRET_REF_KEY]
+            for instance in instances
+            for field in SECRET_REF_FIELDS
+            if isinstance((instance.json_spec or {}).get(field), dict)
+            for value in instance.json_spec[field].values()
+            if is_secret_ref(value)
+        }
+        for name in sorted(names):
+            try:
+                await named_secret_for_use(
+                    self.repository.session, self.repository.user_context, name
+                )
+            except SecretNotFoundError, ManagedSecretError:
+                logger.info(
+                    "Spec %s transport change: instance reference to %s resolves to nothing",
+                    server.id,
+                    name,
+                )
 
     @audited("mcp_server.delete", resource_type="mcp_server", resource_id_param="id")
     async def delete_mcp_server(self, id: UUID) -> bool:
@@ -619,6 +669,14 @@ class MCPServerInstanceService:
 
             cleaned_values = {}
             for name, value in values.items():
+                previous_value = previous_values.get(name)
+                if (
+                    isinstance(value, str)
+                    and value in masked_placeholders
+                    and is_secret_ref(previous_value)
+                ):
+                    # A mask sent over a reference keeps it; it is never stored as a value.
+                    value = previous_value
                 try:
                     referenced = secret_ref_name(f"{field_name}.{name}", value)
                 except InvalidSecretRefError as exc:
@@ -674,8 +732,8 @@ class MCPServerInstanceService:
         """The id of every workspace secret ``refs`` names, each one the caller may use.
 
         Referencing a secret sends its value wherever the connection points, so
-        it takes what wiring the secret in anywhere else takes: its creator or a
-        workspace admin. A refusal is a ``PermissionError`` naming the secret.
+        it takes what wiring the secret in anywhere else takes: ``can_use_secret``.
+        A refusal is a ``PermissionError`` naming the secret.
         """
         catalog = self._secret_catalog()
         ids: dict[str, UUID] = {}
@@ -695,16 +753,15 @@ class MCPServerInstanceService:
                 ) from exc
         return ids
 
-    async def _record_secret_refs(
+    async def _stage_secret_refs(
         self, instance_id: UUID, refs: dict[str, str], ids: dict[str, UUID]
     ) -> None:
-        """Index what the instance references, so the secret cannot be deleted under it."""
-        catalog = self._secret_catalog()
-        await catalog.clear_references(SECRET_REF_CONSUMER, str(instance_id))
-        for field, secret_name in refs.items():
-            await catalog.add_reference(
-                ids[secret_name], SECRET_REF_CONSUMER, str(instance_id), field
-            )
+        """Index what the instance references in the transaction that writes its row."""
+        await self._secret_catalog().stage_references(
+            SECRET_REF_CONSUMER,
+            str(instance_id),
+            [(ids[secret_name], field) for field, secret_name in refs.items()],
+        )
 
     async def _referenced_headers(self, instance: MCPServerInstance) -> dict[str, str]:
         """The header values the instance references, read now from its workspace's secrets."""
@@ -717,6 +774,11 @@ class MCPServerInstanceService:
             )
         resolved: dict[str, str] = {}
         for name, secret_name in refs.items():
+            if secret_name.startswith(RESERVED_PREFIXES):
+                raise SecretRefUnresolvedError(
+                    f"Header {name} of MCP instance {instance.id} references secret "
+                    + f"'{secret_name}', a platform-reserved name no reference may read"
+                )
             value = await self.secret_manager.get_secret(secret_name)
             if not value:
                 raise SecretRefUnresolvedError(
@@ -839,6 +901,13 @@ class MCPServerInstanceService:
                 server_spec_id = str(server_spec.id)
                 created_spec_id = server_spec_id
 
+            if carries_secret_ref(server_spec.json_spec):
+                raise MCPValidationError(
+                    [
+                        f"MCP server spec '{server_spec.name}' carries a secret reference; "
+                        + "only an instance may reference a workspace secret"
+                    ]
+                )
             transport_spec = server_transport_spec(server_spec)
             validation_errors = MCPConfigurationValidator.validate_json_spec(transport_spec)
             if validation_errors:
@@ -903,6 +972,9 @@ class MCPServerInstanceService:
                 workspace_id=self.repository.user_context.workspace_id,
             )
             self.repository.session.add(instance)
+            if secret_refs:
+                await self.repository.session.flush()
+                await self._stage_secret_refs(instance.id, secret_refs, secret_ref_ids)
             await self.repository.session.commit()
             await self.repository.session.refresh(instance)
         except Exception:
@@ -912,8 +984,6 @@ class MCPServerInstanceService:
         if created_spec_id is not None:
             await self._grant_creator_ownership(created_spec_id)
         await self._grant_creator_ownership(instance.id)
-        if secret_refs:
-            await self._record_secret_refs(instance.id, secret_refs, secret_ref_ids)
 
         is_url_type = instance_type == MCPTransport.URL
 
@@ -940,10 +1010,12 @@ class MCPServerInstanceService:
 
         if is_url_type:
             # Synchronous verify — blocks until succeeded or failed
-            verification = await verify(
-                instance,
-                extra_headers=await self._secret_headers(instance) or None,
-            )
+            try:
+                secret_headers = await self._secret_headers(instance)
+            except SecretRefUnresolvedError as exc:
+                verification = await self._store_secret_unresolved(instance.id, exc)
+            else:
+                verification = await verify(instance, extra_headers=secret_headers or None)
             instance.verification = dict(verification)
             refresh_result = self.repository.session.refresh(instance)
             if inspect.isawaitable(refresh_result):
@@ -979,6 +1051,8 @@ class MCPServerInstanceService:
         # `slug` is NOT NULL; route through the repository's single slug resolver
         # so this path can't drift from the others (it previously omitted slug
         # entirely -> NotNullViolationError 500 on the UI "Add Server").
+        if carries_secret_ref(server_payload.json_spec):
+            raise MCPValidationError([SPEC_REFERENCE_REFUSAL])
         slug = await self.mcp_server_repository.resolve_unique_slug(server_payload.name)
         server = MCPServer(
             name=server_payload.name,
@@ -1099,11 +1173,11 @@ class MCPServerInstanceService:
                 await self._set_context_secret(instance, patch["context_secret"], spec)
                 update_kwargs["json_spec"] = spec
 
+        if refs_to_record is not None:
+            await self._stage_secret_refs(id, *refs_to_record)
         instance = await self.repository.update(id, **update_kwargs)
         if not instance:
             return None
-        if refs_to_record is not None:
-            await self._record_secret_refs(instance.id, *refs_to_record)
 
         await self.event_broker.publish(
             MCPServerInstanceUpdated(
@@ -1138,7 +1212,10 @@ class MCPServerInstanceService:
                     logger.debug("bundle member %s lookup failed: %s", mid, e)
             return derive_bundle_verification(instance, members)
 
-        secret_headers = await self._secret_headers(instance)
+        try:
+            secret_headers = await self._secret_headers(instance)
+        except SecretRefUnresolvedError as exc:
+            return await self._store_secret_unresolved(instance.id, exc)
         try:
             extra_headers = {**secret_headers, **await self._resolve_auth_headers(instance)}
         except OAuthReauthRequiredError:
@@ -1245,6 +1322,20 @@ class MCPServerInstanceService:
             },
         }
         await self.repository.update(instance.id, verification=payload)
+
+    async def _store_secret_unresolved(
+        self, instance_id: UUID, error: SecretRefUnresolvedError
+    ) -> dict:
+        """Persist and return a failed verification naming the header and secret, never a value."""
+        payload = {
+            "schema_version": VERIFICATION_SCHEMA_VERSION,
+            "status": "failed",
+            "at": datetime.now(UTC).isoformat(),
+            "error": {"code": "secret_unresolved", "message": str(error), "detail": None},
+        }
+        logger.warning("MCP instance %s cannot resolve a secret reference: %s", instance_id, error)
+        await self.repository.update(instance_id, verification=payload)
+        return payload
 
     async def _store_reauth_required(self, instance_id: UUID) -> dict:
         """Persist and return a verification payload asking the user to reconnect."""
@@ -1454,9 +1545,9 @@ class MCPServerInstanceService:
         if (instance.json_spec or {}).get(CONTEXT_SIGNING_FLAG):
             stored_names = [*stored_names, CONTEXT_SECRET_NAME]
         await self.env_service.delete_instance_environment(instance.id, stored_names)
-        if has_secret_refs(instance.json_spec or {}):
-            await self._secret_catalog().clear_references(SECRET_REF_CONSUMER, str(instance.id))
         await self._release_owned_auth(instance.id)
+        if has_secret_refs(instance.json_spec or {}):
+            await self._secret_catalog().stage_references(SECRET_REF_CONSUMER, str(instance.id), [])
         deleted = await self.repository.delete(id)
         if deleted:
             # This event is notification only. Runtime deletion has already

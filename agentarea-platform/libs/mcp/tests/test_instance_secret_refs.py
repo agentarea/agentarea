@@ -47,6 +47,8 @@ class _Catalog:
         self.ids: dict[str, uuid.UUID] = {}
         self.references: list[tuple[uuid.UUID, str, str, str]] = []
         self.cleared: list[tuple[str, str]] = []
+        self.commits_at_stage: list[int] = []
+        self.session = MagicMock()
 
     async def get_named_for_use(self, name: str):
         self.asked.append(name)
@@ -54,14 +56,12 @@ class _Catalog:
             raise self.refusal
         return SimpleNamespace(id=self.ids.setdefault(name, uuid.uuid4()), secret_name=name)
 
-    async def add_reference(self, secret_id, consumer_type, consumer_id, field) -> None:
-        self.references.append((secret_id, consumer_type, consumer_id, field))
-
-    async def clear_references(self, consumer_type, consumer_id) -> None:
+    async def stage_references(self, consumer_type, consumer_id, references) -> None:
         self.cleared.append((consumer_type, consumer_id))
+        self.commits_at_stage.append(self.session.commit.await_count)
         self.references = [
             ref for ref in self.references if (ref[1], ref[2]) != (consumer_type, consumer_id)
-        ]
+        ] + [(secret_id, consumer_type, consumer_id, field) for secret_id, field in references]
 
 
 def _server(transport: str = "url") -> MagicMock:
@@ -101,6 +101,7 @@ def _service(
         commit=AsyncMock(), refresh=AsyncMock(), rollback=AsyncMock(), flush=AsyncMock()
     )
     service.repository = repository
+    catalog.session = repository.session
     service._secret_catalog = lambda: catalog  # type: ignore[method-assign]
     return service, secrets
 
@@ -326,3 +327,160 @@ async def test_deleting_the_instance_releases_its_references():
     assert catalog.references == []
     assert ("mcp_instance", str(instance.id)) in catalog.cleared
 
+
+
+@pytest.mark.asyncio
+async def test_references_are_written_in_the_instance_commit_not_after_it():
+    catalog = _Catalog()
+    service, _ = _service(_server(), catalog)
+
+    await _create(service, {"type": "url", "headers": {"Authorization": {"secret_name": TOKEN_SECRET}}})
+
+    assert catalog.commits_at_stage == [0]
+
+
+@pytest.mark.asyncio
+async def test_an_update_stages_its_references_before_the_row_is_written():
+    catalog = _Catalog()
+    service, _ = _service(_server("docker"), catalog)
+    instance = await _create(service, {"environment": {"GITHUB_TOKEN": "old-literal"}})
+    order: list[str] = []
+    real_stage = catalog.stage_references
+
+    async def stage(*args):
+        order.append("stage")
+        await real_stage(*args)
+
+    async def update(_id, **kwargs):
+        order.append("update")
+        instance.json_spec = kwargs.get("json_spec", instance.json_spec)
+        return instance
+
+    catalog.stage_references = stage
+    service.repository.update = update
+    with patch.object(service, "_retire_runtime_before_mutation", new=AsyncMock()):
+        await service.update_instance(
+            instance.id,
+            MCPServerInstanceUpdate(
+                json_spec={"environment": {"GITHUB_TOKEN": {"secret_name": TOKEN_SECRET}}}
+            ),
+        )
+
+    assert order == ["stage", "update"]
+
+
+@pytest.mark.asyncio
+async def test_deleting_stages_the_release_into_the_delete_itself():
+    catalog = _Catalog()
+    service, _ = _service(_server(), catalog)
+    instance = await _create(
+        service, {"type": "url", "headers": {"Authorization": {"secret_name": TOKEN_SECRET}}}
+    )
+    order: list[str] = []
+    real_stage = catalog.stage_references
+
+    async def stage(*args):
+        order.append("stage")
+        await real_stage(*args)
+
+    async def delete(_id):
+        order.append("delete")
+        return True
+
+    catalog.stage_references = stage
+    service.repository.delete = delete
+    with patch.object(service, "_release_owned_auth", new=AsyncMock()):
+        await service.delete_instance(instance.id)
+
+    assert order == ["stage", "delete"]
+    assert catalog.references == []
+
+
+@pytest.mark.asyncio
+async def test_a_server_spec_carrying_a_reference_cannot_be_connected():
+    server = _server("docker")
+    server.json_spec = {**server.json_spec, "environment": {"API_KEY": {"secret_name": "PROD_KEY"}}}
+    catalog = _Catalog()
+    service, _ = _service(server, catalog)
+    service.repository.session.add = MagicMock()
+
+    with pytest.raises(MCPValidationError, match="server spec"):
+        await service.create_instance(
+            MCPServerInstanceCreate(name="conn", server_spec_id=uuid.UUID(SPEC_ID), json_spec={})
+        )
+
+    service.repository.session.add.assert_not_called()
+    assert catalog.asked == []
+
+
+@pytest.mark.asyncio
+async def test_a_masked_value_sent_back_over_a_reference_keeps_the_reference():
+    catalog = _Catalog()
+    service, secrets = _service(_server("docker"), catalog)
+    instance = await _create(
+        service, {"environment": {"GITHUB_TOKEN": {"secret_name": TOKEN_SECRET}}}
+    )
+    updated: dict = {}
+
+    async def update(_id, **kwargs):
+        updated.update(kwargs)
+        return instance
+
+    service.repository.update = update
+    with patch.object(service, "_retire_runtime_before_mutation", new=AsyncMock()):
+        await service.update_instance(
+            instance.id,
+            MCPServerInstanceUpdate(json_spec={"environment": {"GITHUB_TOKEN": "******"}}),
+        )
+
+    assert updated["json_spec"]["environment"] == {"GITHUB_TOKEN": {"secret_name": TOKEN_SECRET}}
+    assert _instance_copies(secrets) == {}
+
+
+@pytest.mark.asyncio
+async def test_a_reference_to_a_platform_secret_name_is_never_read():
+    service, secrets = _service(_server(), _Catalog())
+    instance = await _create(
+        service, {"type": "url", "headers": {"Authorization": {"secret_name": TOKEN_SECRET}}}
+    )
+    copied = f"mcp_instance_{uuid.uuid4()}_Authorization"
+    await secrets.set_secret(copied, "another-instances-copy")
+    instance.json_spec = {**instance.json_spec, "headers": {"Authorization": {"secret_name": copied}}}
+
+    with pytest.raises(LookupError, match="reserved"):
+        await service.outbound_headers(instance)
+
+
+@pytest.mark.asyncio
+async def test_verifying_with_a_missing_secret_records_a_failed_verification():
+    service, secrets = _service(_server(), _Catalog())
+    instance = await _create(
+        service, {"type": "url", "headers": {"Authorization": {"secret_name": TOKEN_SECRET}}}
+    )
+    await secrets.delete_secret(TOKEN_SECRET)
+    service.repository.update = AsyncMock(return_value=instance)
+
+    payload = await service.verify_instance(instance.id)
+
+    assert payload["status"] == "failed"
+    assert payload["error"]["code"] == "secret_unresolved"
+    assert "Authorization" in payload["error"]["message"]
+    assert TOKEN_SECRET in payload["error"]["message"]
+    assert TOKEN_VALUE not in str(payload)
+    service.repository.update.assert_awaited_once_with(instance.id, verification=payload)
+
+
+@pytest.mark.asyncio
+async def test_creating_with_a_missing_secret_keeps_the_instance_and_records_the_failure():
+    service, secrets = _service(_server(), _Catalog())
+    await secrets.delete_secret(TOKEN_SECRET)
+    service.repository.update = AsyncMock()
+
+    instance = await _create(
+        service, {"type": "url", "headers": {"Authorization": {"secret_name": TOKEN_SECRET}}}
+    )
+
+    (call,) = service.repository.update.await_args_list
+    assert call.args == (instance.id,)
+    assert call.kwargs["verification"]["error"]["code"] == "secret_unresolved"
+    assert instance.verification["status"] == "failed"

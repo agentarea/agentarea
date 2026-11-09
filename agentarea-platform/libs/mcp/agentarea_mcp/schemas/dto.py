@@ -25,6 +25,7 @@ from pydantic import (
 )
 
 from ..domain.egress_exit_model import EGRESS_EXIT_SPEC_KEY, EGRESS_SPEC_KEY
+from ..domain.secret_refs import carries_secret_ref
 from ..tool_context import CONTEXT_SECRET_MIN_LENGTH, CONTEXT_SPEC_KEY
 from .egress_exit_dto import validate_spec_egress_exit
 from .image_reference import validate_optional_image_reference, validate_spec_image
@@ -94,6 +95,13 @@ def validate_spec_egress(json_spec: dict[str, Any]) -> dict[str, Any]:
     return json_spec
 
 
+def refuse_spec_secret_refs(json_spec: dict[str, Any] | None) -> dict[str, Any] | None:
+    """A server spec is shared; only an instance may reference a workspace secret."""
+    if carries_secret_ref(json_spec):
+        raise ValueError("a server spec may not reference a workspace secret")
+    return json_spec
+
+
 def refuse_instance_egress(json_spec: dict[str, Any] | None) -> dict[str, Any] | None:
     """Whether a workload needs an exit is its image's, declared on the server spec."""
     if json_spec is not None and EGRESS_SPEC_KEY in json_spec:
@@ -114,6 +122,7 @@ JsonSpec = Annotated[
 ContainerJsonSpec = Annotated[JsonSpec, AfterValidator(validate_spec_image)]
 ServerJsonSpec = Annotated[
     ContainerJsonSpec,
+    AfterValidator(refuse_spec_secret_refs),
     AfterValidator(refuse_spec_egress_exit),
     AfterValidator(validate_spec_egress),
 ]

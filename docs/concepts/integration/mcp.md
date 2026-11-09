@@ -58,10 +58,16 @@ instance returns the reference, never the value.
 A reference is authorized when it is attached, the way a cloud role is passed
 to a service: creating or updating the instance requires
 [`can_use_secret`](/reference/authorization-model) on that secret, and the
-request is refused with 403 otherwise. When the server starts — or, for a URL
+request is refused with 403 otherwise. Only an instance may hold a reference:
+a server spec is shared by every instance built from it and editable by anyone
+with edit on it, so a spec carrying a reference is refused, and changing a
+spec's endpoint, image or command takes `can_use_secret` on every secret its
+instances reference. When the server starts — or, for a URL
 server, on each request — the value is read from the instance's own workspace,
-so a rotated secret reaches the next start. A secret that is gone fails the
-start instead of passing an empty value. Revoking someone's access later does
+so a rotated secret reaches the next start. Only a user secret of that
+workspace resolves, never a connection's own credential. A secret that is gone
+or empty fails the start, or records a failed verification naming the header
+and the secret, instead of passing an empty value. Revoking someone's access later does
 not detach a reference they made; remove the reference to cut it. The instance
 is registered as the secret's consumer, so the secret cannot be deleted while
 the instance uses it.
