@@ -6,7 +6,7 @@ ownership tuples a create now writes. Every user secret made before has none;
 creator and stamps it. A create whose grant succeeded stamps it at once.
 
 Revision ID: 20261109_2200_secret_graph_grant
-Revises: 20261107_1200_client_runner
+Revises: 20261109_1900_harness_agent
 Create Date: 2026-11-09 22:00:00.000000
 """
 
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20261109_2200_secret_graph_grant"
-down_revision: str | None = "20261107_1200_client_runner"
+down_revision: str | None = "20261109_1900_harness_agent"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
