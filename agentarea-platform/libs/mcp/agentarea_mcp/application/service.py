@@ -66,8 +66,22 @@ from agentarea_mcp.domain.events import (
     MCPServerInstanceUpdated,
     MCPServerUpdated,
 )
+from agentarea_secrets.catalog_service import (
+    ManagedSecretError,
+    SecretCatalogService,
+    SecretNotFoundError,
+)
+
 from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea_mcp.domain.secret_refs import (
+    SECRET_REF_CONSUMER,
+    InvalidSecretRefError,
+    SecretRefUnresolvedError,
+    has_secret_refs,
+    secret_ref_name,
+    spec_secret_refs,
+)
 from agentarea_mcp.domain.transport import CONTAINER_TRANSPORTS, MCPTransport
 from agentarea_mcp.domain.verification_types import (
     DEFAULT_VERIFICATION,
@@ -606,6 +620,13 @@ class MCPServerInstanceService:
 
             cleaned_values = {}
             for name, value in values.items():
+                try:
+                    referenced = secret_ref_name(f"{field_name}.{name}", value)
+                except InvalidSecretRefError as exc:
+                    raise MCPValidationError([str(exc)]) from exc
+                if referenced is not None:
+                    cleaned_values[name] = value
+                    continue
                 if name not in secret_names and name in known_names:
                     cleaned_values[name] = value
                     continue
@@ -637,8 +658,80 @@ class MCPServerInstanceService:
                     ]
                 )
             )
+        referenced_names = set(spec_secret_refs(spec))
+        if referenced_names and isinstance(spec.get("env_vars"), list):
+            spec["env_vars"] = [n for n in spec["env_vars"] if n not in referenced_names]
 
         return spec, secret_env_vars
+
+    def _secret_catalog(self) -> SecretCatalogService:
+        return SecretCatalogService(
+            session=self.repository.session,
+            user_context=self.repository.user_context,
+            secret_manager=self.secret_manager,
+        )
+
+    async def _assert_may_use_secret_refs(self, refs: dict[str, str]) -> dict[str, UUID]:
+        """The id of every workspace secret ``refs`` names, each one the caller may use.
+
+        Referencing a secret sends its value wherever the connection points, so
+        it takes what wiring the secret in anywhere else takes: its creator or a
+        workspace admin. A refusal is a ``PermissionError`` naming the secret.
+        """
+        catalog = self._secret_catalog()
+        ids: dict[str, UUID] = {}
+        for secret_name in dict.fromkeys(refs.values()):
+            try:
+                ids[secret_name] = (await catalog.get_named_for_use(secret_name)).id
+            except SecretNotFoundError as exc:
+                raise MCPValidationError(
+                    [f"Secret '{secret_name}' is not a secret of this workspace"]
+                ) from exc
+            except ManagedSecretError as exc:
+                raise MCPValidationError(
+                    [
+                        f"Secret '{secret_name}' belongs to a connection; "
+                        + "reference a workspace secret instead"
+                    ]
+                ) from exc
+        return ids
+
+    async def _record_secret_refs(
+        self, instance_id: UUID, refs: dict[str, str], ids: dict[str, UUID]
+    ) -> None:
+        """Index what the instance references, so the secret cannot be deleted under it."""
+        catalog = self._secret_catalog()
+        await catalog.clear_references(SECRET_REF_CONSUMER, str(instance_id))
+        for field, secret_name in refs.items():
+            await catalog.add_reference(
+                ids[secret_name], SECRET_REF_CONSUMER, str(instance_id), field
+            )
+
+    async def _referenced_headers(self, instance: MCPServerInstance) -> dict[str, str]:
+        """The header values the instance references, read now from its workspace's secrets."""
+        refs = spec_secret_refs(instance.json_spec or {}, ("headers",))
+        if not refs:
+            return {}
+        if str(instance.workspace_id) != str(self.repository.user_context.workspace_id):
+            raise SecretRefUnresolvedError(
+                f"MCP instance {instance.id} is not in the workspace reading its secrets"
+            )
+        resolved: dict[str, str] = {}
+        for name, secret_name in refs.items():
+            value = await self.secret_manager.get_secret(secret_name)
+            if not value:
+                raise SecretRefUnresolvedError(
+                    f"Header {name} of MCP instance {instance.id} references secret "
+                    + f"'{secret_name}', which has no value in its workspace"
+                )
+            logger.info(
+                "Resolved header %s of MCP instance %s from secret %s",
+                name,
+                instance.id,
+                secret_name,
+            )
+            resolved[name] = value
+        return resolved
 
     async def _materialize_workspace_spec_copy(self, source: MCPServer) -> MCPServer:
         """Copy-on-write a catalog/platform spec into the caller's workspace.
@@ -788,6 +881,8 @@ class MCPServerInstanceService:
             spec, secret_env_vars = await self._extract_secrets_from_spec(
                 instance_spec, server_spec_id
             )
+            secret_refs = spec_secret_refs(spec)
+            secret_ref_ids = await self._assert_may_use_secret_refs(secret_refs)
             if context_secret:
                 spec[CONTEXT_SIGNING_FLAG] = True
 
@@ -818,6 +913,8 @@ class MCPServerInstanceService:
         if created_spec_id is not None:
             await self._grant_creator_ownership(created_spec_id)
         await self._grant_creator_ownership(instance.id)
+        if secret_refs:
+            await self._record_secret_refs(instance.id, secret_refs, secret_ref_ids)
 
         is_url_type = instance_type == MCPTransport.URL
 
@@ -925,6 +1022,7 @@ class MCPServerInstanceService:
 
         update_kwargs: dict[str, Any] = {}
         instance: MCPServerInstance | None = None
+        refs_to_record: tuple[dict[str, str], dict[str, UUID]] | None = None
         if "name" in patch:
             update_kwargs["name"] = patch["name"]
         if "description" in patch:
@@ -950,6 +1048,13 @@ class MCPServerInstanceService:
                 cleaned_spec, secret_env_vars = await self._extract_secrets_from_spec(
                     json_spec, instance.server_spec_id, instance.json_spec
                 )
+                secret_refs = spec_secret_refs(cleaned_spec)
+                secret_ref_ids = await self._assert_may_use_secret_refs(secret_refs)
+                if secret_refs or has_secret_refs(instance.json_spec or {}):
+                    refs_to_record = (secret_refs, secret_ref_ids)
+                replaced_copies = [
+                    name for name in instance.get_configured_env_vars() if name in secret_refs
+                ]
                 if (instance.json_spec or {}).get(CONTEXT_SIGNING_FLAG):
                     cleaned_spec[CONTEXT_SIGNING_FLAG] = True
                 # Transport belongs to the original connection and is immutable
@@ -977,6 +1082,8 @@ class MCPServerInstanceService:
                         # secret mutation has happened and the old runtime remains
                         # an honest representation of the stored configuration.
                         await self._retire_runtime_before_mutation(instance.id)
+                if replaced_copies:
+                    await self.env_service.delete_instance_environment(id, replaced_copies)
                 if real_secrets:
                     await self.env_service.set_instance_environment(id, real_secrets)
                     logger.info(
@@ -996,6 +1103,8 @@ class MCPServerInstanceService:
         instance = await self.repository.update(id, **update_kwargs)
         if not instance:
             return None
+        if refs_to_record is not None:
+            await self._record_secret_refs(instance.id, *refs_to_record)
 
         await self.event_broker.publish(
             MCPServerInstanceUpdated(
@@ -1229,11 +1338,12 @@ class MCPServerInstanceService:
         if instance.transport != MCPTransport.URL:
             return {}
         names = instance.get_configured_env_vars()
-        if not names:
-            return {}
         if instance.managed_by == MANAGED_BY_PLATFORM:
-            return await platform_instance_environment(instance.id, names)
-        return await self.env_service.get_instance_environment(instance.id, names)
+            return await platform_instance_environment(instance.id, names) if names else {}
+        headers = await self._referenced_headers(instance)
+        if names:
+            headers.update(await self.env_service.get_instance_environment(instance.id, names))
+        return headers
 
     async def outbound_headers(self, instance: MCPServerInstance) -> dict[str, str]:
         """The headers this connection sends its upstream, secret ones included."""
@@ -1345,6 +1455,8 @@ class MCPServerInstanceService:
         if (instance.json_spec or {}).get(CONTEXT_SIGNING_FLAG):
             stored_names = [*stored_names, CONTEXT_SECRET_NAME]
         await self.env_service.delete_instance_environment(instance.id, stored_names)
+        if has_secret_refs(instance.json_spec or {}):
+            await self._secret_catalog().clear_references(SECRET_REF_CONSUMER, str(instance.id))
         await self._release_owned_auth(instance.id)
         deleted = await self.repository.delete(id)
         if deleted:

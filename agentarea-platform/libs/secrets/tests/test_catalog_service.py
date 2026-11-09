@@ -351,6 +351,49 @@ class TestSelectingASecretForUse:
         with pytest.raises(SecretNotFoundError):
             await theirs.get_for_use(secret.id)
 
+    async def test_by_name_another_member_is_refused(self, session: AsyncSession) -> None:
+        secret = await self._created_by_member_a(session)
+        member_b = _catalog(session, user_id="member-b", admin_workspaces=[])
+
+        with pytest.raises(SecretAccessDeniedError):
+            await member_b.get_named_for_use(secret.secret_name)
+
+    async def test_by_name_the_creator_and_an_admin_may_use_it(
+        self, session: AsyncSession
+    ) -> None:
+        secret = await self._created_by_member_a(session)
+        member_a = _catalog(session, user_id="member-a", admin_workspaces=[])
+        admin = _catalog(session, user_id="admin", admin_workspaces=[WORKSPACE])
+
+        assert (await member_a.get_named_for_use(secret.secret_name)).id == secret.id
+        assert (await admin.get_named_for_use(secret.secret_name)).id == secret.id
+
+    async def test_by_name_another_workspace_cannot_find_it(self, session: AsyncSession) -> None:
+        secret = await self._created_by_member_a(session)
+        theirs = _catalog(session, OTHER_WORKSPACE, user_id="member-a", admin_workspaces=[])
+
+        with pytest.raises(SecretNotFoundError):
+            await theirs.get_named_for_use(secret.secret_name)
+
+    async def test_by_name_a_managed_secret_is_refused(self, session: AsyncSession) -> None:
+        name = f"mcp_instance_{uuid.uuid4()}_API_KEY"
+        session.add(
+            EncryptedSecret(
+                id=uuid.uuid4(),
+                workspace_id=WORKSPACE,
+                secret_name=name,
+                encrypted_value="ciphertext",
+                owner_type="mcp_instance",
+                owner_id=str(uuid.uuid4()),
+                created_by="admin",
+            )
+        )
+        await session.commit()
+        admin = _catalog(session, user_id="admin", admin_workspaces=[WORKSPACE])
+
+        with pytest.raises(ManagedSecretError):
+            await admin.get_named_for_use(name)
+
 
 class TestWorkspaceIsolation:
     async def test_another_workspace_cannot_see_or_touch_it(self, session: AsyncSession) -> None:

@@ -163,7 +163,19 @@ class SecretCatalogService:
         workspace membership is not enough to select one. Only whoever created
         it, or a workspace admin, may.
         """
-        secret = await self._require_user_owned(secret_id)
+        return await self._require_usable(await self._require_user_owned(secret_id))
+
+    async def get_named_for_use(self, name: str) -> EncryptedSecret:
+        """``get_for_use`` for a consumer that references the secret by its name."""
+        secret = await self.get_by_name(name)
+        if secret.owner_type is not None:
+            raise ManagedSecretError(
+                f"Secret '{secret.secret_name}' is managed by {secret.owner_type} "
+                "and cannot be referenced."
+            )
+        return await self._require_usable(secret)
+
+    async def _require_usable(self, secret: EncryptedSecret) -> EncryptedSecret:
         if secret.created_by != self._user_context.user_id and not await is_workspace_admin(
             self._user_context
         ):
