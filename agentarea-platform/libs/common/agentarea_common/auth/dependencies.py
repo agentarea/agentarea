@@ -18,6 +18,7 @@ Provides:
 
 import hashlib
 import logging
+import time
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -494,6 +495,40 @@ def _get_hydra_jwks():
     return _hydra_jwks_client
 
 
+# Hydra's JWKS is consulted for every token Kratos refuses; where Hydra is not
+# deployed it is unavailable on every such request, so say so once a while.
+_HYDRA_JWKS_UNAVAILABLE_LOG_INTERVAL_S = 600.0
+_hydra_jwks_unavailable_logged_at: float | None = None
+
+
+def _log_hydra_jwks_unavailable(error: Exception) -> None:
+    global _hydra_jwks_unavailable_logged_at
+    now = time.monotonic()
+    last = _hydra_jwks_unavailable_logged_at
+    if last is not None and now - last < _HYDRA_JWKS_UNAVAILABLE_LOG_INTERVAL_S:
+        return
+    _hydra_jwks_unavailable_logged_at = now
+    logger.warning(
+        "Hydra's JWKS is unavailable; tokens are not checked as Hydra's (at most every %.0fs)",
+        _HYDRA_JWKS_UNAVAILABLE_LOG_INTERVAL_S,
+        exc_info=error,
+    )
+
+
+def _hydra_refusal_detail(error: Exception) -> str:
+    import jwt as pyjwt
+
+    if isinstance(error, pyjwt.InvalidAudienceError):
+        return "Token was not issued for this API"
+    if isinstance(error, pyjwt.InvalidSignatureError):
+        return "Token signature is invalid"
+    if isinstance(error, pyjwt.ImmatureSignatureError):
+        return "Token is not valid yet"
+    if isinstance(error, pyjwt.MissingRequiredClaimError):
+        return "Token is missing a required claim"
+    return "Invalid OAuth token"
+
+
 def _hydra_refusal(detail: str) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -515,12 +550,17 @@ async def _try_hydra_token(token: str, request: Request) -> UserPrincipal | None
 
     from agentarea_common.config import get_auth_settings
 
+    jwks = _get_hydra_jwks()
+    # Unreachable, not JSON, or no usable keys: nothing can say the token is
+    # Hydra's, so Kratos's verdict stands.
     try:
-        signing_key = _get_hydra_jwks().get_signing_key_from_jwt(token)
-    except pyjwt.PyJWKClientConnectionError:
-        logger.warning("Could not fetch Hydra's JWKS to check a bearer token", exc_info=True)
+        jwks.get_signing_keys()
+    except (pyjwt.PyJWKClientError, pyjwt.PyJWKSetError, ValueError) as e:
+        _log_hydra_jwks_unavailable(e)
         return None
-    except (pyjwt.PyJWKClientError, pyjwt.DecodeError) as e:
+    try:
+        signing_key = jwks.get_signing_key_from_jwt(token)
+    except (pyjwt.PyJWKClientError, pyjwt.PyJWKSetError, pyjwt.DecodeError, ValueError) as e:
         logger.debug(f"Bearer token is not Hydra's: {e}")
         return None
 
@@ -555,7 +595,7 @@ async def _try_hydra_token(token: str, request: Request) -> UserPrincipal | None
         raise _hydra_refusal("Token has expired") from e
     except pyjwt.InvalidTokenError as e:
         logger.warning(f"Hydra token refused: {e}")
-        raise _hydra_refusal(f"Invalid OAuth token: {e}") from e
+        raise _hydra_refusal(_hydra_refusal_detail(e)) from e
 
     subject = payload.get("sub", "")
     if not subject:

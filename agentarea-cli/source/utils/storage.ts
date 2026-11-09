@@ -38,6 +38,15 @@ function accountFor(apiUrl: string | undefined): string {
 	return origin;
 }
 
+function legacyTokenOrigin(legacy: string): string | null {
+	try {
+		return apiOrigin((JSON.parse(legacy) as AuthToken).apiUrl);
+	} catch (error) {
+		logger.warn('The stored sign-in is not readable:', error);
+		return null;
+	}
+}
+
 export class TokenStorage {
 	private migration: Promise<void> | undefined;
 	private warnedUnboundLegacy = false;
@@ -76,7 +85,17 @@ export class TokenStorage {
 				return null;
 			}
 
-			return JSON.parse(tokenString) as AuthToken;
+			const token = JSON.parse(tokenString) as AuthToken;
+			if (apiOrigin(token.apiUrl) !== account) {
+				logger.warn(
+					`Not sending the sign-in stored for ${account}: it records ${
+						token.apiUrl ?? 'no API'
+					}. Run \`agentarea login --api-url=${account}\` to sign in again.`,
+				);
+				return null;
+			}
+
+			return token;
 		} catch (error) {
 			logger.error('Failed to retrieve token:', error);
 			throw new StorageError(
@@ -85,14 +104,18 @@ export class TokenStorage {
 		}
 	}
 
-	/** Sign out of *apiUrl*'s origin; other hosts keep their sign-ins. */
-	async clearToken(apiUrl: string): Promise<void> {
+	/**
+	 * Sign out of *apiUrl*'s origin; other hosts keep their sign-ins. False when
+	 * there was no sign-in for it.
+	 */
+	async clearToken(apiUrl: string): Promise<boolean> {
 		const account = accountFor(apiUrl);
 		try {
 			await this.migrateLegacyToken();
 			const keyring = await this.keyring();
-			await keyring.deletePassword(SERVICE_NAME, account);
-			logger.debug(`Token for ${account} cleared from keychain`);
+			const cleared = await keyring.deletePassword(SERVICE_NAME, account);
+			logger.debug(`Token for ${account} cleared from keychain: ${cleared}`);
+			return cleared;
 		} catch (error) {
 			logger.error('Failed to clear token:', error);
 			throw new StorageError(`Failed to clear authentication token: ${error}`);
@@ -119,14 +142,17 @@ export class TokenStorage {
 	}
 
 	private async migrateLegacyToken(): Promise<void> {
-		this.migration ??= this.moveLegacyToken();
+		this.migration ??= this.moveLegacyToken().catch((error: unknown) => {
+			this.migration = undefined;
+			throw error;
+		});
 		return this.migration;
 	}
 
 	/**
-	 * Move the single pre-per-host sign-in to its host's account. One with no
-	 * recorded host is left where it is and never sent: nothing says which API
-	 * issued it.
+	 * Move the single pre-per-host sign-in to its host's account. One that is
+	 * unreadable or records no host is left where it is and never sent: nothing
+	 * says which API issued it. The next sign-in removes it.
 	 */
 	private async moveLegacyToken(): Promise<void> {
 		const keyring = await this.keyring();
@@ -135,8 +161,7 @@ export class TokenStorage {
 			return;
 		}
 
-		const token = JSON.parse(legacy) as AuthToken;
-		const origin = apiOrigin(token.apiUrl);
+		const origin = legacyTokenOrigin(legacy);
 		if (!origin) {
 			if (!this.warnedUnboundLegacy) {
 				this.warnedUnboundLegacy = true;
@@ -148,6 +173,7 @@ export class TokenStorage {
 			return;
 		}
 
+		// Read last, so a sign-in another process saved meanwhile is kept.
 		if (!(await keyring.getPassword(SERVICE_NAME, origin))) {
 			await keyring.setPassword(SERVICE_NAME, origin, legacy);
 		}

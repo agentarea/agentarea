@@ -227,8 +227,13 @@ export async function runLogout(options: {
 		return true;
 	}
 
-	await tokenStorage.clearToken(options.apiUrl);
-	console.log(`Signed out of ${normalizeApiUrl(options.apiUrl)}.`);
+	const host = normalizeApiUrl(options.apiUrl);
+	if (await tokenStorage.clearToken(options.apiUrl)) {
+		console.log(`Signed out of ${host}.`);
+	} else {
+		console.log(`Not signed in to ${host}; nothing to sign out of.`);
+	}
+
 	return true;
 }
 

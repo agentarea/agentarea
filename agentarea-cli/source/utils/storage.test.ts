@@ -1,6 +1,7 @@
 import test from 'ava';
 import {type AuthToken} from '../types/index.js';
 import {memoryTokenStorage} from './storage.fixture.js';
+import {TokenStorage} from './storage.js';
 
 const LEGACY_KEY = 'auth_token';
 
@@ -118,4 +119,88 @@ test('signing in again drops an unbound legacy sign-in', async t => {
 	await storage.saveToken(token('http://localhost:8000', 'LOCAL'));
 
 	t.false(entries.has(LEGACY_KEY));
+});
+
+test('an unreadable legacy sign-in is ignored, and the next sign-in drops it', async t => {
+	const {entries, storage} = memoryTokenStorage({[LEGACY_KEY]: '{not json'});
+
+	t.is(await storage.getTokenFor('http://localhost:8000'), null);
+	t.true(entries.has(LEGACY_KEY));
+
+	await storage.saveToken(token('http://localhost:8000', 'LOCAL'));
+
+	t.false(entries.has(LEGACY_KEY));
+	t.is(
+		(await storage.getTokenFor('http://localhost:8000'))?.accessToken,
+		'LOCAL',
+	);
+});
+
+test('a failed migration is retried, not remembered', async t => {
+	const {keyring} = memoryTokenStorage({
+		[LEGACY_KEY]: JSON.stringify(token('https://api.example.test', 'OLD')),
+	});
+	let keychainLocked = true;
+	const storage = new TokenStorage(async () => ({
+		...keyring,
+		async getPassword(service, account) {
+			if (keychainLocked) {
+				throw new Error('keychain locked');
+			}
+
+			return keyring.getPassword(service, account);
+		},
+	}));
+
+	await t.throwsAsync(storage.getTokenFor('https://api.example.test'));
+	keychainLocked = false;
+
+	t.is(
+		(await storage.getTokenFor('https://api.example.test'))?.accessToken,
+		'OLD',
+	);
+});
+
+test('migration does not overwrite a sign-in another process just saved', async t => {
+	const {entries, keyring} = memoryTokenStorage({
+		[LEGACY_KEY]: JSON.stringify(token('https://api.example.test', 'OLD')),
+	});
+	const storage = new TokenStorage(async () => ({
+		...keyring,
+		async getPassword(service, account) {
+			const value = await keyring.getPassword(service, account);
+			if (account === LEGACY_KEY) {
+				entries.set(
+					'https://api.example.test',
+					JSON.stringify(token('https://api.example.test', 'CONCURRENT')),
+				);
+			}
+
+			return value;
+		},
+	}));
+
+	t.is(
+		(await storage.getTokenFor('https://api.example.test'))?.accessToken,
+		'CONCURRENT',
+	);
+	t.false(entries.has(LEGACY_KEY));
+});
+
+test('a sign-in recorded for another host than its slot is not sent', async t => {
+	const {storage} = memoryTokenStorage({
+		'https://api.example.test': JSON.stringify(
+			token('https://evil.example.test', 'MISFILED'),
+		),
+	});
+
+	t.is(await storage.getTokenFor('https://api.example.test'), null);
+});
+
+test('clearToken says whether there was a sign-in to clear', async t => {
+	const {storage} = memoryTokenStorage();
+	await storage.saveToken(token('http://localhost:8000', 'LOCAL'));
+
+	t.true(await storage.clearToken('http://localhost:8000'));
+	t.false(await storage.clearToken('http://localhost:8000'));
 });

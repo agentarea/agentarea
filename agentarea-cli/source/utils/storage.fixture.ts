@@ -17,5 +17,5 @@ export function memoryTokenStorage(seed: Record<string, string> = {}) {
 			return [...entries].map(([account, password]) => ({account, password}));
 		},
 	};
-	return {entries, storage: new TokenStorage(async () => keyring)};
+	return {entries, keyring, storage: new TokenStorage(async () => keyring)};
 }
