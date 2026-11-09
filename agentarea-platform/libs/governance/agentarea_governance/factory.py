@@ -8,7 +8,6 @@ from agentarea_common.extensions.registry import ExtensionRegistry
 
 from .domain.enums import Phase
 from .engines.regex_engine import RegexDetectionEngine
-from .interceptors.filters.output_sanitizer import OutputSanitizer
 from .interceptors.filters.prompt_injection_detector import PromptInjectionDetector
 from .interceptors.gates.cost_budget_guard import CostBudgetGuard
 from .interceptors.gates.service_budget_guard import ServiceBudgetGuard
@@ -55,12 +54,8 @@ def create_governance_pipeline() -> InterceptorPipeline:
     # then reject it), which is why it was removed. The same holds for a gate that
     # judges a call's arguments: no policy could grant back what it denies.
 
-    # Security filters — input
+    # Security filters
     registry.register(PromptInjectionDetector(engine), Phase.PRE_LLM_CALL, priority=300)
-
-    # Security filters — output
-    registry.register(OutputSanitizer(engine), Phase.POST_LLM_CALL, priority=300)
-    registry.register(OutputSanitizer(engine), Phase.POST_TOOL_CALL, priority=300)
 
     # Observers (always last)
     metrics = MetricsObserver()

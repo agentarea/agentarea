@@ -194,6 +194,8 @@ export default function AgentForm({
       description: initialData?.description || "",
       instruction: initialData?.instruction || "",
       model_id: initialModel.modelId,
+      client_id: initialData?.client_id || "",
+      reasoning_effort: initialData?.reasoning_effort || "",
       tools_config: initialData?.tools_config || {
         mcp_server_configs: [],
         builtin_tools: [],

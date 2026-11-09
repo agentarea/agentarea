@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { apiErrorMessage, catalogFetchFailure } from "./api-errors";
+import {
+  apiErrorMessage,
+  catalogFetchFailure,
+  unreachableApiResponse,
+} from "./api-errors";
 
 /**
  * The generated client hands back the parsed error *body*, not a string.
@@ -55,6 +59,26 @@ describe("apiErrorMessage", () => {
     );
   });
 
+  it("appends the issues a problem body carries after its detail", () => {
+    const message = apiErrorMessage(
+      {
+        error: {
+          detail: "package is not installable",
+          issues: [
+            { severity: "block", message: "model 'x' does not exist" },
+            { severity: "block", message: "required setup field 'bot' is missing" },
+          ],
+        },
+        status: 400,
+      },
+      "Install failed"
+    );
+
+    expect(message).toBe(
+      "Install failed (400): package is not installable: model 'x' does not exist, required setup field 'bot' is missing"
+    );
+  });
+
   it("passes a plain string error through", () => {
     expect(apiErrorMessage({ error: "boom" }, "Failed")).toBe("Failed: boom");
   });
@@ -100,5 +124,47 @@ describe("catalogFetchFailure", () => {
     expect(catalogFetchFailure({ error: { detail: "x" }, status: 409 })).toBeNull();
     expect(catalogFetchFailure(problem(500, "internal_error"))).toBeNull();
     expect(catalogFetchFailure({ error: "offline" })).toBeNull();
+  });
+});
+
+/**
+ * A server action that hands an `Error` to the browser loses its message in a
+ * production build: React replaces it with "Minified React error #441". A
+ * request the API never answered must reach the caller as an ordinary error
+ * body instead.
+ */
+describe("unreachableApiResponse", () => {
+  it("reports a timed-out request as a 504 that names the budget", async () => {
+    const response = unreachableApiResponse(
+      new DOMException("The operation was aborted due to timeout", "TimeoutError"),
+      8000
+    );
+
+    expect(response?.status).toBe(504);
+    const result = { error: await response?.json(), status: response?.status };
+    expect(apiErrorMessage(result, "Failed to load agents")).toBe(
+      "Failed to load agents (504): The API did not answer within 8 s"
+    );
+  });
+
+  it("reports a failed connection as a 502 with its error code", async () => {
+    const error = new TypeError("fetch failed", {
+      cause: Object.assign(new Error("connect ECONNREFUSED 10.0.0.7:8000"), {
+        code: "ECONNREFUSED",
+      }),
+    });
+
+    const response = unreachableApiResponse(error, 8000);
+
+    expect(response?.status).toBe(502);
+    expect(await response?.json()).toEqual({
+      detail: "The API could not be reached (ECONNREFUSED)",
+    });
+  });
+
+  it("leaves a request its caller aborted alone", () => {
+    expect(
+      unreachableApiResponse(new DOMException("aborted", "AbortError"), 8000)
+    ).toBeNull();
   });
 });

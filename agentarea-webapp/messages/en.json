@@ -66,6 +66,7 @@
     "openFiles": "Open files",
     "closeTab": "Close {name}",
     "download": "Download",
+    "closePreview": "Close",
     "copyContents": "Copy contents",
     "copied": "Copied",
     "emptyFile": "Empty file",
@@ -142,8 +143,6 @@
     "confirm": "Confirm",
     "display": "Display",
     "skipToContent": "Skip to content",
-    "switchToDarkTheme": "Switch to dark theme",
-    "switchToLightTheme": "Switch to light theme",
     "scrollToLatestMessage": "Scroll to latest message",
     "previousPage": "Previous",
     "nextPage": "Next",
@@ -203,6 +202,9 @@
     }
   },
   "Sidebar": {
+    "search": "Search",
+    "searchPlaceholder": "Search…",
+    "searchEmpty": "Nothing found",
     "dashboard": "Dashboard",
     "newTask": "New task",
     "inbox": "Inbox",
@@ -371,7 +373,17 @@
   "NavUser": {
     "settings": "Settings",
     "billing": "Billing",
-    "logout": "Log out"
+    "logout": "Log out",
+    "theme": "Theme",
+    "themeSystem": "System",
+    "themeLight": "Light",
+    "themeDark": "Dark"
+  },
+  "NavHelp": {
+    "title": "Help & support",
+    "support": "Contact support",
+    "docs": "Documentation",
+    "discord": "Join our Discord"
   },
   "SettingsSidebar": {
     "title": "Settings",
@@ -689,6 +701,17 @@
       "answerCheckHint": "Models sometimes leak their internals into the reply: Chinese characters, tool names like web_search, internal codes, chunks of JSON, error texts, stray English words in a Russian answer. Chinese models do this more often.\n\nThe check looks for these traces in the final answer. If it finds any, the agent's model rewrites the answer once. The extra model call happens only when something is found.",
       "loadModeHint": "All at once: on every step the model gets the full description of every tool of this connection. It never misses a tool, but each call spends more tokens.\n\nOn demand: the model sees only tool names with a short description and loads the full description of a tool when it needs it. Use it for connections with many tools.",
       "llmModel": "LLM Model",
+      "runsOn": "Runs on",
+      "runsOnPlatform": "AgentArea",
+      "runsOnOffline": "offline",
+      "runsOnHint": "AgentArea runs the agent on a platform model. A Codex or Claude Code client runs it on that CLI's own subscription, through the client's runner, with the client's tools.",
+      "runnerModel": "Model",
+      "runnerModelsPending": "The client's runner has not reported its models yet",
+      "runnerModelHint": "Every agent on this client runs with this model unless a task names another.",
+      "reasoningLevel": "Reasoning level",
+      "reasoningModelDefault": "Model default",
+      "reasoningModelDefaultLevel": "Model default ({level})",
+      "reasoningLevelHint": "This agent reasons at this level unless a task names another.",
       "selectModel": "Select a model",
       "noConfigurationsYet": "No configurations yet",
       "createAndUseProviderConfiguration": "Create and use a provider configuration",
@@ -1093,10 +1116,7 @@
         "notSet": "not set"
       },
       "details": {
-        "title": "Details",
-        "id": "Connection ID",
-        "created": "Created",
-        "updated": "Updated"
+        "id": "Connection ID"
       },
       "confirm": {
         "deleteTitle": "Delete instance?",
@@ -2091,7 +2111,6 @@
     "policyPerCall": "per call",
     "policyContentSafety": "Content safety",
     "policyPromptInjection": "Prompt-injection detection",
-    "policyOutputSanitizer": "Output sanitizer",
     "policyMonthlyCap": "Monthly cap",
     "policyAgentMonthlyCap": "Agent monthly cap",
     "policyServiceBudget": "Service budget",
@@ -2112,7 +2131,9 @@
     "executionAwaitingFollowUp": "Awaiting follow-up",
     "startsAt": "Starts",
     "builtinTools": "Built-in tools",
-    "toolFailed": "{count} failed"
+    "toolFailed": "{count} failed",
+    "ranOn": "Ran on",
+    "runsOn": "Runs on"
   },
   "Workplace": {
     "hero": {
@@ -3432,9 +3453,9 @@
     "noCapConfigured": "No workspace spend cap configured.",
     "approvalsPending": "Approvals pending",
     "nonePending": "None pending",
-    "waitingOnInput": "Tasks waiting on human input",
     "effectiveGuardrails": "{count, plural, one {# effective guardrail} other {# effective guardrails}}",
-    "noGuardrails": "No agent-specific guardrails",
+    "noGuardrails": "No guardrails apply to this agent",
+    "noGuardrailsHint": "Workspace and agent policies that limit tools, spend or approvals show up here",
     "effectDeny": "{count} deny",
     "effectApproval": "{count} approval",
     "effectCap": "{count} cap",
@@ -3819,8 +3840,7 @@
         "removeValue": "Remove {value}"
       },
       "safety": {
-        "promptInjection": "Prompt-injection detection",
-        "outputSanitizer": "Output sanitizer"
+        "promptInjection": "Prompt-injection detection"
       },
       "validation": {
         "agentRequired": "Add at least one agent for this policy.",
@@ -3831,7 +3851,6 @@
         "amountMustNotBeNegative": "The amount can't be negative.",
         "atLeastOneToolRequired": "Add at least one tool.",
         "toolRequired": "Add a tool.",
-        "safetyCheckRequired": "Enable at least one safety check.",
         "approverUnsupported": "Only workspace members can approve; remove role and group approvers.",
         "ruleInvalid": "Rule {number} ({effect}): {error}",
         "installTargetRequired": "Pick at least one registry or trust level.",
@@ -3929,9 +3948,7 @@
   },
   "ClientsPage": {
     "loadFailed": "Couldn’t load harnesses",
-    "loadOneFailed": "Couldn’t load the harness",
     "createFailed": "Couldn’t add the harness",
-    "updateFailed": "Couldn’t save the harness",
     "title": "Harnesses",
     "description": "Connect external agent harnesses to your workspace's tools and skills.",
     "add": "Add harness",
@@ -3950,13 +3967,128 @@
     "connectionsCount": "{count, plural, one {# connection} other {# connections}}",
     "skillsCount": "{count, plural, one {# skill} other {# skills}}",
     "deleteTitle": "Delete harness",
-    "deleteDescription": "Delete \"{name}\"? The scoped MCP endpoint stops working for any harness connected to it. This cannot be undone."
+    "deleteDescription": "Delete \"{name}\"? The scoped MCP endpoint stops working for any harness connected to it. This cannot be undone.",
+    "runner": {
+      "title": "Runner",
+      "description": "This client's CLI can run agents' turns on its own subscription. Start a runner on the machine where the CLI is signed in; agents set to run on this client execute there, with this client's tools.",
+      "online": "Online",
+      "offline": "Offline",
+      "model": "Default model",
+      "modelHint": "Agents on this client run with this model unless a task names another. Each agent sets its own reasoning level in its settings.",
+      "modelsPending": "The runner has not reported its models yet.",
+      "domains": "Allowed domains",
+      "domainsHint": "Hosts the CLI's sandbox may reach during a turn, one per line, besides those the runner itself allows.",
+      "save": "Save",
+      "connect": {
+        "title": "Connect a runner",
+        "description": "Issue a key and run the command on the machine where the CLI is signed in. The key reaches only this client's runner.",
+        "issue": "Issue a key",
+        "register": "Run this on the machine where the CLI is signed in",
+        "shownOnce": "Copy it now: the key is not shown again.",
+        "then": "Then start it:",
+        "done": "Done"
+      },
+      "keys": {
+        "title": "Runner keys",
+        "empty": "No runner key yet.",
+        "revoke": "Revoke",
+        "issued": "Issued {when}",
+        "used": "last used {when}",
+        "neverUsed": "never used"
+      }
+    },
+    "agents": {
+      "title": "Agents on this harness",
+      "description": "Agents set to run on this harness. Their turns execute on its runner, with its tools.",
+      "empty": "No agent runs on this harness yet. Pick it under “Runs on” in an agent's settings."
+    },
+    "tabs": {
+      "label": "Harness sections",
+      "overview": "Overview",
+      "tools": "Tools",
+      "runner": "Runner"
+    },
+    "overview": {
+      "defaultDescription": "A governed, scoped tool bundle an external harness connects to over MCP.",
+      "showMore": "Show more",
+      "showLess": "Show less",
+      "stats": {
+        "mcp": "MCP servers",
+        "toolsets": "Platform toolsets",
+        "skills": "Skills",
+        "agents": "Agents",
+        "allTools": "every tool served",
+        "none": "none attached",
+        "narrowed": "{count, plural, one {# with a tool subset} other {# with a tool subset}}",
+        "skillsSub": "through activate_skill",
+        "agentsSub": "run on its runner",
+        "agentsNone": "none assigned yet"
+      },
+      "connection": {
+        "title": "Connection",
+        "endpoint": "MCP endpoint",
+        "endpointHint": "Point the harness's MCP client here. It serves this bundle and nothing else.",
+        "sync": "Sync command",
+        "syncHint": "Writes the endpoint into the harness's own MCP config."
+      },
+      "runner": {
+        "manage": "Manage",
+        "status": "Status",
+        "noModel": "Not set",
+        "keyCount": "{count, plural, =0 {No keys} one {# key} other {# keys}}"
+      },
+      "agentSub": "Runs on this harness",
+      "details": {
+        "id": "Harness ID"
+      }
+    },
+    "tools": {
+      "add": "Add",
+      "servedTitle": "Served tools",
+      "servedEmpty": "Nothing served yet. Add an MCP server or a platform toolset to choose which of its tools the harness sees.",
+      "served": "Served tools ({selected}/{total})",
+      "openConnection": "Open",
+      "allServed": "All tools served",
+      "someServed": "{count, plural, one {# tool served} other {# tools served}}",
+      "someOff": "{count, plural, one {# method hidden} other {# methods hidden}}",
+      "saveFailed": "Couldn’t save the tool selection",
+      "toolsetGone": "The platform no longer serves this toolset. Remove it from the harness.",
+      "mcpToolsFailed": "Couldn’t load the instance’s tools",
+      "mcpNoTools": "This instance has not reported any tools yet, so the harness serves whatever it exposes.",
+      "catalogFailed": "Couldn’t load platform toolsets",
+      "mcp": {
+        "title": "MCP servers",
+        "sheetDescription": "Instances exposed through this harness's endpoint. Tools keep the namespace prefix set on the instance.",
+        "available": "Active MCP server instances",
+        "empty": "No MCP servers. Add one to expose its tools through the endpoint.",
+        "noneAvailable": "No MCP server instances yet. Create one under Connections first."
+      },
+      "toolsets": {
+        "title": "Platform tools",
+        "sheetDescription": "AgentArea toolsets served through the endpoint, in this harness's workspace and with the caller's own permissions.",
+        "available": "Platform toolsets",
+        "empty": "No platform toolsets. Add the ones this harness should manage AgentArea with.",
+        "noneAvailable": "The platform serves no toolsets."
+      },
+      "skills": {
+        "title": "Skills",
+        "sheetDescription": "Skills reachable through the endpoint's activate_skill tool.",
+        "available": "Available skills",
+        "empty": "No skills. Add the ones the harness should be able to activate.",
+        "noneAvailable": "No skills available. Create one under Skills."
+      }
+    }
   },
   "AttachmentSection": {
     "addFailed": "Couldn’t add {item}",
     "removeFailed": "Couldn’t remove {item}",
     "remove": "Remove {item}",
     "loading": "Loading…"
+  },
+  "DetailsCard": {
+    "title": "Details",
+    "created": "Created",
+    "updated": "Updated"
   },
   "CatalogPage": {
     "title": "Catalog",
@@ -4064,7 +4196,46 @@
     "skillInstallFailed": "Couldn't add the skill",
     "skillAttachFailed": "Couldn't add the skill to {agent}",
     "start": "Start",
-    "installBundle": "Install bundle"
+    "installBundle": "Install bundle",
+    "launch": {
+      "installed": "{name} is installed",
+      "agentsTitle": "Agents · {count}",
+      "agentsHint": "Each agent runs on its own. Open a chat to give one its first task.",
+      "openChat": "Open chat",
+      "todoTitle": "Left to finish · {count}",
+      "off_channel": "Channel is off. Turn it on once the bot is set up.",
+      "off_automation": "Schedule is off. Turn it on when you want it to run.",
+      "open": "Open",
+      "connectionsTitle": "Connections · {count}",
+      "connectionsHint": "Check that each one is authorized before an agent relies on it.",
+      "allAgents": "All agents",
+      "done": "Done",
+      "skippedTitle": "Not installed · {count}"
+    },
+    "target": {
+      "label": "Install into",
+      "notAdmin": "policies need an admin"
+    },
+    "importBack": "Back",
+    "importTitle": "Set up {name}",
+    "pasteLabel": "Package Source",
+    "pastePlaceholder": "Paste your agent package YAML or JSON here...",
+    "pasteHint": "Paste a valid agent package definition in YAML or JSON format.",
+    "analyze": "Analyze Package",
+    "reviewPlan": "Review plan",
+    "planTitle": "What this install does",
+    "planHint": "Installing carries out exactly this plan.",
+    "planChanged": "The workspace changed since the plan was made. Review the new plan below and install again.",
+    "planStale": "You changed the bundle since its plan was made; review the plan again.",
+    "planStatus": {
+      "will_create": "Will be created",
+      "will_update": "Will be updated",
+      "unchanged": "Unchanged",
+      "already_exists": "Already here",
+      "orphaned": "Kept, not deleted",
+      "changes_not_applied": "Changes not applied",
+      "unsupported": "Unsupported"
+    }
   },
   "ProjectOverviewPage": {
     "loadFailed": "Couldn't load the project",
@@ -4395,7 +4566,7 @@
     "paidByOwner": "Paid by the owner",
     "unavailable": "Unavailable",
     "topUp": "Top up",
-    "bannerPayer": "Agents on AgentArea models do not start. Top up to get them running again.",
+    "ownKey": "Use your own API key",
     "bannerMember": "Agents on AgentArea models do not start. Ask the workspace owner to top up.",
     "runway": "Enough for ~{days, plural, one {# day} other {# days}} at {perDay}/day",
     "runwayUnderDay": "Enough for less than a day at {perDay}/day"

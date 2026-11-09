@@ -6,7 +6,7 @@ from uuid import UUID
 from agentarea_common.auth.authorization import assert_workspace_admin
 
 from agentarea_llm.domain.models import ModelSpec
-from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
+from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository, UpsertedSpec
 
 
 class ModelSpecService:
@@ -35,3 +35,9 @@ class ModelSpecService:
     async def upsert(self, **fields: Any) -> ModelSpec:
         await assert_workspace_admin(self.repository.user_context)
         return await self.repository.upsert_by_provider_and_model_kwargs(**fields)
+
+    async def upsert_many(
+        self, provider_spec_id: UUID, rows: list[dict[str, Any]]
+    ) -> dict[str, UpsertedSpec]:
+        await assert_workspace_admin(self.repository.user_context)
+        return await self.repository.upsert_many_by_provider_and_model(provider_spec_id, rows)

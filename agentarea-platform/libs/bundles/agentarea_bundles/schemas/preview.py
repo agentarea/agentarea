@@ -20,7 +20,11 @@ class EntityKind(StrEnum):
 
 class EntityStatus(StrEnum):
     WILL_CREATE = "will_create"
-    ALREADY_EXISTS = "already_exists"
+    WILL_UPDATE = "will_update"  # installed by this bundle before; its spec changed
+    UNCHANGED = "unchanged"  # installed by this bundle before; spec is the same
+    ORPHANED = "orphaned"  # installed by this bundle before; gone from it now, kept in place
+    CHANGES_NOT_APPLIED = "changes_not_applied"  # changed, but this kind is not updated
+    ALREADY_EXISTS = "already_exists"  # same-name entity this bundle did not create; reused
     UNSUPPORTED = "unsupported"
 
 
@@ -62,6 +66,14 @@ class ImportPreview(BaseModel):
     issues: list[PreviewIssue] = Field(default_factory=list)
     installable: bool = Field(
         description="True when there are no blocking issues (setup may still be required)."
+    )
+    plan_digest: str | None = Field(
+        default=None,
+        description=(
+            "Names this plan: the bundle and what it does with each entity. Install takes it "
+            "and refuses with 409 when the plan it would carry out is no longer this one. "
+            "Null when there is no plan to install."
+        ),
     )
 
     @property

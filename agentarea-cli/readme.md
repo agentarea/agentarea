@@ -52,14 +52,15 @@ $ agentarea login --api-url=http://localhost:8000
 # Token stored securely in OS keychain
 
 $ agentarea logout
-# Clears the stored session
+# Signs out of the current API's host; --all signs out of every host
 ```
 
 Every command resolves the API the same way: `--api-url`, else
-`AGENTAREA_API_URL`, else the saved config, else `http://localhost:8000`. The
-stored token is bound to the origin (scheme, host, port) it was issued for and
-is never sent to another one; pointing the CLI at a different host prints a hint
-to run `agentarea login --api-url=<that host>`.
+`AGENTAREA_API_URL`, else the saved config, else `http://localhost:8000`. Each
+API origin (scheme, host, port) keeps its own sign-in, so signing in to one host
+leaves the others signed in, and a token is only ever sent to the origin it was
+issued for. A command against a host with no sign-in asks you to run
+`agentarea login --api-url=<that host>`.
 
 ### List Agents
 

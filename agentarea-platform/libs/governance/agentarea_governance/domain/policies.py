@@ -11,7 +11,7 @@ from enum import StrEnum
 from typing import Any, Literal, NamedTuple, cast
 
 from agentarea_common.money import ZERO, Money, to_money
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 RESOLVER_VERSION = "policy-resolver-v1"
 
@@ -223,8 +223,15 @@ class ContentSafetyPolicy(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     prompt_injection_detection_enabled: bool | None = None
-    output_sanitizer_enabled: bool | None = None
     answer_check: AnswerCheckPolicy | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired_toggles(cls, data: Any) -> Any:
+        # Stored task policies and running workflows still carry the removed sanitizer flag.
+        if isinstance(data, dict) and "output_sanitizer_enabled" in data:
+            data = {k: v for k, v in data.items() if k != "output_sanitizer_enabled"}
+        return data
 
 
 class PolicyDocument(BaseModel):
@@ -336,7 +343,6 @@ class EffectivePolicy(PolicyDocument):
         if self.content_safety:
             state["content_safety"] = {
                 "prompt_injection_enabled": self.content_safety.prompt_injection_detection_enabled,
-                "output_sanitizer_enabled": self.content_safety.output_sanitizer_enabled,
             }
 
         for key in ("cost_used", "service_cost_used"):
@@ -472,9 +478,11 @@ class PolicyResolver:
     ) -> None:
         if not higher or not lower:
             return
-        for field in ("prompt_injection_detection_enabled", "output_sanitizer_enabled"):
-            if getattr(higher, field) is True and getattr(lower, field) is False:
-                raise PolicyValidationError(f"{field} cannot be disabled")
+        if (
+            higher.prompt_injection_detection_enabled is True
+            and lower.prompt_injection_detection_enabled is False
+        ):
+            raise PolicyValidationError("prompt_injection_detection_enabled cannot be disabled")
 
     def _merge_budget(
         self, higher: BudgetPolicy | None, lower: BudgetPolicy | None
@@ -566,8 +574,6 @@ class PolicyResolver:
         return ContentSafetyPolicy(
             prompt_injection_detection_enabled=bool(higher.prompt_injection_detection_enabled)
             or bool(lower.prompt_injection_detection_enabled),
-            output_sanitizer_enabled=bool(higher.output_sanitizer_enabled)
-            or bool(lower.output_sanitizer_enabled),
             # Not a guard but a preference: the more specific layer's setting wins.
             answer_check=lower.answer_check or higher.answer_check,
         )

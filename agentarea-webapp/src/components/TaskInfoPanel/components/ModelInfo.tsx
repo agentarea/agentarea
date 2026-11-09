@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Loader2 } from "lucide-react";
+import { HarnessClientLink } from "@/components/harnesses";
 import ToolsDisplay from "@/components/ToolsDisplay";
 import { Badge } from "@/components/ui/badge";
 import ModelBadge from "@/components/ui/model-badge";
@@ -156,15 +157,27 @@ export default function ModelInfo({
         <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           {t("model")}
         </div>
-        <div>
-          <ModelBadge
-            providerName={agent.model_info?.provider_name}
-            iconUrl={agent.model_info?.provider_icon_url}
-            modelDisplayName={agent.model_info?.model_display_name}
-            configName={agent.model_info?.config_name}
-          />
-        </div>
-        {task && !archived && (
+        {agent.client ? (
+          <>
+            {agent.client.default_model && (
+              <ModelBadge modelDisplayName={agent.client.default_model} />
+            )}
+            <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              {task ? t("ranOn") : t("runsOn")}
+              <HarnessClientLink client={agent.client} />
+            </div>
+          </>
+        ) : (
+          <div>
+            <ModelBadge
+              providerName={agent.model_info?.provider_name}
+              iconUrl={agent.model_info?.provider_icon_url}
+              modelDisplayName={agent.model_info?.model_display_name}
+              configName={agent.model_info?.config_name}
+            />
+          </div>
+        )}
+        {task && !archived && !agent.client && (
           <ModelPicker
             agentId={task.agent_id}
             taskId={task.id}

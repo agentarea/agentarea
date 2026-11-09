@@ -60,6 +60,15 @@ function fallbackStatusPresentation(status: string): StatusPresentation {
   return { label: status, kind: "draft" };
 }
 
+/** A client's runner is online while its socket to the platform is connected. */
+export function getRunnerStatusPresentation(
+  online: boolean
+): StatusPresentation {
+  return online
+    ? { label: "Online", labelKey: "online", kind: "active" }
+    : { label: "Offline", labelKey: "offline", kind: "off" };
+}
+
 export function getMcpVerificationStatusPresentation(
   status: string
 ): StatusPresentation {
@@ -206,6 +215,50 @@ export function getTaskStatusPresentation(status: string): StatusPresentation {
       return { label: "Pending", labelKey: "pending", kind: "queued" };
     case "scheduled":
       return { label: "Scheduled", labelKey: "scheduled", kind: "scheduled" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}
+
+/** What a bundle's deploy plan does with one of its entities. */
+export function getBundleEntityStatusPresentation(
+  status: string
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "will_create":
+      return {
+        label: "Will be created",
+        labelKey: "will_create",
+        kind: "queued",
+      };
+    case "will_update":
+      return {
+        label: "Will be updated",
+        labelKey: "will_update",
+        kind: "attention",
+      };
+    case "unchanged":
+      return { label: "Unchanged", labelKey: "unchanged", kind: "done" };
+    case "already_exists":
+      return {
+        label: "Already here",
+        labelKey: "already_exists",
+        kind: "active",
+      };
+    case "orphaned":
+      return { label: "Kept, not deleted", labelKey: "orphaned", kind: "off" };
+    case "changes_not_applied":
+      return {
+        label: "Changes not applied",
+        labelKey: "changes_not_applied",
+        kind: "paused",
+      };
+    case "unsupported":
+      return {
+        label: "Unsupported",
+        labelKey: "unsupported",
+        kind: "cancelled",
+      };
     default:
       return fallbackStatusPresentation(status);
   }

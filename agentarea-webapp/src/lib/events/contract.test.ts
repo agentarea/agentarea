@@ -106,6 +106,15 @@ describe("derivePart", () => {
     expect(final?.eventType).toBe(LLM_COMPLETED);
   });
 
+  it("keys each reply of one iteration by its item, chunk and final alike", () => {
+    const at = (type: string, item_id: string) =>
+      derivePart(type, { execution_id: "harness-1", iteration: 1, item_id })
+        ?.partId;
+    expect(at("llm.call.chunk", "msg_a")).toBe("harness-1:1:msg_a");
+    expect(at("llm.call.completed", "msg_a")).toBe("harness-1:1:msg_a");
+    expect(at("llm.call.completed", "msg_b")).toBe("harness-1:1:msg_b");
+  });
+
   it("returns null for an llm event missing execution_id or iteration", () => {
     expect(derivePart("llm.call.chunk", { execution_id: "ex-1" })).toBeNull();
     expect(derivePart("llm.call.chunk", { iteration: 0 })).toBeNull();

@@ -14,7 +14,7 @@ const cli = meow(
 	Commands
 	  (no command)              Interactive TUI mode
 	  login                     Sign in through the browser (OAuth + PKCE)
-	  logout                    Clear the stored session
+	  logout [--all]            Sign out of this API's host (--all: every host)
 	  <resource> <verb> [args]  Run any resource action (agents, tasks,
 	                            policies, access, mcp-servers, mcp-instances,
 	                            providers, models, triggers, workspace,
@@ -27,6 +27,11 @@ const cli = meow(
 	  files sync <dir> [prefix] Upload a folder into workspace storage; only
 	                            files whose content changed are sent
 	                            (--exclude=a,b skips names or paths)
+	  init [dir]                Scaffold an agent folder (agent.yaml +
+	                            instructions.md) in dir (default: .)
+	  deploy [dir]              Deploy an agent folder: show the plan, confirm,
+	                            then create or update the agent
+	                            (--dry-run, --set key=value, --yes)
 	  connect codex|claude      Connect a harness to its client bundle
 	                            (creates the client if it does not exist)
 	  mcp sync                  Same, addressing an existing client by id
@@ -53,12 +58,17 @@ const cli = meow(
 	  --query         JSON query params (api)
 	  --path          JSON path params (api)
 	  --list          List operationIds (api)
+	  --dry-run       Print the deploy plan and stop (deploy)
+	  --set           Setup value as key=value; repeatable (deploy)
+	  --yes           Deploy without asking for confirmation (deploy)
 
 	Examples
 	  $ agentarea-cli --token=eyJ...
 	  $ AGENTAREA_TOKEN=eyJ... agentarea-cli
 	  $ agentarea-cli agents list --workspace=acme --token=eyJ...
 	  $ agentarea-cli api --list
+	  $ agentarea-cli init my-agent
+	  $ agentarea-cli deploy my-agent --set model=<instance-id> --yes
 	  $ agentarea-cli api listAgentsV1AgentsGet
 	  $ agentarea-cli api getAgentV1AgentsAgentIdGet --path='{"agent_id":"abc"}'
 `,
@@ -110,6 +120,16 @@ const cli = meow(
 				type: 'string',
 			},
 			list: {
+				type: 'boolean',
+			},
+			dryRun: {
+				type: 'boolean',
+			},
+			set: {
+				type: 'string',
+				isMultiple: true,
+			},
+			yes: {
 				type: 'boolean',
 			},
 		},

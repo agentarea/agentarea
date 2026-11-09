@@ -15,7 +15,9 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
+import type { AgentClientSummary } from "@/api/client";
 import { formatRelTime } from "@/app/w/[workspace]/(main)/dashboard/components/relTime";
+import { HarnessClientLink, HarnessIcon } from "@/components/harnesses";
 import {
   EmptyRow,
   GlanceRow,
@@ -60,6 +62,7 @@ export type AgentOverviewModel = {
     label: string | null;
     provider: string | null;
     iconUrl: string | null;
+    client: AgentClientSummary | null;
   };
   triggers: { count: number; titles: string[] };
   lastActivityAt: string | null;
@@ -90,13 +93,13 @@ export type AgentOverviewModel = {
   pendingApprovals: TaskResponse[];
   skills: string[];
   connections: string[];
+  /** The merged policy the agent runs under (workspace + agent rules). */
   policies:
     | {
         status: "ok";
-        count: number;
+        sources: number;
         effectCounts: Partial<Record<PolicyEffect, number>>;
       }
-    | { status: "adminOnly" }
     | { status: "error"; message: string };
   /** Sections whose data failed to load, with the reason. */
   loadErrors: {
@@ -177,7 +180,6 @@ export async function AgentOverviewView({
   model: AgentOverviewModel;
 }) {
   const t = await getTranslations("AgentOverviewPage");
-  const tAdmin = await getTranslations("AdminOnly");
   const { policies, currency } = model;
   const { agentRef, stats, loadErrors } = model;
   const locale = await getLocale();
@@ -231,28 +233,54 @@ export async function AgentOverviewView({
         showLessLabel={t("showLess")}
         meta={
           <>
-            {model.model.label && (
+            {model.model.client ? (
               <HeroMeta
                 icon={
                   <span className="grid h-[18px] w-[18px] place-items-center rounded-[3px] bg-muted">
-                    {model.model.iconUrl ? (
-                      <ProviderIcon
-                        iconUrl={model.model.iconUrl}
-                        name={model.model.provider || model.model.label}
-                        size="sm"
-                        className="h-3.5 w-3.5"
-                      />
-                    ) : (
-                      <Boxes className="h-3 w-3 text-foreground" />
-                    )}
+                    <HarnessIcon
+                      kind={model.model.client.kind}
+                      className="h-3 w-3 text-foreground"
+                    />
                   </span>
                 }
               >
-                <b className="font-medium text-foreground/80">
-                  {model.model.label}
-                </b>
-                {model.model.provider && <> · {model.model.provider}</>}
+                {model.model.label && (
+                  <>
+                    <b className="font-medium text-foreground/80">
+                      {model.model.label}
+                    </b>
+                    {" · "}
+                  </>
+                )}
+                <HarnessClientLink
+                  client={model.model.client}
+                  withIcon={false}
+                />
               </HeroMeta>
+            ) : (
+              model.model.label && (
+                <HeroMeta
+                  icon={
+                    <span className="grid h-[18px] w-[18px] place-items-center rounded-[3px] bg-muted">
+                      {model.model.iconUrl ? (
+                        <ProviderIcon
+                          iconUrl={model.model.iconUrl}
+                          name={model.model.provider || model.model.label}
+                          size="sm"
+                          className="h-3.5 w-3.5"
+                        />
+                      ) : (
+                        <Boxes className="h-3 w-3 text-foreground" />
+                      )}
+                    </span>
+                  }
+                >
+                  <b className="font-medium text-foreground/80">
+                    {model.model.label}
+                  </b>
+                  {model.model.provider && <> · {model.model.provider}</>}
+                </HeroMeta>
+              )
             )}
             {model.triggers.count > 0 && (
               <HeroMeta icon={<Zap />}>{triggerText}</HeroMeta>
@@ -445,10 +473,19 @@ export async function AgentOverviewView({
                 link={{ label: t("configure"), href: settingsHref }}
               />
               <GlanceRow
-                href={settingsHref}
+                href={
+                  model.model.client
+                    ? `/clients/${model.model.client.id}`
+                    : settingsHref
+                }
                 tile={
                   <span className="grid h-7 w-7 place-items-center rounded bg-muted text-foreground">
-                    {model.model.iconUrl ? (
+                    {model.model.client ? (
+                      <HarnessIcon
+                        kind={model.model.client.kind}
+                        className="h-[15px] w-[15px]"
+                      />
+                    ) : model.model.iconUrl ? (
                       <ProviderIcon
                         iconUrl={model.model.iconUrl}
                         name={model.model.provider || model.model.label || ""}
@@ -579,20 +616,16 @@ export async function AgentOverviewView({
                 href="/policies"
                 tile={<SoftTile icon={<Shield />} />}
                 title={
-                  policies.status === "adminOnly"
-                    ? tAdmin("areas.policies.title")
-                    : policies.status === "error"
-                      ? t("guardrailsLoadFailed")
-                      : policies.count > 0
-                        ? t("effectiveGuardrails", { count: policies.count })
-                        : t("noGuardrails")
+                  policies.status === "error"
+                    ? t("guardrailsLoadFailed")
+                    : policies.sources > 0
+                      ? t("effectiveGuardrails", { count: policies.sources })
+                      : t("noGuardrails")
                 }
                 sub={
-                  policies.status === "adminOnly" ? (
-                    tAdmin("hints.viewPolicies")
-                  ) : policies.status === "error" ? (
+                  policies.status === "error" ? (
                     policies.message
-                  ) : policies.count > 0 ? (
+                  ) : Object.keys(policies.effectCounts).length > 0 ? (
                     <span className="flex flex-wrap gap-x-2.5">
                       {EFFECT_ORDER.filter((e) => policies.effectCounts[e]).map(
                         (e) => (
@@ -616,7 +649,7 @@ export async function AgentOverviewView({
                       )}
                     </span>
                   ) : (
-                    t("waitingOnInput")
+                    t("noGuardrailsHint")
                   )
                 }
               />
@@ -737,17 +770,13 @@ function TaskRow({
         className="px-[15px] py-[11px]"
         dividerClassName="border-b border-border/60"
         contentClassName="gap-3"
-        // Leads the row, icon first. It is the only place the status is named
-        // now -- the caption underneath used to repeat it, so every row said
-        // "Completed" twice.
+        // Leads the row as a bare marker; its name is the tooltip and the
+        // accessible label.
         start={
           visuallyHideStatus ? (
             <span className="sr-only">{label}</span>
           ) : (
-            <TaskStatus
-              status={status}
-              className="shrink-0 whitespace-nowrap text-[12px] font-medium"
-            />
+            <TaskStatus status={status} caption="never" className="shrink-0" />
           )
         }
         end={

@@ -9,8 +9,10 @@ Design notes:
   portable. The installer resolves keys to real ids at install time.
 - The only place user-supplied values enter is :class:`SetupField`. Everything
   else references them via ``${setup.<key>}`` placeholders.
-- ``json_spec`` on an MCP is the native runtime shape consumed by the MCP
-  service (``type``: ``command`` | ``docker`` | ``url``) — no second schema.
+- An MCP is either ``catalog`` — the id of a catalog server, connected the way
+  the catalog's connect flow connects it — or ``json_spec``, the native runtime
+  shape consumed by the MCP service (``type``: ``command`` | ``docker`` |
+  ``url``) — no second schema.
   ``args`` and ``endpoint_url`` may contain ``${setup.<key>}`` references;
   ``environment`` / ``headers`` hold literal non-secret configuration, while
   credentials go through ``bindings``. A URL MCP's ``context_secret`` is a
@@ -22,7 +24,12 @@ from __future__ import annotations
 import re
 from enum import StrEnum
 from typing import Any, Literal
+from uuid import UUID
 
+from agentarea_common.reasoning_effort import (
+    checked_reasoning_effort,
+    checked_reasoning_max_tokens,
+)
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 SCHEMA_VERSION = "0.1.0"
@@ -31,6 +38,8 @@ SCHEMA_VERSION = "0.1.0"
 _PLACEHOLDER_RE = re.compile(r"\$\{setup\.([a-zA-Z0-9_]+)\}")
 
 _KEY_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*$")
+# Entity keys are never interpolated, so they may carry dashes like file names do.
+_ENTITY_KEY_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]*$")
 
 # Entity names land in String(255) columns (skills, agents, MCP instances,
 # installed bundles); a longer one is refused here, at analyze, rather than
@@ -115,8 +124,17 @@ class BundleMcp(BaseModel):
         max_length=MAX_NAME_LENGTH,
         description="Instance display name created in the workspace.",
     )
-    json_spec: dict[str, Any] = Field(
-        description="Native MCP runtime spec. Must include 'type' (command|docker|url)."
+    catalog: str | None = Field(
+        default=None,
+        max_length=MAX_NAME_LENGTH,
+        description=(
+            "Id of a catalog MCP server, e.g. 'ru.yookassa/mcp' or "
+            "'io.github.owner/server/command'. Set this or json_spec."
+        ),
+    )
+    json_spec: dict[str, Any] | None = Field(
+        default=None,
+        description="Native MCP runtime spec. Must include 'type' (command|docker|url).",
     )
     bindings: dict[str, str] = Field(
         default_factory=dict,
@@ -137,8 +155,8 @@ class BundleMcp(BaseModel):
     @field_validator("key")
     @classmethod
     def _valid_key(cls, v: str) -> str:
-        if not _KEY_RE.match(v):
-            raise ValueError(f"mcp key '{v}' must match [a-zA-Z][a-zA-Z0-9_]*")
+        if not _ENTITY_KEY_RE.match(v):
+            raise ValueError(f"mcp key '{v}' must match [a-zA-Z][a-zA-Z0-9_-]*")
         return v
 
     @field_validator("context_secret")
@@ -153,6 +171,12 @@ class BundleMcp(BaseModel):
             )
         return v.strip() if v is not None else None
 
+    @model_validator(mode="after")
+    def _catalog_or_spec(self) -> BundleMcp:
+        if (self.catalog is None) == (self.json_spec is None):
+            raise ValueError(f"mcp '{self.key}' needs exactly one of 'catalog' or 'json_spec'")
+        return self
+
 
 class BundleSkill(BaseModel):
     """A skill to create for the package."""
@@ -161,24 +185,29 @@ class BundleSkill(BaseModel):
 
     key: str = Field(min_length=1)
     name: str = Field(min_length=1, max_length=MAX_NAME_LENGTH)
-    # v0.1.0 supports inline content and github; zip/s3 import comes later.
-    source_type: Literal["content", "github"] = "content"
+    source_type: Literal["content", "files", "github"] = "content"
     content: str | None = Field(
         default=None, description="SKILL.md markdown for source_type=content."
+    )
+    files: dict[str, str] | None = Field(
+        default=None,
+        description="Package files for source_type=files: relative path -> UTF-8 text, SKILL.md at the root.",
     )
     source_url: str | None = Field(default=None, description="Repo URL for source_type=github.")
 
     @field_validator("key")
     @classmethod
     def _valid_key(cls, v: str) -> str:
-        if not _KEY_RE.match(v):
-            raise ValueError(f"skill key '{v}' must match [a-zA-Z][a-zA-Z0-9_]*")
+        if not _ENTITY_KEY_RE.match(v):
+            raise ValueError(f"skill key '{v}' must match [a-zA-Z][a-zA-Z0-9_-]*")
         return v
 
     @model_validator(mode="after")
     def _check_source(self) -> BundleSkill:
         if self.source_type == "content" and not self.content:
             raise ValueError(f"skill '{self.key}' is source_type=content but has no content")
+        if self.source_type == "files" and not self.files:
+            raise ValueError(f"skill '{self.key}' is source_type=files but has no files")
         if self.source_type == "github" and not self.source_url:
             raise ValueError(f"skill '{self.key}' is source_type=github but has no source_url")
         return self
@@ -191,6 +220,7 @@ class BundleAgent(BaseModel):
 
     key: str = Field(min_length=1)
     name: str = Field(min_length=1, max_length=MAX_NAME_LENGTH)
+    description: str = Field(default="", max_length=1000)
     instruction: str = Field(default="", max_length=20000)
     # Literal provider model id (e.g. "gpt-4o") or a ${setup.x} reference.
     model: str | None = Field(default=None)
@@ -200,13 +230,58 @@ class BundleAgent(BaseModel):
         default_factory=list,
         description='Built-in toolsets to attach, e.g. ["agentarea/shell", "agentarea/files"].',
     )
+    reasoning_effort: str | None = Field(
+        default=None,
+        description="A reasoning level the model takes, e.g. low or high. Not with reasoning_max_tokens.",
+    )
+    reasoning_max_tokens: int | None = Field(
+        default=None,
+        description="A token budget for the model's reasoning. Not with reasoning_effort.",
+    )
+    client: str | None = Field(
+        default=None,
+        description=(
+            "The id of a Codex or Claude Code client of the workspace whose runner runs the "
+            "agent's tasks, or a ${setup.x} reference to one. Unset runs them on the platform."
+        ),
+    )
 
     @field_validator("key")
     @classmethod
     def _valid_key(cls, v: str) -> str:
-        if not _KEY_RE.match(v):
-            raise ValueError(f"agent key '{v}' must match [a-zA-Z][a-zA-Z0-9_]*")
+        if not _ENTITY_KEY_RE.match(v):
+            raise ValueError(f"agent key '{v}' must match [a-zA-Z][a-zA-Z0-9_-]*")
         return v
+
+    @field_validator("reasoning_effort", mode="before")
+    @classmethod
+    def _check_reasoning_effort(cls, v: object) -> str | None:
+        return checked_reasoning_effort(v)
+
+    @field_validator("reasoning_max_tokens", mode="before")
+    @classmethod
+    def _check_reasoning_max_tokens(cls, v: object) -> int | None:
+        return checked_reasoning_max_tokens(v)
+
+    @field_validator("client")
+    @classmethod
+    def _client_is_an_id(cls, v: str | None) -> str | None:
+        # A client's name is not unique and any member picks it, so only its id names it.
+        if v is None or setup_refs(v):
+            return v
+        try:
+            return str(UUID(v))
+        except ValueError as exc:
+            raise ValueError(
+                "client must be the id of a Codex or Claude Code client, or a ${setup.x} "
+                "reference to one"
+            ) from exc
+
+    @model_validator(mode="after")
+    def _one_reasoning_form(self) -> BundleAgent:
+        if self.reasoning_effort and self.reasoning_max_tokens:
+            raise ValueError("set reasoning_effort or reasoning_max_tokens, not both")
+        return self
 
 
 class BundleAutomation(BaseModel):
@@ -230,8 +305,8 @@ class BundleAutomation(BaseModel):
     @field_validator("key")
     @classmethod
     def _valid_key(cls, v: str) -> str:
-        if not _KEY_RE.match(v):
-            raise ValueError(f"automation key '{v}' must match [a-zA-Z][a-zA-Z0-9_]*")
+        if not _ENTITY_KEY_RE.match(v):
+            raise ValueError(f"automation key '{v}' must match [a-zA-Z][a-zA-Z0-9_-]*")
         return v
 
 
@@ -269,8 +344,8 @@ class BundlePolicy(BaseModel):
     @field_validator("key")
     @classmethod
     def _valid_key(cls, v: str) -> str:
-        if not _KEY_RE.match(v):
-            raise ValueError(f"policy key '{v}' must match [a-zA-Z][a-zA-Z0-9_]*")
+        if not _ENTITY_KEY_RE.match(v):
+            raise ValueError(f"policy key '{v}' must match [a-zA-Z][a-zA-Z0-9_-]*")
         return v
 
 
@@ -306,8 +381,8 @@ class BundleChannel(BaseModel):
     @field_validator("key")
     @classmethod
     def _valid_key(cls, v: str) -> str:
-        if not _KEY_RE.match(v):
-            raise ValueError(f"channel key '{v}' must match [a-zA-Z][a-zA-Z0-9_]*")
+        if not _ENTITY_KEY_RE.match(v):
+            raise ValueError(f"channel key '{v}' must match [a-zA-Z][a-zA-Z0-9_-]*")
         return v
 
 

@@ -84,10 +84,33 @@ async def test_completion_updates_task_only_after_validation_passes() -> None:
 
 
 @pytest.mark.asyncio
+async def test_a_completion_without_artifacts_still_runs_the_delivery_barrier() -> None:
+    instance = _workflow()
+    instance._publish_events_immediately = AsyncMock()
+    instance._validate_completion_artifacts = AsyncMock(
+        return_value=ArtifactValidationResult(state="passed", generation=0)
+    )
+
+    with (
+        patch(
+            "agentarea_execution.workflows.agent_execution_workflow.workflow.execute_activity",
+            new=AsyncMock(),
+        ),
+        patch(
+            "agentarea_execution.workflows.agent_execution_workflow.workflow.logger",
+            new=Mock(),
+        ),
+    ):
+        await instance._handle_task_completion(_completion_with({"result": "done"}))
+
+    instance._validate_completion_artifacts.assert_awaited_once_with([])
+    assert instance.state.success is True
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({"result": "done"}, "artifacts is required"),
         ({"result": "done", "artifacts": "reports/model.xlsx"}, "must be an array"),
         ({"result": "done", "artifacts": [1]}, "non-empty workspace-relative paths"),
         ("not-json", "valid JSON"),
@@ -225,7 +248,7 @@ async def test_failed_validation_returns_tool_feedback_for_two_repairs() -> None
     feedback = json.loads(instance.state.messages[-1].content)
     assert feedback["status"] == "validation_failed"
     assert feedback["repair_attempts_remaining"] == 1
-    assert "completion again with the workspace-relative paths" in feedback["instruction"]
+    assert "outputs/" in feedback["instruction"]
     assert "artifact_id" not in feedback["instruction"]
     assert instance.state.messages[-1].tool_call_id == completion.id
 

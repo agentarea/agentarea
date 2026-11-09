@@ -18,7 +18,6 @@ from agentarea_api.api.v1.agents import get_all_tools
 RUNTIME_NAMESPACES = {
     "agentarea/math",
     "agentarea/files",
-    "agentarea/workspace_files",
     "agentarea/context",
     "agentarea/web",
     "agentarea/shell",

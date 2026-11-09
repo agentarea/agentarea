@@ -145,6 +145,8 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     stays in the caller's workspace and leaves updated_at alone.
 #   MCP dispatch stamps: the stamp writer runs with no workspace bound under the
 #     ENFORCE tenant scope and still stamps every workspace's instances.
+#   client runner keys: an issued key authenticates bound to its client, a
+#     revoked one does not, and deleting the client deletes its keys.
 #   owned auth configs: an auth config a connect flow minted is deleted with its
 #     connection or instance by ON DELETE CASCADE, its credential and secret
 #     references first; a shared one survives, and the backfill names owners.
@@ -228,6 +230,7 @@ libs/tasks/tests/test_a2a_context_db.py
   libs/openapi/tests/test_record_dispatch_db.py
   libs/openapi/tests/test_platform_connection_db.py
   libs/mcp/tests/test_dispatch_stamps_db.py
+  apps/api/tests/test_client_runner_keys_db.py
   libs/mcp/tests/test_egress_exits_db.py
   apps/api/tests/test_owned_auth_configs_db.py
   libs/common/tests/test_analytics_installation_db.py

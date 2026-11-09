@@ -24,17 +24,32 @@ def _published(path: str, *, sha256: str = "b" * 64, size: int = 42) -> httpx.Re
 
 
 class _Store:
-    """Records every publication the barrier attempts, replying per path."""
+    """Records every publication the barrier attempts, replying per path.
 
-    def __init__(self, responses: dict[str, httpx.Response]) -> None:
+    ``outputs`` answers the listing of the sandbox's outputs folder.
+    """
+
+    def __init__(
+        self,
+        responses: dict[str, httpx.Response],
+        outputs: httpx.Response | None = None,
+    ) -> None:
         self.responses = responses
+        self.outputs = outputs or httpx.Response(200, json={"paths": []})
         self.published: list[str] = []
 
     def client(self, credential: str) -> httpx.AsyncClient:
         async def handler(request: httpx.Request) -> httpx.Response:
+            assert request.headers["authorization"] == f"Bearer {credential}"
+            if request.method == "GET":
+                assert request.url.path == "/sandbox/files"
+                assert request.url.params["workspace_id"] == "workspace-1"
+                assert request.url.params["task_id"] == "task-1"
+                assert request.url.params["list"] == "outputs"
+                assert request.url.params["ensure"] == "false"
+                return self.outputs
             assert request.method == "POST"
             assert request.url.path == "/sandbox/artifacts"
-            assert request.headers["authorization"] == f"Bearer {credential}"
             import json
 
             payload = json.loads(request.content)
@@ -48,7 +63,7 @@ class _Store:
 
 
 @pytest.mark.asyncio
-async def test_no_declared_artifacts_passes_without_touching_the_store() -> None:
+async def test_nothing_declared_and_no_outputs_passes_without_publishing() -> None:
     store = _Store({})
     credential = uuid4().hex
     async with store.client(credential) as client:
@@ -223,3 +238,64 @@ async def test_publication_without_valid_identity_blocks() -> None:
             http_client=client,
         )
     assert result.state == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_a_file_in_outputs_is_published_without_being_declared() -> None:
+    store = _Store(
+        {"outputs/recipe.md": _published("outputs/recipe.md", size=7)},
+        outputs=httpx.Response(200, json={"paths": ["outputs/recipe.md"]}),
+    )
+    credential = uuid4().hex
+    async with store.client(credential) as client:
+        result = await validate_published_artifacts(
+            _request(), manager_url=MANAGER_URL, auth_secret=credential, http_client=client
+        )
+    assert result.state == "passed"
+    assert store.published == ["outputs/recipe.md"]
+    assert [e.path for e in result.evidence] == ["outputs/recipe.md"]
+
+
+@pytest.mark.asyncio
+async def test_declared_files_and_outputs_are_published_once_each() -> None:
+    store = _Store(
+        {
+            "report.md": _published("report.md"),
+            "outputs/chart.png": _published("outputs/chart.png"),
+        },
+        outputs=httpx.Response(200, json={"paths": ["outputs/chart.png"]}),
+    )
+    credential = uuid4().hex
+    async with store.client(credential) as client:
+        result = await validate_published_artifacts(
+            _request("report.md", "/workspace/outputs/chart.png"),
+            manager_url=MANAGER_URL,
+            auth_secret=credential,
+            http_client=client,
+        )
+    assert result.state == "passed"
+    assert store.published == ["report.md", "outputs/chart.png"]
+
+
+@pytest.mark.asyncio
+async def test_a_task_without_a_sandbox_has_no_outputs() -> None:
+    store = _Store({}, outputs=httpx.Response(410, json={"error": "sandbox_expired"}))
+    credential = uuid4().hex
+    async with store.client(credential) as client:
+        result = await validate_published_artifacts(
+            _request(), manager_url=MANAGER_URL, auth_secret=credential, http_client=client
+        )
+    assert result.state == "passed"
+    assert store.published == []
+
+
+@pytest.mark.asyncio
+async def test_an_outputs_listing_the_store_cannot_answer_blocks() -> None:
+    store = _Store({}, outputs=httpx.Response(502, json={"error": "file_list_failed"}))
+    credential = uuid4().hex
+    async with store.client(credential) as client:
+        result = await validate_published_artifacts(
+            _request(), manager_url=MANAGER_URL, auth_secret=credential, http_client=client
+        )
+    assert result.state == "unavailable"
+    assert store.published == []

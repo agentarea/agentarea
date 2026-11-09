@@ -1,5 +1,5 @@
-import type { AgentResponse } from "@/api/client/types.gen";
 import { describe, expect, it } from "vitest";
+import type { AgentResponse } from "@/api/client/types.gen";
 import {
   fromAgent,
   toAgentCreate,
@@ -59,6 +59,7 @@ describe("toAgentCreate", () => {
       description: "",
       instruction: "",
       model_id: "",
+      client_id: "",
       tools_config: { mcp_server_configs: [] },
       planning: false,
       a2ui_enabled: false,
@@ -69,6 +70,38 @@ describe("toAgentCreate", () => {
     expect(body.answer_check).toBeNull();
     expect(body.triggers).toEqual([]);
     expect(body).not.toHaveProperty("events_config");
+  });
+});
+
+describe("reasoning level", () => {
+  const form = {
+    name: "Coder",
+    description: "",
+    instruction: "",
+    model_id: "",
+    tools_config: { mcp_server_configs: [] },
+    planning: false,
+    a2ui_enabled: false,
+    answer_check: { enabled: false, language: "", rewrite_instruction: null },
+  };
+
+  it("sends a runner agent's level, the model's default as null", () => {
+    expect(
+      toAgentUpdate({ ...form, client_id: "c1", reasoning_effort: "high" })
+    ).toMatchObject({ reasoning_effort: "high", reasoning_max_tokens: null });
+    expect(
+      toAgentUpdate({ ...form, client_id: "c1", reasoning_effort: "" })
+    ).toMatchObject({ reasoning_effort: null });
+  });
+
+  it("leaves a platform agent's reasoning untouched", () => {
+    const body = toAgentUpdate({
+      ...form,
+      client_id: "",
+      reasoning_effort: "high",
+    });
+    expect(body).not.toHaveProperty("reasoning_effort");
+    expect(body).not.toHaveProperty("reasoning_max_tokens");
   });
 });
 
@@ -134,7 +167,11 @@ const agent: AgentResponse = {
   a2ui_enabled: true,
   skills: [
     { id: "skill-lead-scoring", name: "Lead scoring", description: null },
-    { id: "skill-reply-drafts", name: "Reply drafts", description: "Tone guide" },
+    {
+      id: "skill-reply-drafts",
+      name: "Reply drafts",
+      description: "Tone guide",
+    },
   ],
   tools,
 };
@@ -145,7 +182,10 @@ describe("fromAgent -> toAgentUpdate", () => {
 
     expect(update.tools).toHaveLength(tools.length);
     expect(update.tools).toEqual(expect.arrayContaining(tools));
-    expect(update.skill_ids).toEqual(["skill-lead-scoring", "skill-reply-drafts"]);
+    expect(update.skill_ids).toEqual([
+      "skill-lead-scoring",
+      "skill-reply-drafts",
+    ]);
     expect(update.a2ui_enabled).toBe(true);
     expect(update.planning).toBe(true);
     expect(update.name).toBe("BizDev — Review");
@@ -153,7 +193,9 @@ describe("fromAgent -> toAgentUpdate", () => {
 
   it("drops a removed skill and keeps the delegation tools", () => {
     const values = fromAgent(agent);
-    values.skills = (values.skills ?? []).filter((s) => s.id !== "skill-reply-drafts");
+    values.skills = (values.skills ?? []).filter(
+      (s) => s.id !== "skill-reply-drafts"
+    );
 
     const update = toAgentUpdate(values);
 
@@ -182,7 +224,11 @@ describe("answer check", () => {
   it("keeps the instruction the form does not edit and turns the check off", () => {
     const values = fromAgent({
       ...agent,
-      answer_check: { enabled: true, language: "ru", rewrite_instruction: "Свой промпт" },
+      answer_check: {
+        enabled: true,
+        language: "ru",
+        rewrite_instruction: "Свой промпт",
+      },
     });
     expect(values.answer_check).toEqual({
       enabled: true,
@@ -204,7 +250,11 @@ describe("answer check", () => {
 
   it("an enabled check with no language sends a null language", () => {
     const values = fromAgent(agent);
-    values.answer_check = { enabled: true, language: "  ", rewrite_instruction: null };
+    values.answer_check = {
+      enabled: true,
+      language: "  ",
+      rewrite_instruction: null,
+    };
     expect(toAgentUpdate(values).answer_check).toEqual({
       enabled: true,
       language: null,

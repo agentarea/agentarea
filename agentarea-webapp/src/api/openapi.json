@@ -357,6 +357,47 @@
         "title": "AgentCardSummary",
         "type": "object"
       },
+      "AgentClientSummary": {
+        "properties": {
+          "default_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Model"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "online": {
+            "title": "Online",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "online",
+          "default_model"
+        ],
+        "title": "AgentClientSummary",
+        "type": "object"
+      },
       "AgentCreateRequest": {
         "additionalProperties": false,
         "description": "``AgentCreate`` plus the triggers created with the agent.",
@@ -394,6 +435,19 @@
               }
             ],
             "description": "Check the agent's final answer for leaks (other scripts, tool names, codes, JSON, stack traces) and have the model rewrite it once before the person sees it. Null leaves it off. A governance safety rule that sets answer_check overrides this setting."
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A Codex or Claude Code client of this workspace whose runner runs the agent's tasks on the CLI's subscription; null runs them on the platform's own loop and model.",
+            "title": "Client Id"
           },
           "description": {
             "default": "",
@@ -724,6 +778,28 @@
                 "type": "null"
               }
             ]
+          },
+          "client": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentClientSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
           },
           "description": {
             "anyOf": [
@@ -1059,6 +1135,19 @@
             ],
             "title": "Capabilities"
           },
+          "client_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A Codex or Claude Code client of this workspace whose runner runs the agent's tasks on the CLI's subscription; null runs them on the platform's own loop and model.",
+            "title": "Client Id"
+          },
           "description": {
             "anyOf": [
               {
@@ -1240,8 +1329,40 @@
         "type": "object"
       },
       "AnalyzeRequest": {
-        "description": "Analyze a bundle into an import preview.\n\nProvide exactly one of ``source`` (pasted text) or ``source_url`` (a URL the\nserver fetches behind the SSRF guard). ``source_url`` is what a landing-page\ndeep-link (`/bundles/import?src=<url>`) uses for one-click installs.",
+        "description": "Analyze a bundle into an import preview.\n\nProvide exactly one of ``source`` (pasted text), ``source_url`` (a URL the\nserver fetches behind the SSRF guard), ``files`` (an agent folder) or\n``bundle`` (a canonical bundle, e.g. one edited after an earlier analyze).\n``source_url`` is what a landing-page deep-link (`/bundles/import?src=<url>`)\nuses for one-click installs; ``files`` is what ``agentarea deploy`` sends.",
         "properties": {
+          "bundle": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Bundle-Input"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A canonical bundle, as an earlier analyze returned it."
+          },
+          "files": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An agent folder: relative POSIX path -> UTF-8 file text, rooted at agent.yaml. 5MB total.",
+            "title": "Files"
+          },
+          "setup_values": {
+            "additionalProperties": true,
+            "description": "Setup values the install will be given, so a redeploy plan shows what a changed value updates. The plan_digest holds only for these values.",
+            "title": "Setup Values",
+            "type": "object"
+          },
           "source": {
             "anyOf": [
               {
@@ -2415,6 +2536,24 @@
         "additionalProperties": false,
         "description": "An agent to create for the package.",
         "properties": {
+          "client": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The id of a Codex or Claude Code client of the workspace whose runner runs the agent's tasks, or a ${setup.x} reference to one. Unset runs them on the platform.",
+            "title": "Client"
+          },
+          "description": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Description",
+            "type": "string"
+          },
           "instruction": {
             "default": "",
             "maxLength": 20000,
@@ -2450,6 +2589,30 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A reasoning level the model takes, e.g. low or high. Not with reasoning_max_tokens.",
+            "title": "Reasoning Effort"
+          },
+          "reasoning_max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A token budget for the model's reasoning. Not with reasoning_effort.",
+            "title": "Reasoning Max Tokens"
           },
           "skills": {
             "description": "BundleSkill keys to attach.",
@@ -2600,6 +2763,19 @@
             "title": "Bindings",
             "type": "object"
           },
+          "catalog": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Id of a catalog MCP server, e.g. 'ru.yookassa/mcp' or 'io.github.owner/server/command'. Set this or json_spec.",
+            "title": "Catalog"
+          },
           "context_secret": {
             "anyOf": [
               {
@@ -2613,10 +2789,17 @@
             "title": "Context Secret"
           },
           "json_spec": {
-            "additionalProperties": true,
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "Native MCP runtime spec. Must include 'type' (command|docker|url).",
-            "title": "Json Spec",
-            "type": "object"
+            "title": "Json Spec"
           },
           "key": {
             "description": "In-package reference key (agents point at this).",
@@ -2634,8 +2817,7 @@
         },
         "required": [
           "key",
-          "name",
-          "json_spec"
+          "name"
         ],
         "title": "BundleMcp",
         "type": "object"
@@ -2823,6 +3005,21 @@
             "description": "SKILL.md markdown for source_type=content.",
             "title": "Content"
           },
+          "files": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Package files for source_type=files: relative path -> UTF-8 text, SKILL.md at the root.",
+            "title": "Files"
+          },
           "key": {
             "minLength": 1,
             "title": "Key",
@@ -2838,6 +3035,7 @@
             "default": "content",
             "enum": [
               "content",
+              "files",
               "github"
             ],
             "title": "Source Type",
@@ -3610,9 +3808,28 @@
       },
       "ClientResponse": {
         "properties": {
+          "allow_domains": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Allow Domains",
+            "type": "array"
+          },
           "created_by": {
             "title": "Created By",
             "type": "string"
+          },
+          "default_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Model"
           },
           "description": {
             "anyOf": [
@@ -3653,9 +3870,29 @@
             "title": "Mcp Instances",
             "type": "array"
           },
+          "models": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Models"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "online": {
+            "default": false,
+            "title": "Online",
+            "type": "boolean"
           },
           "openapi_connections": {
             "default": [],
@@ -3701,6 +3938,25 @@
         "additionalProperties": false,
         "description": "Patch payload for a client. Unset fields remain unchanged.",
         "properties": {
+          "allow_domains": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allow Domains",
+            "type": "array"
+          },
+          "default_model": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Model"
+          },
           "description": {
             "anyOf": [
               {
@@ -3955,17 +4211,6 @@
                 "type": "null"
               }
             ]
-          },
-          "output_sanitizer_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Output Sanitizer Enabled"
           },
           "prompt_injection_detection_enabled": {
             "anyOf": [
@@ -5113,6 +5358,10 @@
       "EntityStatus": {
         "enum": [
           "will_create",
+          "will_update",
+          "unchanged",
+          "orphaned",
+          "changes_not_applied",
           "already_exists",
           "unsupported"
         ],
@@ -6264,6 +6513,18 @@
             "title": "Issues",
             "type": "array"
           },
+          "plan_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Names this plan: the bundle and what it does with each entity. Install takes it and refuses with 409 when the plan it would carry out is no longer this one. Null when there is no plan to install.",
+            "title": "Plan Digest"
+          },
           "setup": {
             "items": {
               "$ref": "#/components/schemas/SetupField"
@@ -6341,6 +6602,9 @@
       "InstallAction": {
         "enum": [
           "created",
+          "updated",
+          "unchanged",
+          "orphaned",
           "reused",
           "skipped"
         ],
@@ -6348,10 +6612,16 @@
         "type": "string"
       },
       "InstallRequest": {
-        "description": "Install a (previously analyzed, possibly edited) canonical bundle.",
+        "description": "Install a canonical bundle by the plan analyze showed for it.",
         "properties": {
           "bundle": {
             "$ref": "#/components/schemas/Bundle-Input"
+          },
+          "plan_digest": {
+            "description": "The plan_digest analyze returned for this bundle and these setup values: the plan the caller approved.",
+            "minLength": 1,
+            "title": "Plan Digest",
+            "type": "string"
           },
           "setup_values": {
             "additionalProperties": true,
@@ -6361,7 +6631,8 @@
           }
         },
         "required": [
-          "bundle"
+          "bundle",
+          "plan_digest"
         ],
         "title": "InstallRequest",
         "type": "object"
@@ -6390,6 +6661,12 @@
               }
             ],
             "title": "Installed Bundle Id"
+          },
+          "setup_values": {
+            "additionalProperties": true,
+            "description": "Non-secret setup values supplied to installs of this bundle, reused on redeploy.",
+            "title": "Setup Values",
+            "type": "object"
           }
         },
         "required": [
@@ -6414,6 +6691,18 @@
               }
             ],
             "title": "Detail"
+          },
+          "fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "sha256 of the resolved non-secret spec last applied; a redeploy diffs on it.",
+            "title": "Fingerprint"
           },
           "id": {
             "anyOf": [
@@ -6712,6 +7001,60 @@
         ],
         "title": "IssueSeverity",
         "type": "string"
+      },
+      "IssuedRunnerKey": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "key": {
+            "description": "The runner's key for `agentarea runner register`; shown once",
+            "title": "Key",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "prefix": {
+            "title": "Prefix",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "created_by",
+          "created_at",
+          "last_used_at",
+          "key"
+        ],
+        "title": "IssuedRunnerKey",
+        "type": "object"
       },
       "MCPAuthConfigCreateRequest": {
         "properties": {
@@ -13021,6 +13364,79 @@
           "max_model_turns"
         ],
         "title": "RunExecutionConfig",
+        "type": "object"
+      },
+      "RunnerIdentity": {
+        "properties": {
+          "client_id": {
+            "format": "uuid",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "workspace": {
+            "title": "Workspace",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "workspace",
+          "kind"
+        ],
+        "title": "RunnerIdentity",
+        "type": "object"
+      },
+      "RunnerKeyResponse": {
+        "description": "A runner key of a client; the key itself is shown only when issued.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "prefix": {
+            "title": "Prefix",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "created_by",
+          "created_at",
+          "last_used_at"
+        ],
+        "title": "RunnerKeyResponse",
         "type": "object"
       },
       "RuntimeUsage": {
@@ -21119,6 +21535,88 @@
         ]
       }
     },
+    "/v1/runner/tasks/{task_id}/files/{file_path}": {
+      "put": {
+        "description": "Store a file the CLI made in its task folder, so the task's file links open it.",
+        "operationId": "upload_task_file_v1_runner_tasks__task_id__files__file_path__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_path",
+            "required": true,
+            "schema": {
+              "title": "File Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload Task File",
+        "tags": [
+          "v1",
+          "protected",
+          "harness runner"
+        ]
+      }
+    },
+    "/v1/runner/whoami": {
+      "get": {
+        "description": "The client this runner key serves, so `agentarea runner register` can check the key.",
+        "operationId": "runner_whoami_v1_runner_whoami_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerIdentity"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Runner Whoami",
+        "tags": [
+          "v1",
+          "protected",
+          "harness runner"
+        ]
+      }
+    },
     "/v1/workspaces": {
       "get": {
         "description": "List every workspace the current user can reach (personal + joined).\n\nProvisions the caller's personal workspace on first call, so a brand\nnew user always gets at least one entry. Baseline governance policies are\nseeded by the workspace-creation hook (see ``get_workspace_service``).",
@@ -24889,7 +25387,7 @@
     },
     "/v1/workspaces/{workspace}/api-keys/{token_id}": {
       "delete": {
-        "description": "Immediately revoke an API key.\n\nThe key's creator, or a workspace admin. The repository is scoped to the\nworkspace, not to the caller, so without this a member could cut off a\ncolleague's integrations.",
+        "description": "Immediately revoke an API key.\n\nThe key's creator, or a workspace admin. The repository is scoped to the\nworkspace, not to the caller, so without this a member could cut off a\ncolleague's integrations. A runner's key is revoked on its client's page.",
         "operationId": "revoke_api_key_v1_api_keys__token_id__delete",
         "parameters": [
           {
@@ -24944,7 +25442,7 @@
         ]
       },
       "get": {
-        "description": "Get a single API key by ID.\n\nSomeone else's key answers 404 to a member, as a missing one does, so the\nids of colleagues' keys cannot be confirmed.",
+        "description": "Get a single API key by ID.\n\nSomeone else's key answers 404 to a member, as a missing one does, so the\nids of colleagues' keys cannot be confirmed. A runner's key lives on its\nclient's page and answers 404 here too.",
         "operationId": "get_api_key_v1_api_keys__token_id__get",
         "parameters": [
           {
@@ -25267,7 +25765,7 @@
     },
     "/v1/workspaces/{workspace}/bundles/analyze": {
       "post": {
-        "description": "Parse and analyze a bundle source, returning a non-destructive preview.",
+        "description": "Parse and analyze a bundle source, returning a non-destructive preview.\n\nFor a bundle installed here before, each entity's status is a plan against\nthat install: will_create, will_update, unchanged, orphaned (kept, not\ndeleted), or changes_not_applied for a changed MCP server or GitHub skill.",
         "operationId": "analyze_bundle_v1_bundles_analyze_post",
         "parameters": [
           {
@@ -25331,7 +25829,7 @@
     },
     "/v1/workspaces/{workspace}/bundles/install": {
       "post": {
-        "description": "Install a canonical bundle: MCP instances, skills, agents and automations.\n\nAll or nothing: a failure removes whatever this install had created. A\nbundle or setup value that is invalid answers 422 (``code: bundle_invalid``);\nany other install failure answers 400 (``code: bundle_install_failed``). Both\nare problem+json with the message in ``detail`` and the blocking ``issues``.",
+        "description": "Install a canonical bundle: MCP instances, skills, agents and automations.\n\nA bundle installed here before is redeployed: what it created is updated in\nplace where the plan says so, and what it no longer declares is kept.\nAll or nothing: a failure removes whatever this install had created. A plan\nother than the one ``plan_digest`` names answers 409\n(``code: bundle_plan_changed``) and writes nothing. A bundle or setup value\nthat is invalid answers 422 (``code: bundle_invalid``); any other install\nfailure answers 400 (``code: bundle_install_failed``). All are problem+json\nwith the message in ``detail`` and the blocking ``issues``.",
         "operationId": "install_bundle_v1_bundles_install_post",
         "parameters": [
           {
@@ -26170,6 +26668,203 @@
           }
         ],
         "summary": "Remove Platform Toolset From Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/clients/{client_id}/runner-keys": {
+      "get": {
+        "description": "The live keys of this client's runners.",
+        "operationId": "list_runner_keys_v1_clients__client_id__runner_keys_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RunnerKeyResponse"
+                  },
+                  "title": "Response List Runner Keys V1 Clients  Client Id  Runner Keys Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Runner Keys",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      },
+      "post": {
+        "description": "A key for this client's runner; it reaches nothing but the client's runner routes.",
+        "operationId": "issue_runner_key_v1_clients__client_id__runner_keys_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuedRunnerKey"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Issue Runner Key",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/clients/{client_id}/runner-keys/{key_id}": {
+      "delete": {
+        "description": "Cut a runner off: its key answers 401 from the next request on.",
+        "operationId": "revoke_runner_key_v1_clients__client_id__runner_keys__key_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Key Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke Runner Key",
         "tags": [
           "v1",
           "protected",

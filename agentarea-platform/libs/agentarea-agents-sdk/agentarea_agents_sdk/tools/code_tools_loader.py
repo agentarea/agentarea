@@ -28,7 +28,6 @@ def _ensure_all_toolsets_imported() -> None:
     sdk_modules = [
         "agentarea_agents_sdk.tools.math_toolset",
         "agentarea_agents_sdk.tools.file_toolset",
-        "agentarea_agents_sdk.tools.workspace_files_toolset",
         "agentarea_agents_sdk.tools.context_toolset",
         "agentarea_agents_sdk.tools.web_toolset",
         "agentarea_agents_sdk.tools.shell_toolset",
@@ -111,6 +110,11 @@ def _tool_methods(cls: type) -> list[dict[str, Any]]:
     return sorted(methods, key=lambda m: m["name"])
 
 
+def toolset_metadata(cls: type) -> dict[str, Any]:
+    """A toolset class's catalog entry: its declared metadata and tool methods."""
+    return _meta_to_dict(cls.__toolset_meta__, cls)
+
+
 def _meta_to_dict(meta: ToolsetMetadata, cls: type) -> dict[str, Any]:
     return {
         "namespace": meta.namespace,
@@ -133,7 +137,7 @@ def get_code_tools_metadata() -> dict[str, dict[str, Any]]:
     """
     _ensure_all_toolsets_imported()
     registry = get_toolset_registry()
-    return {ns: _meta_to_dict(cls.__toolset_meta__, cls) for ns, cls in registry.items()}
+    return {ns: toolset_metadata(cls) for ns, cls in registry.items()}
 
 
 def get_code_tool_class(tool_name: str):

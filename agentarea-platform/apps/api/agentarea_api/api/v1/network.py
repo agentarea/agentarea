@@ -74,9 +74,6 @@ _GOVERNANCE_INTERCEPTORS = [
         phases=["pre_llm_call", "post_llm_call"],
     ),
     GovernanceOverlay(
-        interceptor_name="output_sanitizer", category="filter", phases=["post_llm_call"]
-    ),
-    GovernanceOverlay(
         interceptor_name="content_policy_enforcer",
         category="filter",
         phases=["pre_llm_call", "post_llm_call"],

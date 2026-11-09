@@ -455,7 +455,7 @@ var ErrFileNotFound = sandboxcontract.ErrFileNotFound
 
 // ErrTaskWorkspaceGone signals that the ephemeral task directory has already
 // been reclaimed while the durable inputs/artifacts remain available.
-var ErrTaskWorkspaceGone = fmt.Errorf("sandbox task workspace gone")
+var ErrTaskWorkspaceGone = sandboxcontract.ErrTaskWorkspaceGone
 
 // ErrExecutorIncarnationChanged means the Docker development executor
 // restarted after hydration was observed but before the requested operation.

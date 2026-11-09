@@ -31,6 +31,7 @@ from agentarea_api.api.v1.router import (
     mcp_proxy_v1_router,
     principal_v1_router,
     public_v1_router,
+    runner_v1_router,
     workspace_v1_router,
 )
 
@@ -348,7 +349,8 @@ def create_app() -> FastAPI:
             streamable_http_path="/",
             stateless_http=True,
             transport_security=_transport_security,
-        )
+        ),
+        admit_turn=True,
     )
     _client_mcp_app = ClientMCPScopeMiddleware(_client_mcp_inner, prefix="/mcp/clients")
     _legacy_client_mcp_app = ClientMCPScopeMiddleware(_client_mcp_inner, prefix="/client-mcp")
@@ -456,6 +458,7 @@ def create_app() -> FastAPI:
     app.include_router(workspace_v1_router, tags=["v1"])
     app.include_router(a2a_v1_router, tags=["v1"])
     app.include_router(mcp_proxy_v1_router, tags=["v1"])
+    app.include_router(runner_v1_router, tags=["v1"])
 
     # Routes contributed by installed extensions.
     #
@@ -547,6 +550,7 @@ def create_app() -> FastAPI:
     # it via the shared problem+json helper, surfacing the numbers so the UI can
     # show "you've spent $X of $Y, raise the cap or wait".
     from agentarea_agents.application.agent_service import (
+        InvalidClientError,
         InvalidDelegateError,
         InvalidMcpToolError,
         InvalidModelIdError,
@@ -568,6 +572,10 @@ def create_app() -> FastAPI:
             code="invalid_model_id",
             detail=str(exc),
         )
+
+    @app.exception_handler(InvalidClientError)
+    async def _invalid_client_handler(_request: Request, exc: InvalidClientError):
+        return problem_response(status_code=400, code="invalid_client_id", detail=str(exc))
 
     # A delegate the runtime could not reach — a bad URL, a missing or managed
     # secret, an agent that is not here — is refused on write, like model_id.

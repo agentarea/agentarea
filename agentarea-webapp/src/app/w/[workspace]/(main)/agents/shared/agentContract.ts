@@ -24,7 +24,9 @@ const FORM_TOOL_TYPES: ReadonlySet<AgentTool["type"]> = new Set([
 function toFormSkill(skill: Record<string, unknown>): AgentSkill {
   const { id, name, description } = skill;
   if (typeof id !== "string" || typeof name !== "string") {
-    throw new Error(`Agent skill without an id or name: ${JSON.stringify(skill)}`);
+    throw new Error(
+      `Agent skill without an id or name: ${JSON.stringify(skill)}`
+    );
   }
   return {
     id,
@@ -36,8 +38,8 @@ function toFormSkill(skill: Record<string, unknown>): AgentSkill {
 // Only the ids that are set, so toolsets without models carry no model keys.
 function toModelIds(source: CodeToolModelIds): CodeToolModelIds {
   return Object.fromEntries(
-    (["image_model_id", "video_model_id"] as const).flatMap(
-      (key) => (source[key] ? [[key, source[key]]] : [])
+    (["image_model_id", "video_model_id"] as const).flatMap((key) =>
+      source[key] ? [[key, source[key]]] : []
     )
   );
 }
@@ -54,7 +56,8 @@ export function toToolsConfig(
         allowed_tools:
           t.settings?.allowed_tools?.map((tool) => ({
             tool_name: tool.tool_name,
-            requires_user_confirmation: tool.requires_user_confirmation ?? false,
+            requires_user_confirmation:
+              tool.requires_user_confirmation ?? false,
           })) ?? null,
       })),
     openapi_configs: tools
@@ -64,7 +67,8 @@ export function toToolsConfig(
         openapi_connection_id: t.settings?.openapi_connection_id ?? t.name,
         allowed_tools: t.settings?.allowed_tools ?? null,
         load_mode: t.settings?.load_mode ?? undefined,
-        requires_user_confirmation: t.settings?.requires_user_confirmation ?? false,
+        requires_user_confirmation:
+          t.settings?.requires_user_confirmation ?? false,
       })),
     builtin_tools: tools
       .filter((t): t is CodeToolConfig => t.type === "code")
@@ -73,7 +77,8 @@ export function toToolsConfig(
         disabled_methods: Object.fromEntries(
           (t.settings?.disabled_methods ?? []).map((method) => [method, false])
         ),
-        requires_user_confirmation: t.settings?.requires_user_confirmation ?? false,
+        requires_user_confirmation:
+          t.settings?.requires_user_confirmation ?? false,
         ...toModelIds(t.settings ?? {}),
       })),
     carried_tools: tools.filter((t) => !FORM_TOOL_TYPES.has(t.type)),
@@ -109,6 +114,8 @@ export function fromAgent(agent: AgentResponse): AgentFormValues {
     description: agent.description ?? "",
     instruction: agent.instruction ?? "",
     model_id: agent.model_id ?? "",
+    client_id: agent.client_id ?? "",
+    reasoning_effort: agent.reasoning_effort ?? "",
     tools_config: toToolsConfig(agent.tools ?? []),
     planning: agent.planning ?? false,
     a2ui_enabled: agent.a2ui_enabled ?? false,
@@ -159,8 +166,7 @@ export function toToolsPayload(
       name: builtin.tool_name,
       settings: {
         disabled_methods: disabled?.length ? disabled : null,
-        requires_user_confirmation:
-          builtin.requires_user_confirmation ?? null,
+        requires_user_confirmation: builtin.requires_user_confirmation ?? null,
         ...toModelIds(builtin),
       },
     });
@@ -176,7 +182,15 @@ function toAgentBody(input: AgentFormValues) {
     name: input.name,
     description: input.description,
     instruction: input.instruction,
-    model_id: input.model_id,
+    model_id: input.client_id ? "" : input.model_id,
+    client_id: input.client_id || null,
+    // A runner's CLI takes a level, not a token budget.
+    ...(input.client_id
+      ? {
+          reasoning_effort: input.reasoning_effort || null,
+          reasoning_max_tokens: null,
+        }
+      : {}),
     tools: toToolsPayload(input.tools_config),
     planning: input.planning,
     a2ui_enabled: input.a2ui_enabled,

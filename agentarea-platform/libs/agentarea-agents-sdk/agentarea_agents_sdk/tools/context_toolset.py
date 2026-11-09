@@ -10,6 +10,10 @@ writing back to it is a separate, explicit capability.
 
 from __future__ import annotations
 
+from typing import Annotated
+
+from pydantic import Field
+
 from .decorator_tool import Toolset, tool_method
 from .file_toolset import InMemoryStorage, StorageClient
 from .tool_authz import unrestricted
@@ -25,7 +29,10 @@ def _resolve_context_path(path: str) -> str:
 @toolset(
     namespace="agentarea/context",
     display_name="Organization Context",
-    description="Read files from the organization's durable context store (read-only).",
+    description=(
+        "Read the organization library: shared reference files the organization keeps "
+        "for every task (read-only)."
+    ),
     category="utility",
     plane="runtime",
     requires_user_confirmation=False,
@@ -53,11 +60,16 @@ class ContextToolset(Toolset):
 
     @tool_method(effect="read")
     @unrestricted("read-only files under the prefix the worker injects for this run")
-    async def list_org_files(self, prefix: str = "") -> str:
+    async def list_org_files(
+        self,
+        prefix: Annotated[
+            str, Field(description="Only paths starting with this; empty lists all.")
+        ] = "",
+    ) -> str:
         """List files in the organization library (shared, read-only).
 
         These are the organization's durable shared files, distinct from your
-        own task files (``file_*`` tools).
+        own task files (the ``files`` tool).
 
         Args:
             prefix: Optional path prefix to filter by.
@@ -78,7 +90,9 @@ class ContextToolset(Toolset):
 
     @tool_method(effect="read")
     @unrestricted("read-only files under the prefix the worker injects for this run")
-    async def read_org_file(self, path: str) -> str:
+    async def read_org_file(
+        self, path: Annotated[str, Field(description="Path as list_org_files returns it.")]
+    ) -> str:
         """Read a text file from the organization library (shared, read-only).
 
         Args:

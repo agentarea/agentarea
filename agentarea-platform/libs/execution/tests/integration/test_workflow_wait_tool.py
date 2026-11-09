@@ -30,7 +30,6 @@ from agentarea_execution.models import (
     WorkflowEventsResult,
 )
 from agentarea_execution.testing import TaskLogFake, make_record_activity
-from agentarea_execution.workflows.agent.wait import WAIT_MAX_SECONDS
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from temporalio import activity
 from temporalio.api.enums.v1 import EventType
@@ -43,6 +42,8 @@ _llm_requests: list[LLMCallRequest] = []
 _llm_script: list[Callable[[LLMCallRequest], dict[str, Any]]] = []
 _mcp_calls: list[str] = []
 _discovered_tools: list[dict[str, Any]] = []
+
+_LONG_WAIT = 3600
 
 
 def _function(name: str) -> dict[str, Any]:
@@ -279,7 +280,7 @@ async def test_wait_sleeps_on_a_durable_timer_and_reports_the_full_wait():
 
 @pytest.mark.asyncio
 async def test_a_user_message_wakes_the_wait_early():
-    _llm_script.extend([_wait_turn(WAIT_MAX_SECONDS), _complete_turn])
+    _llm_script.extend([_wait_turn(_LONG_WAIT), _complete_turn])
 
     async def drive(handle):
         for _ in range(200):
@@ -300,7 +301,7 @@ async def test_a_user_message_wakes_the_wait_early():
     assert len(finished) == 1
     assert finished[0]["data"]["success"] is True
     assert finished[0]["data"]["woken_by"] == "user_message"
-    assert finished[0]["data"]["waited_seconds"] < WAIT_MAX_SECONDS
+    assert finished[0]["data"]["waited_seconds"] < _LONG_WAIT
 
     second_turn = _TASK_LOG.messages(_llm_requests[1])
     tool_index = next(i for i, m in enumerate(second_turn) if m.get("tool_call_id") == "call_wait")
@@ -309,7 +310,37 @@ async def test_a_user_message_wakes_the_wait_early():
     assert second_turn[tool_index + 1]["content"] == "the render finished, check now"
 
 
-@pytest.mark.parametrize("seconds", [0, WAIT_MAX_SECONDS + 1, "60", True, 1.5])
+@pytest.mark.asyncio
+async def test_a_wait_of_an_hour_is_one_durable_timer():
+    _llm_script.extend([_wait_turn(_LONG_WAIT, "remind the user"), _complete_turn])
+
+    result, history = await _run()
+
+    assert result.success is True
+    timers = [
+        event.timer_started_event_attributes.start_to_fire_timeout.ToTimedelta()
+        for event in history.events
+        if event.event_type == EventType.EVENT_TYPE_TIMER_STARTED
+    ]
+    assert timedelta(seconds=_LONG_WAIT) in timers
+    finished = _wait_events("tool.result")
+    assert [e["data"]["waited_seconds"] for e in finished] == [_LONG_WAIT]
+
+
+@pytest.mark.asyncio
+async def test_a_wait_past_the_end_of_the_run_is_rejected_with_the_time_left():
+    _llm_script.extend([_wait_turn(3 * _LONG_WAIT), _complete_turn])
+
+    result, _history = await _run()
+
+    assert result.success is True
+    assert _wait_events("tool.call") == []
+    payload = json.loads(_wait_tool_message(_llm_requests[1])["content"])
+    assert payload["status"] == "invalid_wait_arguments"
+    assert "this run ends in" in payload["error"]
+
+
+@pytest.mark.parametrize("seconds", [0, "60", True, 1.5])
 @pytest.mark.asyncio
 async def test_out_of_range_wait_is_rejected_to_the_model_without_a_timer(seconds):
     _llm_script.extend([_wait_turn(seconds), _complete_turn])
@@ -331,7 +362,7 @@ async def test_out_of_range_wait_is_rejected_to_the_model_without_a_timer(second
     tool_message = _wait_tool_message(_llm_requests[1])
     payload = json.loads(tool_message["content"])
     assert payload["status"] == "invalid_wait_arguments"
-    assert str(WAIT_MAX_SECONDS) in payload["error"]
+    assert "at least" in payload["error"]
 
 
 @pytest.mark.asyncio
@@ -339,7 +370,7 @@ async def test_cancelling_the_task_ends_the_wait_and_closes_its_tool_row():
     from temporalio.client import WorkflowFailureError
     from temporalio.exceptions import CancelledError
 
-    _llm_script.extend([_wait_turn(WAIT_MAX_SECONDS)])
+    _llm_script.extend([_wait_turn(_LONG_WAIT)])
 
     async def drive(handle):
         for _ in range(200):

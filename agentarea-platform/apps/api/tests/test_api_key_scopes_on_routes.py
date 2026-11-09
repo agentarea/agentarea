@@ -85,7 +85,7 @@ class _Stand:
             "aat_raw",
         )
         self.keys.get_token.return_value = SimpleNamespace(
-            created_by="alice", name="ci", token_prefix="aat_abc"
+            created_by="alice", name="ci", token_prefix="aat_abc", client_id=None
         )
         self.keys.revoke_token.return_value = True
         self.invitations = AsyncMock()

@@ -59,7 +59,7 @@ class _Resolver:
 
 
 def _service() -> tuple[TaskService, MagicMock]:
-    agent = MagicMock(id=uuid4(), model_id="gpt-4o-mini")
+    agent = MagicMock(id=uuid4(), model_id="gpt-4o-mini", client_id=None)
     agent.name = "stub-agent"
     agent_repo = MagicMock()
     agent_repo.get = AsyncMock(return_value=agent)

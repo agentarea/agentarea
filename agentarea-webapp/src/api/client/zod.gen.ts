@@ -105,6 +105,17 @@ export const zAgentCardSummary = z.object({
 });
 
 /**
+ * AgentClientSummary
+ */
+export const zAgentClientSummary = z.object({
+  default_model: z.string().nullable(),
+  id: z.uuid(),
+  kind: z.string(),
+  name: z.string(),
+  online: z.boolean(),
+});
+
+/**
  * AgentSpend
  */
 export const zAgentSpend = z.object({
@@ -147,20 +158,6 @@ export const zAnalyticsResponse = z.object({
   edition: z.string().nullable(),
   enabled: z.boolean(),
   install_id: z.string().nullable(),
-});
-
-/**
- * AnalyzeRequest
- *
- * Analyze a bundle into an import preview.
- *
- * Provide exactly one of ``source`` (pasted text) or ``source_url`` (a URL the
- * server fetches behind the SSRF guard). ``source_url`` is what a landing-page
- * deep-link (`/bundles/import?src=<url>`) uses for one-click installs.
- */
-export const zAnalyzeRequest = z.object({
-  source: z.string().nullish(),
-  source_url: z.string().nullish(),
 });
 
 /**
@@ -362,11 +359,15 @@ export const zBudgetPeriod = z.enum(["execution", "daily", "monthly"]);
  * An agent to create for the package.
  */
 export const zBundleAgent = z.object({
+  client: z.string().nullish(),
+  description: z.string().max(1000).optional().default(""),
   instruction: z.string().max(20000).optional().default(""),
   key: z.string().min(1),
   mcps: z.array(z.string()).optional(),
   model: z.string().nullish(),
   name: z.string().min(1).max(255),
+  reasoning_effort: z.string().nullish(),
+  reasoning_max_tokens: z.int().nullish(),
   skills: z.array(z.string()).optional(),
   toolsets: z.array(z.string()).optional(),
 });
@@ -419,8 +420,9 @@ export const zBundleChannel = z.object({
  */
 export const zBundleMcp = z.object({
   bindings: z.record(z.string(), z.string()).optional(),
+  catalog: z.string().max(255).nullish(),
   context_secret: z.string().nullish(),
-  json_spec: z.record(z.string(), z.unknown()),
+  json_spec: z.record(z.string(), z.unknown()).nullish(),
   key: z.string().min(1),
   name: z.string().min(1).max(255),
 });
@@ -469,9 +471,13 @@ export const zBundlePolicy = z.object({
  */
 export const zBundleSkill = z.object({
   content: z.string().nullish(),
+  files: z.record(z.string(), z.string()).nullish(),
   key: z.string().min(1),
   name: z.string().min(1).max(255),
-  source_type: z.enum(["content", "github"]).optional().default("content"),
+  source_type: z
+    .enum(["content", "files", "github"])
+    .optional()
+    .default("content"),
   source_url: z.string().nullish(),
 });
 
@@ -685,13 +691,17 @@ export const zClientRef = z.object({
  * ClientResponse
  */
 export const zClientResponse = z.object({
+  allow_domains: z.array(z.string()).optional().default([]),
   created_by: z.string(),
+  default_model: z.string().nullish(),
   description: z.string().nullable(),
   id: z.uuid(),
   kind: z.string(),
   mcp_endpoint_url: z.string().nullish(),
   mcp_instances: z.array(zClientMcpInstanceRef).optional().default([]),
+  models: z.array(z.record(z.string(), z.unknown())).nullish(),
   name: z.string(),
+  online: z.boolean().optional().default(false),
   openapi_connections: z
     .array(zClientOpenApiConnectionRef)
     .optional()
@@ -707,6 +717,8 @@ export const zClientResponse = z.object({
  * Patch payload for a client. Unset fields remain unchanged.
  */
 export const zClientUpdate = z.object({
+  allow_domains: z.array(z.string()).optional(),
+  default_model: z.string().max(255).nullish(),
   description: z.string().max(1000).nullish(),
   kind: z.string().max(32).optional(),
   name: z.string().min(1).max(255).optional(),
@@ -770,7 +782,6 @@ export const zCollectionUpdateRequest = z.object({
  */
 export const zContentSafetyPolicy = z.object({
   answer_check: zAnswerCheckPolicy.nullish(),
-  output_sanitizer_enabled: z.boolean().nullish(),
   prompt_injection_detection_enabled: z.boolean().nullish(),
 });
 
@@ -924,6 +935,10 @@ export const zEntityKind = z.enum([
  */
 export const zEntityStatus = z.enum([
   "will_create",
+  "will_update",
+  "unchanged",
+  "orphaned",
+  "changes_not_applied",
   "already_exists",
   "unsupported",
 ]);
@@ -1202,7 +1217,14 @@ export const zInputSecretValue = z.object({
 /**
  * InstallAction
  */
-export const zInstallAction = z.enum(["created", "reused", "skipped"]);
+export const zInstallAction = z.enum([
+  "created",
+  "updated",
+  "unchanged",
+  "orphaned",
+  "reused",
+  "skipped",
+]);
 
 /**
  * InstalledEntity
@@ -1210,6 +1232,7 @@ export const zInstallAction = z.enum(["created", "reused", "skipped"]);
 export const zInstalledEntity = z.object({
   action: zInstallAction,
   detail: z.string().nullish(),
+  fingerprint: z.string().nullish(),
   id: z.string().nullish(),
   key: z.string(),
   kind: zEntityKind,
@@ -1223,6 +1246,7 @@ export const zInstallResult = z.object({
   bundle_name: z.string(),
   entities: z.array(zInstalledEntity).optional(),
   installed_bundle_id: z.string().nullish(),
+  setup_values: z.record(z.string(), z.unknown()).optional(),
 });
 
 /**
@@ -1298,6 +1322,19 @@ export const zInvitationResponse = z.object({
  * IssueSeverity
  */
 export const zIssueSeverity = z.enum(["block", "warn"]);
+
+/**
+ * IssuedRunnerKey
+ */
+export const zIssuedRunnerKey = z.object({
+  created_at: z.iso.datetime(),
+  created_by: z.string(),
+  id: z.uuid(),
+  key: z.string(),
+  last_used_at: z.iso.datetime().nullable(),
+  name: z.string(),
+  prefix: z.string(),
+});
 
 /**
  * MCPAuthConfigCreateRequest
@@ -2085,6 +2122,8 @@ export const zAgentResponse = z.object({
   a2ui_enabled: z.boolean().nullish(),
   agent_type: z.string().optional().default("stateless"),
   answer_check: zAnswerCheckPolicy.nullish(),
+  client: zAgentClientSummary.nullish(),
+  client_id: z.uuid().nullish(),
   description: z.string().nullish(),
   id: z.uuid(),
   instruction: z.string().nullish(),
@@ -2121,6 +2160,7 @@ export const zAgentUpdate = z.object({
   agent_type: z.enum(["stateless", "stateful"]).optional(),
   answer_check: zAnswerCheckPolicy.nullish(),
   capabilities: z.array(z.string()).nullish(),
+  client_id: z.uuid().nullish(),
   description: z.string().max(1000).nullish(),
   instruction: z.string().max(20000).nullish(),
   model_id: z.string().nullish(),
@@ -2878,6 +2918,29 @@ export const zRunExecutionConfig = z.object({
 });
 
 /**
+ * RunnerIdentity
+ */
+export const zRunnerIdentity = z.object({
+  client_id: z.uuid(),
+  kind: z.string(),
+  workspace: z.string(),
+});
+
+/**
+ * RunnerKeyResponse
+ *
+ * A runner key of a client; the key itself is shown only when issued.
+ */
+export const zRunnerKeyResponse = z.object({
+  created_at: z.iso.datetime(),
+  created_by: z.string(),
+  id: z.uuid(),
+  last_used_at: z.iso.datetime().nullable(),
+  name: z.string(),
+  prefix: z.string(),
+});
+
+/**
  * RuntimeUsage
  *
  * What the workspace's runtime used this month; quantities, never a price.
@@ -3175,6 +3238,25 @@ export const zBundleInput = z.object({
 });
 
 /**
+ * AnalyzeRequest
+ *
+ * Analyze a bundle into an import preview.
+ *
+ * Provide exactly one of ``source`` (pasted text), ``source_url`` (a URL the
+ * server fetches behind the SSRF guard), ``files`` (an agent folder) or
+ * ``bundle`` (a canonical bundle, e.g. one edited after an earlier analyze).
+ * ``source_url`` is what a landing-page deep-link (`/bundles/import?src=<url>`)
+ * uses for one-click installs; ``files`` is what ``agentarea deploy`` sends.
+ */
+export const zAnalyzeRequest = z.object({
+  bundle: zBundleInput.nullish(),
+  files: z.record(z.string(), z.string()).nullish(),
+  setup_values: z.record(z.string(), z.unknown()).optional(),
+  source: z.string().nullish(),
+  source_url: z.string().nullish(),
+});
+
+/**
  * Bundle
  *
  * The canonical, fully-inlined package object.
@@ -3204,16 +3286,18 @@ export const zImportPreview = z.object({
   entities: z.array(zPreviewEntity).optional(),
   installable: z.boolean(),
   issues: z.array(zPreviewIssue).optional(),
+  plan_digest: z.string().nullish(),
   setup: z.array(zSetupField).optional(),
 });
 
 /**
  * InstallRequest
  *
- * Install a (previously analyzed, possibly edited) canonical bundle.
+ * Install a canonical bundle by the plan analyze showed for it.
  */
 export const zInstallRequest = z.object({
   bundle: zBundleInput,
+  plan_digest: z.string().min(1),
   setup_values: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -4305,6 +4389,7 @@ export const zAgentCreateRequest = z.object({
   a2ui_enabled: z.boolean().nullish(),
   agent_type: z.enum(["stateless", "stateful"]).optional().default("stateless"),
   answer_check: zAnswerCheckPolicy.nullish(),
+  client_id: z.uuid().nullish(),
   description: z.string().max(1000).optional().default(""),
   instruction: z.string().max(20000).optional().default(""),
   model_id: z.string().nullish(),
@@ -5003,6 +5088,22 @@ export const zOauthFinishV1OauthFinishPostResponse = zOAuthFinishResponse;
 export const zGetPricingCurrencyV1PricingCurrencyGetResponse =
   zPricingCurrencyResponse;
 
+export const zUploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutPath = z.object({
+  task_id: z.uuid(),
+  file_path: z.string(),
+});
+
+/**
+ * Successful Response
+ */
+export const zUploadTaskFileV1RunnerTasksTaskIdFilesFilePathPutResponse =
+  z.void();
+
+/**
+ * Successful Response
+ */
+export const zRunnerWhoamiV1RunnerWhoamiGetResponse = zRunnerIdentity;
+
 /**
  * Response List Workspaces V1 Workspaces Get
  *
@@ -5700,6 +5801,40 @@ export const zRemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsTo
  * Successful Response
  */
 export const zRemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponse =
+  z.void();
+
+export const zListRunnerKeysV1ClientsClientIdRunnerKeysGetPath = z.object({
+  client_id: z.uuid(),
+});
+
+/**
+ * Response List Runner Keys V1 Clients  Client Id  Runner Keys Get
+ *
+ * Successful Response
+ */
+export const zListRunnerKeysV1ClientsClientIdRunnerKeysGetResponse =
+  z.array(zRunnerKeyResponse);
+
+export const zIssueRunnerKeyV1ClientsClientIdRunnerKeysPostPath = z.object({
+  client_id: z.uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zIssueRunnerKeyV1ClientsClientIdRunnerKeysPostResponse =
+  zIssuedRunnerKey;
+
+export const zRevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeletePath =
+  z.object({
+    client_id: z.uuid(),
+    key_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zRevokeRunnerKeyV1ClientsClientIdRunnerKeysKeyIdDeleteResponse =
   z.void();
 
 export const zAddSkillToClientV1ClientsClientIdSkillsPostBody =

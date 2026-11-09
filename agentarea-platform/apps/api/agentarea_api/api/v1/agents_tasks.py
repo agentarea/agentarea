@@ -31,7 +31,7 @@ from agentarea_api.api.deps.services import (
 from agentarea_common.agent_status import AgentArchivedError
 from agentarea_common.artifacts import secure_download_headers
 from agentarea_common.auth.context import UserContext
-from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.dependencies import UserContextDep, admits_turn_token
 from agentarea_common.auth.route_authz import enforced_in_handler, requires, unrestricted
 from agentarea_common.base import ReadRepositoryFactoryDep
 from agentarea_common.base.pagination import MAX_OFFSET, MAX_PAGE
@@ -52,6 +52,7 @@ from agentarea_common.utils.types import UtcDatetime, utc_isoformat
 from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_common.workflow.executor import WorkflowStatus
 from agentarea_common.workspaces.lookup import workspace_api_prefix
+from agentarea_execution.models import RUNNER_CLIENT_METADATA_KEY
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.domain.model_kind import ModelKind
@@ -67,13 +68,14 @@ from agentarea_tasks.domain.exceptions import (
 from agentarea_tasks.domain.feed import feed_event
 from agentarea_tasks.domain.models import TaskProvenance
 from agentarea_tasks.domain.statuses import ENDED_TASK_STATUSES, TaskStatus
+from agentarea_tasks.harness import HarnessFiles
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.infrastructure.task_log import TaskFeedReader
 from agentarea_tasks.schemas.dto import RunCreate, RunExecutionConfig, require_future_instant
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from ._task_authority import (
@@ -1776,6 +1778,7 @@ def _normalize_live_sandbox_path(value: str, *, allow_empty: bool = False) -> st
         unrestricted("workspace member; the workspace-scoped repository is the boundary")
     ],
 )
+@admits_turn_token
 async def list_task_sandbox_files(
     agent_id: UUID,
     task_id: UUID,
@@ -1784,8 +1787,15 @@ async def list_task_sandbox_files(
     task_service: TaskService = Depends(get_read_task_service),
 ) -> SandboxFileListResponse:
     """Inspect regular files in the existing live sandbox without recreating it."""
-    await _verify_task_for_agent(task_service, agent_id, task_id)
+    task = await _verify_task_for_agent(task_service, agent_id, task_id)
     normalized_prefix = _normalize_live_sandbox_path(prefix, allow_empty=True)
+    if RUNNER_CLIENT_METADATA_KEY in (task.metadata or {}):
+        paths = await HarnessFiles.from_settings(user_context.workspace_id, task_id).list(
+            normalized_prefix
+        )
+        return SandboxFileListResponse(
+            items=[SandboxFileItem(path=path) for path in paths], total=len(paths)
+        )
     response = await _sandbox_manager_request(
         "GET",
         "/sandbox/files",
@@ -1812,6 +1822,7 @@ async def list_task_sandbox_files(
         unrestricted("workspace member; the workspace-scoped repository is the boundary")
     ],
 )
+@admits_turn_token
 async def read_task_sandbox_file(
     agent_id: UUID,
     task_id: UUID,
@@ -1820,8 +1831,22 @@ async def read_task_sandbox_file(
     task_service: TaskService = Depends(get_read_task_service),
 ):
     """Read one file from the existing live sandbox without recreating it."""
-    await _verify_task_for_agent(task_service, agent_id, task_id)
+    task = await _verify_task_for_agent(task_service, agent_id, task_id)
     normalized = _normalize_live_sandbox_path(file_path)
+    if RUNNER_CLIENT_METADATA_KEY in (task.metadata or {}):
+        found = await HarnessFiles.from_settings(user_context.workspace_id, task_id).get(normalized)
+        if found is None:
+            raise HTTPException(status_code=404, detail="Sandbox file not found")
+        body, content_type = found
+        return Response(
+            content=body,
+            media_type=content_type,
+            headers=secure_download_headers(
+                content_type=content_type,
+                filename=PurePosixPath(normalized).name,
+                fallback="artifact.bin",
+            ),
+        )
     client, response = await _sandbox_manager_stream(
         "/sandbox/file-content",
         params={

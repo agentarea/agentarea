@@ -1294,3 +1294,94 @@ class DiscoverToolProvidersResult(BaseModel):
     mcp_tool_routes: dict[str, McpToolRoute] = Field(default_factory=dict)
     success: bool = True
     error: str | None = None
+
+
+# Task metadata naming the client whose runner runs a task's turns; set when the task is created.
+RUNNER_CLIENT_METADATA_KEY = "runner_client_id"
+
+
+def runner_task_queue(client_id: str | UUID) -> str:
+    """The task queue a client's turns wait on; the API process holding its runner polls it."""
+    return f"runner-turns-{client_id}"
+
+
+class RunnerActor(BaseModel):
+    """Who a runner's turn acts for: a person, or the agent itself (ADR-0046)."""
+
+    type: Literal["user", "agent"]
+    id: str
+
+
+class RunnerTurnRequest(BaseModel):
+    """One turn of a task whose agent runs on a client's CLI (ADR-0051)."""
+
+    task_id: UUID
+    agent_id: UUID
+    workspace_id: str
+    iteration: int
+    # Distinguishes this attempt of the turn from one a lost runner left behind.
+    turn_key: str
+    message: str
+    # The sender of a follow-up; None for the first turn, which acts for whoever started the task.
+    actor: RunnerActor | None = None
+
+
+class RunnerTurnResult(BaseModel):
+    status: Literal["completed", "failed", "interrupted"]
+    response: str | None = None
+    error: str | None = None
+
+
+class RunnerTurnEvent(BaseModel):
+    """Something the CLI did in a turn, as the task log keeps it."""
+
+    seq: int
+    kind: Literal["message", "tool.call", "tool.result"]
+    item_id: str
+    name: str | None = None
+    text: str | None = None
+    model: str | None = None
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    output: str | None = None
+    success: bool | None = None
+    exit_code: int | None = None
+
+
+class RunnerApprovalAsk(BaseModel):
+    """The CLI waits for a person to allow a command, a file change or a tool."""
+
+    request_id: str
+    item_id: str | None = None
+    kind: str
+    tool_name: str
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    reason: str | None = None
+
+
+class RunnerSteerOutcome(BaseModel):
+    message_id: str
+    accepted: bool
+
+
+class RunnerTurnUpdate(BaseModel):
+    """What the runner of a turn reported since the last update, signalled to its run."""
+
+    turn_key: str
+    # Who the turn acts for, as the runner's side resolved it.
+    actor: RunnerActor | None = None
+    events: list[RunnerTurnEvent] = Field(default_factory=list)
+    approvals: list[RunnerApprovalAsk] = Field(default_factory=list)
+    steers: list[RunnerSteerOutcome] = Field(default_factory=list)
+
+
+class DeliverToRunnerRequest(BaseModel):
+    """A message, an approval answer or a pause for the runner holding a task's turn."""
+
+    client_id: str
+    task_id: str
+    turn_key: str
+    kind: Literal["steer", "decision", "pause"]
+    message_id: str | None = None
+    text: str | None = None
+    request_id: str | None = None
+    approved: bool | None = None

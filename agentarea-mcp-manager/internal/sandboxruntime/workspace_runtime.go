@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -187,7 +188,11 @@ func (r *WorkspaceRuntime) GetWorkspaceFile(ctx context.Context, req WorkspaceFi
 		return nil, err
 	}
 	defer release()
-	return r.base.SandboxFileGet(operationCtx, req.WorkspaceID, req.TaskID, req.Path)
+	result, err := r.base.SandboxFileGet(operationCtx, req.WorkspaceID, req.TaskID, req.Path)
+	if req.Ensure && errors.Is(err, sandboxcontract.ErrTaskWorkspaceGone) {
+		return nil, fmt.Errorf("%w: %s", sandboxcontract.ErrFileNotFound, req.Path)
+	}
+	return result, err
 }
 
 func (r *WorkspaceRuntime) OpenWorkspaceFile(ctx context.Context, req WorkspaceFileRead) (*FileDownload, error) {
@@ -198,6 +203,9 @@ func (r *WorkspaceRuntime) OpenWorkspaceFile(ctx context.Context, req WorkspaceF
 	download, err := r.base.SandboxFileDownload(operationCtx, req.WorkspaceID, req.TaskID, req.Path)
 	if err != nil {
 		release()
+		if req.Ensure && errors.Is(err, sandboxcontract.ErrTaskWorkspaceGone) {
+			return nil, fmt.Errorf("%w: %s", sandboxcontract.ErrFileNotFound, req.Path)
+		}
 		return nil, err
 	}
 	download.Content = &workspaceDemandReadCloser{source: download.Content, release: release}
@@ -210,7 +218,11 @@ func (r *WorkspaceRuntime) ListWorkspaceFiles(ctx context.Context, req Workspace
 		return nil, err
 	}
 	defer release()
-	return r.base.SandboxFileList(operationCtx, req.WorkspaceID, req.TaskID, req.Prefix)
+	result, err := r.base.SandboxFileList(operationCtx, req.WorkspaceID, req.TaskID, req.Prefix)
+	if req.Ensure && errors.Is(err, sandboxcontract.ErrTaskWorkspaceGone) {
+		return &sandboxcontract.FileListResponse{Paths: []string{}}, nil
+	}
+	return result, err
 }
 
 func (r *WorkspaceRuntime) beginWorkspaceFileDemand(
@@ -227,6 +239,9 @@ func (r *WorkspaceRuntime) beginWorkspaceFileDemand(
 	if err != nil {
 		return nil, nil, err
 	}
+	// An ensured demand has just bound and hydrated the sandbox under this fence, so a
+	// missing task directory then means nothing has been written yet (a task without
+	// inputs), not an expired sandbox: the reads above answer it as an empty workspace.
 	if demand.Ensure {
 		if err := r.EnsureWorkspace(operationCtx, demand.WorkspaceID, demand.TaskID); err != nil {
 			release()

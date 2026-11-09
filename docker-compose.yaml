@@ -222,6 +222,7 @@ services:
       # MCP Apps run in an iframe on a different origin than the webapp.
       - AGENTAREA_MCP_APPS_ORIGIN=${AGENTAREA_MCP_APPS_ORIGIN:-http://127.0.0.1:3000}
       - AGENTAREA_APP_ORIGIN=${AGENTAREA_APP_ORIGIN:-http://localhost:3000}
+      - AGENTAREA_SUPPORT_URL=${AGENTAREA_SUPPORT_URL:-https://github.com/agentarea/agentarea/issues}
     networks:
       - default
       - auth-network

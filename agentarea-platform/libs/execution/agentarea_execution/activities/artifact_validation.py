@@ -1,8 +1,9 @@
-"""Completion barrier: the files a task promises are persisted before it is done.
+"""Completion barrier: the files a task delivers are persisted before it is done.
 
 Content validity is the task/eval layer's call, not the runtime's. The one
-guarantee kept here is that whatever the final answer says it delivers actually
-leaves the sandbox before the sandbox goes away.
+guarantee kept here is that what a turn delivers -- every file in the sandbox's
+``outputs/`` folder, plus any path the completion declares -- actually leaves
+the sandbox before the sandbox goes away, however the turn ended.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from ..models import (
 )
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+OUTPUTS_DIR = "outputs"
 
 
 def _normalize_declared(raw_path: str) -> str:
@@ -88,9 +90,9 @@ async def validate_published_artifacts(
             )
         if path not in declared:
             declared.append(path)
-    if not declared:
-        return ArtifactValidationResult(state="passed", generation=0)
     if not manager_url or not auth_secret:
+        if not declared:
+            return ArtifactValidationResult(state="passed", generation=0)
         return _artifact_store_unavailable("artifact store authentication is not configured")
 
     client = http_client
@@ -100,6 +102,10 @@ async def validate_published_artifacts(
     issues: list[ArtifactValidationIssue] = []
     evidence: list[ArtifactValidationEvidence] = []
     try:
+        outputs = await _outputs_in_sandbox(client, manager_url, auth_secret, request)
+        if isinstance(outputs, ArtifactValidationResult):
+            return outputs
+        declared.extend(path for path in outputs if path not in declared)
         for path in declared:
             try:
                 response = await client.post(
@@ -129,6 +135,36 @@ async def validate_published_artifacts(
             state="failed", generation=0, evidence=evidence, issues=issues
         )
     return ArtifactValidationResult(state="passed", generation=0, evidence=evidence)
+
+
+async def _outputs_in_sandbox(
+    client: Any, manager_url: str, auth_secret: str, request: ArtifactValidationRequest
+) -> list[str] | ArtifactValidationResult:
+    """The files in the task sandbox's outputs folder; none when the task has no sandbox."""
+    try:
+        response = await client.get(
+            f"{manager_url.rstrip('/')}/sandbox/files",
+            params={
+                "workspace_id": request.workspace_id,
+                "task_id": request.task_id,
+                "list": OUTPUTS_DIR,
+                "ensure": "false",
+            },
+            headers={"Authorization": f"Bearer {auth_secret}"},
+        )
+    except httpx.RequestError:
+        return _artifact_store_unavailable("sandbox outputs could not be listed")
+    if response.status_code == 410:
+        return []
+    if response.status_code != 200:
+        return _artifact_store_unavailable(
+            f"sandbox outputs listing returned HTTP {response.status_code}"
+        )
+    try:
+        paths = [_normalize_declared(str(path)) for path in response.json()["paths"]]
+    except TypeError, ValueError, KeyError, WorkspaceValidationError:
+        return _artifact_store_unavailable("sandbox outputs listing returned an invalid response")
+    return [path for path in paths if path.startswith(f"{OUTPUTS_DIR}/")]
 
 
 def _artifact_publication_outcome(

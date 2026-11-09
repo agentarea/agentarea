@@ -164,7 +164,6 @@ function buildTaskPolicyDocument(
   if (rule.effect === "safety" && rule.target === "content") {
     document.content_safety = {
       prompt_injection_detection_enabled: Boolean(params.prompt_injection),
-      output_sanitizer_enabled: Boolean(params.output_sanitizer),
     };
   }
 

@@ -21,6 +21,8 @@ from agentarea_llm.domain.models import ModelKind
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 
 from agentarea_agents.application.approval_sync import (
+    apply_approval_targets,
+    approval_targets_for_agents,
     approval_targets_from_tools,
     release_unticked_approvals,
     strip_confirmation_flags,
@@ -62,6 +64,10 @@ class AgentPreset:
 
 class InvalidModelIdError(ValueError):
     """Raised when ``model_id`` does not resolve to a usable model instance."""
+
+
+class InvalidClientError(ValueError):
+    """Raised when ``client_id`` names no client the caller may run agents on."""
 
 
 class InvalidDelegateError(ValueError):
@@ -208,6 +214,30 @@ class AgentService(BaseCrudService[Agent]):
             resolved.append(installed.id)
         return resolved
 
+    async def _validate_client_id(self, client_id: UUID | None) -> UUID | None:
+        """A runner's client of this workspace the caller may use, or None for the platform loop."""
+        if client_id is None:
+            return None
+        from agentarea_common.auth.permission import PermissionService
+        from agentarea_common.di.container import resolve
+        from agentarea_mcp.domain.client_models import RUNNER_KINDS
+        from agentarea_mcp.infrastructure.client_repository import ClientRepository
+
+        client = await self.repository_factory.create_repository(ClientRepository).get_by_id(
+            client_id
+        )
+        if (
+            client is None
+            or client.kind not in RUNNER_KINDS
+            or not await resolve(PermissionService).check(
+                self._user_context.graph_subject, "use", "client", str(client_id)
+            )
+        ):
+            raise InvalidClientError(
+                f"Client '{client_id}' is no Codex or Claude Code client of this workspace"
+            )
+        return client.id
+
     async def _validate_model_id(self, model_id: str | None) -> str | None:
         """Resolve ``model_id`` to a model instance, or reject it.
 
@@ -229,6 +259,56 @@ class AgentService(BaseCrudService[Agent]):
                 "must be a chat model."
             )
         return model_id
+
+    async def validate_config(
+        self,
+        model_id: str | None,
+        tools: list[dict[str, Any]],
+        client_id: UUID | None = None,
+        reasoning_effort: str | None = None,
+        reasoning_max_tokens: int | None = None,
+    ) -> None:
+        """Refuse what create_agent would refuse about the model, code tools, client and
+        reasoning, writing nothing; and a reasoning level the model does not take,
+        which every run of the agent would refuse.
+        """
+        await self._validate_tool_models(tools)
+        model_id = await self._validate_model_id(model_id)
+        await self._validate_client_id(client_id)
+        if reasoning_effort and reasoning_max_tokens:
+            raise ReasoningConflictError()
+        if reasoning_effort and model_id:
+            await self._validate_reasoning_effort(model_id, reasoning_effort)
+
+    async def _validate_reasoning_effort(self, model_id: str, effort: str) -> None:
+        from agentarea_agents_sdk.models.provider_profiles import check_effort_supported
+
+        instance = await ModelInstanceRepository(
+            session=self.repository_factory.session, user_context=self._user_context
+        ).get_by_id(UUID(model_id))
+        if instance is None:
+            raise InvalidModelIdError(
+                f"Model instance '{model_id}' does not exist in this workspace."
+            )
+        spec = instance.model_spec
+        levels = (
+            spec.reasoning_efforts
+            or instance.provider_config.provider_spec.profile().reasoning_efforts
+        )
+        check_effort_supported(effort, levels, model_name=spec.model_name)
+
+    async def with_approval_flags(
+        self, agent_id: UUID, tools: builtins.list[dict]
+    ) -> builtins.list[dict]:
+        """``tools`` with the approval flags the agent's rules set, as its editor shows them.
+
+        An update that saves them keeps every approval as it is: a tool sent
+        without its flag reads as unticked, which removes the rule.
+        """
+        targets = await approval_targets_for_agents(
+            self.repository_factory.session, self._user_context, [agent_id]
+        )
+        return apply_approval_targets(tools, targets.get(agent_id, set()))
 
     async def _model_instance_kind(self, model_id: str, setting: str) -> str:
         """The kind of the workspace's model instance ``model_id``, or reject it."""
@@ -548,6 +628,7 @@ class AgentService(BaseCrudService[Agent]):
 
         slug = await self._resolve_unique_slug(payload.name)
         model_id = await self._validate_model_id(payload.model_id)
+        client_id = await self._validate_client_id(payload.client_id)
         skill_ids = await self._resolve_skills(payload.skill_ids)
 
         agent = Agent(
@@ -556,6 +637,7 @@ class AgentService(BaseCrudService[Agent]):
             description=payload.description,
             instruction=payload.instruction,
             model_id=model_id,
+            client_id=client_id,
             tools=tools,
             planning=payload.planning,
             a2ui_enabled=payload.a2ui_enabled,
@@ -738,6 +820,8 @@ class AgentService(BaseCrudService[Agent]):
             agent.instruction = patch["instruction"]
         if "model_id" in patch:
             agent.model_id = await self._validate_model_id(patch["model_id"])
+        if "client_id" in patch:
+            agent.client_id = await self._validate_client_id(patch["client_id"])
         approval_targets: set[str] = set()
         if tools_edited:
             approval_targets, agent.tools = self._lift_approval_toggles(edited_tools)

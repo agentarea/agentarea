@@ -51,6 +51,16 @@ _ANTHROPIC_STREAM_ERROR_STATUS = {
     "overloaded_error": 529,
 }
 
+# OpenAI-compatible providers name a mid-stream failure with a string code.
+_STREAM_ERROR_CODE_STATUS = {
+    "invalid_api_key": 401,
+    "insufficient_quota": 402,
+    "rate_limit_exceeded": 429,
+    "context_length_exceeded": 400,
+    "content_filter": 400,
+    "server_error": 502,
+}
+
 # Anthropic's stop_reason in OpenAI's finish_reason vocabulary.
 _ANTHROPIC_FINISH_REASON = {
     "end_turn": "stop",
@@ -70,6 +80,34 @@ class LLMProviderHTTPError(RuntimeError):
         super().__init__(f"Provider returned HTTP {status_code}: {provider_message}")
         self.status_code = status_code
         self.provider_message = provider_message
+
+
+def _raise_stream_error(chunk: dict[str, Any]) -> None:
+    """Raise for a chunk that reports the call failed after the stream opened.
+
+    OpenRouter relays an upstream failure as an `error` object or finish_reason "error"
+    in a chunk. That is a failed call, not an empty reply. Its status is the numeric
+    code, or the one a known string code stands for, else a 502 from upstream; a
+    string code stays in the message for the failure classifier.
+    """
+    error = chunk.get("error")
+    choices = chunk.get("choices") or []
+    if not error and not (choices and choices[0].get("finish_reason") == "error"):
+        return
+    details = error if isinstance(error, dict) else {}
+    code = details.get("code")
+    if isinstance(code, int) and 400 <= code <= 599:
+        status = code
+    else:
+        status = _STREAM_ERROR_CODE_STATUS.get(code, 502) if isinstance(code, str) else 502
+    message = str(
+        details.get("message")
+        or (error if isinstance(error, str) else None)
+        or "the provider ended the stream with an error"
+    )
+    if isinstance(code, str) and code:
+        message = f"{code}: {message}"
+    raise LLMProviderHTTPError(status, message)
 
 
 def _error_body_message(body: bytes) -> str:
@@ -618,6 +656,8 @@ class LLMModel:
                         chunk = json.loads(data_str)
                     except json.JSONDecodeError:
                         continue
+
+                    _raise_stream_error(chunk)
 
                     usage_data = chunk.get("usage")
                     if usage_data:

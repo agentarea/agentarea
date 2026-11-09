@@ -4,18 +4,18 @@ import EmptyState from "@/components/EmptyState";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import FormError from "@/components/FormError";
 import {
+  getAllTasks,
   listAgents,
-  listModelInstances,
   listMCPServerInstances,
   listMCPServers,
+  listModelInstances,
   listOpenAPIConnections,
-  getAllTasks,
 } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
 import {
-  type OpenApiConnectionRef,
   resolveAgentToolIcons,
+  type OpenApiConnectionRef,
 } from "@/utils/agentToolIcons";
 import AgentsList from "./AgentsList";
 
@@ -88,12 +88,16 @@ export default async function AgentsContent({
     (openApiConnections as OpenApiConnectionRef[]) ?? [];
 
   // Count active (running) tasks per agent
-  const taskList = (tasks ?? []) as Array<{ status?: string; agent_id?: string }>;
+  const taskList = (tasks ?? []) as Array<{
+    status?: string;
+    agent_id?: string;
+  }>;
   const activeTaskCountByAgent: Record<string, number> = {};
   for (const task of taskList) {
     if (task.status === "running" && task.agent_id) {
       const agentId = String(task.agent_id);
-      activeTaskCountByAgent[agentId] = (activeTaskCountByAgent[agentId] ?? 0) + 1;
+      activeTaskCountByAgent[agentId] =
+        (activeTaskCountByAgent[agentId] ?? 0) + 1;
     }
   }
 
@@ -110,14 +114,22 @@ export default async function AgentsContent({
 
   const enrichedAgents = agentList.map((agent) => {
     const model = models.find((m) => m.id === agent.model_id);
-    const model_info = model
+    // An agent on a client's runner runs the CLI's model, not a platform model instance.
+    const model_info = agent.client
       ? {
-          provider_name: model.provider_name || undefined,
-          provider_icon_url: model.provider_icon_url || undefined,
-          model_display_name: model.model_display_name || undefined,
-          config_name: model.config_name || undefined,
+          provider_name: agent.client.name,
+          provider_icon_url: undefined,
+          model_display_name: agent.client.default_model || undefined,
+          config_name: undefined,
         }
-      : undefined;
+      : model
+        ? {
+            provider_name: model.provider_name || undefined,
+            provider_icon_url: model.provider_icon_url || undefined,
+            model_display_name: model.model_display_name || undefined,
+            config_name: model.config_name || undefined,
+          }
+        : undefined;
     const active_task_count = activeTaskCountByAgent[String(agent.id)] ?? 0;
     const tool_icons = resolveAgentToolIcons(agent, {
       mcpInstances: mcpInstanceList,
@@ -179,18 +191,10 @@ export default async function AgentsContent({
     return (
       <div className="space-y-4">
         {partialErrorBlock}
-        <AgentsList
-          initialAgents={filteredAgents}
-          viewMode={viewMode}
-        />
+        <AgentsList initialAgents={filteredAgents} viewMode={viewMode} />
       </div>
     );
   }
 
-  return (
-    <AgentsList
-      initialAgents={filteredAgents}
-      viewMode={viewMode}
-    />
-  );
+  return <AgentsList initialAgents={filteredAgents} viewMode={viewMode} />;
 }

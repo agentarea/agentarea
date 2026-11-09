@@ -5,6 +5,7 @@ import logging
 import types
 from collections.abc import Callable
 from typing import (
+    Annotated,
     Any,
     ClassVar,
     TypeVar,
@@ -278,7 +279,7 @@ class Toolset:
                         properties[f"{method_name}_{param_name}"] = {
                             **param_schema,
                             "description": (
-                                f"[For {method_name}] {param_schema.get('description', '')}"
+                                f"[For {method_name}] {param_schema.get('description', '')}".strip()
                             ),
                         }
 
@@ -289,7 +290,7 @@ class Toolset:
     def _generate_method_schema(self, method: Callable) -> dict[str, Any]:
         """Generate schema for a single method."""
         sig = inspect.signature(method)
-        type_hints = get_type_hints(method)
+        type_hints = get_type_hints(method, include_extras=True)
 
         properties = {}
         required = []
@@ -308,7 +309,13 @@ class Toolset:
 
     def _get_parameter_schema(self, param: inspect.Parameter, type_hint: Any) -> dict[str, Any]:
         """Generate schema for a single parameter."""
-        schema: dict[str, Any] = {"description": f"Parameter: {param.name}"}
+        schema: dict[str, Any] = {}
+        if get_origin(type_hint) is Annotated:
+            type_hint, *metadata = get_args(type_hint)
+            for item in metadata:
+                description = item if isinstance(item, str) else getattr(item, "description", None)
+                if description:
+                    schema["description"] = description
         origin = get_origin(type_hint)
         args = get_args(type_hint)
         union_args = args if origin in (types.UnionType, Union) else ()

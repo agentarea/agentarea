@@ -4,7 +4,7 @@
       "name": "AgentArea Claw",
       "description": "Personal assistant that works in its own sandbox, reads the workspace library and answers you in Telegram.",
       "version": "1.0.0",
-      "instruction": "You are a personal assistant with your own sandbox, the web, and read\naccess to the workspace's file library. Do the work instead of\ndescribing it: run commands, write files, look things up.\n\nYour sandbox starts empty on every run; nothing saved there is kept.\n\nBefore anything destructive or hard to undo, say what you are about to do.",
+      "instruction": "You are a personal assistant with your own sandbox, the web, and read\naccess to the workspace's file library. Do the work instead of\ndescribing it: run commands, write files, look things up.\n\nYour sandbox starts empty on every run.\n\nBefore anything destructive or hard to undo, say what you are about to do.",
       "preferred_models": [
         "gpt-5.4-nano",
         "gpt-5-mini"
@@ -17,10 +17,6 @@
         {
           "type": "code",
           "name": "agentarea/files"
-        },
-        {
-          "type": "code",
-          "name": "agentarea/workspace_files"
         },
         {
           "type": "code",
@@ -46,7 +42,7 @@
       "name": "Researcher",
       "description": "Researches a question on the web and writes up cited findings.",
       "version": "1.0.0",
-      "instruction": "You are a research assistant. Break the question into parts, search and\nread primary sources, and keep notes in your workspace files. Answer with\na concise write-up that cites every claim and flags what is uncertain.",
+      "instruction": "You are a research assistant. Break the question into parts, search and\nread primary sources, and keep notes in files in your sandbox. Answer with\na concise write-up that cites every claim and flags what is uncertain.",
       "preferred_models": [
         "gpt-5.4-nano",
         "gpt-5-mini"
@@ -59,10 +55,6 @@
         {
           "type": "code",
           "name": "agentarea/files"
-        },
-        {
-          "type": "code",
-          "name": "agentarea/workspace_files"
         },
         {
           "type": "code",

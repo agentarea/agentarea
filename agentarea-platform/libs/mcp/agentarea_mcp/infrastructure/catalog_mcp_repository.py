@@ -62,6 +62,7 @@ class CatalogMcpRepository:
         tag: str | None = None,
         search: str | None = None,
         item_ids: Collection[str] | None = None,
+        external_id: str | None = None,
     ) -> tuple[list[CatalogMcpItem], int]:
         """Page the catalog in SQL, returning ``(items, total_matching)``.
 
@@ -87,6 +88,9 @@ class CatalogMcpRepository:
         if search is not None:
             where.append("(ri.name ILIKE :search OR COALESCE(ri.description, '') ILIKE :search)")
             params["search"] = f"%{search}%"
+        if external_id is not None:
+            where.append("ri.external_id = :external_id")
+            params["external_id"] = external_id
 
         # Only the fixed clauses above are interpolated; every value is bound.
         where_sql = " AND ".join(where)
@@ -127,6 +131,17 @@ class CatalogMcpRepository:
         result = await self.session.execute(query, {"item_id": item_id})
         row = result.fetchone()
         return self._row_to_item(row, registry_url=None) if row else None
+
+    async def get_by_external_id(self, external_id: str) -> CatalogMcpItem | None:
+        """The catalog item published under ``external_id``, first in browse order.
+
+        Several registries may publish the same server; the one browsing lists
+        first is the one a member would have picked.
+        """
+        items, _ = await self.list_page(
+            limit=1, offset=0, exclude_item_ids=(), external_id=external_id
+        )
+        return items[0] if items else None
 
     @staticmethod
     def _row_to_item(row: Any, registry_url: str | None) -> CatalogMcpItem:

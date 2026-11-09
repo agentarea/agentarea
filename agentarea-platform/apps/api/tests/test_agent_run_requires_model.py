@@ -74,6 +74,7 @@ def _agent(*, model_id):
     agent = MagicMock(id=uuid4())
     agent.name = "Data Analyst"
     agent.model_id = model_id
+    agent.client_id = None
     return agent
 
 

@@ -111,7 +111,7 @@ def test_the_rewrite_names_what_is_wrong_and_takes_an_instruction():
 
 def test_the_check_is_off_unless_the_policy_or_the_agent_turns_it_on():
     assert answer_check_config(None, None) is None
-    assert answer_check_config({"content_safety": {"output_sanitizer_enabled": True}}, None) is None
+    assert answer_check_config({"content_safety": {"prompt_injection_enabled": True}}, None) is None
     off = {"content_safety": {"answer_check": {"enabled": False}}}
     assert answer_check_config(off, None) is None
     on = {"content_safety": {"answer_check": {"enabled": True, "language": "ru"}}}

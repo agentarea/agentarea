@@ -1,6 +1,5 @@
-import { getLocale, getTranslations } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
-import { policyToRule } from "@/app/w/[workspace]/(main)/policies/components/policy-rules";
 import { resolveAgentIdentity } from "@/lib/agent-identity";
 import {
   getAgent,
@@ -9,7 +8,7 @@ import {
   listMCPServerInstances,
   listMCPServers,
   listOpenAPIConnections,
-  listPolicies,
+  previewEffectivePolicy,
   type TaskResponse,
 } from "@/lib/api";
 import {
@@ -19,10 +18,9 @@ import {
 } from "@/lib/api-dashboard";
 import { apiErrorMessage, isApiNotFound } from "@/lib/api-errors";
 import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
+import { withReasoning } from "@/lib/runner-models";
 import { getAgentStatusPresentation } from "@/lib/status";
-import { getViewerCapabilities } from "@/lib/workspace-context";
 import { agentSkillViews } from "@/types/agent";
-import type { Policy, PolicyEffect } from "@/types/policies";
 import {
   resolveAgentToolIcons,
   type OpenApiConnectionRef,
@@ -33,12 +31,13 @@ import {
   type AgentOverviewModel,
 } from "./AgentOverviewView";
 import { CatalogAgentPreview } from "./CatalogAgentPreview";
+import { summarizeEffectivePolicy } from "./effectiveGuardrails";
 
 const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
 
 /**
  * Data container for the agent overview: loads the agent, its tasks, spend,
- * registry-resolved tools and agent-scoped policies, then hands a plain view
+ * registry-resolved tools and the effective policy, then hands a plain view
  * model to {@link AgentOverviewView}.
  */
 export async function AgentOverview({ agentId }: { agentId: string }) {
@@ -62,10 +61,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
 
   // Use the resolved UUID for endpoints that require it (list_agent_tasks, etc.).
   const realId: string = agent.id;
-  const [{ canAdminister }, t] = await Promise.all([
-    getViewerCapabilities(),
-    getTranslations("AgentOverviewPage"),
-  ]);
+  const t = await getTranslations("AgentOverviewPage");
 
   // A section whose data failed to load says so instead of rendering zeros.
   const thrown = (label: string) => (error: unknown) => {
@@ -94,11 +90,9 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     listOpenAPIConnections().catch(
       thrown("Failed to load OpenAPI connections")
     ),
-    canAdminister
-      ? listPolicies({ subject_type: "agent", subject_id: realId }).catch(
-          thrown("Failed to load agent policies")
-        )
-      : null,
+    previewEffectivePolicy({ agent_id: realId }).catch(
+      thrown("Failed to load effective policy")
+    ),
     agent.model_id
       ? getModelInstance(agent.model_id).catch((error: unknown) => ({
           data: undefined,
@@ -173,35 +167,17 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
       (openApiConnectionsRes?.data as OpenApiConnectionRef[]) ?? [],
   });
 
-  // Agent-scoped governance rules, summarised by effect. Never guess a
-  // currency: a failed lookup threads through as null (see @/lib/money for
-  // how that renders) rather than assuming USD.
-  const locale = await getLocale();
+  // Never guess a currency: a failed lookup threads through as null (see
+  // @/lib/money for how that renders) rather than assuming USD.
   const currency = pricingCurrency.ok ? pricingCurrency.currency : null;
-  let policies: AgentOverviewModel["policies"];
-  if (!policiesRes) {
-    policies = { status: "adminOnly" };
-  } else if (policiesRes.error || !policiesRes.data) {
-    policies = {
-      status: "error",
-      message: apiErrorMessage(policiesRes, t("guardrailsLoadFailed")),
-    };
-  } else {
-    const policyRules = (policiesRes.data as Policy[])
-      .filter((p) => p.enabled !== false)
-      .map((p) => policyToRule(p, currency, locale));
-    policies = {
-      status: "ok",
-      count: policyRules.length,
-      effectCounts: policyRules.reduce<Partial<Record<PolicyEffect, number>>>(
-        (acc, rule) => {
-          acc[rule.effect] = (acc[rule.effect] ?? 0) + 1;
-          return acc;
-        },
-        {}
-      ),
-    };
-  }
+  const effectivePolicy = policiesRes.data?.effective_policy;
+  const policies: AgentOverviewModel["policies"] =
+    policiesRes.error || !effectivePolicy
+      ? {
+          status: "error",
+          message: apiErrorMessage(policiesRes, t("guardrailsLoadFailed")),
+        }
+      : { status: "ok", ...summarizeEffectivePolicy(effectivePolicy) };
 
   const { hue, iconKey } = resolveAgentIdentity(agent);
 
@@ -212,16 +188,28 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     hue,
     iconKey,
     status: getAgentStatusPresentation(agent.status || "inactive"),
-    model: {
-      label:
-        modelInstance?.model_display_name ||
-        modelInstance?.name ||
-        modelInstance?.config_name ||
-        agent.model_id ||
-        null,
-      provider: modelInstance?.provider_name || null,
-      iconUrl: modelInstance?.provider_icon_url || null,
-    },
+    // An agent on a client's runner runs the CLI's model, not a platform model instance.
+    model: agent.client
+      ? {
+          label: withReasoning(
+            agent.client.default_model,
+            agent.reasoning_effort
+          ),
+          provider: agent.client.name,
+          iconUrl: null,
+          client: agent.client,
+        }
+      : {
+          label:
+            modelInstance?.model_display_name ||
+            modelInstance?.name ||
+            modelInstance?.config_name ||
+            agent.model_id ||
+            null,
+          provider: modelInstance?.provider_name || null,
+          iconUrl: modelInstance?.provider_icon_url || null,
+          client: null,
+        },
     triggers: {
       count: triggers.length,
       titles: Array.from(new Set(triggers.map((u) => u.title).filter(Boolean))),

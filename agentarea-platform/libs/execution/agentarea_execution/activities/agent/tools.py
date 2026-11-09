@@ -516,7 +516,7 @@ def make_tools_activities(
 
                     # Build runtime kwargs for tools that need request context.
                     extra_kwargs: dict = {}
-                    if tool_name in ("agentarea/files", "agentarea/workspace_files"):
+                    if tool_name == "agentarea/files":
                         # The file tool must write to the same filesystem bash
                         # (agentarea/shell) runs in, so code the agent saves is
                         # visible to the commands it runs. SandboxFileStore
@@ -535,16 +535,6 @@ def make_tools_activities(
                             ),
                             "workspace_id": str(request.workspace_id),
                         }
-                        if tool_name == "agentarea/workspace_files":
-                            from agentarea_common.workspaces.lookup import workspace_slug_for
-
-                            extra_kwargs["workspace_slug"] = await workspace_slug_for(
-                                str(request.workspace_id)
-                            )
-                            # Its files are this task's, so links name the task.
-                            extra_kwargs["task_id"] = (
-                                str(request.task_id) if request.task_id else ""
-                            )
                     elif tool_name == "agentarea/context":
                         # Read-only access to the org context store (tier 1).
                         # ArtifactService is workspace-scoped, so the task can

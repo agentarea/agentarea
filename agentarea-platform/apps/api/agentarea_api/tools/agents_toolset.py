@@ -11,8 +11,13 @@ import json
 from typing import Annotated, Any, cast
 from uuid import UUID
 
-from agentarea_agents.application.agent_service import AgentService, ReasoningConflictError
+from agentarea_agents.application.agent_service import (
+    AgentService,
+    InvalidClientError,
+    ReasoningConflictError,
+)
 from agentarea_agents.schemas.dto import (
+    CLIENT_ID_DESCRIPTION,
     REASONING_EFFORT_DESCRIPTION,
     REASONING_MAX_TOKENS_DESCRIPTION,
     AgentCreate,
@@ -147,9 +152,10 @@ class AgentsToolset(Toolset):
             str, Field(description="Agent name, 1-255 characters, unique in the workspace.")
         ],
         model_id: Annotated[
-            str,
+            str | None,
             Field(
-                description="Model instance id (UUID) the agent runs on, from `models_list_instances`."
+                description="Model instance id (UUID) the agent runs on, from "
+                "`models_list_instances`; null when `client_id` runs it on a CLI."
             ),
         ],
         tools: Annotated[
@@ -174,6 +180,10 @@ class AgentsToolset(Toolset):
         reasoning_max_tokens: Annotated[
             int | None, Field(description=REASONING_MAX_TOKENS_DESCRIPTION)
         ] = None,
+        client_id: Annotated[
+            str | None,
+            Field(description=f"{CLIENT_ID_DESCRIPTION} Client ids come from `clients_list`."),
+        ] = None,
     ) -> str:
         """Create a new agent.
 
@@ -190,6 +200,7 @@ class AgentsToolset(Toolset):
             agent_type=agent_type,
             reasoning_effort=reasoning_effort,
             reasoning_max_tokens=reasoning_max_tokens,
+            client_id=UUID(client_id) if client_id else None,
         )
         try:
             validate_code_tool_names(payload.tools)
@@ -197,7 +208,10 @@ class AgentsToolset(Toolset):
             raise ToolError(exc.detail) from exc
         async with platform_context() as (_s, _u, repo_factory, event_broker, _):
             service = _build_service(repo_factory, event_broker)
-            agent = await service.create_agent(payload)
+            try:
+                agent = await service.create_agent(payload)
+            except InvalidClientError as exc:
+                raise ToolError(str(exc)) from exc
             return json.dumps({"id": str(agent.id), "name": agent.name}, default=str)
 
     @tool_method(
@@ -240,6 +254,13 @@ class AgentsToolset(Toolset):
                 "setting; pass null to go back to the model's default."
             ),
         ] = cast(Any, MISSING),
+        client_id: Annotated[
+            str | None,
+            Field(
+                description=f"{CLIENT_ID_DESCRIPTION} Client ids come from `clients_list`. "
+                "Omit to keep the current one; pass null to run on the platform."
+            ),
+        ] = cast(Any, MISSING),
     ) -> str:
         """Update an existing agent.
 
@@ -261,6 +282,8 @@ class AgentsToolset(Toolset):
             patch["reasoning_effort"] = reasoning_effort
         if reasoning_max_tokens is not MISSING:
             patch["reasoning_max_tokens"] = reasoning_max_tokens
+        if client_id is not MISSING:
+            patch["client_id"] = client_id
         payload = AgentUpdate.model_validate(patch)
         try:
             validate_code_tool_names(payload.tools)
@@ -271,7 +294,7 @@ class AgentsToolset(Toolset):
             service = _build_service(repo_factory, event_broker)
             try:
                 agent = await service.update_agent(UUID(agent_id), payload)
-            except (AgentArchivedError, ReasoningConflictError) as exc:
+            except (AgentArchivedError, ReasoningConflictError, InvalidClientError) as exc:
                 raise ToolError(str(exc)) from exc
             if not agent:
                 raise ToolError("Agent not found")

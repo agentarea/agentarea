@@ -30,11 +30,11 @@ import {
   zCatalogConnectRequest,
   zCreateWorkspaceDirectoryRequest,
   zListSecretsV1SecretsGetResponse,
+  zModelSpecCreate,
   zOAuthAuthorizeResponse,
   zOAuthFinishResponse,
   zOAuthPreflightResponse,
   zProjectCreate,
-  zModelSpecCreate,
   zProjectUpdate,
   zProviderConfigCreate,
   zProviderConfigUpdate,
@@ -79,7 +79,6 @@ import {
   getAgentTaskStatus,
   getAgentWallet,
   getAgentWalletPayments,
-  getClient,
   getMCPServerInstance,
   getNetworkTopology,
   getOpenAPIConnection,
@@ -92,8 +91,6 @@ import {
   installAgent,
   installSkill,
   listAgents,
-  listAllTools,
-  listClientPlatformToolsets,
   listClients,
   listMCPAuthConfigs,
   listMCPServerInstances,
@@ -134,7 +131,6 @@ import {
   submitTaskInput,
   updateAgentWallet,
   updateAllSkills,
-  updateClient,
   updateInstalledSkill,
   updateMCPServerInstance,
   updateOpenAPIConnection,
@@ -602,7 +598,10 @@ export async function connectCatalogApiAction(
   if (!isUUID(itemId)) return { data: null, error: "Invalid ID" };
   const parsed = zCatalogConnectRequest.safeParse(body);
   if (!parsed.success) {
-    return { data: null, error: parsed.error.issues[0]?.message ?? "Invalid keys" };
+    return {
+      data: null,
+      error: parsed.error.issues[0]?.message ?? "Invalid keys",
+    };
   }
   const result = await connectCatalogApi(itemId, parsed.data);
   if (!result.data) {
@@ -650,14 +649,17 @@ export async function probeInstanceAuthAction(instanceId: string) {
  * they all filter the same way (`owner` set means the secret belongs to another
  * entity and is not reusable).
  */
-export async function listWorkspaceSecretsAction(): Promise<SecretResponse[]> {
+export async function listWorkspaceSecretsAction(): Promise<
+  { data: SecretResponse[]; error: null } | { data: null; error: string }
+> {
   const { data, error } = await listSecrets();
   if (error || !data) {
-    throw new Error(
-      apiErrorMessage({ error }, "Failed to load workspace secrets")
-    );
+    return {
+      data: null,
+      error: apiErrorMessage({ error }, "Failed to load workspace secrets"),
+    };
   }
-  return zListSecretsV1SecretsGetResponse.parse(data);
+  return { data: zListSecretsV1SecretsGetResponse.parse(data), error: null };
 }
 
 /**
@@ -800,27 +802,12 @@ export async function listClientsAction() {
   return await listClients();
 }
 
-export async function getClientAction(clientId: string) {
-  return await getClient(clientId);
-}
-
 export async function createClientAction(payload: {
   name: string;
   description?: string | null;
   kind?: string;
 }) {
   return await createClient(payload);
-}
-
-export async function updateClientAction(
-  clientId: string,
-  payload: {
-    name?: string;
-    description?: string | null;
-    kind?: string;
-  }
-) {
-  return await updateClient(clientId, payload);
 }
 
 export async function deleteClientAction(clientId: string) {
@@ -860,15 +847,6 @@ export async function removeMcpInstanceFromClientAction(
   mcpInstanceId: string
 ) {
   return await removeMcpInstanceFromClient(clientId, mcpInstanceId);
-}
-
-/** Tools an MCP instance last reported, without dialing it again. */
-export async function listMcpInstanceToolsAction(mcpInstanceId: string) {
-  return await listAllTools({ include: "mcp", mcpInstanceId });
-}
-
-export async function listClientPlatformToolsetsAction() {
-  return await listClientPlatformToolsets();
 }
 
 export async function addPlatformToolsetToClientAction(

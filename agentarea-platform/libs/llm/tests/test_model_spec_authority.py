@@ -28,6 +28,13 @@ FREE_MODEL = {
     "input_cost_per_token": 0.0,
     "output_cost_per_token": 0.0,
 }
+REPO_WRITES = (
+    "create",
+    "update",
+    "delete",
+    "upsert_by_provider_and_model_kwargs",
+    "upsert_many_by_provider_and_model",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -43,7 +50,7 @@ def _authorization():
 def _service(user_context: UserContext) -> tuple[ModelSpecService, MagicMock]:
     repo = MagicMock()
     repo.user_context = user_context
-    for method in ("create", "update", "delete", "upsert_by_provider_and_model_kwargs"):
+    for method in REPO_WRITES:
         setattr(repo, method, AsyncMock())
     return ModelSpecService(repo), repo
 
@@ -53,6 +60,7 @@ WRITES = {
     "update": lambda s: s.update(uuid4(), input_cost_per_token=0.0),
     "delete": lambda s: s.delete(uuid4()),
     "upsert": lambda s: s.upsert(**FREE_MODEL),
+    "upsert_many": lambda s: s.upsert_many(uuid4(), [FREE_MODEL]),
 }
 
 
@@ -65,7 +73,7 @@ async def test_a_member_cannot_write_a_model_spec(write) -> None:
         await write(service)
 
     assert refused.value.status_code == 403
-    for method in ("create", "update", "delete", "upsert_by_provider_and_model_kwargs"):
+    for method in REPO_WRITES:
         getattr(repo, method).assert_not_called()
 
 
@@ -76,7 +84,4 @@ async def test_an_admin_may_set_any_price_including_zero(write) -> None:
 
     await write(service)
 
-    assert any(
-        getattr(repo, m).await_count
-        for m in ("create", "update", "delete", "upsert_by_provider_and_model_kwargs")
-    )
+    assert any(getattr(repo, m).await_count for m in REPO_WRITES)

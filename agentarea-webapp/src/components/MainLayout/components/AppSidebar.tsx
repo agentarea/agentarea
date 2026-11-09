@@ -7,6 +7,7 @@ import Link from "@/components/WorkspaceLink";
 import { useWorkspacePathname } from "@/hooks/useWorkspaceNavigation";
 import { Inbox, SquarePen } from "lucide-react";
 import {
+  SidebarGroup,
   SidebarHeader,
   SidebarMenuButton,
   useSidebar,
@@ -20,9 +21,16 @@ import {
 import { cn } from "@/lib/utils";
 import type { Workspace } from "@/lib/workspaces";
 import { AppSidebarFooter } from "./AppSidebarFooter";
+import { NavHelp } from "./NavHelp";
 import { NavMain, navItemClassName } from "./NavMain";
+import { NavSearch } from "./NavSearch";
 import { SidebarNavScroll } from "./SidebarNavScroll";
 import { TeamSwitcher } from "./TeamSwitcher";
+
+// New task and Inbox are actions, not places: framed like the search field
+// below them so they do not read as two more nav rows.
+const headerButtonClassName =
+  "border border-sidebar-border bg-background shadow-sm hover:bg-zinc-50 dark:bg-zinc-900 dark:hover:bg-zinc-800";
 
 interface AppSidebarData {
   navSections: React.ComponentProps<typeof NavMain>["sections"];
@@ -92,7 +100,11 @@ export function AppSidebarContent({
                 </span>
               ),
             }}
-            className={cn(navItemClassName, "group/new-task min-w-0 flex-1")}
+            className={cn(
+              navItemClassName,
+              headerButtonClassName,
+              "min-w-0 flex-1 font-medium [&>svg]:text-primary dark:[&>svg]:text-primary"
+            )}
           >
             <Link
               href="/workplace"
@@ -104,12 +116,7 @@ export function AppSidebarContent({
                   <span className="min-w-0 flex-1 truncate">
                     {t("newTask")}
                   </span>
-                  {/* Hidden at rest so it does not read as a second control
-                      competing with the label. */}
-                  <Kbd
-                    keys={["⌘", "J"]}
-                    className="opacity-0 transition-opacity duration-200 group-hover/new-task:opacity-100 group-focus-visible/new-task:opacity-100"
-                  />
+                  <Kbd keys={["⌘", "J"]} />
                 </>
               )}
             </Link>
@@ -123,7 +130,8 @@ export function AppSidebarContent({
                 // base overflow-hidden would clip it.
                 className={cn(
                   navItemClassName,
-                  "relative w-8 shrink-0 overflow-visible"
+                  headerButtonClassName,
+                  "relative w-8 shrink-0 justify-center overflow-visible"
                 )}
               >
                 <Link
@@ -146,10 +154,14 @@ export function AppSidebarContent({
             <TooltipContent side="right">{inboxLabel}</TooltipContent>
           </Tooltip>
         </div>
+        <NavSearch sections={data.navSections} />
       </SidebarHeader>
       <SidebarNavScroll>
         <NavMain sections={data.navSections} />
       </SidebarNavScroll>
+      <SidebarGroup className="py-1">
+        <NavHelp />
+      </SidebarGroup>
       <AppSidebarFooter />
     </>
   );

@@ -14,8 +14,10 @@ import {
   Wrench,
 } from "lucide-react";
 import FormError from "@/components/FormError";
+import { DetailsCard } from "@/components/Overview/DetailsCard";
 import { OverviewHero } from "@/components/Overview/OverviewHero";
 import {
+  CardField,
   EmptyRow,
   HeroMeta,
   SectionCard,
@@ -29,7 +31,6 @@ import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { updateOpenAPIConnectionAction } from "@/lib/server-actions";
 import { getOpenApiConnectionDisplayStatus } from "@/lib/status";
-import { CardField, ConnectionDetailsCard } from "../../components/ConnectionCards";
 import { ConnectionCostSection } from "../../components/ConnectionCostSection";
 import {
   cleanHeaderRows,
@@ -349,7 +350,8 @@ export default function OpenAPIConnectionOverview({
           </div>
 
           <div className="flex min-w-0 flex-col gap-4">
-            <ConnectionDetailsCard
+            <DetailsCard
+              idLabel={tDetail("details.id")}
               id={connection.id}
               createdAt={connection.created_at}
               updatedAt={connection.updated_at}

@@ -18,8 +18,10 @@ import {
 } from "lucide-react";
 import EntityMark from "@/components/EntityMark";
 import FormError from "@/components/FormError";
+import { DetailsCard } from "@/components/Overview/DetailsCard";
 import { OverviewHero } from "@/components/Overview/OverviewHero";
 import {
+  CardField,
   EmptyRow,
   FactRow,
   GlanceRow,
@@ -56,7 +58,6 @@ import {
   getMCPInstanceToolCount,
   TRANSPORT_LABEL,
 } from "../utils";
-import { CardField, ConnectionDetailsCard } from "../components/ConnectionCards";
 import { ConnectionCostSection } from "../components/ConnectionCostSection";
 import { EgressExitSection } from "../components/EgressExitSection";
 import { boundEgressExit, type EgressExitChoices } from "../egress-exit";
@@ -641,7 +642,8 @@ export default function MCPInstanceOverview({
               </SectionCard>
             )}
 
-            <ConnectionDetailsCard
+            <DetailsCard
+              idLabel={t("details.id")}
               id={instance.id}
               createdAt={instance.created_at}
               updatedAt={instance.updated_at}

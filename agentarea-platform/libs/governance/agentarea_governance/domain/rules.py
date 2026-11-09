@@ -281,21 +281,21 @@ class SafetyParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     prompt_injection: bool | None = None
-    output_sanitizer: bool | None = None
     # Check the final answer and rewrite it once; see AnswerCheckPolicy.
     answer_check: AnswerCheckPolicy | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired_toggles(cls, data: Any) -> Any:
+        # The output sanitizer was removed; bundles and edits written before still carry it.
+        if isinstance(data, dict) and "output_sanitizer" in data:
+            data = {k: v for k, v in data.items() if k != "output_sanitizer"}
+        return data
+
     @model_validator(mode="after")
     def _require_one(self) -> SafetyParams:
-        if (
-            self.prompt_injection is None
-            and self.output_sanitizer is None
-            and self.answer_check is None
-        ):
-            raise ValueError(
-                "safety on content requires 'prompt_injection', 'output_sanitizer' "
-                "or 'answer_check'"
-            )
+        if self.prompt_injection is None and self.answer_check is None:
+            raise ValueError("safety on content requires 'prompt_injection' or 'answer_check'")
         return self
 
 
@@ -615,8 +615,6 @@ def _apply_approval(
 def _apply_safety(acc: _DocumentAccumulator, params: dict[str, Any]) -> None:
     if "prompt_injection" in params:
         acc.content_safety["prompt_injection_detection_enabled"] = bool(params["prompt_injection"])
-    if "output_sanitizer" in params:
-        acc.content_safety["output_sanitizer_enabled"] = bool(params["output_sanitizer"])
     if isinstance(params.get("answer_check"), dict):
         acc.content_safety["answer_check"] = AnswerCheckPolicy.model_validate(
             params["answer_check"]

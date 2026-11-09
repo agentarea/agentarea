@@ -14,6 +14,7 @@ import {
   Loader2,
   Trash2,
   User,
+  X,
 } from "lucide-react";
 import FormError from "@/components/FormError";
 import { Button } from "@/components/ui/button";
@@ -83,7 +84,9 @@ export function MediaPreview({
     // back a 401 and renders broken. These are private files behind auth, not
     // assets worth optimising.
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={url} alt={name} className={cn("object-contain", className)} />;
+    return (
+      <img src={url} alt={name} className={cn("object-contain", className)} />
+    );
   }
   if (kind === "video") {
     return <video src={url} controls className={className} />;
@@ -338,11 +341,14 @@ export function FileViewerContent({
   fetchUrl,
   fetchHistory,
   onDelete,
+  onClose,
 }: {
   file: BrowsedFile;
   fetchUrl: FetchUrlFn;
   fetchHistory?: FetchHistoryFn;
   onDelete?: (file: BrowsedFile) => void;
+  /** Shown where the viewer is a pane beside other content. */
+  onClose?: () => void;
 }) {
   const t = useTranslations("FilesPage");
   const [resolvedUrl, setResolvedUrl] = useState<{
@@ -478,6 +484,17 @@ export function FileViewerContent({
             onClick={() => onDelete(file)}
           >
             <Trash2 className="h-4 w-4" />
+          </Button>
+        )}
+        {onClose && (
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 shrink-0 text-muted-foreground"
+            aria-label={t("closePreview")}
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" />
           </Button>
         )}
       </div>

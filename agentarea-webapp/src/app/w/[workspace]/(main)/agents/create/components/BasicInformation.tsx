@@ -1,24 +1,47 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Bot, Cpu, FileText, MessageSquare } from "lucide-react";
+import { Bot, Brain, Cpu, FileText, MessageSquare } from "lucide-react";
 import {
   Control,
   Controller,
   FieldErrors,
   UseFormRegister,
   UseFormSetValue,
+  useWatch,
 } from "react-hook-form";
-import type { ModelInstanceResponse } from "@/api/client/types.gen";
+import type {
+  ClientResponse,
+  ModelInstanceResponse,
+} from "@/api/client/types.gen";
 import ConfigSheet from "@/components/ConfigSheet";
 import FormLabel from "@/components/FormLabel/FormLabel";
+import { HarnessIcon } from "@/components/harnesses";
 import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MarkdownTextarea } from "@/components/ui/markdown-textarea";
 import { ProviderModelSelector } from "@/components/ui/provider-model-selector";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ENTITY_ICONS } from "@/lib/entity-icons";
+import { offeredLevel, runnerModel, runnerModels } from "@/lib/runner-models";
 import type { AgentFormValues } from "../../create/types";
+import {
+  listRunnerClientsAction,
+  setRunnerModelAction,
+} from "../../shared/runnerClientActions";
 import { getNestedErrorMessage } from "../utils/formUtils";
+
+// The Selects' values for "no client" and "the model's level": Radix refuses an empty item value.
+const PLATFORM = "platform";
+const MODEL_DEFAULT = "default";
+const ClientIcon = ENTITY_ICONS.client;
 
 type LLMModelInstance = ModelInstanceResponse;
 
@@ -37,6 +60,7 @@ const BasicInformation = ({
   register,
   control,
   errors,
+  setValue,
   llmModelInstances,
   onRefreshModels,
   suggestedName,
@@ -49,6 +73,44 @@ const BasicInformation = ({
   useEffect(() => {
     if (suggestedName) setNameReady(true);
   }, [suggestedName]);
+
+  const [runnerClients, setRunnerClients] = useState<ClientResponse[]>([]);
+  const [runnerError, setRunnerError] = useState<string | null>(null);
+  useEffect(() => {
+    void listRunnerClientsAction().then((result) => {
+      if (result.ok) setRunnerClients(result.clients);
+      else setRunnerError(result.error);
+    });
+  }, []);
+  const clientId = useWatch({ control, name: "client_id" });
+  const runnerClient = runnerClients.find((c) => c.id === clientId) ?? null;
+  const reasoningEffort = useWatch({ control, name: "reasoning_effort" });
+  const currentRunnerModel = runnerClient
+    ? runnerModel(runnerClient, runnerClient.default_model)
+    : null;
+
+  const keepOfferedLevel = (client: ClientResponse | undefined) => {
+    const model = client ? runnerModel(client, client.default_model) : null;
+    const level = offeredLevel(model, reasoningEffort);
+    if (level !== (reasoningEffort ?? "")) {
+      setValue("reasoning_effort", level, { shouldDirty: true });
+    }
+  };
+
+  const saveRunnerModel = (model: string) => {
+    if (!runnerClient) return;
+    void setRunnerModelAction(runnerClient.id, model).then((result) => {
+      if (result.ok) {
+        setRunnerClients((all) =>
+          all.map((c) => (c.id === result.client.id ? result.client : c))
+        );
+        keepOfferedLevel(result.client);
+        setRunnerError(null);
+      } else {
+        setRunnerError(result.error);
+      }
+    });
+  };
 
   const handleConfigSheetOpenChange = (open: boolean) => {
     setConfigSheetOpen(open);
@@ -113,46 +175,155 @@ const BasicInformation = ({
             )}
           </div>
           <div className="space-y-2">
-            <FormLabel htmlFor="model_id" icon={Cpu} required>
-              {t("llmModel")}
+            <FormLabel htmlFor="client_id" icon={ClientIcon}>
+              {t("runsOn")}
             </FormLabel>
             <Controller
-              name="model_id"
+              name="client_id"
               control={control}
-              rules={{ required: t("modelRequired") }}
               render={({ field }) => (
-                <ProviderModelSelector
-                  modelInstances={llmModelInstances}
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  placeholder={t("selectModel")}
-                  open={searchableSelectOpen}
-                  onOpenChange={setSearchableSelectOpen}
-                  onAddProvider={handleCreateConfigClick}
-                  emptyMessage={
-                    <div className="flex flex-col items-center gap-2 px-6">
-                      <div>{t("noConfigurationsYet")}</div>
-                      <div className="note">
-                        {t("createAndUseProviderConfiguration")}
-                      </div>
-                      <Button
-                        size="sm"
-                        onClick={handleCreateConfigClick}
-                        className="mt-2"
-                      >
-                        {t("createConfiguration")}
-                      </Button>
-                    </div>
-                  }
-                />
+                <Select
+                  value={field.value || PLATFORM}
+                  onValueChange={(value) => {
+                    field.onChange(value === PLATFORM ? "" : value);
+                    if (value !== PLATFORM) {
+                      keepOfferedLevel(
+                        runnerClients.find((c) => c.id === value)
+                      );
+                    }
+                  }}
+                >
+                  <SelectTrigger id="client_id">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={PLATFORM}>
+                      {t("runsOnPlatform")}
+                    </SelectItem>
+                    {runnerClients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        <span className="inline-flex items-center gap-2">
+                          <HarnessIcon kind={c.kind} className="h-4 w-4" />
+                          {c.name}
+                          {c.online ? "" : ` · ${t("runsOnOffline")}`}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             />
-            {getNestedErrorMessage(errors, "model_id") && (
-              <p className="form-error">
-                {getNestedErrorMessage(errors, "model_id")}
-              </p>
-            )}
+            <p className="note">{t("runsOnHint")}</p>
+            {runnerError && <p className="form-error">{runnerError}</p>}
           </div>
+          {runnerClient ? (
+            <div className="space-y-2">
+              <FormLabel htmlFor="runner_model" icon={Cpu}>
+                {t("runnerModel")}
+              </FormLabel>
+              {runnerModels(runnerClient).length > 0 ? (
+                <Select
+                  value={runnerClient.default_model ?? undefined}
+                  onValueChange={saveRunnerModel}
+                >
+                  <SelectTrigger id="runner_model">
+                    <SelectValue placeholder={t("selectModel")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {runnerModels(runnerClient).map((model) => (
+                      <SelectItem key={model.name} value={model.name}>
+                        {model.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="note">{t("runnerModelsPending")}</p>
+              )}
+              <p className="note">{t("runnerModelHint")}</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <FormLabel htmlFor="model_id" icon={Cpu} required>
+                {t("llmModel")}
+              </FormLabel>
+              <Controller
+                name="model_id"
+                control={control}
+                rules={{ required: t("modelRequired") }}
+                render={({ field }) => (
+                  <ProviderModelSelector
+                    modelInstances={llmModelInstances}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    placeholder={t("selectModel")}
+                    open={searchableSelectOpen}
+                    onOpenChange={setSearchableSelectOpen}
+                    onAddProvider={handleCreateConfigClick}
+                    emptyMessage={
+                      <div className="flex flex-col items-center gap-2 px-6">
+                        <div>{t("noConfigurationsYet")}</div>
+                        <div className="note">
+                          {t("createAndUseProviderConfiguration")}
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={handleCreateConfigClick}
+                          className="mt-2"
+                        >
+                          {t("createConfiguration")}
+                        </Button>
+                      </div>
+                    }
+                  />
+                )}
+              />
+              {getNestedErrorMessage(errors, "model_id") && (
+                <p className="form-error">
+                  {getNestedErrorMessage(errors, "model_id")}
+                </p>
+              )}
+            </div>
+          )}
+          {currentRunnerModel &&
+            currentRunnerModel.reasoningLevels.length > 0 && (
+              <div className="space-y-2">
+                <FormLabel htmlFor="reasoning_effort" icon={Brain}>
+                  {t("reasoningLevel")}
+                </FormLabel>
+                <Controller
+                  name="reasoning_effort"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value || MODEL_DEFAULT}
+                      onValueChange={(value) =>
+                        field.onChange(value === MODEL_DEFAULT ? "" : value)
+                      }
+                    >
+                      <SelectTrigger id="reasoning_effort">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={MODEL_DEFAULT}>
+                          {currentRunnerModel.defaultReasoning
+                            ? t("reasoningModelDefaultLevel", {
+                                level: currentRunnerModel.defaultReasoning,
+                              })
+                            : t("reasoningModelDefault")}
+                        </SelectItem>
+                        {currentRunnerModel.reasoningLevels.map((level) => (
+                          <SelectItem key={level} value={level}>
+                            {level}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <p className="note">{t("reasoningLevelHint")}</p>
+              </div>
+            )}
         </div>
         <div className="space-y-2">
           <FormLabel htmlFor="description" icon={FileText} optional>

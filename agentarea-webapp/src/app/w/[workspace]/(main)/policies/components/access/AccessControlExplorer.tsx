@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { Plus, Share2, Zap } from "lucide-react";
+import { Plus, Share2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   AccessControlGraph,
@@ -137,13 +137,19 @@ export default function AccessControlExplorer({
       setLoading(true);
       setError(null);
       try {
-        const data = await resolveAccessAction({
+        const resolved = await resolveAccessAction({
           subject_id: subjectId,
           resource_kind: selectedObject.kind,
           resource_id: splitObjectId(objectId).object,
         });
-        if (!cancelled) {
-          setResult(data);
+        if (cancelled) {
+          return;
+        }
+        if (resolved.ok) {
+          setResult(resolved.data);
+        } else {
+          setError(resolved.error);
+          setResult(null);
         }
       } catch (e) {
         if (cancelled) {
@@ -208,12 +214,16 @@ export default function AccessControlExplorer({
         throw new Error("Create a collection or MCP resource before adding a relationship rule.");
       }
       const target = splitObjectId(ruleObjectId);
-      await createAccessRelationshipAction({
+      const created = await createAccessRelationshipAction({
         namespace: target.namespace,
         object: target.object,
         relation: ruleRelation,
         subject_id: ruleSubjectId,
       });
+      if (!created.ok) {
+        setRuleStatus(created.error);
+        return;
+      }
       setRuleStatus("Relationship rule created.");
       setShowRuleForm(false);
       router.refresh();
@@ -419,18 +429,6 @@ export default function AccessControlExplorer({
               </button>
             </div>
 
-            <div className={styles.scaleNote}>
-              <span className={styles.scaleNoteIcon}>
-                <Zap className="h-4 w-4" />
-              </span>
-              <div>
-                <b>Why this scales.</b> Grants attach to collections, not
-                individual skills. One rule on a collection governs every skill
-                inside it; adding a skill to the collection grants it
-                automatically — no per-skill work, even across thousands of
-                skills.
-              </div>
-            </div>
           </aside>
         </div>
     </div>

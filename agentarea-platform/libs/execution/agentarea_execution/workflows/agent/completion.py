@@ -74,12 +74,7 @@ class CompletionMixin(BudgetMixin):
                 completion_call, "result must be a non-empty string"
             )
             return
-        if "artifacts" not in tool_args:
-            self._reject_invalid_completion_arguments(
-                completion_call, "artifacts is required; use [] when the response delivers no files"
-            )
-            return
-        raw_paths = tool_args["artifacts"]
+        raw_paths = tool_args.get("artifacts", [])
         if not isinstance(raw_paths, list):
             self._reject_invalid_completion_arguments(
                 completion_call, "artifacts must be an array of workspace-relative paths"
@@ -374,9 +369,9 @@ class CompletionMixin(BudgetMixin):
                         "status": "invalid_completion_arguments",
                         "error": reason,
                         "instruction": (
-                            "Call completion again with a non-empty result and an explicit "
-                            "artifacts array of workspace-relative paths. Use [] only when the "
-                            "response delivers no files."
+                            "Call completion again with a non-empty result. Files in "
+                            "outputs/ are delivered on their own; artifacts, when given, is an "
+                            "array of other workspace-relative paths."
                         ),
                     },
                     ensure_ascii=False,
@@ -483,9 +478,9 @@ class CompletionMixin(BudgetMixin):
             "generation": result.generation,
             "issues": [item.model_dump() for item in result.issues],
             "instruction": (
-                "Repair or create the missing output in the workspace, then call completion "
-                "again with the workspace-relative paths in artifacts. Do not claim success "
-                "until validation passes."
+                "Repair or create the missing output in outputs/, or drop the path "
+                "from artifacts, then call completion again. Do not claim success until "
+                "validation passes."
             ),
         }
         self.state.messages.append(

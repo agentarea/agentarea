@@ -31,6 +31,7 @@ with workflow.unsafe.imports_passed_through():
     from ..models import AgentGoal
 
 from ...models import (
+    RUNNER_CLIENT_METADATA_KEY,
     AgentConfigRequest,
     AgentConfigResult,
     AgentExecutionRequest,
@@ -64,6 +65,7 @@ from .patches import (
     UNSTARTED_TASK_MARKED_RUNNING_PATCH,
     WAIT_TOOL_PATCH,
 )
+from .runner_turn import RETRY_MESSAGE
 
 
 class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
@@ -111,6 +113,7 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
         )
         self.state.effective_policy = request.effective_policy
         self._workflow_metadata = dict(request.workflow_metadata or {})
+        self._runner_client_id = self._workflow_metadata.get(RUNNER_CLIENT_METADATA_KEY)
 
         # Initialize helpers
         self.event_manager = EventManager(
@@ -156,6 +159,12 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
                 )
             )
 
+        if self._runner_client_id is not None:
+            # The client's CLI brings its own model, tools and context.
+            if request.resume is not None and not resumed_before_record:
+                self._adopt_resume(request.resume)
+            return
+
         # Initialize agent configuration
         await self._initialize_agent_config()
 
@@ -185,6 +194,10 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
         if resume.own_cost is not None:
             self._delegated_cost = max(resume.total_cost - resume.own_cost, ZERO)
         self._resume_system_prompt_missing = resume.system_prompt_missing
+        if resume.retry and self._runner_client_id is not None and self.state.goal is not None:
+            self._runner_retry_message = (
+                self.state.goal.description if snapshot.current_iteration <= 1 else RETRY_MESSAGE
+            )
         if resume.retry:
             self._events.add_event(
                 EventTypes.WORKFLOW_RETRIED,

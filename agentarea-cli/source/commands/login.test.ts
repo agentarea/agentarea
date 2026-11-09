@@ -1,10 +1,16 @@
 import test from 'ava';
 import {tokenStorage} from '../utils/storage.js';
+import {memoryTokenStorage} from '../utils/storage.fixture.js';
 import {type AuthToken} from '../types/index.js';
 import {loadAccessToken} from './login.js';
 
-function storeToken(token: AuthToken | null): void {
-	tokenStorage.getToken = async () => token;
+async function storeToken(token: AuthToken | null): Promise<void> {
+	const {storage} = memoryTokenStorage();
+	if (token) {
+		await storage.saveToken(token);
+	}
+
+	tokenStorage.getTokenFor = async apiUrl => storage.getTokenFor(apiUrl);
 }
 
 const ISSUED_FOR_GOOD: AuthToken = {
@@ -17,7 +23,7 @@ const ISSUED_FOR_GOOD: AuthToken = {
 test.serial(
 	'loadAccessToken does not send a token to another host',
 	async t => {
-		storeToken(ISSUED_FOR_GOOD);
+		await storeToken(ISSUED_FOR_GOOD);
 
 		t.is(await loadAccessToken('http://127.0.0.1:8000'), null);
 		t.is(await loadAccessToken('https://evil.example'), null);
@@ -29,7 +35,7 @@ test.serial(
 test.serial(
 	'loadAccessToken returns the token for the host it was issued for',
 	async t => {
-		storeToken(ISSUED_FOR_GOOD);
+		await storeToken(ISSUED_FOR_GOOD);
 
 		t.is(
 			await loadAccessToken('https://good.example'),
@@ -42,17 +48,8 @@ test.serial(
 	},
 );
 
-test.serial(
-	'loadAccessToken withholds a token with no recorded host',
-	async t => {
-		storeToken({...ISSUED_FOR_GOOD, apiUrl: undefined});
-
-		t.is(await loadAccessToken('https://good.example'), null);
-	},
-);
-
 test.serial('loadAccessToken returns null when nothing is stored', async t => {
-	storeToken(null);
+	await storeToken(null);
 
 	t.is(await loadAccessToken('https://good.example'), null);
 });

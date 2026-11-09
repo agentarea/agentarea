@@ -102,3 +102,36 @@ describe("a catalog install rule", () => {
     expect(matrix.subjects[0].dimensions.tools.value).toBeNull();
   });
 });
+
+describe("a content safety rule", () => {
+  const safety = (params: Record<string, unknown>): Policy =>
+    ({
+      id: "p1",
+      subject_type: "agent",
+      subject_id: "a1",
+      target: "content",
+      effect: "safety",
+      params,
+      enabled: true,
+    }) as Policy;
+  const chip = (params: Record<string, unknown>) =>
+    policiesToMatrix([safety(params)], [{ id: "a1", name: "Agent" }]).subjects[0]
+      .dimensions.safety?.value;
+
+  it("reads as off when it turns prompt-injection detection off", () => {
+    expect(policyToRule(safety({ prompt_injection: false })).value).toBe(
+      "prompt-injection off"
+    );
+    expect(chip({ prompt_injection: false })).toBe("off");
+  });
+
+  it("reads as on when it checks something", () => {
+    expect(policyToRule(safety({ prompt_injection: true })).value).toBe(
+      "prompt-injection"
+    );
+    expect(chip({ prompt_injection: true })).toBe("on");
+    expect(chip({ prompt_injection: false, answer_check: { enabled: true } })).toBe(
+      "on"
+    );
+  });
+});

@@ -35,6 +35,7 @@ def _key(created_by: str) -> SimpleNamespace:
         last_accessed_at=None,
         created_at="2026-09-01T00:00:00Z",
         created_by=created_by,
+        client_id=None,
     )
 
 
