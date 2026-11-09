@@ -91,6 +91,9 @@ tuples:
   - user: User:u1
     relation: reader
     object: resource:secret1
+  - user: role_assignment:ra1
+    relation: role_assignment
+    object: resource:secret1
 
 tests:
   - name: role_assignment with full role grants all three bits on project
@@ -232,4 +235,12 @@ tests:
       - user: User:stranger
         object: resource:secret1
         assertions:
+          can_use_secret: false
+
+  - name: a full role assigned on the secret manages it but does not use it
+    check:
+      - user: User:ua
+        object: resource:secret1
+        assertions:
+          can_manage: true
           can_use_secret: false

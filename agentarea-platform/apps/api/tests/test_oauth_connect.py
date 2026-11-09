@@ -4,6 +4,7 @@ import json
 import logging
 import urllib.parse
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, call
 from uuid import uuid4
@@ -545,6 +546,7 @@ async def test_authorize_refuses_another_members_secret_as_the_client_id(monkeyp
         owner_type=None,
         owner_id=None,
         created_by="member-a",
+        graph_granted_at=datetime.now(UTC),
     )
     register_singleton(
         PermissionService,

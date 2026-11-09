@@ -496,17 +496,28 @@ async def _refresh_stub_installs(*, dry_run: bool) -> None:
         sys.exit(1)
 
 
-async def _grant_pending_secret_owners(db: Database) -> None:
+async def _grant_pending_secret_owners(db: Database) -> bool:
     """Record the creator of each user secret the graph has no owner for yet.
 
     Cheap once done: the pass reads only unstamped rows, by a partial index.
+    Returns whether it completed without a failed row; a failure is reported
+    here and fails the run at its end, after the registries are synced.
     """
     from agentarea_secrets.graph_owners import grant_pending_secret_owners
 
-    async with db.async_session_factory() as session:
-        granted = await grant_pending_secret_owners(session)
-    if granted:
-        click.echo(f"Granted the owners of {granted} user secrets")
+    try:
+        async with db.async_session_factory() as session:
+            result = await grant_pending_secret_owners(session)
+    except Exception:
+        logger.exception("The secret owner pass failed")
+        click.echo("Secret owners: the pass failed; see the log", err=True)
+        return False
+    if result.granted or result.skipped or result.failed:
+        click.echo(
+            f"Secret owners: {result.granted} granted, {result.skipped} skipped, "
+            f"{result.failed} failed"
+        )
+    return result.failed == 0
 
 
 async def _register_graph_client() -> None:
@@ -716,10 +727,12 @@ async def _reconcile(
         configs.append({"name": name, "source_url": src})
 
     await _register_graph_client()
-    await _grant_pending_secret_owners(db)
+    secret_owners_ok = await _grant_pending_secret_owners(db)
 
     if not configs and not workspace_registries:
         click.echo("No registry config provided (set REGISTRIES_CONFIG or use --source)")
+        if not secret_owners_ok:
+            sys.exit(1)
         return
 
     # Validate up front so a malformed entry reports a clear message instead of
@@ -914,6 +927,7 @@ async def _reconcile(
     if failed:
         for name, err in failed:
             click.echo(f"  - {name}: {err}", err=True)
+    if failed or not secret_owners_ok:
         sys.exit(1)
 
 

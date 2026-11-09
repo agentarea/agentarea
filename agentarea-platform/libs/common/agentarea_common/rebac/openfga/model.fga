@@ -52,6 +52,8 @@ type resource
     # Who may wire a secret's value into something: an MCP env var or header, an
     # OAuth client, an egress exit. Its creator (manager), whoever manages its
     # project (a workspace admin through the root project), or an explicit
-    # grant. Reading or writing a secret's metadata does not imply it.
+    # grant. Reading or writing a secret's metadata does not imply it, and a
+    # role assignment on the secret itself does not either: it grants manage
+    # on the secret, not manager. Managing the secret's project does.
     define secret_user: [User, Agent]
     define can_use_secret: secret_user or manager or can_manage from project

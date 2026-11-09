@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 
 from agentarea_common.audit import AuditService
 from agentarea_common.auth import UserContext
+from agentarea_common.auth.authorization import is_workspace_admin
 from agentarea_common.auth.permission import PermissionService
 from agentarea_common.di.container import resolve
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
@@ -79,6 +80,49 @@ class ConsumerRef:
     field: str
 
 
+USE_SECRET = "use_secret"  # noqa: S105 - a permission verb, not a credential
+
+
+async def named_secret_for_use(
+    session: AsyncSession, user_context: UserContext, name: str
+) -> EncryptedSecret:
+    """The user secret ``name`` of the caller's workspace, if the caller may wire it in."""
+    secret = await find_secret(session, user_context.workspace_id, name)
+    if secret is None:
+        raise SecretNotFoundError(f"No secret named '{name}' in this workspace")
+    if secret.owner_type is not None:
+        raise ManagedSecretError(
+            f"Secret '{secret.secret_name}' is managed by {secret.owner_type} "
+            "and cannot be referenced."
+        )
+    return await _require_usable(user_context, secret)
+
+
+async def _require_usable(user_context: UserContext, secret: EncryptedSecret) -> EncryptedSecret:
+    """``can_use_secret`` once the secret is in the graph; until then the rule it had.
+
+    A secret made before secrets were graph resources has no tuples until the
+    reconcile grants its creator (``graph_granted_at`` still null). For such a
+    row the rule that held when it was created is the authoritative one --
+    its creator or a workspace admin -- not a fallback for a graph failure.
+    Once granted, only the graph decides.
+    """
+    if secret.graph_granted_at is None:
+        allowed = secret.created_by == user_context.user_id or await is_workspace_admin(
+            user_context
+        )
+    else:
+        allowed = await resolve(PermissionService).check(
+            user_context.graph_subject, USE_SECRET, "secret", str(secret.id)
+        )
+    if not allowed:
+        raise SecretAccessDeniedError(
+            f"You may not use secret '{secret.secret_name}': it is used by its creator, "
+            "a workspace admin, or someone it is shared with."
+        )
+    return secret
+
+
 # Owners whose secret the user typed in themselves, and so expects to find when
 # they go looking for "my credentials". Listing them read-only is the difference
 # between the page answering that question and telling someone with a configured
@@ -96,9 +140,6 @@ SURFACED_OWNER_TYPES: tuple[str, ...] = (
     "trigger",
     "agent",  # wallet credentials, supplied in the request body like the rest
 )
-
-
-USE_SECRET = "use_secret"  # noqa: S105 - a permission verb, not a credential
 
 
 class SecretCatalogService:
@@ -179,24 +220,10 @@ class SecretCatalogService:
 
     async def get_named_for_use(self, name: str) -> EncryptedSecret:
         """``get_for_use`` for a consumer that references the secret by its name."""
-        secret = await self.get_by_name(name)
-        if secret.owner_type is not None:
-            raise ManagedSecretError(
-                f"Secret '{secret.secret_name}' is managed by {secret.owner_type} "
-                "and cannot be referenced."
-            )
-        return await self._require_usable(secret)
+        return await named_secret_for_use(self._session, self._user_context, name)
 
     async def _require_usable(self, secret: EncryptedSecret) -> EncryptedSecret:
-        allowed = await resolve(PermissionService).check(
-            self._user_context.graph_subject, USE_SECRET, "secret", str(secret.id)
-        )
-        if not allowed:
-            raise SecretAccessDeniedError(
-                f"You may not use secret '{secret.secret_name}': it is used by its creator, "
-                "a workspace admin, or someone it is shared with."
-            )
-        return secret
+        return await _require_usable(self._user_context, secret)
 
     async def get_by_name(self, name: str) -> EncryptedSecret:
         secret = await find_secret(self._session, self._workspace_id, name)
@@ -425,6 +452,18 @@ class SecretCatalogService:
 
     async def clear_references(self, consumer_type: str, consumer_id: str) -> None:
         """Drop every reference a consumer holds, before rewriting them."""
+        await self.stage_references(consumer_type, consumer_id, [])
+        await self._session.commit()
+
+    async def stage_references(
+        self, consumer_type: str, consumer_id: str, references: list[tuple[UUID, str]]
+    ) -> None:
+        """Replace a consumer's references in the caller's transaction, which commits them.
+
+        Written with the consumer's own row, a reference cannot be missing while
+        the consumer uses the secret, and the foreign key refuses the secret's
+        delete for as long as it is.
+        """
         await self._session.execute(
             delete(SecretReference).where(
                 SecretReference.workspace_id == self._workspace_id,
@@ -432,7 +471,16 @@ class SecretCatalogService:
                 SecretReference.consumer_id == consumer_id,
             )
         )
-        await self._session.commit()
+        for secret_id, field in references:
+            self._session.add(
+                SecretReference(
+                    workspace_id=self._workspace_id,
+                    secret_id=secret_id,
+                    consumer_type=consumer_type,
+                    consumer_id=consumer_id,
+                    field=field,
+                )
+            )
 
     async def count_user_secrets(self) -> int:
         result = await self._session.execute(

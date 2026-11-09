@@ -292,12 +292,16 @@ and Compose's reconcile service — also brings the authorization graph up to
 date with rows a release added state for. Nothing here is a manual step:
 
 - Every user secret whose creator's ownership has not reached the graph yet
-  (`encrypted_secrets.graph_granted_at` is null — all secrets created before
-  secrets became graph resources) is granted to its creator and stamped. Until
-  that run, only a workspace admin may attach such a secret to an MCP server, an
-  OAuth client or an egress exit. The pass is idempotent and reads only
-  unstamped rows; if the graph refuses a grant, the reconcile fails rather than
-  skipping it, so the Job shows the failure.
+  (`encrypted_secrets.graph_granted_at` is null — every secret created before
+  secrets became graph resources) is granted to its creator, a person or the
+  agent that made it, and stamped. Until that happens, such a secret is
+  authorized by the rule it was created under: its creator or a workspace
+  admin may attach it to an MCP server, an OAuth client, an egress exit or a
+  stream source. Once stamped, only the graph's `can_use_secret` decides. A
+  secret the platform principal created is left unstamped with a warning.
+- The pass is idempotent and reads only unstamped rows. A row the graph
+  refuses is logged and the pass goes on; the registries are still synced,
+  and the command then exits non-zero so the Job shows the failure.
 
 ## Verify
 
