@@ -49,13 +49,27 @@ interface ScheduleChipProps {
   value: Date | null;
   onChange: (value: Date | null) => void;
   disabled?: boolean;
+  /** Opened from outside, e.g. the composer's add menu; uncontrolled when absent. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function ScheduleChip({ value, onChange, disabled }: ScheduleChipProps) {
+export function ScheduleChip({
+  value,
+  onChange,
+  disabled,
+  open: openProp,
+  onOpenChange,
+}: ScheduleChipProps) {
   const t = useTranslations("Chat.inputControls");
   const locale = useLocale();
   const calendarLocale = useCalendarLocale();
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    onOpenChange?.(next);
+  };
   // What the fields hold while typing; the value moves only on a whole time.
   const [dayText, setDayText] = useState("");
   const [clockText, setClockText] = useState("");

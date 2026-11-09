@@ -20,19 +20,6 @@ class AgentModelNotConfiguredError(Exception):
         )
 
 
-class InvalidRunnerClientError(ValueError):
-    """Raised when a run names a client to run on that the caller may not run agents on.
-
-    Maps to HTTP 422 at the API boundary.
-    """
-
-    def __init__(self, client_id):
-        self.client_id = str(client_id)
-        super().__init__(
-            f"Client '{self.client_id}' is no Codex or Claude Code client of this workspace"
-        )
-
-
 class SchedulingNotSupportedError(Exception):
     """Raised when a task carrying ``scheduled_at`` is handed to a manager without a timer.
 

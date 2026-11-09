@@ -4190,7 +4190,6 @@ export const zScheduleTaskCreate = z.object({
   parameters: z.record(z.string(), z.unknown()).optional(),
   project_id: z.string().nullish(),
   requires_human_approval: z.boolean().nullish().default(false),
-  runner_client_id: z.uuid().nullish(),
   scheduled_at: z.iso.datetime(),
   task_policy: zPolicyDocument.nullish(),
   webhook: zTaskWebhook.nullish(),
@@ -4208,7 +4207,6 @@ export const zTaskCreate = z.object({
   parameters: z.record(z.string(), z.unknown()).optional(),
   project_id: z.string().nullish(),
   requires_human_approval: z.boolean().nullish().default(false),
-  runner_client_id: z.uuid().nullish(),
   task_policy: zPolicyDocument.nullish(),
   webhook: zTaskWebhook.nullish(),
 });
@@ -5726,6 +5724,15 @@ export const zUpdateClientV1ClientsClientIdPatchPath = z.object({
  * Successful Response
  */
 export const zUpdateClientV1ClientsClientIdPatchResponse = zClientResponse;
+
+export const zHarnessAgentV1ClientsClientIdAgentPostPath = z.object({
+  client_id: z.uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zHarnessAgentV1ClientsClientIdAgentPostResponse = zAgentResponse;
 
 export const zAddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostBody =
   zMcpInstanceAssociationBody;

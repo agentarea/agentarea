@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { useTranslations } from "next-intl";
 import type { AgentResponse, ProjectResponse } from "@/api/client/types.gen";
+import { getAgents, getRunOptions } from "@/components/actions";
 import FullChat, {
   type Agent,
   type ProjectOption,
@@ -12,8 +12,9 @@ import FullChat, {
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Kbd } from "@/components/ui/kbd";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getAgentsWithRunTargets } from "@/components/actions";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { apiErrorMessage } from "@/lib/api-errors";
+import type { RunOptions } from "@/lib/run-targets";
 import {
   getViewerCapabilitiesAction,
   listPoliciesAction,
@@ -26,7 +27,6 @@ export const QUICK_TASK_OPEN_EVENT = "workplace:quick-task-open";
 /** Agents carry a couple of presentational fields not in the generated schema. */
 type ApiAgent = AgentResponse & {
   icon?: string | null;
- 
 };
 
 type ApiProject = ProjectResponse;
@@ -81,6 +81,7 @@ export default function QuickTaskDialog() {
   const [agents, setAgents] = React.useState<Agent[]>([]);
   const [projects, setProjects] = React.useState<ProjectOption[]>([]);
   const [policies, setPolicies] = React.useState<TaskPolicyOption[]>([]);
+  const [runOptions, setRunOptions] = React.useState<RunOptions | null>(null);
   const [policiesNotice, setPoliciesNotice] = React.useState<{
     text: string;
     isError: boolean;
@@ -110,60 +111,65 @@ export default function QuickTaskDialog() {
     if (!open || dataLoaded) return;
     let cancelled = false;
     Promise.all([
-      getAgentsWithRunTargets(),
+      getAgents(),
+      getRunOptions(),
       listProjectsAction(),
       getViewerCapabilitiesAction(),
     ])
-      .then(async ([agentsRes, projectsRes, { canAdminister }]) => {
-        const policiesRes = canAdminister ? await listPoliciesAction() : null;
-        if (cancelled) return;
-        const agentList: Agent[] = ((agentsRes.data ?? []) as ApiAgent[]).map(
-          (a) => ({
-            id: String(a.id),
-            name: a.name,
-            description: a.description ?? null,
-            icon: a.icon ?? null,
-            runTargets: agentsRes.runTargets[String(a.id)],
-          })
-        );
-        const projectList: ProjectOption[] = (
-          (projectsRes.data ?? []) as ApiProject[]
-        ).map((p) => ({
-          id: String(p.id),
-          name: p.name,
-          description: p.description ?? null,
-        }));
-        if (!policiesRes) {
-          setPoliciesNotice({
-            text: tAdmin("hints.pickTaskPolicy"),
-            isError: false,
-          });
-        } else if (policiesRes.error || !policiesRes.data) {
-          console.error("Failed to load task policies", policiesRes.error);
-          setPoliciesNotice({
-            text: apiErrorMessage(policiesRes, t("policiesLoadFailed")),
-            isError: true,
-          });
-        }
-        const policyList: TaskPolicyOption[] = (
-          (policiesRes?.data ?? []) as ApiPolicy[]
-        ).map((p) => ({
-          id: String(p.id),
-          name: formatPolicyName(p),
-          description: formatPolicyDescription(p),
-          policy: {
+      .then(
+        async ([agentsRes, runOptionsRes, projectsRes, { canAdminister }]) => {
+          const policiesRes = canAdminister ? await listPoliciesAction() : null;
+          if (cancelled) return;
+          const agentList: Agent[] = ((agentsRes.data ?? []) as ApiAgent[]).map(
+            (a) => ({
+              id: String(a.id),
+              name: a.name,
+              description: a.description ?? null,
+              icon: a.icon ?? null,
+              modelId: a.model_id ?? null,
+              client: a.client ?? null,
+            })
+          );
+          const projectList: ProjectOption[] = (
+            (projectsRes.data ?? []) as ApiProject[]
+          ).map((p) => ({
             id: String(p.id),
-            target: p.target ?? "",
-            effect: p.effect ?? "",
-            params: p.params ?? {},
-          },
-        }));
-        setAgents(agentList);
-        setProjects(projectList);
-        setPolicies(policyList);
-        setSelectedAgent((prev) => prev || agentList[0] || null);
-        setDataLoaded(true);
-      })
+            name: p.name,
+            description: p.description ?? null,
+          }));
+          if (!policiesRes) {
+            setPoliciesNotice({
+              text: tAdmin("hints.pickTaskPolicy"),
+              isError: false,
+            });
+          } else if (policiesRes.error || !policiesRes.data) {
+            console.error("Failed to load task policies", policiesRes.error);
+            setPoliciesNotice({
+              text: apiErrorMessage(policiesRes, t("policiesLoadFailed")),
+              isError: true,
+            });
+          }
+          const policyList: TaskPolicyOption[] = (
+            (policiesRes?.data ?? []) as ApiPolicy[]
+          ).map((p) => ({
+            id: String(p.id),
+            name: formatPolicyName(p),
+            description: formatPolicyDescription(p),
+            policy: {
+              id: String(p.id),
+              target: p.target ?? "",
+              effect: p.effect ?? "",
+              params: p.params ?? {},
+            },
+          }));
+          setAgents(agentList);
+          setProjects(projectList);
+          setPolicies(policyList);
+          setRunOptions(runOptionsRes);
+          setSelectedAgent((prev) => prev || agentList[0] || null);
+          setDataLoaded(true);
+        }
+      )
       .catch((error: unknown) => {
         console.error("Failed to load quick task data", error);
         if (cancelled) return;
@@ -223,6 +229,7 @@ export default function QuickTaskDialog() {
               onAgentChange={setSelectedAgent}
               availableProjects={projects}
               availableTaskPolicies={policies}
+              runOptions={runOptions}
               onTaskCreated={handleTaskCreated}
               startCentered
               embedded

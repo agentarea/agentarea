@@ -47,7 +47,6 @@ from .domain.base_service import BaseTaskService
 from .domain.exceptions import (
     AgentModelNotConfiguredError,
     BudgetCapExceededError,
-    InvalidRunnerClientError,
     RunStillClosingError,
     SchedulingNotSupportedError,
 )
@@ -387,9 +386,7 @@ class TaskService(BaseTaskService):
         return agent
 
     @staticmethod
-    def _require_agent_model(
-        agent, agent_id: UUID, parameters: dict[str, Any] | None, runner_client_id: UUID | None
-    ) -> None:
+    def _require_agent_model(agent, agent_id: UUID, parameters: dict[str, Any] | None) -> None:
         """Fail fast when an agent has no model to run with.
 
         Catalog agents can be installed without a model when the workspace has
@@ -400,19 +397,12 @@ class TaskService(BaseTaskService):
         ``None`` only in test/standalone mode (no repository wired), where the
         check is skipped — mirroring ``_validate_agent_exists``.
         """
-        if agent is None or agent.client_id is not None or runner_client_id is not None:
+        if agent is None or agent.client_id is not None:
             return
         if model_override_of(parameters):
             return
         if not getattr(agent, "model_id", None):
             raise AgentModelNotConfiguredError(agent_id)
-
-    async def _require_runner_client(self, client_id: UUID) -> None:
-        """Refuse a client to run on that is no runner client the caller may use."""
-        from agentarea_mcp.application import client_service
-
-        if await client_service.usable_runner_client(self.repository_factory, client_id) is None:
-            raise InvalidRunnerClientError(client_id)
 
     @audited("task.create", resource_type="task")
     async def create_task_with_policy(
@@ -435,7 +425,6 @@ class TaskService(BaseTaskService):
         scheduled_at: datetime | None = None,
         provenance: TaskProvenance,
         execution_id: str | None = None,
-        runner_client_id: UUID | None = None,
     ) -> AgentTask:
         """Persist a task with resolved governance policy. Does not dispatch to Temporal.
 
@@ -459,8 +448,6 @@ class TaskService(BaseTaskService):
             raise ValueError("workspace_id is required to create a task")
 
         new_task_id = task_id or uuid4()
-        if runner_client_id is not None:
-            await self._require_runner_client(runner_client_id)
         # Refuse before persisting: an engine without a timer would run this
         # immediately, and a half-created row for a run that can never happen
         # is worse than a clean rejection.
@@ -503,14 +490,13 @@ class TaskService(BaseTaskService):
 
         agent = await self._validate_agent_exists(agent_id)
         if require_model:
-            self._require_agent_model(agent, agent_id, parameters, runner_client_id)
+            self._require_agent_model(agent, agent_id, parameters)
         metadata: dict[str, Any] = {}
         if metadata_overrides:
             metadata.update(metadata_overrides)
-        runner = runner_client_id or (agent.client_id if agent is not None else None)
-        if runner is not None:
+        if agent is not None and agent.client_id is not None:
             # The task's turns run on this client's runner for its whole life.
-            metadata[RUNNER_CLIENT_METADATA_KEY] = str(runner)
+            metadata[RUNNER_CLIENT_METADATA_KEY] = str(agent.client_id)
         metadata.setdefault("created_via", "api")
         # Only stamp a name we actually loaded. `agent` is None only in
         # test/standalone mode (no agent_repository wired) — recording
@@ -652,7 +638,6 @@ class TaskService(BaseTaskService):
             task_id=task_id,
             scheduled_at=payload.scheduled_at,
             provenance=provenance,
-            runner_client_id=payload.runner_client_id,
         )
 
     async def reserve_run(
@@ -708,7 +693,6 @@ class TaskService(BaseTaskService):
             require_model=True,
             scheduled_at=payload.scheduled_at,
             provenance=provenance,
-            runner_client_id=payload.runner_client_id,
         )
 
     async def dispatch_reserved_run(self, task: AgentTask) -> AgentTask:
@@ -1343,7 +1327,6 @@ class TaskService(BaseTaskService):
         scheduled_at: datetime | None = None,
         provenance: TaskProvenance,
         follow_up_claim: FollowUpClaim | None = None,
-        runner_client_id: UUID | None = None,
     ) -> AgentTask:
         """Canonical entry point for creating and executing a task via Temporal workflow.
 
@@ -1367,7 +1350,6 @@ class TaskService(BaseTaskService):
             provenance: Who or what started this task, and the event that caused it.
             follow_up_claim: Guards a follow-up routed into a running workflow so a
                 redelivered event does not queue it twice.
-            runner_client_id: Run on this runner client instead of where the agent runs.
 
         Returns:
             Created task with workflow execution info, or the routed-into existing
@@ -1431,7 +1413,6 @@ class TaskService(BaseTaskService):
             require_model=True,
             scheduled_at=scheduled_at,
             provenance=provenance,
-            runner_client_id=runner_client_id,
         )
 
         stored_task.status = "pending"

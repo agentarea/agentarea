@@ -1499,9 +1499,6 @@
       "taskPolicy": "Политика задачи",
       "noProject": "Без проекта",
       "defaultPolicy": "Политика по умолчанию",
-      "runsOn": "Где запускать",
-      "onPlatform": "Платформа",
-      "cliDefaultModel": "модель CLI по умолчанию",
       "runnerOffline": "не в сети",
       "when": "Когда",
       "runNow": "Сейчас",
@@ -1517,7 +1514,13 @@
         "inOneHour": "Через час",
         "tomorrowMorning": "Завтра утром",
         "mondayMorning": "В понедельник утром"
-      }
+      },
+      "agents": "Агенты",
+      "harnesses": "Харнессы",
+      "add": "Добавить",
+      "attachFiles": "Файлы",
+      "mcpsAndSkills": "MCP и скиллы",
+      "runLater": "Запустить позже"
     },
     "Messages": {
       "toolCall": "Использую инструмент",
@@ -1603,7 +1606,8 @@
       "agentFallback": "агента",
       "compacted": "Контекст сжат: ранние сообщения ({count}) заменены кратким пересказом",
       "messageStoredSeparately": "Сообщение хранится отдельно и здесь не показано."
-    }
+    },
+    "runnerOffline": "{name} не в сети: задача подождёт его до 10 минут."
   },
   "TasksPage": {
     "title": "Задачи",

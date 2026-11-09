@@ -18,9 +18,13 @@ class AgentRepository(WorkspaceScopedRepository[Agent]):
         super().__init__(session, Agent, user_context)
 
     def _listing_conditions(self, filters: dict[str, Any]) -> list[Any]:
-        if "status" in filters:
-            return []
-        return [self.model_class.status != AgentStatus.ARCHIVED]
+        conditions = []
+        if "status" not in filters:
+            conditions.append(self.model_class.status != AgentStatus.ARCHIVED)
+        if "harness_client_id" not in filters:
+            # A harness client's own agent is reached through the client, not offered.
+            conditions.append(self.model_class.harness_client_id.is_(None))
+        return conditions
 
     async def get(self, id: UUID | str) -> Agent | None:
         """Get an agent by ID. Delegates to get_by_id for compatibility."""

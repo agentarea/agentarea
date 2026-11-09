@@ -4,9 +4,11 @@ import logging
 from typing import Annotated, Any
 from uuid import UUID
 
+from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents_sdk.mcp_server import UnknownToolsetError
 from agentarea_agents_sdk.tools.tool_definition import ToolEffect
-from agentarea_api.api.deps.services import AuditServiceDep
+from agentarea_api.api.deps.services import AuditServiceDep, get_agent_service
+from agentarea_api.api.v1.agents import AgentResponse
 from agentarea_api.platform_mcp import (
     attachable_toolset,
     client_platform_server,
@@ -479,6 +481,23 @@ async def _runner_client(service: ClientService, client_id: UUID) -> Client:
     if client is None:
         raise HTTPException(status_code=404, detail="Client not found")
     return client
+
+
+@router.post(
+    "/{client_id}/agent",
+    response_model=AgentResponse,
+    dependencies=[requires("use", "client", id_param="client_id")],
+)
+async def harness_agent(
+    client_id: UUID,
+    agent_service: AgentService = Depends(get_agent_service),
+) -> AgentResponse:
+    """The agent a task given to this Codex or Claude Code client itself runs as.
+
+    Made on first use, with no instructions or tools of its own: the client's
+    CLI brings them. It is not listed among the workspace's agents.
+    """
+    return AgentResponse.from_domain(await agent_service.harness_agent(client_id))
 
 
 @router.post(
