@@ -29,6 +29,7 @@ from pydantic import BaseModel, ValidationError
 from agentarea_bundles.schemas.bundle import (
     MAX_NAME_LENGTH,
     Bundle,
+    BundleAgent,
     BundleAutomation,
     BundleChannel,
     BundleMcp,
@@ -86,7 +87,7 @@ class DeployChecks(Protocol):
 
     async def catalog_mcp(self, catalog_id: str) -> CatalogMcp | None: ...
     async def agent_problem(
-        self, model_id: str, toolsets: list[str], client_id: str | None
+        self, agent: BundleAgent, model_id: str, client_id: str | None
     ) -> str | None: ...
     async def automation_problem(
         self, package: Bundle, automation: BundleAutomation
@@ -393,6 +394,17 @@ def policy_as_rule(policy: BundlePolicy, subject_id: str) -> PolicyRule:
     )
 
 
+def matching_rule(rules: list[Any], rule: PolicyRule) -> Any | None:
+    """The rule among ``rules`` that already does what ``rule`` would: a policy reuses it.
+
+    Rules have no name. One with the same subject, target and effect but other
+    params or condition (a $1000 cap against a $10 one) is another rule.
+    """
+    return next(
+        (r for r in rules if r.params == rule.params and r.condition == rule.condition), None
+    )
+
+
 def mcp_is_unsupported(mcp: BundleMcp) -> str | None:
     """Return a reason string if this MCP cannot run in our runtime, else None."""
     if mcp.catalog is not None:
@@ -503,9 +515,26 @@ class BundleAnalyzer:
         )
 
     def _digest(self, package: Bundle, entities: list[PreviewEntity]) -> str:
-        """sha256 of the bundle and what the plan does with each entity, and to which id."""
+        """sha256 of the bundle and what the plan does with each entity, to which id, with
+        which resolved spec.
+
+        The spec's fingerprint carries the setup values it resolves, so another
+        value is another plan; secret values stay out of it.
+        """
+        specs = {
+            (kind, item.key): item for kind in EntityKind for item in bundle_entities(package, kind)
+        }
         plan: list[list[str | None]] = [
-            [e.kind.value, e.key, e.status.value, self._ids.get((e.kind, e.key))] for e in entities
+            [
+                e.kind.value,
+                e.key,
+                e.status.value,
+                self._ids.get((e.kind, e.key)),
+                spec_fingerprint(package, spec, self._values)
+                if (spec := specs.get((e.kind, e.key))) is not None
+                else None,
+            ]
+            for e in entities
         ]
         canonical = {"bundle": package.model_dump(mode="json"), "plan": sorted(plan, key=str)}
         return hashlib.sha256(
@@ -630,7 +659,7 @@ class BundleAnalyzer:
                 unresolved = unresolved or bool(setup_refs(value))
             if not model_id or unresolved:
                 continue
-            problem = await checks.agent_problem(model_id, agent.toolsets, client)
+            problem = await checks.agent_problem(agent, model_id, client)
             if problem:
                 issues.append(
                     PreviewIssue(

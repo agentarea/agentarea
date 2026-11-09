@@ -10,10 +10,15 @@ and import/export alike.
 from uuid import uuid4
 
 import pytest
-from agentarea_agents.application.agent_service import AgentService, InvalidModelIdError
+from agentarea_agents.application.agent_service import (
+    AgentService,
+    InvalidModelIdError,
+    ReasoningConflictError,
+)
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.domain.skill_models import Skill, agent_skills_table
 from agentarea_agents.schemas.dto import AgentCreate, AgentUpdate
+from agentarea_agents_sdk.models.provider_profiles import ReasoningSettingError
 from agentarea_common.audit.models import AuditEventORM
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
@@ -289,3 +294,27 @@ async def test_a_config_is_checked_without_writing_an_agent(session_factory):
             await service.validate_config("gpt-4o", [])
         with pytest.raises(InvalidModelIdError, match="needs image_model_id"):
             await service.validate_config(str(instance.id), [_code_tool("agentarea/media")])
+
+
+async def test_a_config_check_refuses_reasoning_the_agent_or_its_model_cannot_take(
+    session_factory,
+):
+    """Both reasoning forms at once is what create refuses; a level the model's catalog
+    entry does not list is what every run refuses."""
+    async with session_factory() as session:
+        service = _service(session, _context())
+        instance = await _seed_model_instance(session)
+        spec = await session.get(ModelSpec, instance.model_spec_id)
+        assert spec is not None
+        spec.reasoning_efforts = ["low", "high"]
+        await session.flush()
+        model_id = str(instance.id)
+
+        await service.validate_config(model_id, [], reasoning_effort="high")
+        await service.validate_config(model_id, [], reasoning_max_tokens=2048)
+        with pytest.raises(ReasoningConflictError):
+            await service.validate_config(
+                model_id, [], reasoning_effort="high", reasoning_max_tokens=2048
+            )
+        with pytest.raises(ReasoningSettingError, match="takes reasoning_effort low, high"):
+            await service.validate_config(model_id, [], reasoning_effort="max")

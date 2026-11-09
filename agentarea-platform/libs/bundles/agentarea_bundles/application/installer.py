@@ -47,6 +47,7 @@ from agentarea_bundles.application.analyzer import (
     context_secret_errors,
     effective_setup,
     linked_id,
+    matching_rule,
     mcp_is_unsupported,
     policy_as_rule,
     remembered_setup,
@@ -1271,21 +1272,23 @@ class BundleInstaller:
                 )
                 continue
 
-            # Idempotent by (subject, target, effect): rules have no name.
-            existing = await self._governance_service.list_rules(
-                subject_type=subject_type,
-                subject_id=subject_id,
-                target=policy.target,
-                effect=effect,
+            existing = matching_rule(
+                await self._governance_service.list_rules(
+                    subject_type=subject_type,
+                    subject_id=subject_id,
+                    target=policy.target,
+                    effect=effect,
+                ),
+                rule,
             )
-            if existing:
+            if existing is not None:
                 result.entities.append(
                     InstalledEntity(
                         kind=EntityKind.POLICY,
                         key=policy.key,
                         name=policy.key,
                         action=InstallAction.REUSED,
-                        id=str(existing[0].id) if existing[0].id else None,
+                        id=str(existing.id) if existing.id else None,
                     )
                 )
                 continue

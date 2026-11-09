@@ -21,7 +21,9 @@ from agentarea_bundles.application.analyzer import (
     PriorInstall,
     context_secret_errors,
     effective_setup,
+    matching_rule,
     parse_bundle,
+    policy_as_rule,
     required_setup_errors,
 )
 from agentarea_bundles.application.folder import load_folder
@@ -33,7 +35,7 @@ from agentarea_bundles.application.installer import (
 )
 from agentarea_bundles.domain.models import InstalledBundle
 from agentarea_bundles.infrastructure.repository import InstalledBundleRepository
-from agentarea_bundles.schemas.bundle import Bundle, BundleAutomation, BundlePolicy
+from agentarea_bundles.schemas.bundle import Bundle, BundleAgent, BundleAutomation, BundlePolicy
 from agentarea_bundles.schemas.preview import (
     EntityKind,
     EntityStatus,
@@ -284,7 +286,8 @@ class BundleService:
             target=policy.target,
             effect=PolicyEffect(policy.effect),
         )
-        return str(rules[0].id) if rules and rules[0].id else None
+        found = matching_rule(rules, policy_as_rule(policy, str(subject_id)))
+        return str(found.id) if found is not None and found.id else None
 
     async def ref_exists(self, kind: EntityKind, entity_id: str) -> bool:
         return await self._installer().get_entity(kind, entity_id) is not None
@@ -319,16 +322,18 @@ class BundleService:
         return self._catalog_mcps[catalog_id]
 
     async def agent_problem(
-        self, model_id: str, toolsets: list[str], client_id: str | None
+        self, agent: BundleAgent, model_id: str, client_id: str | None
     ) -> str | None:
         from agentarea_agents.application.agent_service import (
             InvalidClientError,
             InvalidModelIdError,
+            ReasoningConflictError,
         )
+        from agentarea_agents_sdk.models.provider_profiles import ReasoningSettingError
         from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
 
         known = get_code_tools_metadata()
-        unknown = [name for name in toolsets if name not in known]
+        unknown = [name for name in agent.toolsets if name not in known]
         if unknown:
             return f"unknown toolset(s): {', '.join(unknown)}"
         try:
@@ -337,9 +342,18 @@ class BundleService:
             return "client must be the id of a Codex or Claude Code client"
         try:
             await self._agent_service.validate_config(
-                model_id, [{"type": "code", "name": name} for name in toolsets], client
+                model_id,
+                [{"type": "code", "name": name} for name in agent.toolsets],
+                client,
+                agent.reasoning_effort,
+                agent.reasoning_max_tokens,
             )
-        except (InvalidModelIdError, InvalidClientError) as exc:
+        except (
+            InvalidModelIdError,
+            InvalidClientError,
+            ReasoningConflictError,
+            ReasoningSettingError,
+        ) as exc:
             return str(exc)
         return None
 

@@ -5,7 +5,9 @@ import {
   bundleEditReducer,
   bundlePolicyAsPolicy,
   initialEdit,
+  isPlanChanged,
   openIssues,
+  planKey,
   setupFieldPlacement,
 } from "../bundle-plan";
 
@@ -245,5 +247,43 @@ describe("bundle policies", () => {
       subject_id: "researcher",
       effect: "deny",
     });
+  });
+});
+
+describe("planKey", () => {
+  it("names the same draft the same however its objects were built", () => {
+    const a = planKey({ bundle: { name: "b" }, setup_values: { x: 1, y: 2 } });
+    const b = planKey({ bundle: { name: "b" }, setup_values: { y: 2, x: 1 } });
+    expect(a).toBe(b);
+  });
+
+  it("names a draft with another setup value or edit differently", () => {
+    const base = planKey({ bundle: { name: "b" }, setup_values: { x: 1 } });
+    expect(planKey({ bundle: { name: "b" }, setup_values: { x: 2 } })).not.toBe(
+      base
+    );
+    expect(
+      planKey({
+        bundle: { name: "b", description: "d" },
+        setup_values: { x: 1 },
+      })
+    ).not.toBe(base);
+  });
+});
+
+describe("isPlanChanged", () => {
+  it("is the 409 install answers for a plan other than the one sent", () => {
+    expect(
+      isPlanChanged({ status: 409, error: { code: "bundle_plan_changed" } })
+    ).toBe(true);
+    expect(
+      isPlanChanged({
+        status: 409,
+        error: { code: "approval_enforced_by_policy" },
+      })
+    ).toBe(false);
+    expect(
+      isPlanChanged({ status: 400, error: { code: "bundle_install_failed" } })
+    ).toBe(false);
   });
 });

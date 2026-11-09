@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_agents.application.agent_service import InvalidModelIdError
+from agentarea_agents_sdk.models.provider_profiles import ReasoningSettingError
 from agentarea_bundles.application.analyzer import parse_bundle
 from agentarea_bundles.application.installer import BundleInstallError, BundleValidationError
 from agentarea_bundles.application.service import BundlePlanChangedError, BundleService
@@ -94,7 +95,10 @@ class FakeAgentSvc(Known):
     async def with_approval_flags(self, agent_id, tools):
         return tools
 
-    async def validate_config(self, model_id, tools, client_id=None):
+    async def validate_config(
+        self, model_id, tools, client_id=None, reasoning_effort=None, reasoning_max_tokens=None
+    ):
+        self.validated = (reasoning_effort, reasoning_max_tokens)
         if self.refuse:
             raise self.refuse
 
@@ -615,3 +619,46 @@ async def test_a_setup_value_that_changes_the_plan_needs_its_own_analyze():
     assert without.plan_digest != supplied.plan_digest
     with pytest.raises(BundlePlanChangedError):
         await service.install(parse_bundle(CHANNEL), {"bot": "t"}, without.plan_digest or "")
+
+
+async def test_a_reasoning_level_the_model_does_not_take_blocks_before_any_write():
+    agents = FakeAgentSvc(
+        refuse=ReasoningSettingError("model gpt-4o takes reasoning_effort low, high, not max")
+    )
+    service, bundles = _service(agent_service=agents)
+    pkg = parse_bundle(CRON.replace("instruction: x", "instruction: x, reasoning_effort: max"))
+
+    preview = await service.analyze_bundle(pkg)
+
+    assert agents.validated == ("max", None)
+    assert any(i.entity_key == "lead" and "not max" in i.message for i in preview.block_issues)
+    with pytest.raises(BundleValidationError):
+        await _install(service, pkg, {})
+    assert agents.calls == []
+    assert bundles.writes == []
+
+
+class FakeRules:
+    def __init__(self, rules):
+        self.rules = rules
+        self.asked = []
+
+    async def list_rules(self, **filters):
+        self.asked.append(filters)
+        return self.rules
+
+
+async def test_a_policy_is_found_only_as_a_rule_with_its_params_and_condition():
+    service, _ = _service()
+    policy = parse_bundle(
+        'schema_version: "0.1.0"\nname: p\n'
+        "policies: [{key: cap, subject: workspace, target: spend, effect: cap, "
+        "params: {amount_usd: 10}}]\n"
+    ).policies[0]
+    bigger = SimpleNamespace(id=uuid4(), params={"amount_usd": 1000}, condition=None)
+    same = SimpleNamespace(id=uuid4(), params={"amount_usd": 10}, condition=None)
+
+    service._governance_service = FakeRules([bigger])
+    assert await service.find_policy(policy, None) is None
+    service._governance_service = FakeRules([bigger, same])
+    assert await service.find_policy(policy, None) == str(same.id)

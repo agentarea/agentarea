@@ -261,12 +261,41 @@ class AgentService(BaseCrudService[Agent]):
         return model_id
 
     async def validate_config(
-        self, model_id: str | None, tools: list[dict[str, Any]], client_id: UUID | None = None
+        self,
+        model_id: str | None,
+        tools: list[dict[str, Any]],
+        client_id: UUID | None = None,
+        reasoning_effort: str | None = None,
+        reasoning_max_tokens: int | None = None,
     ) -> None:
-        """Refuse what create_agent would refuse about the model, code tools and client, writing nothing."""
+        """Refuse what create_agent would refuse about the model, code tools, client and
+        reasoning, writing nothing; and a reasoning level the model does not take,
+        which every run of the agent would refuse.
+        """
         await self._validate_tool_models(tools)
-        await self._validate_model_id(model_id)
+        model_id = await self._validate_model_id(model_id)
         await self._validate_client_id(client_id)
+        if reasoning_effort and reasoning_max_tokens:
+            raise ReasoningConflictError()
+        if reasoning_effort and model_id:
+            await self._validate_reasoning_effort(model_id, reasoning_effort)
+
+    async def _validate_reasoning_effort(self, model_id: str, effort: str) -> None:
+        from agentarea_agents_sdk.models.provider_profiles import check_effort_supported
+
+        instance = await ModelInstanceRepository(
+            session=self.repository_factory.session, user_context=self._user_context
+        ).get_by_id(UUID(model_id))
+        if instance is None:
+            raise InvalidModelIdError(
+                f"Model instance '{model_id}' does not exist in this workspace."
+            )
+        spec = instance.model_spec
+        levels = (
+            spec.reasoning_efforts
+            or instance.provider_config.provider_spec.profile().reasoning_efforts
+        )
+        check_effort_supported(effort, levels, model_name=spec.model_name)
 
     async def with_approval_flags(
         self, agent_id: UUID, tools: builtins.list[dict]

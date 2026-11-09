@@ -13,11 +13,9 @@ import {
   Send,
   ShieldCheck,
   SlidersHorizontal,
-  type LucideIcon,
 } from "lucide-react";
 import type {
   BundleAgent,
-  EntityKind,
   ImportPreview,
   ModelInstanceResponse,
   SetupField,
@@ -66,34 +64,35 @@ import {
   initialEdit,
   installedMcpKeys,
   isAgentMcpOn,
+  isPlanChanged,
   launchPlan,
   missingRequiredSetup,
   openIssues,
+  planKey,
   setupFieldPlacement,
   suggestedModel,
   type BundleEdit,
   type BundleEditAction,
+  type InstallDraft,
   type LaunchPlan,
 } from "./bundle-plan";
-
-// What a bundle entity of each kind becomes in the workspace.
-const BUNDLE_KIND_ICONS: Record<EntityKind, LucideIcon> = {
-  agent: ENTITY_ICONS.agent,
-  mcp: ENTITY_ICONS.mcp,
-  skill: ENTITY_ICONS.skill,
-  channel: Send,
-  automation: ENTITY_ICONS.trigger,
-  policy: ShieldCheck,
-};
+import { BUNDLE_KIND_ICONS, DeployPlan } from "./DeployPlan";
 
 type Load =
   | { kind: "loading" }
   | { kind: "error"; message: string }
   | { kind: "ready"; preview: ImportPreview };
 
+// The plan analyze made of one draft; `key` is the draft's planKey.
+type Planned = { key: string; preview: ImportPreview };
+
+// Install sends the digest of the plan on screen, so a plan is shown first.
+// `changed` marks one made again after install found the workspace had moved on.
 type Install =
   | { kind: "idle" }
-  | { kind: "installing" }
+  | { kind: "planning" }
+  | { kind: "planned"; planned: Planned; changed: boolean }
+  | { kind: "installing"; planned: Planned }
   | { kind: "error"; message: string }
   | { kind: "done"; name: string; plan: LaunchPlan };
 
@@ -220,13 +219,10 @@ export function BundlePlan({
 
   const preview = load.preview;
 
-  async function runInstall() {
-    setInstall({ kind: "installing" });
+  async function plan(draft: InstallDraft, changed: boolean) {
+    setInstall({ kind: "planning" });
     try {
-      const request = buildInstallRequest(preview, edit, canAdminister);
-      // Install carries out one plan only: the plan of exactly what it is
-      // sent, edits and setup values included.
-      const planned = await analyzeBundleAction(request);
+      const planned = await analyzeBundleAction(draft);
       if (planned.error || !planned.data) {
         setInstall({
           kind: "error",
@@ -234,18 +230,33 @@ export function BundlePlan({
         });
         return;
       }
-      const blocked = planned.data.issues?.find((i) => i.severity === "block");
-      if (blocked || !planned.data.plan_digest) {
-        setInstall({
-          kind: "error",
-          message: blocked?.message ?? t("installFailed"),
-        });
+      setInstall({
+        kind: "planned",
+        planned: { key: planKey(draft), preview: planned.data },
+        changed,
+      });
+    } catch (e) {
+      console.error("Failed to plan the bundle install", e);
+      setInstall({
+        kind: "error",
+        message: `${t("analyzeFailed")}: ${formatApiError(e)}`,
+      });
+    }
+  }
+
+  async function runInstall(draft: InstallDraft, planned: Planned) {
+    const digest = planned.preview.plan_digest;
+    if (!digest) return;
+    setInstall({ kind: "installing", planned });
+    try {
+      const installed = await installBundleAction({
+        ...draft,
+        plan_digest: digest,
+      });
+      if (isPlanChanged(installed)) {
+        await plan(draft, true);
         return;
       }
-      const installed = await installBundleAction({
-        ...request,
-        plan_digest: planned.data.plan_digest,
-      });
       if (installed.error || !installed.data) {
         setInstall({
           kind: "error",
@@ -256,9 +267,9 @@ export function BundlePlan({
       // A lone agent with nothing left to finish is started right away; an
       // organisation lands on its launch screen. The button keeps spinning
       // until the route changes.
-      const plan = launchPlan(request, installed.data);
-      if (plan.openNow) {
-        router.push(plan.openNow);
+      const launch = launchPlan(draft, installed.data);
+      if (launch.openNow) {
+        router.push(launch.openNow);
         router.refresh();
         return;
       }
@@ -268,7 +279,7 @@ export function BundlePlan({
           preview.bundle.display_name ||
           installed.data.bundle_name ||
           preview.bundle.name,
-        plan,
+        plan: launch,
       });
     } catch (e) {
       console.error("Failed to install bundle", e);
@@ -299,6 +310,17 @@ export function BundlePlan({
   const modelless = agentsWithoutModel(preview, edit);
   const agentsKept = (preview.bundle.agents ?? []).some(
     (a) => !edit.agentOff.has(a.key)
+  );
+  const draft = buildInstallRequest(preview, edit, canAdminister);
+  const draftKey = planKey(draft);
+  // A plan made of another draft no longer says what install would do.
+  const shown =
+    install.kind === "planned" || install.kind === "installing"
+      ? install.planned
+      : null;
+  const planned = shown?.key === draftKey ? shown : null;
+  const planBlocking = (planned?.preview.issues ?? []).filter(
+    (i) => i.severity === "block"
   );
 
   return (
@@ -336,6 +358,26 @@ export function BundlePlan({
 
       {configuring && (
         <div className="flex flex-col gap-2 border-t border-border/60 pt-5">
+          {planned && <DeployPlan plan={planned.preview} />}
+          {install.kind === "planned" && install.changed && planned && (
+            <StatusIndicator kind="attention" size="sm" className="text-xs">
+              {t("planChanged")}
+            </StatusIndicator>
+          )}
+          {shown && !planned && (
+            <StatusIndicator kind="attention" size="sm" className="text-xs">
+              {t("planStale")}
+            </StatusIndicator>
+          )}
+          {planBlocking.length > 0 && (
+            <FormError>
+              {planBlocking.map((i) => (
+                <span key={i.message} className="block">
+                  {i.message}
+                </span>
+              ))}
+            </FormError>
+          )}
           {install.kind === "error" && <FormError>{install.message}</FormError>}
           {modelless.length > 0 && (
             <StatusIndicator kind="attention" size="sm" className="text-xs">
@@ -350,15 +392,25 @@ export function BundlePlan({
           <div className="flex items-center gap-2">
             <StartAgentButton
               size="xs"
-              onClick={runInstall}
-              isLoading={install.kind === "installing"}
+              onClick={() =>
+                planned ? runInstall(draft, planned) : plan(draft, false)
+              }
+              isLoading={
+                install.kind === "planning" || install.kind === "installing"
+              }
               disabled={
                 blocking.length > 0 ||
                 missing.length > 0 ||
-                modelless.length > 0
+                modelless.length > 0 ||
+                planBlocking.length > 0 ||
+                (planned !== null && !planned.preview.plan_digest)
               }
             >
-              {agentsKept ? t("start") : t("installBundle")}
+              {!planned
+                ? t("reviewPlan")
+                : agentsKept
+                  ? t("start")
+                  : t("installBundle")}
             </StartAgentButton>
             <Button variant="ghost" size="sm" onClick={onCancel}>
               {tCommon("cancel")}

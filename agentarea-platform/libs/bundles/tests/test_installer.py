@@ -402,13 +402,23 @@ async def test_unenforceable_policy_refuses_the_whole_install():
 
 
 async def test_policy_idempotent_when_rule_exists():
-    inst, deps = _installer(
-        governance_service=FakeGovernanceSvc(existing=[SimpleNamespace(id=uuid4())])
-    )
-    res = await inst.install(parse_bundle(POLICIES), {})
+    same = SimpleNamespace(id=uuid4(), params={"amount_usd": 50}, condition=None)
+    inst, deps = _installer(governance_service=FakeGovernanceSvc(existing=[same]))
+    res = await inst.install(parse_bundle(POLICIES.split("  - {key: deny")[0]), {})
     actions = {(e.kind, e.key): e.action for e in res.entities}
     assert actions[("policy", "cap")] == InstallAction.REUSED
     assert deps["governance_service"].created == []  # nothing created
+
+
+async def test_a_rule_with_other_params_is_not_the_policy_and_one_is_created():
+    bigger = SimpleNamespace(id=uuid4(), params={"amount_usd": 1000}, condition=None)
+    inst, deps = _installer(governance_service=FakeGovernanceSvc(existing=[bigger]))
+    res = await inst.install(parse_bundle(POLICIES.split("  - {key: deny")[0]), {})
+
+    cap = next(e for e in res.entities if e.key == "cap")
+    assert cap.action == InstallAction.CREATED
+    [created] = deps["governance_service"].created
+    assert created.params == {"amount_usd": 50}
 
 
 async def test_policy_on_a_missing_agent_refuses_the_install():

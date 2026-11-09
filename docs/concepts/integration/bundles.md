@@ -167,7 +167,8 @@ policies:
 `POST /v1/workspaces/{workspace}/bundles/analyze` parses the source and returns an `ImportPreview` —
 the plan: every entity tagged `will_create`, `will_update`, `unchanged`,
 `orphaned`, `changes_not_applied`, `already_exists` or `unsupported`, plus a
-list of issues and a `plan_digest` naming the plan. It writes nothing. This is
+list of issues and a `plan_digest` naming the plan: each entity's status, the
+id it resolves to and the fingerprint of its resolved non-secret spec. It writes nothing. This is
 where a missing setup field, an agent pointing at a nonexistent MCP key, or a
 command runtime the platform cannot run is surfaced. Pass the setup values the
 install will be given: a plan depends on them.
@@ -214,8 +215,8 @@ it recorded, marked `REUSED`, and never changed. Either is found only while it
 still exists (an archived agent is installed again). Triggers are named
 `{bundle_name}:{key}`; one the bundle did not record as its own is reused only
 when it carries that name, runs the agent this install bound and is the one
-recorded. A policy is reused when a rule with its subject, target and effect
-exists, and the plan says so.
+recorded. A policy is reused when a rule with its subject, target, effect,
+params and condition exists, and the plan says so.
 
 An agent update changes only the tools and skills the bundle declares or the
 last install attached; whatever was added to the agent in the workspace, and

@@ -317,6 +317,38 @@ export function openIssues(
 /** What /install is sent but the plan digest, which an analyze of exactly this gives. */
 export type InstallDraft = Omit<InstallRequest, "plan_digest">;
 
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, v]) => v !== undefined)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([k, v]) => [k, canonical(v)])
+    );
+  }
+  return value;
+}
+
+/**
+ * Names a draft: two drafts with the same key install the same thing, so a plan
+ * shown for one is the plan of the other. Any edit or setup value changes it.
+ */
+export function planKey(draft: InstallDraft): string {
+  return JSON.stringify(canonical(draft));
+}
+
+/** Install refused the plan it was sent: the workspace changed since it was shown. */
+export function isPlanChanged(result: { error?: unknown; status?: number }) {
+  const error = result.error;
+  return (
+    result.status === 409 &&
+    typeof error === "object" &&
+    error !== null &&
+    (error as Record<string, unknown>).code === "bundle_plan_changed"
+  );
+}
+
 /** The bundle and setup values to send to /install, with every choice applied. */
 export function buildInstallRequest(
   preview: ImportPreview,

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { InstallRequest, InstallResult } from "@/api/client/types.gen";
-import { launchPlan } from "../bundle-plan";
+import type { InstallResult } from "@/api/client/types.gen";
+import { launchPlan, type InstallDraft } from "../bundle-plan";
 
 function request(
   channels: { key: string; enabled: boolean }[] = [],
   automations: { key: string; enabled: boolean }[] = []
-): InstallRequest {
+): InstallDraft {
   return {
     bundle: {
       name: "b",
@@ -23,7 +23,7 @@ function request(
       })),
     },
     setup_values: {},
-  } as InstallRequest;
+  };
 }
 
 function result(entities: InstallResult["entities"]): InstallResult {

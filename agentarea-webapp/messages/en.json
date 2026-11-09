@@ -4177,7 +4177,21 @@
     "pasteLabel": "Package Source",
     "pastePlaceholder": "Paste your agent package YAML or JSON here...",
     "pasteHint": "Paste a valid agent package definition in YAML or JSON format.",
-    "analyze": "Analyze Package"
+    "analyze": "Analyze Package",
+    "reviewPlan": "Review plan",
+    "planTitle": "What this install does",
+    "planHint": "Installing carries out exactly this plan.",
+    "planChanged": "The workspace changed since the plan was made. Review the new plan below and install again.",
+    "planStale": "You changed the bundle since its plan was made; review the plan again.",
+    "planStatus": {
+      "will_create": "Will be created",
+      "will_update": "Will be updated",
+      "unchanged": "Unchanged",
+      "already_exists": "Already here",
+      "orphaned": "Kept, not deleted",
+      "changes_not_applied": "Changes not applied",
+      "unsupported": "Unsupported"
+    }
   },
   "ProjectOverviewPage": {
     "loadFailed": "Couldn't load the project",

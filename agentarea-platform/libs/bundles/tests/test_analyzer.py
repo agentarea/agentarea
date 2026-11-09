@@ -555,7 +555,8 @@ class _Checks:
         transport = self.catalog.get(catalog_id)
         return CatalogMcp(spec_id=f"spec-{catalog_id}", transport=transport) if transport else None
 
-    async def agent_problem(self, model_id, toolsets, client_id):
+    async def agent_problem(self, agent, model_id, client_id):
+        toolsets = agent.toolsets
         self.asked.append(model_id)
         if client_id in self.bad_clients:
             return f"bad client {client_id}"
@@ -1053,3 +1054,29 @@ async def test_the_plan_digest_names_the_plan():
             await BundleAnalyzer(existence=_Refs(), prior=moved).analyze(parse_bundle(DEPLOYED))
         ).plan_digest
     )
+
+
+async def test_the_plan_digest_holds_only_for_the_setup_values_it_was_made_with():
+    prior = _prior_with_values(MODEL_SETUP, {"model": "m1"})
+    pkg = parse_bundle(MODEL_SETUP)
+
+    async def digest(values):
+        preview = await BundleAnalyzer(existence=_Refs(), prior=prior, setup_values=values).analyze(
+            pkg
+        )
+        return preview.plan_digest
+
+    # a first install creates the agent either way; the value it gets still differs
+    fresh = await BundleAnalyzer(setup_values={"model": "m"}).analyze(pkg)
+    other = await BundleAnalyzer(setup_values={"model": "other"}).analyze(pkg)
+    assert {e.status for e in fresh.entities} == {e.status for e in other.entities}
+    assert fresh.plan_digest != other.plan_digest
+    assert await digest({"model": "m2"}) != await digest({"model": "m3"})
+    assert await digest({"model": "m2"}) == await digest({"model": "m2"})
+
+
+async def test_the_plan_digest_never_carries_a_secret_value():
+    pkg = parse_bundle(CHANNELED)
+    a = await BundleAnalyzer(setup_values={"bot": "secret-a"}).analyze(pkg)
+    b = await BundleAnalyzer(setup_values={"bot": "secret-b"}).analyze(pkg)
+    assert a.plan_digest == b.plan_digest

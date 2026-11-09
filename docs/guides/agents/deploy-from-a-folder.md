@@ -94,7 +94,8 @@ into `${setup.<key>}`.
 
     `reasoning_effort` is a level the model takes, such as `low` or `high`;
     `reasoning_max_tokens` is a token budget instead. Set one or neither,
-    never both. `client` runs the agent's tasks through the runner of a Codex
+    never both. A level the model's catalog entry does not list blocks the
+    deploy, since every run would refuse it. `client` runs the agent's tasks through the runner of a Codex
     or Claude Code client of the workspace, named by the client's id — a
     literal id or a `${setup.<key>}` reference. A client's name is not unique,
     so a name is refused; a client you may not use, or one that is no runner's,
@@ -224,9 +225,9 @@ into `${setup.<key>}`.
     `--yes` to skip the prompt in a script or CI job. `--workspace` can instead
     be set once with `agentarea workspace use acme`.
 
-    The install carries out exactly the plan you confirmed. If anything
-    changed it in between — a teammate's deploy, an entity deleted by hand —
-    the install refuses with `the deploy plan changed since it was shown` and
+    The install carries out exactly the plan you confirmed, setup values
+    included. If anything changed it in between — a teammate's deploy, an
+    entity deleted by hand — the install refuses with `the deploy plan changed since it was shown` and
     writes nothing; run `deploy` again to see the new plan.
   </Step>
 </Steps>
@@ -255,9 +256,11 @@ re-creating everything:
   only carries the same name — one a teammate made by hand, for instance — is
   not this folder's, and the deploy creates its own. Something an earlier
   install linked instead of creating shows as `already exists` and is never
-  changed. A rule with the same subject, target and effect as a policy file
-  is the one exception: the deploy reuses it rather than writing a second,
-  and the plan says `already exists`.
+  changed. A rule with the same subject, target, effect, params and
+  condition as a policy file is the one exception: the deploy reuses it
+  rather than writing a second, and the plan says `already exists`. A rule
+  that differs in any of them — a $1000 cap against the file's $10 — is
+  another rule, and the deploy creates the file's.
 - An agent this folder created and someone has since archived counts as
   gone: the deploy creates the agent again.
 - A redeploy changes only the agent's tools and skills the folder declares or
