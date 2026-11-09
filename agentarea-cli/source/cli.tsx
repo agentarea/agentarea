@@ -14,7 +14,7 @@ const cli = meow(
 	Commands
 	  (no command)              Interactive TUI mode
 	  login                     Sign in through the browser (OAuth + PKCE)
-	  logout                    Clear the stored session
+	  logout [--all]            Sign out of this API's host (--all: every host)
 	  <resource> <verb> [args]  Run any resource action (agents, tasks,
 	                            policies, access, mcp-servers, mcp-instances,
 	                            providers, models, triggers, workspace,

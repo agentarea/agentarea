@@ -373,74 +373,214 @@ async def test_mcp_workspace_reference_accepts_slug_or_id():
     assert by_slug.workspace_slug == "shared-slug"
 
 
-@pytest.mark.asyncio
-async def test_hydra_token_workspace_claim_is_ignored():
-    from agentarea_common.auth.dependencies import _try_hydra_token
+_API_AUDIENCE = "https://api.example.test"
 
-    jwks = Mock()
-    jwks.get_signing_key_from_jwt.return_value = Mock(key="public-key")
-    settings = Mock()
-    settings.HYDRA_AUDIENCE = "https://api.example.test"
 
-    with (
-        patch("agentarea_common.auth.dependencies._get_hydra_jwks", return_value=jwks),
-        patch("agentarea_common.config.get_auth_settings", return_value=settings),
-        patch(
-            "jwt.decode",
-            return_value={
+def _kratos_with_its_own_key():
+    """The real Kratos provider, holding only Kratos's key (not Hydra's)."""
+    import json
+
+    from agentarea_common.auth.providers.kratos import KratosAuthProvider
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    jwk = json.loads(jwt.algorithms.ECAlgorithm.to_jwk(key.public_key()))
+    jwks = {"keys": [{**jwk, "kid": "kratos-key", "use": "sig", "alg": "ES256"}]}
+    provider = KratosAuthProvider(
+        {"jwks_b64": json.dumps(jwks), "issuer": "http://kratos.test", "audience": "agentarea-api"}
+    )
+    return provider, key
+
+
+def _hydra_jwks_client(fetch_data):
+    """PyJWKClient for Hydra's JWKS, with the HTTP fetch replaced by *fetch_data*."""
+    client = jwt.PyJWKClient("http://hydra.test/.well-known/jwks.json", cache_keys=True)
+    client.fetch_data = fetch_data
+    return client
+
+
+def _raise(error: Exception):
+    def fetch():
+        raise error
+
+    return fetch
+
+
+class TestHydraTokenRefusal:
+    """A token Hydra signed is judged by Hydra's rules, and says why it was refused."""
+
+    @pytest.fixture
+    def hydra(self, monkeypatch):
+        import json
+        import time
+
+        from agentarea_common.auth import dependencies
+        from cryptography.hazmat.primitives.asymmetric import rsa
+
+        monkeypatch.setattr(dependencies, "_hydra_jwks_unavailable_logged_at", None)
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        public_jwk = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(key.public_key()))
+        hydra_jwks = {"keys": [{**public_jwk, "kid": "hydra-key", "use": "sig", "alg": "RS256"}]}
+        kratos, kratos_key = _kratos_with_its_own_key()
+        settings = Mock(HYDRA_AUDIENCE=_API_AUDIENCE)
+        jwks_client = Mock()
+
+        def sign(*, expires_in: int = 3600, kid: str = "hydra-key", signer=key, **claims) -> str:
+            now = int(time.time())
+            payload = {
                 "sub": "alice",
-                "ext": {"workspace_id": "foreign-workspace"},
-            },
-        ),
+                "client_id": "agentarea-cli",
+                "aud": [_API_AUDIENCE],
+                "iss": "http://hydra.test/",
+                "iat": now - 60,
+                "exp": now + expires_in,
+                **claims,
+            }
+            return jwt.encode(payload, signer, algorithm="RS256", headers={"kid": kid})
+
+        def sign_kratos(*, expires_in: int) -> str:
+            now = int(time.time())
+            payload = {
+                "sub": "bob",
+                "aud": "agentarea-api",
+                "iss": "http://kratos.test",
+                "iat": now - 120,
+                "exp": now + expires_in,
+            }
+            return jwt.encode(payload, kratos_key, algorithm="ES256", headers={"kid": "kratos-key"})
+
+        def serve_jwks(fetch_data) -> None:
+            jwks_client.current = _hydra_jwks_client(fetch_data)
+
+        serve_jwks(lambda: hydra_jwks)
+        with (
+            patch(
+                "agentarea_common.auth.dependencies._get_hydra_jwks",
+                side_effect=lambda: jwks_client.current,
+            ),
+            patch("agentarea_common.config.get_auth_settings", return_value=settings),
+            patch(
+                "agentarea_common.auth.dependencies.get_auth_provider",
+                return_value=kratos,
+            ),
+        ):
+            yield Mock(
+                sign=sign, sign_kratos=sign_kratos, serve_jwks=serve_jwks, settings=settings
+            )
+
+    @staticmethod
+    async def _authenticate(token: str) -> UserPrincipal:
+        from agentarea_common.auth.dependencies import authenticate_principal
+        from fastapi.security import HTTPAuthorizationCredentials
+
+        return await authenticate_principal(
+            _request(), HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_valid_hydra_token_is_accepted(self, hydra):
+        principal = await self._authenticate(hydra.sign())
+
+        assert principal.user_id == "alice"
+
+    @pytest.mark.asyncio
+    async def test_an_expired_hydra_token_is_reported_as_expired(self, hydra):
+        with pytest.raises(HTTPException) as exc_info:
+            await self._authenticate(hydra.sign(expires_in=-60))
+
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail == "Token has expired"
+        assert (exc_info.value.headers or {})["WWW-Authenticate"].startswith("Bearer ")
+
+    @pytest.mark.asyncio
+    async def test_a_hydra_token_for_another_audience_says_so(self, hydra, caplog):
+        with pytest.raises(HTTPException) as exc_info:
+            await self._authenticate(hydra.sign(aud=["https://other.example.test"]))
+
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail == "Token was not issued for this API"
+        assert any(
+            r.levelname == "WARNING" and "Hydra" in r.getMessage() for r in caplog.records
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_hydra_token_without_a_user_says_so(self, hydra):
+        with pytest.raises(HTTPException) as exc_info:
+            await self._authenticate(hydra.sign(sub="agentarea-cli"))
+
+        assert exc_info.value.status_code == 401
+        assert "JWKS" not in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_a_hydra_token_is_refused_when_no_audience_is_configured(self, hydra):
+        hydra.settings.HYDRA_AUDIENCE = None
+
+        with pytest.raises(HTTPException) as exc_info:
+            await self._authenticate(hydra.sign())
+
+        assert exc_info.value.status_code == 401
+        assert "JWKS" not in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_a_token_neither_kratos_nor_hydra_signed_keeps_the_kratos_reason(self, hydra):
+        with pytest.raises(HTTPException) as exc_info:
+            await self._authenticate(hydra.sign(kid="somebody-else"))
+
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail == "Key not found in JWKS"
+
+    @pytest.mark.asyncio
+    async def test_a_hydra_token_with_a_forged_signature_says_so(self, hydra):
+        from cryptography.hazmat.primitives.asymmetric import rsa
+
+        forger = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await self._authenticate(hydra.sign(signer=forger))
+
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail == "Token signature is invalid"
+
+    @pytest.mark.asyncio
+    async def test_a_hydra_token_workspace_claim_is_ignored(self, hydra):
+        principal = await self._authenticate(hydra.sign(ext={"workspace_id": "foreign"}))
+
+        assert principal.user_id == "alice"
+        assert not hasattr(principal, "workspace_id")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "fetch_data",
+        [
+            pytest.param(_raise(jwt.PyJWKClientConnectionError("refused")), id="unreachable"),
+            pytest.param(lambda: "<html>Bad gateway</html>", id="not-a-json-object"),
+            pytest.param(_raise(ValueError("Expecting value: line 1 column 1")), id="not-json"),
+            pytest.param(lambda: {"keys": []}, id="no-keys"),
+            pytest.param(lambda: {"keys": "nope"}, id="invalid-key-set"),
+        ],
+    )
+    async def test_a_broken_hydra_jwks_leaves_an_expired_kratos_session_a_401(
+        self, hydra, fetch_data
     ):
-        context = await _try_hydra_token("oauth-token", Mock(spec=Request))
+        hydra.serve_jwks(fetch_data)
 
-    assert context is not None
-    assert context.user_id == "alice"
-    assert not hasattr(context, "workspace_id")
+        with pytest.raises(HTTPException) as exc_info:
+            await self._authenticate(hydra.sign_kratos(expires_in=-60))
 
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail == "Token has expired"
 
-@pytest.mark.asyncio
-async def test_hydra_token_without_a_user_is_refused():
-    """A client_credentials token names the client as its subject; nobody logged in."""
-    from agentarea_common.auth.dependencies import _try_hydra_token
-
-    jwks = Mock()
-    jwks.get_signing_key_from_jwt.return_value = Mock(key="public-key")
-    settings = Mock()
-    settings.HYDRA_AUDIENCE = "https://api.example.test"
-
-    with (
-        patch("agentarea_common.auth.dependencies._get_hydra_jwks", return_value=jwks),
-        patch("agentarea_common.config.get_auth_settings", return_value=settings),
-        patch(
-            "jwt.decode",
-            return_value={
-                "sub": "90eaf1b8-5c71-48a5-a5f2-8da8c9a66771",
-                "client_id": "90eaf1b8-5c71-48a5-a5f2-8da8c9a66771",
-            },
-        ),
+    @pytest.mark.asyncio
+    async def test_an_unavailable_hydra_jwks_is_logged_once_not_per_request(
+        self, hydra, caplog
     ):
-        context = await _try_hydra_token("oauth-token", Mock(spec=Request))
+        hydra.serve_jwks(_raise(jwt.PyJWKClientConnectionError("refused")))
 
-    assert context is None
+        for _ in range(3):
+            with pytest.raises(HTTPException):
+                await self._authenticate(hydra.sign_kratos(expires_in=-60))
 
-
-@pytest.mark.asyncio
-async def test_hydra_token_issued_to_a_user_through_a_client_is_accepted():
-    from agentarea_common.auth.dependencies import _try_hydra_token
-
-    jwks = Mock()
-    jwks.get_signing_key_from_jwt.return_value = Mock(key="public-key")
-    settings = Mock()
-    settings.HYDRA_AUDIENCE = "https://api.example.test"
-
-    with (
-        patch("agentarea_common.auth.dependencies._get_hydra_jwks", return_value=jwks),
-        patch("agentarea_common.config.get_auth_settings", return_value=settings),
-        patch("jwt.decode", return_value={"sub": "alice", "client_id": "codex-client"}),
-    ):
-        context = await _try_hydra_token("oauth-token", Mock(spec=Request))
-
-    assert context is not None
-    assert context.user_id == "alice"
+        warnings = [r for r in caplog.records if "Hydra's JWKS" in r.getMessage()]
+        assert len(warnings) == 1
+        assert warnings[0].levelname == "WARNING"
+        assert warnings[0].exc_info is not None

@@ -18,6 +18,7 @@ Provides:
 
 import hashlib
 import logging
+import time
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -494,39 +495,94 @@ def _get_hydra_jwks():
     return _hydra_jwks_client
 
 
-async def _try_hydra_token(token: str, request: Request) -> UserPrincipal | None:
-    """Try to validate a JWT as a Hydra-issued OAuth token.
+# Hydra's JWKS is consulted for every token Kratos refuses; where Hydra is not
+# deployed it is unavailable on every such request, so say so once a while.
+_HYDRA_JWKS_UNAVAILABLE_LOG_INTERVAL_S = 600.0
+_hydra_jwks_unavailable_logged_at: float | None = None
 
-    Returns the principal if valid, None otherwise. Used as a fallback when
-    Kratos validation fails — MCP clients (Cursor, Claude Desktop) authenticate
-    via Hydra OAuth 2.1 and their tokens are signed with Hydra's keys.
+
+def _log_hydra_jwks_unavailable(error: Exception) -> None:
+    global _hydra_jwks_unavailable_logged_at
+    now = time.monotonic()
+    last = _hydra_jwks_unavailable_logged_at
+    if last is not None and now - last < _HYDRA_JWKS_UNAVAILABLE_LOG_INTERVAL_S:
+        return
+    _hydra_jwks_unavailable_logged_at = now
+    logger.warning(
+        "Hydra's JWKS is unavailable; tokens are not checked as Hydra's (at most every %.0fs)",
+        _HYDRA_JWKS_UNAVAILABLE_LOG_INTERVAL_S,
+        exc_info=error,
+    )
+
+
+def _hydra_refusal_detail(error: Exception) -> str:
+    import jwt as pyjwt
+
+    if isinstance(error, pyjwt.InvalidAudienceError):
+        return "Token was not issued for this API"
+    if isinstance(error, pyjwt.InvalidSignatureError):
+        return "Token signature is invalid"
+    if isinstance(error, pyjwt.ImmatureSignatureError):
+        return "Token is not valid yet"
+    if isinstance(error, pyjwt.MissingRequiredClaimError):
+        return "Token is missing a required claim"
+    return "Invalid OAuth token"
+
+
+def _hydra_refusal(detail: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": _www_authenticate_bearer()},
+    )
+
+
+async def _try_hydra_token(token: str, request: Request) -> UserPrincipal | None:
+    """Validate a JWT as a Hydra-issued OAuth token.
+
+    Returns None when the token is not Hydra's — its key id is not in Hydra's
+    JWKS — so the caller reports why Kratos refused it. A token Hydra signed is
+    judged here alone: refusing it raises 401 with the reason (expired, wrong
+    audience, no user), never Kratos's "Key not found in JWKS". MCP clients
+    (Cursor, Claude Desktop) and the CLI authenticate via Hydra OAuth 2.1.
     """
     import jwt as pyjwt
 
     from agentarea_common.config import get_auth_settings
 
+    jwks = _get_hydra_jwks()
+    # Unreachable, not JSON, or no usable keys: nothing can say the token is
+    # Hydra's, so Kratos's verdict stands.
     try:
-        jwks_client = _get_hydra_jwks()
-        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        jwks.get_signing_keys()
+    except (pyjwt.PyJWKClientError, pyjwt.PyJWKSetError, ValueError) as e:
+        _log_hydra_jwks_unavailable(e)
+        return None
+    try:
+        signing_key = jwks.get_signing_key_from_jwt(token)
+    except (pyjwt.PyJWKClientError, pyjwt.PyJWKSetError, pyjwt.DecodeError, ValueError) as e:
+        logger.debug(f"Bearer token is not Hydra's: {e}")
+        return None
 
-        # Audience verification is mandatory. It used to be toggled by whether
-        # HYDRA_AUDIENCE happened to be set, and it was set in no chart, compose
-        # file or env template — so `aud` was never checked anywhere, and any
-        # token Hydra had ever signed was accepted on every protected route.
-        #
-        # An unset HYDRA_AUDIENCE now DISABLES this auth path rather than
-        # weakening it: deployments that do not run Hydra (the prod compose does
-        # not) keep working, and deployments that do must say which audience they
-        # accept.
-        hydra_audience = get_auth_settings().HYDRA_AUDIENCE
-        if not hydra_audience:
-            logger.warning(
-                "Hydra bearer token presented but AGENTAREA_AUTH_HYDRA_AUDIENCE is not configured; "
-                "refusing the token. Set AGENTAREA_AUTH_HYDRA_AUDIENCE to this API's resource "
-                "identifier to enable MCP OAuth."
-            )
-            return None
+    # Audience verification is mandatory. It used to be toggled by whether
+    # HYDRA_AUDIENCE happened to be set, and it was set in no chart, compose
+    # file or env template — so `aud` was never checked anywhere, and any
+    # token Hydra had ever signed was accepted on every protected route.
+    #
+    # An unset HYDRA_AUDIENCE now DISABLES this auth path rather than
+    # weakening it: deployments that do not run Hydra (the prod compose does
+    # not) keep working, and deployments that do must say which audience they
+    # accept.
+    hydra_audience = get_auth_settings().HYDRA_AUDIENCE
+    if not hydra_audience:
+        logger.warning(
+            "Hydra bearer token presented but AGENTAREA_AUTH_HYDRA_AUDIENCE is not configured; "
+            "refusing the token. Set AGENTAREA_AUTH_HYDRA_AUDIENCE to this API's resource "
+            "identifier to enable MCP OAuth."
+        )
+        raise _hydra_refusal("OAuth tokens are not accepted by this API")
 
+    try:
         payload = pyjwt.decode(
             token,
             signing_key.key,
@@ -534,23 +590,26 @@ async def _try_hydra_token(token: str, request: Request) -> UserPrincipal | None
             audience=hydra_audience,
             options={"verify_aud": True},
         )
+    except pyjwt.ExpiredSignatureError as e:
+        logger.info("Hydra token refused: expired")
+        raise _hydra_refusal("Token has expired") from e
+    except pyjwt.InvalidTokenError as e:
+        logger.warning(f"Hydra token refused: {e}")
+        raise _hydra_refusal(_hydra_refusal_detail(e)) from e
 
-        subject = payload.get("sub", "")
-        if not subject:
-            return None
-        # Hydra names the client itself as the subject of a client_credentials
-        # token: no user logged in, so there is no principal to act as.
-        if subject == payload.get("client_id"):
-            logger.warning("Hydra token refused: subject is its own client %s", subject)
-            return None
+    subject = payload.get("sub", "")
+    if not subject:
+        logger.warning("Hydra token refused: no subject")
+        raise _hydra_refusal("OAuth token names no user")
+    # Hydra names the client itself as the subject of a client_credentials
+    # token: no user logged in, so there is no principal to act as.
+    if subject == payload.get("client_id"):
+        logger.warning("Hydra token refused: subject is its own client %s", subject)
+        raise _hydra_refusal("OAuth token was issued to a client, not a signed-in user")
 
-        # OAuth identifies the principal, never its active tenant: any
-        # workspace claim in the token is ignored.
-        return UserPrincipal(user_id=subject, credential=Credential(kind="oauth"))
-
-    except Exception as e:
-        logger.debug(f"Hydra token verification failed: {e}")
-        return None
+    # OAuth identifies the principal, never its active tenant: any
+    # workspace claim in the token is ignored.
+    return UserPrincipal(user_id=subject, credential=Credential(kind="oauth"))
 
 
 async def _authenticate_token(token: str, request: Request) -> UserPrincipal:

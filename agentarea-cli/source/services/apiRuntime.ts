@@ -26,7 +26,8 @@ export async function resolveToken(): Promise<string | undefined> {
 	try {
 		const stored = await tokenStorage.getTokenFor(getApiBaseUrl());
 		return stored?.accessToken;
-	} catch {
+	} catch (error) {
+		logger.warn('Could not read the stored token:', error);
 		return undefined;
 	}
 }

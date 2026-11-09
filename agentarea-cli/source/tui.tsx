@@ -49,7 +49,7 @@ export default function TUI({token: cliToken}: TUIProps) {
 					setLoading(false);
 				}
 			} catch (error) {
-				logger.warn('Failed to load stored token');
+				logger.warn('Failed to load stored token:', error);
 				setShowAuthInput(true);
 				setLoading(false);
 			}

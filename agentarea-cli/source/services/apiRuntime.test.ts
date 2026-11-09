@@ -1,6 +1,7 @@
 import test from 'ava';
 import {configManager} from '../utils/config.js';
 import {tokenStorage} from '../utils/storage.js';
+import {memoryTokenStorage} from '../utils/storage.fixture.js';
 import {type AuthToken} from '../types/index.js';
 import {apiClient} from './apiClient.js';
 import {
@@ -23,8 +24,10 @@ function targetApi(url: string): void {
 	configManager.reinitialize();
 }
 
-test.beforeEach(() => {
-	tokenStorage.getToken = async () => ISSUED_FOR_GOOD;
+test.beforeEach(async () => {
+	const {storage} = memoryTokenStorage();
+	await storage.saveToken(ISSUED_FOR_GOOD);
+	tokenStorage.getTokenFor = async apiUrl => storage.getTokenFor(apiUrl);
 	setRuntimeToken(undefined);
 	apiClient.clearToken();
 });
