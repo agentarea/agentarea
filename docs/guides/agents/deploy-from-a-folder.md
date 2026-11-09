@@ -112,15 +112,31 @@ into `${setup.<key>}`.
     name: YooKassa
     catalog: ru.yookassa/mcp
     bindings:
-      Authorization: "Bearer ${setup.kassa_token}"
+      Authorization: "${secret.kassa-token}"
     ```
 
-    The id is the catalog entry's: `<server>` for a remote server,
-    `<server>/command` or `<server>/docker` for one the platform runs. The
-    server connects the way the catalog's connect flow connects it, so the
+    The id is the catalog spec's full name: `<server>` for a remote server,
+    and for one the platform runs the full name plus `/docker` or `/command`,
+    for example
+    `io.github.n24q02m/better-telegram-mcp/oci/docker.io/n24q02m/better-telegram-mcp-latest/docker`.
+    The server connects the way the catalog's connect flow connects it, so the
     folder carries no endpoint, command or image. A `bindings` key is a header
     for a remote server and an environment variable otherwise. An id the
     catalog does not have blocks the deploy.
+
+    A binding takes its value one of two ways:
+
+    | Value | What the server gets | When to use it |
+    |---|---|---|
+    | `${secret.<name>}` | A reference to the workspace secret `<name>`, read each time the server starts | Recommended for credentials: the value never passes through the deploy, and rotating the secret reaches the server on its next start |
+    | `${setup.<key>}`, alone or inside a string | The value passed with `--set`, copied into the server's own secret | A value that differs per deploy, or one that needs a prefix such as `Bearer ` |
+
+    `${secret.<name>}` must be the whole value — put a prefix such as
+    `Bearer ` into the secret itself. The secret must already exist in the
+    workspace (create it on the Secrets page or with `POST /v1/workspaces/<workspace>/secrets`), and you must be allowed
+    to use it: its creator, a workspace admin, or someone it was shared with.
+    Otherwise the plan blocks naming the binding, and the plan shows each
+    reference as `<name> from secret '<secret>'`.
 
     A server that is not in the catalog takes its spec instead:
 
@@ -205,8 +221,9 @@ into `${setup.<key>}`.
     Every entity is tagged `create`, `update`, `unchanged`, `orphaned`,
     `changes not applied`, `already exists`, or `unsupported`, alongside any
     issue found (a reference to an MCP key that does not exist, a binding that
-    points at an undeclared setup field, and the like). A blocking issue stops
-    the deploy; a warning does not.
+    points at an undeclared setup field or a secret you may not use, a
+    required setup field with no `--set` value and no `default`, and the
+    like). A blocking issue stops the deploy; a warning does not.
   </Step>
 
   <Step title="Supply setup values and deploy">
