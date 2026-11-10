@@ -31,6 +31,7 @@ from agentarea_api.api.deps.services import (
     DatabaseSessionDep,
     MCPServerInstanceServiceDep,
 )
+from agentarea_api.api.v1.connection_mcp import ConnectionMCPResponse
 from agentarea_common.auth.dependencies import (
     PrincipalDep,
     UserContextDep,
@@ -62,6 +63,8 @@ from agentarea_mcp.infrastructure.repository import (
 from agentarea_mcp.tool_context import CallerContext
 from agentarea_mcp.transport_spec import instance_transport_spec
 from agentarea_openapi.application.url_validator import validate_url
+from agentarea_openapi.domain.models import OpenAPIConnection
+from agentarea_openapi.infrastructure.repository import OpenAPIConnectionRepository
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from mcp.shared.inbound import NAME_BEARING_METHODS, decode_header_value
@@ -390,7 +393,7 @@ async def bind_mcp_instance_workspace(
     principal: PrincipalDep,
     db_session: AsyncSession = Depends(get_read_db_session, scope="function"),
 ) -> None:
-    """Act in the workspace of the instance the URL names.
+    """Act in the workspace of the connection the URL names: an MCP instance or an API connection.
 
     The endpoint is addressed by instance id alone, so the instance is located
     across workspaces and the caller must reach the one it lives in. A foreign
@@ -402,11 +405,15 @@ async def bind_mcp_instance_workspace(
         instance_uuid = UUID(instance_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="MCP instance not found") from None
-    with unscoped("the proxy URL names an instance; its workspace is the one to bind"):
+    with unscoped("the proxy URL names a connection; its workspace is the one to bind"):
         located = await db_session.execute(
-            select(MCPServerInstance.workspace_id).where(MCPServerInstance.id == instance_uuid)
+            select(MCPServerInstance.workspace_id)
+            .where(MCPServerInstance.id == instance_uuid)
+            .union_all(
+                select(OpenAPIConnection.workspace_id).where(OpenAPIConnection.id == instance_uuid)
+            )
         )
-    workspace_id = located.scalar_one_or_none()
+    workspace_id = located.scalars().first()
     if workspace_id is None or str(workspace_id) not in (principal.accessible_workspaces or []):
         raise HTTPException(status_code=404, detail="MCP instance not found")
     bind_request_workspace(request, str(workspace_id), await workspace_slug_for(str(workspace_id)))
@@ -435,10 +442,15 @@ async def proxy_instance(
     secret_manager: BaseSecretManagerDep,
     instance_service: MCPServerInstanceServiceDep,
 ):
-    """Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream."""
+    """Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+
+    An API connection has the same address: its operations are served as tools.
+    """
     instance_repo = MCPServerInstanceRepository(db_session, user_context)
     instance = await instance_repo.get_by_id(instance_id)
     if instance is None:
+        if await OpenAPIConnectionRepository(db_session, user_context).get_by_id(instance_id):
+            return ConnectionMCPResponse(user_context, instance_id)
         raise HTTPException(status_code=404, detail="MCP instance not found")
 
     server_spec = None

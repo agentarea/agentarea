@@ -1333,7 +1333,7 @@
     "openapiDetail": {
       "refreshFromSpec": "Refresh from spec URL",
       "deleteTitle": "Delete connection?",
-      "baseUrl": "Base URL",
+      "baseUrl": "Upstream API",
       "specUrl": "Spec URL",
       "noCustomHeaders": "No custom headers. Add Authorization or any other request header your provider needs.",
       "noCustomQueryParams": "No query parameters. Add a key the API expects in the URL, such as api_key.",
