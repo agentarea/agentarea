@@ -255,7 +255,23 @@ class OpenAPITool(BaseTool):
         if request_body_meta and "body" in kwargs:
             ct = request_body_meta.get("content_type", "application/json")
             if ct == "application/json":
-                json_body = kwargs["body"]
+                from agentarea_common.request_transform import (
+                    RequestTransformError,
+                    apply_request_transform,
+                )
+
+                try:
+                    json_body = apply_request_transform(
+                        self._operation.get("request_transform") or [], kwargs["body"]
+                    )
+                except RequestTransformError as e:
+                    return {
+                        "success": False,
+                        "error": f"Invalid request body: {e}",
+                        "result": None,
+                        "tool_name": self.name,
+                        "status_code": None,
+                    }
             elif ct.startswith("text/"):
                 content_body = str(kwargs["body"])
             else:

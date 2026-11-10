@@ -11,6 +11,7 @@ from agentarea_api.api.v1.openapi_connections import (
     create_connection,
     preview_spec,
 )
+from agentarea_common.auth.context import UserContext
 from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_openapi.application import service as openapi_service
 from agentarea_openapi.application.service import OpenAPIConnectionService
@@ -95,6 +96,7 @@ async def test_creating_a_connection_from_a_malformed_spec_is_a_400(spec, monkey
             OpenAPIConnectionCreate.model_construct(
                 name="x", base_url="https://api.example.com", spec_content=spec
             ),
+            user_context=UserContext(user_id="u1", workspace_id="ws1"),
             service=service,
         )
 

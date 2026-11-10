@@ -415,17 +415,17 @@ async def bind_mcp_instance_workspace(
 @router.get(
     "/{instance_id}/mcp",
     operation_id="proxy_instance_v1_mcp__instance_id__mcp_get",
-    dependencies=[requires("use", "mcp_instance", id_param="instance_id")],
+    dependencies=[requires("use_connection", "mcp_instance", id_param="instance_id")],
 )
 @router.post(
     "/{instance_id}/mcp",
     operation_id="proxy_instance_v1_mcp__instance_id__mcp_post",
-    dependencies=[requires("use", "mcp_instance", id_param="instance_id")],
+    dependencies=[requires("use_connection", "mcp_instance", id_param="instance_id")],
 )
 @router.delete(
     "/{instance_id}/mcp",
     operation_id="proxy_instance_v1_mcp__instance_id__mcp_delete",
-    dependencies=[requires("use", "mcp_instance", id_param="instance_id")],
+    dependencies=[requires("use_connection", "mcp_instance", id_param="instance_id")],
 )
 async def proxy_instance(
     instance_id: UUID,

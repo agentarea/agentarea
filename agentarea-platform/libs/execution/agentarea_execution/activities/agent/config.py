@@ -104,11 +104,83 @@ async def _runnable_skills(skills: list[Any], ctx: Any) -> tuple[list[Any], list
     return [skill for skill in skills if str(skill.id) not in refusals], withheld
 
 
+def _tool_connection(tool: dict[str, Any]) -> tuple[str, UUID] | None:
+    """The connection an MCP or OpenAPI tool config calls through, when it names one by id."""
+    if tool.get("type") == "mcp":
+        kind, reference = "mcp_instance", tool.get("name")
+    elif tool.get("type") == "openapi":
+        kind, reference = (
+            "openapi_connection",
+            (tool.get("settings") or {}).get("openapi_connection_id"),
+        )
+    else:
+        return None
+    try:
+        return kind, UUID(str(reference))
+    except ValueError:
+        return None
+
+
+async def _require_usable_connections(agent: Any, tools: list[dict[str, Any]], ctx: Any) -> None:
+    """The agent may call through every connection it names.
+
+    A personal connection reaches a run only when it was lent to the agent;
+    anything the platform manages is no one's account and needs no grant.
+    """
+    from agentarea_common.auth.permission import PermissionService
+    from agentarea_common.constants import MANAGED_BY_PLATFORM
+    from agentarea_common.di.container import resolve
+
+    permissions = resolve(PermissionService)
+    subject = f"Agent:{agent.id}"
+    for tool in tools:
+        connection = _tool_connection(tool)
+        if connection is None:
+            continue
+        kind, connection_id = connection
+        if await permissions.check(subject, "use_connection", kind, str(connection_id)):
+            continue
+        if kind == "mcp_instance":
+            row = await (await ctx.get_mcp_server_instance_service()).get(connection_id)
+        else:
+            row = await (await ctx.get_openapi_connection_service()).get_connection(connection_id)
+        if row is not None and getattr(row, "managed_by", None) == MANAGED_BY_PLATFORM:
+            continue
+        raise ApplicationError(
+            f"Agent {agent.name!r} may not call through connection {connection_id}: it is "
+            "someone's personal connection that was not lent to this agent. Its owner can "
+            "share it with the workspace or attach it to the agent.",
+            non_retryable=True,
+        )
+
+
+async def _require_selectable_connection(instance: Any, starter_id: str) -> None:
+    from agentarea_common.auth.permission import PermissionService
+    from agentarea_common.constants import MANAGED_BY_PLATFORM
+    from agentarea_common.di.container import resolve
+
+    if getattr(instance, "managed_by", None) == MANAGED_BY_PLATFORM:
+        return
+    if not await resolve(PermissionService).check(
+        f"User:{starter_id}", "use_connection", "mcp_instance", str(instance.id)
+    ):
+        raise ApplicationError(
+            f"The MCP connection {instance.name!r} selected for this run is someone else's "
+            "personal connection.",
+            non_retryable=True,
+        )
+
+
 async def _resolve_task_resources(
-    agent: Any, parameters: dict[str, Any], ctx: Any
+    agent: Any, parameters: dict[str, Any], ctx: Any, *, starter_id: str
 ) -> tuple[list[dict[str, Any]], list[Any]]:
-    """Resolve additive run resources with the task's workspace-scoped services."""
+    """Resolve additive run resources with the task's workspace-scoped services.
+
+    A connection selected for the run is lent for that run by whoever started
+    it, so it must be one they may use.
+    """
     tools = deepcopy(_as_tool_config_list(agent.tools))
+    await _require_usable_connections(agent, tools, ctx)
     skills = list(getattr(agent, "skills", None) or [])
     mcp_ids = _task_resource_ids(parameters, "mcps")
     if mcp_ids:
@@ -117,6 +189,7 @@ async def _resolve_task_resources(
             instance = await mcp_service.get(instance_id)
             if instance is None:
                 raise ApplicationError("Selected task MCP is unavailable", non_retryable=True)
+            await _require_selectable_connection(instance, starter_id)
             # An inherited restriction must never be replaced by a second,
             # unrestricted entry for the same server. A configured tool still
             # naming its connection reaches nothing on its own; selecting that
@@ -408,7 +481,9 @@ def make_config_activities(
                     str(AgentArchivedError(agent.id)), type="AgentArchived", non_retryable=True
                 )
 
-            tools, skills = await _resolve_task_resources(agent, request.task_parameters, ctx)
+            tools, skills = await _resolve_task_resources(
+                agent, request.task_parameters, ctx, starter_id=user_context.user_id
+            )
             skills, withheld_skills = await _runnable_skills(skills, ctx)
             runtime = await discover_runtime_manifest_activity()
 

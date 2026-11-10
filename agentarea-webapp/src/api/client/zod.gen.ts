@@ -779,6 +779,13 @@ export const zCollectionUpdateRequest = z.object({
 });
 
 /**
+ * ConnectionSharingRequest
+ */
+export const zConnectionSharingRequest = z.object({
+  shared: z.boolean(),
+});
+
+/**
  * ContentSafetyPolicy
  *
  * Content-safety governance controls.
@@ -1579,10 +1586,12 @@ export const zMcpServerInstanceResponse = z.object({
   description: z.string().nullable(),
   events: z.record(z.string(), z.unknown()).nullish(),
   id: z.uuid(),
+  is_owner: z.boolean().optional().default(false),
   json_spec: z.record(z.string(), z.unknown()),
   last_dispatch: z.record(z.string(), z.unknown()).nullish(),
   managed_by: z.string().nullish(),
   name: z.string(),
+  personal: z.boolean().optional().default(false),
   server_spec_id: z.string(),
   tools: z.array(z.record(z.string(), z.unknown())).nullish(),
   transport: zMcpTransport,
@@ -1986,9 +1995,10 @@ export const zNetworkTopologyResponse = z.object({
  *
  * Start a sign-in for one MCP instance or one catalog API.
  *
- * ``auto`` uses the operator's platform app when one serves the provider, else
- * registers AgentArea with it (RFC 7591). ``custom`` uses an OAuth app the
- * workspace registered with the provider, and overrides either.
+ * ``auto`` signs a connection connected with its own OAuth app in with that
+ * app again; else it uses the operator's platform app when one serves the
+ * provider, else registers AgentArea with it (RFC 7591). ``custom`` uses an
+ * OAuth app the workspace registered with the provider, and overrides any.
  */
 export const zOAuthAuthorizeRequest = z.object({
   catalog_item_id: z.uuid().nullish(),
@@ -1998,6 +2008,7 @@ export const zOAuthAuthorizeRequest = z.object({
   client_secret_secret_id: z.uuid().nullish(),
   credential_mode: z.enum(["auto", "custom"]).optional().default("auto"),
   instance_id: z.uuid().nullish(),
+  openapi_connection_id: z.uuid().nullish(),
   return_to: z.string().max(2048).optional().default(""),
   scopes: z.array(z.string()).min(1).nullish(),
 });
@@ -2055,14 +2066,16 @@ export const zOAuthLinkResponse = z.object({
  * What the UI needs before it can offer Connect.
  *
  * ``ready`` — Connect runs unattended, with the client ``credential_source``
- * names: the operator's ``platform`` app, or one registered ``dynamic``-ally.
+ * names: the operator's ``platform`` app, one registered ``dynamic``-ally, or
+ * the ``custom`` app the connection was connected with, signed in with again.
  * ``oauth_app_required`` — ask for a client ID/secret first.
  * ``unsupported`` — this cannot be authorized with OAuth; ``detail`` says why.
  */
 export const zOAuthPreflightResponse = z.object({
   authorization_endpoint: z.string().nullish(),
+  client_id: z.string().nullish(),
   connected: z.boolean(),
-  credential_source: z.enum(["platform", "dynamic"]).nullish(),
+  credential_source: z.enum(["platform", "dynamic", "custom"]).nullish(),
   default_scopes: z.array(z.string()).optional(),
   detail: z.string().optional().default(""),
   issuer: z.string().nullish(),
@@ -2722,9 +2735,11 @@ export const zOpenApiConnectionResponse = z.object({
   custom_query_params: z.array(zQueryParamOutput).nullish(),
   description: z.string().nullish(),
   id: z.uuid(),
+  is_owner: z.boolean().optional().default(false),
   last_dispatch: z.record(z.string(), z.unknown()).nullish(),
   managed_by: z.string().nullish(),
   name: z.string(),
+  personal: z.boolean().optional().default(false),
   registry_item_id: z.uuid().nullish(),
   spec_url: z.string().nullish(),
   status: z.string(),
@@ -6312,6 +6327,20 @@ export const zProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostPath =
     instance_id: z.uuid(),
   });
 
+export const zSetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutBody =
+  zConnectionSharingRequest;
+
+export const zSetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutPath =
+  z.object({
+    instance_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zSetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutResponse =
+  zMcpServerInstanceResponse;
+
 export const zRunTestAuthV1McpServerInstancesInstanceIdTestAuthPostPath =
   z.object({
     instance_id: z.uuid(),
@@ -6571,6 +6600,7 @@ export const zOauthPreflightV1OauthPreflightGetQuery = z.object({
   instance_id: z.uuid().nullish(),
   server_id: z.uuid().nullish(),
   catalog_item_id: z.uuid().nullish(),
+  openapi_connection_id: z.uuid().nullish(),
 });
 
 /**
@@ -6677,6 +6707,20 @@ export const zDiscoverToolsV1OpenapiConnectionsConnectionIdDiscoverToolsPostPath
   z.object({
     connection_id: z.uuid(),
   });
+
+export const zSetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutBody =
+  zConnectionSharingRequest;
+
+export const zSetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutPath =
+  z.object({
+    connection_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zSetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutResponse =
+  zOpenApiConnectionResponse;
 
 export const zListPolicyRulesV1PoliciesGetQuery = z.object({
   subject_type: zPolicySubjectType.nullish(),

@@ -2,14 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useLocale, useNow, useTranslations } from "next-intl";
-import { useSearchParams } from "next/navigation";
 import {
   Activity,
   ExternalLink,
   Github,
   GitBranch,
   Globe,
-  KeyRound,
   Link2,
   ShieldCheck,
   TriangleAlert,
@@ -23,7 +21,6 @@ import { OverviewHero } from "@/components/Overview/OverviewHero";
 import {
   CardField,
   EmptyRow,
-  FactRow,
   GlanceRow,
   HeroMeta,
   SectionCard,
@@ -43,13 +40,6 @@ import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { mcpIdentity } from "@/lib/entity-identity";
 import { useClientApiUrl } from "@/lib/use-client-api-url";
-import { CustomHeadersEditor, toHeaderRows } from "../components/CustomHeadersEditor";
-import { CustomHeadersList } from "../components/CustomHeadersList";
-import type { HeaderRow } from "../components/HeaderRows";
-import { SectionEditAction } from "../components/SectionEditAction";
-import { headersUpdateSpec, remoteHeaderFields, storedHeaders } from "../credential-fields";
-import { OAuthConnectPanel } from "../OAuthConnectPanel";
-import { summarizeAuthorization, type OAuthConnectState } from "../oauth-connect-state";
 import { getMcpConnectionState } from "../state";
 import { MCPInstance, MCPServer } from "../types";
 import { readLastDispatch } from "../usage";
@@ -58,9 +48,6 @@ import {
   getMCPInstanceToolCount,
   TRANSPORT_LABEL,
 } from "../utils";
-import { ConnectionCostSection } from "../components/ConnectionCostSection";
-import { EgressExitSection } from "../components/EgressExitSection";
-import { boundEgressExit, type EgressExitChoices } from "../egress-exit";
 import { relativeParts } from "../relative-parts";
 import { verifyInstance } from "./actions";
 
@@ -70,8 +57,6 @@ interface Props {
   memberNames?: Record<string, string>;
   consumers: MCPInstanceConsumer[] | null;
   consumersError: string | null;
-  /** Null when the connection cannot have one or the deployment has none. */
-  egressExits: EgressExitChoices | null;
 }
 
 interface McpServerJsonSpec {
@@ -103,27 +88,15 @@ export default function MCPInstanceOverview({
   memberNames = {},
   consumers,
   consumersError,
-  egressExits,
 }: Props) {
   const t = useTranslations("MCPServersPage.instanceDetail");
   const tState = useTranslations("MCPServersPage.state");
-  const tConn = useTranslations("OpenAPIConnection");
   const locale = useLocale();
   const now = useNow({ updateInterval: 60_000 });
   const router = useWorkspaceRouter();
-  const searchParams = useSearchParams();
   const apiBaseUrl = useClientApiUrl();
   const [verifyError, setVerifyError] = useState<string | null>(null);
-  const [saveConfigError, setSaveConfigError] = useState<string | null>(null);
-  // The callback's query is dropped from the URL right away, so the failure is
-  // captured once and stays on the page.
-  const [oauthError, setOauthError] = useState<string | null>(() =>
-    searchParams.get("oauth") === "error"
-      ? searchParams.get("reason") || "unknown"
-      : null
-  );
   const [isVerifying, setIsVerifying] = useState(false);
-  const [oauthState, setOauthState] = useState<OAuthConnectState | undefined>();
 
   const verification = instance.verification as
     | {
@@ -161,44 +134,6 @@ export default function MCPInstanceOverview({
     }
   };
 
-  // The headers draft, null while they are not being edited.
-  const [headersDraft, setHeadersDraft] = useState<HeaderRow[] | null>(null);
-  const [isSavingHeaders, setIsSavingHeaders] = useState(false);
-
-  const handleSaveHeaders = async () => {
-    setIsSavingHeaders(true);
-    setSaveConfigError(null);
-    try {
-      const { updateMCPServerInstanceAction } = await import(
-        "@/lib/server-actions"
-      );
-      // The update replaces json_spec; the helper leaves out the transport
-      // fields the API refuses back and keeps a secret left blank.
-      const result = await updateMCPServerInstanceAction(instance.id, {
-        json_spec: headersUpdateSpec(instance.json_spec ?? {}, headersDraft ?? []),
-      });
-      if (result.error) {
-        setSaveConfigError(apiErrorMessage(result, t("errors.saveConfigFailed")));
-        return;
-      }
-      setHeadersDraft(null);
-      router.refresh();
-    } catch (err) {
-      console.error("Failed to save MCP instance headers", err);
-      setSaveConfigError(`${t("errors.saveConfigFailed")}: ${formatApiError(err)}`);
-    } finally {
-      setIsSavingHeaders(false);
-    }
-  };
-
-  // Drop the OAuth callback's query; the panel shows the authorized state and
-  // a failure stays on the page through `oauthError`.
-  useEffect(() => {
-    if (searchParams.get("oauth")) {
-      router.replace(`/connections/${instance.id}`, { scroll: false });
-    }
-  }, [searchParams, instance.id, router]);
-
   // Poll while verification is in_progress
   useEffect(() => {
     if (verification?.status !== "in_progress") return;
@@ -206,24 +141,6 @@ export default function MCPInstanceOverview({
     return () => clearInterval(interval);
   }, [verification?.status, router]);
 
-  const plainEnvVars = (instance.json_spec?.environment ?? {}) as Record<
-    string,
-    string | { secret_name?: string }
-  >;
-  const secretEnvNames = (instance.json_spec?.env_vars ?? []) as string[];
-  // Merge non-secret env vars with secret env vars (masked); a workspace
-  // secret reference shows as the ${secret.<name>} it was written as.
-  const envVars: Record<string, string> = Object.fromEntries(
-    Object.entries(plainEnvVars).map(([name, value]) => [
-      name,
-      typeof value === "string" ? value : `\${secret.${value?.secret_name ?? ""}}`,
-    ])
-  );
-  for (const name of secretEnvNames) {
-    if (!(name in envVars)) {
-      envVars[name] = "******";
-    }
-  }
   const containerImage = instance.json_spec?.image as string | undefined;
   const containerPort = instance.json_spec?.port as number | undefined;
   const toolCount = getMCPInstanceToolCount(instance);
@@ -232,13 +149,6 @@ export default function MCPInstanceOverview({
   const isCommandType = instance.transport === "command";
   const isBundleType = instance.transport === "bundle";
   const bundleMembers = (instance.json_spec?.members ?? []) as string[];
-
-  const authorization = summarizeAuthorization({
-    isUrlType,
-    verificationStatus: verification?.status,
-    connected: !!instance.auth_config_id,
-    oauthState: oauthState?.kind,
-  });
 
   // Command-type fields
   const commandStr = instance.json_spec?.command as string | undefined;
@@ -251,17 +161,6 @@ export default function MCPInstanceOverview({
     serverSpec?.remote_url ||
     (serverSpec?.json_spec as McpServerJsonSpec | undefined)?.remotes?.[0]
       ?.url) as string | undefined;
-  const headers = storedHeaders(instance.json_spec ?? {});
-  // Nothing stored yet: start from the headers the server declares, if any.
-  const openHeaders = () => {
-    const declared = remoteHeaderFields(serverSpec);
-    setSaveConfigError(null);
-    setHeadersDraft(
-      headers.length === 0 && declared.length > 0
-        ? declared.map((field) => ({ name: field.name, value: "" }))
-        : toHeaderRows(headers)
-    );
-  };
 
   // The one way in, for every transport: AgentArea's demand gateway, keyed by
   // instance id. It is what gives on-demand start, the request lease and idle
@@ -352,12 +251,10 @@ export default function MCPInstanceOverview({
       />
 
       {/* What needs a hand before anything else on the page. */}
-      {(oauthError || isStuck || verifyError ||
+      {(isStuck ||
+        verifyError ||
         (verification?.status === "failed" && verification.error)) && (
         <div className="mx-4 mt-3 space-y-2 md:shrink-0">
-          {oauthError && (
-            <FormError>{t("oauth.connectError", { reason: oauthError })}</FormError>
-          )}
           {verifyError && <FormError>{verifyError}</FormError>}
           {isStuck && (
             <Alert className="flex items-center justify-between gap-3">
@@ -501,71 +398,6 @@ export default function MCPInstanceOverview({
               )}
             </SectionCard>
 
-            {egressExits && (
-              <EgressExitSection
-                instanceId={instance.id}
-                boundExitId={boundEgressExit(instance.json_spec ?? {})}
-                choices={egressExits}
-              />
-            )}
-
-            {isUrlType && (
-              <SectionCard>
-                <SectionCardHead
-                  icon={<KeyRound />}
-                  title={t("connection.headers")}
-                  count={headers.length}
-                  action={
-                    <SectionEditAction
-                      open={headersDraft !== null}
-                      hasRows={headers.length > 0}
-                      busy={isSavingHeaders}
-                      onOpen={openHeaders}
-                      onCancel={() => setHeadersDraft(null)}
-                      onSave={handleSaveHeaders}
-                      saveLabel={tConn("saveHeaders")}
-                    />
-                  }
-                />
-                {headersDraft !== null ? (
-                  <div className="space-y-3 px-[15px] py-3">
-                    <CustomHeadersEditor
-                      rows={headersDraft}
-                      onChange={(rows) => {
-                        setSaveConfigError(null);
-                        setHeadersDraft(rows);
-                      }}
-                      stored={headers}
-                      alwaysSecret
-                    />
-                    {saveConfigError && <FormError>{saveConfigError}</FormError>}
-                  </div>
-                ) : headers.length > 0 ? (
-                  <CustomHeadersList headers={headers} />
-                ) : (
-                  <EmptyRow text={t("connection.noHeaders")} />
-                )}
-              </SectionCard>
-            )}
-
-            {isUrlType && (
-              <SectionCard>
-                <SectionCardHead icon={<KeyRound />} title={t("authorization.title")} />
-                <div className="space-y-2 px-[15px] py-3">
-                  {authorization.reachableButUnauthorized && (
-                    <p className="note">{t("oauth.unauthorizedNote")}</p>
-                  )}
-                  <OAuthConnectPanel
-                    target={{ kind: "instance", instanceId: instance.id }}
-                    isUrlType={isUrlType}
-                    onStateChange={setOauthState}
-                    onConnectStart={() => setOauthError(null)}
-                    bare
-                  />
-                </div>
-              </SectionCard>
-            )}
-
             {isBundleType && bundleMembers.length > 0 && (
               <SectionCard className="[&>a:last-child>div]:border-b-0">
                 <SectionCardHead
@@ -584,18 +416,6 @@ export default function MCPInstanceOverview({
                 ))}
               </SectionCard>
             )}
-
-            <ConnectionCostSection
-              cost={instance.cost}
-              managedBy={instance.managed_by}
-              onSave={async (cost) => {
-                const { updateMCPServerInstanceAction } = await import(
-                  "@/lib/server-actions"
-                );
-                return updateMCPServerInstanceAction(instance.id, { cost });
-              }}
-              onSaved={() => router.refresh()}
-            />
           </div>
 
           <div className="flex min-w-0 flex-col gap-4">
@@ -627,29 +447,6 @@ export default function MCPInstanceOverview({
                 ))
               )}
             </SectionCard>
-
-            {Object.keys(envVars).length > 0 && (
-              <SectionCard>
-                <SectionCardHead
-                  icon={<KeyRound />}
-                  title={t("env.title")}
-                  count={Object.keys(envVars).length}
-                />
-                {Object.entries(envVars).map(([key, value]) => (
-                  <FactRow
-                    key={key}
-                    title={<span className="font-mono">{key}</span>}
-                    trailing={
-                      value ? (
-                        <span className="font-mono">{value}</span>
-                      ) : (
-                        <span className="italic">{t("env.notSet")}</span>
-                      )
-                    }
-                  />
-                ))}
-              </SectionCard>
-            )}
 
             <DetailsCard
               idLabel={t("details.id")}

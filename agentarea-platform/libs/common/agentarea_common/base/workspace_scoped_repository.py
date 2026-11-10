@@ -11,6 +11,7 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.context import ServicePrincipal, UserContext
+from ..rebac.connection_access import make_personal
 from ..rebac.ownership import (
     enroll_agent,
     grant_resource_owner,
@@ -307,6 +308,12 @@ class WorkspaceScopedRepository[T]:
         # relations its runs act with.
         if getattr(self.model_class, "__graph_principal__", False):
             await enroll_agent(agent_id=record_id, workspace_id=self.user_context.workspace_id)
+        # A connection is its creator's until they share it; one the platform
+        # manages is no one's account.
+        if getattr(self.model_class, "__graph_personal__", False) and not getattr(
+            record, "managed_by", None
+        ):
+            await make_personal(record_id)
 
     async def update(self, id: UUID | str, creator_scoped: bool = False, **kwargs: Any) -> T | None:
         """Update a record by ID within the current workspace.

@@ -466,7 +466,9 @@ class ConnectorToolsToolset(Toolset):
             [instance] = instances
             if not _platform_managed(instance):
                 try:
-                    await require_permission("use", "mcp_instance", str(instance.id), user_ctx)
+                    await require_permission(
+                        "use_connection", "mcp_instance", str(instance.id), user_ctx
+                    )
                 except HTTPException as exc:
                     raise ToolError(exc.detail) from exc
 
@@ -504,7 +506,9 @@ class ConnectorToolsToolset(Toolset):
     ) -> str | InputRequiredResult:
         if not _platform_managed(connection):
             try:
-                await require_permission("use", "openapi_connection", str(connection.id), user_ctx)
+                await require_permission(
+                    "use_connection", "openapi_connection", str(connection.id), user_ctx
+                )
             except HTTPException as exc:
                 raise ToolError(exc.detail) from exc
 

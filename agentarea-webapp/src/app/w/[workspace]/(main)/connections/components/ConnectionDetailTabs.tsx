@@ -2,13 +2,14 @@
 
 import { useTranslations } from "next-intl";
 import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { Gauge, ScrollText, Wrench } from "lucide-react";
+import { Gauge, ScrollText, Settings, Wrench } from "lucide-react";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 
 const TABS = [
   { key: "", icon: Gauge, labelKey: "overview" },
   { key: "tools", icon: Wrench, labelKey: "tools", counted: true },
   { key: "activity", icon: ScrollText, labelKey: "activity" },
+  { key: "settings", icon: Settings, labelKey: "settings" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];

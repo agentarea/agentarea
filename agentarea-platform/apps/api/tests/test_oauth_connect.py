@@ -4,6 +4,7 @@ import json
 import logging
 import urllib.parse
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, call
 from uuid import uuid4
@@ -369,9 +370,16 @@ def test_authorize_request_rejects_credentials_in_auto_mode():
         OAuthAuthorizeRequest(instance_id=uuid4(), client_id="cid")
 
 
-@pytest.mark.parametrize("target", [{}, {"instance_id": uuid4(), "catalog_item_id": uuid4()}])
+@pytest.mark.parametrize(
+    "target",
+    [
+        {},
+        {"instance_id": uuid4(), "catalog_item_id": uuid4()},
+        {"catalog_item_id": uuid4(), "openapi_connection_id": uuid4()},
+    ],
+)
 def test_authorize_request_names_exactly_one_target(target):
-    with pytest.raises(ValueError, match="exactly one of instance_id or catalog_item_id"):
+    with pytest.raises(ValueError, match="exactly one of instance_id, catalog_item_id or"):
         OAuthAuthorizeRequest(**target)
 
 
@@ -545,6 +553,11 @@ async def test_authorize_refuses_another_members_secret_as_the_client_id(monkeyp
         owner_type=None,
         owner_id=None,
         created_by="member-a",
+        graph_granted_at=datetime.now(UTC),
+    )
+    register_singleton(
+        PermissionService,
+        GrantedPermissions(("User:member-a", "use_secret", str(secret.id))),
     )
     register_singleton(
         PermissionService,
@@ -1478,7 +1491,7 @@ async def test_finishing_attaches_the_credential_to_the_mcp_instance(monkeypatch
 
     location = await callback.finish()
 
-    assert location == f"{_APP}/w/acme/connections/{_INSTANCE_ID}?oauth=success"
+    assert location == f"{_APP}/w/acme/connections/{_INSTANCE_ID}/settings?oauth=success"
     callback.exchange.assert_awaited_once_with(
         callback.auth_config, code="code", redirect_uri=_CALLBACK, code_verifier="verifier"
     )
@@ -1558,7 +1571,7 @@ async def test_finishing_activates_the_api_connection(monkeypatch):
 
     location = await callback.finish()
 
-    assert location == f"{_APP}/w/acme/connections/openapi/{connection_id}?oauth=success"
+    assert location == f"{_APP}/w/acme/connections/openapi/{connection_id}/settings?oauth=success"
     assert callback.connection_update.await_args.kwargs == {
         "auth_config_id": callback.auth_config.id,
         "status": "active",
@@ -1612,7 +1625,7 @@ async def test_connect_page_query_and_fragment_are_not_carried_back(monkeypatch)
 async def test_any_other_return_to_lands_on_the_connection_page(monkeypatch, return_to):
     callback = _Callback(monkeypatch, _flow(return_to=return_to))
 
-    assert await callback.finish() == f"{_APP}/w/acme/connections/{_INSTANCE_ID}?oauth=success"
+    assert await callback.finish() == f"{_APP}/w/acme/connections/{_INSTANCE_ID}/settings?oauth=success"
 
 
 @pytest.mark.asyncio
@@ -1647,7 +1660,7 @@ async def test_a_denied_api_sign_in_lands_on_the_connection(monkeypatch):
     location = await callback.run(code=None, error="access_denied")
 
     assert location == (
-        f"{_APP}/w/acme/connections/openapi/{connection_id}?oauth=error&reason=access_denied"
+        f"{_APP}/w/acme/connections/openapi/{connection_id}/settings?oauth=error&reason=access_denied"
     )
     callback.connection_update.assert_not_awaited()
 
@@ -1890,3 +1903,431 @@ async def test_analytics_counts_a_provider_error_only_as_an_rfc_6749_code(
     await callback.run(code=None, state="state" if with_state else None, error=error)
 
     assert counted == [{"provider": "unknown", "outcome": outcome}]
+
+
+# ---------------------------------------------------------------------------
+# Reconnecting with the connection's own OAuth app
+# ---------------------------------------------------------------------------
+
+_OWNER = "owner-1"
+
+
+def _connected_with(monkeypatch, config: dict, *, registration_endpoint: str | None = None):
+    """A Gmail instance whose current auth config is ``config``, made by ``_OWNER``."""
+    auth_config_id = uuid4()
+    auth_config = SimpleNamespace(
+        id=auth_config_id,
+        auth_type="oauth2",
+        config={
+            "provider": "accounts.google.com",
+            "issuer": "https://accounts.google.com",
+            "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth",
+            "token_url": "https://oauth2.googleapis.com/token",
+            "scopes": [_GMAIL_READONLY],
+            **config,
+        },
+        secret_key=f"mcp_auth_cred:{auth_config_id}",
+        created_by=_OWNER,
+    )
+    instance = _patch_instance_lookup(
+        monkeypatch,
+        auth_config_id=auth_config.id,
+        spec_metadata={"agentarea:oauth_scopes": [_GMAIL_MODIFY]},
+    )
+
+    class _AuthConfigRepository:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def get_by_id(self, requested_id):
+            return auth_config if requested_id == auth_config.id else None
+
+    monkeypatch.setattr(targets, "MCPAuthConfigRepository", _AuthConfigRepository)
+    _patch_discovery(
+        monkeypatch,
+        _google_metadata(registration_endpoint=registration_endpoint, scopes=_GMAIL_OFFERED),
+    )
+    return instance, auth_config
+
+
+def _stored_app(monkeypatch, auth_config, stored: dict[str, str], user_context: UserContext):
+    """The auth config and the secrets it keeps or names, as the authorize step reads them."""
+    manager = SimpleNamespace(get_secret=AsyncMock(side_effect=stored.get), set_secret=AsyncMock())
+    repository = SimpleNamespace(
+        get=AsyncMock(return_value=auth_config), create=AsyncMock(), user_context=user_context
+    )
+    monkeypatch.setattr(service, "MCPAuthConfigRepository", lambda *_args: repository)
+    monkeypatch.setattr(service, "get_real_secret_manager", lambda **_kwargs: manager)
+    stored_state = AsyncMock()
+    monkeypatch.setattr(oauth_state, "store", stored_state)
+    return manager, repository, stored_state
+
+
+_INLINE_APP = {"credential_mode": "custom", "client_id": "own-client-id-abcd"}
+_REFERENCED_APP = {
+    "credential_mode": "custom",
+    "client_id_secret_name": "gmail_client_id",
+    "client_secret_secret_name": "gmail_client_secret",  # pragma: allowlist secret
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.flow(MainFlow.MCP_OAUTH)
+async def test_preflight_offers_a_reconnect_with_the_connections_own_oauth_app(monkeypatch):
+    """Google has no DCR, so without its own app a reconnect would ask for a
+    client ID and secret again; the connection already holds them."""
+    _connected_with(monkeypatch, _INLINE_APP)
+
+    result = await _preflight(instance_id=uuid4())
+
+    assert result.status == "ready"
+    assert result.credential_source == "custom"
+    assert result.client_id == "own-client-id-abcd"
+    assert result.connected is True
+    assert result.default_scopes == [_GMAIL_READONLY]
+
+
+@pytest.mark.asyncio
+async def test_preflight_names_no_client_id_kept_in_a_workspace_secret(monkeypatch):
+    """Preflight answers any member; a secret's value goes only to who may use it."""
+    _connected_with(monkeypatch, _REFERENCED_APP)
+
+    result = await _preflight(instance_id=uuid4())
+
+    assert result.status == "ready"
+    assert result.credential_source == "custom"
+    assert result.client_id is None
+
+
+@pytest.mark.asyncio
+async def test_an_own_app_registered_at_other_endpoints_is_not_offered_again(monkeypatch):
+    """The client was registered with the server the config names; a server that
+    moved gets a new app, not the old client's ID."""
+    _connected_with(
+        monkeypatch, {**_INLINE_APP, "token_url": "https://old-as.example.com/token"}
+    )
+
+    result = await _preflight(instance_id=uuid4())
+
+    assert result.status == "oauth_app_required"
+    assert result.credential_source is None
+    assert result.client_id is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("credential_mode", ["dynamic", "managed"])
+async def test_a_connection_without_its_own_app_reconnects_as_before(
+    monkeypatch, credential_mode
+):
+    instance, _ = _connected_with(
+        monkeypatch,
+        {"credential_mode": credential_mode, "client_id": "earlier-client"},
+        registration_endpoint="https://as.example.com/register",
+    )
+    auth_create, _ = _patch_authorize(monkeypatch)
+    register = _patch_registration(monkeypatch)
+
+    preflight = await _preflight(instance_id=instance.id)
+    response = await _authorize(OAuthAuthorizeRequest(instance_id=instance.id))
+
+    assert preflight.credential_source == "dynamic"
+    assert preflight.client_id is None
+    register.assert_awaited_once()
+    assert _query(response.authorize_url)["client_id"] == ["dcr-client-id"]
+    auth_create.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.flow(MainFlow.MCP_OAUTH)
+@pytest.mark.parametrize("credential_source", ["inline", "workspace_secrets"])
+async def test_a_reconnect_signs_in_again_with_the_stored_own_app(monkeypatch, credential_source):
+    """Nothing is re-entered and nothing is copied: the flow re-authorizes the
+    auth config that holds the client, for the scopes the person picked now."""
+    if credential_source == "inline":
+        instance, auth_config = _connected_with(monkeypatch, _INLINE_APP)
+        stored = {
+            auth_config.secret_key: json.dumps(
+                {"client_secret": "own-client-secret", "access_token": "old-token"}  # pragma: allowlist secret
+            )
+        }
+        expected_client_id = "own-client-id-abcd"
+    else:
+        instance, auth_config = _connected_with(monkeypatch, _REFERENCED_APP)
+        stored = {
+            auth_config.secret_key: json.dumps({"access_token": "old-token"}),
+            "gmail_client_id": "workspace-client-id",
+            "gmail_client_secret": "own-client-secret",  # pragma: allowlist secret
+        }
+        expected_client_id = "workspace-client-id"
+    owner = UserContext(user_id=_OWNER, workspace_id="ws")
+    manager, repository, stored_state = _stored_app(monkeypatch, auth_config, stored, owner)
+    register = _patch_registration(monkeypatch)
+    secret_catalog = SimpleNamespace(add_reference=AsyncMock(), get_for_use=AsyncMock())
+    picked = [_GMAIL_READONLY, _GMAIL_MODIFY]
+
+    response = await _authorize(
+        OAuthAuthorizeRequest(instance_id=instance.id, scopes=picked),
+        secret_catalog,
+        user_context=owner,
+    )
+
+    query = _query(response.authorize_url)
+    assert query["client_id"] == [expected_client_id]
+    assert query["scope"] == [" ".join(picked)]
+    assert query["redirect_uri"] == [_CALLBACK]
+    assert response.connection_id == instance.id
+    repository.create.assert_not_awaited()
+    manager.set_secret.assert_not_awaited()
+    secret_catalog.add_reference.assert_not_awaited()
+    register.assert_not_awaited()
+    state: OAuthState = stored_state.await_args.args[1]
+    assert state.auth_config_id == str(auth_config.id)
+    assert state.scopes == picked
+    assert "own-client-secret" not in json.dumps(vars(state))
+
+
+@pytest.mark.asyncio
+async def test_a_reconnect_with_the_own_app_is_refused_to_a_member_who_did_not_bring_it(
+    monkeypatch,
+):
+    """Signing in with the stored client puts its credential to use, as attaching
+    the auth config would: its creator or a workspace admin only."""
+    import agentarea_mcp.application.auth_service as auth_service_module
+
+    instance, auth_config = _connected_with(monkeypatch, _REFERENCED_APP)
+    member = UserContext(user_id="member-b", workspace_id="ws")
+    manager, _, stored_state = _stored_app(monkeypatch, auth_config, {}, member)
+    monkeypatch.setattr(auth_service_module, "is_workspace_admin", AsyncMock(return_value=False))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _authorize(OAuthAuthorizeRequest(instance_id=instance.id), user_context=member)
+
+    assert exc_info.value.status_code == 403
+    manager.get_secret.assert_not_awaited()
+    stored_state.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_reconnect_whose_stored_secret_is_gone_asks_for_an_oauth_app(monkeypatch):
+    instance, auth_config = _connected_with(monkeypatch, _REFERENCED_APP)
+    owner = UserContext(user_id=_OWNER, workspace_id="ws")
+    stored = {auth_config.secret_key: json.dumps({})}
+    _, _, stored_state = _stored_app(monkeypatch, auth_config, stored, owner)
+
+    with pytest.raises(AppError) as exc_info:
+        await _authorize(OAuthAuthorizeRequest(instance_id=instance.id), user_context=owner)
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.code == "oauth_app_required"
+    assert "client ID and secret again" in exc_info.value.detail
+    stored_state.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_finishing_a_reconnect_records_the_scopes_it_asked_for(monkeypatch):
+    """The config keeps what it asked for until the new grant is in hand."""
+    picked = [_GMAIL_READONLY, _GMAIL_MODIFY]
+    callback = _Callback(
+        monkeypatch, _flow(scopes=picked), auth_config={"scopes": [_GMAIL_READONLY], "x": 1}
+    )
+    update = AsyncMock()
+    monkeypatch.setattr(service.MCPAuthService, "update", update, raising=False)
+
+    location = await callback.finish()
+
+    assert location.endswith("?oauth=success")
+    update.assert_awaited_once_with(
+        callback.auth_config.id,
+        config={"scopes": picked, "x": 1},
+        allow_managed_credentials=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_failed_reconnect_keeps_the_scopes_the_connection_has(monkeypatch):
+    callback = _Callback(
+        monkeypatch,
+        _flow(scopes=[_GMAIL_MODIFY]),
+        exchange=AsyncMock(side_effect=OAuthCodeExchangeError("token_exchange_failed")),
+    )
+    update = AsyncMock()
+    monkeypatch.setattr(service.MCPAuthService, "update", update, raising=False)
+
+    location = await callback.finish()
+
+    assert "oauth=error" in location
+    update.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Reconnecting an existing catalog API connection
+# ---------------------------------------------------------------------------
+
+
+def _api_connection(monkeypatch, config: dict | None, *, registry_item_id=None):
+    """A Metrica API connection made from the catalog; ``config`` is its auth config's."""
+    auth_config = None
+    if config is not None:
+        auth_config_id = uuid4()
+        auth_config = SimpleNamespace(
+            id=auth_config_id,
+            auth_type="oauth2",
+            config={
+                "provider": "yandex-metrica",
+                "authorization_url": "https://oauth.example.com/authorize",
+                "token_url": "https://oauth.example.com/token",
+                "scopes": ["metrika:read"],
+                **config,
+            },
+            secret_key=f"mcp_auth_cred:{auth_config_id}",
+            created_by=_OWNER,
+        )
+    connection = SimpleNamespace(
+        id=uuid4(),
+        registry_item_id=registry_item_id or uuid4(),
+        auth_config_id=auth_config.id if auth_config else None,
+    )
+
+    class _ConnectionRepository:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def get_by_id(self, requested_id):
+            return connection if requested_id == connection.id else None
+
+    class _AuthConfigRepository:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def get_by_id(self, requested_id):
+            return auth_config if auth_config and requested_id == auth_config.id else None
+
+    monkeypatch.setattr(targets, "OpenAPIConnectionRepository", _ConnectionRepository)
+    monkeypatch.setattr(targets, "MCPAuthConfigRepository", _AuthConfigRepository)
+    _patch_catalog(monkeypatch, _metrica_item())
+    return connection, auth_config
+
+
+@pytest.mark.asyncio
+async def test_preflight_answers_for_an_existing_api_connection(monkeypatch, platform_apps):
+    platform_apps.append(_YANDEX_APP)
+    connection, _ = _api_connection(
+        monkeypatch,
+        {"credential_mode": "managed", "platform_oauth_issuer": "https://oauth.example.com"},
+    )
+
+    result = await _preflight(openapi_connection_id=connection.id)
+
+    assert result.status == "ready"
+    assert result.credential_source == "platform"
+    assert result.connected is True
+    assert result.scopes == ["metrika:read"]
+    assert result.default_scopes == ["metrika:read"]
+
+
+@pytest.mark.asyncio
+async def test_preflight_offers_an_api_connection_its_own_oauth_app(monkeypatch):
+    connection, _ = _api_connection(monkeypatch, _INLINE_APP)
+
+    result = await _preflight(openapi_connection_id=connection.id)
+
+    assert result.status == "ready"
+    assert result.credential_source == "custom"
+    assert result.client_id == "own-client-id-abcd"
+
+
+@pytest.mark.asyncio
+async def test_preflight_404s_for_an_unknown_api_connection(monkeypatch):
+    _api_connection(monkeypatch, None)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _preflight(openapi_connection_id=uuid4())
+
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_an_api_connection_not_made_from_the_catalog_has_no_sign_in(monkeypatch):
+    connection, _ = _api_connection(monkeypatch, None)
+    connection.registry_item_id = None
+
+    result = await _preflight(openapi_connection_id=connection.id)
+
+    assert result.status == "unsupported"
+    assert "catalog" in result.detail
+
+
+@pytest.mark.asyncio
+async def test_preflight_takes_one_target_only():
+    with pytest.raises(HTTPException) as exc_info:
+        await _preflight(openapi_connection_id=uuid4(), catalog_item_id=uuid4())
+
+    assert exc_info.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_a_reconnect_reauthorizes_the_api_connection_in_place(monkeypatch, platform_apps):
+    """No second connection: the sign-in attaches to the one the person opened."""
+    platform_apps.append(_YANDEX_APP)
+    connection, _ = _api_connection(
+        monkeypatch,
+        {"credential_mode": "managed", "platform_oauth_issuer": "https://oauth.example.com"},
+    )
+    connection_create = _patch_connection_creation(monkeypatch)
+    auth_create, stored_state = _patch_authorize(monkeypatch)
+
+    response = await _authorize(
+        OAuthAuthorizeRequest(openapi_connection_id=connection.id, return_to=_APP)
+    )
+
+    assert response.connection_id == connection.id
+    connection_create.assert_not_awaited()
+    assert _query(response.authorize_url)["client_id"] == ["platform-client-id"]
+    assert auth_create.await_args.kwargs["openapi_connection_id"] == connection.id
+    state: OAuthState = stored_state.await_args.args[1]
+    assert state.target_kind == "openapi_connection"
+    assert state.connection_id == str(connection.id)
+
+
+@pytest.mark.asyncio
+async def test_a_reconnect_of_an_api_connection_reuses_its_own_oauth_app(monkeypatch):
+    connection, auth_config = _api_connection(monkeypatch, _INLINE_APP)
+    owner = UserContext(user_id=_OWNER, workspace_id="ws")
+    stored = {
+        auth_config.secret_key: json.dumps(
+            {"client_secret": "own-client-secret"}  # pragma: allowlist secret
+        )
+    }
+    manager, repository, stored_state = _stored_app(monkeypatch, auth_config, stored, owner)
+    connection_create = _patch_connection_creation(monkeypatch)
+
+    response = await _authorize(
+        OAuthAuthorizeRequest(openapi_connection_id=connection.id),
+        SimpleNamespace(add_reference=AsyncMock(), get_for_use=AsyncMock()),
+        user_context=owner,
+    )
+
+    assert _query(response.authorize_url)["client_id"] == ["own-client-id-abcd"]
+    connection_create.assert_not_awaited()
+    repository.create.assert_not_awaited()
+    manager.set_secret.assert_not_awaited()
+    state: OAuthState = stored_state.await_args.args[1]
+    assert state.auth_config_id == str(auth_config.id)
+    assert state.target_kind == "openapi_connection"
+
+
+@pytest.mark.asyncio
+async def test_reconnecting_an_api_connection_is_an_edit(monkeypatch, platform_apps):
+    platform_apps.append(_YANDEX_APP)
+    connection, _ = _api_connection(
+        monkeypatch,
+        {"credential_mode": "managed", "platform_oauth_issuer": "https://oauth.example.com"},
+    )
+    deny = AsyncMock(side_effect=HTTPException(status_code=403, detail="no"))
+    monkeypatch.setattr(targets, "require_permission", deny)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _authorize(OAuthAuthorizeRequest(openapi_connection_id=connection.id))
+
+    assert exc_info.value.status_code == 403
+    assert deny.await_args.args[:3] == ("edit", "openapi_connection", str(connection.id))

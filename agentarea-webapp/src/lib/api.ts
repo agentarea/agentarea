@@ -718,6 +718,21 @@ export const updateMCPServerInstance = async (
   return withStatus(result);
 };
 
+export const setMCPServerInstanceSharing = async (
+  instanceId: string,
+  shared: boolean
+) => {
+  const result =
+    await sdk.setMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPut(
+      {
+        client: serverClient,
+        path: { instance_id: instanceId },
+        body: { shared },
+      }
+    );
+  return withStatus(result);
+};
+
 export const verifyMCPServerInstance = async (instanceId: string) => {
   const result =
     await sdk.verifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPost({
@@ -1771,6 +1786,19 @@ export const updateOpenAPIConnection = async (
       body,
     });
   return { data, error };
+};
+
+export const setOpenAPIConnectionSharing = async (
+  connectionId: string,
+  shared: boolean
+) => {
+  const result =
+    await sdk.setConnectionSharingV1OpenapiConnectionsConnectionIdSharingPut({
+      client: serverClient,
+      path: { connection_id: connectionId },
+      body: { shared },
+    });
+  return withStatus(result);
 };
 
 export const discoverOpenAPITools = async (connectionId: string) => {

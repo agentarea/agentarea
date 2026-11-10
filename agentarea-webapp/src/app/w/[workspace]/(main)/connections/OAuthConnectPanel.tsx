@@ -14,11 +14,14 @@ import {
   oauthPreflightAction,
 } from "@/lib/server-actions";
 import {
+  authorizeTargetOf,
   buildAuthorizeRequest,
   canAuthorize,
   canUseOwnApp,
+  clientIdTail,
   deriveOAuthConnectState,
   preflightAfterAuthorizeError,
+  preflightTargetOf,
   scopeChoice,
   type OAuthConnectState,
   type OAuthPreflight,
@@ -43,7 +46,21 @@ import { OAuthScopePicker } from "./OAuthScopePicker";
 export type OAuthConnectTarget =
   | { kind: "instance"; instanceId: string }
   | { kind: "spec"; serverId: string; ensureInstance: () => Promise<string> }
-  | { kind: "catalog"; itemId: string };
+  | { kind: "catalog"; itemId: string }
+  | { kind: "api_connection"; connectionId: string };
+
+function targetId(target: OAuthConnectTarget): string {
+  switch (target.kind) {
+    case "instance":
+      return target.instanceId;
+    case "spec":
+      return target.serverId;
+    case "catalog":
+      return target.itemId;
+    case "api_connection":
+      return target.connectionId;
+  }
+}
 
 export function OAuthConnectPanel({
   target,
@@ -95,30 +112,21 @@ export function OAuthConnectPanel({
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const targetKind = target.kind;
-  const targetKey =
-    target.kind === "instance"
-      ? target.instanceId
-      : target.kind === "catalog"
-        ? target.itemId
-        : target.serverId;
+  const targetKey = targetId(target);
 
   useEffect(() => {
     if (!isUrlType || hasGivenPreflight) return;
     let active = true;
-    oauthPreflightAction(
-      targetKind === "instance"
-        ? { instance_id: targetKey }
-        : targetKind === "catalog"
-          ? { catalog_item_id: targetKey }
-          : { server_id: targetKey }
-    ).then(({ data, error }) => {
-      if (!active) return;
-      if (error || !data) {
-        setPreflightError(error || t("preflightFailed"));
-        return;
+    oauthPreflightAction(preflightTargetOf(targetKind, targetKey)).then(
+      ({ data, error }) => {
+        if (!active) return;
+        if (error || !data) {
+          setPreflightError(error || t("preflightFailed"));
+          return;
+        }
+        setPreflight(data);
       }
-      setPreflight(data);
-    });
+    );
     return () => {
       active = false;
     };
@@ -161,14 +169,9 @@ export function OAuthConnectPanel({
     try {
       const request = buildAuthorizeRequest({
         target:
-          target.kind === "catalog"
-            ? { catalog_item_id: target.itemId }
-            : {
-                instance_id:
-                  target.kind === "instance"
-                    ? target.instanceId
-                    : await target.ensureInstance(),
-              },
+          target.kind === "spec"
+            ? { instance_id: await target.ensureInstance() }
+            : authorizeTargetOf(target.kind, targetKey),
         state,
         credentials,
         scopes,
@@ -202,6 +205,7 @@ export function OAuthConnectPanel({
     state,
     t,
     target,
+    targetKey,
     onConnectStart,
     onAuthorizeError,
     returnPath,
@@ -262,6 +266,14 @@ export function OAuthConnectPanel({
   );
 
   if (state.kind === "ready") {
+    const ownApp = state.credentialSource === "custom";
+    const detail = ownApp
+      ? state.clientId
+        ? t("ownAppInUse", { client: clientIdTail(state.clientId) })
+        : t("ownAppInUseFromSecret")
+      : state.connected
+        ? t("authorizedDetail")
+        : t("readyDetail");
     const button = (
       <Button
         size={buttonSize}
@@ -302,9 +314,7 @@ export function OAuthConnectPanel({
                 ? t("authorizedTitle")
                 : (title ?? t("readyTitle"))}
             </p>
-            <p className="text-xs text-muted-foreground">
-              {state.connected ? t("authorizedDetail") : t("readyDetail")}
-            </p>
+            <p className="text-xs text-muted-foreground">{detail}</p>
           </div>
           {!bare && button}
         </Row>
@@ -318,7 +328,7 @@ export function OAuthConnectPanel({
             onClick={() => setUseOwnApp(true)}
             disabled={isConnecting}
           >
-            {t("useOwnApp")}
+            {ownApp ? t("replaceOwnApp") : t("useOwnApp")}
           </Button>
         )}
         {connectError && <ErrorLine message={connectError} />}
@@ -344,14 +354,20 @@ export function OAuthConnectPanel({
         />
         <div className="min-w-0">
           <p className="text-sm font-medium">
-            {state.optional
-              ? t("ownAppTitle")
-              : state.connected
-                ? t("needsAppTitleConnected")
-                : t("needsAppTitle")}
+            {state.replacesOwnApp
+              ? t("replaceOwnAppTitle")
+              : state.optional
+                ? t("ownAppTitle")
+                : state.connected
+                  ? t("needsAppTitleConnected")
+                  : t("needsAppTitle")}
           </p>
           <p className="text-xs text-muted-foreground">
-            {state.optional ? t("ownAppDetail") : state.reason}
+            {state.replacesOwnApp
+              ? t("replaceOwnAppDetail")
+              : state.optional
+                ? t("ownAppDetail")
+                : state.reason}
           </p>
         </div>
       </div>
@@ -390,7 +406,7 @@ export function OAuthConnectPanel({
             onClick={() => setUseOwnApp(false)}
             disabled={isConnecting}
           >
-            {t("usePlatformApp")}
+            {state.replacesOwnApp ? t("keepOwnApp") : t("usePlatformApp")}
           </Button>
         )}
       </div>

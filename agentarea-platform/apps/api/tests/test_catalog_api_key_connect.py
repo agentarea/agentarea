@@ -71,7 +71,10 @@ def _request(**values) -> CatalogConnectRequest:
 
 @pytest.fixture(autouse=True)
 def _raw_response(monkeypatch):
-    monkeypatch.setattr(routes, "_connection_response", lambda conn: conn)
+    async def raw(conn, *_args):
+        return conn
+
+    monkeypatch.setattr(routes, "_connection_response", raw)
     # The payload's URL check resolves the host; these hosts are fictional.
     monkeypatch.setattr(url_validator, "validate_url", lambda *_args, **_kwargs: None)
 

@@ -35,6 +35,9 @@ class OAuthState:
     user_id: str
     code_verifier: str
     return_to: str = ""
+    # A reconnect re-authorizes the auth config it already has: the scopes it
+    # asks for are written to that config only once the code is redeemed.
+    scopes: list[str] | None = None
 
 
 async def _redis():

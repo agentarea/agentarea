@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  authorizeTargetOf,
   buildAuthorizeRequest,
   canAuthorize,
   canUseOwnApp,
+  clientIdTail,
   deriveOAuthConnectState,
   preflightAfterAuthorizeError,
+  preflightTargetOf,
   scopeChoice,
   scopeShortName,
   summarizeAuthorization,
@@ -131,6 +134,57 @@ describe("deriveOAuthConnectState", () => {
         useOwnApp: true,
       })
     ).toEqual({ kind: "ready", connected: false, credentialSource: "dynamic" });
+  });
+
+  it("reconnects with the connection's own app instead of asking for it again", () => {
+    const ready = preflight({
+      credential_source: "custom",
+      client_id: "1234-own-client-abcd",
+      connected: true,
+    });
+    const state = deriveOAuthConnectState({
+      isUrlType: true,
+      preflight: ready,
+    });
+
+    expect(state).toEqual({
+      kind: "ready",
+      connected: true,
+      credentialSource: "custom",
+      clientId: "1234-own-client-abcd",
+    });
+    expect(
+      buildAuthorizeRequest({
+        target: { instance_id: INSTANCE_ID },
+        state,
+        scopes: ["https://www.googleapis.com/auth/gmail.modify"],
+      })
+    ).toEqual({
+      instance_id: INSTANCE_ID,
+      credential_mode: "auto",
+      scopes: ["https://www.googleapis.com/auth/gmail.modify"],
+    });
+  });
+
+  it("asks for a new app when the person replaces the connection's own", () => {
+    const ready = preflight({ credential_source: "custom", connected: true });
+
+    expect(canUseOwnApp(ready)).toBe(true);
+    expect(
+      deriveOAuthConnectState({
+        isUrlType: true,
+        preflight: ready,
+        useOwnApp: true,
+      })
+    ).toEqual({
+      kind: "needs_oauth_app",
+      connected: true,
+      reason: "",
+      issuer: "https://accounts.google.com",
+      redirectUri: REDIRECT_URI,
+      optional: true,
+      replacesOwnApp: true,
+    });
   });
 
   it("carries the reason through when the server cannot be authorized at all", () => {
@@ -486,5 +540,36 @@ describe("picked scopes", () => {
         scopes: [],
       })
     ).toBeNull();
+  });
+});
+
+describe("clientIdTail", () => {
+  it("shows only the end of a client ID", () => {
+    expect(clientIdTail("1234-own-client-abcd")).toBe("…abcd");
+    expect(clientIdTail("abcd")).toBe("abcd");
+  });
+});
+
+describe("preflightTargetOf", () => {
+  it("names each connection the way the API asks about it", () => {
+    expect(preflightTargetOf("instance", INSTANCE_ID)).toEqual({
+      instance_id: INSTANCE_ID,
+    });
+    expect(preflightTargetOf("spec", ITEM_ID)).toEqual({ server_id: ITEM_ID });
+    expect(preflightTargetOf("catalog", ITEM_ID)).toEqual({
+      catalog_item_id: ITEM_ID,
+    });
+    expect(preflightTargetOf("api_connection", ITEM_ID)).toEqual({
+      openapi_connection_id: ITEM_ID,
+    });
+  });
+
+  it("signs an existing API connection in again, not a new one", () => {
+    expect(
+      buildAuthorizeRequest({
+        target: authorizeTargetOf("api_connection", ITEM_ID),
+        state: { kind: "ready", connected: true, credentialSource: "platform" },
+      })
+    ).toEqual({ openapi_connection_id: ITEM_ID, credential_mode: "auto" });
   });
 });

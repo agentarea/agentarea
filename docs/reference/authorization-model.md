@@ -71,6 +71,9 @@ type resource
     define can_invoke: invoker
     define secret_user: [User, Agent]
     define can_use_secret: secret_user or manager or can_manage from project
+    define personal: [User:*, Agent:*]
+    define connection_user: [User, Agent]
+    define can_use_connection: connection_user or manager or (can_read but not personal)
 ```
 
 Identity types are PascalCase; governance types are lowercase. Object references
@@ -131,6 +134,9 @@ objects amplifies its bits across all of them.
 | `can_invoke` | computed | `invoker` only. Reading, managing or administering the workspace does not let anyone run an agent. |
 | `secret_user` | `User`, `Agent` | Who may wire a workspace secret's value into something they configure. Granted explicitly; there is no grant API yet. |
 | `can_use_secret` | computed | `secret_user`, `manager`, or `can_manage from project`: the secret's creator, a workspace admin, or an explicit grant. Reading a secret does not imply it. Checked when a secret is attached — an MCP env var or header, an OAuth client, an egress exit — not when it is resolved at run time. |
+| `personal` | `User:*`, `Agent:*` | Set on an MCP server or API connection its creator has not shared with the workspace. A new connection is personal; one the platform manages is not. |
+| `connection_user` | `User`, `Agent` | Who the connection was lent to. Attaching a connection to an agent lends it to that agent. |
+| `can_use_connection` | computed | `connection_user`, `manager`, or `can_read` unless the connection is `personal`. Members still list a personal connection, and an admin still manages it, but only its creator and the agents it was lent to call through it. Checked on every tool call, when a connection is attached to an agent or a client, and when a run starts. |
 
 Agents, skills, MCP servers, registered clients and user secrets are all `resource:<uuid>`.
 A user secret created before secrets were graph resources is attached to its

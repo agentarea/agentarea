@@ -19,10 +19,44 @@ export type { CustomOAuthAppCredentials };
 
 export type OAuthPreflight = OAuthPreflightResponse;
 
-/** What is being signed in to: an MCP instance, or a catalog API to connect. */
+/**
+ * What is being signed in to: an MCP instance, a catalog API to connect, or an
+ * API connection made from the catalog, signed in to again.
+ */
 export type OAuthAuthorizeTarget =
   | { instance_id: string }
-  | { catalog_item_id: string };
+  | { catalog_item_id: string }
+  | { openapi_connection_id: string };
+
+/** What a preflight asks about: the authorize targets, or a catalog MCP spec before it has an instance. */
+export type OAuthPreflightTarget = OAuthAuthorizeTarget | { server_id: string };
+
+export type ConnectTargetKind =
+  | "instance"
+  | "spec"
+  | "catalog"
+  | "api_connection";
+
+export function authorizeTargetOf(
+  kind: Exclude<ConnectTargetKind, "spec">,
+  id: string
+): OAuthAuthorizeTarget {
+  switch (kind) {
+    case "instance":
+      return { instance_id: id };
+    case "catalog":
+      return { catalog_item_id: id };
+    case "api_connection":
+      return { openapi_connection_id: id };
+  }
+}
+
+export function preflightTargetOf(
+  kind: ConnectTargetKind,
+  id: string
+): OAuthPreflightTarget {
+  return kind === "spec" ? { server_id: id } : authorizeTargetOf(kind, id);
+}
 
 export type OAuthConnectState =
   /** Not an authorizable connection — show nothing. */
@@ -31,17 +65,20 @@ export type OAuthConnectState =
   /** Cannot be authorized this way; `reason` says why. No action offered. */
   | { kind: "unsupported"; reason: string }
   /**
-   * Connect runs on its own, with the operator's `platform` app or a client
-   * the provider registers `dynamic`ally.
+   * Connect runs on its own, with the operator's `platform` app, a client
+   * the provider registers `dynamic`ally, or the `custom` app the connection
+   * already holds — `clientId` when it was typed in.
    */
   | {
       kind: "ready";
       connected: boolean;
-      credentialSource?: "platform" | "dynamic" | null;
+      credentialSource?: "platform" | "dynamic" | "custom" | null;
+      clientId?: string | null;
     }
   /**
    * Connect needs a client ID/secret first. `optional`: the person chose their
-   * own app over one that would have worked unattended.
+   * own app over one that would have worked unattended; `replacesOwnApp`: over
+   * the one the connection already holds.
    */
   | {
       kind: "needs_oauth_app";
@@ -50,6 +87,7 @@ export type OAuthConnectState =
       issuer: string | null;
       redirectUri?: string;
       optional?: boolean;
+      replacesOwnApp?: boolean;
     };
 
 export function deriveOAuthConnectState({
@@ -78,12 +116,18 @@ export function deriveOAuthConnectState({
           issuer: preflight.issuer ?? null,
           redirectUri: preflight.redirect_uri,
           optional: true,
+          ...(preflight.credential_source === "custom"
+            ? { replacesOwnApp: true }
+            : {}),
         };
       }
       return {
         kind: "ready",
         connected: preflight.connected,
         credentialSource: preflight.credential_source ?? null,
+        ...(preflight.credential_source === "custom"
+          ? { clientId: preflight.client_id ?? null }
+          : {}),
       };
     case "oauth_app_required":
       return {
@@ -109,13 +153,21 @@ export function preflightAfterAuthorizeError(
 }
 
 /**
- * Whether a ready connection may instead use the person's own OAuth app: only
- * over the operator's app, whose consent screen names AgentArea, not them.
+ * Whether a ready connection may instead use the person's own OAuth app: over
+ * the operator's app, whose consent screen names AgentArea, not them, or to
+ * replace the own app the connection already holds.
  */
 export function canUseOwnApp(preflight: OAuthPreflight | null): boolean {
   return (
-    preflight?.status === "ready" && preflight.credential_source === "platform"
+    preflight?.status === "ready" &&
+    (preflight.credential_source === "platform" ||
+      preflight.credential_source === "custom")
   );
+}
+
+/** `…abcd` for a client ID: enough to recognise the app, not to copy it. */
+export function clientIdTail(clientId: string): string {
+  return clientId.length > 4 ? `…${clientId.slice(-4)}` : clientId;
 }
 
 /**

@@ -2295,6 +2295,15 @@ export type CollectionUpdateRequest = {
     name?: string | null;
 };
 /**
+ * ConnectionSharingRequest
+ */
+export type ConnectionSharingRequest = {
+    /**
+     * Shared
+     */
+    shared: boolean;
+};
+/**
  * ContentSafetyPolicy
  *
  * Content-safety governance controls.
@@ -4274,6 +4283,10 @@ export type McpServerInstanceResponse = {
      */
     id: string;
     /**
+     * Is Owner
+     */
+    is_owner?: boolean;
+    /**
      * Json Spec
      */
     json_spec: {
@@ -4293,6 +4306,10 @@ export type McpServerInstanceResponse = {
      * Name
      */
     name: string;
+    /**
+     * Personal
+     */
+    personal?: boolean;
     /**
      * Server Spec Id
      */
@@ -5162,9 +5179,10 @@ export type NetworkTopologyResponse = {
  *
  * Start a sign-in for one MCP instance or one catalog API.
  *
- * ``auto`` uses the operator's platform app when one serves the provider, else
- * registers AgentArea with it (RFC 7591). ``custom`` uses an OAuth app the
- * workspace registered with the provider, and overrides either.
+ * ``auto`` signs a connection connected with its own OAuth app in with that
+ * app again; else it uses the operator's platform app when one serves the
+ * provider, else registers AgentArea with it (RFC 7591). ``custom`` uses an
+ * OAuth app the workspace registered with the provider, and overrides any.
  */
 export type OAuthAuthorizeRequest = {
     /**
@@ -5203,6 +5221,12 @@ export type OAuthAuthorizeRequest = {
      * MCP instance to sign in to.
      */
     instance_id?: string | null;
+    /**
+     * Openapi Connection Id
+     *
+     * API connection made from the catalog, to sign in again.
+     */
+    openapi_connection_id?: string | null;
     /**
      * Return To
      */
@@ -5321,7 +5345,8 @@ export type OAuthLinkResponse = {
  * What the UI needs before it can offer Connect.
  *
  * ``ready`` — Connect runs unattended, with the client ``credential_source``
- * names: the operator's ``platform`` app, or one registered ``dynamic``-ally.
+ * names: the operator's ``platform`` app, one registered ``dynamic``-ally, or
+ * the ``custom`` app the connection was connected with, signed in with again.
  * ``oauth_app_required`` — ask for a client ID/secret first.
  * ``unsupported`` — this cannot be authorized with OAuth; ``detail`` says why.
  */
@@ -5331,13 +5356,17 @@ export type OAuthPreflightResponse = {
      */
     authorization_endpoint?: string | null;
     /**
+     * Client Id
+     */
+    client_id?: string | null;
+    /**
      * Connected
      */
     connected: boolean;
     /**
      * Credential Source
      */
-    credential_source?: 'platform' | 'dynamic' | null;
+    credential_source?: 'platform' | 'dynamic' | 'custom' | null;
     /**
      * Default Scopes
      */
@@ -5492,6 +5521,10 @@ export type OpenApiConnectionResponse = {
      */
     id: string;
     /**
+     * Is Owner
+     */
+    is_owner?: boolean;
+    /**
      * Last Dispatch
      */
     last_dispatch?: {
@@ -5505,6 +5538,10 @@ export type OpenApiConnectionResponse = {
      * Name
      */
     name: string;
+    /**
+     * Personal
+     */
+    personal?: boolean;
     /**
      * Registry Item Id
      */
@@ -14956,6 +14993,31 @@ export type ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostResponses = 
      */
     200: unknown;
 };
+export type SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutData = {
+    body: ConnectionSharingRequest;
+    path: {
+        /**
+         * Instance Id
+         */
+        instance_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/sharing';
+};
+export type SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutError = SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutErrors[keyof SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutErrors];
+export type SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: McpServerInstanceResponse;
+};
+export type SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutResponse = SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutResponses[keyof SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutResponses];
 export type RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostData = {
     body?: never;
     path: {
@@ -15689,6 +15751,12 @@ export type OauthPreflightV1OauthPreflightGetData = {
          * Catalog API to inspect before connecting it
          */
         catalog_item_id?: string | null;
+        /**
+         * Openapi Connection Id
+         *
+         * API connection made from the catalog, to sign in again
+         */
+        openapi_connection_id?: string | null;
     };
     url: '/v1/workspaces/{workspace}/oauth/preflight';
 };
@@ -15934,6 +16002,31 @@ export type DiscoverToolsV1OpenapiConnectionsConnectionIdDiscoverToolsPostRespon
      */
     200: unknown;
 };
+export type SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutData = {
+    body: ConnectionSharingRequest;
+    path: {
+        /**
+         * Connection Id
+         */
+        connection_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/openapi-connections/{connection_id}/sharing';
+};
+export type SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutError = SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutErrors[keyof SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutErrors];
+export type SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: OpenApiConnectionResponse;
+};
+export type SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutResponse = SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutResponses[keyof SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutResponses];
 export type ListPolicyRulesV1PoliciesGetData = {
     body?: never;
     path?: never;

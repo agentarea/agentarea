@@ -41,6 +41,7 @@ import {
 } from "../utils";
 import { getMcpConnectionState, getOpenApiConnectionState } from "../state";
 import type { ConnectionUsage } from "../usage";
+import { PersonalBadge } from "./ConnectionSharing";
 
 interface MCPServerSpecCardProps {
   server: MCPServer;
@@ -174,6 +175,7 @@ export function MCPInstanceCard({
               {tState(connectionState.key)}
             </StatusIndicator>
           }
+          badge={instance.personal ? <PersonalBadge /> : undefined}
           // The type last: it is the one to drop when the card is narrow.
           facts={[...facts, { key: "type", value: typeLabel, label: typeLabel }]}
         />
@@ -208,7 +210,9 @@ function CardSubtitle({
   return (
     <div className="flex w-full min-w-0 items-center gap-2">
       <span className="shrink-0 whitespace-nowrap">{status}</span>
-      {badge && <span className="shrink-0">{badge}</span>}
+      {badge && (
+        <span className="flex shrink-0 items-center gap-1">{badge}</span>
+      )}
       {facts.length > 0 && (
         <span className="flex h-4 min-w-0 flex-1 flex-wrap gap-x-2.5 overflow-hidden text-xs leading-4 text-muted-foreground">
           {facts.map(({ key, icon: Icon, value, label }) =>
@@ -267,13 +271,16 @@ export function OpenAPIConnectionCard({
             </StatusIndicator>
           }
           badge={
-            <Badge
-              size="sm"
-              variant="outline"
-              className="h-5 px-1.5 font-normal text-orange-600 border-orange-300"
-            >
-              OpenAPI
-            </Badge>
+            <>
+              <Badge
+                size="sm"
+                variant="outline"
+                className="h-5 px-1.5 font-normal text-orange-600 border-orange-300"
+              >
+                OpenAPI
+              </Badge>
+              {connection.personal && <PersonalBadge />}
+            </>
           }
           facts={[
             {

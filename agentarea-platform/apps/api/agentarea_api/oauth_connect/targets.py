@@ -32,6 +32,7 @@ from agentarea_mcp.application.oauth_client_service import (
     oauth_default_scopes,
 )
 from agentarea_mcp.application.oauth_profile import OAuthProfile
+from agentarea_mcp.domain.auth_models import MCPAuthConfig
 from agentarea_mcp.domain.transport import MCPTransport
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_mcp.infrastructure.repository import (
@@ -74,6 +75,8 @@ class PreflightTarget(Protocol):
     """Something a person may be asked to sign in to."""
 
     connected: bool
+    # The auth config a connected target signs in with now.
+    current_auth_config: MCPAuthConfig | None
 
     async def profile(self) -> OAuthProfile:
         """The authorization server this target signs in with.
@@ -175,11 +178,13 @@ class MCPInstanceTarget:
         server_spec: Any,
         user_context: UserContext,
         current_scopes: tuple[str, ...] = (),
+        current_auth_config: MCPAuthConfig | None = None,
     ) -> None:
         self.instance = instance
         self.server_spec = server_spec
         self.user_context = user_context
         self.current_scopes = current_scopes
+        self.current_auth_config = current_auth_config
         self.missing_scopes = _missing_scopes(getattr(instance, "verification", None))
         self.connected = instance.auth_config_id is not None
 
@@ -196,6 +201,7 @@ class MCPInstanceTarget:
                 instance.server_spec_id
             )
         current: tuple[str, ...] = ()
+        auth_config = None
         if instance.auth_config_id is not None:
             auth_config = await MCPAuthConfigRepository(session, user_context).get_by_id(
                 instance.auth_config_id
@@ -203,7 +209,7 @@ class MCPInstanceTarget:
             scopes = auth_config.config.get("scopes") if auth_config else None
             if isinstance(scopes, list):
                 current = tuple(scope for scope in scopes if isinstance(scope, str))
-        return cls(instance, server_spec, user_context, current)
+        return cls(instance, server_spec, user_context, current, auth_config)
 
     async def profile(self) -> OAuthProfile:
         profile = await _discovered(
@@ -240,6 +246,7 @@ class MCPSpecTarget:
     """A catalog MCP spec, asked about before any instance is created from it."""
 
     connected = False
+    current_auth_config: MCPAuthConfig | None = None
 
     def __init__(self, server_spec: Any) -> None:
         self.server_spec = server_spec
@@ -326,6 +333,7 @@ class CatalogItemTarget:
     """A trusted catalog API template; each sign-in materializes a new OpenAPI connection."""
 
     connected = False
+    current_auth_config: MCPAuthConfig | None = None
 
     def __init__(
         self,
@@ -432,6 +440,84 @@ class CatalogItemTarget:
 
     def auth_config_name(self, connection_id: UUID) -> str:
         return f"{self.oauth['provider_key']}-{str(connection_id)[:8]}"
+
+
+class OpenAPIConnectionTarget:
+    """An API connection made from a catalog item: a reconnect signs it in again in place.
+
+    The sign-in is the catalog item's; ``current_scopes``, what its credential
+    asked for, start the scope pick.
+    """
+
+    def __init__(
+        self,
+        connection: Any,
+        catalog: CatalogItemTarget | None,
+        user_context: UserContext,
+        current_auth_config: MCPAuthConfig | None,
+    ) -> None:
+        self.connection = connection
+        self.catalog = catalog
+        self.user_context = user_context
+        self.current_auth_config = current_auth_config
+        self.connected = connection.auth_config_id is not None
+        scopes = current_auth_config.config.get("scopes") if current_auth_config else None
+        self.current_scopes: tuple[str, ...] = (
+            tuple(scope for scope in scopes if isinstance(scope, str))
+            if isinstance(scopes, list)
+            else ()
+        )
+
+    @classmethod
+    async def load(
+        cls, connection_id: UUID, user_context: UserContext, session: AsyncSession
+    ) -> OpenAPIConnectionTarget:
+        connection = await OpenAPIConnectionRepository(session, user_context).get_by_id(
+            connection_id
+        )
+        if connection is None:
+            raise HTTPException(status_code=404, detail="Connection not found")
+        catalog = None
+        if connection.registry_item_id is not None:
+            catalog = await CatalogItemTarget.load(
+                connection.registry_item_id, user_context, session
+            )
+        auth_config = None
+        if connection.auth_config_id is not None:
+            auth_config = await MCPAuthConfigRepository(session, user_context).get_by_id(
+                connection.auth_config_id
+            )
+        return cls(connection, catalog, user_context, auth_config)
+
+    def _catalog(self) -> CatalogItemTarget:
+        if self.catalog is None:
+            raise NotAuthorizableError(
+                "This API connection was not made from a catalog API, so it has no "
+                "sign-in to repeat.",
+                status_code=400,
+            )
+        return self.catalog
+
+    async def profile(self) -> OAuthProfile:
+        profile = await self._catalog().profile()
+        still_offered = tuple(scope for scope in self.current_scopes if scope in profile.scopes)
+        if not still_offered:
+            return profile
+        return replace(profile, default_scopes=still_offered)
+
+    def oauth_app_required_detail(self, profile: OAuthProfile) -> str:
+        return self._catalog().oauth_app_required_detail(profile)
+
+    async def ensure_may_authorize(self) -> None:
+        await require_permission(
+            "edit", "openapi_connection", str(self.connection.id), self.user_context
+        )
+
+    async def create_connection(self) -> tuple[TargetKind, UUID]:
+        return "openapi_connection", self.connection.id
+
+    def auth_config_name(self, connection_id: UUID) -> str:
+        return self._catalog().auth_config_name(connection_id)
 
 
 # ---------------------------------------------------------------------------

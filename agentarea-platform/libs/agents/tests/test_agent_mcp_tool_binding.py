@@ -17,7 +17,7 @@ from agentarea_common.audit.models import AuditEventORM
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
 from agentarea_common.base.repository_factory import RepositoryFactory
-from agentarea_common.testing import install_graph_ownership_stub
+from agentarea_common.testing import allow_all_permissions, install_graph_ownership_stub
 from agentarea_governance.infrastructure.orm import PolicyRuleORM
 from agentarea_mcp.domain.auth_models import MCPAuthConfig
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
@@ -26,7 +26,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 
 @pytest.fixture(autouse=True)
-def _graph(monkeypatch):
+def graph(monkeypatch):
+    allow_all_permissions()
     return install_graph_ownership_stub(monkeypatch)
 
 
@@ -168,3 +169,50 @@ async def test_a_platform_connection_binds_by_name(session):
     agent = await _service(session).create_agent(_create(_mcp("tools")))
 
     assert agent.tools[0]["name"] == gateway
+
+
+def _granted(*connections: str) -> None:
+    from agentarea_common.auth.permission import PermissionService
+    from agentarea_common.di.container import register_singleton
+    from agentarea_common.testing import GrantedPermissions
+
+    register_singleton(
+        PermissionService,
+        GrantedPermissions(*(("User:user-a", "use_connection", c) for c in connections)),
+    )
+
+
+def _loans(graph) -> set[str]:
+    return {str(t) for t in graph.recorded if t.relation == "connection_user"}
+
+
+async def test_attaching_a_connection_lends_it_to_the_agent(session, graph):
+    connection = await _connection(session, "github")
+    _granted(connection)
+
+    agent = await _service(session).create_agent(_create(_mcp(connection)))
+
+    assert _loans(graph) == {f"resource:{connection}#connection_user@Agent:{agent.id}"}
+
+
+async def test_someone_elses_personal_connection_cannot_be_attached(session, graph):
+    connection = await _connection(session, "github", created_by="user-b")
+    _granted()
+
+    with pytest.raises(PermissionError, match="personal connection"):
+        await _service(session).create_agent(_create(_mcp(connection)))
+
+
+async def test_an_attached_connection_is_not_rechecked_and_a_dropped_one_is_withdrawn(
+    session, graph
+):
+    kept = await _connection(session, "github")
+    dropped = await _connection(session, "linear")
+    _granted(kept, dropped)
+    service = _service(session)
+    agent = await service.create_agent(_create(_mcp(kept), _mcp(dropped)))
+
+    _granted()
+    await service.update_agent(agent.id, AgentUpdate(tools=[_mcp(kept)]))
+
+    assert _loans(graph) == {f"resource:{kept}#connection_user@Agent:{agent.id}"}

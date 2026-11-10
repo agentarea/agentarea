@@ -19,7 +19,12 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.exceptions import AppError
 from agentarea_common.workspaces.lookup import workspace_slug_for
-from agentarea_mcp.application.auth_service import MCPAuthService, OAuthCodeExchangeError
+from agentarea_mcp.application.auth_service import (
+    AuthConfigAccessDeniedError,
+    MCPAuthService,
+    MissingCredentialsError,
+    OAuthCodeExchangeError,
+)
 from agentarea_mcp.application.oauth_client_service import (
     MCPOAuthClientService,
     MCPOAuthDiscoveryError,
@@ -32,6 +37,7 @@ from agentarea_mcp.application.oauth_profile import (
     platform_app_for,
 )
 from agentarea_mcp.application.platform_oauth_app import platform_oauth_app
+from agentarea_mcp.domain.auth_models import MCPAuthConfig
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_secrets.catalog_service import SecretCatalogService
 from fastapi import HTTPException
@@ -63,12 +69,14 @@ class Preflight:
 
     status: Literal["ready", "oauth_app_required", "unsupported"]
     connected: bool
-    credential_source: CredentialSource | None = None
+    credential_source: CredentialSource | Literal["custom"] | None = None
     detail: str = ""
     issuer: str | None = None
     authorization_endpoint: str | None = None
     scopes: tuple[str, ...] = ()
     default_scopes: tuple[str, ...] = ()
+    # The connection's own app's client ID, when its config keeps it in plain.
+    client_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -135,17 +143,33 @@ def _oauth_app_required(detail: str, issuer: str | None) -> AppError:
     return AppError(detail, status_code=422, code="oauth_app_required", extra={"issuer": issuer})
 
 
+def _own_app(target: PreflightTarget, profile: OAuthProfile) -> MCPAuthConfig | None:
+    """The OAuth app the person brought for this connection, when a reconnect may sign in with it.
+
+    Only against the endpoints it was registered with.
+    """
+    auth_config = target.current_auth_config
+    if auth_config is None or auth_config.config.get("credential_mode") != "custom":
+        return None
+    endpoints = (auth_config.config.get("authorization_url"), auth_config.config.get("token_url"))
+    if endpoints != (profile.authorization_endpoint, profile.token_endpoint):
+        return None
+    return auth_config
+
+
 async def preflight(target: PreflightTarget) -> Preflight:
     """Every outcome is an answer: "no OAuth here" is rendered, not decoded from an error."""
     try:
         profile = await target.profile()
     except NotAuthorizableError as exc:
         return Preflight(status="unsupported", connected=target.connected, detail=exc.detail)
-    source = auto_credential_source(profile)
+    own_app = _own_app(target, profile)
+    source = "custom" if own_app is not None else auto_credential_source(profile)
     return Preflight(
         status="ready" if source else "oauth_app_required",
         connected=target.connected,
         credential_source=source,
+        client_id=own_app.config.get("client_id") if own_app is not None else None,
         detail="" if source else target.oauth_app_required_detail(profile),
         issuer=profile.issuer,
         authorization_endpoint=profile.authorization_endpoint,
@@ -191,43 +215,51 @@ class OAuthConnectService:
         secret_manager = get_real_secret_manager(
             session=self._session, user_context=self._user_context
         )
-        if credential_mode == "custom":
-            resolved = await resolve_custom_oauth_app(
-                custom, catalog=self._secret_catalog, manager=secret_manager
-            )
-            resolved.config["credential_mode"] = "custom"
-        else:
-            profile, resolved = await self._auto_client(target, profile)
-
-        kind, connection_id = await target.create_connection()
         auth_service = MCPAuthService(
             MCPAuthConfigRepository(self._session, self._user_context), secret_manager
         )
-        # The client is persisted before the redirect: token exchange and every
-        # refresh need it again, so the OAuth state names it instead of carrying it.
-        auth_config = await auth_service.create(
-            name=target.auth_config_name(connection_id),
-            auth_type="oauth2",
-            config={
-                "provider": profile.provider,
-                **({"issuer": profile.issuer} if profile.issuer else {}),
-                "authorization_url": profile.authorization_endpoint,
-                "token_url": profile.token_endpoint,
-                "scopes": list(requested),
-                "authorization_scheme": profile.authorization_scheme,
-                "client_auth_method": profile.client_auth_method,
-                **resolved.config,
-            },
-            credentials=resolved.credentials,
-            allow_managed_credentials=True,
-            # Minted for this connection, so it is deleted with it.
-            mcp_instance_id=connection_id if kind == "mcp_instance" else None,
-            openapi_connection_id=connection_id if kind == "openapi_connection" else None,
-        )
-        for secret_id, field_name in resolved.references:
-            await self._secret_catalog.add_reference(
-                secret_id, "mcp_auth_config", str(auth_config.id), field_name
+        own_app = _own_app(target, profile) if credential_mode == "auto" else None
+        if own_app is not None:
+            # A reconnect signs in again with the client the connection holds:
+            # its secret stays where it is, and the callback renews the tokens.
+            auth_config, client_id = await self._own_client(auth_service, own_app, profile)
+            kind, connection_id = await target.create_connection()
+        else:
+            if credential_mode == "custom":
+                resolved = await resolve_custom_oauth_app(
+                    custom, catalog=self._secret_catalog, manager=secret_manager
+                )
+                resolved.config["credential_mode"] = "custom"
+            else:
+                profile, resolved = await self._auto_client(target, profile)
+
+            kind, connection_id = await target.create_connection()
+            # The client is persisted before the redirect: token exchange and every
+            # refresh need it again, so the OAuth state names it instead of carrying it.
+            auth_config = await auth_service.create(
+                name=target.auth_config_name(connection_id),
+                auth_type="oauth2",
+                config={
+                    "provider": profile.provider,
+                    **({"issuer": profile.issuer} if profile.issuer else {}),
+                    "authorization_url": profile.authorization_endpoint,
+                    "token_url": profile.token_endpoint,
+                    "scopes": list(requested),
+                    "authorization_scheme": profile.authorization_scheme,
+                    "client_auth_method": profile.client_auth_method,
+                    **resolved.config,
+                },
+                credentials=resolved.credentials,
+                allow_managed_credentials=True,
+                # Minted for this connection, so it is deleted with it.
+                mcp_instance_id=connection_id if kind == "mcp_instance" else None,
+                openapi_connection_id=connection_id if kind == "openapi_connection" else None,
             )
+            for secret_id, field_name in resolved.references:
+                await self._secret_catalog.add_reference(
+                    secret_id, "mcp_auth_config", str(auth_config.id), field_name
+                )
+            client_id = resolved.client_id
 
         pkce = PKCEPair.generate()
         token = secrets.token_urlsafe(32)
@@ -241,11 +273,12 @@ class OAuthConnectService:
                 user_id=str(self._user_context.user_id),
                 code_verifier=pkce.verifier,
                 return_to=return_to,
+                scopes=list(requested) if own_app is not None else None,
             ),
         )
         authorize_url = MCPOAuthClientService().build_authorize_url(
             profile,
-            client_id=resolved.client_id,
+            client_id=client_id,
             redirect_uri=callback_uri(),
             pkce=pkce,
             state=token,
@@ -253,6 +286,38 @@ class OAuthConnectService:
         )
         count("oauth_connect", provider=_provider_label(profile.issuer), outcome="started")
         return Authorization(authorize_url=authorize_url, connection_id=connection_id)
+
+    async def _own_client(
+        self, auth_service: MCPAuthService, own_app: MCPAuthConfig, profile: OAuthProfile
+    ) -> tuple[MCPAuthConfig, str]:
+        """The connection's own app, for whoever may put its credential to use."""
+        try:
+            auth_config = await auth_service.get_for_use(own_app.id)
+        except AuthConfigAccessDeniedError as exc:
+            raise HTTPException(
+                status_code=403,
+                detail=f"{exc} Connect with your own OAuth app instead.",
+            ) from exc
+        try:
+            client_id, _, _ = await auth_service.get_oauth_client_credentials(
+                auth_config, require_secret=True
+            )
+        except MissingCredentialsError as exc:
+            logger.warning(
+                "Own OAuth app of auth config %s is incomplete: %s",
+                auth_config.id,
+                exc,
+                exc_info=True,
+            )
+            count(
+                "oauth_connect",
+                provider=_provider_label(profile.issuer),
+                outcome="failed:oauth_app_required",
+            )
+            raise _oauth_app_required(
+                f"{exc} Enter the OAuth app's client ID and secret again.", profile.issuer
+            ) from exc
+        return auth_config, client_id
 
     async def _auto_client(
         self, target: ConnectTarget, profile: OAuthProfile
@@ -402,6 +467,12 @@ async def finish(
     except OAuthCodeExchangeError as exc:
         count("oauth_connect", provider=provider, outcome=f"failed:{exc.reason}")
         return _with_query(landing, oauth="error", reason=exc.reason)
+    if flow.scopes is not None:
+        await auth_service.update(
+            auth_config.id,
+            config={**auth_config.config, "scopes": flow.scopes},
+            allow_managed_credentials=True,
+        )
 
     await attach_credential(flow, session, user_context, auth_config.id)
     await session.commit()

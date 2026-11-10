@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useLocale, useNow, useTranslations } from "next-intl";
-import { useSearchParams } from "next/navigation";
 import {
   Activity,
   ExternalLink,
@@ -13,40 +11,20 @@ import {
   SlidersHorizontal,
   Wrench,
 } from "lucide-react";
-import FormError from "@/components/FormError";
 import { DetailsCard } from "@/components/Overview/DetailsCard";
-import { OverviewHero } from "@/components/Overview/OverviewHero";
 import {
   CardField,
-  EmptyRow,
   HeroMeta,
   SectionCard,
   SectionCardHead,
   Stat,
   StatStrip,
 } from "@/components/Overview/OverviewCard";
+import { OverviewHero } from "@/components/Overview/OverviewHero";
 import { CopyableText } from "@/components/ui/copyable-text";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
-import { updateOpenAPIConnectionAction } from "@/lib/server-actions";
 import { getOpenApiConnectionDisplayStatus } from "@/lib/status";
-import { ConnectionCostSection } from "../../components/ConnectionCostSection";
-import {
-  cleanHeaderRows,
-  CustomHeadersEditor,
-  toHeaderRows,
-} from "../../components/CustomHeadersEditor";
-import { CustomHeadersList } from "../../components/CustomHeadersList";
-import { SectionEditAction } from "../../components/SectionEditAction";
-import {
-  cleanQueryParamRows,
-  CustomQueryParamsEditor,
-  toQueryParamRows,
-} from "../../components/CustomQueryParamsEditor";
 import { OpenAPIConnectionMark } from "../../components/MCPCard";
-import type { HeaderRow } from "../../components/HeaderRows";
-import type { SecretRow } from "../../components/SecretRows";
 import { relativeParts } from "../../relative-parts";
 import { getOpenApiConnectionState } from "../../state";
 import type { OpenAPIConnection } from "../../types";
@@ -63,8 +41,6 @@ function hostOf(url: string): string {
 const externalLinkClass =
   "font-medium text-foreground/80 underline-offset-2 hover:underline";
 
-type Section = "headers" | "queryParams";
-
 export default function OpenAPIConnectionOverview({
   connection,
 }: {
@@ -73,55 +49,8 @@ export default function OpenAPIConnectionOverview({
   const t = useTranslations("MCPServersPage.openapiDetail");
   const tDetail = useTranslations("MCPServersPage.instanceDetail");
   const tState = useTranslations("MCPServersPage.state");
-  const tConn = useTranslations("OpenAPIConnection");
   const locale = useLocale();
   const now = useNow({ updateInterval: 60_000 });
-  const router = useWorkspaceRouter();
-  const searchParams = useSearchParams();
-  // One draft per section, null while it is not being edited: the two edit
-  // independently, so opening one never discards what is typed in the other.
-  const [headersDraft, setHeadersDraft] = useState<HeaderRow[] | null>(null);
-  const [queryDraft, setQueryDraft] = useState<SecretRow[] | null>(null);
-  const [saving, setSaving] = useState<Section | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  // The callback's query is dropped from the URL right away, so the failure is
-  // captured once and stays on the page.
-  const [oauthError] = useState<string | null>(() =>
-    searchParams.get("oauth") === "error"
-      ? searchParams.get("reason") || "unknown"
-      : null
-  );
-
-  useEffect(() => {
-    if (searchParams.get("oauth")) {
-      router.replace(`/connections/openapi/${connection.id}`, { scroll: false });
-    }
-  }, [searchParams, connection.id, router]);
-
-  const save = async (
-    section: Section,
-    body: Parameters<typeof updateOpenAPIConnectionAction>[1],
-    close: () => void
-  ) => {
-    const failedKey =
-      section === "headers" ? "saveHeadersFailed" : "saveQueryParamsFailed";
-    setSaving(section);
-    setError(null);
-    try {
-      const result = await updateOpenAPIConnectionAction(connection.id, body);
-      if (result.error) {
-        setError(apiErrorMessage(result, t(`errors.${failedKey}`)));
-        return;
-      }
-      close();
-      router.refresh();
-    } catch (err) {
-      console.error("Failed to save OpenAPI connection", err);
-      setError(`${t(`errors.${failedKey}`)}: ${formatApiError(err)}`);
-    } finally {
-      setSaving(null);
-    }
-  };
 
   const toolCount = connection.available_tools.length;
   const headers = connection.custom_headers ?? [];
@@ -163,7 +92,9 @@ export default function OpenAPIConnectionOverview({
           <>
             <HeroMeta icon={<FileJson />}>OpenAPI</HeroMeta>
             {connection.base_url && (
-              <HeroMeta icon={<Globe />}>{hostOf(connection.base_url)}</HeroMeta>
+              <HeroMeta icon={<Globe />}>
+                {hostOf(connection.base_url)}
+              </HeroMeta>
             )}
             {connection.spec_url && (
               <HeroMeta icon={<ExternalLink />}>
@@ -181,12 +112,6 @@ export default function OpenAPIConnectionOverview({
         }
       />
 
-      {oauthError && (
-        <div className="mx-4 mt-3 md:shrink-0">
-          <FormError>{t("oauthError", { reason: oauthError })}</FormError>
-        </div>
-      )}
-
       <div className="w-full bg-muted/20 px-4 pb-11 pt-[18px] md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain">
         <StatStrip>
           <Stat
@@ -194,7 +119,11 @@ export default function OpenAPIConnectionOverview({
             label={tDetail("stats.tools")}
             value={toolCount}
             bar={null}
-            sub={connection.spec_url ? t("stats.fromSpecUrl") : t("stats.fromSpecJson")}
+            sub={
+              connection.spec_url
+                ? t("stats.fromSpecUrl")
+                : t("stats.fromSpecJson")
+            }
           />
           <Stat
             icon={<Activity />}
@@ -205,7 +134,9 @@ export default function OpenAPIConnectionOverview({
             sub={
               lastDispatch ? (
                 <StatusIndicator
-                  kind={lastDispatch.status === "succeeded" ? "active" : "failed"}
+                  kind={
+                    lastDispatch.status === "succeeded" ? "active" : "failed"
+                  }
                   size="sm"
                 >
                   {lastDispatch.status === "succeeded"
@@ -235,10 +166,11 @@ export default function OpenAPIConnectionOverview({
 
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
           <div className="flex min-w-0 flex-col gap-4">
-            {error && <FormError>{error}</FormError>}
-
             <SectionCard>
-              <SectionCardHead icon={<Link2 />} title={tDetail("connection.title")} />
+              <SectionCardHead
+                icon={<Link2 />}
+                title={tDetail("connection.title")}
+              />
               <CardField label={t("baseUrl")}>
                 {connection.base_url ? (
                   <CopyableText text={connection.base_url} />
@@ -258,95 +190,6 @@ export default function OpenAPIConnectionOverview({
                 )}
               </CardField>
             </SectionCard>
-
-            <SectionCard>
-              <SectionCardHead
-                icon={<KeyRound />}
-                title={t("headersTitle")}
-                count={headers.length}
-                action={
-                  <SectionEditAction
-                    open={headersDraft !== null}
-                    hasRows={headers.length > 0}
-                    busy={saving === "headers"}
-                    onOpen={() => {
-                      setError(null);
-                      setHeadersDraft(toHeaderRows(headers));
-                    }}
-                    onCancel={() => setHeadersDraft(null)}
-                    onSave={() =>
-                      save(
-                        "headers",
-                        { custom_headers: cleanHeaderRows(headersDraft ?? []) },
-                        () => setHeadersDraft(null)
-                      )
-                    }
-                    saveLabel={tConn("saveHeaders")}
-                  />
-                }
-              />
-              {headersDraft !== null ? (
-                <div className="px-[15px] py-3">
-                  <CustomHeadersEditor
-                    rows={headersDraft}
-                    onChange={setHeadersDraft}
-                    stored={headers}
-                  />
-                </div>
-              ) : headers.length > 0 ? (
-                <CustomHeadersList headers={headers} />
-              ) : (
-                <EmptyRow text={t("noCustomHeaders")} />
-              )}
-            </SectionCard>
-
-            <SectionCard>
-              <SectionCardHead
-                icon={<SlidersHorizontal />}
-                title={t("queryParamsTitle")}
-                count={queryParams.length}
-                action={
-                  <SectionEditAction
-                    open={queryDraft !== null}
-                    hasRows={queryParams.length > 0}
-                    busy={saving === "queryParams"}
-                    onOpen={() => {
-                      setError(null);
-                      setQueryDraft(toQueryParamRows(queryParams));
-                    }}
-                    onCancel={() => setQueryDraft(null)}
-                    onSave={() =>
-                      save(
-                        "queryParams",
-                        { custom_query_params: cleanQueryParamRows(queryDraft ?? []) },
-                        () => setQueryDraft(null)
-                      )
-                    }
-                    saveLabel={tConn("saveQueryParams")}
-                  />
-                }
-              />
-              {queryDraft !== null ? (
-                <div className="px-[15px] py-3">
-                  <CustomQueryParamsEditor
-                    rows={queryDraft}
-                    onChange={setQueryDraft}
-                    stored={queryParams}
-                  />
-                </div>
-              ) : queryParams.length > 0 ? (
-                <CustomHeadersList headers={queryParams} />
-              ) : (
-                <EmptyRow text={t("noCustomQueryParams")} />
-              )}
-            </SectionCard>
-
-            <ConnectionCostSection
-              cost={connection.cost}
-              managedBy={connection.managed_by}
-              onSave={(cost) => updateOpenAPIConnectionAction(connection.id, { cost })}
-              onSaved={() => router.refresh()}
-            />
           </div>
 
           <div className="flex min-w-0 flex-col gap-4">

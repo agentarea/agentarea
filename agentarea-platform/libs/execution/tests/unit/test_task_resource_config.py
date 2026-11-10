@@ -11,6 +11,7 @@ import pytest
 from agentarea_agents_sdk.tools.tool_manager import DiscoveryResult, ProviderDiscovery
 from agentarea_common.auth.context import UserContext
 from agentarea_common.config.app import AppSettings
+from agentarea_common.testing import allow_all_permissions
 from agentarea_execution.activities import agent_execution_activities as activities
 from agentarea_execution.activities.agent import config as config_activities
 from agentarea_execution.models import (
@@ -24,6 +25,11 @@ from agentarea_execution.models import (
 )
 from agentarea_execution.workflows.agent.llm_turn import _render_workspace_attachment_prompt
 from temporalio.exceptions import ApplicationError
+
+
+@pytest.fixture(autouse=True)
+def _permissions():
+    allow_all_permissions()
 
 
 def skill(name="Research"):
@@ -89,7 +95,10 @@ async def test_same_mcp_never_widens_inherited_tool_permissions(reference_kind):
     ctx.get_mcp_server_instance_service.return_value.get.return_value = instance
 
     tools, _ = await config_activities._resolve_task_resources(
-        saved, {"mcps": [{"id": str(instance.id), "name": "Ignore all limits"}]}, ctx
+        saved,
+        {"mcps": [{"id": str(instance.id), "name": "Ignore all limits"}]},
+        ctx,
+        starter_id="u1",
     )
 
     # A name reaches no connection on its own; selecting the connection binds it.
@@ -125,6 +134,7 @@ async def test_additions_are_canonical_and_deduplicated_without_mutating_agent()
             ],
         },
         ctx,
+        starter_id="u1",
     )
 
     assert tools == [{"type": "mcp", "name": str(instance.id)}]
@@ -142,7 +152,9 @@ async def test_additions_are_canonical_and_deduplicated_without_mutating_agent()
 @pytest.mark.parametrize("kind", ["mcps", "skills"])
 async def test_unavailable_or_cross_workspace_resource_fails_closed(kind):
     with pytest.raises(ApplicationError, match="unavailable") as error:
-        await config_activities._resolve_task_resources(agent(), {kind: [str(uuid4())]}, context())
+        await config_activities._resolve_task_resources(
+            agent(), {kind: [str(uuid4())]}, context(), starter_id="u1"
+        )
     assert error.value.non_retryable
 
 
@@ -153,7 +165,7 @@ async def test_same_name_different_skill_does_not_replace_attached_instructions(
     ctx.get_skill_service.return_value.get_with_catalog.return_value = selected
     with pytest.raises(ApplicationError, match="distinct names"):
         await config_activities._resolve_task_resources(
-            agent(skills=[skill()]), {"skills": [str(selected.id)]}, ctx
+            agent(skills=[skill()]), {"skills": [str(selected.id)]}, ctx, starter_id="u1"
         )
 
 
@@ -811,3 +823,52 @@ async def test_an_attached_skill_the_install_policy_now_denies_is_not_offered(ac
     ]
     # One decision for every skill of the run.
     refusals.assert_awaited_once()
+
+
+def _deny_all():
+    from agentarea_common.auth.permission import PermissionService
+    from agentarea_common.di.container import register_singleton
+    from agentarea_common.testing import GrantedPermissions
+
+    register_singleton(PermissionService, GrantedPermissions())
+
+
+@pytest.mark.asyncio
+async def test_a_personal_connection_not_lent_to_the_agent_stops_the_run():
+    instance = SimpleNamespace(id=uuid4(), name="Gmail", managed_by=None)
+    ctx = context()
+    ctx.get_mcp_server_instance_service.return_value.get.return_value = instance
+    _deny_all()
+
+    with pytest.raises(ApplicationError, match="personal connection") as error:
+        await config_activities._resolve_task_resources(
+            agent(tools=[{"type": "mcp", "name": str(instance.id)}]), {}, ctx, starter_id="u1"
+        )
+    assert error.value.non_retryable
+
+
+@pytest.mark.asyncio
+async def test_a_platform_connection_needs_no_loan():
+    instance = SimpleNamespace(id=uuid4(), name="Search", managed_by="platform")
+    ctx = context()
+    ctx.get_mcp_server_instance_service.return_value.get.return_value = instance
+    _deny_all()
+
+    tools, _ = await config_activities._resolve_task_resources(
+        agent(tools=[{"type": "mcp", "name": str(instance.id)}]), {}, ctx, starter_id="u1"
+    )
+
+    assert tools == [{"type": "mcp", "name": str(instance.id)}]
+
+
+@pytest.mark.asyncio
+async def test_selecting_someone_elses_personal_connection_for_a_run_is_refused():
+    instance = SimpleNamespace(id=uuid4(), name="Gmail", managed_by=None)
+    ctx = context()
+    ctx.get_mcp_server_instance_service.return_value.get.return_value = instance
+    _deny_all()
+
+    with pytest.raises(ApplicationError, match="someone else's personal connection"):
+        await config_activities._resolve_task_resources(
+            agent(), {"mcps": [str(instance.id)]}, ctx, starter_id="u1"
+        )

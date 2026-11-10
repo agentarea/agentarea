@@ -203,7 +203,7 @@ async def create_source(
         caller = service.repository_factory.user_context
 
         async def authorize(instance_id: UUID) -> None:
-            await require_permission("use", "mcp_instance", str(instance_id), caller)
+            await require_permission("use_connection", "mcp_instance", str(instance_id), caller)
 
         config = await mcp_events_config(
             payload, load_instance=instances.get_by_id, authorize=authorize

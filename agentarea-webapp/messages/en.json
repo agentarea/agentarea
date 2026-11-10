@@ -1021,6 +1021,12 @@
         "usePlatformApp": "Use AgentArea's OAuth app",
         "ownAppTitle": "Your own OAuth app",
         "ownAppDetail": "Sign in through an OAuth app you registered with the provider instead of AgentArea's.",
+        "ownAppInUse": "Your own OAuth app · client {client}",
+        "ownAppInUseFromSecret": "Your own OAuth app · client ID from a workspace secret",
+        "replaceOwnApp": "Replace",
+        "replaceOwnAppTitle": "Replace your OAuth app",
+        "replaceOwnAppDetail": "Enter the client ID and secret of another OAuth app you registered with the provider.",
+        "keepOwnApp": "Keep the current app",
         "scopesSummary": "Access: {picked} of {total} scopes",
         "scopesHint": "What this connection may do at the provider. Untick what its agents do not need: the provider's consent screen asks only for what stays ticked.",
         "scopesNone": "Pick at least one scope."
@@ -1134,7 +1140,8 @@
         "label": "Connection sections",
         "overview": "Overview",
         "tools": "Tools",
-        "activity": "Activity"
+        "activity": "Activity",
+        "settings": "Settings"
       },
       "showMore": "Show more",
       "showLess": "Show less",
@@ -1358,6 +1365,17 @@
       "byState": "State",
       "byType": "Type",
       "none": "No grouping"
+    },
+    "sharing": {
+      "title": "Access",
+      "personal": "Personal",
+      "personalHint": "Only whoever added it, and the agents they attach it to, can use it",
+      "share": "Share with workspace",
+      "shared": "Shared with the workspace: every member and their agents can use it.",
+      "personalOwn": "Personal: only you and the agents you attach it to can use it.",
+      "personalOther": "Personal: only whoever added it and the agents they attach it to can use it.",
+      "ownerOnly": "Only whoever added it can share it.",
+      "saveFailed": "Could not change who can use this connection"
     }
   },
   "Models": {

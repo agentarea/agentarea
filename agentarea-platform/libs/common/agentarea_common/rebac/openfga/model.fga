@@ -57,3 +57,11 @@ type resource
     # on the secret, not manager. Managing the secret's project does.
     define secret_user: [User, Agent]
     define can_use_secret: secret_user or manager or can_manage from project
+    # Who may call through a connection (an MCP server or an API connection).
+    # One without `personal` is the workspace's: whoever reads it may use it.
+    # A personal one is used through its creator's own account: the creator
+    # (manager) and whoever they lent it to may, and nobody else, not even a
+    # workspace admin, who still sees, manages and deletes it.
+    define personal: [User:*, Agent:*]
+    define connection_user: [User, Agent]
+    define can_use_connection: connection_user or manager or (can_read but not personal)
