@@ -10,7 +10,10 @@ function asString(v: unknown): string | undefined {
   return typeof v === "string" && v.trim() ? v : undefined;
 }
 
-function pick(args: Record<string, unknown> | undefined, keys: string[]): string | undefined {
+function pick(
+  args: Record<string, unknown> | undefined,
+  keys: string[]
+): string | undefined {
   if (!args) return undefined;
   for (const k of keys) {
     const v = asString(args[k]);
@@ -29,7 +32,11 @@ function truncate(s: string, max = 64): string {
 }
 
 function titleize(name: string): string {
-  const cleaned = name.replace(/^mcp__/, "").replace(/__/g, " ").replace(/[_-]+/g, " ").trim();
+  const cleaned = name
+    .replace(/^mcp__/, "")
+    .replace(/__/g, " ")
+    .replace(/[_-]+/g, " ")
+    .trim();
   return cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : name;
 }
 
@@ -63,11 +70,14 @@ export function describeToolCall(
       meta?.script_name ||
       pick(a, ["script_name", "script", "file", "path"]) ||
       undefined;
-    return script ? { text: `Ran ${basename(script)}` } : { text: "Ran a script" };
+    return script
+      ? { text: `Ran ${basename(script)}` }
+      : { text: "Ran a script" };
   }
 
   if (n === "wait") {
-    const span = typeof a.seconds === "number" ? `Waiting ${a.seconds} s` : "Waiting";
+    const span =
+      typeof a.seconds === "number" ? `Waiting ${a.seconds} s` : "Waiting";
     const reason = pick(a, ["reason"]);
     return { text: reason ? `${span}: ${truncate(reason)}` : span };
   }
@@ -91,8 +101,14 @@ export function describeToolCall(
   }
 
   // Agent delegation: delegate_to_<agent>
-  if (n.startsWith("delegate") || n.includes("call_agent") || n.includes("sub_agent")) {
-    const target = n.startsWith("delegate_to_") ? titleize(toolName.slice("delegate_to_".length)) : undefined;
+  if (
+    n.startsWith("delegate") ||
+    n.includes("call_agent") ||
+    n.includes("sub_agent")
+  ) {
+    const target = n.startsWith("delegate_to_")
+      ? titleize(toolName.slice("delegate_to_".length))
+      : undefined;
     const fromArg = pick(a, ["agent", "agent_name", "target"]);
     const who = target || fromArg;
     return { text: who ? `Delegated to ${who}` : "Delegated to another agent" };
@@ -107,7 +123,11 @@ export function describeToolCall(
     const path = pick(a, ["path", "file", "filename", "file_path"]);
     return { text: path ? `Wrote ${basename(path)}` : "Wrote a file" };
   }
-  if (n.includes("edit_file") || n.includes("apply_patch") || n.includes("patch")) {
+  if (
+    n.includes("edit_file") ||
+    n.includes("apply_patch") ||
+    n.includes("patch")
+  ) {
     const path = pick(a, ["path", "file", "filename", "file_path"]);
     return { text: path ? `Edited ${basename(path)}` : "Edited a file" };
   }
@@ -116,19 +136,40 @@ export function describeToolCall(
   }
 
   // Web
-  if (n.includes("web_search") || n.includes("google_search") || n === "search" || n.endsWith("_search")) {
+  if (
+    n.includes("web_search") ||
+    n.includes("google_search") ||
+    n === "search" ||
+    n.endsWith("_search")
+  ) {
     const q = pick(a, ["query", "q", "search", "text"]);
     // GitHub-style searches read better with the source name.
-    if (n.includes("github")) return q ? { text: "Searched GitHub", code: truncate(q, 48) } : { text: "Searched GitHub" };
-    return q ? { text: "Searched the web for", code: truncate(q, 48) } : { text: "Searched the web" };
+    if (n.includes("github"))
+      return q
+        ? { text: "Searched GitHub", code: truncate(q, 48) }
+        : { text: "Searched GitHub" };
+    return q
+      ? { text: "Searched the web for", code: truncate(q, 48) }
+      : { text: "Searched the web" };
   }
-  if (n.includes("fetch") || n.includes("http") || n.includes("url") || n.includes("browse") || n.includes("curl")) {
+  if (
+    n.includes("fetch") ||
+    n.includes("http") ||
+    n.includes("url") ||
+    n.includes("browse") ||
+    n.includes("curl")
+  ) {
     const url = pick(a, ["url", "href", "uri", "link"]);
     return { text: url ? `Fetched ${truncate(url, 56)}` : "Fetched a URL" };
   }
 
   // Database
-  if (n.includes("postgres") || n.includes("sql") || n.includes("query") || n.includes("database")) {
+  if (
+    n.includes("postgres") ||
+    n.includes("sql") ||
+    n.includes("query") ||
+    n.includes("database")
+  ) {
     return { text: "Queried the database" };
   }
 
@@ -136,21 +177,39 @@ export function describeToolCall(
   if (n.includes("github")) {
     if (n.includes("get_file") || n.includes("read")) {
       const path = pick(a, ["path", "file"]);
-      return { text: path ? `Read GitHub file ${basename(path)}` : "Read a GitHub file" };
+      return {
+        text: path
+          ? `Read GitHub file ${basename(path)}`
+          : "Read a GitHub file",
+      };
     }
-    if (n.includes("pull_request") || n.includes("pr")) return { text: "Opened a pull request" };
+    if (n.includes("pull_request") || n.includes("pr"))
+      return { text: "Opened a pull request" };
     if (n.includes("issue")) return { text: "Worked with GitHub issues" };
     return { text: titleize(toolName) };
   }
 
   // Messaging
-  if (n.includes("slack") || n.includes("discord") || n.includes("telegram") || n.includes("post_message") || n.includes("notify")) {
+  if (
+    n.includes("slack") ||
+    n.includes("discord") ||
+    n.includes("telegram") ||
+    n.includes("post_message") ||
+    n.includes("notify")
+  ) {
     const channel = pick(a, ["channel", "to", "recipient"]);
-    return { text: channel ? `Sent a message to ${channel}` : "Sent a message" };
+    return {
+      text: channel ? `Sent a message to ${channel}` : "Sent a message",
+    };
   }
 
   // Memory
-  if (n.includes("recall") || n.includes("memory") || n.includes("remember") || n.includes("history")) {
+  if (
+    n.includes("recall") ||
+    n.includes("memory") ||
+    n.includes("remember") ||
+    n.includes("history")
+  ) {
     return { text: "Recalled history" };
   }
 
@@ -185,16 +244,56 @@ function toolCategory(toolName: string): ToolCategory {
   const n = (toolName || "").toLowerCase();
   if (n === "run_skill_script") return "ran";
   if (n === "activate_skill" || n.includes("skill")) return "skill";
-  if (/(shell|bash|terminal|command|cmd|execute|exec|run_)/.test(n)) return "ran";
-  if (n.startsWith("delegate") || n.includes("call_agent") || n.includes("sub_agent")) return "delegated";
-  if (n.includes("edit_file") || n.includes("apply_patch") || n.includes("patch")) return "edited";
-  if (n.includes("write_file") || n.includes("create_file") || n === "write") return "wrote";
-  if (/^(read_file|read|cat|open_file)$/.test(n) || n.includes("read_file")) return "read";
-  if (n.includes("web_search") || n.includes("google_search") || n === "search" || n.endsWith("_search")) return "searched";
-  if (n.includes("fetch") || n.includes("http") || n.includes("url") || n.includes("browse") || n.includes("curl")) return "fetched";
-  if (n.includes("postgres") || n.includes("sql") || n.includes("query") || n.includes("database")) return "queried";
-  if (n.includes("slack") || n.includes("discord") || n.includes("telegram") || n.includes("post_message") || n.includes("notify")) return "sent";
-  if (n.includes("list") || n.includes("glob") || n.includes("ls")) return "listed";
+  if (/(shell|bash|terminal|command|cmd|execute|exec|run_)/.test(n))
+    return "ran";
+  if (
+    n.startsWith("delegate") ||
+    n.includes("call_agent") ||
+    n.includes("sub_agent")
+  )
+    return "delegated";
+  if (
+    n.includes("edit_file") ||
+    n.includes("apply_patch") ||
+    n.includes("patch")
+  )
+    return "edited";
+  if (n.includes("write_file") || n.includes("create_file") || n === "write")
+    return "wrote";
+  if (/^(read_file|read|cat|open_file)$/.test(n) || n.includes("read_file"))
+    return "read";
+  if (
+    n.includes("web_search") ||
+    n.includes("google_search") ||
+    n === "search" ||
+    n.endsWith("_search")
+  )
+    return "searched";
+  if (
+    n.includes("fetch") ||
+    n.includes("http") ||
+    n.includes("url") ||
+    n.includes("browse") ||
+    n.includes("curl")
+  )
+    return "fetched";
+  if (
+    n.includes("postgres") ||
+    n.includes("sql") ||
+    n.includes("query") ||
+    n.includes("database")
+  )
+    return "queried";
+  if (
+    n.includes("slack") ||
+    n.includes("discord") ||
+    n.includes("telegram") ||
+    n.includes("post_message") ||
+    n.includes("notify")
+  )
+    return "sent";
+  if (n.includes("list") || n.includes("glob") || n.includes("ls"))
+    return "listed";
   return "other";
 }
 

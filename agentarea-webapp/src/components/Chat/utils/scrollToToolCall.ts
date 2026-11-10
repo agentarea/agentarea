@@ -7,7 +7,8 @@
 export function scrollToToolCall(callId?: string | null): void {
   if (!callId || typeof document === "undefined") return;
 
-  const escaped = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(callId) : callId;
+  const escaped =
+    typeof CSS !== "undefined" && CSS.escape ? CSS.escape(callId) : callId;
   const el =
     document.getElementById(`tc-${callId}`) ||
     document.querySelector<HTMLElement>(`[data-aa-tc~="${escaped}"]`);
@@ -24,7 +25,8 @@ export function scrollToToolCall(callId?: string | null): void {
     borderRadius: el.style.borderRadius,
   };
   el.style.borderRadius = el.style.borderRadius || "0.5rem";
-  el.style.transition = "box-shadow 1.2s ease-out, background-color 1.2s ease-out";
+  el.style.transition =
+    "box-shadow 1.2s ease-out, background-color 1.2s ease-out";
   el.style.boxShadow = "0 0 0 2px rgba(59, 130, 246, 0.7)";
   el.style.backgroundColor = "rgba(59, 130, 246, 0.10)";
 

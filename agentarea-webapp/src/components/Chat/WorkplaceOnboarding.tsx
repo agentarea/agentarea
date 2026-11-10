@@ -1,10 +1,10 @@
 "use client";
 
 import React, { Suspense, useRef } from "react";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { useTranslations } from "next-intl";
 import { Lock, Sparkles } from "lucide-react";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import {
   BadgeSuggestions,
   BadgeSuggestionsSkeleton,

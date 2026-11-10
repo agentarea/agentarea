@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { parseSSEStream, type SSEEvent } from "./sseParser";
 
-function readerOf(...chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
+function readerOf(
+  ...chunks: string[]
+): ReadableStreamDefaultReader<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream<Uint8Array>({
     start(controller) {

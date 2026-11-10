@@ -82,7 +82,11 @@ describe("routeComposerMessage", () => {
       hasFiles: false,
     });
 
-    expect(route).toEqual({ route: "current", pendingInputId: undefined, resumes: false });
+    expect(route).toEqual({
+      route: "current",
+      pendingInputId: undefined,
+      resumes: false,
+    });
   });
 
   it("continues a stopped or failed task's conversation in a new run", () => {

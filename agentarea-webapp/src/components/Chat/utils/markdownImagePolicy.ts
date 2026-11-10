@@ -12,7 +12,9 @@ if (
   typeof defaultHarden[1] !== "object" ||
   defaultHarden[1] === null
 ) {
-  throw new TypeError("Streamdown harden defaults do not expose an options tuple");
+  throw new TypeError(
+    "Streamdown harden defaults do not expose an options tuple"
+  );
 }
 const hardenPlugin: Plugin = defaultHarden[0];
 const hardenDefaults: HardenOptions = defaultHarden[1];
@@ -100,7 +102,10 @@ export function messageRehypePlugins(
     ? {
         ...hardenDefaults,
         defaultOrigin: sources.appOrigin,
-        allowedImagePrefixes: workspaceFileImagePrefixes(sources, workspaceSlug),
+        allowedImagePrefixes: workspaceFileImagePrefixes(
+          sources,
+          workspaceSlug
+        ),
         allowDataImages: true,
       }
     : {
