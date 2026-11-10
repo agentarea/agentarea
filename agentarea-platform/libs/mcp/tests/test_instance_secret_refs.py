@@ -29,7 +29,7 @@ from agentarea_secrets.catalog_service import (
 
 ENDPOINT = "https://mcp.example.com/mcp"
 SPEC_ID = "00000000-0000-4000-8000-0000000000aa"
-TOKEN_SECRET = "gh-token"
+TOKEN_SECRET = "gh-token"  # pragma: allowlist secret
 TOKEN_VALUE = "ghp_canary"
 
 
@@ -399,7 +399,7 @@ async def test_deleting_stages_the_release_into_the_delete_itself():
 @pytest.mark.asyncio
 async def test_a_server_spec_carrying_a_reference_cannot_be_connected():
     server = _server("docker")
-    server.json_spec = {**server.json_spec, "environment": {"API_KEY": {"secret_name": "PROD_KEY"}}}
+    server.json_spec = {**server.json_spec, "environment": {"API_KEY": {"secret_name": "PROD_KEY"}}}  # pragma: allowlist secret
     catalog = _Catalog()
     service, _ = _service(server, catalog)
     service.repository.session.add = MagicMock()

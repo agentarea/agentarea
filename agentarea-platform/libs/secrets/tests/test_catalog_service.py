@@ -623,7 +623,7 @@ class TestSecretOwnersGraphMigration:
         legacy = EncryptedSecret(
             id=uuid.uuid4(),
             workspace_id=WORKSPACE,
-            secret_name="legacy-key",
+            secret_name="legacy-key",  # pragma: allowlist secret
             encrypted_value="ciphertext",
             created_by="member-a",
         )

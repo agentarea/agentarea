@@ -20,7 +20,7 @@ from agentarea_mcp.schemas.dto import MCPServerCreate, MCPServerUpdate
 from agentarea_secrets.catalog_service import SecretAccessDeniedError, SecretNotFoundError
 from pydantic import ValidationError
 
-REF = {"secret_name": "PROD_KEY"}
+REF = {"secret_name": "PROD_KEY"}  # pragma: allowlist secret
 
 
 def _service(server, instances=()):

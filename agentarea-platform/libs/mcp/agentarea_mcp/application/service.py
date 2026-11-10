@@ -785,13 +785,10 @@ class MCPServerInstanceService:
                     f"Header {name} of MCP instance {instance.id} references secret "
                     + f"'{secret_name}', which has no value in its workspace"
                 )
-            logger.info(
-                "Resolved header %s of MCP instance %s from secret %s",
-                name,
-                instance.id,
-                secret_name,
-            )
             resolved[name] = value
+        logger.info(
+            "Resolved %d secret-backed header(s) of MCP instance %s", len(resolved), instance.id
+        )
         return resolved
 
     async def _materialize_workspace_spec_copy(self, source: MCPServer) -> MCPServer:

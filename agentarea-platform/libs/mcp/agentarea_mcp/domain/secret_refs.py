@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from typing import Any
 
-SECRET_REF_KEY = "secret_name"  # noqa: S105 - the reference's key, not a credential
+SECRET_REF_KEY = "secret_name"  # noqa: S105 - the reference's key, not a credential  pragma: allowlist secret
 SECRET_REF_FIELDS = ("environment", "headers")
-SECRET_REF_CONSUMER = "mcp_instance"  # noqa: S105 - a consumer type, not a credential
+SECRET_REF_CONSUMER = "mcp_instance"  # noqa: S105 - a consumer type, not a credential  pragma: allowlist secret
 
 
 class InvalidSecretRefError(ValueError):
