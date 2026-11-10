@@ -26353,7 +26353,7 @@
     },
     "/v1/workspaces/{workspace}/clients/{client_id}/agent": {
       "post": {
-        "description": "The agent a task given to this Codex or Claude Code client itself runs as.\n\nMade on first use, with no instructions or tools of its own: the client's\nCLI brings them. It is not listed among the workspace's agents.",
+        "description": "The agent a task given to this harness client itself runs as.\n\nMade on first use, with no instructions or tools of its own: the client's\nCLI brings them. It is not listed among the workspace's agents. Like every\nagent response it names its client, so a picker can show the harness.",
         "operationId": "harness_agent_v1_clients__client_id__agent_post",
         "parameters": [
           {
