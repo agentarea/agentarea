@@ -16,7 +16,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: connection.name };
 }
 
-export default async function OpenAPIConnectionLayout({ params, children }: Props) {
+export default async function OpenAPIConnectionLayout({
+  params,
+  children,
+}: Props) {
   const { id } = await params;
   const t = await getTranslations("MCPServersPage");
   const connection = await getOpenAPIConnectionCached(id);
@@ -41,7 +44,9 @@ export default async function OpenAPIConnectionLayout({ params, children }: Prop
         <ConnectionDetailTabs
           basePath={`/connections/openapi/${id}`}
           toolCount={connection.available_tools.length}
-          without={["activity"]}
+          without={
+            connection.managed_by ? ["activity", "access"] : ["activity"]
+          }
         />
       }
     >

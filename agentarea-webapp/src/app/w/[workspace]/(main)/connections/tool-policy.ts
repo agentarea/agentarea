@@ -41,6 +41,20 @@ export function toolPolicyTarget(instanceId: string, toolName: string): string {
 }
 
 /**
+ * The rule target naming one operation of one API connection, as the runtime
+ * checks it: `openapi:<connection id>:<tool>`, the tool being the operation's
+ * name with every character a tool name cannot hold made `_`. That leaves no
+ * glob character to escape.
+ */
+export function openapiToolPolicyTarget(
+  connectionId: string,
+  operationName: string
+): string {
+  const toolName = operationName.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return toolTarget(`openapi:${connectionId}:${toolName}`);
+}
+
+/**
  * A rule this screen owns: the workspace's plain deny or approval. An approval
  * that names its approvers was written in Govern and stays there: switching
  * the tool here never deletes it.

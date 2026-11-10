@@ -1,8 +1,11 @@
 import { getTranslations } from "next-intl/server";
-import { getMCPInstanceToolPolicies } from "@/lib/api";
+import {
+  getMCPInstanceToolPolicies,
+  getOpenAPIConnectionToolPolicies,
+} from "@/lib/api";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { getViewerCapabilities } from "@/lib/workspace-context";
-import type { ToolPolicyState } from "../tool-policy";
+import type { ToolPolicyState } from "./tool-policy";
 
 export interface ToolPoliciesResult {
   /** `null` when they could not be read. */
@@ -16,15 +19,19 @@ export interface ToolPoliciesResult {
  * Each tool's workspace default and the engine's verdict on it, which other
  * rules may make stricter. Every member may read them.
  */
-export async function loadToolPolicies(
-  instanceId: string
-): Promise<ToolPoliciesResult> {
+export async function loadToolPolicies(connection: {
+  kind: "mcp" | "openapi";
+  id: string;
+}): Promise<ToolPoliciesResult> {
   const [{ canAdminister }, t] = await Promise.all([
     getViewerCapabilities(),
     getTranslations("MCPServersPage.instanceDetail.errors"),
   ]);
   try {
-    const result = await getMCPInstanceToolPolicies(instanceId);
+    const result =
+      connection.kind === "mcp"
+        ? await getMCPInstanceToolPolicies(connection.id)
+        : await getOpenAPIConnectionToolPolicies(connection.id);
     if (result.error || !result.data) {
       return {
         policies: null,

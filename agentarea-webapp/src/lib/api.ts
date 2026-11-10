@@ -2327,6 +2327,19 @@ export const getMCPInstanceToolPolicies = async (instanceId: string) => {
   return withStatus(result);
 };
 
+export const getOpenAPIConnectionToolPolicies = async (
+  connectionId: string
+) => {
+  const result =
+    await sdk.getConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGet(
+      {
+        client: serverClient,
+        path: { connection_id: connectionId },
+      }
+    );
+  return withStatus(result);
+};
+
 export const createPolicy = async (body: PolicyRuleCreateRequest) => {
   const { data, error } = await sdk.createPolicyRuleV1PoliciesPost({
     client: serverClient,

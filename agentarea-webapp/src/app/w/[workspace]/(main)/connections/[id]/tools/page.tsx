@@ -1,6 +1,6 @@
+import { loadToolPolicies } from "../../toolPolicyData";
 import { loadConsumers } from "../consumersData";
 import { getInstanceCached } from "../instanceData";
-import { loadToolPolicies } from "../toolPolicyData";
 import InstanceToolsView from "./InstanceToolsView";
 
 interface Props {
@@ -12,7 +12,7 @@ export default async function ConnectionToolsPage({ params }: Props) {
   const [instance, { consumers, error }, toolPolicies] = await Promise.all([
     getInstanceCached(id),
     loadConsumers(id),
-    loadToolPolicies(id),
+    loadToolPolicies({ kind: "mcp", id }),
   ]);
 
   return (

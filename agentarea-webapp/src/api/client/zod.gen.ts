@@ -6722,6 +6722,17 @@ export const zSetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutPath
 export const zSetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutResponse =
   zOpenApiConnectionResponse;
 
+export const zGetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetPath =
+  z.object({
+    connection_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zGetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetResponse =
+  zMcpInstanceToolPolicies;
+
 export const zListPolicyRulesV1PoliciesGetQuery = z.object({
   subject_type: zPolicySubjectType.nullish(),
   subject_id: z.string().nullish(),
