@@ -79,6 +79,8 @@ spec:
             # Migration-specific settings
             - name: MIGRATION_TIMEOUT
               value: {{ .Values.global.database.migrations.initializationTimeout | quote }}
+            # `migrate` also applies the graph migrations.
+            {{- include "agentarea.backendJobEnv" . | nindent 12 }}
           {{- if or .Values.global.jobs.kube.resources .Values.backend.resources }}
           resources:
             {{- if .Values.global.jobs.kube.resources }}
