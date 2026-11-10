@@ -7,6 +7,8 @@ import {
 	AcpTurn,
 	acpCommand,
 	acpEvents,
+	acpModelOption,
+	acpModels,
 	acpPermissionOption,
 	isRunnerHarness,
 	type ApprovalAsk,
@@ -79,6 +81,21 @@ test('an ACP turn streams its message and says it once whole', t => {
 		],
 	);
 	t.is(stream.response, 'Hello');
+});
+
+test("a session's models are its model option's values", t => {
+	const options = [
+		{id: 'mode', category: 'mode', options: [{value: 'ask'}]},
+		{
+			id: 'model',
+			category: 'model',
+			currentValue: 'opencode/a-free',
+			options: [{value: 'opencode/a-free'}, {value: 'openrouter/b'}],
+		},
+	];
+	t.is(acpModelOption(options), 'model');
+	t.deepEqual(acpModels(options), ['opencode/a-free', 'openrouter/b']);
+	t.is(acpModelOption([]), undefined);
 });
 
 test('a permission is answered with the allow-once or reject-once option', t => {
