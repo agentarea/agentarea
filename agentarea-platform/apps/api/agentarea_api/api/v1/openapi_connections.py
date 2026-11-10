@@ -5,12 +5,18 @@ import logging
 from typing import Any, Literal
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.openapi_tool import _slugify_name, openapi_tool_target
 from agentarea_api.api.deps.services import DatabaseSessionDep, get_openapi_connection_service
 from agentarea_api.api.v1._connection_sharing import (
     ConnectionSharing,
     ConnectionSharingRequest,
     set_sharing,
     sharing_of,
+)
+from agentarea_api.api.v1._tool_policies import (
+    MCPInstanceToolPolicies,
+    tool_policy,
+    workspace_tool_policy,
 )
 from agentarea_api.catalog_api import CatalogApiItem, load_catalog_api_item
 from agentarea_common.auth.context import UserContext
@@ -365,6 +371,54 @@ async def get_connection(
     if not conn:
         raise HTTPException(status_code=404, detail="Connection not found")
     return await _connection_response(conn, user_context)
+
+
+@router.get(
+    "/{connection_id}/tool-policies",
+    response_model=MCPInstanceToolPolicies,
+    dependencies=[
+        unrestricted(
+            "workspace member; reads the workspace policy layer, as the effective-policy "
+            "preview does"
+        )
+    ],
+)
+async def get_connection_tool_policies(
+    connection_id: UUID,
+    user_context: UserContextDep,
+    session: DatabaseSessionDep,
+    service: OpenAPIConnectionService = Depends(get_openapi_connection_service),
+) -> MCPInstanceToolPolicies:
+    """The workspace default and the workspace-layer verdict for each operation.
+
+    A run names an operation ``openapi:<connection id>:<tool>``, the tool being the
+    operation's name made a valid tool name; only that name may allow it, and the
+    tool name alone may only narrow it.
+    """
+    conn = await service.get_connection(connection_id)
+    if not conn:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    workspace_rules, workspace_policy = await workspace_tool_policy(session, user_context)
+    names = dict.fromkeys(
+        tool["name"]
+        for tool in conn.available_tools or []
+        if isinstance(tool, dict) and isinstance(tool.get("name"), str) and tool["name"]
+    )
+    tools = []
+    for name in names:
+        tool_name = _slugify_name(name)
+        target = openapi_tool_target(str(conn.id), tool_name)
+        tools.append(
+            tool_policy(
+                name,
+                rule_target=f"tool:{target}",
+                pdp_target=target,
+                restricting_aliases=(tool_name,),
+                workspace_rules=workspace_rules,
+                workspace_policy=workspace_policy,
+            )
+        )
+    return MCPInstanceToolPolicies(tools=tools)
 
 
 @router.patch(

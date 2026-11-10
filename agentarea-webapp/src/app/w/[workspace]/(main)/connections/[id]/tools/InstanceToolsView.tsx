@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useOptimistic, useState, useTransition } from "react";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import ContentBlock from "@/components/ContentBlock";
 import EmptyState from "@/components/EmptyState";
@@ -12,23 +12,11 @@ import type { MCPInstanceConsumer } from "@/lib/api";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { discoverMCPInstanceToolsAction as discoverMCPInstanceTools } from "@/lib/server-actions";
 import { ToolsTable, ToolsToolbar } from "../../components/ToolsTable";
-import {
-  sharedToolPolicy,
-  withDefault,
-  type ToolPolicy,
-  type ToolPolicyState,
-} from "../../tool-policy";
+import type { ToolPoliciesResult } from "../../toolPolicyData";
 import type { MCPInstance } from "../../types";
 import { useToolFacets } from "../../useToolFacets";
+import { useToolPolicyControls } from "../../useToolPolicyControls";
 import { setToolPoliciesAction } from "../actions";
-import type { ToolPoliciesResult } from "../toolPolicyData";
-import { ToolPolicySelect } from "./ToolPolicySelect";
-
-const ALLOWED: ToolPolicyState = {
-  default: "allow",
-  effective: "allow",
-  reason: null,
-};
 
 type Discovery =
   | { kind: "succeeded"; count: number }
@@ -54,74 +42,14 @@ export default function InstanceToolsView({
   const router = useWorkspaceRouter();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [discovery, setDiscovery] = useState<Discovery>(null);
-  const [policyError, setPolicyError] = useState<string | null>(null);
 
   const tools = (instance.tools ??
     instance.json_spec?.available_tools ??
     []) as Array<{ name: string; description: string }>;
-  const [policies, showPolicies] = useOptimistic(
-    toolPolicies.policies ?? {},
-    (current, change: { names: string[]; policy: ToolPolicy }) => ({
-      ...current,
-      ...Object.fromEntries(
-        change.names.map((name) => [
-          name,
-          withDefault(current[name] ?? ALLOWED, change.policy),
-        ])
-      ),
-    })
+  const policy = useToolPolicyControls(toolPolicies, (names, value) =>
+    setToolPoliciesAction(instance.id, names, value)
   );
-  const [, startPolicyChange] = useTransition();
-  const hasPolicies = toolPolicies.policies !== null;
-  const stateOf = (toolName: string) => policies[toolName] ?? ALLOWED;
-  // The filters count what the engine does, not only what is set here.
-  const policyOf = useCallback(
-    (toolName: string): ToolPolicy => policies[toolName]?.effective ?? "allow",
-    [policies]
-  );
-  const facets = useToolFacets(tools, consumers, hasPolicies ? policyOf : null);
-
-  const setPolicy = (names: string[], policy: ToolPolicy) =>
-    startPolicyChange(async () => {
-      showPolicies({ names, policy });
-      setPolicyError(null);
-      try {
-        const result = await setToolPoliciesAction(instance.id, names, policy);
-        if (!result.ok) setPolicyError(result.error);
-      } catch (err) {
-        console.error("Failed to set tool policies", err);
-        setPolicyError(
-          `${t("tools.policy.saveFailed")}: ${formatApiError(err)}`
-        );
-      }
-    });
-
-  const policyControls = hasPolicies
-    ? {
-        cell: (toolName: string) => (
-          <ToolPolicySelect
-            label={t("tools.policy.label")}
-            value={stateOf(toolName).default}
-            effective={stateOf(toolName)}
-            onChange={
-              toolPolicies.canEdit
-                ? (policy) => setPolicy([toolName], policy)
-                : undefined
-            }
-          />
-        ),
-        group: toolPolicies.canEdit
-          ? (toolNames: string[]) => (
-              <ToolPolicySelect
-                label={t("tools.policy.groupLabel")}
-                prefix={t("tools.policy.allPrefix")}
-                value={sharedToolPolicy(policies, toolNames)}
-                onChange={(policy) => setPolicy(toolNames, policy)}
-              />
-            )
-          : null,
-      }
-    : null;
+  const facets = useToolFacets(tools, consumers, policy.policyOf);
 
   const handleRefresh = async () => {
     if (isRefreshing) return;
@@ -194,8 +122,8 @@ export default function InstanceToolsView({
         {toolPolicies.error && (
           <SectionLoadError message={toolPolicies.error} />
         )}
-        {policyError && <FormError>{policyError}</FormError>}
-        {hasPolicies && tools.length > 0 && !toolPolicies.canEdit && (
+        {policy.error && <FormError>{policy.error}</FormError>}
+        {policy.controls && tools.length > 0 && !toolPolicies.canEdit && (
           <p className="note">{t("tools.policy.adminOnly")}</p>
         )}
 
@@ -204,7 +132,7 @@ export default function InstanceToolsView({
             tools={tools}
             consumers={consumers}
             facets={facets}
-            policy={policyControls}
+            policy={policy.controls}
           />
         ) : (
           <EmptyState

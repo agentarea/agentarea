@@ -33307,6 +33307,70 @@
         ]
       }
     },
+    "/v1/workspaces/{workspace}/openapi-connections/{connection_id}/tool-policies": {
+      "get": {
+        "description": "The workspace default and the workspace-layer verdict for each operation.\n\nA run names an operation ``openapi:<connection id>:<tool>``, the tool being the\noperation's name made a valid tool name; only that name may allow it, and the\ntool name alone may only narrow it.",
+        "operationId": "get_connection_tool_policies_v1_openapi_connections__connection_id__tool_policies_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Connection Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPInstanceToolPolicies"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Connection Tool Policies",
+        "tags": [
+          "v1",
+          "protected",
+          "openapi-connections"
+        ]
+      }
+    },
     "/v1/workspaces/{workspace}/policies": {
       "get": {
         "description": "List policy rules in the current workspace.",

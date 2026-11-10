@@ -14,7 +14,6 @@ import {
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { ConnectionCostSection } from "../../components/ConnectionCostSection";
-import { ConnectionSharingSection } from "../../components/ConnectionSharing";
 import {
   CustomHeadersEditor,
   toHeaderRows,
@@ -154,19 +153,6 @@ export default function MCPInstanceSettings({
           <FormError>
             {t("oauth.connectError", { reason: oauthError })}
           </FormError>
-        )}
-
-        {!instance.managed_by && (
-          <ConnectionSharingSection
-            personal={instance.personal ?? false}
-            isOwner={instance.is_owner ?? false}
-            onShare={async (shared) => {
-              const { setMCPServerInstanceSharingAction } = await import(
-                "@/lib/server-actions"
-              );
-              return setMCPServerInstanceSharingAction(instance.id, shared);
-            }}
-          />
         )}
 
         {isUrlType && (

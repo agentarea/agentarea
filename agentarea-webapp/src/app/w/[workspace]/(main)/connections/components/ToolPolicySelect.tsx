@@ -19,7 +19,7 @@ import {
   TOOL_POLICIES,
   type ToolPolicy,
   type ToolPolicyState,
-} from "../../tool-policy";
+} from "../tool-policy";
 
 function PolicyLabel({ policy }: { policy: ToolPolicy }) {
   const tEffects = useTranslations("PoliciesPage.editor.effects");

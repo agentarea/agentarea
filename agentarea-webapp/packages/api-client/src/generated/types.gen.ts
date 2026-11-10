@@ -17332,6 +17332,36 @@ export type SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutRespon
 
 export type SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutResponse = SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutResponses[keyof SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutResponses];
 
+export type GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetData = {
+    body?: never;
+    path: {
+        /**
+         * Connection Id
+         */
+        connection_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/openapi-connections/{connection_id}/tool-policies';
+};
+
+export type GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetError = GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetErrors[keyof GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetErrors];
+
+export type GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: McpInstanceToolPolicies;
+};
+
+export type GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetResponse = GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetResponses[keyof GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetResponses];
+
 export type ListPolicyRulesV1PoliciesGetData = {
     body?: never;
     path?: never;

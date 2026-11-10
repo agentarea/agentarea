@@ -1,14 +1,18 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { Gauge, ScrollText, Settings, Wrench } from "lucide-react";
+import { Gauge, ScrollText, Settings, Users, Wrench } from "lucide-react";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+import {
+  useWorkspacePathname,
+  useWorkspaceRouter,
+} from "@/hooks/useWorkspaceNavigation";
 
 const TABS = [
   { key: "", icon: Gauge, labelKey: "overview" },
   { key: "tools", icon: Wrench, labelKey: "tools", counted: true },
   { key: "activity", icon: ScrollText, labelKey: "activity" },
+  { key: "access", icon: Users, labelKey: "access" },
   { key: "settings", icon: Settings, labelKey: "settings" },
 ] as const;
 
@@ -59,7 +63,9 @@ export default function ConnectionDetailTabs({
               </span>
             ),
             count:
-              "counted" in tab && tab.counted && toolCount ? toolCount : undefined,
+              "counted" in tab && tab.counted && toolCount
+                ? toolCount
+                : undefined,
           };
         })}
         value={activeTab}

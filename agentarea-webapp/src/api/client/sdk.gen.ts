@@ -354,6 +354,9 @@ import type {
   GetCollectionV1SkillCollectionsCollectionIdGetData,
   GetCollectionV1SkillCollectionsCollectionIdGetErrors,
   GetCollectionV1SkillCollectionsCollectionIdGetResponses,
+  GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetData,
+  GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetErrors,
+  GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetResponses,
   GetConnectionV1OpenapiConnectionsConnectionIdGetData,
   GetConnectionV1OpenapiConnectionsConnectionIdGetErrors,
   GetConnectionV1OpenapiConnectionsConnectionIdGetResponses,
@@ -7714,6 +7717,42 @@ export const setConnectionSharingV1OpenapiConnectionsConnectionIdSharingPut = <
       ...options.headers,
     },
   });
+
+/**
+ * Get Connection Tool Policies
+ *
+ * The workspace default and the workspace-layer verdict for each operation.
+ *
+ * A run names an operation ``openapi:<connection id>:<tool>``, the tool being the
+ * operation's name made a valid tool name; only that name may allow it, and the
+ * tool name alone may only narrow it.
+ */
+export const getConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGet =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetResponses,
+    GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).get<
+      GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetResponses,
+      GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/openapi-connections/{connection_id}/tool-policies",
+      ...options,
+    });
 
 /**
  * List Policy Rules

@@ -12,12 +12,8 @@ import {
 } from "@/components/Overview/OverviewCard";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
-import {
-  setOpenAPIConnectionSharingAction,
-  updateOpenAPIConnectionAction,
-} from "@/lib/server-actions";
+import { updateOpenAPIConnectionAction } from "@/lib/server-actions";
 import { ConnectionCostSection } from "../../../components/ConnectionCostSection";
-import { ConnectionSharingSection } from "../../../components/ConnectionSharing";
 import {
   cleanHeaderRows,
   CustomHeadersEditor,
@@ -109,16 +105,6 @@ export default function OpenAPIConnectionSettings({
           <FormError>{t("oauthError", { reason: oauthError })}</FormError>
         )}
         {error && <FormError>{error}</FormError>}
-
-        {!connection.managed_by && (
-          <ConnectionSharingSection
-            personal={connection.personal ?? false}
-            isOwner={connection.is_owner ?? false}
-            onShare={(shared) =>
-              setOpenAPIConnectionSharingAction(connection.id, shared)
-            }
-          />
-        )}
 
         {signsInWithOAuth && (
           <SectionCard>
