@@ -57,9 +57,7 @@ export function FeedLiveProvider({
       source = current;
       // Read the page again once subscribed: an event that arrived between
       // the server's read and this subscription would otherwise be missed.
-      current.onopen = () => {
-        emit({ type: "resync" });
-      };
+      current.onopen = () => emit({ type: "resync" });
       current.onerror = () => {
         // A refused response (the API restarting) closes it for good; the
         // browser retries only a connection that dropped.

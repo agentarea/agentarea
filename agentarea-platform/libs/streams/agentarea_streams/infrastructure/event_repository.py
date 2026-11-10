@@ -109,8 +109,8 @@ def _feed_conditions(
     conditions: list[ColumnElement[bool]] = []
     if f.stream_id is not None and facet != "stream":
         conditions.append(_E.stream_id == f.stream_id)
-    if f.source_type is not None and facet != "source_type":
-        conditions.append(_E.source_type == f.source_type)
+    if f.source_types and facet != "source_type":
+        conditions.append(_E.source_type.in_(f.source_types))
     if not f.platform and facet is None:
         conditions.append(_E.source_type.is_distinct_from(PLATFORM_SOURCE_TYPE))
     return conditions + _other_conditions(f)
@@ -331,8 +331,8 @@ class StreamEventRepository:
             counts.stream_id.in_(list(streams)),
         ]
         by_stream = select(counts.stream_id, func.sum(counts.count)).where(*visible)
-        if feed_filter.source_type is not None:
-            by_stream = by_stream.where(counts.source_type == feed_filter.source_type)
+        if feed_filter.source_types:
+            by_stream = by_stream.where(counts.source_type.in_(feed_filter.source_types))
         by_source = select(counts.source_type, func.sum(counts.count)).where(
             *visible, counts.source_type != _NO_SOURCE_TYPE
         )
@@ -356,8 +356,8 @@ class StreamEventRepository:
         """
         f = feed_filter
         either: list[ColumnElement[bool]] = []
-        if f.stream_id is not None and f.source_type is not None:
-            either.append(or_(_E.stream_id == f.stream_id, _E.source_type == f.source_type))
+        if f.stream_id is not None and f.source_types:
+            either.append(or_(_E.stream_id == f.stream_id, _E.source_type.in_(f.source_types)))
         matched = (
             select(_E.stream_id, _E.source_type)
             .where(
@@ -379,7 +379,7 @@ class StreamEventRepository:
         total = 0
         for stream_id, source_type, n in rows.tuples().all():
             total += n
-            if f.source_type is None or source_type == f.source_type:
+            if not f.source_types or source_type in f.source_types:
                 by_stream[stream_id] += n
             if source_type is not None and (f.stream_id is None or stream_id == f.stream_id):
                 by_source[source_type] += n

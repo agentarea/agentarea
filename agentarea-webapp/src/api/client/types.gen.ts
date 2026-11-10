@@ -20709,8 +20709,10 @@ export type ListWorkspaceEventsV1StreamsEventsGetData = {
     stream_id?: string | null;
     /**
      * Source Type
+     *
+     * Any of these source types; repeat it for several.
      */
-    source_type?: string | null;
+    source_type?: Array<string>;
     /**
      * Kind
      *
@@ -20783,8 +20785,10 @@ export type StreamWorkspaceEventsV1StreamsEventsLiveGetData = {
     stream_id?: string | null;
     /**
      * Source Type
+     *
+     * Any of these source types; repeat it for several.
      */
-    source_type?: string | null;
+    source_type?: Array<string>;
     /**
      * Kind
      *

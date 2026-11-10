@@ -156,7 +156,9 @@
       "title": "Leave without saving?",
       "description": "The changes on this page are not saved yet. If you leave, they are lost.",
       "leave": "Leave"
-    }
+    },
+    "removeFilter": "Remove filter: {label}",
+    "clearAll": "Clear all"
   },
   "admin": {
     "title": "Admin Dashboard",
@@ -2544,7 +2546,10 @@
       "created": "Created",
       "platformName": "Platform",
       "platformLabel": "Written by the platform",
-      "platformDescription": "What happened to this workspace's tasks: completed, failed, cancelled, or waiting for an approval or an answer. Put a trigger on it to react to another agent's outcome."
+      "platformDescription": "What happened to this workspace's tasks: completed, failed, cancelled, or waiting for an approval or an answer. Put a trigger on it to react to another agent's outcome.",
+      "writtenBy": "Written by",
+      "platformWriter": "The platform",
+      "sourcesWriter": "Its sources"
     },
     "noStreams": "No streams yet",
     "noStreamsDescription": "A stream collects the events of its sources. Create one, then add a source to it.",
@@ -2684,13 +2689,7 @@
       "notPolledYet": "Not polled yet",
       "pollError": "Last poll failed: {error}"
     },
-    "streamsTitle": "Streams",
     "streamsDescription": "Named event streams, their sources and forwards",
-    "streamsMenu": {
-      "button": "Streams",
-      "all": "All streams",
-      "empty": "No streams yet"
-    },
     "result": {
       "all": "All",
       "queued": "Queued",
@@ -2704,7 +2703,7 @@
     "list": {
       "filters": "Filters",
       "stream": "Stream",
-      "provider": "Provider",
+      "provider": "Source",
       "kind": "Kind",
       "kindPlaceholder": "order.* or order.paid",
       "result": "Result",
@@ -2726,7 +2725,13 @@
       "skippedOf": "skipped {done}/{total}",
       "filterSession": "Show the whole session",
       "unknownStream": "Deleted stream",
-      "showPlatform": "Show platform events"
+      "platformHidden": "Platform events are hidden.",
+      "emptyTitle": "No events yet",
+      "emptyAction": "Open streams",
+      "noneMatchingTitle": "No matching events",
+      "showPlatformAction": "Show platform events",
+      "onlyPlatformTitle": "Nothing from outside yet",
+      "onlyPlatform": "Only platform events have arrived, and they are hidden from the feed."
     },
     "panel": {
       "handlers": "Handlers",
@@ -2742,7 +2747,10 @@
       "close": "Close",
       "gone": "This event is no longer kept.",
       "title": "Event",
-      "processor": "Processor"
+      "processor": "Processor",
+      "details": "Details",
+      "received": "Received",
+      "loadFailed": "Could not load the event"
     },
     "processors": {
       "title": "Processors",
@@ -2751,6 +2759,42 @@
       "everyEvent": "on every event",
       "createdAt": "Added {time}",
       "code": "Code (processor.py)"
+    },
+    "sections": {
+      "label": "Events sections",
+      "events": "Events",
+      "streams": "Streams"
+    },
+    "toolbar": {
+      "kindPlaceholder": "Filter by kind: order.* or order.paid",
+      "sourcesCount": "{count, plural, one {# source} other {# sources}}",
+      "origin": "Origin",
+      "origins": {
+        "outside": "From outside",
+        "all": "Outside and platform",
+        "platform": "Platform only"
+      },
+      "allEvents": "All events"
+    },
+    "streamPage": {
+      "label": "Stream sections",
+      "events": "Events",
+      "sources": "Sources",
+      "processors": "Processors",
+      "noSources": "No sources yet",
+      "noProcessors": "No processors read this stream",
+      "deliveries": {
+        "webhook": "Webhook",
+        "poll": "Polling",
+        "platform": "The platform"
+      },
+      "receiving": "Receiving",
+      "pollFailed": "Last poll failed",
+      "takes": "Takes",
+      "source": "Source",
+      "delivery": "Delivery",
+      "address": "Address",
+      "state": "State"
     }
   },
   "NetworkPage": {

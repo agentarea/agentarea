@@ -6,6 +6,7 @@ import ContentBlock from "@/components/ContentBlock";
 import { ViewModeTabs } from "@/components/HeaderTabs";
 import SearchInput from "@/components/SearchInput";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
+import EventsSectionTabs from "../components/EventsSectionTabs";
 import StreamsContent from "../components/StreamsContent";
 import StreamsSkeleton from "../components/StreamsSkeleton";
 
@@ -26,14 +27,12 @@ export default async function StreamsPage({
   return (
     <ContentBlock
       header={{
-        breadcrumb: [
-          { label: t("title"), href: "/events" },
-          { label: t("streamsTitle") },
-        ],
+        breadcrumb: [{ label: t("title") }],
         description: t("streamsDescription"),
       }}
       subheader={
         <SubheaderToolbar
+          categories={<EventsSectionTabs />}
           search={
             <SearchInput
               urlParamName="search"

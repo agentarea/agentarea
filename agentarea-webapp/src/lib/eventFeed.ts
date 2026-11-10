@@ -17,7 +17,8 @@ export const PROCESSING_RESULTS: readonly ProcessingStatus[] = [
 /** The workspace feed's view, all of it in the URL. */
 export interface FeedState {
   stream?: string;
-  source_type?: string;
+  /** Any of these source types; never empty when set. */
+  source_type?: string[];
   kind?: string;
   result?: ProcessingStatus;
   session?: string;
@@ -26,9 +27,21 @@ export interface FeedState {
   event?: string;
   /** An older page: the sequence it starts before. */
   before?: string;
-  /** `1` shows the platform's own events, which the feed leaves out by default. */
-  platform?: "1";
+  /** Whose events: unset is the ones from outside, the platform's own left out. */
+  origin?: Exclude<FeedOrigin, "outside">;
 }
+
+/**
+ * Whose events the feed shows: what arrived from outside (the default), that
+ * and the platform's own (its tasks' outcomes), or the platform's alone.
+ */
+export type FeedOrigin = "outside" | "all" | "platform";
+
+export const FEED_ORIGINS: readonly FeedOrigin[] = [
+  "outside",
+  "all",
+  "platform",
+];
 
 /** The source type of the events the platform writes about its own tasks. */
 export const PLATFORM_SOURCE_TYPE = "platform";
@@ -42,8 +55,20 @@ const KEYS = [
   "sender",
   "event",
   "before",
-  "platform",
+  "origin",
 ] as const;
+
+const UUID =
+  /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
+
+/** An old stream page's `?event=`: the event's sequence in that stream. */
+export function legacyEventSequence(
+  value: string | string[] | undefined
+): number | undefined {
+  return typeof value === "string" && /^\d+$/.test(value)
+    ? Number(value)
+    : undefined;
+}
 
 export function parseFeedState(
   params: Record<string, string | string[] | undefined>
@@ -51,12 +76,21 @@ export function parseFeedState(
   const state: FeedState = {};
   for (const key of KEYS) {
     const value = params[key];
+    if (key === "source_type") {
+      const types = [...new Set([value ?? []].flat())].filter(Boolean);
+      if (types.length > 0) state.source_type = types;
+      continue;
+    }
     if (typeof value !== "string" || value === "") continue;
     if (key === "result") {
       const result = PROCESSING_RESULTS.find((r) => r === value);
       if (result) state.result = result;
-    } else if (key === "platform") {
-      if (value === "1") state.platform = value;
+    } else if (key === "origin") {
+      if (value === "all" || value === "platform") state.origin = value;
+    } else if (key === "event") {
+      // An event is named by its id; anything else (an old link's sequence)
+      // opens nothing rather than failing the read.
+      if (UUID.test(value)) state.event = value;
     } else {
       state[key] = value;
     }
@@ -64,27 +98,52 @@ export function parseFeedState(
   return state;
 }
 
+/**
+ * Where a feed lives: the workspace's (`/events`) or one stream's, whose page
+ * pins the stream, so its URL never carries it.
+ */
+export interface FeedPath {
+  base: string;
+  pinned?: readonly (keyof FeedState)[];
+}
+
+export const WORKSPACE_FEED: FeedPath = { base: "/events" };
+
 /** A feed URL; `patch` replaces values, an `undefined` in it removes one. */
-export function feedHref(state: FeedState, patch: Partial<FeedState> = {}) {
+export function feedHref(
+  state: FeedState,
+  patch: Partial<FeedState> = {},
+  path: FeedPath = WORKSPACE_FEED
+) {
   const merged: FeedState = { ...state, ...patch };
   const params = new URLSearchParams();
   for (const key of KEYS) {
-    const value = merged[key];
-    if (value) params.set(key, value);
+    if (path.pinned?.includes(key)) continue;
+    for (const value of [merged[key] ?? []].flat()) {
+      if (value) params.append(key, value);
+    }
   }
   const query = params.toString();
-  return `/events${query ? `?${query}` : ""}`;
+  return `${path.base}${query ? `?${query}` : ""}`;
 }
 
-/** The view is the platform's own: its stream or its provider is the filter. */
-export function platformForced(
+/**
+ * Whose events the view holds. The other filters can decide it: the
+ * platform's stream, or the platform as the only source, holds nothing else;
+ * the platform among other sources holds both.
+ */
+export function feedOrigin(
   state: FeedState,
   platformStreams: readonly string[]
-): boolean {
-  return (
-    state.source_type === PLATFORM_SOURCE_TYPE ||
-    (state.stream !== undefined && platformStreams.includes(state.stream))
-  );
+): FeedOrigin {
+  if (state.origin === "platform") return "platform";
+  if (state.stream !== undefined && platformStreams.includes(state.stream)) {
+    return "platform";
+  }
+  if (state.source_type?.includes(PLATFORM_SOURCE_TYPE)) {
+    return state.source_type.length === 1 ? "platform" : "all";
+  }
+  return state.origin ?? "outside";
 }
 
 /** Whether the feed shows the platform's own events. */
@@ -92,14 +151,55 @@ export function showsPlatform(
   state: FeedState,
   platformStreams: readonly string[]
 ): boolean {
-  return state.platform === "1" || platformForced(state, platformStreams);
+  return feedOrigin(state, platformStreams) !== "outside";
+}
+
+/**
+ * The patch that switches the view to `origin`, dropping a stream or source
+ * filter that would contradict it: the platform's stream away from it, the
+ * platform as a source when its events are left out, any other source when
+ * only the platform's are wanted.
+ */
+export function originPatch(
+  state: FeedState,
+  platformStreams: readonly string[],
+  origin: FeedOrigin
+): Partial<FeedState> {
+  const onPlatformStream =
+    state.stream !== undefined && platformStreams.includes(state.stream);
+  const sources = (state.source_type ?? []).filter((slug) =>
+    origin === "outside"
+      ? slug !== PLATFORM_SOURCE_TYPE
+      : origin === "platform"
+        ? slug === PLATFORM_SOURCE_TYPE
+        : true
+  );
+  return {
+    origin: origin === "outside" ? undefined : origin,
+    stream:
+      onPlatformStream && origin !== "platform" ? undefined : state.stream,
+    source_type: sources.length > 0 ? sources : undefined,
+  };
+}
+
+/**
+ * The sources the API is asked for. Only the platform's: its source alone.
+ * Outside and platform with sources picked: those and the platform's, so the
+ * picked ones are added to what was shown rather than replacing it.
+ */
+function apiSourceTypes(state: FeedState): string[] | undefined {
+  if (state.origin === "platform") return [PLATFORM_SOURCE_TYPE];
+  if (state.origin === "all" && state.source_type) {
+    return [...new Set([...state.source_type, PLATFORM_SOURCE_TYPE])];
+  }
+  return state.source_type;
 }
 
 /** The feed's filters as the API names them. */
 export function feedApiQuery(state: FeedState, showPlatform: boolean) {
   return {
     stream_id: state.stream,
-    source_type: state.source_type,
+    source_type: apiSourceTypes(state),
     kind: state.kind,
     result: state.result,
     session_key: state.session,
@@ -115,10 +215,10 @@ export function feedApiQuery(state: FeedState, showPlatform: boolean) {
 export function liveQuery(state: FeedState, showPlatform: boolean): string {
   const { result: _result, ...rest } = feedApiQuery(state, showPlatform);
   return Object.entries(rest)
-    .filter(
-      (entry): entry is [string, string | boolean] =>
-        entry[1] !== undefined && entry[1] !== ""
+    .flatMap(([key, value]) =>
+      [value ?? []].flat().map((one) => [key, one] as const)
     )
+    .filter(([, value]) => value !== "")
     .map(
       ([key, value]) =>
         `${key}=${encodeURIComponent(String(value)).replace(/%2A/g, "*")}`

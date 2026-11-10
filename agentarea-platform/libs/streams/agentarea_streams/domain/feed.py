@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .models import RecordedEvent
 from .processing import Processing, ProcessingStatus, processing_status
@@ -13,7 +13,8 @@ _WILDCARD = ".*"
 
 class FeedFilter(BaseModel):
     stream_id: UUID | None = None
-    source_type: str | None = None
+    #: Any of these source types; empty is every one.
+    source_types: list[str] = Field(default_factory=list)
     #: ``order.paid``, or ``order.*`` for every kind under ``order.``.
     kind: str | None = None
     sender: str | None = None

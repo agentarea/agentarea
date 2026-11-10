@@ -2,24 +2,27 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { ArrowUp, Paperclip } from "lucide-react";
+import { ArrowUp, CalendarDays, Paperclip } from "lucide-react";
 import type { FeedEventResponse, Processing } from "@/api/client/types.gen";
 import SourceTypeMark from "@/components/SourceTypeMark";
 import Table, { type Column } from "@/components/Table/Table";
 import { Button } from "@/components/ui/button";
+import { CollapsibleGroup } from "@/components/ui/group-header";
 import WorkspaceLink from "@/components/WorkspaceLink";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
+import { EntityIcon } from "@/lib/entity-icons";
 import {
   applyProcessing,
   applyRecorded,
   dayGroups,
-  feedHref,
   matchesResult,
   neighbourEvent,
   type FeedState,
 } from "@/lib/eventFeed";
 import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
+import FeedEmptyState from "./FeedEmptyState";
 import { useFeedLive } from "./FeedLive";
+import { useFeedHref, useFeedPath } from "./FeedPath";
 import { useFeedSelection } from "./FeedSelection";
 import ProcessingPill from "./ProcessingPill";
 
@@ -70,6 +73,9 @@ export default function FeedList({
 }) {
   const t = useTranslations("EventsPage.list");
   const tFeed = useTranslations("EventsPage.feed");
+  const feedHref = useFeedHref();
+  // On a stream's own page every row is of that stream: no column for it.
+  const oneStream = useFeedPath().pinned?.includes("stream") ?? false;
   const locale = useLocale();
   const router = useWorkspaceRouter();
   const { listen } = useFeedLive();
@@ -171,82 +177,66 @@ export default function FeedList({
   const streamNames = new Map(streams.map((s) => [s.id, s.name]));
   const zone = clock?.zone ?? "UTC";
   const groups = dayGroups(rows, new Date(clock?.now ?? Date.now()), zone);
-  const filtered = Boolean(
-    hidesPlatform ||
-      state.stream ||
-      state.source_type ||
-      state.kind ||
-      state.result ||
-      state.session ||
-      state.sender
-  );
 
+  // One table per day: a fixed layout with set widths keeps the columns of
+  // every day in the same place (Automation does the same per group). The
+  // widths sit on the cells too, since a later day's table has no header.
+  // The day heading says when; a row needs no time column of its own.
   const columns: Column<FeedRow>[] = [
-    {
-      header: tFeed("received"),
-      accessor: "received_at",
-      cellClassName: "w-0 whitespace-nowrap tabular-nums text-muted-foreground",
-      render: (_value, event) =>
-        event && (
-          <time
-            dateTime={event.received_at}
-            title={new Date(event.received_at).toLocaleString(locale, {
-              dateStyle: "medium",
-              timeStyle: "medium",
-              timeZone: zone,
-            })}
-          >
-            {new Date(event.received_at).toLocaleTimeString(locale, {
-              hour: "2-digit",
-              minute: "2-digit",
-              timeZone: zone,
-            })}
-          </time>
-        ),
-    },
+    // Leads the row like Automation's: the source's tile, then what arrived.
     {
       header: tFeed("kind"),
       accessor: "kind",
-      cellClassName: "w-full max-w-0",
       render: (_value, event) =>
         event && (
-          <span className="flex min-w-0 items-center gap-2">
+          <span className="flex min-w-0 items-center gap-2.5">
             <SourceTypeMark
               type={sourceTypeBySlug(sourceTypes, event.source_type)}
               slug={event.source_type}
-              inline
-              className="h-3.5 w-3.5 shrink-0"
+              size={28}
             />
-            <span className="truncate font-medium">{event.kind}</span>
+            <span className="truncate text-[13px] font-medium text-foreground">
+              {event.kind}
+            </span>
             {event.sender && (
-              <span className="truncate text-muted-foreground">
+              <span className="truncate text-[13px] text-muted-foreground">
                 {event.sender}
               </span>
             )}
             {event.attachments > 0 && (
               <Paperclip
                 aria-hidden="true"
-                className="h-3 w-3 shrink-0 text-muted-foreground"
+                className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
               />
             )}
           </span>
         ),
     },
-    {
-      header: t("stream"),
-      accessor: "stream_id",
-      headerClassName: "hidden md:table-cell",
-      cellClassName:
-        "hidden max-w-[160px] truncate text-muted-foreground md:table-cell",
-      render: (value) => streamNames.get(String(value)) ?? t("unknownStream"),
-    },
+    ...(oneStream
+      ? []
+      : [
+          {
+            header: t("stream"),
+            accessor: "stream_id",
+            headerClassName: "hidden w-[180px] md:table-cell",
+            cellClassName: "hidden w-[180px] md:table-cell",
+            render: (value) => (
+              <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground">
+                <EntityIcon kind="stream" className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">
+                  {streamNames.get(String(value)) ?? t("unknownStream")}
+                </span>
+              </span>
+            ),
+          } satisfies Column<FeedRow>,
+        ]),
     {
       header: t("session"),
       accessor: "session_key",
-      headerClassName: "hidden 2xl:table-cell",
-      cellClassName: "hidden max-w-[160px] truncate 2xl:table-cell",
+      headerClassName: "hidden w-[160px] 2xl:table-cell",
+      cellClassName: "hidden w-[160px] 2xl:table-cell",
       render: (_value, event) =>
-        event?.session_key && (
+        event?.session_key ? (
           <WorkspaceLink
             href={feedHref(state, {
               session: event.session_key,
@@ -256,17 +246,20 @@ export default function FeedList({
             scroll={false}
             title={t("filterSession")}
             onClick={(e) => e.stopPropagation()}
-            className="font-mono text-muted-foreground hover:text-primary hover:underline"
+            className="block truncate font-mono text-[12px] text-muted-foreground hover:text-primary hover:underline"
           >
             {event.session_key.split(":").slice(1).join(":") ||
               event.session_key}
           </WorkspaceLink>
+        ) : (
+          <span className="text-[13px] text-muted-foreground">—</span>
         ),
     },
     {
       header: t("result"),
       accessor: "processing",
-      cellClassName: "w-0 whitespace-nowrap",
+      headerClassName: "w-[180px]",
+      cellClassName: "w-[180px]",
       render: (_value, event) =>
         event && (
           <ProcessingPill
@@ -279,7 +272,7 @@ export default function FeedList({
   ];
 
   return (
-    <div ref={listRef} className="min-w-0 space-y-5">
+    <div ref={listRef} className="min-w-0 space-y-4">
       {waiting.length > 0 && (
         <div className="sticky top-0 z-10 flex justify-center">
           <Button
@@ -294,47 +287,57 @@ export default function FeedList({
         </div>
       )}
       {rows.length === 0 ? (
-        <div className="py-6 text-center text-sm text-muted-foreground">
-          {filtered ? t("noneMatching") : t("empty")}
-        </div>
+        <FeedEmptyState state={state} hidesPlatform={hidesPlatform} />
       ) : (
-        groups.map((group, index) => (
-          <section key={group.day} aria-label={group.day}>
-            <h2 className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-              {group.relative
-                ? t(group.relative)
-                : new Date(`${group.day}T12:00:00Z`).toLocaleDateString(
-                    locale,
-                    {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                      timeZone: "UTC",
-                    }
-                  )}
-            </h2>
-            <Table<FeedRow>
-              data={group.events.map((event) => ({
-                ...event,
-                id: event.event_id,
-              }))}
-              columns={columns}
-              hideHeader={index > 0}
-              onRowClick={(event) => open(event.event_id)}
-              rowProps={(event) => ({
-                id: `feed-row-${event.event_id}`,
-                role: "link",
-                tabIndex: 0,
-                onKeyDown: (e) => {
-                  if (e.key === "Enter") open(event.event_id);
-                },
-                ...(event.event_id === selected
-                  ? { "aria-current": "true", className: "bg-muted/40" }
-                  : {}),
-              })}
-            />
-          </section>
-        ))
+        // A heading per day, the shared group heading Automation uses; it
+        // carries its own air above the label, so the days are pulled up into
+        // the content's top padding.
+        <div className="-mt-2 flex flex-col gap-1">
+          {groups.map((group, index) => (
+            <CollapsibleGroup
+              key={group.day}
+              variant="plain"
+              icon={<CalendarDays />}
+              count={group.events.length}
+              label={
+                group.relative
+                  ? t(group.relative)
+                  : new Date(`${group.day}T12:00:00Z`).toLocaleDateString(
+                      locale,
+                      {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                        timeZone: "UTC",
+                      }
+                    )
+              }
+            >
+              <Table<FeedRow>
+                className="table-fixed"
+                data={group.events.map((event) => ({
+                  ...event,
+                  id: event.event_id,
+                }))}
+                columns={columns}
+                hideHeader={index > 0}
+                onRowClick={(event) => open(event.event_id)}
+                rowProps={(event) => ({
+                  id: `feed-row-${event.event_id}`,
+                  role: "link",
+                  tabIndex: 0,
+                  onKeyDown: (e) => {
+                    if (e.key === "Enter") open(event.event_id);
+                  },
+                  // The table's own selected state, not a local tint.
+                  ...(event.event_id === selected
+                    ? { "aria-current": "true", "data-state": "selected" }
+                    : {}),
+                })}
+              />
+            </CollapsibleGroup>
+          ))}
+        </div>
       )}
       {nextBefore != null && (
         <WorkspaceLink

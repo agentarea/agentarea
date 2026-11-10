@@ -343,7 +343,7 @@ async def _seed(world):
 
 _FACET = {
     "stream": ("stream_id", "s.stream_id = :stream_id"),
-    "source_type": ("source_type", "s.source_type = :source_type"),
+    "source_type": ("source_type", "s.source_type = ANY(:source_types)"),
 }
 
 
@@ -369,7 +369,7 @@ async def _exact(world, feed_filter: FeedFilter, streams):
         "ws": world.ctx.workspace_id,
         "streams": list(streams),
         "stream_id": f.stream_id,
-        "source_type": f.source_type,
+        "source_types": f.source_types,
         "kind": f.kind,
         "kind_prefix": (f.kind or "")[:-1] + "%",
         "sender": f.sender,
@@ -383,7 +383,7 @@ async def _exact(world, feed_filter: FeedFilter, streams):
         if facet == "source_type":
             where.append("s.source_type IS NOT NULL")
         for other, (_, condition) in _FACET.items():
-            value = f.stream_id if other == "stream" else f.source_type
+            value = f.stream_id if other == "stream" else (f.source_types or None)
             if other != facet and value is not None:
                 where.append(condition)
         async with world.raw() as session:
@@ -404,11 +404,12 @@ def _filters(world):
         FeedFilter(),
         FeedFilter(platform=False),
         FeedFilter(stream_id=mail),
-        FeedFilter(source_type="mail"),
-        FeedFilter(stream_id=mail, source_type="generic_webhook"),
+        FeedFilter(source_types=["mail"]),
+        FeedFilter(source_types=["mail", "generic_webhook"]),
+        FeedFilter(stream_id=mail, source_types=["generic_webhook"]),
         FeedFilter(kind="order.*"),
         FeedFilter(kind="message", stream_id=mail),
-        FeedFilter(sender="alice", source_type="platform"),
+        FeedFilter(sender="alice", source_types=["platform"]),
         FeedFilter(session_key="s:1"),
         FeedFilter(result=ProcessingStatus.QUEUED),
         FeedFilter(result=ProcessingStatus.NO_HANDLERS, kind="push"),

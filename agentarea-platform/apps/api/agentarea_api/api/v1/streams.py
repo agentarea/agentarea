@@ -480,9 +480,17 @@ async def _readable_streams(service: StreamService, caller: GraphCaller) -> list
     return [row.id for row in rows]
 
 
+def _source_types(values: list[str]) -> list[str]:
+    if any(len(value) > 64 for value in values):
+        raise HTTPException(status_code=422, detail="A source type is at most 64 characters.")
+    return values
+
+
 def feed_filter(
     stream_id: UUID | None = Query(None),
-    source_type: str | None = Query(None, max_length=64),
+    source_type: list[str] = Query(
+        [], max_length=50, description="Any of these source types; repeat it for several."
+    ),
     kind: str | None = Query(
         None, max_length=255, description="An event kind, or a prefix ending in .* (order.*)."
     ),
@@ -499,7 +507,7 @@ def feed_filter(
 ) -> FeedFilter:
     return FeedFilter(
         stream_id=stream_id,
-        source_type=source_type,
+        source_types=_source_types(source_type),
         kind=kind,
         sender=sender,
         session_key=session_key,
