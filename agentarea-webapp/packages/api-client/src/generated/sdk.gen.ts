@@ -364,6 +364,8 @@ export const previewInvitationV1InvitationsPreviewPost = <ThrowOnError extends b
  * Proxy Instance
  *
  * Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+ *
+ * An API connection has the same address: its operations are served as tools.
  */
 export const proxyInstanceV1McpInstanceIdMcpDelete = <ThrowOnError extends boolean = false>(options: Options<ProxyInstanceV1McpInstanceIdMcpDeleteData, ThrowOnError>): RequestResult<ProxyInstanceV1McpInstanceIdMcpDeleteResponses, ProxyInstanceV1McpInstanceIdMcpDeleteErrors, ThrowOnError> => (options.client ?? client).delete<ProxyInstanceV1McpInstanceIdMcpDeleteResponses, ProxyInstanceV1McpInstanceIdMcpDeleteErrors, ThrowOnError>({
     security: [{
@@ -379,6 +381,8 @@ export const proxyInstanceV1McpInstanceIdMcpDelete = <ThrowOnError extends boole
  * Proxy Instance
  *
  * Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+ *
+ * An API connection has the same address: its operations are served as tools.
  */
 export const proxyInstanceV1McpInstanceIdMcpGet = <ThrowOnError extends boolean = false>(options: Options<ProxyInstanceV1McpInstanceIdMcpGetData, ThrowOnError>): RequestResult<ProxyInstanceV1McpInstanceIdMcpGetResponses, ProxyInstanceV1McpInstanceIdMcpGetErrors, ThrowOnError> => (options.client ?? client).get<ProxyInstanceV1McpInstanceIdMcpGetResponses, ProxyInstanceV1McpInstanceIdMcpGetErrors, ThrowOnError>({
     security: [{
@@ -394,6 +398,8 @@ export const proxyInstanceV1McpInstanceIdMcpGet = <ThrowOnError extends boolean 
  * Proxy Instance
  *
  * Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+ *
+ * An API connection has the same address: its operations are served as tools.
  */
 export const proxyInstanceV1McpInstanceIdMcpPost = <ThrowOnError extends boolean = false>(options: Options<ProxyInstanceV1McpInstanceIdMcpPostData, ThrowOnError>): RequestResult<ProxyInstanceV1McpInstanceIdMcpPostResponses, ProxyInstanceV1McpInstanceIdMcpPostErrors, ThrowOnError> => (options.client ?? client).post<ProxyInstanceV1McpInstanceIdMcpPostResponses, ProxyInstanceV1McpInstanceIdMcpPostErrors, ThrowOnError>({
     security: [{

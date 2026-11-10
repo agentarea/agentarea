@@ -171,18 +171,24 @@ export declare const previewInvitationV1InvitationsPreviewPost: <ThrowOnError ex
  * Proxy Instance
  *
  * Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+ *
+ * An API connection has the same address: its operations are served as tools.
  */
 export declare const proxyInstanceV1McpInstanceIdMcpDelete: <ThrowOnError extends boolean = false>(options: Options<ProxyInstanceV1McpInstanceIdMcpDeleteData, ThrowOnError>) => RequestResult<ProxyInstanceV1McpInstanceIdMcpDeleteResponses, ProxyInstanceV1McpInstanceIdMcpDeleteErrors, ThrowOnError>;
 /**
  * Proxy Instance
  *
  * Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+ *
+ * An API connection has the same address: its operations are served as tools.
  */
 export declare const proxyInstanceV1McpInstanceIdMcpGet: <ThrowOnError extends boolean = false>(options: Options<ProxyInstanceV1McpInstanceIdMcpGetData, ThrowOnError>) => RequestResult<ProxyInstanceV1McpInstanceIdMcpGetResponses, ProxyInstanceV1McpInstanceIdMcpGetErrors, ThrowOnError>;
 /**
  * Proxy Instance
  *
  * Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+ *
+ * An API connection has the same address: its operations are served as tools.
  */
 export declare const proxyInstanceV1McpInstanceIdMcpPost: <ThrowOnError extends boolean = false>(options: Options<ProxyInstanceV1McpInstanceIdMcpPostData, ThrowOnError>) => RequestResult<ProxyInstanceV1McpInstanceIdMcpPostResponses, ProxyInstanceV1McpInstanceIdMcpPostErrors, ThrowOnError>;
 /**

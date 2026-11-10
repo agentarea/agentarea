@@ -1334,7 +1334,7 @@
     "openapiDetail": {
       "refreshFromSpec": "Обновить из спецификации",
       "deleteTitle": "Удалить подключение?",
-      "baseUrl": "Базовый URL",
+      "baseUrl": "Адрес API",
       "specUrl": "URL спецификации",
       "noCustomHeaders": "Своих заголовков нет. Добавьте Authorization или любой другой заголовок, который нужен провайдеру.",
       "noCustomQueryParams": "Параметров нет. Добавьте ключ, который API ждёт в URL, например api_key.",

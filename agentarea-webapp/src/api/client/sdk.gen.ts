@@ -1692,6 +1692,8 @@ export const previewInvitationV1InvitationsPreviewPost = <
  * Proxy Instance
  *
  * Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+ *
+ * An API connection has the same address: its operations are served as tools.
  */
 export const proxyInstanceV1McpInstanceIdMcpDelete = <
   ThrowOnError extends boolean = false,
@@ -1722,6 +1724,8 @@ export const proxyInstanceV1McpInstanceIdMcpDelete = <
  * Proxy Instance
  *
  * Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+ *
+ * An API connection has the same address: its operations are served as tools.
  */
 export const proxyInstanceV1McpInstanceIdMcpGet = <
   ThrowOnError extends boolean = false,
@@ -1752,6 +1756,8 @@ export const proxyInstanceV1McpInstanceIdMcpGet = <
  * Proxy Instance
  *
  * Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+ *
+ * An API connection has the same address: its operations are served as tools.
  */
 export const proxyInstanceV1McpInstanceIdMcpPost = <
   ThrowOnError extends boolean = false,

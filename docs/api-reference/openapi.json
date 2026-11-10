@@ -21164,7 +21164,7 @@
     },
     "/v1/mcp/{instance_id}/mcp": {
       "delete": {
-        "description": "Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.",
+        "description": "Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.\n\nAn API connection has the same address: its operations are served as tools.",
         "operationId": "proxy_instance_v1_mcp__instance_id__mcp_delete",
         "parameters": [
           {
@@ -21210,7 +21210,7 @@
         ]
       },
       "get": {
-        "description": "Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.",
+        "description": "Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.\n\nAn API connection has the same address: its operations are served as tools.",
         "operationId": "proxy_instance_v1_mcp__instance_id__mcp_get",
         "parameters": [
           {
@@ -21256,7 +21256,7 @@
         ]
       },
       "post": {
-        "description": "Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.",
+        "description": "Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.\n\nAn API connection has the same address: its operations are served as tools.",
         "operationId": "proxy_instance_v1_mcp__instance_id__mcp_post",
         "parameters": [
           {

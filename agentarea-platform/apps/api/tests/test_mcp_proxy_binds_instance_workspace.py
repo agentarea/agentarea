@@ -25,7 +25,7 @@ INSTANCE_ID = uuid4()
 
 def _session(workspace_id: str | None) -> MagicMock:
     result = MagicMock()
-    result.scalar_one_or_none.return_value = workspace_id
+    result.scalars.return_value.first.return_value = workspace_id
     session = MagicMock()
     session.execute = AsyncMock(return_value=result)
     return session

@@ -145,6 +145,12 @@ Every instance is reachable at `/v1/mcp/{instance_id}/mcp`. The proxy:
 Downstream servers see only governed traffic, and the credential never leaves
 the platform.
 
+An API (OpenAPI) connection has the same address, `/v1/mcp/{connection_id}/mcp`.
+There is no upstream MCP server behind it: the platform serves the connection's
+operations as tools, and each call is judged, audited, metered and held for
+approval exactly as an agent's call to the same operation. A platform-managed
+API connection has no such address.
+
 ### On-demand start and idle reclaim
 
 An instance row is desired state; the workload behind it is not. The two are

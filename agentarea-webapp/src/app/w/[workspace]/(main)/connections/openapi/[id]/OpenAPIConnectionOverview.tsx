@@ -24,6 +24,7 @@ import { OverviewHero } from "@/components/Overview/OverviewHero";
 import { CopyableText } from "@/components/ui/copyable-text";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { getOpenApiConnectionDisplayStatus } from "@/lib/status";
+import { useClientApiUrl } from "@/lib/use-client-api-url";
 import { OpenAPIConnectionMark } from "../../components/MCPCard";
 import { relativeParts } from "../../relative-parts";
 import { getOpenApiConnectionState } from "../../state";
@@ -51,6 +52,12 @@ export default function OpenAPIConnectionOverview({
   const tState = useTranslations("MCPServersPage.state");
   const locale = useLocale();
   const now = useNow({ updateInterval: 60_000 });
+  const apiBaseUrl = useClientApiUrl();
+  // The address every connection answers MCP at; a platform-managed one has none.
+  const connectUrl =
+    connection.managed_by === "platform"
+      ? null
+      : `${apiBaseUrl}/v1/mcp/${connection.id}/mcp`;
 
   const toolCount = connection.available_tools.length;
   const headers = connection.custom_headers ?? [];
@@ -171,6 +178,12 @@ export default function OpenAPIConnectionOverview({
                 icon={<Link2 />}
                 title={tDetail("connection.title")}
               />
+              {connectUrl && (
+                <CardField label={tDetail("connection.connectUrl")}>
+                  <CopyableText text={connectUrl} />
+                  <p className="note">{tDetail("connection.connectUrlHint")}</p>
+                </CardField>
+              )}
               <CardField label={t("baseUrl")}>
                 {connection.base_url ? (
                   <CopyableText text={connection.base_url} />

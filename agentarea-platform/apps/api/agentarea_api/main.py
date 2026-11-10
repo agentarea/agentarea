@@ -352,6 +352,9 @@ def create_app() -> FastAPI:
         ),
         admit_turn=True,
     )
+    from agentarea_api.api.v1.connection_mcp import build_app, connection_mcp_server
+
+    build_app(_transport_security)
     _client_mcp_app = ClientMCPScopeMiddleware(_client_mcp_inner, prefix="/mcp/clients")
     _legacy_client_mcp_app = ClientMCPScopeMiddleware(_client_mcp_inner, prefix="/client-mcp")
 
@@ -362,6 +365,7 @@ def create_app() -> FastAPI:
                 _mcp_server.session_manager.run(),
                 _pinned_mcp_server.session_manager.run(),
                 client_mcp_server.session_manager.run(),
+                connection_mcp_server.session_manager.run(),
             ):
                 yield
 
