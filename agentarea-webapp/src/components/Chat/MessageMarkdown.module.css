@@ -251,22 +251,30 @@
     color 120ms ease;
 }
 
-.root :global([data-streamdown="table-wrapper"]):hover > div:first-child > button,
+.root
+  :global([data-streamdown="table-wrapper"]):hover
+  > div:first-child
+  > button,
 .root
   :global([data-streamdown="table-wrapper"]):hover
   > div:first-child
   > div
   > button,
-.root :global([data-streamdown="table-wrapper"]):focus-within > div:first-child > button,
+.root
+  :global([data-streamdown="table-wrapper"]):focus-within
+  > div:first-child
+  > button,
 .root
   :global([data-streamdown="table-wrapper"]):focus-within
   > div:first-child
   > div
   > button,
-.root :global([data-streamdown="code-block"]):hover
+.root
+  :global([data-streamdown="code-block"]):hover
   :global([data-streamdown="code-block-actions"])
   > button,
-.root :global([data-streamdown="code-block"]):focus-within
+.root
+  :global([data-streamdown="code-block"]):focus-within
   :global([data-streamdown="code-block-actions"])
   > button {
   opacity: 1;

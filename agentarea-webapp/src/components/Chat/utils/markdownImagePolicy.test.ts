@@ -46,7 +46,9 @@ describe("messageRehypePlugins", () => {
     );
 
     expect(elements.map((node) => node.tagName)).toEqual(["img"]);
-    expect(elements.some((node) => "srcSet" in (node.properties ?? {}))).toBe(false);
+    expect(elements.some((node) => "srcSet" in (node.properties ?? {}))).toBe(
+      false
+    );
   });
 
   it("loads images only from the workspace's file downloads", () => {
@@ -62,21 +64,33 @@ describe("messageRehypePlugins", () => {
   });
 
   it.each([
-    ["the API's OAuth redirect", "https://api.example/oauth2/auth?state=secret"],
+    [
+      "the API's OAuth redirect",
+      "https://api.example/oauth2/auth?state=secret",
+    ],
     ["the proxy's OAuth redirect", "/api/proxy/oauth2/auth?state=secret"],
     [
       "a dot-segment escape",
       "https://api.example/v1/workspaces/acme/files/download/../../../../oauth2/auth",
     ],
-    ["another workspace", "https://api.example/v1/workspaces/other/files/download/a.png"],
-    ["another host", "https://evil.example/v1/workspaces/acme/files/download/a.png"],
+    [
+      "another workspace",
+      "https://api.example/v1/workspaces/other/files/download/a.png",
+    ],
+    [
+      "another host",
+      "https://evil.example/v1/workspaces/acme/files/download/a.png",
+    ],
   ])("blocks %s", (_, src) => {
     expect(imageSources(`<img src="${src}" alt="x">`)).toEqual([]);
   });
 
   it("blocks every remote image off a workspace page", () => {
     expect(
-      imageSources('<img src="/api/proxy/v1/workspaces/acme/files/download/a.png">', null)
+      imageSources(
+        '<img src="/api/proxy/v1/workspaces/acme/files/download/a.png">',
+        null
+      )
     ).toEqual([]);
   });
 

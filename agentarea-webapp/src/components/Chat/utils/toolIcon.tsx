@@ -1,14 +1,14 @@
 import React from "react";
 import {
-  Boxes,
   BookOpen,
+  Boxes,
   Brain,
   Calendar,
   Cloud,
   Code,
   Database,
-  FileText,
   FilePlus2,
+  FileText,
   Globe,
   Mail,
   MessageSquare,
@@ -34,19 +34,54 @@ interface IconRule {
 const RULES: IconRule[] = [
   // Generic action categories. Integration brands use the resolved server icon
   // carried by the event rather than guessing from an arbitrary tool name.
-  { match: ["postgres", "mysql", "sqlite", "database", "_sql", "sql_"], icon: Database },
+  {
+    match: ["postgres", "mysql", "sqlite", "database", "_sql", "sql_"],
+    icon: Database,
+  },
   { match: ["gmail", "email", "smtp", "sendmail"], icon: Mail },
-  { match: ["gdrive", "google_drive", "googledrive", "drive_", "s3", "gcs", "storage"], icon: Cloud },
+  {
+    match: [
+      "gdrive",
+      "google_drive",
+      "googledrive",
+      "drive_",
+      "s3",
+      "gcs",
+      "storage",
+    ],
+    icon: Cloud,
+  },
   { match: ["calendar", "gcal", "schedule"], icon: Calendar },
-  { match: ["discord", "telegram", "chat_", "message", "notify"], icon: MessageSquare },
+  {
+    match: ["discord", "telegram", "chat_", "message", "notify"],
+    icon: MessageSquare,
+  },
 
   // Built-in tool categories
-  { match: ["shell", "bash", "terminal", "command", "cmd", "execute", "exec", "run_"], icon: SquareTerminal },
+  {
+    match: [
+      "shell",
+      "bash",
+      "terminal",
+      "command",
+      "cmd",
+      "execute",
+      "exec",
+      "run_",
+    ],
+    icon: SquareTerminal,
+  },
   { match: ["activate_skill", "skill"], icon: Sparkles },
-  { match: ["delegate", "call_agent", "spawn_agent", "sub_agent"], icon: Users },
+  {
+    match: ["delegate", "call_agent", "spawn_agent", "sub_agent"],
+    icon: Users,
+  },
   { match: ["recall", "memory", "remember", "history"], icon: Brain },
   { match: ["web_search", "google_search", "search", "lookup"], icon: Search },
-  { match: ["fetch", "http", "url", "browse", "curl", "request", "web"], icon: Globe },
+  {
+    match: ["fetch", "http", "url", "browse", "curl", "request", "web"],
+    icon: Globe,
+  },
   { match: ["edit_file", "apply_patch", "patch"], icon: Pencil },
   { match: ["read_file", "open_file", "cat"], icon: BookOpen },
   { match: ["write_file", "create_file"], icon: FilePlus2 },

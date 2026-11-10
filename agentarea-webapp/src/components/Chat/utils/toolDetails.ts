@@ -11,7 +11,8 @@ const TOOL_EVENT_MARKER_PATTERNS = [
   /^\[redacted\]$/,
 ];
 
-export const TOOL_DETAILS_UNAVAILABLE = "Full details weren’t saved for this run.";
+export const TOOL_DETAILS_UNAVAILABLE =
+  "Full details weren’t saved for this run.";
 
 export function isUnavailableToolValue(value: unknown): boolean {
   return (
@@ -44,7 +45,9 @@ export function stripUnavailableToolValues(value: unknown): unknown {
     const sourceEntries = Object.entries(value as Record<string, unknown>);
     const entries = sourceEntries
       .map(([key, item]) => [key, stripUnavailableToolValues(item)] as const)
-      .filter((entry): entry is readonly [string, unknown] => entry[1] !== undefined);
+      .filter(
+        (entry): entry is readonly [string, unknown] => entry[1] !== undefined
+      );
     return sourceEntries.length === 0 || entries.length > 0
       ? Object.fromEntries(entries)
       : undefined;
