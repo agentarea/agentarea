@@ -4,6 +4,7 @@ import re
 from collections.abc import Collection
 from typing import Any
 
+from agentarea_common.request_transform import RequestTransformError, validate_request_transform
 from agentarea_common.tool_cost import connector_payers, parse_cost_model
 from agentarea_governance.domain.tool_calls import CONTROL_FLOW_TOOL_NAMES
 
@@ -113,6 +114,11 @@ def parse_openapi_operations(
             response_transform = operation.get("x-agentarea-response-transform") or []
             if not isinstance(response_transform, list):
                 raise ValueError(f"{op_where}.x-agentarea-response-transform must be a list")
+            request_transform = operation.get("x-agentarea-request-transform") or []
+            try:
+                validate_request_transform(request_transform)
+            except RequestTransformError as error:
+                raise ValueError(f"{op_where}: {error}") from error
             error_path = _error_path(operation, op_where) or default_error_path
 
             operations.append(
@@ -125,6 +131,7 @@ def parse_openapi_operations(
                     "request_body": request_body,
                     "input_schema": input_schema,
                     "cost": own_cost if own_cost is not None else default_cost,
+                    "request_transform": request_transform,
                     "response_transform": response_transform,
                     "error_path": error_path,
                 }

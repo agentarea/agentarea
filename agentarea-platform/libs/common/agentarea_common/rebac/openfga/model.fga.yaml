@@ -95,6 +95,38 @@ tuples:
     relation: role_assignment
     object: resource:secret1
 
+  # Connections: a member reads everything under the root project.
+  - user: User:member1
+    relation: reader
+    object: project:ws1-root
+  - user: Agent:bot1
+    relation: reader
+    object: project:ws1-root
+  - user: project:ws1-root
+    relation: project
+    object: resource:conn_shared
+  - user: User:owner1
+    relation: manager
+    object: resource:conn_shared
+  - user: project:ws1-root
+    relation: project
+    object: resource:conn_personal
+  - user: User:owner1
+    relation: manager
+    object: resource:conn_personal
+  - user: User:owner1
+    relation: reader
+    object: resource:conn_personal
+  - user: "User:*"
+    relation: personal
+    object: resource:conn_personal
+  - user: "Agent:*"
+    relation: personal
+    object: resource:conn_personal
+  - user: Agent:lent1
+    relation: connection_user
+    object: resource:conn_personal
+
 tests:
   - name: role_assignment with full role grants all three bits on project
     check:
@@ -244,3 +276,48 @@ tests:
         assertions:
           can_manage: true
           can_use_secret: false
+
+  - name: a connection without personal is used by whoever reads it
+    check:
+      - user: User:member1
+        object: resource:conn_shared
+        assertions:
+          can_use_connection: true
+      - user: Agent:bot1
+        object: resource:conn_shared
+        assertions:
+          can_use_connection: true
+      - user: User:wsadmin
+        object: resource:conn_shared
+        assertions:
+          can_use_connection: true
+      - user: User:stranger
+        object: resource:conn_shared
+        assertions:
+          can_use_connection: false
+
+  - name: a personal connection is listed to the workspace but used by its creator and whom it was lent to
+    check:
+      - user: User:owner1
+        object: resource:conn_personal
+        assertions:
+          can_use_connection: true
+      - user: Agent:lent1
+        object: resource:conn_personal
+        assertions:
+          can_use_connection: true
+      - user: User:member1
+        object: resource:conn_personal
+        assertions:
+          can_read: true
+          can_use_connection: false
+      - user: Agent:bot1
+        object: resource:conn_personal
+        assertions:
+          can_read: true
+          can_use_connection: false
+      - user: User:wsadmin
+        object: resource:conn_personal
+        assertions:
+          can_manage: true
+          can_use_connection: false

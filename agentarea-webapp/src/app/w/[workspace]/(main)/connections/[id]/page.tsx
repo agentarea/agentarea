@@ -1,10 +1,8 @@
 import type { McpServerInstanceResponse } from "@/api/client/types.gen";
-import { getMCPServer, getMCPServerInstance } from "@/lib/api";
-import { optionalApiData, requireApiData } from "@/lib/server-resource";
-import { bindsEgressExit } from "../egress-exit";
-import { loadEgressExitChoices } from "../egressExitsData";
+import { getMCPServerInstance } from "@/lib/api";
+import { requireApiData } from "@/lib/server-resource";
 import { loadConsumers } from "./consumersData";
-import { getInstanceCached } from "./instanceData";
+import { getInstanceCached, loadServerSpec } from "./instanceData";
 import MCPInstanceOverview from "./MCPInstanceOverview";
 
 interface Props {
@@ -15,18 +13,10 @@ export default async function MCPInstancePage({ params }: Props) {
   const { id } = await params;
   const instance = await getInstanceCached(id);
 
-  const [serverSpecResult, consumerResult, egressExits] = await Promise.all([
-    instance.server_spec_id ? getMCPServer(instance.server_spec_id) : null,
+  const [serverSpec, consumerResult] = await Promise.all([
+    loadServerSpec(instance),
     loadConsumers(instance.id),
-    bindsEgressExit(instance.transport) ? loadEgressExitChoices() : null,
   ]);
-  const serverSpec =
-    serverSpecResult && instance.server_spec_id
-      ? optionalApiData(
-          serverSpecResult,
-          `MCP server ${instance.server_spec_id}`
-        )
-      : null;
 
   // Resolve bundle member names
   const memberNames: Record<string, string> = {};
@@ -52,7 +42,6 @@ export default async function MCPInstancePage({ params }: Props) {
       memberNames={memberNames}
       consumers={consumerResult.consumers}
       consumersError={consumerResult.error}
-      egressExits={egressExits}
     />
   );
 }

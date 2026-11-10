@@ -10,6 +10,7 @@ from agentarea_agents.domain.models import Agent  # noqa: F401
 from agentarea_agents.domain.skill_models import Skill  # noqa: F401
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
+from agentarea_common.testing import allow_all_permissions
 from agentarea_execution.activities.agent import config as config_activities
 from agentarea_execution.models import AgentConfigRequest
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance  # noqa: F401
@@ -24,6 +25,11 @@ from temporalio.exceptions import ApplicationError
 from .test_task_resource_config import activity_context, agent  # noqa: F401
 
 WORKSPACE = "workspace-a"
+
+
+@pytest.fixture(autouse=True)
+def _permissions():
+    allow_all_permissions()
 
 
 @pytest.fixture

@@ -58,7 +58,7 @@ def catalog_connect_page_url(workspace_slug: str, registry_item_id: str) -> str:
 
 def mcp_instance_landing_url(return_to: str, workspace_slug: str, instance_id: str) -> str:
     """The connect page when ``return_to`` is exactly the one for this workspace
-    and instance, else the connection's detail page.
+    and instance, else the connection's settings, where it is signed in.
 
     Its query and fragment are dropped, never carried back.
     """
@@ -68,9 +68,9 @@ def mcp_instance_landing_url(return_to: str, workspace_slug: str, instance_id: s
         connect_page = connect_page_url(workspace_slug, instance_id)
         if page == connect_page:
             return connect_page
-    return f"{frontend_base(return_to)}/w/{workspace_slug}/connections/{instance_id}"
+    return f"{frontend_base(return_to)}/w/{workspace_slug}/connections/{instance_id}/settings"
 
 
 def openapi_connection_landing_url(return_to: str, workspace_slug: str, connection_id: str) -> str:
-    """An API connection's detail page."""
-    return f"{frontend_base(return_to)}/w/{workspace_slug}/connections/openapi/{connection_id}"
+    """An API connection's settings, where it is signed in."""
+    return f"{frontend_base(return_to)}/w/{workspace_slug}/connections/openapi/{connection_id}/settings"

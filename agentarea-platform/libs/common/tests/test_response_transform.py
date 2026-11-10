@@ -61,3 +61,67 @@ def test_a_missing_field_is_an_error():
 def test_an_unknown_step_is_refused(steps):
     with pytest.raises(ResponseTransformError):
         apply_response_transform(steps, {"x": "eA=="})
+
+
+GMAIL_RAW_STEPS = [{"decode": "base64url", "at": "$.raw"}, {"parse": "rfc822", "at": "$.raw"}]
+
+
+def _gmail_raw(message: bytes) -> dict:
+    return {"id": "m1", "raw": base64.urlsafe_b64encode(message).decode().rstrip("=")}
+
+
+def test_a_raw_message_becomes_its_fields_and_text():
+    from email.message import EmailMessage
+
+    message = EmailMessage()
+    message["From"] = "Артём <artem@agentarea.ai>"
+    message["To"] = "a@example.com, b@example.com"
+    message["Subject"] = "Счёт за ноябрь"
+    message["Message-ID"] = "<m1@example.com>"
+    message.set_content("Добрый день")
+    message.add_alternative("<p>Добрый день</p>", subtype="html")
+    message.add_attachment(b"%PDF", maintype="application", subtype="pdf", filename="invoice.pdf")
+
+    body = apply_response_transform(GMAIL_RAW_STEPS, _gmail_raw(message.as_bytes()))
+
+    mail = body["raw"]
+    assert body["id"] == "m1"
+    assert mail["from"] == "Артём <artem@agentarea.ai>"
+    assert mail["to"] == "a@example.com, b@example.com"
+    assert mail["subject"] == "Счёт за ноябрь"
+    assert mail["message_id"] == "<m1@example.com>"
+    assert mail["text"].strip() == "Добрый день"
+    assert "html" not in mail
+    assert mail["attachments"] == [
+        {"filename": "invoice.pdf", "content_type": "application/pdf", "size": 4}
+    ]
+
+
+def test_an_html_only_message_keeps_its_html():
+    raw = (
+        b"From: a@example.com\r\nTo: b@example.com\r\nSubject: hi\r\n"
+        b"Content-Type: text/html; charset=utf-8\r\n\r\n<b>hi</b>\r\n"
+    )
+
+    mail = apply_response_transform(GMAIL_RAW_STEPS, _gmail_raw(raw))["raw"]
+
+    assert mail["html"].strip() == "<b>hi</b>"
+    assert mail["text"] == ""
+
+
+def test_a_message_in_a_legacy_charset_is_read():
+    raw = (
+        b"From: a@example.com\r\nSubject: =?windows-1251?b?0vXl8fI=?=\r\n"
+        b"Content-Type: text/plain; charset=windows-1251\r\n"
+        b"Content-Transfer-Encoding: 8bit\r\n\r\n" + "Привет".encode("cp1251") + b"\r\n"
+    )
+
+    mail = apply_response_transform(GMAIL_RAW_STEPS, _gmail_raw(raw))["raw"]
+
+    assert mail["subject"] == "Тхест"
+    assert mail["text"].strip() == "Привет"
+
+
+def test_invalid_base64url_is_an_error():
+    with pytest.raises(ResponseTransformError, match="invalid base64url"):
+        apply_response_transform(GMAIL_RAW_STEPS, {"raw": "@@@"})

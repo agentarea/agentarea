@@ -87,6 +87,7 @@ _TABLES = [
 
 @pytest.fixture(autouse=True)
 def _graph(monkeypatch):
+    allow_all_permissions()
     return install_graph_ownership_stub(monkeypatch)
 
 

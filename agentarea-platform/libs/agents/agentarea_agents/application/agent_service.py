@@ -15,6 +15,7 @@ from agentarea_common.base import RepositoryFactory
 from agentarea_common.base.service import BaseCrudService
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.errors import NotFoundError
+from agentarea_common.rebac.connection_access import lend_connection, withdraw_connection
 from agentarea_common.utils.slug import generate_slug
 from agentarea_governance.application.catalog_install import CatalogInstallGuard
 from agentarea_llm.domain.models import ModelKind
@@ -102,6 +103,22 @@ def _credential_bindings(tools: list[dict] | None) -> set[tuple[str, str, str]]:
                 )
             )
     return bindings
+
+
+def _connection_ids(tools: list[dict] | None) -> set[tuple[str, str]]:
+    """Each ``(kind, id)`` connection (MCP instance, API connection) a tool config calls through."""
+    ids: set[tuple[str, str]] = set()
+    for tool in tools or []:
+        if tool.get("type") == "mcp":
+            kind, reference = "mcp_instance", tool.get("name")
+        elif tool.get("type") == "openapi":
+            kind = "openapi_connection"
+            reference = (tool.get("settings") or {}).get("openapi_connection_id")
+        else:
+            continue
+        if _is_uuid(reference):
+            ids.add((kind, str(UUID(str(reference)))))
+    return ids
 
 
 def _is_uuid(value: Any) -> bool:
@@ -428,6 +445,44 @@ class AgentService(BaseCrudService[Agent]):
         for name, _url, secret_name in sorted(new_bindings):
             await self._require_delegate_secret(name, secret_name)
 
+    async def _require_usable_connections(
+        self, tools: builtins.list[dict] | None, previous: builtins.list[dict] | None = None
+    ) -> None:
+        """Each connection newly attached is one the editor may call through.
+
+        Attaching lends it to the agent, so whoever runs the agent calls through
+        it: only someone who may use it can lend it. Connections already there
+        are not rechecked, or nobody but the lender could edit the agent again.
+        """
+        from agentarea_common.auth.permission import PermissionService
+        from agentarea_common.di.container import resolve
+
+        attached = sorted(_connection_ids(tools) - _connection_ids(previous))
+        if not attached:
+            return
+        permissions = resolve(PermissionService)
+        subject = self._user_context.graph_subject
+        for kind, connection_id in attached:
+            if not await permissions.check(subject, "use_connection", kind, connection_id):
+                raise PermissionError(
+                    f"Connection {connection_id} is someone else's personal connection; "
+                    "its owner can share it with the workspace or attach it themselves."
+                )
+
+    async def _sync_connection_loans(
+        self,
+        agent_id: UUID,
+        tools: builtins.list[dict] | None,
+        previous: builtins.list[dict] | None = None,
+    ) -> None:
+        """Lend the agent the connections it now names, withdraw the ones it dropped."""
+        attached = {connection_id for _, connection_id in _connection_ids(tools)}
+        detached = {connection_id for _, connection_id in _connection_ids(previous)}
+        for connection_id in sorted(attached - detached):
+            await lend_connection(connection_id, agent_id)
+        for connection_id in sorted(detached - attached):
+            await withdraw_connection(connection_id, agent_id)
+
     async def _bind_mcp_tools(
         self, tools: builtins.list[dict] | None, *, refuse_unbound: bool = True
     ) -> None:
@@ -647,6 +702,7 @@ class AgentService(BaseCrudService[Agent]):
         approval_targets, tools = self._lift_approval_toggles(tools)
         await self._validate_tool_models(tools)
         await self._validate_delegates(tools)
+        await self._require_usable_connections(tools)
 
         slug = await self._resolve_unique_slug(payload.name)
         model_id = await self._validate_model_id(payload.model_id)
@@ -671,6 +727,9 @@ class AgentService(BaseCrudService[Agent]):
             agent_type=payload.agent_type,
         )
         agent = await self.create(agent)
+        await self._sync_connection_loans(
+            agent.id, agent.tools if isinstance(agent.tools, list) else None
+        )
         # A brand-new agent has no prior rules, so an empty target set is a no-op
         # reconcile — unlike update, which must run to remove unticked rules.
         if approval_targets:
@@ -714,6 +773,7 @@ class AgentService(BaseCrudService[Agent]):
             raise ValueError(f"catalog agent {item.name!r} has no tools list in its spec")
         tools = deepcopy(tools)
         await self._bind_mcp_tools(tools, refuse_unbound=False)
+        await self._require_usable_connections(tools)
         approval_targets, tools = self._lift_approval_toggles(tools)
 
         # The catalog never binds a concrete model — that is a per-workspace
@@ -734,6 +794,7 @@ class AgentService(BaseCrudService[Agent]):
             planning=spec.get("planning"),
             registry_item_id=item.id,
         )
+        await self._sync_connection_loans(agent.id, tools)
         await self._get_catalog_repository().mark_installed(item.id, str(agent.id), item.version)
         if approval_targets:
             await self._sync_approval_rules(agent.id, approval_targets)
@@ -825,6 +886,9 @@ class AgentService(BaseCrudService[Agent]):
                 edited_tools,
                 agent.tools if isinstance(agent.tools, list) else None,
             )
+            await self._require_usable_connections(
+                edited_tools, agent.tools if isinstance(agent.tools, list) else None
+            )
             await release_unticked_approvals(
                 self.repository_factory.session,
                 self.repository_factory.user_context,
@@ -845,6 +909,7 @@ class AgentService(BaseCrudService[Agent]):
         if "client_id" in patch:
             agent.client_id = await self._validate_client_id(patch["client_id"])
         approval_targets: set[str] = set()
+        previous_tools = agent.tools if isinstance(agent.tools, list) else None
         if tools_edited:
             approval_targets, agent.tools = self._lift_approval_toggles(edited_tools)
         if "planning" in patch:
@@ -866,6 +931,9 @@ class AgentService(BaseCrudService[Agent]):
 
         if tools_edited:
             await self._sync_approval_rules(agent.id, approval_targets)
+            await self._sync_connection_loans(
+                agent.id, agent.tools if isinstance(agent.tools, list) else None, previous_tools
+            )
 
         if "skill_ids" in patch and payload.skill_ids is not None:
             repo = self._get_agent_repository()

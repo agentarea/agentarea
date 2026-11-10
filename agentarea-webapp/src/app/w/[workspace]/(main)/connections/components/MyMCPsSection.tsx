@@ -34,6 +34,7 @@ import {
 import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
 import type { ConnectionUsage } from "../usage";
 import { getMCPInstanceToolCount, TRANSPORT_LABEL } from "../utils";
+import { PersonalBadge } from "./ConnectionSharing";
 import {
   MCPInstanceCard,
   OpenAPIConnectionCard,
@@ -205,8 +206,13 @@ export function MyMCPsSection({
               />
             )}
             <div className="min-w-0">
-              <div className="truncate text-[13px] font-medium text-foreground">
-                {value}
+              <div className="flex min-w-0 items-center gap-1.5">
+                <div className="truncate text-[13px] font-medium text-foreground">
+                  {value}
+                </div>
+                {(item._instance ?? item._connection)?.personal && (
+                  <PersonalBadge />
+                )}
               </div>
               <div className="truncate text-[11px] text-muted-foreground">
                 {rowSubtitle(item)}

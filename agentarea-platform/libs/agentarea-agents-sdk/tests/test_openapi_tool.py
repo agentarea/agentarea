@@ -917,6 +917,58 @@ class TestFactoryOmitsConfiguredQueryParams:
         assert parameters["required"] == []
 
 
+class TestOpenAPIToolRequestTransform:
+    _OP = {
+        "method": "POST",
+        "path": "/gmail/v1/users/me/messages/send",
+        "request_body": {"content_type": "application/json", "required": True, "schema": {}},
+        "request_transform": [{"build": "rfc822", "into": "raw"}],
+    }
+
+    @pytest.mark.asyncio
+    async def test_the_vendor_receives_the_built_body(self):
+        import base64
+
+        client = _build_mock_client(httpx.Response(200, json={"id": "m1"}))
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=client),
+        ):
+            tool = mod.OpenAPITool(
+                _make_operation() | self._OP,
+                _CONNECTION_ID,
+                _CONNECTION_NAME,
+                _make_service(_make_connection()),
+            )
+            result = await tool.execute(
+                body={"to": "a@example.com", "subject": "Привет", "text": "ok", "threadId": "t1"}
+            )
+
+        assert result["success"] is True
+        sent = client.request.call_args.kwargs["json"]
+        assert set(sent) == {"raw", "threadId"}
+        assert b"To: a@example.com" in base64.urlsafe_b64decode(sent["raw"])
+
+    @pytest.mark.asyncio
+    async def test_arguments_the_transform_cannot_use_never_reach_the_vendor(self):
+        client = _build_mock_client(httpx.Response(200, json={}))
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=client),
+        ):
+            tool = mod.OpenAPITool(
+                _make_operation() | self._OP,
+                _CONNECTION_ID,
+                _CONNECTION_NAME,
+                _make_service(_make_connection()),
+            )
+            result = await tool.execute(body={"subject": "no recipient", "text": "x"})
+
+        assert result["success"] is False
+        assert "to, cc or bcc" in result["error"]
+        client.request.assert_not_called()
+
+
 class TestOpenAPIToolResponseTransform:
     @pytest.mark.asyncio
     async def test_a_declared_transform_reshapes_the_body_the_agent_and_the_meter_see(self):

@@ -12,6 +12,12 @@ from agentarea_api.api.v1._approval_policy_sync import (
     approval_targets_for_agents,
     mcp_tool_ticked,
 )
+from agentarea_api.api.v1._connection_sharing import (
+    ConnectionSharing,
+    ConnectionSharingRequest,
+    set_sharing,
+    sharing_of,
+)
 from agentarea_api.api.v1.mcp_oauth_links import (
     MCPOAuthLinkService,
     OAuthLinkResponse,
@@ -79,6 +85,10 @@ class MCPServerInstanceResponse(BaseModel):
     managed_by: str | None = None
     # A member-set cost that wins over the catalog's (wiki ADR-0038 §2.3).
     cost: dict[str, Any] | None = None
+    # Only its creator and the agents it was lent to may call through it.
+    personal: bool = False
+    # The caller added it, so the caller decides whether the workspace may use it.
+    is_owner: bool = False
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -173,12 +183,18 @@ async def _instance_response(
     *,
     verification_override: dict | None = None,
     schema_cache: dict[str, list[dict[str, Any]]] | None = None,
+    sharing: ConnectionSharing | None = None,
 ) -> MCPServerInstanceResponse:
-    return MCPServerInstanceResponse.from_domain(
+    response = MCPServerInstanceResponse.from_domain(
         instance,
         verification_override=verification_override,
         secret_env_names=await _instance_secret_env_names(service, instance, schema_cache),
     )
+    if sharing is None:
+        sharing = (await sharing_of([instance], service.repository.user_context))[str(instance.id)]
+    response.personal = sharing.personal
+    response.is_owner = sharing.is_owner
+    return response
 
 
 class ValidateRequest(BaseModel):
@@ -414,6 +430,7 @@ async def list_mcp_server_instances(
 ):
     """List all MCP server instances in the workspace."""
     instances = await service.list()
+    sharing = await sharing_of(instances, user_context)
 
     response_instances = []
     schema_cache: dict[str, list[dict[str, Any]]] = {}
@@ -432,12 +449,18 @@ async def list_mcp_server_instances(
             derived_v = derive_bundle_verification(instance, members)
             response_instances.append(
                 await _instance_response(
-                    service, instance, verification_override=derived_v, schema_cache=schema_cache
+                    service,
+                    instance,
+                    verification_override=derived_v,
+                    schema_cache=schema_cache,
+                    sharing=sharing[str(instance.id)],
                 )
             )
         else:
             response_instances.append(
-                await _instance_response(service, instance, schema_cache=schema_cache)
+                await _instance_response(
+                    service, instance, schema_cache=schema_cache, sharing=sharing[str(instance.id)]
+                )
             )
 
     return response_instances
@@ -626,6 +649,26 @@ async def get_mcp_server_instance(
         derived_v = derive_bundle_verification(instance, members)
         return await _instance_response(service, instance, verification_override=derived_v)
 
+    return await _instance_response(service, instance)
+
+
+@router.put(
+    "/{instance_id}/sharing",
+    response_model=MCPServerInstanceResponse,
+    dependencies=[requires("view", "mcp_instance", id_param="instance_id")],
+)
+async def set_mcp_server_instance_sharing(
+    instance_id: UUID,
+    request: ConnectionSharingRequest,
+    user_context: UserContextDep,
+    db_session: DatabaseSessionDep,
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+):
+    """Share the connection with the workspace, or make it its owner's again."""
+    instance = await service.get(instance_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail="MCP Server Instance not found")
+    await set_sharing(instance.id, request.shared, user_context, db_session)
     return await _instance_response(service, instance)
 
 

@@ -128,6 +128,8 @@ import {
   resumeAgentTask,
   retryAgentTask,
   sendTaskCommand,
+  setMCPServerInstanceSharing,
+  setOpenAPIConnectionSharing,
   submitTaskInput,
   updateAgentWallet,
   updateAllSkills,
@@ -314,6 +316,19 @@ export async function updateMCPServerInstanceAction(
   instance: McpServerInstanceUpdate
 ) {
   return await updateMCPServerInstance(instanceId, instance);
+}
+
+/** Share a connection with the workspace, or make it its owner's again. */
+export async function setMCPServerInstanceSharingAction(
+  instanceId: string,
+  shared: boolean
+) {
+  const result = await setMCPServerInstanceSharing(instanceId, shared);
+  if (!result.error) {
+    revalidatePath(await requestWorkspacePath("/connections"));
+    revalidatePath(await requestWorkspacePath(`/connections/${instanceId}`));
+  }
+  return result;
 }
 
 export async function listProviderSpecsAction(params?: {
@@ -621,6 +636,21 @@ export async function updateOpenAPIConnectionAction(
   return await updateOpenAPIConnection(connectionId, body);
 }
 
+/** Share a connection with the workspace, or make it its owner's again. */
+export async function setOpenAPIConnectionSharingAction(
+  connectionId: string,
+  shared: boolean
+) {
+  const result = await setOpenAPIConnectionSharing(connectionId, shared);
+  if (!result.error) {
+    revalidatePath(await requestWorkspacePath("/connections"));
+    revalidatePath(
+      await requestWorkspacePath(`/connections/openapi/${connectionId}`)
+    );
+  }
+  return result;
+}
+
 export async function listMCPServerInstancesAction() {
   return await listMCPServerInstances();
 }
@@ -664,13 +694,15 @@ export async function listWorkspaceSecretsAction(): Promise<
 
 /**
  * Ask how a connection can be authorized: an existing MCP instance, a catalog
- * MCP spec before any instance exists, or a catalog API before it is connected.
+ * MCP spec before any instance exists, a catalog API before it is connected, or
+ * an API connection made from the catalog, to sign in again.
  */
 export async function oauthPreflightAction(
   target:
     | { instance_id: string }
     | { server_id: string }
     | { catalog_item_id: string }
+    | { openapi_connection_id: string }
 ): Promise<{ data: OAuthPreflightResponse | null; error: string | null }> {
   const [key, id] = Object.entries(target)[0] as [string, string];
   // Validate UUID to prevent SSRF/path injection in downstream fetch URL
@@ -695,7 +727,8 @@ export async function oauthPreflightAction(
 
 /** Start a sign-in for an MCP instance or a catalog API; one flow for both. */
 export async function oauthAuthorizeAction(body: OAuthAuthorizeRequest) {
-  const id = body.instance_id ?? body.catalog_item_id;
+  const id =
+    body.instance_id ?? body.catalog_item_id ?? body.openapi_connection_id;
   // Validate UUID to prevent SSRF/path injection in downstream fetch URL
   if (!id || !isUUID(id)) {
     return { data: null, error: "Invalid ID", code: null };

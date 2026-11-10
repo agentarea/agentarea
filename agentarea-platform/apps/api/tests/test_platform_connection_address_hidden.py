@@ -9,10 +9,12 @@ response: the same rule as a platform provider configuration's endpoint.
 import uuid
 from datetime import UTC, datetime
 
+from agentarea_api.api.v1._connection_sharing import ConnectionSharing
 from agentarea_api.api.v1.mcp_servers_specifications import MCPServerResponse
 from agentarea_api.api.v1.openapi_connections import _connection_response
 from agentarea_api.tools.mcp_servers_toolset import _serialize_server
 from agentarea_api.tools.openapi_connections_toolset import _serialize
+from agentarea_common.auth.context import UserContext
 from agentarea_common.constants import MANAGED_BY_PLATFORM, PLATFORM_WORKSPACE_ID
 from agentarea_mcp.domain.models import MCPServer
 from agentarea_openapi.domain.models import OpenAPIConnection
@@ -51,10 +53,14 @@ def _mcp_spec(workspace_id: str, registry_item_id: uuid.UUID | None, url: str) -
     )
 
 
-def test_a_platform_openapi_connection_hides_its_base_url():
+_SHARED = ConnectionSharing(personal=False, is_owner=False)
+_CALLER = UserContext(user_id="u1", workspace_id="ws1")
+
+
+async def test_a_platform_openapi_connection_hides_its_base_url():
     conn = _openapi(MANAGED_BY_PLATFORM, GATEWAY)
 
-    response = _connection_response(conn)
+    response = await _connection_response(conn, _CALLER, _SHARED)
 
     assert response.base_url is None
     assert response.managed_by == MANAGED_BY_PLATFORM
@@ -62,10 +68,12 @@ def test_a_platform_openapi_connection_hides_its_base_url():
     assert _serialize(conn)["base_url"] is None
 
 
-def test_a_workspace_openapi_connection_keeps_its_base_url():
+async def test_a_workspace_openapi_connection_keeps_its_base_url():
     conn = _openapi(None, "https://api.example.test/v1")
 
-    assert _connection_response(conn).base_url == "https://api.example.test/v1"
+    assert (
+        await _connection_response(conn, _CALLER, _SHARED)
+    ).base_url == "https://api.example.test/v1"
     assert _serialize(conn)["base_url"] == "https://api.example.test/v1"
 
 

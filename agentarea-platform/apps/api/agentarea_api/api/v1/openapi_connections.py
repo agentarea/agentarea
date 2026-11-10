@@ -6,6 +6,12 @@ from typing import Any, Literal
 from uuid import UUID
 
 from agentarea_api.api.deps.services import DatabaseSessionDep, get_openapi_connection_service
+from agentarea_api.api.v1._connection_sharing import (
+    ConnectionSharing,
+    ConnectionSharingRequest,
+    set_sharing,
+    sharing_of,
+)
 from agentarea_api.catalog_api import CatalogApiItem, load_catalog_api_item
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
@@ -63,6 +69,10 @@ class OpenAPIConnectionResponse(BaseModel):
     # A member-set cost that wins over the connector's (wiki ADR-0038 §2.3).
     cost: dict[str, Any] | None = None
     managed_by: str | None = None
+    # Only its creator and the agents it was lent to may call through it.
+    personal: bool = False
+    # The caller added it, so the caller decides whether the workspace may use it.
+    is_owner: bool = False
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -97,11 +107,17 @@ def _format_query_params(raw: list[dict[str, Any]] | None) -> list[QueryParamOut
     ]
 
 
-def _connection_response(conn: OpenAPIConnection) -> OpenAPIConnectionResponse:
+async def _connection_response(
+    conn: OpenAPIConnection, user_context: UserContext, sharing: ConnectionSharing | None = None
+) -> OpenAPIConnectionResponse:
     resp = OpenAPIConnectionResponse.model_validate(conn)
     resp.base_url = conn.visible_base_url
     resp.custom_headers = _format_headers(conn.custom_headers)
     resp.custom_query_params = _format_query_params(conn.custom_query_params)
+    if sharing is None:
+        sharing = (await sharing_of([conn], user_context))[str(conn.id)]
+    resp.personal = sharing.personal
+    resp.is_owner = sharing.is_owner
     return resp
 
 
@@ -183,11 +199,12 @@ async def preview_spec(
 )
 async def create_connection(
     request: OpenAPIConnectionCreate,
+    user_context: UserContextDep,
     service: OpenAPIConnectionService = Depends(get_openapi_connection_service),
 ):
     try:
         conn = await service.create_connection(request)
-        return _connection_response(conn)
+        return await _connection_response(conn, user_context)
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
@@ -307,7 +324,7 @@ async def connect_catalog_api(
         raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    return _connection_response(conn)
+    return await _connection_response(conn, user_context)
 
 
 @router.get(
@@ -318,6 +335,7 @@ async def connect_catalog_api(
     ],
 )
 async def list_connections(
+    user_context: UserContextDep,
     status: str | None = Query(None),
     search: str | None = Query(None),
     limit: int = Query(100, ge=1, le=1000),
@@ -327,7 +345,8 @@ async def list_connections(
     connections, _total = await service.list_connections(
         status=status, search=search, limit=limit, offset=offset
     )
-    return [_connection_response(c) for c in connections]
+    sharing = await sharing_of(connections, user_context)
+    return [await _connection_response(c, user_context, sharing[str(c.id)]) for c in connections]
 
 
 @router.get(
@@ -338,13 +357,14 @@ async def list_connections(
     ],
 )
 async def get_connection(
+    user_context: UserContextDep,
     connection_id: UUID,
     service: OpenAPIConnectionService = Depends(get_openapi_connection_service),
 ):
     conn = await service.get_connection(connection_id)
     if not conn:
         raise HTTPException(status_code=404, detail="Connection not found")
-    return _connection_response(conn)
+    return await _connection_response(conn, user_context)
 
 
 @router.patch(
@@ -353,6 +373,7 @@ async def get_connection(
     dependencies=[requires("edit", "openapi_connection", id_param="connection_id")],
 )
 async def update_connection(
+    user_context: UserContextDep,
     connection_id: UUID,
     request: OpenAPIConnectionUpdate,
     service: OpenAPIConnectionService = Depends(get_openapi_connection_service),
@@ -369,7 +390,27 @@ async def update_connection(
 
     if not conn:
         raise HTTPException(status_code=404, detail="Connection not found")
-    return _connection_response(conn)
+    return await _connection_response(conn, user_context)
+
+
+@router.put(
+    "/{connection_id}/sharing",
+    response_model=OpenAPIConnectionResponse,
+    dependencies=[requires("view", "openapi_connection", id_param="connection_id")],
+)
+async def set_connection_sharing(
+    connection_id: UUID,
+    request: ConnectionSharingRequest,
+    user_context: UserContextDep,
+    db_session: DatabaseSessionDep,
+    service: OpenAPIConnectionService = Depends(get_openapi_connection_service),
+):
+    """Share the connection with the workspace, or make it its owner's again."""
+    conn = await service.get_connection(connection_id)
+    if not conn:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    await set_sharing(conn.id, request.shared, user_context, db_session)
+    return await _connection_response(conn, user_context)
 
 
 @router.delete(

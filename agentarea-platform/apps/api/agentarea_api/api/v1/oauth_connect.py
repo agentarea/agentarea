@@ -30,6 +30,7 @@ from agentarea_api.oauth_connect.targets import (
     ConnectTarget,
     MCPInstanceTarget,
     MCPSpecTarget,
+    OpenAPIConnectionTarget,
     PreflightTarget,
 )
 from agentarea_common.auth.dependencies import PrincipalDep, UserContextDep
@@ -49,9 +50,10 @@ principal_router = APIRouter(prefix="/oauth", tags=["oauth-connect"])
 class OAuthAuthorizeRequest(CustomOAuthAppFields):
     """Start a sign-in for one MCP instance or one catalog API.
 
-    ``auto`` uses the operator's platform app when one serves the provider, else
-    registers AgentArea with it (RFC 7591). ``custom`` uses an OAuth app the
-    workspace registered with the provider, and overrides either.
+    ``auto`` signs a connection connected with its own OAuth app in with that
+    app again; else it uses the operator's platform app when one serves the
+    provider, else registers AgentArea with it (RFC 7591). ``custom`` uses an
+    OAuth app the workspace registered with the provider, and overrides any.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -60,6 +62,9 @@ class OAuthAuthorizeRequest(CustomOAuthAppFields):
     catalog_item_id: UUID | None = Field(
         default=None,
         description="Catalog API to connect; the connection is created by this request.",
+    )
+    openapi_connection_id: UUID | None = Field(
+        default=None, description="API connection made from the catalog, to sign in again."
     )
     credential_mode: Literal["auto", "custom"] = "auto"
     scopes: list[str] | None = Field(
@@ -74,8 +79,11 @@ class OAuthAuthorizeRequest(CustomOAuthAppFields):
 
     @model_validator(mode="after")
     def validate_target_and_credentials(self) -> OAuthAuthorizeRequest:
-        if (self.instance_id is None) == (self.catalog_item_id is None):
-            raise ValueError("Pass exactly one of instance_id or catalog_item_id.")
+        targets = (self.instance_id, self.catalog_item_id, self.openapi_connection_id)
+        if sum(target is not None for target in targets) != 1:
+            raise ValueError(
+                "Pass exactly one of instance_id, catalog_item_id or openapi_connection_id."
+            )
         if self.credential_mode == "auto":
             if self.has_any_custom_credential():
                 raise ValueError(
@@ -88,7 +96,7 @@ class OAuthAuthorizeRequest(CustomOAuthAppFields):
 
 class OAuthAuthorizeResponse(BaseModel):
     authorize_url: str
-    # The MCP instance, or the API connection this request created.
+    # The MCP instance, or the API connection this request created or signs in again.
     connection_id: UUID
 
 
@@ -107,13 +115,16 @@ class OAuthPreflightResponse(BaseModel):
     """What the UI needs before it can offer Connect.
 
     ``ready`` — Connect runs unattended, with the client ``credential_source``
-    names: the operator's ``platform`` app, or one registered ``dynamic``-ally.
+    names: the operator's ``platform`` app, one registered ``dynamic``-ally, or
+    the ``custom`` app the connection was connected with, signed in with again.
     ``oauth_app_required`` — ask for a client ID/secret first.
     ``unsupported`` — this cannot be authorized with OAuth; ``detail`` says why.
     """
 
     status: Literal["ready", "oauth_app_required", "unsupported"]
-    credential_source: Literal["platform", "dynamic"] | None = None
+    credential_source: Literal["platform", "dynamic", "custom"] | None = None
+    # A ``custom`` app's client ID when it was typed in; never its secret.
+    client_id: str | None = None
     connected: bool
     detail: str = ""
     issuer: str | None = None
@@ -146,16 +157,23 @@ async def oauth_preflight(
     catalog_item_id: Annotated[
         UUID | None, Query(description="Catalog API to inspect before connecting it")
     ] = None,
+    openapi_connection_id: Annotated[
+        UUID | None, Query(description="API connection made from the catalog, to sign in again")
+    ] = None,
 ) -> OAuthPreflightResponse:
     """Report whether a connection can be authorized, and with what.
 
     Every outcome is a 200: "this server has no OAuth" is an answer the UI
     renders, not a failure it has to decode.
     """
-    if sum(target is not None for target in (instance_id, server_id, catalog_item_id)) != 1:
+    requested = (instance_id, server_id, catalog_item_id, openapi_connection_id)
+    if sum(target is not None for target in requested) != 1:
         raise HTTPException(
             status_code=422,
-            detail="Pass exactly one of instance_id, server_id or catalog_item_id.",
+            detail=(
+                "Pass exactly one of instance_id, server_id, catalog_item_id or "
+                "openapi_connection_id."
+            ),
         )
     target: PreflightTarget
     if instance_id is not None:
@@ -164,6 +182,8 @@ async def oauth_preflight(
         target = await MCPSpecTarget.load(server_id, user_context, db_session)
     elif catalog_item_id is not None:
         target = await CatalogItemTarget.load(catalog_item_id, user_context, db_session)
+    elif openapi_connection_id is not None:
+        target = await OpenAPIConnectionTarget.load(openapi_connection_id, user_context, db_session)
     else:
         raise HTTPException(status_code=422, detail="No target to inspect.")
 
@@ -171,6 +191,7 @@ async def oauth_preflight(
     return OAuthPreflightResponse(
         status=answer.status,
         credential_source=answer.credential_source,
+        client_id=answer.client_id,
         connected=answer.connected,
         detail=answer.detail,
         issuer=answer.issuer,
@@ -203,6 +224,10 @@ async def oauth_authorize(
         target = await MCPInstanceTarget.load(body.instance_id, user_context, db_session)
     elif body.catalog_item_id is not None:
         target = await CatalogItemTarget.load(body.catalog_item_id, user_context, db_session)
+    elif body.openapi_connection_id is not None:
+        target = await OpenAPIConnectionTarget.load(
+            body.openapi_connection_id, user_context, db_session
+        )
     else:
         raise HTTPException(status_code=422, detail="No target to authorize.")
 

@@ -24,6 +24,8 @@ _BIT_BY_PERMISSION = {
     "execute": "can_invoke",
     # Wiring a secret's value into a connection; reading the secret is not it.
     "use_secret": "can_use_secret",  # pragma: allowlist secret
+    # Calling through a connection; a personal one lists without being usable.
+    "use_connection": "can_use_connection",
     "operate": "can_read",
     "connect": "can_read",
     "edit": "can_write",

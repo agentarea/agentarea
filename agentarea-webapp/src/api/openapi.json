@@ -4212,6 +4212,19 @@
         "title": "CollectionUpdateRequest",
         "type": "object"
       },
+      "ConnectionSharingRequest": {
+        "properties": {
+          "shared": {
+            "title": "Shared",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "shared"
+        ],
+        "title": "ConnectionSharingRequest",
+        "type": "object"
+      },
       "ContentSafetyPolicy": {
         "additionalProperties": false,
         "description": "Content-safety governance controls.",
@@ -7741,6 +7754,11 @@
             "title": "Id",
             "type": "string"
           },
+          "is_owner": {
+            "default": false,
+            "title": "Is Owner",
+            "type": "boolean"
+          },
           "json_spec": {
             "additionalProperties": true,
             "title": "Json Spec",
@@ -7772,6 +7790,11 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "personal": {
+            "default": false,
+            "title": "Personal",
+            "type": "boolean"
           },
           "server_spec_id": {
             "title": "Server Spec Id",
@@ -9508,7 +9531,7 @@
       },
       "OAuthAuthorizeRequest": {
         "additionalProperties": false,
-        "description": "Start a sign-in for one MCP instance or one catalog API.\n\n``auto`` uses the operator's platform app when one serves the provider, else\nregisters AgentArea with it (RFC 7591). ``custom`` uses an OAuth app the\nworkspace registered with the provider, and overrides either.",
+        "description": "Start a sign-in for one MCP instance or one catalog API.\n\n``auto`` signs a connection connected with its own OAuth app in with that\napp again; else it uses the operator's platform app when one serves the\nprovider, else registers AgentArea with it (RFC 7591). ``custom`` uses an\nOAuth app the workspace registered with the provider, and overrides any.",
         "properties": {
           "catalog_item_id": {
             "anyOf": [
@@ -9596,6 +9619,19 @@
             ],
             "description": "MCP instance to sign in to.",
             "title": "Instance Id"
+          },
+          "openapi_connection_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "API connection made from the catalog, to sign in again.",
+            "title": "Openapi Connection Id"
           },
           "return_to": {
             "default": "",
@@ -9784,7 +9820,7 @@
         "type": "object"
       },
       "OAuthPreflightResponse": {
-        "description": "What the UI needs before it can offer Connect.\n\n``ready`` \u2014 Connect runs unattended, with the client ``credential_source``\nnames: the operator's ``platform`` app, or one registered ``dynamic``-ally.\n``oauth_app_required`` \u2014 ask for a client ID/secret first.\n``unsupported`` \u2014 this cannot be authorized with OAuth; ``detail`` says why.",
+        "description": "What the UI needs before it can offer Connect.\n\n``ready`` \u2014 Connect runs unattended, with the client ``credential_source``\nnames: the operator's ``platform`` app, one registered ``dynamic``-ally, or\nthe ``custom`` app the connection was connected with, signed in with again.\n``oauth_app_required`` \u2014 ask for a client ID/secret first.\n``unsupported`` \u2014 this cannot be authorized with OAuth; ``detail`` says why.",
         "properties": {
           "authorization_endpoint": {
             "anyOf": [
@@ -9797,6 +9833,17 @@
             ],
             "title": "Authorization Endpoint"
           },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
           "connected": {
             "title": "Connected",
             "type": "boolean"
@@ -9806,7 +9853,8 @@
               {
                 "enum": [
                   "platform",
-                  "dynamic"
+                  "dynamic",
+                  "custom"
                 ],
                 "type": "string"
               },
@@ -10120,6 +10168,11 @@
             "title": "Id",
             "type": "string"
           },
+          "is_owner": {
+            "default": false,
+            "title": "Is Owner",
+            "type": "boolean"
+          },
           "last_dispatch": {
             "anyOf": [
               {
@@ -10146,6 +10199,11 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "personal": {
+            "default": false,
+            "title": "Personal",
+            "type": "boolean"
           },
           "registry_item_id": {
             "anyOf": [
@@ -30364,6 +30422,80 @@
         ]
       }
     },
+    "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/sharing": {
+      "put": {
+        "description": "Share the connection with the workspace, or make it its owner's again.",
+        "operationId": "set_mcp_server_instance_sharing_v1_mcp_server_instances__instance_id__sharing_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instance_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Instance Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionSharingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPServerInstanceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Mcp Server Instance Sharing",
+        "tags": [
+          "v1",
+          "protected",
+          "mcp-server-instances"
+        ]
+      }
+    },
     "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/test-auth": {
       "post": {
         "description": "Test the authentication configuration attached to an MCP server instance.",
@@ -32422,6 +32554,25 @@
               "description": "Catalog API to inspect before connecting it",
               "title": "Catalog Item Id"
             }
+          },
+          {
+            "description": "API connection made from the catalog, to sign in again",
+            "in": "query",
+            "name": "openapi_connection_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "API connection made from the catalog, to sign in again",
+              "title": "Openapi Connection Id"
+            }
           }
         ],
         "responses": {
@@ -33075,6 +33226,80 @@
           }
         ],
         "summary": "Discover Tools",
+        "tags": [
+          "v1",
+          "protected",
+          "openapi-connections"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/openapi-connections/{connection_id}/sharing": {
+      "put": {
+        "description": "Share the connection with the workspace, or make it its owner's again.",
+        "operationId": "set_connection_sharing_v1_openapi_connections__connection_id__sharing_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Connection Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionSharingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAPIConnectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Connection Sharing",
         "tags": [
           "v1",
           "protected",

@@ -466,3 +466,43 @@ def test_spec_info_of_a_spec_without_info_or_servers():
         "version": None,
         "base_url": None,
     }
+
+
+def _mail_spec(transform: object) -> dict:
+    return {
+        "openapi": "3.0.0",
+        "info": {"title": "Mail", "version": "1"},
+        "paths": {
+            "/send": {
+                "post": {
+                    "operationId": "send",
+                    "x-agentarea-request-transform": transform,
+                    "requestBody": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {"to": {"type": "string"}},
+                                }
+                            }
+                        }
+                    },
+                }
+            }
+        },
+    }
+
+
+def test_a_request_transform_is_carried_to_the_operation():
+    [op] = parse_openapi_operations(_mail_spec([{"build": "rfc822", "into": "raw"}]))
+
+    assert op["request_transform"] == [{"build": "rfc822", "into": "raw"}]
+
+
+def test_an_operation_without_a_request_transform_has_none():
+    assert all(op["request_transform"] == [] for op in parse_openapi_operations(SAMPLE_SPEC))
+
+
+def test_a_malformed_request_transform_is_refused_at_parse():
+    with pytest.raises(ValueError, match="request transform"):
+        parse_openapi_operations(_mail_spec([{"build": "mime", "into": "raw"}]))

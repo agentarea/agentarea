@@ -112,6 +112,37 @@ class ClientService:
             raise NotFoundError(f"{label} not found")
         return record_uuid
 
+    async def _usable_connection(
+        self,
+        repository_class: Callable[[AsyncSession, UserContext], WorkspaceScopedRepository[Any]],
+        record_id: UUID | str,
+        label: str,
+        kind: str,
+    ) -> UUID:
+        """A connection the caller may lend: a client calls through it as anyone running it."""
+        from agentarea_common.auth.permission import PermissionService
+        from agentarea_common.constants import MANAGED_BY_PLATFORM
+        from agentarea_common.di.container import resolve
+
+        try:
+            record_uuid = UUID(str(record_id))
+        except ValueError:
+            raise NotFoundError(f"{label} not found") from None
+        repository = repository_class(self.repository.session, self.repository.user_context)
+        record = await repository.get_by_id(record_uuid)
+        if record is None:
+            raise NotFoundError(f"{label} not found")
+        if getattr(record, "managed_by", None) != MANAGED_BY_PLATFORM and not await resolve(
+            PermissionService
+        ).check(
+            self.repository.user_context.graph_subject, "use_connection", kind, str(record_uuid)
+        ):
+            raise PermissionError(
+                f"This {label} is someone else's personal connection; its owner can share it "
+                "with the workspace."
+            )
+        return record_uuid
+
     async def _client_id(self, client_id: UUID | str) -> UUID:
         return await self._in_workspace(ClientRepository, client_id, "Client")
 
@@ -133,7 +164,9 @@ class ClientService:
     ) -> None:
         await self.repository.add_mcp_instance(
             await self._client_id(client_id),
-            await self._in_workspace(MCPServerInstanceRepository, mcp_instance_id, "MCP instance"),
+            await self._usable_connection(
+                MCPServerInstanceRepository, mcp_instance_id, "MCP instance", "mcp_instance"
+            ),
             namespace_prefix,
             allowed_tools,
         )
@@ -157,8 +190,11 @@ class ClientService:
 
         await self.repository.add_openapi_connection(
             await self._client_id(client_id),
-            await self._in_workspace(
-                OpenAPIConnectionRepository, connection_id, "OpenAPI connection"
+            await self._usable_connection(
+                OpenAPIConnectionRepository,
+                connection_id,
+                "OpenAPI connection",
+                "openapi_connection",
             ),
             namespace_prefix,
             allowed_tools,

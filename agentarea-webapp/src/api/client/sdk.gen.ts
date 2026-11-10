@@ -869,6 +869,12 @@ import type {
   SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostData,
   SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostErrors,
   SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostResponses,
+  SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutData,
+  SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutErrors,
+  SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutResponses,
+  SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutData,
+  SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutErrors,
+  SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutResponses,
   StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostData,
   StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostErrors,
   StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses,
@@ -6373,6 +6379,42 @@ export const probeInstanceAuthV1McpServerInstancesInstanceIdProbePost = <
   });
 
 /**
+ * Set Mcp Server Instance Sharing
+ *
+ * Share the connection with the workspace, or make it its owner's again.
+ */
+export const setMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPut =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutResponses,
+    SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).put<
+      SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutResponses,
+      SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/sharing",
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
+
+/**
  * Run Test Auth
  *
  * Test the authentication configuration attached to an MCP server instance.
@@ -7627,6 +7669,43 @@ export const discoverToolsV1OpenapiConnectionsConnectionIdDiscoverToolsPost = <
     ],
     url: "/v1/workspaces/{workspace}/openapi-connections/{connection_id}/discover-tools",
     ...options,
+  });
+
+/**
+ * Set Connection Sharing
+ *
+ * Share the connection with the workspace, or make it its owner's again.
+ */
+export const setConnectionSharingV1OpenapiConnectionsConnectionIdSharingPut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutData,
+    ThrowOnError
+  >
+): RequestResult<
+  SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutResponses,
+  SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutResponses,
+    SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/openapi-connections/{connection_id}/sharing",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**
