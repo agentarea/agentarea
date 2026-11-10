@@ -97,14 +97,14 @@ async def named_secret_for_use(
 
 
 async def _require_usable(user_context: UserContext, secret: EncryptedSecret) -> EncryptedSecret:
-    """``can_use_secret`` on the secret: its creator, a workspace admin, or a grantee."""
+    """``can_use_secret`` on the secret: its creator or a workspace admin."""
     allowed = await resolve(PermissionService).check(
         user_context.graph_subject, USE_SECRET, "secret", str(secret.id)
     )
     if not allowed:
         raise SecretAccessDeniedError(
-            f"You may not use secret '{secret.secret_name}': it is used by its creator, "
-            "a workspace admin, or someone it is shared with."
+            f"You may not use secret '{secret.secret_name}': it is used by its creator "
+            "or a workspace admin."
         )
     return secret
 

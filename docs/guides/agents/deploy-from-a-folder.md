@@ -134,9 +134,11 @@ into `${setup.<key>}`.
     `${secret.<name>}` must be the whole value — put a prefix such as
     `Bearer ` into the secret itself. The secret must already exist in the
     workspace (create it on the Secrets page or with `POST /v1/workspaces/<workspace>/secrets`), and you must be allowed
-    to use it: its creator, a workspace admin, or someone it was shared with.
+    to use it: its creator or a workspace admin.
     Otherwise the plan blocks naming the binding, and the plan shows each
-    reference as `<name> from secret '<secret>'`.
+    reference as `<name> from secret '<secret>' to <host>`, the host the
+    value is sent to. A secret reference anywhere else in the server's spec
+    blocks the plan.
 
     A server that is not in the catalog takes its spec instead:
 

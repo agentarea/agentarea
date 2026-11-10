@@ -14,6 +14,7 @@ import json
 from collections.abc import Awaitable, Callable, Collection
 from dataclasses import dataclass
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 import yaml
 from agentarea_agents.application.skill_parser import SkillParser
@@ -24,6 +25,7 @@ from agentarea_governance.domain.rules import (
     PolicySubjectType,
     assert_enforceable,
 )
+from agentarea_mcp.domain.secret_refs import carries_secret_ref
 from pydantic import BaseModel, ValidationError
 
 from agentarea_bundles.schemas.bundle import (
@@ -428,6 +430,15 @@ def mcp_is_unsupported(mcp: BundleMcp) -> str | None:
     return None
 
 
+def _secret_destination(mcp: BundleMcp) -> str:
+    """The host a bound secret is sent to, for the plan to name."""
+    spec = mcp.json_spec or {}
+    url = spec.get("endpoint_url") or spec.get("url")
+    if isinstance(url, str) and (host := urlsplit(url).hostname):
+        return host
+    return f"catalog server '{mcp.catalog}'" if mcp.catalog else "a local server"
+
+
 def _json_spec_setup_refs(json_spec: dict[str, Any] | None) -> list[str]:
     """Setup keys referenced from the transport values the installer resolves."""
     if not json_spec:
@@ -822,7 +833,9 @@ class BundleAnalyzer:
             for env_name, ref in mcp.bindings.items():
                 secret_name = secret_binding(ref)
                 if secret_name is not None:
-                    secret_refs.append(f"{env_name} from secret '{secret_name}'")
+                    secret_refs.append(
+                        f"{env_name} from secret '{secret_name}' to {_secret_destination(mcp)}"
+                    )
                     problem = (
                         await self._checks.secret_problem(secret_name)
                         if self._checks is not None
@@ -870,6 +883,17 @@ class BundleAnalyzer:
                                 entity_key=mcp.key,
                             )
                         )
+            if carries_secret_ref(mcp.json_spec):
+                issues.append(
+                    PreviewIssue(
+                        severity=IssueSeverity.BLOCK,
+                        message=(
+                            f"mcp '{mcp.key}' json_spec may not hold a secret reference; "
+                            "bind it: ${secret.<name>}"
+                        ),
+                        entity_key=mcp.key,
+                    )
+                )
             for key in _json_spec_setup_refs(mcp.json_spec):
                 if key not in setup_keys:
                     issues.append(

@@ -1114,7 +1114,7 @@ async def test_a_secret_binding_is_planned_as_a_reference():
     assert preview.installable is True
     assert checks.secrets_asked == ["gh-token"]
     (mcp,) = [e for e in preview.entities if e.key == "gh"]
-    assert mcp.detail == "Authorization from secret 'gh-token'"
+    assert mcp.detail == "Authorization from secret 'gh-token' to api.example.com"
     assert preview.setup == []
 
 
@@ -1126,6 +1126,20 @@ async def test_a_secret_the_deployer_may_not_use_blocks():
     assert _blocks(preview) == {
         ("gh", "mcp 'gh' binding 'Authorization' is refused: you may not use it")
     }
+
+
+async def test_a_secret_reference_in_the_spec_itself_blocks():
+    source = SECRET_BOUND.replace(
+        'endpoint_url: "https://api.example.com/mcp"}',
+        'endpoint_url: "https://api.example.com/mcp", headers: {X-Key: {secret_name: gh-token}}}',
+    )
+    preview = await BundleAnalyzer(checks=_Checks()).analyze(parse_bundle(source))
+
+    assert preview.installable is False
+    assert (
+        "gh",
+        "mcp 'gh' json_spec may not hold a secret reference; bind it: ${secret.<name>}",
+    ) in _blocks(preview)
 
 
 async def test_a_secret_reference_inside_a_longer_value_blocks():
