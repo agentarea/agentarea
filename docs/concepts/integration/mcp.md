@@ -46,6 +46,32 @@ one workspace. It points at a spec via `server_spec_id`, carries its own
 `verification` record, the discovered `tools`, a `network_scope`, an optional
 `auth_config_id`, and `last_used_at`.
 
+### Credentials: copied, or referenced
+
+A value in an instance's `environment` or `headers` is either written into the
+instance itself or names a workspace secret. A literal marked secret is copied
+into a secret the instance owns, `mcp_instance_<id>_<NAME>`, and only its name
+stays in `json_spec.env_vars`. A reference stays in `json_spec` as
+`{"secret_name": "<workspace secret>"}`; nothing is copied, and reading the
+instance returns the reference, never the value.
+
+A reference is authorized when it is attached, the way a cloud role is passed
+to a service: creating or updating the instance requires
+[`can_use_secret`](/reference/authorization-model) on that secret, and the
+request is refused with 403 otherwise. Only an instance may hold a reference:
+a server spec is shared by every instance built from it and editable by anyone
+with edit on it, so a spec carrying a reference is refused, and changing a
+spec's endpoint, image or command takes `can_use_secret` on every secret its
+instances reference. When the server starts — or, for a URL
+server, on each request — the value is read from the instance's own workspace,
+so a rotated secret reaches the next start. Only a user secret of that
+workspace resolves, never a connection's own credential. A secret that is gone
+or empty fails the start, or records a failed verification naming the header
+and the secret, instead of passing an empty value. Revoking someone's access later does
+not detach a reference they made; remove the reference to cut it. The instance
+is registered as the secret's consumer, so the secret cannot be deleted while
+the instance uses it.
+
 ### Three hosting shapes
 
 | `type` | What runs | Endpoint |

@@ -32,6 +32,7 @@ from agentarea_mcp.application.service import MCPServerInstanceService, derive_b
 from agentarea_mcp.application.validation_service import MCPValidationError
 from agentarea_mcp.domain.env_schema import normalize_env_schema
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea_mcp.domain.secret_refs import is_secret_ref
 from agentarea_mcp.domain.transport import CONTAINER_TRANSPORTS, MCPTransport
 from agentarea_mcp.package_import import MCPRuntimeRetirementError
 from agentarea_mcp.schemas.dto import (
@@ -103,7 +104,9 @@ class MCPServerInstanceResponse(BaseModel):
             values = json_spec.get(field_name)
             if isinstance(values, dict):
                 masked_values = {
-                    name: masked_value if name in secret_names else value
+                    name: masked_value
+                    if name in secret_names and not is_secret_ref(value)
+                    else value
                     for name, value in values.items()
                 }
                 for name in listed_secret_names:
@@ -764,6 +767,8 @@ async def update_mcp_server_instance(
         instance = await service.update_instance(instance_id, data)
     except MCPValidationError as exc:
         raise HTTPException(status_code=422, detail={"errors": exc.errors}) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except MCPRuntimeRetirementError as exc:
         raise HTTPException(
             status_code=exc.status_code,

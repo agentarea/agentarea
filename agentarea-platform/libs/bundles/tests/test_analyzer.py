@@ -541,8 +541,17 @@ async def test_a_first_install_requires_every_required_field():
 
 class _Checks:
     def __init__(
-        self, bad_models=(), bad_toolsets=(), bad_crons=(), denied=(), catalog=None, bad_clients=()
+        self,
+        bad_models=(),
+        bad_toolsets=(),
+        bad_crons=(),
+        denied=(),
+        catalog=None,
+        bad_clients=(),
+        secret_problems=None,
     ):
+        self.secret_problems = secret_problems or {}
+        self.secrets_asked = []
         self.bad_models = set(bad_models)
         self.bad_clients = set(bad_clients)
         self.bad_toolsets = set(bad_toolsets)
@@ -570,6 +579,10 @@ class _Checks:
 
     async def may_edit(self, kind, entity_id):
         return entity_id not in self.denied
+
+    async def secret_problem(self, secret_name):
+        self.secrets_asked.append(secret_name)
+        return self.secret_problems.get(secret_name)
 
 
 def _blocks(preview):
@@ -1080,3 +1093,58 @@ async def test_the_plan_digest_never_carries_a_secret_value():
     a = await BundleAnalyzer(setup_values={"bot": "secret-a"}).analyze(pkg)
     b = await BundleAnalyzer(setup_values={"bot": "secret-b"}).analyze(pkg)
     assert a.plan_digest == b.plan_digest
+
+
+SECRET_BOUND = """
+schema_version: "0.1.0"
+name: p
+mcps:
+  - key: gh
+    name: GitHub
+    json_spec: {type: url, endpoint_url: "https://api.example.com/mcp"}
+    bindings: {Authorization: "${secret.gh-token}"}
+agents: [{key: lead, name: Lead, model: gpt-4o, mcps: [gh]}]
+"""
+
+
+async def test_a_secret_binding_is_planned_as_a_reference():
+    checks = _Checks()
+    preview = await BundleAnalyzer(checks=checks).analyze(parse_bundle(SECRET_BOUND))
+
+    assert preview.installable is True
+    assert checks.secrets_asked == ["gh-token"]
+    (mcp,) = [e for e in preview.entities if e.key == "gh"]
+    assert mcp.detail == "Authorization from secret 'gh-token' to api.example.com"
+    assert preview.setup == []
+
+
+async def test_a_secret_the_deployer_may_not_use_blocks():
+    checks = _Checks(secret_problems={"gh-token": "is refused: you may not use it"})
+    preview = await BundleAnalyzer(checks=checks).analyze(parse_bundle(SECRET_BOUND))
+
+    assert preview.installable is False
+    assert _blocks(preview) == {
+        ("gh", "mcp 'gh' binding 'Authorization' is refused: you may not use it")
+    }
+
+
+async def test_a_secret_reference_in_the_spec_itself_blocks():
+    source = SECRET_BOUND.replace(
+        'endpoint_url: "https://api.example.com/mcp"}',
+        'endpoint_url: "https://api.example.com/mcp", headers: {X-Key: {secret_name: gh-token}}}',
+    )
+    preview = await BundleAnalyzer(checks=_Checks()).analyze(parse_bundle(source))
+
+    assert preview.installable is False
+    assert (
+        "gh",
+        "mcp 'gh' json_spec may not hold a secret reference; bind it: ${secret.<name>}",
+    ) in _blocks(preview)
+
+
+async def test_a_secret_reference_inside_a_longer_value_blocks():
+    source = SECRET_BOUND.replace('"${secret.gh-token}"', '"Bearer ${secret.gh-token}"')
+    preview = await BundleAnalyzer(checks=_Checks()).analyze(parse_bundle(source))
+
+    (issue,) = preview.block_issues
+    assert "must be ${secret.<name>} alone" in issue.message

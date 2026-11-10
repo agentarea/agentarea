@@ -89,7 +89,7 @@ func (p *BackendProvider) CreateInstance(ctx context.Context, instance *models.M
 	p.logger.Info("Creating Kubernetes instance via backend",
 		slog.String("instance_id", instance.InstanceID),
 		slog.String("name", instance.Name))
-	spec, err := BuildBackendInstanceSpec(instance, p.secrets)
+	spec, err := BuildBackendInstanceSpec(ctx, instance, p.secrets, p.logger)
 	if err != nil {
 		return err
 	}
@@ -168,14 +168,14 @@ func (p *BackendProvider) DeleteInstance(ctx context.Context, instanceID, name s
 
 // BuildBackendInstanceSpec resolves an instance's environment and converts its
 // JSON specification to the backend shape used by container providers.
-func BuildBackendInstanceSpec(instance *models.MCPServerInstance, resolver secrets.SecretResolver) (*BackendInstanceSpec, error) {
+func BuildBackendInstanceSpec(ctx context.Context, instance *models.MCPServerInstance, resolver secrets.SecretResolver, logger *slog.Logger) (*BackendInstanceSpec, error) {
 	if instance == nil {
 		return nil, fmt.Errorf("MCP instance is required")
 	}
 	if err := refuseStdioImage(instance.JSONSpec); err != nil {
 		return nil, err
 	}
-	resolvedJSON, err := resolveInstanceSpecSecrets(resolver, instance.InstanceID, instance.JSONSpec)
+	resolvedJSON, err := resolveInstanceSpecSecrets(ctx, resolver, logger, instance)
 	if err != nil {
 		return nil, err
 	}

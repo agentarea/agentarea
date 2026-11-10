@@ -14,9 +14,12 @@ from uuid import uuid4
 import pytest
 from agentarea_api.api.v1._stream_sources import create_source, release_source
 from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.permission import PermissionService
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config.streams import EventStreamSettings
+from agentarea_common.di.container import register_singleton
+from agentarea_common.testing import GrantedPermissions, install_graph_ownership_stub
 from agentarea_secrets.catalog_service import SecretCatalogService, SecretInUseError
 from agentarea_secrets.database_secret_manager import DatabaseSecretManager
 from agentarea_streams.application.source_credentials import read_source_credentials
@@ -67,7 +70,10 @@ async def _ensure_source_type(session: AsyncSession, slug: str) -> None:
     )
 
 
-async def test_a_picked_secret_is_resolved_at_use_and_cannot_be_deleted_while_in_use():
+async def test_a_picked_secret_is_resolved_at_use_and_cannot_be_deleted_while_in_use(
+    monkeypatch,
+):
+    install_graph_ownership_stub(monkeypatch)
     engine = create_async_engine(TEST_DATABASE_URL)
     maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     ctx = UserContext(user_id="u", workspace_id=str(uuid4()))
@@ -79,6 +85,9 @@ async def test_a_picked_secret_is_resolved_at_use_and_cannot_be_deleted_while_in
             catalog = SecretCatalogService(session, ctx, manager)
             await _ensure_source_type(session, "github")
             secret = await catalog.create_user_secret("gh-hook", "the-value")
+            register_singleton(
+                PermissionService, GrantedPermissions(("User:u", "use_secret", str(secret.id)))
+            )
             service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
             stream = await service.create_stream(name="github", description="")
             await session.commit()

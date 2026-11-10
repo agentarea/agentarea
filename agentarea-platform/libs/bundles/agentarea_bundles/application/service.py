@@ -107,13 +107,23 @@ class BundleService:
     ) -> ImportPreview:
         """Load an agent folder into a package and produce an import preview."""
         package, folder_issues = await asyncio.to_thread(load_folder, files)
-        preview = await self.analyze_bundle(package, setup_values)
+        preview = await self.analyze_bundle(package, setup_values, report_missing_setup=True)
         preview.issues = [*folder_issues, *preview.issues]
         return preview
 
     async def analyze_bundle(
-        self, package: Bundle, setup_values: dict[str, Any] | None = None
+        self,
+        package: Bundle,
+        setup_values: dict[str, Any] | None = None,
+        *,
+        report_missing_setup: bool = False,
     ) -> ImportPreview:
+        """Plan the install; ``report_missing_setup`` also blocks on required setup with no value.
+
+        A folder deploy is given its setup values up front, so a dry run says
+        what is missing rather than install refusing it. The webapp's import
+        asks for them after the first analyze, so it does not set it.
+        """
         prior, unreadable = await self._prior(package.name)
         if unreadable is not None:
             return ImportPreview(
@@ -122,7 +132,17 @@ class BundleService:
         analyzer = BundleAnalyzer(
             existence=self, prior=prior, setup_values=setup_values, checks=self
         )
-        return await analyzer.analyze(package)
+        preview = await analyzer.analyze(package)
+        if report_missing_setup:
+            missing = required_setup_errors(
+                package,
+                effective_setup(package, setup_values or {}, prior),
+                analyzer.needed_setup,
+            )
+            if missing:
+                preview.issues = [*preview.issues, *missing]
+                preview.installable = False
+        return preview
 
     async def _prior(self, name: str) -> tuple[PriorInstall | None, PreviewIssue | None]:
         """The last install of this package in the workspace, the base a redeploy diffs on.
@@ -320,6 +340,20 @@ class BundleService:
                 found = CatalogMcp(spec_id=str(spec.id), transport=transport)
             self._catalog_mcps[catalog_id] = found
         return self._catalog_mcps[catalog_id]
+
+    async def secret_problem(self, secret_name: str) -> str | None:
+        """Why the deploying caller may not reference ``secret_name``, the check
+        creating the MCP instance makes; None when it may.
+        """
+        from agentarea_mcp.application.validation_service import MCPValidationError
+
+        try:
+            await self._mcp_instance_service.assert_may_use_secret_refs({secret_name: secret_name})
+        except MCPValidationError as exc:
+            return f"is refused: {'; '.join(exc.errors)}"
+        except PermissionError as exc:
+            return f"is refused: {exc}"
+        return None
 
     async def agent_problem(
         self, agent: BundleAgent, model_id: str, client_id: str | None

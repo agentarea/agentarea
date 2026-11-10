@@ -15,7 +15,9 @@ Design notes:
   ``url``) — no second schema.
   ``args`` and ``endpoint_url`` may contain ``${setup.<key>}`` references;
   ``environment`` / ``headers`` hold literal non-secret configuration, while
-  credentials go through ``bindings``. A URL MCP's ``context_secret`` is a
+  credentials go through ``bindings``: a ``${setup.<key>}`` reference, or
+  ``${secret.<name>}`` naming a workspace secret the instance references, never
+  copies. A URL MCP's ``context_secret`` is a
   ``${setup.<key>}`` reference to a secret setup field, like a binding.
 """
 
@@ -37,6 +39,9 @@ SCHEMA_VERSION = "0.1.0"
 # ${setup.<key>} placeholder, e.g. "Bearer ${setup.github_token}"
 _PLACEHOLDER_RE = re.compile(r"\$\{setup\.([a-zA-Z0-9_]+)\}")
 
+# ${secret.<name>}: a whole binding value naming a workspace secret.
+_SECRET_REF_RE = re.compile(r"\$\{secret\.([a-zA-Z0-9_-]+)\}")
+
 _KEY_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*$")
 # Entity keys are never interpolated, so they may carry dashes like file names do.
 _ENTITY_KEY_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]*$")
@@ -52,6 +57,16 @@ def setup_refs(value: Any) -> list[str]:
     if not isinstance(value, str):
         return []
     return _PLACEHOLDER_RE.findall(value)
+
+
+def secret_binding(value: str) -> str | None:
+    """The workspace secret a binding references with ``${secret.<name>}``, else None."""
+    match = _SECRET_REF_RE.fullmatch(value.strip())
+    return match.group(1) if match else None
+
+
+def mentions_secret(value: str) -> bool:
+    return "${secret." in value
 
 
 def resolve_placeholders(value: str, setup_values: dict[str, Any]) -> str:

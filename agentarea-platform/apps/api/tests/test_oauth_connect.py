@@ -16,12 +16,12 @@ from agentarea_api.api.v1.oauth_connect import OAuthAuthorizeRequest, OAuthFinis
 from agentarea_api.oauth_connect import pages, service, targets
 from agentarea_api.oauth_connect import state as oauth_state
 from agentarea_api.oauth_connect.state import OAuthState, ReturnedFlow
-from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
-from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.auth.permission import PermissionService
 from agentarea_common.config.mcp import MCPSettings
 from agentarea_common.di.container import register_singleton
 from agentarea_common.exceptions import AppError
+from agentarea_common.testing import GrantedPermissions
 from agentarea_common.testing.flows import MainFlow
 from agentarea_mcp.application import platform_oauth_app
 from agentarea_mcp.application.auth_service import OAuthCodeExchangeError
@@ -536,7 +536,6 @@ async def test_authorize_with_a_custom_oauth_app_keeps_the_secret_out_of_state(
 async def test_authorize_refuses_another_members_secret_as_the_client_id(monkeypatch):
     """The client ID is echoed back inside the authorize URL, so selecting
     someone else's secret here would hand its plaintext to the caller."""
-    register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
     instance = _patch_instance_lookup(monkeypatch)
     _patch_discovery(monkeypatch, _google_metadata())
     member_b = UserContext(user_id="member-b", workspace_id="ws", admin_workspaces=[])
@@ -546,6 +545,10 @@ async def test_authorize_refuses_another_members_secret_as_the_client_id(monkeyp
         owner_type=None,
         owner_id=None,
         created_by="member-a",
+    )
+    register_singleton(
+        PermissionService,
+        GrantedPermissions(("User:member-a", "use_secret", str(secret.id))),
     )
     session = AsyncMock()
     session.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: secret)

@@ -15,7 +15,10 @@ from agentarea_common.auth import UserContext
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.base.models import BaseModel
+from agentarea_common.auth.permission import PermissionService
 from agentarea_common.di.container import register_singleton
+from agentarea_common.rebac.ownership import root_project_id
+from agentarea_common.testing import RecordingGraph, install_graph_ownership_stub
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_secrets.catalog_service import (
     SURFACED_OWNER_TYPES,
@@ -44,6 +47,35 @@ pytestmark = pytest.mark.skipif(
 _PREFIX = f"catalog-test-{os.getenv('PYTEST_XDIST_WORKER', 'main')}-"
 WORKSPACE = f"{_PREFIX}ws"
 OTHER_WORKSPACE = f"{_PREFIX}other-ws"
+
+
+# Who administers which workspace, as the graph's admin-from-workspace path sees it.
+_ADMINS = {"User:admin": WORKSPACE, "User:other-admin": OTHER_WORKSPACE}
+
+
+class _SecretGraph:
+    """Answers ``use_secret`` as the model does, from the tuples the catalog wrote."""
+
+    def __init__(self, graph: RecordingGraph) -> None:
+        self.graph = graph
+
+    async def check(self, subject: str, permission: str, resource_type: str, resource_id: str):
+        assert (permission, resource_type) == ("use_secret", "secret")
+        tuples = [t for t in self.graph.recorded if t.object == resource_id]
+        if any(t.subject_id == subject and t.relation in ("manager", "secret_user") for t in tuples):
+            return True
+        admin_of = _ADMINS.get(subject)
+        return admin_of is not None and any(
+            t.relation == "project" and t.subject_id == f"project:{root_project_id(admin_of)}"
+            for t in tuples
+        )
+
+
+@pytest.fixture(autouse=True)
+def graph(monkeypatch) -> RecordingGraph:
+    recording = install_graph_ownership_stub(monkeypatch)
+    register_singleton(PermissionService, _SecretGraph(recording))
+    return recording
 
 
 @pytest.fixture
@@ -286,8 +318,8 @@ class TestSelectingASecretForUse:
 
     An OAuth client ID lands in the authorize URL handed back to the caller; a
     channel password goes to whatever IMAP host the trigger names. Being in the
-    workspace is therefore not enough: only the secret's creator, or someone
-    who administers the workspace, may put it to use.
+    workspace is therefore not enough: the graph's ``can_use_secret`` decides,
+    which the creator, a workspace admin and an explicit ``secret_user`` hold.
     """
 
     @pytest.fixture(autouse=True)
@@ -320,7 +352,7 @@ class TestSelectingASecretForUse:
 
     async def test_admin_of_another_workspace_is_refused(self, session: AsyncSession) -> None:
         secret = await self._created_by_member_a(session)
-        elsewhere = _catalog(session, user_id="admin", admin_workspaces=[OTHER_WORKSPACE])
+        elsewhere = _catalog(session, user_id="other-admin", admin_workspaces=[OTHER_WORKSPACE])
 
         with pytest.raises(SecretAccessDeniedError):
             await elsewhere.get_for_use(secret.id)
@@ -350,6 +382,92 @@ class TestSelectingASecretForUse:
 
         with pytest.raises(SecretNotFoundError):
             await theirs.get_for_use(secret.id)
+
+    async def test_by_name_another_member_is_refused(self, session: AsyncSession) -> None:
+        secret = await self._created_by_member_a(session)
+        member_b = _catalog(session, user_id="member-b", admin_workspaces=[])
+
+        with pytest.raises(SecretAccessDeniedError):
+            await member_b.get_named_for_use(secret.secret_name)
+
+    async def test_by_name_the_creator_and_an_admin_may_use_it(
+        self, session: AsyncSession
+    ) -> None:
+        secret = await self._created_by_member_a(session)
+        member_a = _catalog(session, user_id="member-a", admin_workspaces=[])
+        admin = _catalog(session, user_id="admin", admin_workspaces=[WORKSPACE])
+
+        assert (await member_a.get_named_for_use(secret.secret_name)).id == secret.id
+        assert (await admin.get_named_for_use(secret.secret_name)).id == secret.id
+
+    async def test_by_name_another_workspace_cannot_find_it(self, session: AsyncSession) -> None:
+        secret = await self._created_by_member_a(session)
+        theirs = _catalog(session, OTHER_WORKSPACE, user_id="member-a", admin_workspaces=[])
+
+        with pytest.raises(SecretNotFoundError):
+            await theirs.get_named_for_use(secret.secret_name)
+
+    async def test_by_name_a_managed_secret_is_refused(self, session: AsyncSession) -> None:
+        name = f"mcp_instance_{uuid.uuid4()}_API_KEY"
+        session.add(
+            EncryptedSecret(
+                id=uuid.uuid4(),
+                workspace_id=WORKSPACE,
+                secret_name=name,
+                encrypted_value="ciphertext",
+                owner_type="mcp_instance",
+                owner_id=str(uuid.uuid4()),
+                created_by="admin",
+            )
+        )
+        await session.commit()
+        admin = _catalog(session, user_id="admin", admin_workspaces=[WORKSPACE])
+
+        with pytest.raises(ManagedSecretError):
+            await admin.get_named_for_use(name)
+
+
+class TestSecretInTheGraph:
+    async def test_creating_one_makes_the_creator_its_manager_under_the_root_project(
+        self, session: AsyncSession, graph: RecordingGraph
+    ) -> None:
+        secret = await _catalog(session, user_id="member-a").create_user_secret(
+            "graph-key", "value-1234", None
+        )
+
+        on_secret = {(t.relation, t.subject_id) for t in graph.recorded if t.object == str(secret.id)}
+        assert ("project", f"project:{root_project_id(WORKSPACE)}") in on_secret
+        assert ("manager", "User:member-a") in on_secret
+
+    async def test_a_secret_user_grant_lets_another_member_use_it(
+        self, session: AsyncSession, graph: RecordingGraph
+    ) -> None:
+        from agentarea_common.rebac.models import RelationTuple
+
+        secret = await _catalog(session, user_id="member-a").create_user_secret(
+            "shared-key", "value-1234", None
+        )
+        await graph.write_tuple(
+            RelationTuple(
+                namespace="resource",
+                object=str(secret.id),
+                relation="secret_user",
+                subject_id="User:member-b",
+            )
+        )
+
+        member_b = _catalog(session, user_id="member-b", admin_workspaces=[])
+        assert (await member_b.get_named_for_use("shared-key")).id == secret.id
+
+    async def test_deleting_it_removes_its_tuples(
+        self, session: AsyncSession, graph: RecordingGraph
+    ) -> None:
+        catalog = _catalog(session, user_id="member-a")
+        secret = await catalog.create_user_secret("gone-key", "value-1234", None)
+
+        await catalog.delete_user_secret(secret.id)
+
+        assert not [t for t in graph.recorded if t.object == str(secret.id)]
 
 
 class TestWorkspaceIsolation:
@@ -494,3 +612,32 @@ class TestRotate:
         await catalog.rotate_user_secret(secret.id, "new-value-bbbb")
 
         assert [c.consumer_id for c in await catalog.consumers(secret.id)] == [consumer_id]
+
+
+class TestSecretOwnersGraphMigration:
+    async def test_a_secret_made_before_gets_its_creator_and_project_and_repeats_harmlessly(
+        self, session: AsyncSession, graph: RecordingGraph
+    ) -> None:
+        from agentarea_secrets.graph_migrations import grant_secret_owners
+
+        legacy = EncryptedSecret(
+            id=uuid.uuid4(),
+            workspace_id=WORKSPACE,
+            secret_name="legacy-key",  # pragma: allowlist secret
+            encrypted_value="ciphertext",
+            created_by="member-a",
+        )
+        session.add(legacy)
+        await session.commit()
+
+        async def provider():
+            return graph
+
+        await grant_secret_owners(session, provider)
+        on_legacy = [(t.relation, t.subject_id) for t in graph.recorded if t.object == str(legacy.id)]
+        assert ("project", f"project:{root_project_id(WORKSPACE)}") in on_legacy
+        assert ("manager", "User:member-a") in on_legacy
+        member_a = _catalog(session, user_id="member-a", admin_workspaces=[])
+        assert (await member_a.get_named_for_use("legacy-key")).id == legacy.id
+
+        await grant_secret_owners(session, provider)

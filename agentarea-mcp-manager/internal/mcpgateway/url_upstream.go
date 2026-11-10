@@ -1,6 +1,7 @@
 package mcpgateway
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/agentarea/mcp-manager/internal/egress"
+	"github.com/agentarea/mcp-manager/internal/secrets"
 )
 
 const managedByPlatform = "platform"
@@ -22,7 +24,7 @@ var forwardedURLHeaders = map[string]bool{"Accept": true, "Content-Type": true, 
 // serveURL proxies to a URL MCP server. There is no workload, so nothing here
 // touches the lifecycle; the instance's credentials are added on the way out
 // and never leave this process otherwise.
-func (g *Gateway) serveURL(response http.ResponseWriter, request *http.Request, instanceID string, server *URLServer) {
+func (g *Gateway) serveURL(response http.ResponseWriter, request *http.Request, instanceID, workspaceID string, server *URLServer) {
 	if server.AuthConfigID != "" {
 		http.Error(response, "MCP instance authenticates through an auth config, which the gateway does not resolve", http.StatusConflict)
 		return
@@ -36,7 +38,7 @@ func (g *Gateway) serveURL(response http.ResponseWriter, request *http.Request, 
 		http.Error(response, "MCP instance has no http(s) endpoint_url", http.StatusBadGateway)
 		return
 	}
-	headers, err := g.urlHeaders(instanceID, server)
+	headers, err := g.urlHeaders(request.Context(), instanceID, workspaceID, server)
 	if err != nil {
 		g.logger.Error("MCP instance credentials could not be resolved", slog.String("instance_id", instanceID), slog.String("error", err.Error()))
 		http.Error(response, "MCP instance credentials could not be resolved", http.StatusBadGateway)
@@ -82,12 +84,12 @@ func (g *Gateway) serveURL(response http.ResponseWriter, request *http.Request, 
 	proxy.ServeHTTP(response, request)
 }
 
-// urlHeaders mirrors MCPServerInstanceService._outbound_headers: the plain
-// headers, then every secret the instance names, which wins over a plain one.
-func (g *Gateway) urlHeaders(instanceID string, server *URLServer) (map[string]string, error) {
-	headers := make(map[string]string, len(server.Headers)+len(server.EnvVars))
-	for name, value := range server.Headers {
-		headers[name] = value
+// urlHeaders mirrors MCPServerInstanceService._outbound_headers: the plain and
+// referenced headers, then every copied secret the instance names, which wins.
+func (g *Gateway) urlHeaders(ctx context.Context, instanceID, workspaceID string, server *URLServer) (map[string]string, error) {
+	headers, err := secrets.ResolveValues(ctx, g.urlSecrets, g.logger, workspaceID, instanceID, server.Headers)
+	if err != nil {
+		return nil, err
 	}
 	if len(server.EnvVars) == 0 {
 		return headers, nil

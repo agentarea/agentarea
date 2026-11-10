@@ -662,3 +662,84 @@ async def test_a_policy_is_found_only_as_a_rule_with_its_params_and_condition():
     assert await service.find_policy(policy, None) is None
     service._governance_service = FakeRules([bigger, same])
     assert await service.find_policy(policy, None) == str(same.id)
+
+
+FOLDER = {
+    "agent.yaml": (
+        "name: researcher\n"
+        "model: m\n"
+        "setup:\n"
+        "  - {key: token, label: Token, type: secret, required: true}\n"
+        "  - {key: region, label: Region, type: string, required: true, default: eu}\n"
+    ),
+    "mcp/gh.yaml": (
+        "name: GitHub\n"
+        "json_spec: {type: url, endpoint_url: 'https://api.example.com/mcp'}\n"
+        "bindings: {X-Token: '${setup.token}'}\n"
+    ),
+}
+
+
+async def test_a_folder_dry_run_blocks_on_a_required_setup_value_it_was_not_given():
+    service, _ = _service()
+
+    preview = await service.analyze_files(FOLDER, {})
+
+    assert preview.installable is False
+    assert [(i.entity_key, i.message) for i in preview.block_issues] == [
+        ("token", "required setup field 'token' is missing")
+    ]
+
+
+async def test_a_folder_given_every_required_value_is_installable():
+    service, _ = _service()
+
+    preview = await service.analyze_files(FOLDER, {"token": "t"})
+
+    assert preview.installable is True
+
+
+async def test_the_import_flow_asks_for_setup_after_the_first_analyze():
+    service, _ = _service()
+    package = parse_bundle(CHANNEL)
+
+    preview = await service.analyze_bundle(package, {})
+
+    assert preview.installable is True
+
+
+class RefusingSecrets(FakeGetSvc):
+    def __init__(self, refusal):
+        super().__init__()
+        self.refusal = refusal
+        self.asked = []
+
+    async def assert_may_use_secret_refs(self, refs):
+        self.asked.append(refs)
+        if self.refusal is not None:
+            raise self.refusal
+        return {}
+
+
+@pytest.mark.parametrize(
+    ("refusal", "problem"),
+    [
+        (None, None),
+        (PermissionError("You may not use secret 'gh'"), "is refused: You may not use secret 'gh'"),
+    ],
+)
+async def test_a_secret_binding_is_checked_by_the_instance_service(refusal, problem):
+    from agentarea_mcp.application.validation_service import MCPValidationError
+
+    service, _ = _service()
+    service._mcp_instance_service = RefusingSecrets(refusal)
+
+    assert await service.secret_problem("gh") == problem
+    assert service._mcp_instance_service.asked == [{"gh": "gh"}]
+
+    service._mcp_instance_service = RefusingSecrets(
+        MCPValidationError(["Secret 'gh' is not a secret of this workspace"])
+    )
+    assert await service.secret_problem("gh") == (
+        "is refused: Secret 'gh' is not a secret of this workspace"
+    )

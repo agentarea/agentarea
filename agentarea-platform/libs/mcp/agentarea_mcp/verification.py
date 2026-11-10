@@ -375,7 +375,12 @@ async def verify(
             endpoint_url = settings.mcp.manager_gateway_url(instance_id)
         else:
             endpoint_url = runtime_instance.endpoint_url
-        headers = dict(runtime_instance.json_spec.get("headers", {}))
+        # A header referencing a workspace secret arrives resolved in extra_headers.
+        headers = {
+            name: value
+            for name, value in (runtime_instance.json_spec.get("headers") or {}).items()
+            if isinstance(value, str)
+        }
         if extra_headers:
             headers.update(extra_headers)
         # Registry remote servers declare their wire transport; honor it exactly

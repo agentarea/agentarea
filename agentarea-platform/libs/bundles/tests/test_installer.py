@@ -2153,3 +2153,38 @@ async def test_a_credential_that_names_a_secret_is_never_replaced_by_a_value():
         await inst.install(pkg, {"bot": "literal"}, prior=prior, approved_updates=_every(pkg))
 
     assert sm.secrets == {ids["credentials"]: stored}
+
+
+SECRET_BOUND_MCP = """
+schema_version: "0.1.0"
+name: p
+mcps:
+  - key: gh
+    name: GitHub
+    json_spec: {type: url, endpoint_url: "https://api.example.com/mcp"}
+    bindings: {Authorization: "${secret.gh-token}"}
+agents: [{key: lead, name: Lead, model: gpt-4o, mcps: [gh]}]
+"""
+
+
+async def test_a_secret_binding_is_written_as_a_reference_and_marked_secret():
+    inst, deps = _installer()
+
+    await inst.install(parse_bundle(SECRET_BOUND_MCP), {})
+
+    (created,) = deps["mcp_instance_service"].calls
+    assert created.json_spec == {"headers": {"Authorization": {"secret_name": "gh-token"}}}  # pragma: allowlist secret
+    (spec,) = deps["mcp_server_service"].calls
+    assert [(e["name"], e["isSecret"]) for e in spec.env_schema] == [("Authorization", True)]
+
+
+async def test_a_secret_the_instance_service_refuses_is_a_validation_error():
+    inst, deps = _installer()
+
+    async def refuse(payload):
+        raise PermissionError("You may not use secret 'gh-token'")
+
+    deps["mcp_instance_service"].create_instance = refuse
+
+    with pytest.raises(BundleValidationError, match="gh-token"):
+        await inst.install(parse_bundle(SECRET_BOUND_MCP), {})

@@ -69,6 +69,8 @@ type resource
     define can_manage: manager or can_manage from role_assignment or can_manage from project
     define invoker: [User, Agent, Workspace#members]
     define can_invoke: invoker
+    define secret_user: [User, Agent]
+    define can_use_secret: secret_user or manager or can_manage from project
 ```
 
 Identity types are PascalCase; governance types are lowercase. Object references
@@ -127,8 +129,13 @@ objects amplifies its bits across all of them.
 | `can_read` / `can_write` / `can_manage` | computed | Direct relation, or the same bit from an assignment, or from `project`. |
 | `invoker` | `User`, `Agent`, `Workspace#members` | Who may run the agent. Granted explicitly: an agent's creator holds it from creation, and nothing else implies it. |
 | `can_invoke` | computed | `invoker` only. Reading, managing or administering the workspace does not let anyone run an agent. |
+| `secret_user` | `User`, `Agent` | Who may wire a workspace secret's value into something they configure. Granted explicitly; there is no grant API yet. |
+| `can_use_secret` | computed | `secret_user`, `manager`, or `can_manage from project`: the secret's creator, a workspace admin, or an explicit grant. Reading a secret does not imply it. Checked when a secret is attached — an MCP env var or header, an OAuth client, an egress exit — not when it is resolved at run time. |
 
-Agents, skills, MCP servers and registered clients are all `resource:<uuid>`.
+Agents, skills, MCP servers, registered clients and user secrets are all `resource:<uuid>`.
+A user secret created before secrets were graph resources is attached to its
+workspace's root project, and its creator granted `manager`, by a graph
+migration that `agentarea-api migrate` applies after the schema migration.
 Which kind a resource is lives in the database, not the graph.
 
 ## Values

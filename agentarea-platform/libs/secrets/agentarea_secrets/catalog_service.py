@@ -15,8 +15,14 @@ from uuid import UUID, uuid4
 
 from agentarea_common.audit import AuditService
 from agentarea_common.auth import UserContext
-from agentarea_common.auth.authorization import is_workspace_admin
+from agentarea_common.auth.permission import PermissionService
+from agentarea_common.di.container import resolve
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.rebac.ownership import (
+    ResourceOwnershipError,
+    grant_resource_owner,
+    revoke_resource,
+)
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,7 +55,7 @@ class ManagedSecretError(PermissionError):
 
 
 class SecretAccessDeniedError(PermissionError):
-    """Only the secret's creator or a workspace admin may put it to use."""
+    """The caller holds no ``can_use_secret`` on the secret."""
 
 
 class SecretInUseError(RuntimeError):
@@ -70,6 +76,37 @@ class ConsumerRef:
     consumer_type: str
     consumer_id: str
     field: str
+
+
+USE_SECRET = "use_secret"  # noqa: S105 - a permission verb, not a credential  # pragma: allowlist secret
+
+
+async def named_secret_for_use(
+    session: AsyncSession, user_context: UserContext, name: str
+) -> EncryptedSecret:
+    """The user secret ``name`` of the caller's workspace, if the caller may wire it in."""
+    secret = await find_secret(session, user_context.workspace_id, name)
+    if secret is None:
+        raise SecretNotFoundError(f"No secret named '{name}' in this workspace")
+    if secret.owner_type is not None:
+        raise ManagedSecretError(
+            f"Secret '{secret.secret_name}' is managed by {secret.owner_type} "
+            "and cannot be referenced."
+        )
+    return await _require_usable(user_context, secret)
+
+
+async def _require_usable(user_context: UserContext, secret: EncryptedSecret) -> EncryptedSecret:
+    """``can_use_secret`` on the secret: its creator or a workspace admin."""
+    allowed = await resolve(PermissionService).check(
+        user_context.graph_subject, USE_SECRET, "secret", str(secret.id)
+    )
+    if not allowed:
+        raise SecretAccessDeniedError(
+            f"You may not use secret '{secret.secret_name}': it is used by its creator "
+            "or a workspace admin."
+        )
+    return secret
 
 
 # Owners whose secret the user typed in themselves, and so expects to find when
@@ -159,18 +196,20 @@ class SecretCatalogService:
         """A user-owned secret the caller may wire into a connection.
 
         Using a secret sends its value somewhere the caller chooses -- an OAuth
-        authorize URL handed back to them, a mailbox host they named -- so
-        workspace membership is not enough to select one. Only whoever created
-        it, or a workspace admin, may.
+        authorize URL handed back to them, a mailbox host they named, an MCP
+        server's environment -- so workspace membership is not enough to select
+        one, and neither is reading it. The graph decides: ``can_use_secret`` on
+        ``resource:<secret id>``, held by its creator, whoever manages its
+        project (a workspace admin), and anyone granted ``secret_user``.
         """
-        secret = await self._require_user_owned(secret_id)
-        if secret.created_by != self._user_context.user_id and not await is_workspace_admin(
-            self._user_context
-        ):
-            raise SecretAccessDeniedError(
-                f"Secret '{secret.secret_name}' can only be used by its creator or a workspace admin."
-            )
-        return secret
+        return await self._require_usable(await self._require_user_owned(secret_id))
+
+    async def get_named_for_use(self, name: str) -> EncryptedSecret:
+        """``get_for_use`` for a consumer that references the secret by its name."""
+        return await named_secret_for_use(self._session, self._user_context, name)
+
+    async def _require_usable(self, secret: EncryptedSecret) -> EncryptedSecret:
+        return await _require_usable(self._user_context, secret)
 
     async def get_by_name(self, name: str) -> EncryptedSecret:
         secret = await find_secret(self._session, self._workspace_id, name)
@@ -251,6 +290,7 @@ class SecretCatalogService:
                 )
             )
         secret = await self.get_by_name(name)
+        await self._grant_owner(secret)
         await self._audit("secret.create", secret)
         await self._session.commit()
 
@@ -316,8 +356,30 @@ class SecretCatalogService:
             # value. Otherwise the credential is still sitting in the backend
             # with nothing left pointing at it.
             await self._secrets.delete_secret(secret.secret_name)
+        try:
+            await revoke_resource(secret.id)
+        except Exception:
+            # The row is gone; tuples on an id that no longer exists grant nothing.
+            logger.exception("Deleted secret %s but could not remove its graph tuples", secret.id)
 
         logger.info("Deleted user secret from workspace %s", self._workspace_id)
+
+    async def _grant_owner(self, secret: EncryptedSecret) -> None:
+        """Make the creator the secret's manager under the workspace's root project.
+
+        The value is already stored, so a failed grant takes it back out: a
+        secret no one may use would only block its own name.
+        """
+        try:
+            await grant_resource_owner(
+                resource_id=secret.id,
+                workspace_id=self._workspace_id,
+                owner=self._user_context.graph_subject,
+            )
+        except ResourceOwnershipError:
+            await self._session.rollback()
+            await self._secrets.delete_secret(secret.secret_name)
+            raise
 
     async def _require_user_owned(self, secret_id: UUID) -> EncryptedSecret:
         secret = await self.get(secret_id)
@@ -375,6 +437,18 @@ class SecretCatalogService:
 
     async def clear_references(self, consumer_type: str, consumer_id: str) -> None:
         """Drop every reference a consumer holds, before rewriting them."""
+        await self.stage_references(consumer_type, consumer_id, [])
+        await self._session.commit()
+
+    async def stage_references(
+        self, consumer_type: str, consumer_id: str, references: list[tuple[UUID, str]]
+    ) -> None:
+        """Replace a consumer's references in the caller's transaction, which commits them.
+
+        Written with the consumer's own row, a reference cannot be missing while
+        the consumer uses the secret, and the foreign key refuses the secret's
+        delete for as long as it is.
+        """
         await self._session.execute(
             delete(SecretReference).where(
                 SecretReference.workspace_id == self._workspace_id,
@@ -382,7 +456,16 @@ class SecretCatalogService:
                 SecretReference.consumer_id == consumer_id,
             )
         )
-        await self._session.commit()
+        for secret_id, field in references:
+            self._session.add(
+                SecretReference(
+                    workspace_id=self._workspace_id,
+                    secret_id=secret_id,
+                    consumer_type=consumer_type,
+                    consumer_id=consumer_id,
+                    field=field,
+                )
+            )
 
     async def count_user_secrets(self) -> int:
         result = await self._session.execute(

@@ -824,7 +824,7 @@ WHERE id = $1::uuid`, instanceID); err != nil {
 	}
 	want := URLServer{
 		EndpointURL: "https://remote.example/mcp",
-		Headers:     map[string]string{"X-Region": "eu"},
+		Headers:     map[string]any{"X-Region": "eu"},
 		EnvVars:     []string{"X-Api-Key"},
 		ManagedBy:   "platform",
 	}

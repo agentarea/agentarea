@@ -9,6 +9,8 @@ type SecretResolver interface {
 	// fetched from encrypted_secrets (not from json_spec.environment).
 	ResolveInstanceEnvVars(instanceID string, envVarNames []string) (map[string]string, error)
 
+	WorkspaceSecretResolver
+
 	// Close cleans up any resources used by the resolver
 	Close() error
 }

@@ -285,6 +285,14 @@ Check the Job explicitly.
   </Step>
 </Steps>
 
+## Graph migrations
+
+The migration Job (`agentarea-api migrate`) also brings the authorization
+graph up to date with rows a release made graph resources, after the schema
+migration and in the same run. Each step applies once, is recorded in the
+`graph_migrations` table, and is idempotent; a failed step fails the Job and
+runs again on its retry. Nothing here is a manual step.
+
 ## Verify
 
 Confirm the running images are the ones you pinned:

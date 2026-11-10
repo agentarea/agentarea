@@ -171,9 +171,38 @@ def migrate():
                 command.upgrade(alembic_cfg, "head")
                 click.echo("Migrations completed successfully")
 
+        asyncio.run(_apply_graph_migrations())
+
     except Exception as e:
         click.echo(f"Migration failed: {e}")
         sys.exit(1)
+
+
+async def _apply_graph_migrations() -> None:
+    """Apply the graph migrations the schema migration cannot (``agentarea_api.graph_migrations``).
+
+    The graph client is registered only when a step has something to write: on
+    a fresh install this runs before the graph store is reachable.
+    """
+    from agentarea_common.rebac.graph_migrations import apply_pending_graph_migrations
+    from agentarea_common.rebac.ownership import resolve_graph_client
+
+    from agentarea_api.graph_migrations import GRAPH_MIGRATIONS
+
+    registered = False
+
+    async def graph() -> OpenFGAClient:
+        nonlocal registered
+        if not registered:
+            await _register_graph_client()
+            registered = True
+        return resolve_graph_client()
+
+    db = Database(get_db_settings())
+    applied = await apply_pending_graph_migrations(
+        db.async_session_factory, GRAPH_MIGRATIONS, graph
+    )
+    click.echo(f"Graph migrations applied: {', '.join(applied) or 'none pending'}")
 
 
 @cli.command()

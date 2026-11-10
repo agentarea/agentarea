@@ -72,6 +72,28 @@ tuples:
   - user: Workspace:ws1#members
     relation: invoker
     object: resource:agent3
+  # A workspace secret: its creator owns it under the root project.
+  - user: project:ws1-root
+    relation: project
+    object: resource:secret1
+  - user: User:owner1
+    relation: reader
+    object: resource:secret1
+  - user: User:owner1
+    relation: writer
+    object: resource:secret1
+  - user: User:owner1
+    relation: manager
+    object: resource:secret1
+  - user: User:u3
+    relation: secret_user
+    object: resource:secret1
+  - user: User:u1
+    relation: reader
+    object: resource:secret1
+  - user: role_assignment:ra1
+    relation: role_assignment
+    object: resource:secret1
 
 tests:
   - name: role_assignment with full role grants all three bits on project
@@ -180,3 +202,45 @@ tests:
         object: resource:agent3
         assertions:
           can_invoke: false
+
+  - name: a secret's creator may use it
+    check:
+      - user: User:owner1
+        object: resource:secret1
+        assertions:
+          can_use_secret: true
+
+  - name: a workspace admin may use any secret under the root project
+    check:
+      - user: User:wsadmin
+        object: resource:secret1
+        assertions:
+          can_use_secret: true
+
+  - name: an explicit secret_user grant admits exactly that person
+    check:
+      - user: User:u3
+        object: resource:secret1
+        assertions:
+          can_use_secret: true
+          can_read: false
+
+  - name: reading a secret does not imply using it
+    check:
+      - user: User:u1
+        object: resource:secret1
+        assertions:
+          can_read: true
+          can_use_secret: false
+      - user: User:stranger
+        object: resource:secret1
+        assertions:
+          can_use_secret: false
+
+  - name: a full role assigned on the secret manages it but does not use it
+    check:
+      - user: User:ua
+        object: resource:secret1
+        assertions:
+          can_manage: true
+          can_use_secret: false

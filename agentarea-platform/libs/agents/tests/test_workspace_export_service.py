@@ -424,6 +424,30 @@ class TestMcpExport:
         assert await export_service.export_workspace() == yaml_text
 
     @pytest.mark.asyncio
+    async def test_a_workspace_secret_reference_exports_as_a_secret_binding(
+        self, export_service, mock_mcp_instance_service
+    ):
+        mock_mcp_instance_service.list.return_value = [_mcp_instance("GitHub")]
+        mock_mcp_instance_service.get_transport_spec_for_instance.return_value = {
+            "type": "url",
+            "endpoint_url": "https://api.example.test/mcp",
+            "headers": {
+                "Authorization": {"secret_name": "gh-token"},  # pragma: allowlist secret
+                "X-Region": {"secret_name": "region"},  # pragma: allowlist secret
+            },
+        }
+
+        bundle = parse_bundle(await export_service.export_workspace())
+
+        mcp = bundle.mcps[0]
+        assert mcp.bindings == {
+            "Authorization": "${secret.gh-token}",
+            "X-Region": "${secret.region}",
+        }
+        assert "headers" not in mcp.json_spec
+        assert bundle.setup == []
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "endpoint_url",
         [

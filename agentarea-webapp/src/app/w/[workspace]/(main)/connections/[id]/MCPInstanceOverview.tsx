@@ -206,10 +206,19 @@ export default function MCPInstanceOverview({
     return () => clearInterval(interval);
   }, [verification?.status, router]);
 
-  const plainEnvVars = (instance.json_spec?.environment ?? {}) as Record<string, string>;
+  const plainEnvVars = (instance.json_spec?.environment ?? {}) as Record<
+    string,
+    string | { secret_name?: string }
+  >;
   const secretEnvNames = (instance.json_spec?.env_vars ?? []) as string[];
-  // Merge non-secret env vars with secret env vars (masked)
-  const envVars: Record<string, string> = { ...plainEnvVars };
+  // Merge non-secret env vars with secret env vars (masked); a workspace
+  // secret reference shows as the ${secret.<name>} it was written as.
+  const envVars: Record<string, string> = Object.fromEntries(
+    Object.entries(plainEnvVars).map(([name, value]) => [
+      name,
+      typeof value === "string" ? value : `\${secret.${value?.secret_name ?? ""}}`,
+    ])
+  );
   for (const name of secretEnvNames) {
     if (!(name in envVars)) {
       envVars[name] = "******";

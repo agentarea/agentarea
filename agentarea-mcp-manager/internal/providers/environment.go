@@ -1,12 +1,16 @@
 package providers
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 
+	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/secrets"
 )
 
-func resolveInstanceSpecSecrets(resolver secrets.SecretResolver, instanceID string, source map[string]any) (map[string]any, error) {
+func resolveInstanceSpecSecrets(ctx context.Context, resolver secrets.SecretResolver, logger *slog.Logger, instance *models.MCPServerInstance) (map[string]any, error) {
+	instanceID, source := instance.InstanceID, instance.JSONSpec
 	resolved := make(map[string]any, len(source))
 	for key, value := range source {
 		resolved[key] = value
@@ -36,9 +40,13 @@ func resolveInstanceSpecSecrets(resolver secrets.SecretResolver, instanceID stri
 		secretNames = append(secretNames, values...)
 	}
 
-	stringEnvironment := make(map[string]string, len(environment))
-	for key, value := range environment {
-		stringEnvironment[key] = fmt.Sprint(value)
+	var workspaceResolver secrets.WorkspaceSecretResolver
+	if resolver != nil {
+		workspaceResolver = resolver
+	}
+	stringEnvironment, err := secrets.ResolveValues(ctx, workspaceResolver, logger, instance.WorkspaceID, instanceID, environment)
+	if err != nil {
+		return nil, fmt.Errorf("resolve MCP environment: %w", err)
 	}
 	if len(secretNames) > 0 {
 		if resolver == nil {

@@ -6,17 +6,26 @@ from uuid import uuid4
 
 import pytest
 from agentarea_api.api.v1.oauth_app_credentials import workspace_secret_value
-from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
-from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.auth.permission import PermissionService
 from agentarea_common.di.container import register_singleton
+from agentarea_common.testing import GrantedPermissions
 from agentarea_secrets.catalog_service import SecretCatalogService
 from fastapi import HTTPException
 
 
 def _catalog_holding(secret, user_id: str, admin_workspaces: list[str]) -> SecretCatalogService:
-    """The catalog's own selection rule, over a session that finds ``secret``."""
-    register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
+    """The catalog's own selection rule, over a session that finds ``secret``.
+
+    The graph grants ``can_use_secret`` to the creator and the workspace admin.
+    """
+    register_singleton(
+        PermissionService,
+        GrantedPermissions(
+            (f"User:{secret.created_by}", "use_secret", str(secret.id)),
+            ("User:workspace-admin", "use_secret", str(secret.id)),
+        ),
+    )
     session = AsyncMock()
     session.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: secret)
     user = UserContext(user_id=user_id, workspace_id="ws", admin_workspaces=admin_workspaces)
