@@ -8,7 +8,7 @@ from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents_sdk.mcp_server import UnknownToolsetError
 from agentarea_agents_sdk.tools.tool_definition import ToolEffect
 from agentarea_api.api.deps.services import AuditServiceDep, get_agent_service
-from agentarea_api.api.v1.agents import AgentResponse
+from agentarea_api.api.v1.agents import AgentResponse, overlay_runner_clients
 from agentarea_api.platform_mcp import (
     attachable_toolset,
     client_platform_server,
@@ -26,6 +26,7 @@ from agentarea_common.auth.route_authz import (
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.base.pagination import MAX_OFFSET
 from agentarea_common.config.app import get_app_settings
+from agentarea_common.config.database import get_db_session
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.access_token_service import APIKeyService
 from agentarea_mcp.application.client_service import ClientService
@@ -37,6 +38,7 @@ from agentarea_mcp.infrastructure.runner_presence import runner_presence
 from agentarea_mcp.schemas.client_dto import ClientCreate, ClientUpdate
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ._access_control_grants import grant_resource_owner
 
@@ -495,14 +497,19 @@ async def _runner_client(service: ClientService, client_id: UUID) -> Client:
 )
 async def harness_agent(
     client_id: UUID,
+    user_context: UserContextDep,
+    session: AsyncSession = Depends(get_db_session),
     agent_service: AgentService = Depends(get_agent_service),
 ) -> AgentResponse:
-    """The agent a task given to this Codex or Claude Code client itself runs as.
+    """The agent a task given to this harness client itself runs as.
 
     Made on first use, with no instructions or tools of its own: the client's
-    CLI brings them. It is not listed among the workspace's agents.
+    CLI brings them. It is not listed among the workspace's agents. Like every
+    agent response it names its client, so a picker can show the harness.
     """
-    return AgentResponse.from_domain(await agent_service.harness_agent(client_id))
+    response = AgentResponse.from_domain(await agent_service.harness_agent(client_id))
+    await overlay_runner_clients(session, user_context, [response])
+    return response
 
 
 @router.post(

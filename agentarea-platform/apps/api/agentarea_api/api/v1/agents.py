@@ -215,7 +215,7 @@ async def _overlay_approval_flags(
         response.tools = [TOOL_CONFIG_ADAPTER.validate_python(t) for t in applied]
 
 
-async def _overlay_runner_clients(
+async def overlay_runner_clients(
     session: AsyncSession, user_context: UserContext, responses: list[AgentResponse]
 ) -> None:
     """Name each response's client, online when its runner's socket is connected."""
@@ -322,7 +322,7 @@ async def create_agent(
     await _grant_agent_owner(agent.id, user_context.user_id, user_context.workspace_id)
     response = AgentResponse.from_domain(agent)
     await _overlay_approval_flags(session, user_context, [response])
-    await _overlay_runner_clients(session, user_context, [response])
+    await overlay_runner_clients(session, user_context, [response])
     return response
 
 
@@ -548,7 +548,7 @@ async def get_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
     response = AgentResponse.from_domain(agent, include_skills=True)
     await _overlay_approval_flags(session, user_context, [response])
-    await _overlay_runner_clients(session, user_context, [response])
+    await overlay_runner_clients(session, user_context, [response])
     return response
 
 
@@ -619,7 +619,7 @@ async def list_agents(
     ]
     responses = [AgentResponse.from_domain(agent) for agent in agents]
     await _overlay_approval_flags(session, user_context, responses)
-    await _overlay_runner_clients(session, user_context, responses)
+    await overlay_runner_clients(session, user_context, responses)
     return responses
 
 
@@ -657,7 +657,7 @@ async def update_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
     response = AgentResponse.from_domain(agent, include_skills=True)
     await _overlay_approval_flags(session, user_context, [response])
-    await _overlay_runner_clients(session, user_context, [response])
+    await overlay_runner_clients(session, user_context, [response])
     return response
 
 
@@ -712,5 +712,5 @@ async def restore_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
     response = AgentResponse.from_domain(agent, include_skills=True)
     await _overlay_approval_flags(session, user_context, [response])
-    await _overlay_runner_clients(session, user_context, [response])
+    await overlay_runner_clients(session, user_context, [response])
     return response
