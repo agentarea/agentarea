@@ -1,15 +1,12 @@
 """A user secret whose ownership the graph could not record is taken back out."""
 
-from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 from agentarea_common.auth import UserContext
-from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.permission import PermissionService
-from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.di.container import register_singleton
 from agentarea_common.rebac.ownership import ResourceOwnershipError
 from agentarea_common.testing import TestSecretManager
@@ -41,16 +38,6 @@ async def test_a_failed_grant_removes_the_value_and_raises(monkeypatch):
     session.rollback.assert_awaited()
 
 
-def _row(created_by: str, granted: bool) -> SimpleNamespace:
-    return SimpleNamespace(
-        id=uuid4(),
-        secret_name="api-key",
-        owner_type=None,
-        created_by=created_by,
-        graph_granted_at=datetime.now(UTC) if granted else None,
-    )
-
-
 class _Graph:
     def __init__(self, allowed: bool) -> None:
         self.allowed = allowed
@@ -61,32 +48,17 @@ class _Graph:
         return self.allowed
 
 
-@pytest.mark.parametrize(
-    ("user_id", "admin_workspaces", "allowed"),
-    [("creator", [], True), ("admin", ["ws"], True), ("member", [], False)],
-)
-async def test_a_secret_not_yet_in_the_graph_follows_the_rule_it_was_created_under(
-    monkeypatch, user_id, admin_workspaces, allowed
-):
-    graph = _Graph(allowed=False)
+@pytest.mark.parametrize("allowed", [True, False])
+async def test_only_the_graph_decides_who_uses_a_secret(monkeypatch, allowed):
+    graph = _Graph(allowed=allowed)
     register_singleton(PermissionService, graph)
-    register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
-    monkeypatch.setattr(catalog_service, "find_secret", AsyncMock(return_value=_row("creator", False)))
-    caller = UserContext(user_id=user_id, workspace_id="ws", admin_workspaces=admin_workspaces)
+    secret = SimpleNamespace(id=uuid4(), secret_name="api-key", owner_type=None, created_by="creator")
+    monkeypatch.setattr(catalog_service, "find_secret", AsyncMock(return_value=secret))
+    creator = UserContext(user_id="creator", workspace_id="ws", admin_workspaces=["ws"])
 
     if allowed:
-        await named_secret_for_use(AsyncMock(), caller, "api-key")
+        assert await named_secret_for_use(AsyncMock(), creator, "api-key") is secret
     else:
         with pytest.raises(SecretAccessDeniedError):
-            await named_secret_for_use(AsyncMock(), caller, "api-key")
-    assert graph.asked == 0
-
-
-async def test_once_granted_only_the_graph_decides(monkeypatch):
-    graph = _Graph(allowed=False)
-    register_singleton(PermissionService, graph)
-    monkeypatch.setattr(catalog_service, "find_secret", AsyncMock(return_value=_row("creator", True)))
-
-    with pytest.raises(SecretAccessDeniedError):
-        await named_secret_for_use(AsyncMock(), UserContext(user_id="creator", workspace_id="ws"), "api-key")
+            await named_secret_for_use(AsyncMock(), creator, "api-key")
     assert graph.asked == 1

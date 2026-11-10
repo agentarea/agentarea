@@ -438,7 +438,6 @@ class TestSecretInTheGraph:
         on_secret = {(t.relation, t.subject_id) for t in graph.recorded if t.object == str(secret.id)}
         assert ("project", f"project:{root_project_id(WORKSPACE)}") in on_secret
         assert ("manager", "User:member-a") in on_secret
-        assert secret.graph_granted_at is not None
 
     async def test_a_secret_user_grant_lets_another_member_use_it(
         self, session: AsyncSession, graph: RecordingGraph
@@ -615,11 +614,11 @@ class TestRotate:
         assert [c.consumer_id for c in await catalog.consumers(secret.id)] == [consumer_id]
 
 
-class TestPendingGraphGrants:
-    async def test_the_reconcile_grants_a_secret_made_before_and_then_finds_nothing(
+class TestSecretOwnersGraphMigration:
+    async def test_a_secret_made_before_gets_its_creator_and_project_and_repeats_harmlessly(
         self, session: AsyncSession, graph: RecordingGraph
     ) -> None:
-        from agentarea_secrets.graph_owners import grant_pending_secret_owners
+        from agentarea_secrets.graph_migrations import grant_secret_owners
 
         legacy = EncryptedSecret(
             id=uuid.uuid4(),
@@ -631,10 +630,14 @@ class TestPendingGraphGrants:
         session.add(legacy)
         await session.commit()
 
-        assert (await grant_pending_secret_owners(session)).granted >= 1
-        assert ("manager", "User:member-a") in {
-            (t.relation, t.subject_id) for t in graph.recorded if t.object == str(legacy.id)
-        }
+        async def provider():
+            return graph
+
+        await grant_secret_owners(session, provider)
+        on_legacy = [(t.relation, t.subject_id) for t in graph.recorded if t.object == str(legacy.id)]
+        assert ("project", f"project:{root_project_id(WORKSPACE)}") in on_legacy
+        assert ("manager", "User:member-a") in on_legacy
         member_a = _catalog(session, user_id="member-a", admin_workspaces=[])
         assert (await member_a.get_named_for_use("legacy-key")).id == legacy.id
-        assert (await grant_pending_secret_owners(session)).granted == 0
+
+        await grant_secret_owners(session, provider)

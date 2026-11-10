@@ -171,9 +171,38 @@ def migrate():
                 command.upgrade(alembic_cfg, "head")
                 click.echo("Migrations completed successfully")
 
+        asyncio.run(_apply_graph_migrations())
+
     except Exception as e:
         click.echo(f"Migration failed: {e}")
         sys.exit(1)
+
+
+async def _apply_graph_migrations() -> None:
+    """Apply the graph migrations the schema migration cannot (``agentarea_api.graph_migrations``).
+
+    The graph client is registered only when a step has something to write: on
+    a fresh install this runs before the graph store is reachable.
+    """
+    from agentarea_common.rebac.graph_migrations import apply_pending_graph_migrations
+    from agentarea_common.rebac.ownership import resolve_graph_client
+
+    from agentarea_api.graph_migrations import GRAPH_MIGRATIONS
+
+    registered = False
+
+    async def graph() -> OpenFGAClient:
+        nonlocal registered
+        if not registered:
+            await _register_graph_client()
+            registered = True
+        return resolve_graph_client()
+
+    db = Database(get_db_settings())
+    applied = await apply_pending_graph_migrations(
+        db.async_session_factory, GRAPH_MIGRATIONS, graph
+    )
+    click.echo(f"Graph migrations applied: {', '.join(applied) or 'none pending'}")
 
 
 @cli.command()
@@ -496,30 +525,6 @@ async def _refresh_stub_installs(*, dry_run: bool) -> None:
         sys.exit(1)
 
 
-async def _grant_pending_secret_owners(db: Database) -> bool:
-    """Record the creator of each user secret the graph has no owner for yet.
-
-    Cheap once done: the pass reads only unstamped rows, by a partial index.
-    Returns whether it completed without a failed row; a failure is reported
-    here and fails the run at its end, after the registries are synced.
-    """
-    from agentarea_secrets.graph_owners import grant_pending_secret_owners
-
-    try:
-        async with db.async_session_factory() as session:
-            result = await grant_pending_secret_owners(session)
-    except Exception:
-        logger.exception("The secret owner pass failed")
-        click.echo("Secret owners: the pass failed; see the log", err=True)
-        return False
-    if result.granted or result.skipped or result.failed:
-        click.echo(
-            f"Secret owners: {result.granted} granted, {result.skipped} skipped, "
-            f"{result.failed} failed"
-        )
-    return result.failed == 0
-
-
 async def _register_graph_client() -> None:
     """Register the authorization-graph client the API and worker register.
 
@@ -726,14 +731,11 @@ async def _reconcile(
         )
         configs.append({"name": name, "source_url": src})
 
-    await _register_graph_client()
-    secret_owners_ok = await _grant_pending_secret_owners(db)
-
     if not configs and not workspace_registries:
         click.echo("No registry config provided (set REGISTRIES_CONFIG or use --source)")
-        if not secret_owners_ok:
-            sys.exit(1)
         return
+
+    await _register_graph_client()
 
     # Validate up front so a malformed entry reports a clear message instead of
     # failing deep inside the per-registry loop with a bare KeyError.
@@ -927,7 +929,6 @@ async def _reconcile(
     if failed:
         for name, err in failed:
             click.echo(f"  - {name}: {err}", err=True)
-    if failed or not secret_owners_ok:
         sys.exit(1)
 
 

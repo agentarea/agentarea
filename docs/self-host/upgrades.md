@@ -285,23 +285,13 @@ Check the Job explicitly.
   </Step>
 </Steps>
 
-## What the reconcile does after an upgrade
+## Graph migrations
 
-`agentarea-api reconcile` — the chart's registry reconcile Job and CronJob,
-and Compose's reconcile service — also brings the authorization graph up to
-date with rows a release added state for. Nothing here is a manual step:
-
-- Every user secret whose creator's ownership has not reached the graph yet
-  (`encrypted_secrets.graph_granted_at` is null — every secret created before
-  secrets became graph resources) is granted to its creator, a person or the
-  agent that made it, and stamped. Until that happens, such a secret is
-  authorized by the rule it was created under: its creator or a workspace
-  admin may attach it to an MCP server, an OAuth client, an egress exit or a
-  stream source. Once stamped, only the graph's `can_use_secret` decides. A
-  secret the platform principal created is left unstamped with a warning.
-- The pass is idempotent and reads only unstamped rows. A row the graph
-  refuses is logged and the pass goes on; the registries are still synced,
-  and the command then exits non-zero so the Job shows the failure.
+The migration Job (`agentarea-api migrate`) also brings the authorization
+graph up to date with rows a release made graph resources, after the schema
+migration and in the same run. Each step applies once, is recorded in the
+`graph_migrations` table, and is idempotent; a failed step fails the Job and
+runs again on its retry. Nothing here is a manual step.
 
 ## Verify
 

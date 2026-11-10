@@ -133,11 +133,9 @@ objects amplifies its bits across all of them.
 | `can_use_secret` | computed | `secret_user`, `manager`, or `can_manage from project`: the secret's creator, a workspace admin, or an explicit grant. Reading a secret does not imply it. Checked when a secret is attached — an MCP env var or header, an OAuth client, an egress exit — not when it is resolved at run time. |
 
 Agents, skills, MCP servers, registered clients and user secrets are all `resource:<uuid>`.
-A user secret created before secrets were graph resources has no tuples until
-the registry reconcile job (`agentarea-api reconcile`) grants its creator
-`manager` and stamps `graph_granted_at`. Until it is stamped, the secret is
-authorized by the rule it was created under — its creator or a workspace
-admin — and from then on only by `can_use_secret`.
+A user secret created before secrets were graph resources is attached to its
+workspace's root project, and its creator granted `manager`, by a graph
+migration that `agentarea-api migrate` applies after the schema migration.
 Which kind a resource is lives in the database, not the graph.
 
 ## Values

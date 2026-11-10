@@ -10,7 +10,6 @@ decide, still succeeds.
 
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import agentarea_registry.application.service as registry_service
@@ -65,7 +64,6 @@ async def test_every_workspace_registry_is_synced_as_its_workspace(monkeypatch, 
         return object()
 
     monkeypatch.setattr(cli, "_register_graph_client", register)
-    monkeypatch.setattr(cli, "_grant_pending_secret_owners", AsyncMock())
     monkeypatch.setattr(cli, "_registry_sync_lock", _always_held)
     monkeypatch.setattr(cli, "Database", _Database)
     monkeypatch.setattr(cli, "get_db_settings", lambda: None)
@@ -120,7 +118,6 @@ async def test_a_failed_platform_source_still_fails_the_run(monkeypatch):
         return object()
 
     monkeypatch.setattr(cli, "_register_graph_client", register)
-    monkeypatch.setattr(cli, "_grant_pending_secret_owners", AsyncMock())
     monkeypatch.setattr(cli, "_registry_sync_lock", _always_held)
     monkeypatch.setattr(cli, "Database", _Database)
     monkeypatch.setattr(cli, "get_db_settings", lambda: None)

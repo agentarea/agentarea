@@ -8,8 +8,6 @@ for WorkflowSettings"), then, once the client was registered up front, the
 whole run.
 """
 
-from unittest.mock import AsyncMock
-
 import pytest
 from agentarea_api.cli import _register_graph_client
 from agentarea_common.config import get_settings
@@ -97,7 +95,6 @@ async def test_a_retired_manifest_entry_retires_its_registry_without_syncing(
         return object()
 
     monkeypatch.setattr(cli, "_register_graph_client", register)
-    monkeypatch.setattr(cli, "_grant_pending_secret_owners", AsyncMock(return_value=True))
     monkeypatch.setattr(cli, "Database", _Database)
     monkeypatch.setattr(cli, "_registry_sync_lock", _always_held)
     monkeypatch.setattr(cli, "get_db_settings", lambda: None)
@@ -113,131 +110,3 @@ async def test_a_retired_manifest_entry_retires_its_registry_without_syncing(
     calls.clear()
     await cli._reconcile(retired, (), None)
     assert calls == [("retire", live.id)]
-
-
-async def test_registries_still_sync_when_the_secret_owner_pass_failed(
-    monkeypatch,
-) -> None:
-    from contextlib import asynccontextmanager
-    from types import SimpleNamespace
-    from uuid import uuid4
-
-    import agentarea_registry.application.service as registry_service
-    import agentarea_registry.infrastructure.repository as registry_repository
-    from agentarea_api import cli
-
-    @asynccontextmanager
-    async def _always_held(_db, _key):
-        yield True
-
-    live = SimpleNamespace(id=uuid4(), name="system-openapi-connections", is_active=True)
-    calls: list[tuple] = []
-
-    class _Session:
-        async def commit(self) -> None:
-            pass
-
-    class _Database:
-        def __init__(self, *_args) -> None:
-            pass
-
-        @asynccontextmanager
-        async def async_session_factory(self):
-            yield _Session()
-
-    class _RegistryRepository:
-        def __init__(self, *_args) -> None:
-            pass
-
-        async def get_platform_by_name(self, name):
-            return live if name == live.name else None
-
-    class _RegistryService:
-        def __init__(self, *_args, **_kwargs) -> None:
-            pass
-
-        async def retire_registry(self, registry_id, replacements=()):
-            calls.append(("retire", registry_id))
-            return 0
-
-        async def sync_registry(self, registry_id):
-            calls.append(("sync", registry_id))
-            return {}
-
-    async def register() -> object:
-        return object()
-
-    monkeypatch.setattr(cli, "_register_graph_client", register)
-    monkeypatch.setattr(cli, "_grant_pending_secret_owners", AsyncMock(return_value=False))
-    monkeypatch.setattr(cli, "Database", _Database)
-    monkeypatch.setattr(cli, "_registry_sync_lock", _always_held)
-    monkeypatch.setattr(cli, "get_db_settings", lambda: None)
-    monkeypatch.setattr(registry_repository, "RegistryRepository", _RegistryRepository)
-    monkeypatch.setattr(registry_service, "RegistryService", _RegistryService)
-
-    retired = '[{"name": "system-openapi-connections", "active": false}]'
-    with pytest.raises(SystemExit):
-        await cli._reconcile(retired, (), None)
-    assert calls == [("retire", live.id)]
-
-
-async def test_every_reconcile_grants_the_owners_of_secrets_the_graph_lacks(monkeypatch):
-    from agentarea_api import cli
-
-    order: list[str] = []
-
-    async def register() -> None:
-        order.append("graph")
-
-    async def grant(db) -> bool:
-        order.append("secrets")
-        return True
-
-    monkeypatch.setattr(cli, "_register_graph_client", register)
-    monkeypatch.setattr(cli, "_grant_pending_secret_owners", grant)
-    monkeypatch.setattr(cli, "Database", lambda settings: object())
-    monkeypatch.setattr(cli, "get_db_settings", lambda: None)
-
-    await cli._reconcile(None, (), None)
-
-    assert order == ["graph", "secrets"]
-
-
-async def test_a_failed_secret_owner_pass_fails_the_run(monkeypatch):
-    from agentarea_api import cli
-
-    async def register() -> None:
-        return None
-
-    monkeypatch.setattr(cli, "_register_graph_client", register)
-    monkeypatch.setattr(cli, "_grant_pending_secret_owners", AsyncMock(return_value=False))
-    monkeypatch.setattr(cli, "Database", lambda settings: object())
-    monkeypatch.setattr(cli, "get_db_settings", lambda: None)
-
-    with pytest.raises(SystemExit) as exited:
-        await cli._reconcile(None, (), None)
-    assert exited.value.code == 1
-
-
-async def test_a_secret_owner_pass_that_raises_is_reported_not_raised(monkeypatch, capsys):
-    from agentarea_api import cli
-    from agentarea_secrets import graph_owners
-
-    class _Sessions:
-        def async_session_factory(self):
-            return self
-
-        async def __aenter__(self):
-            return object()
-
-        async def __aexit__(self, *exc):
-            return False
-
-    monkeypatch.setattr(
-        graph_owners,
-        "grant_pending_secret_owners",
-        AsyncMock(side_effect=RuntimeError("database unreachable")),
-    )
-
-    assert await cli._grant_pending_secret_owners(_Sessions()) is False
-    assert "the pass failed" in capsys.readouterr().err

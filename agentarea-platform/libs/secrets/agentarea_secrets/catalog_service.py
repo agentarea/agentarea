@@ -11,12 +11,10 @@ overwrite of a live credential.
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from agentarea_common.audit import AuditService
 from agentarea_common.auth import UserContext
-from agentarea_common.auth.authorization import is_workspace_admin
 from agentarea_common.auth.permission import PermissionService
 from agentarea_common.di.container import resolve
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
@@ -99,22 +97,10 @@ async def named_secret_for_use(
 
 
 async def _require_usable(user_context: UserContext, secret: EncryptedSecret) -> EncryptedSecret:
-    """``can_use_secret`` once the secret is in the graph; until then the rule it had.
-
-    A secret made before secrets were graph resources has no tuples until the
-    reconcile grants its creator (``graph_granted_at`` still null). For such a
-    row the rule that held when it was created is the authoritative one --
-    its creator or a workspace admin -- not a fallback for a graph failure.
-    Once granted, only the graph decides.
-    """
-    if secret.graph_granted_at is None:
-        allowed = secret.created_by == user_context.user_id or await is_workspace_admin(
-            user_context
-        )
-    else:
-        allowed = await resolve(PermissionService).check(
-            user_context.graph_subject, USE_SECRET, "secret", str(secret.id)
-        )
+    """``can_use_secret`` on the secret: its creator, a workspace admin, or a grantee."""
+    allowed = await resolve(PermissionService).check(
+        user_context.graph_subject, USE_SECRET, "secret", str(secret.id)
+    )
     if not allowed:
         raise SecretAccessDeniedError(
             f"You may not use secret '{secret.secret_name}': it is used by its creator, "
@@ -394,7 +380,6 @@ class SecretCatalogService:
             await self._session.rollback()
             await self._secrets.delete_secret(secret.secret_name)
             raise
-        secret.graph_granted_at = datetime.now(UTC)
 
     async def _require_user_owned(self, secret_id: UUID) -> EncryptedSecret:
         secret = await self.get(secret_id)

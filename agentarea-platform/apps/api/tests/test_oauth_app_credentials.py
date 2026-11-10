@@ -1,6 +1,5 @@
 """A workspace's own OAuth app: which of its secrets a Connect flow may read."""
 
-from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -40,7 +39,6 @@ def _user_secret(created_by: str) -> SimpleNamespace:
         owner_type=None,
         owner_id=None,
         created_by=created_by,
-        graph_granted_at=datetime.now(UTC),
     )
 
 
