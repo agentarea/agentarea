@@ -432,8 +432,8 @@ class TestMcpExport:
             "type": "url",
             "endpoint_url": "https://api.example.test/mcp",
             "headers": {
-                "Authorization": {"secret_name": "gh-token"},
-                "X-Region": {"secret_name": "region"},
+                "Authorization": {"secret_name": "gh-token"},  # pragma: allowlist secret
+                "X-Region": {"secret_name": "region"},  # pragma: allowlist secret
             },
         }
 

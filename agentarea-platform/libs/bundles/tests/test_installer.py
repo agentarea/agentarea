@@ -2173,7 +2173,7 @@ async def test_a_secret_binding_is_written_as_a_reference_and_marked_secret():
     await inst.install(parse_bundle(SECRET_BOUND_MCP), {})
 
     (created,) = deps["mcp_instance_service"].calls
-    assert created.json_spec == {"headers": {"Authorization": {"secret_name": "gh-token"}}}
+    assert created.json_spec == {"headers": {"Authorization": {"secret_name": "gh-token"}}}  # pragma: allowlist secret
     (spec,) = deps["mcp_server_service"].calls
     assert [(e["name"], e["isSecret"]) for e in spec.env_schema] == [("Authorization", True)]
 

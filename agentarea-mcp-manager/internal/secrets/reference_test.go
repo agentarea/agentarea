@@ -140,13 +140,13 @@ func TestResolveValuesReadsTheSecretOnEveryCall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got["API_KEY"] != "rotated" {
+	if got["API_KEY"] != "rotated" { // pragma: allowlist secret
 		t.Fatalf("API_KEY = %q, want the rotated value", got["API_KEY"])
 	}
 }
 
 func TestResolveValuesLogsTheReferenceButNotTheValue(t *testing.T) {
-	const secretValue = "PRIVATE_SECRET_VALUE"
+	const secretValue = "PRIVATE_SECRET_VALUE" // pragma: allowlist secret
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	stub := &workspaceSecretStub{values: map[workspaceSecret]string{{"ws-own", "openai-key"}: secretValue}}
@@ -167,7 +167,7 @@ func TestResolveValuesLogsTheReferenceButNotTheValue(t *testing.T) {
 }
 
 func TestResolveValuesRefusesAPlatformReservedSecretName(t *testing.T) {
-	for _, secretName := range []string{
+	for _, secretName := range []string{ // pragma: allowlist secret
 		"provider_config_x",
 		"mcp_instance_11111111-1111-4111-8111-111111111111_API_KEY",
 		"mcp_auth_cred:x",

@@ -15,7 +15,7 @@ def test_the_reference_is_returned_unmasked_and_a_copied_secret_masked():
         transport=MCPTransport.URL,
         json_spec={
             "type": "url",
-            "headers": {"Authorization": {"secret_name": "gh-token"}},
+            "headers": {"Authorization": {"secret_name": "gh-token"}},  # pragma: allowlist secret
             "env_vars": ["X-Api-Key"],
         },
         workspace_id="ws",
@@ -30,6 +30,6 @@ def test_the_reference_is_returned_unmasked_and_a_copied_secret_masked():
     )
 
     assert response.json_spec["headers"] == {
-        "Authorization": {"secret_name": "gh-token"},
+        "Authorization": {"secret_name": "gh-token"},  # pragma: allowlist secret
         "X-Api-Key": "******",
     }

@@ -34,7 +34,7 @@ func resolveSpec(resolver *recordingSecretResolver, workspaceID string, source m
 	instance := &models.MCPServerInstance{InstanceID: "instance-1", WorkspaceID: workspaceID, JSONSpec: source}
 	var secretResolver secrets.SecretResolver
 	if resolver != nil {
-		secretResolver = resolver
+		secretResolver = resolver // pragma: allowlist secret
 	}
 	return resolveInstanceSpecSecrets(context.Background(), secretResolver, slog.New(slog.NewTextHandler(io.Discard, nil)), instance)
 }
