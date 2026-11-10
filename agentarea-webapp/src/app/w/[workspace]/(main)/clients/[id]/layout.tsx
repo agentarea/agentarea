@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
-import { RUNNER_KINDS } from "@/lib/runner-kinds";
 import { getClientCached } from "./clientData";
 import ClientDetailTabs from "./ClientDetailTabs";
 import ClientHeaderControls from "./ClientHeaderControls";
@@ -40,7 +39,7 @@ export default async function ClientLayout({ params, children }: Props) {
         <ClientDetailTabs
           basePath={`/clients/${id}`}
           toolCount={toolCount}
-          withRunner={RUNNER_KINDS.includes(client.kind)}
+          withRunner={client.has_runner ?? false}
         />
       }
     >

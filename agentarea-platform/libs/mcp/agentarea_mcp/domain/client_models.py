@@ -28,7 +28,9 @@ if TYPE_CHECKING:
     from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 
 # The client kinds a runner drives: a client of one of them can execute agents' turns.
-RUNNER_KINDS = ("codex", "claude")
+# Codex and Claude Code have drivers of their own; the rest speak the Agent Client
+# Protocol, and ``acp`` is any other ACP command its runner is started with.
+RUNNER_KINDS = ("codex", "claude", "opencode", "gemini", "qwen", "goose", "cursor", "acp")
 
 client_skills = sa.Table(
     "client_skills",

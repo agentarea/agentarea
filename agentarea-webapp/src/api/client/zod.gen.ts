@@ -695,6 +695,7 @@ export const zClientResponse = z.object({
   created_by: z.string(),
   default_model: z.string().nullish(),
   description: z.string().nullable(),
+  has_runner: z.boolean().optional().default(false),
   id: z.uuid(),
   kind: z.string(),
   mcp_endpoint_url: z.string().nullish(),
