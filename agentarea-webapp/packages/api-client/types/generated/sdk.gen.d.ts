@@ -729,10 +729,11 @@ export declare const updateClientV1ClientsClientIdPatch: <ThrowOnError extends b
 /**
  * Harness Agent
  *
- * The agent a task given to this Codex or Claude Code client itself runs as.
+ * The agent a task given to this harness client itself runs as.
  *
  * Made on first use, with no instructions or tools of its own: the client's
- * CLI brings them. It is not listed among the workspace's agents.
+ * CLI brings them. It is not listed among the workspace's agents. Like every
+ * agent response it names its client, so a picker can show the harness.
  */
 export declare const harnessAgentV1ClientsClientIdAgentPost: <ThrowOnError extends boolean = false>(options: Options<HarnessAgentV1ClientsClientIdAgentPostData, ThrowOnError>) => RequestResult<HarnessAgentV1ClientsClientIdAgentPostResponses, HarnessAgentV1ClientsClientIdAgentPostErrors, ThrowOnError>;
 /**
