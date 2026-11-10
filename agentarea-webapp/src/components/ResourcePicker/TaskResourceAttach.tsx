@@ -35,6 +35,9 @@ type TaskResourceAttachProps = {
   onMcpsChange: (next: TaskResourceRef[]) => void;
   onSkillsChange: (next: TaskResourceRef[]) => void;
   disabled?: boolean;
+  /** Opened from outside, e.g. the composer's add menu; uncontrolled when absent. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 /**
@@ -51,9 +54,16 @@ export function TaskResourceAttach({
   onMcpsChange,
   onSkillsChange,
   disabled,
+  open: openProp,
+  onOpenChange,
 }: TaskResourceAttachProps) {
   const t = useTranslations("Pickers");
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    onOpenChange?.(next);
+  };
   const names = [
     ...mcps.map((ref) => ref.name ?? ref.id),
     // Read the way the panel lists them, not as the raw imported slug.

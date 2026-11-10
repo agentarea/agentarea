@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Sparkles } from "lucide-react";
 import { useWorkspacePath } from "@/hooks/useWorkspaceNavigation";
+import type { RunOptions } from "@/lib/run-targets";
 import type { BadgeSuggestion } from "./componets/BadgeSuggestions";
 import { ChatWelcome } from "./componets/ChatWelcome";
 import FullChat, {
@@ -17,6 +18,7 @@ interface WorkplaceChatProps {
   availableAgents: Agent[];
   availableProjects?: ProjectOption[];
   availableTaskPolicies?: TaskPolicyOption[];
+  runOptions?: RunOptions | null;
   badgeSuggestions?: BadgeSuggestion[] | Promise<BadgeSuggestion[]>;
 }
 
@@ -29,6 +31,7 @@ export function WorkplaceChat({
   availableAgents,
   availableProjects,
   availableTaskPolicies,
+  runOptions,
   badgeSuggestions,
 }: WorkplaceChatProps) {
   const t = useTranslations("Workplace.hero");
@@ -64,6 +67,7 @@ export function WorkplaceChat({
       onAgentChange={setSelectedAgent}
       availableProjects={availableProjects}
       availableTaskPolicies={availableTaskPolicies}
+      runOptions={runOptions}
       startCentered
       badgeSuggestions={badgeSuggestions}
       welcomeComponent={<ChatWelcome icon={Sparkles} title={t("title")} />}

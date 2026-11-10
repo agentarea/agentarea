@@ -5,7 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import {Readable, pipeline} from 'node:stream';
-import {spawn, type ChildProcessWithoutNullStreams} from 'node:child_process';
+import {
+	spawn,
+	spawnSync,
+	type ChildProcessWithoutNullStreams,
+} from 'node:child_process';
 
 /**
  * Runner: serve a harness client's turns with the Codex or Claude Code CLI on
@@ -42,13 +46,7 @@ export interface RunnerOptions {
 	harness: RunnerHarness;
 	root: string;
 	loginFrom: string | undefined;
-	/**
-	 * `profile`: every command the CLI runs sees only its task's folder, nothing of the
-	 * runner's data or other people's profiles, and the network only to `allowDomains`
-	 * and the client's own allowed domains;
-	 * anything beyond that waits for a person's approval. `none`: commands run unconfined.
-	 */
-	sandbox: 'profile' | 'none';
+	/** Hosts every sandboxed turn may reach, beside the client's own. */
 	allowDomains: string[];
 	/** Turns run at once. */
 	capacity: number;
@@ -69,6 +67,13 @@ export interface Assign {
 	instructions: string | null;
 	/** Hosts the client allows the CLI's sandbox, beside `allowDomains`. */
 	allow_domains: string[];
+	/**
+	 * The client's setting. On, every command the CLI runs sees only its task's
+	 * folder, nothing of the runner's data or other people's profiles, and the
+	 * network only to the allowed hosts; anything beyond that waits for a
+	 * person's approval. Off, commands run unconfined. Absent counts as on.
+	 */
+	sandbox?: boolean;
 	/** Acts for the turn's actor on the client's MCP endpoint until the turn ends. */
 	token: string;
 	/** The client's MCP endpoint, relative to the platform's API. */
@@ -197,13 +202,14 @@ const ACCOUNT_FEATURES = [
 export function codexConfig(
 	options: RunnerOptions,
 	home: string,
-	clientDomains: string[] = [],
+	clientDomains: string[],
+	sandboxed: boolean,
 ): string {
 	const features = [
 		'[features]',
 		...ACCOUNT_FEATURES.map(feature => `${feature} = false`),
 	];
-	if (options.sandbox === 'none') {
+	if (!sandboxed) {
 		return [...features, ''].join('\n');
 	}
 
@@ -246,11 +252,16 @@ export function codexConfig(
  * A person's own CLI home on this machine, so one sender never sees another's
  * sessions, and the Codex config written into it.
  */
+/** Whether the turn's commands run sandboxed; a platform that does not say keeps them so. */
+export function sandboxed(assign: Pick<Assign, 'sandbox'>): boolean {
+	return assign.sandbox !== false;
+}
+
 function profileHome(
 	options: RunnerOptions,
-	userId: string,
-	clientDomains: string[] = [],
+	assign: Pick<Assign, 'requested_by' | 'allow_domains' | 'sandbox'>,
 ): {home: string; config: string} {
+	const userId = assign.requested_by;
 	const safe = userId.replace(/[^a-zA-Z0-9_-]/g, '_');
 	const home = path.join(options.root, 'profiles', safe, options.harness);
 	fs.mkdirSync(home, {recursive: true});
@@ -265,7 +276,12 @@ function profileHome(
 		}
 	}
 
-	const config = codexConfig(options, home, clientDomains);
+	const config = codexConfig(
+		options,
+		home,
+		assign.allow_domains,
+		sandboxed(assign),
+	);
 	fs.writeFileSync(path.join(home, 'config.toml'), config);
 	return {home, config};
 }
@@ -705,7 +721,7 @@ class CodexTurn implements TurnControl {
 	async start(): Promise<void> {
 		const {assign} = this;
 		const cwd = taskDir(this.server.options, assign.task_id);
-		const unconfined = this.server.options.sandbox === 'none';
+		const unconfined = !sandboxed(assign);
 		const threadParams = {
 			cwd,
 			approvalPolicy: unconfined ? 'never' : 'on-request',
@@ -1117,7 +1133,7 @@ class ClaudeTurn implements TurnControl {
 	) {
 		this.assign = assign;
 		this.sink = sink;
-		const {home} = profileHome(options, assign.requested_by);
+		const {home} = profileHome(options, assign);
 		const args = [
 			'-p',
 			'--input-format',
@@ -1129,7 +1145,7 @@ class ClaudeTurn implements TurnControl {
 			'--permission-prompt-tool',
 			'stdio',
 			'--permission-mode',
-			options.sandbox === 'none' ? 'bypassPermissions' : 'acceptEdits',
+			sandboxed(assign) ? 'acceptEdits' : 'bypassPermissions',
 			'--mcp-config',
 			privateFile(
 				home,
@@ -2135,15 +2151,16 @@ class Runner {
 
 	private async startCodex(running: Running, sink: TurnSink): Promise<void> {
 		const {assign} = running;
-		const {home, config} = profileHome(
-			this.options,
-			assign.requested_by,
-			assign.allow_domains,
-		);
+		if (sandboxed(assign) && !managesNetwork(codexRequirements())) {
+			sink.finished('failed', {error: REQUIREMENTS_MISSING});
+			return;
+		}
+
+		const {home, config} = profileHome(this.options, assign);
 		let server = this.codexServers.get(home);
 		if (server && server.config !== config) {
 			console.error(
-				`[runner] the client's allowed domains changed; restarting the CLI of ${logged(
+				`[runner] the client's sandbox or allowed domains changed; restarting the CLI of ${logged(
 					assign.requested_by,
 				)}`,
 			);
@@ -2208,24 +2225,57 @@ export function claudeSettings(options: RunnerOptions): {
 	};
 }
 
-/** A sandboxed Codex needs its managed network proxy on, or no approval can reach a host. */
-function checkCodexRequirements(options: RunnerOptions): void {
-	if (options.harness !== 'codex' || options.sandbox === 'none') {
-		return;
-	}
-
-	const requirements = fs.existsSync(CODEX_REQUIREMENTS_FILE)
+function codexRequirements(): string {
+	return fs.existsSync(CODEX_REQUIREMENTS_FILE)
 		? fs.readFileSync(CODEX_REQUIREMENTS_FILE, 'utf8')
 		: '';
-	if (!managesNetwork(requirements)) {
+}
+
+/** Why a sandboxed Codex turn cannot run: no approval could reach a host off the list. */
+const REQUIREMENTS_MISSING = `${CODEX_REQUIREMENTS_FILE} must turn on Codex's managed network proxy, so a person can allow a host the client does not list; run \`agentarea runner setup\` on the runner's machine, or turn the client's sandbox off`;
+
+/**
+ * Turn on Codex's managed network proxy for this machine. The file is the
+ * machine's, under /etc, so writing it asks for the person's sudo password.
+ */
+export function setupCodexRequirements(): 'already' | 'written' {
+	const current = codexRequirements();
+	if (managesNetwork(current)) return 'already';
+	if (/^\s*\[network_proxy\]\s*$/m.test(current)) {
 		throw new Error(
-			`${CODEX_REQUIREMENTS_FILE} must turn on Codex's managed network proxy, so a person can allow a host the client does not list:\n\n[network_proxy]\nenabled = true\n\nAdd it, or run with --sandbox none.`,
+			`${CODEX_REQUIREMENTS_FILE} has a [network_proxy] table without \`enabled = true\`; set it there`,
 		);
 	}
+
+	const mkdir = spawnSync(
+		'sudo',
+		['mkdir', '-p', path.dirname(CODEX_REQUIREMENTS_FILE)],
+		{
+			stdio: 'inherit',
+		},
+	);
+	const tee =
+		mkdir.status === 0
+			? spawnSync('sudo', ['tee', '-a', CODEX_REQUIREMENTS_FILE], {
+					input: `${
+						current && !current.endsWith('\n') ? '\n' : ''
+					}\n[network_proxy]\nenabled = true\n`,
+					stdio: ['pipe', 'ignore', 'inherit'],
+			  })
+			: mkdir;
+	if (tee.status !== 0) {
+		throw new Error(`could not write ${CODEX_REQUIREMENTS_FILE}`);
+	}
+
+	return 'written';
 }
 
 export async function runRunner(options: RunnerOptions): Promise<never> {
-	checkCodexRequirements(options);
+	if (options.harness === 'codex' && !managesNetwork(codexRequirements())) {
+		console.error(
+			`[runner] ${REQUIREMENTS_MISSING}; until then its sandboxed turns fail.`,
+		);
+	}
 	console.error(
 		`[runner] ${options.harness} serving client ${options.config.client_id} in ${options.config.workspace} at ${options.config.api_url}; data in ${options.root}`,
 	);

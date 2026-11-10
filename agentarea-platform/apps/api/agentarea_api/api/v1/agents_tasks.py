@@ -659,7 +659,7 @@ async def get_all_tasks(
         # Sequential awaits: agent_service and task_service share one AsyncSession
         # via ReadRepositoryFactoryDep, and asyncpg forbids concurrent ops on a
         # single connection ("another operation is in progress").
-        agents_result = await agent_service.list(include_archived=True)
+        agents_result = await agent_service.list(include_archived=True, include_harness=True)
         agent_map = {str(agent.id): agent.name for agent in agents_result}
         task_orms = await task_service.task_repository.list_page(
             limit=limit,

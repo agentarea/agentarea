@@ -7,6 +7,7 @@ import {
 	claudeEvents,
 	claudeSettings,
 	codexConfig,
+	sandboxed,
 	codexEvents,
 	managesNetwork,
 	notifiedTurn,
@@ -199,14 +200,31 @@ test('a sandboxed config proxies every host, so one off the list can be asked fo
 		harness: 'codex' as const,
 		root: '/data',
 		loginFrom: '/login',
-		sandbox: 'profile' as const,
 		allowDomains: [],
 		capacity: 1,
 	};
-	const config = codexConfig(options, '/data/profiles/u/codex', ['pypi.org']);
+	const config = codexConfig(
+		options,
+		'/data/profiles/u/codex',
+		['pypi.org'],
+		true,
+	);
 	t.regex(config, /\.network\]\nenabled = true\n/);
 	t.regex(config, /"pypi\.org" = "allow"/);
-	t.regex(codexConfig(options, '/data/profiles/u/codex'), /enabled = true/);
+	t.regex(
+		codexConfig(options, '/data/profiles/u/codex', [], true),
+		/enabled = true/,
+	);
+	t.notRegex(
+		codexConfig(options, '/data/profiles/u/codex', ['pypi.org'], false),
+		/permissions/,
+	);
+});
+
+test('a turn runs sandboxed unless the client turned it off', t => {
+	t.true(sandboxed({sandbox: true}));
+	t.true(sandboxed({}));
+	t.false(sandboxed({sandbox: false}));
 });
 
 const assign = {

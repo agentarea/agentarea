@@ -378,6 +378,8 @@ func (p *OpenSandboxProvider) ResolveProvisioning(
 			return nil, mapOpenSandboxError(err)
 		}
 		for _, info := range response.Items {
+			// A Stopping match is kept: its pod may still run, and the fence
+			// holds until the server stops returning it.
 			if info.Status.State == opensandbox.StateTerminated {
 				continue
 			}
@@ -584,15 +586,60 @@ func immutableOCIImage(image string) bool {
 	return err == nil
 }
 
+// Renew extends the lease of a live sandbox. Since OpenSandbox 1.2 a deleted
+// BatchSandbox stays readable as Stopping until its pod is gone, and one past
+// its expireTime reads Terminated (reason SANDBOX_EXPIRED) while the pod may
+// still run. The server renews either without complaint, so the state is read
+// first: a sandbox on its way out is a missing session, and the manager drops
+// the binding and provisions a fresh one instead of extending it.
 func (p *OpenSandboxProvider) Renew(ctx context.Context, session *Session, ttl time.Duration) error {
-	sandbox, err := p.connect(ctx, session)
+	info, err := opensandbox.NewSandboxManager(p.cfg.Connection).GetSandboxInfo(ctx, session.ID)
 	if err != nil {
+		return mapOpenSandboxError(err)
+	}
+	if err := openSandboxSessionEnded(session.ID, info); err != nil {
 		return err
+	}
+	sandbox, err := opensandbox.ConnectSandbox(ctx, p.renewConnection(), session.ID)
+	if err != nil {
+		return mapOpenSandboxError(err)
 	}
 	if _, err := sandbox.Renew(ctx, ttl); err != nil {
 		return mapOpenSandboxError(err)
 	}
 	return nil
+}
+
+// openSandboxSessionEnded reports a sandbox the server still returns but that
+// will not serve again as a missing session.
+func openSandboxSessionEnded(sandboxID string, info *opensandbox.SandboxInfo) error {
+	if info == nil {
+		return fmt.Errorf("OpenSandbox returned no state for sandbox %s", sandboxID)
+	}
+	switch info.Status.State {
+	case opensandbox.StateStopping, opensandbox.StateTerminated:
+		return fmt.Errorf("%w: OpenSandbox sandbox %s is %s (%s)", ErrSessionNotFound, sandboxID, info.Status.State, info.Status.Reason)
+	}
+	return nil
+}
+
+// renewConnection retries the renewal POST on the status codes reads retry on.
+// SDK 1.2 stopped retrying a POST on a status code by default, since most
+// writes are not safe to repeat. A renewal is: it sets an absolute expiry. And
+// a transient 503 on the renewal after an execution would discard a live
+// workspace.
+func (p *OpenSandboxProvider) renewConnection() opensandbox.ConnectionConfig {
+	connection := p.cfg.Connection
+	if connection.Retry == nil {
+		return connection
+	}
+	retry := *connection.Retry
+	retry.RetryableStatusCodesNonIdempotent = retry.RetryableStatusCodes
+	if len(retry.RetryableStatusCodesNonIdempotent) == 0 {
+		retry.RetryableStatusCodesNonIdempotent = opensandbox.DefaultRetryConfig().RetryableStatusCodes
+	}
+	connection.Retry = &retry
+	return connection
 }
 
 func (p *OpenSandboxProvider) ExecuteQuiescent(ctx context.Context, session *Session, executionRequest QuiescentExecution) (*sandboxcontract.ExecuteResponse, error) {

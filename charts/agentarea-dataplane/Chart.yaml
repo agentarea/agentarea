@@ -6,7 +6,7 @@ description: >-
   namespaces, admission and network policy the untrusted workloads of both are
   confined to.
 type: application
-version: 0.2.11
+version: 0.2.12
 # The mcp-manager release this chart runs. Keep it equal to the control plane's:
 # both halves of the data-plane API are one build.
 appVersion: "0.1.2"
@@ -31,22 +31,22 @@ annotations:
     - name: agentarea/agentarea-mcp-manager
       image: agentarea/agentarea-mcp-manager:0.1.2
     - name: opensandbox/controller
-      image: opensandbox/controller:release-1.1.1@sha256:aca5cda09a0fbc5867e6028f8b6aaa60fdcd78ebee634f71a263d45d5f6c2bab
+      image: opensandbox/controller:release-1.2.0@sha256:7701db7eacda4c3533a961e0451f6ce067535d8ce46f15765a04dcf0ffa6e2c6
     - name: opensandbox/execd
-      image: opensandbox/execd:release-1.1.1@sha256:cda2bc35409bbf57561599b316cafb899598f7dce671332e7ceda14eb1cfeded
+      image: opensandbox/execd:release-1.2.0@sha256:c75836c46ef4302afccec182d5d7339eb2f905f51e3d73b7aa17bb76c832526c
     - name: opensandbox/server
-      image: opensandbox/server:release-1.1.1@sha256:bcd5f264101262cebfa7e1ff9cd0424403e42f31a6596e4364cf90d8cb5c936b
+      image: opensandbox/server:release-1.2.0@sha256:25bebdcf1cf7724eb923faecbdbbf82d4038c6ab35c736151574726d14006f30
     - name: pause
       image: registry.k8s.io/pause:3.10.2
 dependencies:
   # Vendored from manifests/charts/{base,controller} at the OpenSandbox
-  # release-1.1.1 tag (Apache-2.0), which publishes no chart repository. base
+  # release-1.2.0 tag (Apache-2.0), which publishes no chart repository. base
   # brings the BatchSandbox CRDs, controller the controller that turns them
   # into pods; one switch installs both.
   - name: base
     alias: opensandbox-base
-    version: 1.1.1
+    version: 1.2.0
     condition: opensandbox-controller.enabled
   - name: opensandbox-controller
-    version: 1.1.1
+    version: 1.2.0
     condition: opensandbox-controller.enabled

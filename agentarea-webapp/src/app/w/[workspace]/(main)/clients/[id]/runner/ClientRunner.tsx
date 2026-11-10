@@ -8,6 +8,7 @@ import {
   KeyRound,
   Loader2,
   Plus,
+  ShieldCheck,
   SquareTerminal,
 } from "lucide-react";
 import type { ClientResponse, RunnerKeyResponse } from "@/api/client/types.gen";
@@ -31,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { getRunnerStatusPresentation } from "@/lib/status";
@@ -40,6 +42,7 @@ import {
   revokeRunnerKeyAction,
   saveAllowDomainsAction,
   setRunnerModelAction,
+  setRunnerSandboxAction,
 } from "../actions";
 
 /**
@@ -76,6 +79,7 @@ export function ClientRunner({
           {keys !== null && (
             <>
               <RunnerKeys clientId={client.id} kind={client.kind} keys={keys} />
+              <RunnerSandbox client={client} />
               <AllowDomains client={client} />
             </>
           )}
@@ -134,6 +138,42 @@ function RunnerModel({
           </Select>
         )}
         <p className="note">{t("modelHint")}</p>
+        {error && <FormError>{error}</FormError>}
+      </div>
+    </SectionCard>
+  );
+}
+
+function RunnerSandbox({ client }: { client: ClientResponse }) {
+  const t = useTranslations("ClientsPage.runner");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const sandbox = client.sandbox ?? true;
+
+  const save = (next: boolean) => {
+    setError(null);
+    startTransition(async () => {
+      const result = await setRunnerSandboxAction(client.id, next);
+      setError(result.error);
+    });
+  };
+
+  return (
+    <SectionCard>
+      <SectionCardHead
+        icon={<ShieldCheck />}
+        title={t("sandbox")}
+        action={
+          <Switch
+            checked={sandbox}
+            onCheckedChange={save}
+            disabled={pending}
+            aria-label={t("sandbox")}
+          />
+        }
+      />
+      <div className="space-y-2 px-[15px] py-3">
+        <p className="note">{sandbox ? t("sandboxOn") : t("sandboxOff")}</p>
         {error && <FormError>{error}</FormError>}
       </div>
     </SectionCard>

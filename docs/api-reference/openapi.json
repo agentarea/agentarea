@@ -3910,6 +3910,11 @@
             "title": "Platform Toolsets",
             "type": "array"
           },
+          "sandbox": {
+            "default": true,
+            "title": "Sandbox",
+            "type": "boolean"
+          },
           "skills": {
             "default": [],
             "items": {
@@ -3979,6 +3984,10 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "sandbox": {
+            "title": "Sandbox",
+            "type": "boolean"
           }
         },
         "title": "ClientUpdate",
@@ -26272,6 +26281,70 @@
           }
         ],
         "summary": "Update Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/clients/{client_id}/agent": {
+      "post": {
+        "description": "The agent a task given to this Codex or Claude Code client itself runs as.\n\nMade on first use, with no instructions or tools of its own: the client's\nCLI brings them. It is not listed among the workspace's agents.",
+        "operationId": "harness_agent_v1_clients__client_id__agent_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Harness Agent",
         "tags": [
           "v1",
           "protected",

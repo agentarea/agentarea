@@ -1500,6 +1500,7 @@
       "taskPolicy": "Task policy",
       "noProject": "No project",
       "defaultPolicy": "Default policy",
+      "runnerOffline": "offline",
       "when": "When",
       "runNow": "Now",
       "runAt": "Run at",
@@ -1514,7 +1515,13 @@
         "inOneHour": "In an hour",
         "tomorrowMorning": "Tomorrow morning",
         "mondayMorning": "Monday morning"
-      }
+      },
+      "agents": "Agents",
+      "harnesses": "Harnesses",
+      "add": "Add",
+      "attachFiles": "Files",
+      "mcpsAndSkills": "MCP and skills",
+      "runLater": "Run later"
     },
     "Messages": {
       "toolCall": "Tool Call",
@@ -1600,7 +1607,8 @@
       "agentFallback": "agent",
       "compacted": "Context compacted: {count, plural, one {# earlier message was} other {# earlier messages were}} summarized",
       "messageStoredSeparately": "The message is stored separately and is not shown here."
-    }
+    },
+    "runnerOffline": "{name} is offline: the task waits up to 10 minutes for it to come back."
   },
   "TasksPage": {
     "title": "Tasks",
@@ -3995,7 +4003,10 @@
         "issued": "Issued {when}",
         "used": "last used {when}",
         "neverUsed": "never used"
-      }
+      },
+      "sandbox": "Sandbox",
+      "sandboxOn": "The CLI's commands see only the task's folder and reach only the allowed hosts; anything else waits for a person. Codex needs `agentarea runner setup` once on the runner's machine.",
+      "sandboxOff": "The CLI's commands run unconfined on the runner's machine: every file and every host it can reach."
     },
     "agents": {
       "title": "Agents on this harness",

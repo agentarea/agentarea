@@ -3,6 +3,7 @@ import { getAgents } from "@/components/actions";
 import { WorkplaceChat } from "@/components/Chat/WorkplaceChat";
 import { WorkplaceOnboarding } from "@/components/Chat/WorkplaceOnboarding";
 import { listModelInstances, listPolicies, listProjects } from "@/lib/api";
+import { loadRunOptions } from "@/lib/run-options";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { getViewerCapabilities } from "@/lib/workspace-context";
 import type {
@@ -49,12 +50,15 @@ export async function WorkplaceData() {
   }
 
   type AgentWithDisplay = AgentResponse & { icon?: string | null };
+  const runOptions = await loadRunOptions();
   const agents =
     (agentsData as AgentWithDisplay[] | undefined)?.map((agent) => ({
       id: String(agent.id),
       name: agent.name,
       description: agent.description,
       icon: agent.icon ?? null,
+      modelId: agent.model_id ?? null,
+      client: agent.client ?? null,
     })) || [];
 
   const projects =
@@ -104,6 +108,7 @@ export async function WorkplaceData() {
       availableAgents={agents}
       availableProjects={projects}
       availableTaskPolicies={taskPolicies}
+      runOptions={runOptions}
       badgeSuggestions={badgeSuggestions}
     />
   ) : (

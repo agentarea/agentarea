@@ -2,7 +2,10 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import type { PolicyDocument } from "@/api/client/types.gen";
+import type {
+  AgentClientSummary,
+  PolicyDocument,
+} from "@/api/client/types.gen";
 import { scheduleTask } from "@/components/actions";
 import type { HumanInputSecretValue } from "@/components/Chat/types";
 import FormError from "@/components/FormError";
@@ -23,6 +26,7 @@ import {
   type CompletedRun,
   type EventState,
 } from "@/lib/events/reducer";
+import { runsOn, type RunOptions } from "@/lib/run-targets";
 import { resumeAgentTaskAction as resumeAgentTask } from "@/lib/server-actions";
 import { getTaskStatusPresentation } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -34,6 +38,7 @@ import {
 } from "@/utils/mentions";
 import ActivityGroup from "./ActivityGroup";
 import { buildActivitySegments } from "./activityView";
+import { AgentRunPicker } from "./componets/AgentRunPicker";
 import {
   BadgeSuggestions,
   BadgeSuggestionsSkeleton,
@@ -85,6 +90,10 @@ export interface Agent {
   name: string;
   description?: string | null;
   icon?: string | null;
+  modelId?: string | null;
+  client?: AgentClientSummary | null;
+  /** Set when the agent stands for a harness itself: the task goes to that CLI with no agent configured. */
+  harnessClientId?: string | null;
 }
 
 export interface ProjectOption {
@@ -195,6 +204,8 @@ interface FullChatProps {
   onAgentChange?: (agent: Agent) => void;
   availableProjects?: ProjectOption[];
   availableTaskPolicies?: TaskPolicyOption[];
+  /** The models and runners a run can be sent to instead of where its agent runs. */
+  runOptions?: RunOptions | null;
   startCentered?: boolean;
   /**
    * Drop the page gutters around the composer so it sits flush in a host that
@@ -227,6 +238,7 @@ export default function FullChat({
   badgeSuggestions,
   availableProjects = [],
   availableTaskPolicies = [],
+  runOptions,
 }: FullChatProps) {
   const t = useTranslations("Chat");
 
@@ -355,6 +367,14 @@ export default function FullChat({
   const [taskMcps, setTaskMcps] = React.useState<TaskResourceRef[]>([]);
   const [taskSkills, setTaskSkills] = React.useState<TaskResourceRef[]>([]);
   const [scheduledAt, setScheduledAt] = React.useState<Date | null>(null);
+  const where = runOptions
+    ? runsOn(
+        { modelId: agent.modelId ?? null, client: agent.client ?? null },
+        runOptions
+      )
+    : null;
+  const offlineRunner =
+    where?.on === "runner" && !where.runner.online ? where.runner.name : null;
   const router = useWorkspaceRouter();
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const cardContainerRef = React.useRef<HTMLDivElement>(null);
@@ -1081,9 +1101,18 @@ export default function FullChat({
             containerRef={cardContainerRef}
             variant="centered"
             rows={3}
-            currentAgent={agent}
-            availableAgents={availableAgents}
-            onAgentChange={onAgentChange}
+            runNotice={
+              offlineRunner ? t("runnerOffline", { name: offlineRunner }) : null
+            }
+            agentPicker={
+              <AgentRunPicker
+                agent={agent}
+                agents={availableAgents}
+                onAgentChange={onAgentChange}
+                runOptions={runOptions}
+                disabled={isLoading}
+              />
+            }
             currentProjectId={selectedProjectId}
             availableProjects={availableProjects}
             onProjectChange={setSelectedProjectId}

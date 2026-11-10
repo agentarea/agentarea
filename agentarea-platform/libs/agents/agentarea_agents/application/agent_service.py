@@ -2,7 +2,7 @@ import builtins
 import logging
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -48,6 +48,9 @@ from agentarea_agents.infrastructure.catalog_skill_repository import (
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_agents.infrastructure.skill_repository import SkillRepository
 from agentarea_agents.schemas.dto import AgentCreate, AgentUpdate
+
+if TYPE_CHECKING:
+    from agentarea_mcp.domain.client_models import Client
 
 logger = logging.getLogger(__name__)
 
@@ -218,25 +221,37 @@ class AgentService(BaseCrudService[Agent]):
         """A runner's client of this workspace the caller may use, or None for the platform loop."""
         if client_id is None:
             return None
-        from agentarea_common.auth.permission import PermissionService
-        from agentarea_common.di.container import resolve
-        from agentarea_mcp.domain.client_models import RUNNER_KINDS
-        from agentarea_mcp.infrastructure.client_repository import ClientRepository
+        return (await self._runner_client(client_id)).id
 
-        client = await self.repository_factory.create_repository(ClientRepository).get_by_id(
-            client_id
-        )
-        if (
-            client is None
-            or client.kind not in RUNNER_KINDS
-            or not await resolve(PermissionService).check(
-                self._user_context.graph_subject, "use", "client", str(client_id)
-            )
-        ):
+    async def _runner_client(self, client_id: UUID) -> Client:
+        from agentarea_mcp.application.client_service import usable_runner_client
+
+        client = await usable_runner_client(self.repository_factory, client_id)
+        if client is None:
             raise InvalidClientError(
                 f"Client '{client_id}' is no Codex or Claude Code client of this workspace"
             )
-        return client.id
+        return client
+
+    async def harness_agent(self, client_id: UUID) -> Agent:
+        """The agent a task given to this harness client itself runs as, made on first use.
+
+        It has no instructions or tools of its own: the client's CLI brings them.
+        """
+        client = await self._runner_client(client_id)
+        repo = self._get_agent_repository()
+        existing = await repo.list_all(include_archived=True, harness_client_id=client.id)
+        if existing:
+            return existing[0]
+        return await self.create(
+            Agent(
+                name=client.name,
+                slug=await self._resolve_unique_slug(client.name),
+                client_id=client.id,
+                harness_client_id=client.id,
+                tools=[],
+            )
+        )
 
     async def _validate_model_id(self, model_id: str | None) -> str | None:
         """Resolve ``model_id`` to a model instance, or reject it.
@@ -533,7 +548,10 @@ class AgentService(BaseCrudService[Agent]):
         )
 
     async def list(
-        self, include_catalog: bool = False, include_archived: bool = False
+        self,
+        include_catalog: bool = False,
+        include_archived: bool = False,
+        include_harness: bool = False,
     ) -> builtins.list[Agent]:
         """List the workspace's own agents.
 
@@ -543,7 +561,8 @@ class AgentService(BaseCrudService[Agent]):
         items as read-only (ADR-003).
 
         Archived agents are left out unless ``include_archived``; they still
-        count as forks, so their catalog item is not offered again.
+        count as forks, so their catalog item is not offered again. The agents
+        that stand for harness clients are left out unless ``include_harness``.
 
         Forked copies (a tenant ``agents`` row carrying ``registry_item_id``) are
         always flagged ``update_available`` when the catalog version has moved on
@@ -552,7 +571,10 @@ class AgentService(BaseCrudService[Agent]):
         repo = self._get_agent_repository()
         all_agents = await repo.list_all(include_archived=True)
         tenant_agents = [
-            a for a in all_agents if include_archived or a.status != AgentStatus.ARCHIVED
+            a
+            for a in all_agents
+            if (include_archived or a.status != AgentStatus.ARCHIVED)
+            and (include_harness or a.harness_client_id is None)
         ]
 
         catalog_repo = self._get_catalog_repository()

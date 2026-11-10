@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { FormSkeleton } from "@/components/Skeleton";
 import { getAgent, listModelInstances } from "@/lib/api";
+import { loadRunOptions } from "@/lib/run-options";
 import { requireApiData } from "@/lib/server-resource";
 import AgentNewTask from "./components/AgentNewTask";
 
@@ -31,10 +32,14 @@ export default async function AgentNewTaskPage({ params }: Props) {
         config_name: model.config_name || undefined,
       }
     : undefined;
+  const runOptions = await loadRunOptions();
 
   return (
     <Suspense fallback={<FormSkeleton className="p-4" />}>
-      <AgentNewTask agent={{ ...agent, model_info }} />
+      <AgentNewTask
+        agent={{ ...agent, model_info }}
+        runOptions={runOptions}
+      />
     </Suspense>
   );
 }

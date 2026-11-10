@@ -69,6 +69,11 @@ class Agent(BaseModel, WorkspaceScopedMixin):
     # Code CLI on a subscription, ADR-0051); None runs them on the platform's own loop.
     # References clients.id (FK in the migration; the client model lives in agentarea_mcp).
     client_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True, index=True)
+    # Set on the one agent that stands for a harness client itself: a task given to
+    # the client with no agent configured runs as it. Left out of the agent list.
+    harness_client_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=True, unique=True
+    )
 
     # Relationships
     skills: Mapped[list[Skill]] = relationship(

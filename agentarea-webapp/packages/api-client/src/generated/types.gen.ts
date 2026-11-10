@@ -2206,6 +2206,10 @@ export type ClientResponse = {
      */
     platform_toolsets?: Array<ClientPlatformToolsetRef>;
     /**
+     * Sandbox
+     */
+    sandbox?: boolean;
+    /**
      * Skills
      */
     skills?: Array<ClientRef>;
@@ -2241,6 +2245,10 @@ export type ClientUpdate = {
      * Name
      */
     name?: string;
+    /**
+     * Sandbox
+     */
+    sandbox?: boolean;
 };
 
 /**
@@ -14206,6 +14214,36 @@ export type UpdateClientV1ClientsClientIdPatchResponses = {
 };
 
 export type UpdateClientV1ClientsClientIdPatchResponse = UpdateClientV1ClientsClientIdPatchResponses[keyof UpdateClientV1ClientsClientIdPatchResponses];
+
+export type HarnessAgentV1ClientsClientIdAgentPostData = {
+    body?: never;
+    path: {
+        /**
+         * Client Id
+         */
+        client_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/clients/{client_id}/agent';
+};
+
+export type HarnessAgentV1ClientsClientIdAgentPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type HarnessAgentV1ClientsClientIdAgentPostError = HarnessAgentV1ClientsClientIdAgentPostErrors[keyof HarnessAgentV1ClientsClientIdAgentPostErrors];
+
+export type HarnessAgentV1ClientsClientIdAgentPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgentResponse;
+};
+
+export type HarnessAgentV1ClientsClientIdAgentPostResponse = HarnessAgentV1ClientsClientIdAgentPostResponses[keyof HarnessAgentV1ClientsClientIdAgentPostResponses];
 
 export type AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostData = {
     body: McpInstanceAssociationBody;

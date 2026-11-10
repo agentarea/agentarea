@@ -11,22 +11,22 @@ import {
   FolderKanban,
   Loader2,
   Paperclip,
-  Square,
   Play,
   Send,
   ShieldCheck,
+  Square,
 } from "lucide-react";
-import { AgentAvatar } from "@/components/AgentAvatar";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 import {
   TaskResourceAttach,
   type TaskResourceRef,
 } from "@/components/ResourcePicker/TaskResourceAttach";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { AttachmentCard } from "@/components/ui/attachment-card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { MentionMenu } from "../MentionMenu";
+import { ComposerMenu } from "./ComposerMenu";
 import { ContextSelect } from "./ContextSelect";
 import { ScheduleChip } from "./ScheduleChip";
 
@@ -116,6 +116,8 @@ export interface ChatInputAreaProps {
 
   /** Optional delivery constraint shown when files are selected. */
   attachmentNotice?: string;
+  /** A note about where the task goes, e.g. that its runner is offline. */
+  runNotice?: string | null;
 
   /**
    * File input ref
@@ -182,37 +184,9 @@ export interface ChatInputAreaProps {
   containerClassName?: string;
 
   /**
-   * Current agent (for agent selector)
+   * Who takes the task and where it runs: the agent and run target picker.
    */
-  currentAgent?: {
-    id: string;
-    name: string;
-    description?: string | null;
-    icon?: string | null;
-   
-  };
-
-  /**
-   * Available agents (for agent selector)
-   */
-  availableAgents?: Array<{
-    id: string;
-    name: string;
-    description?: string | null;
-    icon?: string | null;
-   
-  }>;
-
-  /**
-   * Agent change handler
-   */
-  onAgentChange?: (agent: {
-    id: string;
-    name: string;
-    description?: string | null;
-    icon?: string | null;
-   
-  }) => void;
+  agentPicker?: React.ReactNode;
 
   /**
    * Current project id
@@ -342,6 +316,7 @@ export function ChatInputArea({
   onOpenFileDialog,
   onFileSelect,
   attachmentNotice,
+  runNotice,
   fileInputRef,
   textareaRef,
   onKeyDown,
@@ -354,9 +329,7 @@ export function ChatInputArea({
   rows = 3,
   className,
   containerClassName,
-  currentAgent,
-  availableAgents,
-  onAgentChange,
+  agentPicker,
   currentProjectId,
   availableProjects,
   onProjectChange,
@@ -382,12 +355,24 @@ export function ChatInputArea({
     : sendButtonIcon === "arrow"
       ? ArrowUp
       : Send;
-  const showContextControls =
-    Boolean(leadingControls) ||
-    Boolean(currentAgent && availableAgents?.length && onAgentChange) ||
-    Boolean(availableProjects?.length && onProjectChange) ||
-    Boolean(availableTaskPolicies?.length && onTaskPolicyChange) ||
+  const [resourcesOpen, setResourcesOpen] = React.useState(false);
+  const [scheduleOpen, setScheduleOpen] = React.useState(false);
+  const canAttachResources = Boolean(
+    taskMcps && taskSkills && onTaskMcpsChange && onTaskSkillsChange
+  );
+  const canPickProject = Boolean(availableProjects?.length && onProjectChange);
+  const canPickPolicy = Boolean(
+    availableTaskPolicies?.length && onTaskPolicyChange
+  );
+  // The add menu carries what a task may take besides who takes it and its
+  // files, which keep their own button.
+  const showMenu =
+    canAttachResources ||
+    canPickProject ||
+    canPickPolicy ||
     Boolean(onScheduledAtChange);
+  const showContextControls =
+    Boolean(leadingControls) || Boolean(agentPicker) || showMenu;
 
   return (
     <div ref={containerRef} className={cn("w-full", containerClassName)}>
@@ -427,6 +412,14 @@ export function ChatInputArea({
                 />
               ))}
           </div>
+          {runNotice ? (
+            <p
+              role="status"
+              className="px-1 text-[11px] leading-4 text-amber-700 dark:text-amber-400"
+            >
+              {runNotice}
+            </p>
+          ) : null}
           {selectedFiles.length > 0 && attachmentNotice ? (
             <p
               role="status"
@@ -440,48 +433,34 @@ export function ChatInputArea({
             {showContextControls ? (
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-hidden sm:flex-nowrap sm:gap-2">
                 {leadingControls}
-                {currentAgent && availableAgents?.length && onAgentChange ? (
-                  <div className="flex min-w-0 basis-full sm:max-w-[12rem] sm:basis-auto">
-                    {/* Trigger and options share one avatar. Rendering a bare
-                        icon on the trigger dropped the hue, which is the part
-                        that differs per agent — so picking another one left
-                        the composer looking unchanged. */}
-                    <ContextSelect
-                      // Narrower than the other chips (the wrapper caps it):
-                      // agent names run long, and the project/policy defaults
-                      // must stay readable. The trigger fills no more than the
-                      // wrapper, so a squeezed row truncates the name.
-                      className="min-w-0 sm:max-w-full"
-                      icon={FolderKanban}
-                      label={t("agent")}
-                      value={currentAgent.id}
-                      disabled={isLoading}
-                      onValueChange={(agentId) => {
-                        const nextAgent = availableAgents.find(
-                          (agent) => agent.id === agentId
-                        );
-                        if (nextAgent) onAgentChange(nextAgent);
-                      }}
-                      options={availableAgents}
-                      renderTriggerIcon={(option) => (
-                        <AgentAvatar
-                          agent={option}
-                          size="xs"
-                          className="shrink-0"
-                        />
-                      )}
-                      renderOptionIcon={(option) => (
-                        <AgentAvatar
-                          agent={option}
-                          size="xs"
-                          className="mt-0.5 shrink-0"
-                        />
-                      )}
-                    />
+                {showMenu ? (
+                  <ComposerMenu
+                    onOpenResources={
+                      canAttachResources
+                        ? () => setResourcesOpen(true)
+                        : undefined
+                    }
+                    onSchedule={
+                      onScheduledAtChange
+                        ? () => setScheduleOpen(true)
+                        : undefined
+                    }
+                    projects={availableProjects}
+                    currentProjectId={currentProjectId}
+                    onProjectChange={onProjectChange}
+                    policies={availableTaskPolicies}
+                    currentPolicyId={currentTaskPolicyId}
+                    onPolicyChange={onTaskPolicyChange}
+                    disabled={isLoading || disabled}
+                  />
+                ) : null}
+                {agentPicker ? (
+                  <div className="flex min-w-0 basis-full sm:max-w-[18rem] sm:basis-auto">
+                    {agentPicker}
                   </div>
                 ) : null}
 
-                {availableProjects?.length && onProjectChange ? (
+                {canPickProject && onProjectChange && currentProjectId ? (
                   <ContextSelect
                     className="shrink min-w-0"
                     icon={FolderKanban}
@@ -495,12 +474,12 @@ export function ChatInputArea({
                     }
                     options={[
                       { id: NO_PROJECT_VALUE, name: t("noProject") },
-                      ...availableProjects,
+                      ...(availableProjects ?? []),
                     ]}
                   />
                 ) : null}
 
-                {availableTaskPolicies?.length && onTaskPolicyChange ? (
+                {canPickPolicy && onTaskPolicyChange && currentTaskPolicyId ? (
                   <ContextSelect
                     className="shrink min-w-0"
                     icon={ShieldCheck}
@@ -517,13 +496,21 @@ export function ChatInputArea({
                         id: DEFAULT_TASK_POLICY_VALUE,
                         name: t("defaultPolicy"),
                       },
-                      ...availableTaskPolicies,
+                      ...(availableTaskPolicies ?? []),
                     ]}
                   />
                 ) : null}
 
-                {taskMcps && taskSkills && onTaskMcpsChange && onTaskSkillsChange ? (
+                {taskMcps &&
+                taskSkills &&
+                onTaskMcpsChange &&
+                onTaskSkillsChange &&
+                (resourcesOpen ||
+                  taskMcps.length > 0 ||
+                  taskSkills.length > 0) ? (
                   <TaskResourceAttach
+                    open={resourcesOpen}
+                    onOpenChange={setResourcesOpen}
                     mcps={taskMcps}
                     skills={taskSkills}
                     onMcpsChange={onTaskMcpsChange}
@@ -532,8 +519,10 @@ export function ChatInputArea({
                   />
                 ) : null}
 
-                {onScheduledAtChange ? (
+                {onScheduledAtChange && (scheduleOpen || scheduledAt) ? (
                   <ScheduleChip
+                    open={scheduleOpen}
+                    onOpenChange={setScheduleOpen}
                     value={scheduledAt}
                     onChange={onScheduledAtChange}
                     disabled={isLoading}

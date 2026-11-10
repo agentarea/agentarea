@@ -8,13 +8,15 @@ import FullChat from "@/components/Chat/FullChat";
 import TaskInfoPanel from "@/components/TaskInfoPanel/TaskInfoPanel";
 import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { useWorkspacePath } from "@/hooks/useWorkspaceNavigation";
+import type { RunOptions } from "@/lib/run-targets";
 import { Agent } from "@/types/agent";
 
 interface Props {
   agent: Agent;
+  runOptions?: RunOptions | null;
 }
 
-export default function AgentNewTask({ agent }: Props) {
+export default function AgentNewTask({ agent, runOptions }: Props) {
   const t = useTranslations("AgentsPage.descriptionPage");
   const workspaceHref = useWorkspacePath();
 
@@ -54,7 +56,10 @@ export default function AgentNewTask({ agent }: Props) {
               id: agent.id,
               name: agent.name,
               description: agent.description || undefined,
+              modelId: agent.model_id ?? null,
+              client: agent.client ?? null,
             }}
+            runOptions={runOptions}
             onTaskStarted={handleTaskCreated}
             onTaskFinished={handleTaskFinished}
           />

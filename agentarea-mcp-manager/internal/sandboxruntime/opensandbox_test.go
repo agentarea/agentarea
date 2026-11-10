@@ -924,15 +924,18 @@ func TestOpenSandboxResolveProvisioningUsesDurableMetadata(t *testing.T) {
 		if !strings.Contains(metadata, "agentarea.provisioning_id=provision-1") {
 			t.Errorf("metadata filter = %q", metadata)
 		}
+		matching := map[string]string{
+			"agentarea.provisioning_id": "provision-1",
+			"agentarea.workspace_id":    "workspace-1",
+			"agentarea.task_id":         "task-1",
+		}
 		_ = json.NewEncoder(w).Encode(opensandbox.ListSandboxesResponse{
-			Items: []opensandbox.SandboxInfo{{
-				ID: "osb-orphan", Status: opensandbox.SandboxStatus{State: opensandbox.StateRunning},
-				Metadata: map[string]string{
-					"agentarea.provisioning_id": "provision-1",
-					"agentarea.workspace_id":    "workspace-1",
-					"agentarea.task_id":         "task-1",
-				},
-			}},
+			Items: []opensandbox.SandboxInfo{
+				{ID: "osb-orphan", Status: opensandbox.SandboxStatus{State: opensandbox.StateRunning}, Metadata: matching},
+				// Deleted but its pod not yet gone: still a match until the server drops it.
+				{ID: "osb-stopping", Status: opensandbox.SandboxStatus{State: opensandbox.StateStopping, Reason: "DELETING"}, Metadata: matching},
+				{ID: "osb-expired", Status: opensandbox.SandboxStatus{State: opensandbox.StateTerminated, Reason: "SANDBOX_EXPIRED"}, Metadata: matching},
+			},
 			Pagination: opensandbox.PaginationInfo{Page: 1, PageSize: 100},
 		})
 	}))
@@ -949,7 +952,95 @@ func TestOpenSandboxResolveProvisioningUsesDurableMetadata(t *testing.T) {
 		Provider: "opensandbox", ProvisioningID: "provision-1", WorkspaceID: "workspace-1",
 		TaskID: "task-1", StartedAt: now, ExpiresAt: now.Add(time.Hour),
 	})
-	if err != nil || len(sessions) != 1 || sessions[0].ID != "osb-orphan" {
+	if err != nil || len(sessions) != 2 || sessions[0].ID != "osb-orphan" || sessions[1].ID != "osb-stopping" {
 		t.Fatalf("ResolveProvisioning() = %+v, %v", sessions, err)
 	}
+}
+
+func TestOpenSandboxRenewReportsEndedSandboxAsMissing(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status opensandbox.SandboxStatus
+	}{
+		{"stopping", opensandbox.SandboxStatus{State: opensandbox.StateStopping, Reason: "DELETING"}},
+		{"expired", opensandbox.SandboxStatus{State: opensandbox.StateTerminated, Reason: "SANDBOX_EXPIRED"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var renews atomic.Int32
+			var server *httptest.Server
+			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == "/v1/sandboxes/osb-1":
+					_ = json.NewEncoder(w).Encode(opensandbox.SandboxInfo{ID: "osb-1", Status: tc.status})
+				// The server still resolves the endpoint and accepts the renewal:
+				// only the state tells this sandbox is on its way out.
+				case r.Method == http.MethodGet && r.URL.Path == "/v1/sandboxes/osb-1/endpoints/44772":
+					_ = json.NewEncoder(w).Encode(opensandbox.Endpoint{Endpoint: server.URL})
+				case r.URL.Path == "/v1/sandboxes/osb-1/renew-expiration":
+					renews.Add(1)
+					_ = json.NewEncoder(w).Encode(opensandbox.RenewExpirationResponse{ExpiresAt: time.Now().Add(time.Minute)})
+				default:
+					http.Error(w, "unexpected "+r.Method+" "+r.URL.Path, http.StatusNotFound)
+				}
+			}))
+			defer server.Close()
+			provider := newTestOpenSandboxProvider(t, opensandbox.ConnectionConfig{Domain: server.URL})
+
+			err := provider.Renew(context.Background(), &Session{ID: "osb-1"}, time.Minute)
+			if !errors.Is(err, ErrSessionNotFound) {
+				t.Fatalf("Renew() error = %v, want ErrSessionNotFound", err)
+			}
+			if renews.Load() != 0 {
+				t.Fatalf("renewed a sandbox in state %s", tc.status.State)
+			}
+		})
+	}
+}
+
+func TestOpenSandboxRenewRetriesTransientStatus(t *testing.T) {
+	var renews atomic.Int32
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/sandboxes/osb-1":
+			_ = json.NewEncoder(w).Encode(opensandbox.SandboxInfo{ID: "osb-1", Status: opensandbox.SandboxStatus{State: opensandbox.StateRunning}})
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/sandboxes/osb-1/endpoints/44772":
+			_ = json.NewEncoder(w).Encode(opensandbox.Endpoint{Endpoint: server.URL})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/sandboxes/osb-1/renew-expiration":
+			if renews.Add(1) == 1 {
+				http.Error(w, "unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(opensandbox.RenewExpirationResponse{ExpiresAt: time.Now().Add(time.Minute)})
+		default:
+			http.Error(w, "unexpected "+r.Method+" "+r.URL.Path, http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	retry := opensandbox.DefaultRetryConfig()
+	retry.InitialBackoff = time.Millisecond
+	provider := newTestOpenSandboxProvider(t, opensandbox.ConnectionConfig{Domain: server.URL, Retry: &retry})
+
+	if err := provider.Renew(context.Background(), &Session{ID: "osb-1"}, time.Minute); err != nil {
+		t.Fatalf("Renew() error = %v", err)
+	}
+	if got := renews.Load(); got != 2 {
+		t.Fatalf("renew POSTs = %d, want a retry after the 503", got)
+	}
+	if provider.cfg.Connection.Retry.RetryableStatusCodesNonIdempotent != nil {
+		t.Fatal("renewal retry leaked into the connection other writes use")
+	}
+}
+
+func newTestOpenSandboxProvider(t *testing.T, connection opensandbox.ConnectionConfig) *OpenSandboxProvider {
+	t.Helper()
+	provider, err := NewOpenSandboxProvider(OpenSandboxConfig{
+		Connection: connection, LeaseTTL: time.Hour,
+		AllowInsecure: true, Isolation: "gvisor", RuntimeIdentity: "runsc-release",
+		EgressMode: "host-public", AllowInternetAccess: true, ResourceStorage: "2147483648",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return provider
 }
