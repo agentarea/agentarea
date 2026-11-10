@@ -78,7 +78,7 @@ class ConsumerRef:
     field: str
 
 
-USE_SECRET = "use_secret"  # noqa: S105 - a permission verb, not a credential  pragma: allowlist secret
+USE_SECRET = "use_secret"  # noqa: S105 - a permission verb, not a credential  # pragma: allowlist secret
 
 
 async def named_secret_for_use(
