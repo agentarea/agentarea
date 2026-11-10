@@ -547,6 +547,8 @@ export class JsonRpcPeer {
 	private readonly child: ChildProcessWithoutNullStreams;
 	private readonly timeoutMs: number;
 	private readonly name: string;
+	/** Tag every message `"jsonrpc": "2.0"`; ACP agents drop one without it, Codex needs none. */
+	private readonly tagged: boolean;
 	private readonly onNotification: (
 		method: string,
 		params: Record<string, any>,
@@ -568,9 +570,11 @@ export class JsonRpcPeer {
 		) => void,
 		timeoutMs = REQUEST_TIMEOUT_MS,
 		name = 'codex app-server',
+		tagged = false,
 	) {
 		this.timeoutMs = timeoutMs;
 		this.name = name;
+		this.tagged = tagged;
 		this.child = child;
 		this.onNotification = onNotification;
 		this.onRequest = onRequest;
@@ -641,8 +645,9 @@ export class JsonRpcPeer {
 		this.waiting.clear();
 	}
 
-	private write(message: unknown): void {
-		this.child.stdin.write(`${JSON.stringify(message)}\n`);
+	private write(message: Record<string, unknown>): void {
+		const sent = this.tagged ? {jsonrpc: '2.0', ...message} : message;
+		this.child.stdin.write(`${JSON.stringify(sent)}\n`);
 	}
 
 	private receive(line: string): void {
@@ -1868,6 +1873,106 @@ export function acpEvents(
 	return [];
 }
 
+/** An ACP harness's process, with the machine's own sign-in and the variables it keeps. */
+function spawnAcp(
+	options: Pick<RunnerOptions, 'passEnv'>,
+	command: string[],
+	cwd: string,
+): ChildProcessWithoutNullStreams {
+	const keep: Record<string, string> = {};
+	for (const name of options.passEnv ?? []) {
+		const value = process.env[name];
+		if (value !== undefined) {
+			keep[name] = value;
+		}
+	}
+
+	return spawn(command[0]!, command.slice(1), {
+		cwd,
+		// The machine's own sign-in to the CLI lives in its home.
+		env: cliEnv(os.homedir(), keep),
+		stdio: ['pipe', 'pipe', 'pipe'],
+	});
+}
+
+/**
+ * The models an ACP harness offers, from a session opened for the asking, so
+ * the client's page can pick the one its turns use.
+ */
+export async function acpRunnerReport(
+	options: RunnerOptions,
+): Promise<RunnerReport | undefined> {
+	const command = acpCommand(options);
+	const cwd = path.join(options.root, 'models');
+	fs.mkdirSync(cwd, {recursive: true});
+	const child = spawnAcp(options, command, cwd);
+	const peer = new JsonRpcPeer(
+		child,
+		() => {},
+		(id, method) => {
+			peer.respondError(id, `the runner does not answer ${method}`);
+		},
+		REQUEST_TIMEOUT_MS,
+		command[0] ?? 'acp',
+		true,
+	);
+	child.on('error', (error: Error) => {
+		peer.failAll(error);
+	});
+	try {
+		await peer.request('initialize', {
+			protocolVersion: 1,
+			clientCapabilities: {
+				fs: {readTextFile: false, writeTextFile: false},
+				terminal: false,
+			},
+			clientInfo: {name: 'agentarea-runner', version: VERSION},
+		});
+		const session = await peer.request('session/new', {cwd, mcpServers: []});
+		const options = (session?.configOptions ?? []) as Array<
+			Record<string, any>
+		>;
+		const models = acpModels(options);
+		if (models.length === 0) {
+			return undefined;
+		}
+
+		const current = options.find(option => option['category'] === 'model')?.[
+			'currentValue'
+		];
+		return {
+			models: models.map(name => ({
+				name,
+				reasoning_levels: [],
+				default_reasoning: null,
+			})),
+			default_model: typeof current === 'string' ? current : null,
+		};
+	} finally {
+		child.kill('SIGTERM');
+	}
+}
+
+/** The id of a session's model option, the way OpenCode offers its models. */
+export function acpModelOption(
+	configOptions: Array<Record<string, any>>,
+): string | undefined {
+	const option = configOptions.find(
+		candidate => candidate['category'] === 'model',
+	);
+	return option ? String(option['id']) : undefined;
+}
+
+/** The models a session offers, by the value that picks one. */
+export function acpModels(configOptions: Array<Record<string, any>>): string[] {
+	const option = configOptions.find(
+		candidate => candidate['category'] === 'model',
+	);
+	return ((option?.['options'] ?? []) as Array<Record<string, any>>).map(
+		choice => String(choice['value']),
+	);
+}
+
 /** The option that answers a permission request: allow once, or reject once. */
 export function acpPermissionOption(
 	options: Array<Record<string, any>>,
@@ -1927,20 +2032,7 @@ export class AcpTurn implements TurnControl {
 		this.sink = sink;
 		this.label = command[0] ?? 'acp';
 		this.stream = new AcpStream(assign.turn_id);
-		const keep: Record<string, string> = {};
-		for (const name of options.passEnv ?? []) {
-			const value = process.env[name];
-			if (value !== undefined) {
-				keep[name] = value;
-			}
-		}
-
-		this.child = spawn(command[0]!, command.slice(1), {
-			cwd: taskDir(options, assign.task_id),
-			// The machine's own sign-in to the CLI lives in its home.
-			env: cliEnv(os.homedir(), keep),
-			stdio: ['pipe', 'pipe', 'pipe'],
-		});
+		this.child = spawnAcp(options, command, taskDir(options, assign.task_id));
 		this.child.stderr.on('data', (chunk: Buffer) => {
 			this.stderr = (this.stderr + chunk.toString()).slice(-4000);
 		});
@@ -1954,6 +2046,7 @@ export class AcpTurn implements TurnControl {
 			},
 			REQUEST_TIMEOUT_MS,
 			this.label,
+			true,
 		);
 		this.exited = new Promise(resolve => {
 			this.child.on('close', code => {
@@ -2010,10 +2103,11 @@ export class AcpTurn implements TurnControl {
 			},
 		];
 		let resumed = false;
+		let session: Record<string, any> | null;
 		if (assign.session_id && capabilities['loadSession']) {
 			// Loading replays the session's history as updates; it is not this turn's.
 			this.replaying = true;
-			await this.peer.request('session/load', {
+			session = await this.peer.request('session/load', {
 				sessionId: assign.session_id,
 				cwd,
 				mcpServers,
@@ -2022,19 +2116,13 @@ export class AcpTurn implements TurnControl {
 			this.sessionId = assign.session_id;
 			resumed = true;
 		} else {
-			const session = await this.peer.request('session/new', {
-				cwd,
-				mcpServers,
-			});
-			this.sessionId = String(session?.sessionId);
+			session = await this.peer.request('session/new', {cwd, mcpServers});
+			this.sessionId = String(session?.['sessionId']);
 		}
 
 		this.sink.started(this.sessionId);
 		if (assign.model) {
-			await this.peer.request('session/set_model', {
-				sessionId: this.sessionId,
-				modelId: assign.model,
-			});
+			await this.pickModel(assign.model, session?.['configOptions'] ?? []);
 		}
 
 		const text =
@@ -2060,6 +2148,27 @@ export class AcpTurn implements TurnControl {
 		}
 
 		this.child.stdin.end();
+	}
+
+	/** The turn's model: the session's model option, or `session/set_model` where it has none. */
+	private async pickModel(
+		model: string,
+		configOptions: Array<Record<string, any>>,
+	): Promise<void> {
+		const option = acpModelOption(configOptions);
+		if (option) {
+			await this.peer.request('session/set_config_option', {
+				sessionId: this.sessionId,
+				configId: option,
+				value: model,
+			});
+			return;
+		}
+
+		await this.peer.request('session/set_model', {
+			sessionId: this.sessionId,
+			modelId: model,
+		});
 	}
 
 	private notified(method: string, params: Record<string, any>): void {
@@ -2339,6 +2448,8 @@ class Runner {
 	/** Each task's latest Claude process, which a new turn of the task waits out. */
 	private readonly claudeTurns = new Map<string, ClaudeTurn>();
 	private readonly acpTurns = new Map<string, AcpTurn>();
+	/** An ACP harness's models, asked once at start. */
+	acpReport: RunnerReport | undefined;
 	private pinger: NodeJS.Timeout | undefined;
 	private backoff = 1000;
 
@@ -2371,7 +2482,7 @@ class Runner {
 			const report =
 				this.options.harness === 'codex'
 					? codexRunnerReport(this.options.loginFrom)
-					: undefined;
+					: this.acpReport;
 			socket.send(
 				JSON.stringify({
 					type: 'hello',
@@ -2834,6 +2945,18 @@ export async function runRunner(options: RunnerOptions): Promise<never> {
 		`[runner] ${options.harness} serving client ${options.config.client_id} in ${options.config.workspace} at ${options.config.api_url}; data in ${options.root}`,
 	);
 	const runner = new Runner(options);
+	if (options.harness !== 'codex' && options.harness !== 'claude') {
+		try {
+			runner.acpReport = await acpRunnerReport(options);
+		} catch (error) {
+			console.error(
+				`[runner] could not ask ${options.harness} for its models: ${String(
+					error,
+				)}`,
+			);
+		}
+	}
+
 	await runner.relay.listen();
 	runner.connect();
 	return new Promise<never>(() => {
