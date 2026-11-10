@@ -2096,6 +2096,10 @@ export type ClientResponse = {
      */
     description: string | null;
     /**
+     * Has Runner
+     */
+    has_runner?: boolean;
+    /**
      * Id
      */
     id: string;

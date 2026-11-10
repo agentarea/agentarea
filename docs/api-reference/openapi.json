@@ -3842,6 +3842,11 @@
             ],
             "title": "Description"
           },
+          "has_runner": {
+            "default": false,
+            "title": "Has Runner",
+            "type": "boolean"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",

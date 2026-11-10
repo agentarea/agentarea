@@ -10,6 +10,11 @@ import EmptyState from "@/components/EmptyState/EmptyState";
 import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
+import {
+  HARNESS_OPTIONS,
+  HarnessBadge,
+  HarnessIcon,
+} from "@/components/harnesses";
 import { ViewModeTabs } from "@/components/HeaderTabs";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +39,6 @@ import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { createClientAction, listClientsAction } from "@/lib/server-actions";
 import { ClientsListSkeleton } from "./ClientsSkeleton";
-import { HARNESS_OPTIONS, HarnessBadge, HarnessIcon } from "@/components/harnesses";
 
 const McpIcon = ENTITY_ICONS.mcp;
 const SkillIcon = ENTITY_ICONS.skill;

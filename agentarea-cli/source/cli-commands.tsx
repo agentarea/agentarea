@@ -11,7 +11,9 @@ import {connectClient} from './commands/connect.js';
 import {
 	defaultRunnerRoot,
 	loadRunnerConfig,
+	ACP_COMMANDS,
 	CODEX_REQUIREMENTS_FILE,
+	isRunnerHarness,
 	registerRunner,
 	runRunner,
 	setupCodexRequirements,
@@ -131,9 +133,11 @@ export async function handleCliCommand(
 			return false;
 		}
 
-		if (subcommand !== 'codex' && subcommand !== 'claude') {
+		if (!isRunnerHarness(subcommand)) {
 			console.error(
-				'Usage: agentarea runner codex|claude [--root <dir>] [--login-from <dir>] [--allow-domain <host,...>] [--capacity <turns>]\n       agentarea runner setup',
+				`Usage: agentarea runner codex|claude|${Object.keys(ACP_COMMANDS).join(
+					'|',
+				)}|acp [--root <dir>] [--login-from <dir>] [--allow-domain <host,...>] [--capacity <turns>] [--command "<acp command>"] [--pass-env <NAME,...>]\n       agentarea runner setup`,
 			);
 			return false;
 		}
@@ -164,6 +168,14 @@ export async function handleCliCommand(
 				.filter(Boolean),
 			capacity:
 				rawFlags['capacity'] === undefined ? 2 : Number(rawFlags['capacity']),
+			...(typeof rawFlags['command'] === 'string'
+				? {command: rawFlags['command'].trim().split(/\s+/)}
+				: {}),
+			passEnv: ([] as unknown[])
+				.concat(rawFlags['passEnv'] ?? [])
+				.flatMap(value => String(value).split(','))
+				.map(name => name.trim())
+				.filter(Boolean),
 		});
 	}
 

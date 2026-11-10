@@ -3,7 +3,6 @@
 import type { ClientResponse } from "@/api/client/types.gen";
 import { listClients, updateClient } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
-import { RUNNER_KINDS } from "@/lib/runner-kinds";
 
 /** The workspace's Codex and Claude Code clients, whose runners an agent can run on. */
 export async function listRunnerClientsAction(): Promise<
@@ -18,7 +17,7 @@ export async function listRunnerClientsAction(): Promise<
   }
   return {
     ok: true,
-    clients: result.data.filter((client) => RUNNER_KINDS.includes(client.kind)),
+    clients: result.data.filter((client) => client.has_runner),
   };
 }
 

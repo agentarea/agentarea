@@ -14,9 +14,7 @@ interface ClientsPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-export default async function ClientsPage({
-  searchParams,
-}: ClientsPageProps) {
+export default async function ClientsPage({ searchParams }: ClientsPageProps) {
   const initialResult = listClients().then(
     (apiResult) => ({ apiResult }),
     (exception: unknown) => ({ exception })

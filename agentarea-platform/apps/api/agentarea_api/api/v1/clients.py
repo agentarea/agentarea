@@ -128,6 +128,8 @@ class ClientResponse(BaseModel):
     allow_domains: list[str] = []
     sandbox: bool = True
     online: bool = False
+    # Whether its kind is one a runner drives, so it can take agents' turns.
+    has_runner: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -178,6 +180,7 @@ async def client_responses(service: ClientService, clients: list[Client]) -> lis
         response = ClientResponse.model_validate(client)
         response.mcp_endpoint_url = client_mcp_endpoint_url(client.id)
         response.online = client.id in online
+        response.has_runner = client.kind in RUNNER_KINDS
         client_links = links.get(str(client.id), {})
         for instance in response.mcp_instances:
             if link := client_links.get(str(instance.id)):
