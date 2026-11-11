@@ -11,6 +11,11 @@ import {
   SidebarMenuButton,
   useSidebar,
 } from "@/components/ui/sidebar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import Link from "@/components/WorkspaceLink";
 import { useWorkspacePathname } from "@/hooks/useWorkspaceNavigation";
 import { cn } from "@/lib/utils";
@@ -78,34 +83,36 @@ export function AppSidebarContent({
           <div className="min-w-0 flex-1">
             <NavSearch sections={data.navSections} />
           </div>
-          <SidebarMenuButton
-            asChild
-            isActive={newTaskActive}
-            tooltip={{
-              // Layout goes on an inner span: a display class on the content
-              // itself would override the `hidden` that keeps it off while
-              // the sidebar is expanded.
-              children: (
-                <span className="flex items-center gap-1.5">
-                  {t("newTask")}
-                  <Kbd keys={["⌘", "J"]} variant="inverse" />
-                </span>
-              ),
-            }}
-            className={cn(
-              navItemClassName,
-              headerButtonClassName,
-              "w-8 shrink-0 justify-center [&>svg]:text-primary dark:[&>svg]:text-primary"
-            )}
-          >
-            <Link
-              href="/workplace"
-              aria-label={t("newTask")}
-              aria-current={newTaskActive ? "page" : undefined}
+          {/* Icon only, so its name shows on hover whether the sidebar is
+              expanded or collapsed. */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <SidebarMenuButton
+                asChild
+                isActive={newTaskActive}
+                className={cn(
+                  navItemClassName,
+                  headerButtonClassName,
+                  "w-8 shrink-0 justify-center [&>svg]:text-primary dark:[&>svg]:text-primary"
+                )}
+              >
+                <Link
+                  href="/workplace"
+                  aria-label={t("newTask")}
+                  aria-current={newTaskActive ? "page" : undefined}
+                >
+                  <SquarePen />
+                </Link>
+              </SidebarMenuButton>
+            </TooltipTrigger>
+            <TooltipContent
+              side={open ? "bottom" : "right"}
+              className="flex items-center gap-1.5"
             >
-              <SquarePen />
-            </Link>
-          </SidebarMenuButton>
+              {t("newTask")}
+              <Kbd keys={["⌘", "J"]} variant="inverse" />
+            </TooltipContent>
+          </Tooltip>
         </div>
       </SidebarHeader>
       <SidebarNavScroll>
