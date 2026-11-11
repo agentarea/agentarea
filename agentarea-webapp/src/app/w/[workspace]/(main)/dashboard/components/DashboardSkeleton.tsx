@@ -26,7 +26,7 @@ function SpendSkeleton() {
           <Skeleton className="mt-1 h-[5px] w-[150px] rounded-full" />
         </div>
       </div>
-      <Skeleton className="-mx-6 mt-1 h-[150px] rounded-none" />
+      <Skeleton className="-mx-8 mt-1 h-[150px] rounded-none" />
     </div>
   );
 }
@@ -35,7 +35,7 @@ function CalendarSkeleton() {
   const t = useTranslations("DashboardPage");
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="px-6 pb-3 pt-4">
+      <div className="px-8 pb-3.5 pt-5">
         <BoardSectionHeader
           icon={<CalendarDays />}
           color="hsl(var(--foreground))"
@@ -64,14 +64,14 @@ function ListSkeleton({
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="px-6 pb-3 pt-4">
+      <div className="px-8 pb-3.5 pt-5">
         <BoardSectionHeader icon={icon} color={color} title={title} pill="…" />
       </div>
       <div className={cn("min-h-0 flex-1", bodyClassName)}>
         {Array.from({ length: rows }).map((_, i) => (
           <div
             key={i}
-            className="flex items-center gap-3 border-b border-zinc-200 px-6 py-3 dark:border-zinc-700"
+            className="flex items-center gap-3 border-b border-zinc-200 px-8 py-3.5 dark:border-zinc-700"
           >
             <Skeleton className="h-6 w-6 shrink-0 rounded-md" />
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -102,7 +102,7 @@ export default function DashboardSkeleton() {
           <CalendarSkeleton key="schedule" />,
         ]}
         right={[
-          <div key="money" className="flex flex-col px-6 pb-4 pt-3.5">
+          <div key="money" className="flex flex-col px-8 pb-6 pt-5">
             <SpendSkeleton />
           </div>,
           <ListSkeleton

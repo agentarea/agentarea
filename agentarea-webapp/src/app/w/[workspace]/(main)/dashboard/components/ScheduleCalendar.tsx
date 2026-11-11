@@ -74,7 +74,7 @@ function FrequentStrip({
   const t = useTranslations("DashboardPage");
   if (items.length === 0) return null;
   return (
-    <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-zinc-200 px-6 py-2.5 dark:border-zinc-700">
+    <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-zinc-200 px-8 py-3 dark:border-zinc-700">
       <span className="mr-1 shrink-0 text-[11.5px] text-muted-foreground">
         {t("throughoutTheDay")}
       </span>
@@ -256,7 +256,7 @@ export function ScheduleCalendar({ schedule }: { schedule: Schedule }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-zinc-200 px-6 pb-3 pt-4 dark:border-zinc-700">
+      <div className="border-b border-zinc-200 px-8 pb-3.5 pt-5 dark:border-zinc-700">
         <BoardSectionHeader
           icon={<CalendarDays />}
           color="hsl(var(--foreground))"

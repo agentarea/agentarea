@@ -117,7 +117,7 @@ export function UpcomingList({
   const upcoming = days.filter((d) => !d.isPast && d.items.length > 0);
   if (upcoming.length === 0) {
     return (
-      <div className="px-6 py-6 text-[13px] text-muted-foreground">{empty}</div>
+      <div className="px-8 py-6 text-[13px] text-muted-foreground">{empty}</div>
     );
   }
   return (
@@ -125,7 +125,7 @@ export function UpcomingList({
       {upcoming.map((day) => (
         <div
           key={dayKey(day.date)}
-          className="border-b border-zinc-200 px-6 py-2.5 dark:border-zinc-700"
+          className="border-b border-zinc-200 px-8 py-3 dark:border-zinc-700"
         >
           <div className="mb-1.5 text-[12px] font-medium capitalize text-muted-foreground">
             {formats.dayLabel(day.date)}
