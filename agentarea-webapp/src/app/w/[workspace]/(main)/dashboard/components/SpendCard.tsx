@@ -123,7 +123,7 @@ export function SpendCard({
 
       <div
         className={cn(
-          "-mx-8",
+          "-mx-10",
           compact ? "mt-1 h-[150px]" : "mt-2.5 min-h-[96px] flex-1"
         )}
       >

@@ -49,7 +49,7 @@ export async function DashboardData() {
             wallets={data.blockers.wallet_exhausted}
             currency={currency}
           />
-          <div className="flex flex-col px-8 pb-6 pt-5">
+          <div className="flex flex-col px-10 pb-8 pt-7">
             <SpendCard
               spend={data.spend}
               trend={data.daily_spend}

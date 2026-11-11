@@ -60,7 +60,7 @@ export function BalanceSection({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "border-b border-dashed border-zinc-300 px-8 pb-5 pt-5 dark:border-zinc-700",
+        "border-b border-dashed border-zinc-300 px-10 pb-7 pt-7 dark:border-zinc-700",
         className
       )}
     >
