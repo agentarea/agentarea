@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
+  SquarePen,
   Terminal,
   Users,
   Wallet,
@@ -35,6 +36,7 @@ export type NavSection = {
     titleKey?: string;
     url: string;
     icon?: React.ElementType;
+    shortcut?: string[];
   }[];
 };
 
@@ -48,6 +50,13 @@ export const navData = {
           titleKey: "dashboard",
           url: "/dashboard",
           icon: Gauge,
+        },
+        {
+          title: "New task",
+          titleKey: "newTask",
+          url: "/workplace",
+          icon: SquarePen,
+          shortcut: ["⌘", "J"],
         },
         {
           title: "Apps",

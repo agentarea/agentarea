@@ -22,6 +22,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Kbd } from "@/components/ui/kbd";
 import {
   SidebarGroup,
   SidebarGroupLabel,
@@ -47,6 +48,7 @@ type NavItem = {
   titleKey?: string;
   url: string;
   icon?: LucideIcon;
+  shortcut?: string[];
   isActive?: boolean;
   items?: {
     title: string;
@@ -519,6 +521,9 @@ export function NavMain({ sections }: { sections: NavSection[] }) {
                         <span>
                           {item.titleKey ? t(item.titleKey) : item.title}
                         </span>
+                        {item.shortcut && (
+                          <Kbd keys={item.shortcut} className="ml-auto" />
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

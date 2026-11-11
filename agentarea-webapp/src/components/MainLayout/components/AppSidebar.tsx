@@ -2,9 +2,8 @@
 
 import * as React from "react";
 import { useTranslations } from "next-intl";
-import { Inbox, SquarePen } from "lucide-react";
+import { Inbox } from "lucide-react";
 import { getPendingApprovalCountAction } from "@/components/Approvals/actions";
-import { Kbd } from "@/components/ui/kbd";
 import {
   SidebarGroup,
   SidebarHeader,
@@ -28,8 +27,8 @@ import { SidebarBalance } from "./SidebarBalance";
 import { SidebarNavScroll } from "./SidebarNavScroll";
 import { TeamSwitcher } from "./TeamSwitcher";
 
-// New task and Inbox are actions, not places: framed like the search field
-// below them so they do not read as two more nav rows.
+// Inbox sits beside the search field and is framed like it, so it does not
+// read as one more nav row.
 const headerButtonClassName =
   "border border-sidebar-border bg-background shadow-sm hover:bg-zinc-50 dark:bg-zinc-900 dark:hover:bg-zinc-800";
 
@@ -48,7 +47,6 @@ export function AppSidebarContent({
   const t = useTranslations("Sidebar");
   const pathname = useWorkspacePathname();
   const inboxActive = pathname === "/inbox" || pathname.startsWith("/inbox/");
-  const homeActive = pathname === "/workplace";
   const [pendingApprovals, setPendingApprovals] = React.useState(0);
 
   // Re-read on every navigation (deciding in the inbox or on a task page
@@ -85,43 +83,9 @@ export function AppSidebarContent({
       <SidebarHeader>
         <TeamSwitcher workspaces={workspaces} />
         <div className={cn("flex items-center gap-1", !open && "flex-col")}>
-          {/* Like the nav items, the tooltip only shows while the sidebar is
-              collapsed; expanded, the label is already visible. */}
-          <SidebarMenuButton
-            asChild
-            isActive={homeActive}
-            tooltip={{
-              // Layout goes on an inner span: a display class on the content
-              // itself would override the `hidden` that keeps it off while
-              // the sidebar is expanded.
-              children: (
-                <span className="flex items-center gap-1.5">
-                  {t("newTask")}
-                  <Kbd keys={["⌘", "J"]} variant="inverse" />
-                </span>
-              ),
-            }}
-            className={cn(
-              navItemClassName,
-              headerButtonClassName,
-              "min-w-0 flex-1 font-medium [&>svg]:text-primary dark:[&>svg]:text-primary"
-            )}
-          >
-            <Link
-              href="/workplace"
-              aria-current={homeActive ? "page" : undefined}
-            >
-              <SquarePen />
-              {open && (
-                <>
-                  <span className="min-w-0 flex-1 truncate">
-                    {t("newTask")}
-                  </span>
-                  <Kbd keys={["⌘", "J"]} />
-                </>
-              )}
-            </Link>
-          </SidebarMenuButton>
+          <div className="min-w-0 flex-1">
+            <NavSearch sections={data.navSections} />
+          </div>
           <Tooltip>
             <TooltipTrigger asChild>
               <SidebarMenuButton
@@ -155,7 +119,6 @@ export function AppSidebarContent({
             <TooltipContent side="right">{inboxLabel}</TooltipContent>
           </Tooltip>
         </div>
-        <NavSearch sections={data.navSections} />
       </SidebarHeader>
       <SidebarNavScroll>
         <NavMain sections={data.navSections} />
