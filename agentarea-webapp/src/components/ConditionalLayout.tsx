@@ -21,6 +21,7 @@ import type { Workspace } from "@/lib/workspaces";
 interface ConditionalLayoutProps {
   children: React.ReactNode;
   sidebarDefaultOpen?: boolean;
+  sidebarDefaultWidth?: number;
   workspaces: Workspace[];
 }
 
@@ -47,6 +48,7 @@ function SkipToContentLink() {
 export default function ConditionalLayout({
   children,
   sidebarDefaultOpen,
+  sidebarDefaultWidth,
   workspaces,
 }: ConditionalLayoutProps) {
   const shouldReduceMotion = useReducedMotion();
@@ -72,7 +74,11 @@ export default function ConditionalLayout({
   );
 
   return (
-    <SidebarProvider defaultOpen={sidebarDefaultOpen} className="flex-col">
+    <SidebarProvider
+      defaultOpen={sidebarDefaultOpen}
+      defaultWidth={sidebarDefaultWidth}
+      className="flex-col"
+    >
       <SkipToContentLink />
       <div className="flex h-screen w-screen flex-row overflow-hidden bg-layoutBackground py-2 pr-2 pl-2 md:pl-0">
         <Sidebar collapsible="icon">
@@ -104,7 +110,7 @@ export default function ConditionalLayout({
             </AnimatePresence>
           </div>
           {/* Rail lives outside the overflow-hidden animated wrapper so its
-              -right-4 toggle strip is not clipped and stays clickable. */}
+              resize handle on the edge is not clipped. */}
           <SidebarRail />
         </Sidebar>
         <main

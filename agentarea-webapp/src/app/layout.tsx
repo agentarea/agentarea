@@ -10,6 +10,7 @@ import ConditionalLayout from "@/components/ConditionalLayout";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { BalanceProvider } from "@/hooks/useBalance";
 import { EgressExitsOfferedProvider } from "@/hooks/useEgressExitsOffered";
+import { recordPageView } from "@/lib/analytics/page-views";
 import { getBalance } from "@/lib/api-dashboard";
 import type { BalanceState } from "@/lib/balance";
 import { getEgressExits, type EgressExitsState } from "@/lib/egress-exits";
@@ -17,7 +18,7 @@ import { getEgressExits, type EgressExitsState } from "@/lib/egress-exits";
 // session helper comes from there. main still imported the package path; the
 // billing-URL fix below is main's and is kept.
 import { getServerSession } from "@/lib/ory";
-import { recordPageView } from "@/lib/analytics/page-views";
+import { SIDEBAR_WIDTH_COOKIE_NAME } from "@/lib/sidebar-width";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 
 const sharedMetadata: Omit<Metadata, "metadataBase"> = {
@@ -102,8 +103,12 @@ const inter = Inter({
 // Uses ORY_BROWSER_URL (not NEXT_PUBLIC_*) to avoid Next.js build-time inlining
 function getRuntimeConfig() {
   return {
-    CLIENT_ORY_SDK_URL: process.env.ORY_BROWSER_URL || process.env.ORY_SDK_URL || "",
-    CLIENT_API_URL: process.env.NEXT_PUBLIC_API_URL || process.env.AGENTAREA_API_URL || "http://localhost:8000",
+    CLIENT_ORY_SDK_URL:
+      process.env.ORY_BROWSER_URL || process.env.ORY_SDK_URL || "",
+    CLIENT_API_URL:
+      process.env.NEXT_PUBLIC_API_URL ||
+      process.env.AGENTAREA_API_URL ||
+      "http://localhost:8000",
     // Where this deployment's billing PAGE lives, if it has one. Empty on the open
     // build, which has nothing to bill for and therefore no page and no link.
     //
@@ -130,6 +135,12 @@ export default async function RootLayout({
   const sidebarCookie = cookieStore.get("sidebar_state")?.value;
   const sidebarDefaultOpen =
     sidebarCookie !== undefined ? sidebarCookie === "true" : true;
+  const sidebarWidthCookie = Number(
+    cookieStore.get(SIDEBAR_WIDTH_COOKIE_NAME)?.value
+  );
+  const sidebarDefaultWidth = Number.isFinite(sidebarWidthCookie)
+    ? sidebarWidthCookie
+    : undefined;
   const session = await getServerSession();
   const runtimeConfig = getRuntimeConfig();
   // Anonymous visitors (landing, auth) have no workspaces to switch between,
@@ -162,6 +173,7 @@ export default async function RootLayout({
                   >
                     <ConditionalLayout
                       sidebarDefaultOpen={sidebarDefaultOpen}
+                      sidebarDefaultWidth={sidebarDefaultWidth}
                       workspaces={workspaces}
                     >
                       {children}
