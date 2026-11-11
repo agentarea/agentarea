@@ -22,7 +22,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Kbd } from "@/components/ui/kbd";
 import {
   SidebarGroup,
   SidebarGroupLabel,
@@ -48,7 +47,6 @@ type NavItem = {
   titleKey?: string;
   url: string;
   icon?: LucideIcon;
-  shortcut?: string[];
   isActive?: boolean;
   items?: {
     title: string;
@@ -214,7 +212,14 @@ function NavSectionGroup({
   );
 }
 
-export function NavMain({ sections }: { sections: NavSection[] }) {
+export function NavMain({
+  sections,
+  counts,
+}: {
+  sections: NavSection[];
+  /** A count shown at the end of a row, keyed by the row's url. */
+  counts?: Record<string, number>;
+}) {
   const items = sections.flatMap((s) => s.items);
   const pathname = useWorkspacePathname();
   const activeSectionIds = useMemo(
@@ -508,6 +513,7 @@ export function NavMain({ sections }: { sections: NavSection[] }) {
                     </Collapsible>
                   );
                 }
+                const count = counts?.[item.url] ?? 0;
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
@@ -521,8 +527,10 @@ export function NavMain({ sections }: { sections: NavSection[] }) {
                         <span>
                           {item.titleKey ? t(item.titleKey) : item.title}
                         </span>
-                        {item.shortcut && (
-                          <Kbd keys={item.shortcut} className="ml-auto" />
+                        {count > 0 && (
+                          <span className="ml-auto rounded-full bg-[color:var(--status-attention)] px-1.5 text-[11px] font-semibold leading-4 text-white tabular-nums">
+                            {count > 99 ? "99+" : count}
+                          </span>
                         )}
                       </Link>
                     </SidebarMenuButton>
