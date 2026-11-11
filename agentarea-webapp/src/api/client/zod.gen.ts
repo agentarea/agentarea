@@ -3633,6 +3633,7 @@ export const zSourceTypeResponse = z.object({
   icon: z.string(),
   icon_url: z.string().nullable(),
   name: z.string(),
+  registers_webhook: z.boolean().optional().default(false),
   replies: z.boolean(),
   slug: z.string(),
   verification_header: z.string().nullable(),

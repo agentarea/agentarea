@@ -191,6 +191,10 @@ async def test_the_source_types_come_from_the_catalog(client, env, graph):
         True,
         False,
     )
+    assert (types["telegram"]["registers_webhook"], types["slack"]["registers_webhook"]) == (
+        True,
+        False,
+    )
 
 
 async def test_a_typed_secret_is_stored_under_the_source_and_never_returned(client, env, graph):

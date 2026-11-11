@@ -184,6 +184,10 @@ class SourceTypeResponse(BaseModel):
         default=False, description="Its sources choose who may write (see a source's senders)."
     )
     replies: bool = Field(description="A task started by its event can answer where it came from.")
+    registers_webhook: bool = Field(
+        default=False,
+        description="The platform registers a webhook source's URL with the provider itself.",
+    )
 
 
 def source_response(row: Any) -> StreamSourceResponse:
@@ -229,6 +233,7 @@ def source_type_response(entry: SourceTypeEntry) -> SourceTypeResponse:
         continues_sessions=entry.continues_sessions(),
         admits_senders=entry.admission is not None,
         replies=entry.reply is not None,
+        registers_webhook=entry.registration is not None,
     )
 
 

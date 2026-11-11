@@ -8779,6 +8779,12 @@ export type SourceTypeResponse = {
    */
   name: string;
   /**
+   * Registers Webhook
+   *
+   * The platform registers a webhook source's URL with the provider itself.
+   */
+  registers_webhook?: boolean;
+  /**
    * Replies
    *
    * A task started by its event can answer where it came from.

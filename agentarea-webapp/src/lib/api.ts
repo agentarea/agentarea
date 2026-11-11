@@ -66,6 +66,7 @@ import type {
   SkillUpdateRequest,
   SourceCreate,
   SourceUpdate,
+  StreamCreate,
   TaskCreate,
   ToolCallApprovalDecision,
   TriggerCreate,
@@ -1459,6 +1460,22 @@ export const getTriggerCorrelations = async (triggerId: string) => {
 export const listStreams = async () => {
   const result = await sdk.listStreamsV1StreamsGet({
     client: serverClient,
+  });
+  return withStatus(result);
+};
+
+export const createStream = async (body: StreamCreate) => {
+  const result = await sdk.createStreamV1StreamsPost({
+    client: serverClient,
+    body,
+  });
+  return withStatus(result);
+};
+
+export const deleteStream = async (streamId: string) => {
+  const result = await sdk.deleteStreamV1StreamsStreamIdDelete({
+    client: serverClient,
+    path: { stream_id: streamId },
   });
   return withStatus(result);
 };

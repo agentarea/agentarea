@@ -10,6 +10,7 @@ import {
   KeyRound,
   LayoutGrid,
   Library,
+  MessagesSquare,
   Network,
   Plug,
   Radio,
@@ -127,6 +128,12 @@ export const navData = {
           titleKey: "automation",
           url: "/triggers",
           icon: Zap,
+        },
+        {
+          title: "Channels",
+          titleKey: "channels",
+          url: "/channels",
+          icon: MessagesSquare,
         },
         {
           title: "Models",
