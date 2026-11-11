@@ -232,6 +232,7 @@
     "workspace": "Workspace",
     "modelSpecs": "Model Specs",
     "automation": "Automation",
+    "channels": "Channels",
     "events": "Events",
     "network": "Network",
     "members": "Members",
@@ -4568,5 +4569,42 @@
     "topUp": "Top up",
     "runway": "Enough for ~{days, plural, one {# day} other {# days}} at {perDay}/day",
     "runwayUnderDay": "Enough for less than a day at {perDay}/day"
+  },
+  "ChannelsPage": {
+    "title": "Channels",
+    "description": "Bots that people write to; the agent answers in the same chat.",
+    "new": "New channel",
+    "empty": "No channels yet",
+    "emptyDescription": "Paste a bot token, choose who may write and which agent answers.",
+    "loadFailed": "Could not load channels",
+    "create": {
+      "title": "New channel",
+      "submit": "Create channel",
+      "type": "Messenger",
+      "typePlaceholder": "Choose a messenger",
+      "name": "Name",
+      "agent": "Agent that answers",
+      "agentPlaceholder": "Choose an agent",
+      "agentHint": "Messages start a task of this agent; a chat continues the same conversation.",
+      "missing": "Fill in: {fields}",
+      "invalid": "The channel cannot be made: {detail}",
+      "failed": "Could not create the channel. Try again.",
+      "noTypes": "No messenger in the catalog can be a channel.",
+      "typesFailed": "Messengers",
+      "agentsFailed": "Agents",
+      "streamFailed": "Could not create the channel's stream",
+      "sourceFailed": "Could not connect the bot",
+      "triggerFailed": "Could not bind the agent",
+      "undoFailed": "Its stream {streamId} is left; delete it in Events",
+      "created": {
+        "title": "Channel created",
+        "write": "The bot is connected. Write to it.",
+        "writeAndLink": "The bot is connected. Write to it: the first reply brings a link that ties the chat to your account.",
+        "pasteUrl": "Paste this address into the app's webhook settings at the provider.",
+        "urlLabel": "Webhook URL",
+        "secretWarning": "Shown once. Copy it now.",
+        "done": "Open channel"
+      }
+    }
   }
 }

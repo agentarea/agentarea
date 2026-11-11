@@ -15351,6 +15351,12 @@
             "title": "Name",
             "type": "string"
           },
+          "registers_webhook": {
+            "default": false,
+            "description": "The platform registers a webhook source's URL with the provider itself.",
+            "title": "Registers Webhook",
+            "type": "boolean"
+          },
           "replies": {
             "description": "A task started by its event can answer where it came from.",
             "title": "Replies",
