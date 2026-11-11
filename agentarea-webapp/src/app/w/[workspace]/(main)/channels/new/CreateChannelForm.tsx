@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Bot, KeyRound, Link2, Radio, Settings2, Tag } from "lucide-react";
 import { Controller, useForm, useWatch } from "react-hook-form";
@@ -37,6 +37,19 @@ import {
 } from "./channelRequest";
 
 export const CREATE_CHANNEL_FORM = "create-channel-form";
+
+/** Why the channel was not made, brought into view: the submit button sits in the header. */
+function ChannelError({ message }: { message: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [message]);
+  return (
+    <div ref={ref} role="alert">
+      <FormError>{message}</FormError>
+    </div>
+  );
+}
 
 interface Created {
   triggerId: string;
@@ -140,7 +153,6 @@ export function CreateChannelForm({
         onSubmit={submit}
         className="mx-auto flex w-full max-w-[1120px] flex-col gap-6"
       >
-        {error && <FormError>{error}</FormError>}
         {types.length === 0 && <FormError>{t("noTypes")}</FormError>}
 
         <div className="space-y-2 md:max-w-sm">
@@ -262,6 +274,8 @@ export function CreateChannelForm({
           />
           <p className="note">{t("agentHint")}</p>
         </div>
+
+        {error && <ChannelError message={error} />}
       </form>
 
       <Dialog
