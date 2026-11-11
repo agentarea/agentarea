@@ -6,8 +6,11 @@ import {
   FileText,
   GalleryVerticalEnd,
   Gauge,
+  Hammer,
   KeyRound,
+  Landmark,
   LayoutGrid,
+  Library,
   Network,
   Plug,
   Radio,
@@ -37,8 +40,6 @@ export type NavSection = {
 export const navData = {
   navSections: [
     {
-      label: "Work",
-      labelKey: "work",
       collapsible: false,
       items: [
         {
@@ -76,6 +77,7 @@ export const navData = {
     {
       label: "Knowledge",
       labelKey: "knowledge",
+      icon: Library,
       items: [
         {
           title: "Context",
@@ -94,6 +96,7 @@ export const navData = {
     {
       label: "Build",
       labelKey: "build",
+      icon: Hammer,
       items: [
         {
           title: "Agents",
@@ -136,6 +139,7 @@ export const navData = {
     {
       label: "Govern",
       labelKey: "govern",
+      icon: Landmark,
       items: [
         {
           title: "Network",

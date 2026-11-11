@@ -14,6 +14,7 @@ import {
   getBrokenTriggerStatusPresentation,
   type StatusKind,
 } from "@/lib/status";
+import { cn } from "@/lib/utils";
 import { RowGroup, type Row } from "./DashboardRow";
 import { formatRelTime } from "./relTime";
 import { firstLine, groupStopped } from "./stopped";
@@ -132,20 +133,20 @@ export function AttentionPanel({
   let body: ReactNode;
   if (total === 0) {
     body = (
-      <div className="flex h-full items-center gap-3 px-6 py-6">
+      <div className="flex items-start gap-2.5 px-6 py-3.5">
         <StatusIndicator
           kind="done"
-          iconClassName="h-5 w-5"
           className="mt-px"
           aria-label={t("allClearTitle")}
         />
-        <div className="min-w-0">
-          <div className="text-[14px] font-medium text-foreground">
+        <div className="min-w-0 text-[13px]">
+          <span className="font-medium text-foreground">
             {t("allClearTitle")}
-          </div>
-          <div className="mt-1 text-[12.5px] text-muted-foreground">
+          </span>
+          <span className="text-muted-foreground">
+            {" — "}
             {t("allClearHint")}
-          </div>
+          </span>
         </div>
       </div>
     );
@@ -173,7 +174,9 @@ export function AttentionPanel({
           pill={total}
         />
       </div>
-      <div className="lg:h-[264px] lg:overflow-y-auto">{body}</div>
+      <div className={cn(total > 0 && "lg:h-[264px] lg:overflow-y-auto")}>
+        {body}
+      </div>
     </div>
   );
 }

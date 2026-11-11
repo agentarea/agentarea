@@ -82,8 +82,7 @@ export function BalanceSection({ className }: { className?: string }) {
             "tabular-nums",
             balance?.amount != null
               ? "text-[24px] font-semibold leading-none tracking-[-0.03em]"
-              : "text-[14px] text-muted-foreground",
-            balance?.exhausted && "text-red-600 dark:text-red-400"
+              : "text-[14px] text-muted-foreground"
           )}
         >
           {value}

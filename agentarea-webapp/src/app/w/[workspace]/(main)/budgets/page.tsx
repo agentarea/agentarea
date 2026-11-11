@@ -14,7 +14,7 @@ export default async function BudgetsPage() {
       header={{
         breadcrumb: [{ label: "Budgets" }],
       }}
-      className="!p-0 lg:!overflow-hidden"
+      className="!p-0"
     >
       <Suspense fallback={<BudgetsSkeleton />}>
         <BudgetsData />

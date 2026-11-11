@@ -5,25 +5,13 @@ import type {
   DailySpendPoint,
   SpendCard as SpendCardData,
 } from "@/api/client";
-import { AgentAvatar } from "@/components/AgentAvatar";
 import { BoardSectionHeader } from "@/components/board";
+import { CapMeter, capTone } from "@/components/CapMeter";
 import { computeDelta, DeltaBadge } from "@/components/charts/Sparkline";
 import { SpendTrendChart } from "@/components/charts/SpendTrendChart";
-import Link from "@/components/WorkspaceLink";
+import { TopAgentsList } from "@/components/TopAgentsList";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
-
-function barTone(pct: number) {
-  if (pct >= 100) return "bg-[color:var(--status-danger)]";
-  if (pct >= 80) return "bg-[color:var(--status-warning)]";
-  return "bg-[color:var(--violet)]";
-}
-
-function pctTone(pct: number) {
-  if (pct >= 100) return "text-red-600 dark:text-red-400";
-  if (pct >= 80) return "text-amber-600 dark:text-amber-400";
-  return "text-muted-foreground";
-}
 
 export function SpendCard({
   spend,
@@ -113,7 +101,7 @@ export function SpendCard({
                 className={cn(
                   "text-[11.5px] tabular-nums",
                   compact ? "mt-1.5" : "mt-2",
-                  pctTone(pct)
+                  capTone(pct)
                 )}
               >
                 {t("budgetUsage", {
@@ -121,17 +109,13 @@ export function SpendCard({
                   cap: fmt(spend.cap_usd ?? "0"),
                 })}
               </div>
-              <div
+              <CapMeter
+                pct={pct}
                 className={cn(
-                  "ml-auto h-[5px] overflow-hidden rounded-full bg-muted",
+                  "ml-auto",
                   compact ? "mt-1 w-[168px]" : "mt-1.5 w-[150px]"
                 )}
-              >
-                <div
-                  className={cn("h-full rounded-full", barTone(pct))}
-                  style={{ width: `${Math.min(100, pct)}%` }}
-                />
-              </div>
+              />
             </>
           )}
         </div>
@@ -157,44 +141,13 @@ export function SpendCard({
           <div className="text-[11.5px] text-muted-foreground">
             {t("topAgents")}
           </div>
-          <ul className="mt-1.5 flex flex-col gap-1.5">
-            {topAgents.map((a) => {
-              const share =
-                Number(spend.mtd_usd) > 0
-                  ? (Number(a.usd) / Number(spend.mtd_usd)) * 100
-                  : 0;
-              const name = a.agent_name ? (
-                <Link
-                  href={`/agents/${a.agent_id}`}
-                  className="truncate font-medium hover:underline"
-                >
-                  {a.agent_name}
-                </Link>
-              ) : (
-                <span className="truncate text-muted-foreground">
-                  {t("deletedAgent")}
-                </span>
-              );
-              return (
-                <li
-                  key={a.agent_id}
-                  className="flex min-w-0 items-center gap-2 text-[13px]"
-                >
-                  <AgentAvatar
-                    agent={{ id: a.agent_id, name: a.agent_name }}
-                    size="xs"
-                  />
-                  {name}
-                  <span className="ml-auto shrink-0 text-[11.5px] tabular-nums text-muted-foreground">
-                    {share.toFixed(0)}%
-                  </span>
-                  <span className="w-[72px] shrink-0 text-right font-semibold tabular-nums">
-                    {fmt(a.usd)}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="mt-1.5">
+            <TopAgentsList
+              agents={topAgents}
+              total={Number(spend.mtd_usd)}
+              currency={currency}
+            />
+          </div>
         </div>
       )}
     </div>
