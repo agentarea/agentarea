@@ -58,8 +58,10 @@ export function CreateChannelForm({
   agents: SelectableAgent[];
 }) {
   const t = useTranslations("ChannelsPage.create");
+  const tSenders = useTranslations("EventsPage.sources.senders");
   const router = useWorkspaceRouter();
   const formRef = useRef<HTMLFormElement>(null);
+  const inFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Created | null>(null);
   const { control, register, handleSubmit } = useForm<ChannelFormValues>({
@@ -75,17 +77,45 @@ export function CreateChannelForm({
   const typeSlug = useWatch({ control, name: "sourceType" });
   const type = sourceTypeBySlug(types, typeSlug);
 
+  const label = (entry: SourceType, key: string) => {
+    if (key === "agent") return t("agent");
+    if (key === "senders") return tSenders("label");
+    return (
+      [...entry.credentials, ...entry.config].find((f) => f.key === key)
+        ?.label ?? key
+    );
+  };
+
   const submit = handleSubmit(async (values) => {
-    if (!type) return;
+    if (inFlight.current) return;
+    if (!type) {
+      setError(t("typePlaceholder"));
+      return;
+    }
     const missing = missingChannelFields(type, values);
     if (missing.length > 0) {
-      setError(t("missing", { fields: missing.join(", ") }));
+      setError(
+        t("missing", {
+          fields: missing.map((key) => label(type, key)).join(", "),
+        })
+      );
       return;
     }
     setError(null);
+    inFlight.current = true;
     announceFormSubmitting(formRef.current, true);
-    const result = await createChannelAction(toChannelRequest(type, values));
-    announceFormSubmitting(formRef.current, false);
+    let result: Awaited<ReturnType<typeof createChannelAction>>;
+    try {
+      result = await createChannelAction(toChannelRequest(type, values));
+    } catch (caught) {
+      setError(
+        `${t("failed")} ${caught instanceof Error ? caught.message : String(caught)}`
+      );
+      return;
+    } finally {
+      inFlight.current = false;
+      announceFormSubmitting(formRef.current, false);
+    }
     if (result.error !== null) {
       setError(result.error);
       return;
@@ -111,6 +141,7 @@ export function CreateChannelForm({
         className="mx-auto flex w-full max-w-[1120px] flex-col gap-6"
       >
         {error && <FormError>{error}</FormError>}
+        {types.length === 0 && <FormError>{t("noTypes")}</FormError>}
 
         <div className="space-y-2 md:max-w-sm">
           <FormLabel htmlFor="channel-type" icon={Radio} required>
@@ -149,6 +180,7 @@ export function CreateChannelForm({
           <Input
             id="channel-name"
             placeholder={type?.name}
+            maxLength={255}
             autoComplete="off"
             {...register("name")}
           />

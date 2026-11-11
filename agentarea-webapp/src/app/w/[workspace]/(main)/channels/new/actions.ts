@@ -18,6 +18,9 @@ import { DEFAULT_SESSION_IDLE_TIMEOUT } from "@/lib/sourceTypes";
 import { requestWorkspacePath } from "@/lib/workspace-request";
 import type { ChannelRequest } from "./channelRequest";
 
+/** The trigger as checked before anything is written; its stream is not made yet. */
+const zChannelTrigger = zTriggerCreate.omit({ stream_id: true });
+
 export type CreateChannelResult =
   | { error: string }
   | {
@@ -36,7 +39,29 @@ export async function createChannelAction(
   request: ChannelRequest
 ): Promise<CreateChannelResult> {
   const t = await getTranslations("ChannelsPage.create");
-  const stream = await createStream(zStreamCreate.parse(request.stream));
+  const streamBody = zStreamCreate.safeParse(request.stream);
+  const sourceBody = zSourceCreate.safeParse(request.source);
+  const triggerBody = zChannelTrigger.safeParse({
+    name: request.name,
+    description: "",
+    trigger_type: "stream",
+    agent_id: request.agentId,
+    session: { continue: true, idle_timeout: DEFAULT_SESSION_IDLE_TIMEOUT },
+  });
+  if (!streamBody.success || !sourceBody.success || !triggerBody.success) {
+    const issues = [streamBody, sourceBody, triggerBody].flatMap((parsed) =>
+      parsed.success ? [] : parsed.error.issues
+    );
+    return {
+      error: t("invalid", {
+        detail: issues
+          .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+          .join("; "),
+      }),
+    };
+  }
+
+  const stream = await createStream(streamBody.data);
   if (!stream.data) {
     return { error: apiErrorMessage(stream, t("streamFailed")) };
   }
@@ -51,24 +76,15 @@ export async function createChannelAction(
     return { error: reason };
   };
 
-  const source = await createStreamSource(
-    streamId,
-    zSourceCreate.parse(request.source)
-  );
+  const source = await createStreamSource(streamId, sourceBody.data);
   if (!source.data) {
     return undo(apiErrorMessage(source, t("sourceFailed")));
   }
 
-  const trigger = await createTrigger(
-    zTriggerCreate.parse({
-      name: request.name,
-      description: "",
-      trigger_type: "stream",
-      agent_id: request.agentId,
-      stream_id: streamId,
-      session: { continue: true, idle_timeout: DEFAULT_SESSION_IDLE_TIMEOUT },
-    })
-  );
+  const trigger = await createTrigger({
+    ...triggerBody.data,
+    stream_id: streamId,
+  });
   if (!trigger.data) {
     return undo(apiErrorMessage(trigger, t("triggerFailed")));
   }
