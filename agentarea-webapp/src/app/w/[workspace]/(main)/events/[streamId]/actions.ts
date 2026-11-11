@@ -2,9 +2,17 @@
 
 import { getTranslations } from "next-intl/server";
 import { revalidatePath } from "next/cache";
-import type { SourceCreate, SourceCreated } from "@/api/client/types.gen";
-import { zSourceCreate } from "@/api/client/zod.gen";
-import { createStreamSource, deleteStreamSource } from "@/lib/api";
+import type {
+  Senders,
+  SourceCreate,
+  SourceCreated,
+} from "@/api/client/types.gen";
+import { zSourceCreate, zSourceUpdate } from "@/api/client/zod.gen";
+import {
+  createStreamSource,
+  deleteStreamSource,
+  updateStreamSource,
+} from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { requestWorkspacePath } from "@/lib/workspace-request";
 
@@ -35,4 +43,19 @@ export async function deleteStreamSourceAction(
     revalidatePath(await requestWorkspacePath(`/events/${streamId}`));
   }
   return result;
+}
+
+export async function updateStreamSourceSendersAction(
+  streamId: string,
+  sourceId: string,
+  senders: Senders
+): Promise<{ error: string | null }> {
+  const t = await getTranslations("EventsPage.sources");
+  const body = zSourceUpdate.parse({ senders });
+  const result = await updateStreamSource(streamId, sourceId, body);
+  if (result.error) {
+    return { error: apiErrorMessage(result, t("senders.saveFailed")) };
+  }
+  revalidatePath(await requestWorkspacePath(`/events/${streamId}`));
+  return { error: null };
 }

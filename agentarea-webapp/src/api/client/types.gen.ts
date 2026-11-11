@@ -8103,6 +8103,27 @@ export type SecretValueUpdate = {
 };
 
 /**
+ * Senders
+ *
+ * Which senders a source with an ``admission`` lets through to its agent.
+ *
+ * ``owner``: only whoever added the source, once their account is linked.
+ * ``members``: anyone linked whom the graph lets run the agent.
+ * ``ids``: exactly these accounts at the provider, linked or not; the owner
+ * answers for them, so their runs are the owner's.
+ */
+export type Senders = {
+  /**
+   * Allow
+   */
+  allow: "owner" | "members" | "ids";
+  /**
+   * Ids
+   */
+  ids?: Array<string>;
+};
+
+/**
  * SetupField
  *
  * A single value the user must provide before the package can run.
@@ -8578,6 +8599,10 @@ export type SourceCreate = {
    */
   kind?: SourceKind;
   /**
+   * Who may write, for a type that admits senders (Telegram): owner, the one adding it (the default); members, linked people who may run the agent; ids, these account ids. Other types take none.
+   */
+  senders?: Senders | null;
+  /**
    * Source Type
    *
    * A slug of GET /streams/source-types.
@@ -8633,6 +8658,16 @@ export type SourceCreated = {
    * The provider was pointed at webhook_url (entries with a registration).
    */
   registered?: boolean;
+  /**
+   * Who may write, on a type that admits senders; null there means members (added before it could be chosen), and null on every other type.
+   */
+  senders?: Senders | null;
+  /**
+   * Senders Set By
+   *
+   * The user who chose senders: 'owner' admits them, listed senders run as them.
+   */
+  senders_set_by?: string | null;
   /**
    * Source Type
    *
@@ -8692,6 +8727,12 @@ export type SourceKind = "webhook" | "poll" | "platform";
  * SourceTypeResponse
  */
 export type SourceTypeResponse = {
+  /**
+   * Admits Senders
+   *
+   * Its sources choose who may write (see a source's senders).
+   */
+  admits_senders?: boolean;
   /**
    * Config
    */
@@ -8781,6 +8822,15 @@ export type SourceTypeTemplates = {
    * Session Key
    */
   session_key: string | Array<string> | null;
+};
+
+/**
+ * SourceUpdate
+ *
+ * What can change on a source once added: who may write to it.
+ */
+export type SourceUpdate = {
+  senders: Senders;
 };
 
 /**
@@ -9169,6 +9219,16 @@ export type StreamSourceResponse = {
    * The provider was pointed at webhook_url (entries with a registration).
    */
   registered?: boolean;
+  /**
+   * Who may write, on a type that admits senders; null there means members (added before it could be chosen), and null on every other type.
+   */
+  senders?: Senders | null;
+  /**
+   * Senders Set By
+   *
+   * The user who chose senders: 'owner' admits them, listed senders run as them.
+   */
+  senders_set_by?: string | null;
   /**
    * Source Type
    *
@@ -21450,6 +21510,42 @@ export type DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponses = {
 
 export type DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponse =
   DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponses[keyof DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponses];
+
+export type PatchSourceV1StreamsStreamIdSourcesSourceIdPatchData = {
+  body: SourceUpdate;
+  path: {
+    /**
+     * Stream Id
+     */
+    stream_id: string;
+    /**
+     * Source Id
+     */
+    source_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/streams/{stream_id}/sources/{source_id}";
+};
+
+export type PatchSourceV1StreamsStreamIdSourcesSourceIdPatchErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type PatchSourceV1StreamsStreamIdSourcesSourceIdPatchError =
+  PatchSourceV1StreamsStreamIdSourcesSourceIdPatchErrors[keyof PatchSourceV1StreamsStreamIdSourcesSourceIdPatchErrors];
+
+export type PatchSourceV1StreamsStreamIdSourcesSourceIdPatchResponses = {
+  /**
+   * Successful Response
+   */
+  200: StreamSourceResponse;
+};
+
+export type PatchSourceV1StreamsStreamIdSourcesSourceIdPatchResponse =
+  PatchSourceV1StreamsStreamIdSourcesSourceIdPatchResponses[keyof PatchSourceV1StreamsStreamIdSourcesSourceIdPatchResponses];
 
 export type ListSubscriptionsV1StreamsStreamIdSubscriptionsGetData = {
   body?: never;

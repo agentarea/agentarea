@@ -31,6 +31,8 @@ from ..domain.filters import EventFilter
 from ..domain.models import RecordedEvent, TriggerBinding
 from ..domain.platform import PLATFORM_SOURCE_TYPE, PLATFORM_STREAM_NAME
 from ..domain.processor import check_code
+from ..domain.source_types import Senders, senders_to_store
+from ..infrastructure.catalog_source_types import CatalogSourceTypeRepository
 from ..infrastructure.event_repository import StreamEventRepository
 from ..infrastructure.orm import StreamORM, StreamSourceORM, StreamSubscriptionORM
 from ..infrastructure.repository import (
@@ -182,8 +184,13 @@ class StreamService:
         source_type: str,
         webhook_config: dict[str, Any],
         event_templates: dict[str, Any] | None,
+        senders: Senders | None = None,
     ) -> StreamSourceORM:
-        """A webhook source gets its public webhook id; a poll source is fetched by Go."""
+        """A webhook source gets its public webhook id; a poll source is fetched by Go.
+
+        A source of a type that admits senders answers only whoever adds it
+        unless ``senders`` says otherwise.
+        """
         stream = await self.get_stream(stream_id)
         if kind == SourceKind.PLATFORM or stream.kind == StreamKind.PLATFORM.value:
             raise StreamManagedByPlatformError(
@@ -197,7 +204,27 @@ class StreamService:
             webhook_id=secrets.token_urlsafe(16) if kind == SourceKind.WEBHOOK else None,
             webhook_config=webhook_config,
             event_templates=event_templates,
+            senders=senders_to_store(
+                await self._admits_senders(source_type),
+                senders,
+                self.repository_factory.user_context.user_id,
+            ),
         )
+
+    async def _admits_senders(self, source_type: str) -> bool:
+        entry = await CatalogSourceTypeRepository(self._session).get(source_type)
+        return entry is not None and entry.admission is not None
+
+    async def set_source_senders(
+        self, stream_id: UUID, source_id: UUID, senders: Senders
+    ) -> StreamSourceORM:
+        """Who may write to the source now; the caller answers for the choice."""
+        source = await self.get_source(stream_id, source_id)
+        source.senders = senders_to_store(
+            True, senders, self.repository_factory.user_context.user_id
+        )
+        await self._session.flush()
+        return source
 
     async def get_source(self, stream_id: UUID, source_id: UUID) -> StreamSourceORM:
         source = await self._sources().get_in_stream(stream_id, source_id)

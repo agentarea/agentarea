@@ -41,7 +41,12 @@ from agentarea_streams.domain.errors import (
 )
 from agentarea_streams.domain.feed import FeedFilter, RoutedEvent
 from agentarea_streams.domain.processing import Processing, ProcessingStatus
-from agentarea_streams.domain.source_types import SourceField, SourceTypeEntry
+from agentarea_streams.domain.source_types import (
+    Senders,
+    SendersRecord,
+    SourceField,
+    SourceTypeEntry,
+)
 from agentarea_streams.infrastructure.catalog_source_types import CatalogSourceTypeRepository
 from agentarea_streams.infrastructure.event_repository import StreamEventRepository
 from agentarea_streams.schemas import (
@@ -49,6 +54,7 @@ from agentarea_streams.schemas import (
     ProcessorCreate,
     ProcessorUpdate,
     SourceCreate,
+    SourceUpdate,
     StreamCreate,
 )
 from agentarea_tasks.infrastructure.repository import TaskRepository
@@ -64,6 +70,7 @@ from ._stream_sources import (
     delete_stream_with_sources,
     public_webhook_url,
     release_source,
+    update_source,
 )
 from .stream_event_feed import (
     FeedEventResponse,
@@ -122,6 +129,17 @@ class StreamSourceResponse(BaseModel):
         default=False,
         description="The provider was pointed at webhook_url (entries with a registration).",
     )
+    senders: Senders | None = Field(
+        default=None,
+        description=(
+            "Who may write, on a type that admits senders; null there means members "
+            "(added before it could be chosen), and null on every other type."
+        ),
+    )
+    senders_set_by: str | None = Field(
+        default=None,
+        description="The user who chose senders: 'owner' admits them, listed senders run as them.",
+    )
     created_at: UtcDatetime
 
 
@@ -162,6 +180,9 @@ class SourceTypeResponse(BaseModel):
     continues_sessions: bool = Field(
         description="Default of a trigger's session.continue for this type."
     )
+    admits_senders: bool = Field(
+        default=False, description="Its sources choose who may write (see a source's senders)."
+    )
     replies: bool = Field(description="A task started by its event can answer where it came from.")
 
 
@@ -178,6 +199,8 @@ def source_response(row: Any) -> StreamSourceResponse:
         registered=bool(
             row.webhook_id and row.registered_url == public_webhook_url(row.webhook_id)
         ),
+        senders=SendersRecord.model_validate(row.senders).choice() if row.senders else None,
+        senders_set_by=SendersRecord.model_validate(row.senders).by if row.senders else None,
         created_at=row.created_at,
     )
 
@@ -204,6 +227,7 @@ def source_type_response(entry: SourceTypeEntry) -> SourceTypeResponse:
         verification_scheme=verification.scheme if verification else None,
         verification_header=verification.header if verification else None,
         continues_sessions=entry.continues_sessions(),
+        admits_senders=entry.admission is not None,
         replies=entry.reply is not None,
     )
 
@@ -754,6 +778,22 @@ async def add_source(
     except StreamManagedByPlatformError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     return SourceCreated(**source_response(row).model_dump(), issued=issued)
+
+
+@router.patch(
+    "/{stream_id}/sources/{source_id}",
+    response_model=StreamSourceResponse,
+    dependencies=[requires("edit", "stream", id_param="stream_id")],
+)
+async def patch_source(
+    stream_id: UUID, source_id: UUID, data: SourceUpdate, service: StreamServiceDep
+):
+    """Change who may write to a source whose type admits senders (Telegram)."""
+    try:
+        row = await update_source(stream_id, source_id, data, service=service)
+    except StreamSourceNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return source_response(row)
 
 
 @router.delete(

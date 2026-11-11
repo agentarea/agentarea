@@ -5,10 +5,12 @@ import SourceTypeMark from "@/components/SourceTypeMark";
 import { CopyableText } from "@/components/ui/copyable-text";
 import { Skeleton } from "@/components/ui/skeleton";
 import { listStreamSources } from "@/lib/api";
+import { getServerSession } from "@/lib/ory/flows";
 import { requireApiData } from "@/lib/server-resource";
 import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
 import { formatDateTime } from "@/utils/dateUtils";
 import { deleteStreamSourceAction } from "../actions";
+import SourceSenders from "./SourceSenders";
 
 /** Where the stream's events come from: each source's public URL, and delete for the ones no trigger owns. */
 export default async function StreamSources({
@@ -18,11 +20,13 @@ export default async function StreamSources({
   streamId: string;
   types: SourceType[];
 }) {
-  const [t, locale, sourcesResult] = await Promise.all([
+  const [t, locale, sourcesResult, session] = await Promise.all([
     getTranslations("EventsPage.sources"),
     getLocale(),
     listStreamSources(streamId),
+    getServerSession(),
   ]);
+  const viewerId = session?.identity?.id;
   const sources = requireApiData(sourcesResult, "stream sources");
   const onDelete = deleteStreamSourceAction.bind(null, streamId);
 
@@ -72,6 +76,17 @@ export default async function StreamSources({
                 <div className="min-w-0 flex-1 space-y-1">
                   {source.webhook_url && (
                     <CopyableText text={source.webhook_url} />
+                  )}
+                  {type?.admits_senders && (
+                    <SourceSenders
+                      streamId={streamId}
+                      sourceId={source.id}
+                      senders={source.senders}
+                      chosenByOther={
+                        !!source.senders_set_by &&
+                        source.senders_set_by !== viewerId
+                      }
+                    />
                   )}
                   {source.poll_error && (
                     <p

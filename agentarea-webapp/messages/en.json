@@ -2617,7 +2617,28 @@
       "processor": "Processor"
     },
     "sources": {
-      "title": "Sources",
+      "senders": {
+        "label": "Who may write to the bot",
+        "choices": {
+          "owner": "Only me",
+          "ownerOther": "Only whoever set it",
+          "ids": "Telegram IDs",
+          "members": "Members with access"
+        },
+        "hints": {
+          "owner": "The bot answers only you. Write to it once: it sends a link that ties your Telegram to your account.",
+          "ownerOther": "The bot answers only the person who chose this. Choose it yourself to make it you.",
+          "ids": "The bot answers only these Telegram accounts; they need no AgentArea account. Their runs count as yours, checked against what you may run.",
+          "idsOther": "The bot answers only these Telegram accounts; their runs count as whoever made the list. Save the list yourself to answer for it.",
+          "members": "The bot answers anyone who linked their Telegram and may run the agent."
+        },
+        "idsLabel": "Telegram IDs",
+        "idsPlaceholder": "123456789, 987654321",
+        "invalidIds": "Not a numeric Telegram ID: {ids}",
+        "save": "Save",
+        "saveFailed": "Could not change who may write to the bot"
+      },
+        "title": "Sources",
       "empty": "No sources yet. Add one to collect events here without a trigger.",
       "add": "Add source",
       "signedWith": "Signature",

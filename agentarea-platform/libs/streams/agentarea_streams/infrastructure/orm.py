@@ -89,6 +89,8 @@ class StreamSourceORM(BaseModel, WorkspaceScopedMixin):
     webhook_id: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
     webhook_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     webhook_config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    #: Who of the senders a source with an admission lets through; null admits members.
+    senders: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     credential_key: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
     #: The source's own kind / key / session_key templates, in place of its entry's.
     event_templates: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)

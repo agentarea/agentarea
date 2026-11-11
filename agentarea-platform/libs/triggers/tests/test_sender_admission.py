@@ -4,28 +4,28 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from uuid import uuid4
-import pytest
-from agentarea_streams.application import forward
-from agentarea_streams.application.forward import ForwardHandler
-from agentarea_streams.domain import StreamEvent
-from agentarea_streams.domain.source_types import SourceTypeEntry
-from agentarea_triggers.channels import sender_admission
-from agentarea_triggers.channels.sender_admission import Refused, event_admission
-import json
-from datetime import UTC, datetime
-from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
 
+import pytest
 from agentarea_common.identity import ExternalIdentityTakenError
+from agentarea_streams.application import forward
+from agentarea_streams.application.forward import ForwardHandler
 from agentarea_streams.domain import StreamEvent
-from agentarea_streams.domain.source_types import Admission
+from agentarea_streams.domain.source_types import (
+    Admission,
+    Senders,
+    SendersRecord,
+    SourceTypeEntry,
+    senders_to_store,
+)
+from agentarea_triggers.channels import sender_admission
 from agentarea_triggers.channels.sender_admission import (
     Admitted,
     EventAdmission,
     Refused,
     TelegramSenderAdmission,
+    event_admission,
 )
 
 ALICE_TG = "111"
@@ -239,6 +239,148 @@ async def test_an_account_linked_to_someone_else_is_not_moved():
     assert "already linked to another" in sent[-1][1]
 
 
+OWNER = "owner-user"
+
+
+def _door(senders: Senders) -> EventAdmission:
+    return EventAdmission(
+        admission=TELEGRAM_ADMISSION,
+        credentials_secret="channel_cred:telegram:x",
+        senders=senders,
+        owner_id=OWNER,
+    )
+
+
+ONLY_OWNER = _door(Senders(allow="owner"))
+LISTED = _door(Senders(allow="ids", ids=[ALICE_TG]))
+
+
+async def test_an_owner_only_bot_admits_its_owner_once_linked():
+    trigger = _trigger()
+    admission, sent, calls = _admission(identities=_Identities({ALICE_TG: OWNER}))
+    result = await admission.admit(object(), trigger, _message(ALICE_TG), ONLY_OWNER)
+    assert result == Admitted(OWNER)
+    assert calls == [{"user_id": OWNER, "workspace_id": "w", "agent_id": trigger.agent_id}]
+    assert sent == []
+
+
+async def test_an_owner_only_bot_keeps_out_another_linked_member_who_may_run_the_agent():
+    admission, sent, calls = _admission(identities=_Identities({ALICE_TG: "alice"}))
+    trigger = _trigger()
+    first = await admission.admit(object(), trigger, _message(ALICE_TG), ONLY_OWNER)
+    second = await admission.admit(object(), trigger, _message(ALICE_TG), ONLY_OWNER)
+    assert isinstance(first, Refused) and isinstance(second, Refused)
+    assert calls == []
+    assert len(sent) == 1
+    assert "private" in sent[0][1]
+
+
+async def test_an_owner_only_bot_points_an_unlinked_sender_at_the_link_page():
+    admission, sent, _ = _admission()
+    result = await admission.admit(object(), _trigger(), _message(STRANGER_TG), ONLY_OWNER)
+    assert isinstance(result, Refused)
+    assert "/link/telegram?bot=acme_bot" in sent[0][1]
+
+
+async def test_a_listed_id_reaches_the_agent_unlinked_and_runs_as_the_owner():
+    trigger = _trigger()
+    admission, sent, calls = _admission()
+    result = await admission.admit(object(), trigger, _message(ALICE_TG), LISTED)
+    assert result == Admitted(OWNER, sender=f"telegram:{ALICE_TG}")
+    assert calls == [{"user_id": OWNER, "workspace_id": "w", "agent_id": trigger.agent_id}]
+    assert sent == []
+
+
+async def test_an_id_off_the_list_is_kept_out_and_never_asked_to_link():
+    admission, sent, calls = _admission(identities=_Identities({STRANGER_TG: "alice"}))
+    trigger = _trigger()
+    first = await admission.admit(object(), trigger, _message(STRANGER_TG), LISTED)
+    second = await admission.admit(object(), trigger, _message(STRANGER_TG), LISTED)
+    assert isinstance(first, Refused) and isinstance(second, Refused)
+    assert calls == []
+    assert len(sent) == 1
+    assert "private" in sent[0][1]
+    assert "link" not in sent[0][1]
+
+
+async def test_a_listed_bot_stops_when_its_owner_may_no_longer_run_the_agent():
+    admission, _, _ = _admission(may_run=False)
+    result = await admission.admit(object(), _trigger(), _message(ALICE_TG), LISTED)
+    assert isinstance(result, Refused)
+
+
+def test_a_list_names_at_least_one_numeric_id_and_other_modes_name_none():
+    with pytest.raises(ValueError):
+        Senders(allow="ids", ids=[])
+    with pytest.raises(ValueError):
+        Senders(allow="ids", ids=["@alice"])
+    with pytest.raises(ValueError):
+        Senders(allow="owner", ids=[ALICE_TG])
+    with pytest.raises(ValueError):
+        Senders(allow="ids", ids=["\u0661\u0662\u0663"])
+    with pytest.raises(ValueError):
+        Senders.model_validate({"allow": "owner", "by": "someone-else"})
+    assert Senders(allow="ids", ids=[" 111 ", "111", "222"]).ids == ("111", "222")
+
+
+def test_a_bot_added_without_a_choice_answers_only_whoever_added_it():
+    assert senders_to_store(True, None, "adder") == {"allow": "owner", "ids": [], "by": "adder"}
+    assert senders_to_store(True, Senders(allow="ids", ids=["1"]), "editor") == {
+        "allow": "ids",
+        "ids": ["1"],
+        "by": "editor",
+    }
+    assert senders_to_store(False, None, "adder") is None
+
+
+async def test_the_one_who_chose_the_senders_is_the_owner_not_the_creator(monkeypatch):
+    monkeypatch.setattr(sender_admission, "CatalogSourceTypeRepository", _Catalog)
+    event = _message(ALICE_TG)
+    source = SimpleNamespace(
+        id=event.source_id,
+        workspace_id="w",
+        webhook_type="telegram",
+        credential_key="k",
+        senders={"allow": "ids", "ids": [ALICE_TG], "by": "editor"},
+        created_by=OWNER,
+    )
+    door = await event_admission(_Session(source), event)
+    assert door is not None
+    assert door.owner_id == "editor"
+    assert door.senders == Senders(allow="ids", ids=[ALICE_TG])
+
+
+async def test_a_source_that_never_chose_keeps_admitting_members_who_may_run(monkeypatch):
+    monkeypatch.setattr(sender_admission, "CatalogSourceTypeRepository", _Catalog)
+    event = _message(ALICE_TG)
+    source = SimpleNamespace(
+        id=event.source_id,
+        workspace_id="w",
+        webhook_type="telegram",
+        credential_key="k",
+        senders=None,
+        created_by=OWNER,
+    )
+    door = await event_admission(_Session(source), event)
+    assert door is not None
+    assert (door.senders, door.owner_id) == (Senders(allow="members"), None)
+
+
+async def test_a_source_reads_its_own_choice_of_senders(monkeypatch):
+    monkeypatch.setattr(sender_admission, "CatalogSourceTypeRepository", _Catalog)
+    event = _message(ALICE_TG)
+    source = SimpleNamespace(
+        id=event.source_id,
+        workspace_id="w",
+        webhook_type="telegram",
+        credential_key="k",
+        senders=SendersRecord(allow="ids", ids=[ALICE_TG], by=OWNER).model_dump(mode="json"),
+        created_by=OWNER,
+    )
+    door = await event_admission(_Session(source), event)
+    assert door is not None and door.senders == Senders(allow="ids", ids=[ALICE_TG])
+
+
 # An event forwarded into another stream keeps its sender admission.
 
 CATALOG = Path(__file__).parents[4] / "data" / "catalog" / "source-types.json"
@@ -303,7 +445,12 @@ async def test_a_forwarded_telegram_message_from_an_unlinked_sender_is_refused(m
     monkeypatch.setattr(sender_admission, "CatalogSourceTypeRepository", _Catalog)
     original = _message(STRANGER_TG)
     source = SimpleNamespace(
-        id=original.source_id, workspace_id="w", webhook_type="telegram", credential_key="k"
+        id=original.source_id,
+        workspace_id="w",
+        webhook_type="telegram",
+        credential_key="k",
+        senders=None,
+        created_by="member",
     )
     copy = await _forwarded(original, monkeypatch)
     assert (copy.source_id, copy.source_type) == (original.source_id, "telegram")

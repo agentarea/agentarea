@@ -14299,6 +14299,35 @@
         "title": "SecretValueUpdate",
         "type": "object"
       },
+      "Senders": {
+        "additionalProperties": false,
+        "description": "Which senders a source with an ``admission`` lets through to its agent.\n\n``owner``: only whoever added the source, once their account is linked.\n``members``: anyone linked whom the graph lets run the agent.\n``ids``: exactly these accounts at the provider, linked or not; the owner\nanswers for them, so their runs are the owner's.",
+        "properties": {
+          "allow": {
+            "enum": [
+              "owner",
+              "members",
+              "ids"
+            ],
+            "title": "Allow",
+            "type": "string"
+          },
+          "ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "allow"
+        ],
+        "title": "Senders",
+        "type": "object"
+      },
       "SetupField": {
         "additionalProperties": false,
         "description": "A single value the user must provide before the package can run.\n\nThis is the generalized analogue of a Claude plugin ``userConfig`` entry\nand mirrors the existing MCP ``env_schema`` (KeyValueInput) shape.",
@@ -15040,6 +15069,17 @@
             "default": "webhook",
             "description": "webhook: the provider posts to the source's URL; poll: the platform fetches."
           },
+          "senders": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Senders"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who may write, for a type that admits senders (Telegram): owner, the one adding it (the default); members, linked people who may run the agent; ids, these account ids. Other types take none."
+          },
           "source_type": {
             "description": "A slug of GET /streams/source-types.",
             "maxLength": 50,
@@ -15120,6 +15160,29 @@
             "description": "The provider was pointed at webhook_url (entries with a registration).",
             "title": "Registered",
             "type": "boolean"
+          },
+          "senders": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Senders"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who may write, on a type that admits senders; null there means members (added before it could be chosen), and null on every other type."
+          },
+          "senders_set_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The user who chose senders: 'owner' admits them, listed senders run as them.",
+            "title": "Senders Set By"
           },
           "source_type": {
             "anyOf": [
@@ -15223,6 +15286,12 @@
       },
       "SourceTypeResponse": {
         "properties": {
+          "admits_senders": {
+            "default": false,
+            "description": "Its sources choose who may write (see a source's senders).",
+            "title": "Admits Senders",
+            "type": "boolean"
+          },
           "config": {
             "items": {
               "$ref": "#/components/schemas/SourceField"
@@ -15426,6 +15495,20 @@
           "occurred_at"
         ],
         "title": "SourceTypeTemplates",
+        "type": "object"
+      },
+      "SourceUpdate": {
+        "additionalProperties": false,
+        "description": "What can change on a source once added: who may write to it.",
+        "properties": {
+          "senders": {
+            "$ref": "#/components/schemas/Senders"
+          }
+        },
+        "required": [
+          "senders"
+        ],
+        "title": "SourceUpdate",
         "type": "object"
       },
       "SpecPreviewRequest": {
@@ -16116,6 +16199,29 @@
             "description": "The provider was pointed at webhook_url (entries with a registration).",
             "title": "Registered",
             "type": "boolean"
+          },
+          "senders": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Senders"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who may write, on a type that admits senders; null there means members (added before it could be chosen), and null on every other type."
+          },
+          "senders_set_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The user who chose senders: 'owner' admits them, listed senders run as them.",
+            "title": "Senders Set By"
           },
           "source_type": {
             "anyOf": [
@@ -41004,6 +41110,88 @@
           }
         ],
         "summary": "Delete Source",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      },
+      "patch": {
+        "description": "Change who may write to a source whose type admits senders (Telegram).",
+        "operationId": "patch_source_v1_streams__stream_id__sources__source_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamSourceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Patch Source",
         "tags": [
           "v1",
           "protected",

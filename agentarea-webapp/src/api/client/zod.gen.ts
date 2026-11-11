@@ -3203,6 +3203,21 @@ export const zSecretValueUpdate = z.object({
 });
 
 /**
+ * Senders
+ *
+ * Which senders a source with an ``admission`` lets through to its agent.
+ *
+ * ``owner``: only whoever added the source, once their account is linked.
+ * ``members``: anyone linked whom the graph lets run the agent.
+ * ``ids``: exactly these accounts at the provider, linked or not; the owner
+ * answers for them, so their runs are the owner's.
+ */
+export const zSenders = z.object({
+  allow: z.enum(["owner", "members", "ids"]),
+  ids: z.array(z.string()).max(100).optional().default([]),
+});
+
+/**
  * SetupFieldType
  *
  * Input widget / storage hint for a setup field.
@@ -3550,6 +3565,8 @@ export const zSourceCreated = z.object({
   poll_error: z.string().nullish(),
   polled_at: z.iso.datetime().nullish(),
   registered: z.boolean().optional().default(false),
+  senders: zSenders.nullish(),
+  senders_set_by: z.string().nullish(),
   source_type: z.string().nullable(),
   webhook_id: z.string().nullable(),
   webhook_url: z.string().nullable(),
@@ -3586,6 +3603,7 @@ export const zSourceCreate = z.object({
     .optional(),
   event_templates: zEventOverrides.nullish(),
   kind: zSourceKind.optional().default("webhook"),
+  senders: zSenders.nullish(),
   source_type: z.string().min(1).max(50),
 });
 
@@ -3604,6 +3622,7 @@ export const zSourceTypeTemplates = z.object({
  * SourceTypeResponse
  */
 export const zSourceTypeResponse = z.object({
+  admits_senders: z.boolean().optional().default(false),
   config: z.array(zSourceField),
   continues_sessions: z.boolean(),
   credentials: z.array(zSourceField),
@@ -3618,6 +3637,15 @@ export const zSourceTypeResponse = z.object({
   slug: z.string(),
   verification_header: z.string().nullable(),
   verification_scheme: z.string().nullable(),
+});
+
+/**
+ * SourceUpdate
+ *
+ * What can change on a source once added: who may write to it.
+ */
+export const zSourceUpdate = z.object({
+  senders: zSenders,
 });
 
 /**
@@ -3748,6 +3776,8 @@ export const zStreamSourceResponse = z.object({
   poll_error: z.string().nullish(),
   polled_at: z.iso.datetime().nullish(),
   registered: z.boolean().optional().default(false),
+  senders: zSenders.nullish(),
+  senders_set_by: z.string().nullish(),
   source_type: z.string().nullable(),
   webhook_id: z.string().nullable(),
   webhook_url: z.string().nullable(),
@@ -7842,6 +7872,20 @@ export const zDeleteSourceV1StreamsStreamIdSourcesSourceIdDeletePath = z.object(
  */
 export const zDeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponse =
   z.void();
+
+export const zPatchSourceV1StreamsStreamIdSourcesSourceIdPatchBody =
+  zSourceUpdate;
+
+export const zPatchSourceV1StreamsStreamIdSourcesSourceIdPatchPath = z.object({
+  stream_id: z.uuid(),
+  source_id: z.uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zPatchSourceV1StreamsStreamIdSourcesSourceIdPatchResponse =
+  zStreamSourceResponse;
 
 export const zListSubscriptionsV1StreamsStreamIdSubscriptionsGetPath = z.object(
   {

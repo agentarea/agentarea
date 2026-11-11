@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .domain.enums import SourceKind
 from .domain.filters import EventFilter
-from .domain.source_types import EventOverrides
+from .domain.source_types import EventOverrides, Senders
 
 
 class StreamCreate(BaseModel):
@@ -55,12 +55,29 @@ class SourceCreate(BaseModel):
         ),
     )
 
+    senders: Senders | None = Field(
+        default=None,
+        description=(
+            "Who may write, for a type that admits senders (Telegram): owner, the one "
+            "adding it (the default); members, linked people who may run the agent; ids, "
+            "these account ids. Other types take none."
+        ),
+    )
+
     @field_validator("kind")
     @classmethod
     def _not_platform(cls, kind: SourceKind) -> SourceKind:
         if kind is SourceKind.PLATFORM:
             raise ValueError("platform sources are the platform's; add a webhook or poll source")
         return kind
+
+
+class SourceUpdate(BaseModel):
+    """What can change on a source once added: who may write to it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    senders: Senders
 
 
 class ForwardCreate(BaseModel):

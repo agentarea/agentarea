@@ -744,6 +744,9 @@ import type {
   PatchProviderConfigV1ProviderConfigsConfigIdPatchData,
   PatchProviderConfigV1ProviderConfigsConfigIdPatchErrors,
   PatchProviderConfigV1ProviderConfigsConfigIdPatchResponses,
+  PatchSourceV1StreamsStreamIdSourcesSourceIdPatchData,
+  PatchSourceV1StreamsStreamIdSourcesSourceIdPatchErrors,
+  PatchSourceV1StreamsStreamIdSourcesSourceIdPatchResponses,
   PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostData,
   PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostErrors,
   PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostResponses,
@@ -11071,6 +11074,43 @@ export const deleteSourceV1StreamsStreamIdSourcesSourceIdDelete = <
     ],
     url: "/v1/workspaces/{workspace}/streams/{stream_id}/sources/{source_id}",
     ...options,
+  });
+
+/**
+ * Patch Source
+ *
+ * Change who may write to a source whose type admits senders (Telegram).
+ */
+export const patchSourceV1StreamsStreamIdSourcesSourceIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    PatchSourceV1StreamsStreamIdSourcesSourceIdPatchData,
+    ThrowOnError
+  >
+): RequestResult<
+  PatchSourceV1StreamsStreamIdSourcesSourceIdPatchResponses,
+  PatchSourceV1StreamsStreamIdSourcesSourceIdPatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).patch<
+    PatchSourceV1StreamsStreamIdSourcesSourceIdPatchResponses,
+    PatchSourceV1StreamsStreamIdSourcesSourceIdPatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}/sources/{source_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**

@@ -21,7 +21,7 @@ from agentarea_common.di.container import get_container
 from agentarea_common.rebac.openfga_client import OpenFGAClient
 from agentarea_secrets.catalog_service import SecretAccessDeniedError
 from agentarea_streams.domain import StreamInUseError, StreamSourceNotFoundError
-from agentarea_streams.domain.source_types import SourceTypeEntry
+from agentarea_streams.domain.source_types import Senders, SourceTypeEntry
 from httpx import ASGITransport, AsyncClient
 
 NOW = datetime(2026, 10, 6, 12, 0, tzinfo=UTC)
@@ -91,7 +91,9 @@ class _Secrets:
         return self.values.pop(name, None) is not None
 
 
-def _row(source_type: str, *, kind="webhook", webhook_config=None, event_templates=None):
+def _row(
+    source_type: str, *, kind="webhook", webhook_config=None, event_templates=None, senders=None
+):
     source_id = uuid4()
     return SimpleNamespace(
         id=source_id,
@@ -104,6 +106,7 @@ def _row(source_type: str, *, kind="webhook", webhook_config=None, event_templat
         polled_at=None,
         poll_error=None,
         registered_url=None,
+        senders=senders,
         created_at=NOW,
     )
 
@@ -128,6 +131,9 @@ def env(monkeypatch):
         kind=kw["kind"].value,
         webhook_config=kw["webhook_config"],
         event_templates=kw["event_templates"],
+        senders=(
+            {**kw["senders"].model_dump(mode="json"), "by": "u"} if kw.get("senders") else None
+        ),
     )
     secrets = _Secrets({"gh-hook": "from-catalog", "bot": "123:abc"})
     catalog = AsyncMock()
@@ -181,6 +187,10 @@ async def test_the_source_types_come_from_the_catalog(client, env, graph):
     assert types["telegram"]["delivery"] == "both"
     assert types["telegram"]["continues_sessions"] is True
     assert types["github"]["icon_url"].endswith("/channels/github.svg")
+    assert (types["telegram"]["admits_senders"], types["github"]["admits_senders"]) == (
+        True,
+        False,
+    )
 
 
 async def test_a_typed_secret_is_stored_under_the_source_and_never_returned(client, env, graph):
@@ -223,7 +233,10 @@ async def test_a_secret_the_caller_may_not_use_is_refused(client, env, graph):
     env.catalog.get_for_use.side_effect = SecretAccessDeniedError("only its creator")
     response = await client.post(
         f"{BASE}/sources",
-        json={"source_type": "github", "credentials": {"webhook_secret": {"secret_id": str(uuid4())}}},
+        json={
+            "source_type": "github",
+            "credentials": {"webhook_secret": {"secret_id": str(uuid4())}},
+        },
     )
     assert response.status_code == 403
     env.service.add_source.assert_not_called()
@@ -233,7 +246,10 @@ async def test_a_secret_the_caller_may_not_use_is_refused(client, env, graph):
     ("payload", "says"),
     [
         ({"source_type": "sentry"}, "needs client_secret"),
-        ({"source_type": "github", "credentials": {"webhook_secret": ""}}, "webhook_secret is empty"),
+        (
+            {"source_type": "github", "credentials": {"webhook_secret": ""}},
+            "webhook_secret is empty",
+        ),
         ({"source_type": "example_pay", "credentials": {"secret_key": "k"}}, "needs shop_id"),
         ({"source_type": "example_pay", "config": {"shop_id": "1"}}, "needs secret_key"),
         (
@@ -345,14 +361,15 @@ async def test_lookup_settings_are_kept_on_the_source_for_the_verifier(client, e
     assert _stored(env, "example_pay", response.json()["id"]) == {"secret_key": "live_x"}
 
 
-async def test_a_telegram_source_is_issued_its_token_and_left_to_the_reconciler(
-    client, env, graph
-):
+async def test_a_telegram_source_is_issued_its_token_and_left_to_the_reconciler(client, env, graph):
     secret_id = uuid4()
     env.catalog.get_for_use.return_value = SimpleNamespace(id=secret_id, secret_name="bot")
     response = await client.post(
         f"{BASE}/sources",
-        json={"source_type": "telegram", "credentials": {"bot_token": {"secret_id": str(secret_id)}}},
+        json={
+            "source_type": "telegram",
+            "credentials": {"bot_token": {"secret_id": str(secret_id)}},
+        },
     )
     assert response.status_code == 201, response.text
     body = response.json()
@@ -417,3 +434,65 @@ async def test_deleting_a_stream_releases_every_source(client, env, graph):
         f"channel_cred:telegram:{poll.id}",
     ]
     env.service.delete_stream.assert_awaited_once()
+
+
+async def test_a_new_telegram_bot_answers_only_whoever_added_it(client, env, graph):
+    response = await client.post(
+        f"{BASE}/sources",
+        json={"source_type": "telegram", "kind": "poll", "credentials": {"bot_token": "123:abc"}},
+    )
+    assert response.status_code == 201, response.text
+    assert env.service.add_source.await_args.kwargs["senders"] is None
+
+
+async def test_a_telegram_bot_can_be_opened_to_listed_ids(client, env, graph):
+    response = await client.post(
+        f"{BASE}/sources",
+        json={
+            "source_type": "telegram",
+            "kind": "poll",
+            "credentials": {"bot_token": "123:abc"},
+            "senders": {"allow": "ids", "ids": ["111", "222"]},
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert env.service.add_source.await_args.kwargs["senders"] == Senders(
+        allow="ids", ids=["111", "222"]
+    )
+
+
+async def test_a_type_that_admits_anyone_takes_no_senders(client, env, graph):
+    response = await client.post(
+        f"{BASE}/sources",
+        json={
+            "source_type": "sentry",
+            "credentials": {"client_secret": "s3cret"},
+            "senders": {"allow": "owner"},
+        },
+    )
+    assert response.status_code == 422
+    assert env.service.add_source.await_count == 0
+
+
+async def test_who_may_write_to_a_bot_can_change(client, env, graph):
+    row = _row("telegram", kind="poll", senders={"allow": "owner", "ids": [], "by": "u"})
+    env.service.get_source.return_value = row
+
+    async def _set(stream_id, source_id, senders):
+        row.senders = {**senders.model_dump(mode="json"), "by": "u"}
+        return row
+
+    env.service.set_source_senders.side_effect = _set
+    response = await client.patch(
+        f"{BASE}/sources/{row.id}", json={"senders": {"allow": "ids", "ids": ["111"]}}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["senders"] == {"allow": "ids", "ids": ["111"]}
+
+
+async def test_a_source_that_admits_anyone_cannot_be_given_senders(client, env, graph):
+    row = _row("github")
+    env.service.get_source.return_value = row
+    response = await client.patch(f"{BASE}/sources/{row.id}", json={"senders": {"allow": "owner"}})
+    assert response.status_code == 422
+    assert env.service.set_source_senders.await_count == 0
