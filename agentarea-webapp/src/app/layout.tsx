@@ -3,7 +3,7 @@ import "./globals.css";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
 import { Inter } from "next/font/google";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { SessionProvider } from "@ory/elements-react/client";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import ConditionalLayout from "@/components/ConditionalLayout";
@@ -18,7 +18,7 @@ import { getEgressExits, type EgressExitsState } from "@/lib/egress-exits";
 // session helper comes from there. main still imported the package path; the
 // billing-URL fix below is main's and is kept.
 import { getServerSession } from "@/lib/ory";
-import { SIDEBAR_WIDTH_COOKIE_NAME } from "@/lib/sidebar-width";
+import { readUiPrefs } from "@/lib/ui-prefs-server";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 
 const sharedMetadata: Omit<Metadata, "metadataBase"> = {
@@ -131,16 +131,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const locale = await getLocale();
-  const cookieStore = await cookies();
-  const sidebarCookie = cookieStore.get("sidebar_state")?.value;
-  const sidebarDefaultOpen =
-    sidebarCookie !== undefined ? sidebarCookie === "true" : true;
-  const sidebarWidthCookie = Number(
-    cookieStore.get(SIDEBAR_WIDTH_COOKIE_NAME)?.value
-  );
-  const sidebarDefaultWidth = Number.isFinite(sidebarWidthCookie)
-    ? sidebarWidthCookie
-    : undefined;
+  const uiPrefs = await readUiPrefs();
   const session = await getServerSession();
   const runtimeConfig = getRuntimeConfig();
   // Anonymous visitors (landing, auth) have no workspaces to switch between,
@@ -172,8 +163,8 @@ export default async function RootLayout({
                     offered={egressExits.status !== "none"}
                   >
                     <ConditionalLayout
-                      sidebarDefaultOpen={sidebarDefaultOpen}
-                      sidebarDefaultWidth={sidebarDefaultWidth}
+                      sidebarDefaultOpen={uiPrefs.sidebarOpen ?? true}
+                      sidebarDefaultWidth={uiPrefs.sidebarWidth}
                       workspaces={workspaces}
                     >
                       {children}

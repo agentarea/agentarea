@@ -1,8 +1,6 @@
-import type { Metadata } from "next";
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { cookies } from "next/headers";
-import Link from "@/components/WorkspaceLink";
 import { Plus } from "lucide-react";
 import { AGENT_COLUMNS } from "@/app/w/[workspace]/(main)/agents/components/agentColumns";
 import AgentsContent from "@/app/w/[workspace]/(main)/agents/components/AgentsContent";
@@ -12,6 +10,8 @@ import { ViewModeTabs } from "@/components/HeaderTabs";
 import SearchInput from "@/components/SearchInput";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { Button } from "@/components/ui/button";
+import Link from "@/components/WorkspaceLink";
+import { readUiPrefs } from "@/lib/ui-prefs-server";
 
 export const metadata: Metadata = {
   title: "Agents",
@@ -31,9 +31,9 @@ export default async function AgentsBrowsePage({
       ? resolvedSearchParams.search
       : "";
 
-  // Read tab from URL or fallback to cookie
-  const cookieStore = await cookies();
-  const cookieTab = cookieStore.get("tab_agents")?.value;
+  // Read tab from URL, else the remembered view
+  const uiPrefs = await readUiPrefs();
+  const cookieTab = uiPrefs.views["tab_agents"];
   const tab =
     typeof resolvedSearchParams.tab === "string"
       ? resolvedSearchParams.tab

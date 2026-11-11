@@ -1,14 +1,14 @@
 import { getTranslations } from "next-intl/server";
-import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
+import { readUiPrefs } from "@/lib/ui-prefs-server";
+import { EXPLORE_VIEW_KEY } from "../bundles/components/catalog-data";
 import {
   CatalogGallerySkeleton,
   ExploreSortSelect,
   ExploreTypeTabs,
   ExploreViewToggle,
 } from "../bundles/components/CatalogGallery";
-import { EXPLORE_VIEW_COOKIE } from "../bundles/components/catalog-data";
 
 // Route-level Suspense fallback for /explore. The page is an async Server
 // Component that awaits the first catalog page, so without this the nearest
@@ -20,12 +20,12 @@ import { EXPLORE_VIEW_COOKIE } from "../bundles/components/catalog-data";
 export default async function Loading() {
   // Seed the skeleton from the persisted view so a hard refresh skeletons the
   // same layout (grid vs table) the page will paint.
-  const [t, cookieStore] = await Promise.all([
+  const [t, uiPrefs] = await Promise.all([
     getTranslations("CatalogPage"),
-    cookies(),
+    readUiPrefs(),
   ]);
   const initialView =
-    cookieStore.get(EXPLORE_VIEW_COOKIE)?.value === "table" ? "table" : "grid";
+    uiPrefs.views[EXPLORE_VIEW_KEY] === "table" ? "table" : "grid";
 
   return (
     <ContentBlock

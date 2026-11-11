@@ -1,13 +1,13 @@
-import type { Metadata } from "next";
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { ViewModeTabs } from "@/components/HeaderTabs";
 import SearchInput from "@/components/SearchInput";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { statusesForFilter } from "@/lib/taskStatusFilter";
+import { readUiPrefs } from "@/lib/ui-prefs-server";
 import { TasksData } from "./components/TasksData";
 import TasksSkeleton from "./components/TasksSkeleton";
 import TasksStatusFilter from "./components/TasksStatusFilter";
@@ -41,9 +41,9 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
         : null;
   if (statuses === null) notFound();
 
-  // Read tab from URL or fallback to cookie
-  const cookieStore = await cookies();
-  const cookieTab = cookieStore.get("tab_tasks")?.value;
+  // Read tab from URL, else the remembered view
+  const uiPrefs = await readUiPrefs();
+  const cookieTab = uiPrefs.views["tab_tasks"];
   const tab =
     typeof resolvedSearchParams.tab === "string"
       ? resolvedSearchParams.tab
@@ -65,9 +65,7 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
       }}
       subheader={
         <SubheaderToolbar
-          search={
-            <SearchInput urlParamName="search" urlPath="/tasks" />
-          }
+          search={<SearchInput urlParamName="search" urlPath="/tasks" />}
           controls={
             <>
               <TasksStatusFilter />
