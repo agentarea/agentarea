@@ -32,7 +32,7 @@ export default function BudgetsSkeleton() {
       <BoardColumns
         leftFraction={0.6}
         left={[
-          <div key="spend" className="px-6 pb-4 pt-3.5">
+          <div key="spend" className="px-8 pb-6 pt-5">
             <Header
               icon={<Wallet />}
               title={tDash("spend")}
@@ -42,7 +42,7 @@ export default function BudgetsSkeleton() {
             <Skeleton className="mt-2 h-3.5 w-56" />
             <Skeleton className="mt-3 h-[190px] w-full" />
           </div>,
-          <div key="agents" className="flex flex-col gap-3 px-6 pb-4 pt-3.5">
+          <div key="agents" className="flex flex-col gap-3 px-8 pb-6 pt-5">
             <Header
               icon={<EntityIcon kind="agent" />}
               title={t("agentsTitle")}
@@ -54,7 +54,7 @@ export default function BudgetsSkeleton() {
           </div>,
         ]}
         right={[
-          <div key="money" className="px-6 pb-4 pt-3.5">
+          <div key="money" className="px-8 pb-6 pt-5">
             <Header icon={<Gauge />} title={t("monthlyCap")} />
             <Skeleton className="mt-2 h-7 w-32" />
             <Skeleton className="mt-2 h-3.5 w-56" />

@@ -38,7 +38,7 @@ export function DashboardRow({
   return (
     <Link href={href} className="block">
       <InteractiveListRow
-        className="px-6 py-1.5"
+        className="px-8 py-2.5"
         start={<span className="flex">{status}</span>}
       >
         <div className="flex w-full min-w-0 items-center gap-3 text-[12px] text-muted-foreground">
@@ -114,7 +114,7 @@ export function RowGroup({
       count={rows.reduce((n, r) => n + (r.count ?? 1), 0)}
       icon={<StatusIndicator kind={kind} size="sm" aria-label={label} />}
       sticky={false}
-      headerClassName="px-6 lg:sticky lg:top-0 lg:z-10"
+      headerClassName="px-8 lg:sticky lg:top-0 lg:z-10"
     >
       {rows.map(({ key, ...row }) => (
         <DashboardRow key={key} {...row} />
