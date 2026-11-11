@@ -63,8 +63,6 @@ type NavSection = {
   items: NavItem[];
 };
 
-const SECTIONS_STORAGE_KEY = "navOpenSections";
-
 // Rest/hover/active look of a sidebar link. Shared with the header shortcuts
 // (New task, Inbox) so every clickable row in the sidebar reacts the same way.
 export const navItemClassName = cn(
@@ -168,7 +166,6 @@ export function NavMain({ sections }: { sections: NavSection[] }) {
   const [openSections, setOpenSections] = useState<Set<string>>(
     () => new Set(activeSectionIds)
   );
-  const sectionsRestored = useRef(false);
   const [openCollapsibles, setOpenCollapsibles] = useState<Set<string>>(
     new Set()
   );
@@ -204,25 +201,8 @@ export function NavMain({ sections }: { sections: NavSection[] }) {
       }
     };
   }, []);
-  // Секция с активной страницей всегда раскрыта, остальные — как их оставил
-  // пользователь.
-  //
-  // Restoring in a passive effect let the browser paint the active-section-only
-  // state first and the saved state a frame later, so every navigation shoved
-  // the sections below it down the sidebar. A layout effect lands the same
-  // change before paint, while the server and first client render still agree.
-  useIsomorphicLayoutEffect(() => {
-    const saved = localStorage.getItem(SECTIONS_STORAGE_KEY);
-    sectionsRestored.current = true;
-    if (!saved) return;
-    try {
-      const parsed: string[] = JSON.parse(saved);
-      setOpenSections((prev) => new Set([...parsed, ...prev]));
-    } catch (e) {
-      console.warn("Failed to parse saved open sections:", e);
-    }
-  }, []);
-
+  // Sections open closed on every load, except the one holding the current
+  // page; what the user opens stays open while the sidebar is mounted.
   useEffect(() => {
     setOpenSections((prev) =>
       activeSectionIds.every((id) => prev.has(id))
@@ -230,14 +210,6 @@ export function NavMain({ sections }: { sections: NavSection[] }) {
         : new Set([...prev, ...activeSectionIds])
     );
   }, [activeSectionIds]);
-
-  useEffect(() => {
-    if (!sectionsRestored.current) return;
-    localStorage.setItem(
-      SECTIONS_STORAGE_KEY,
-      JSON.stringify(Array.from(openSections))
-    );
-  }, [openSections]);
 
   // Восстанавливаем только открытые коллапсы из localStorage при инициализации
   useIsomorphicLayoutEffect(() => {
