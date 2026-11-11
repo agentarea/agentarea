@@ -244,7 +244,6 @@
     "logout": "Выйти",
     "support": "Поддержка",
     "workspaceSettings": "Настройки воркспейса",
-    "inboxPending": "{count, plural, one {Входящие, # согласование ждёт} few {Входящие, # согласования ждут} other {Входящие, # согласований ждут}}",
     "audit": "Аудит"
   },
   "MembersPage": {
