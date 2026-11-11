@@ -48,7 +48,7 @@ export function BudgetSpend({
         )}
       </div>
 
-      <div className="-mx-8 mt-3 h-[190px]">
+      <div className="-mx-10 mt-3 h-[190px]">
         <SpendTrendChart
           data={points}
           height={190}

@@ -133,7 +133,7 @@ export function AttentionPanel({
   let body: ReactNode;
   if (total === 0) {
     body = (
-      <div className="flex items-start gap-2.5 px-8 py-4">
+      <div className="flex items-start gap-2.5 px-10 py-5">
         <StatusIndicator
           kind="done"
           className="mt-px"
@@ -166,7 +166,7 @@ export function AttentionPanel({
 
   return (
     <div className="flex min-h-0 flex-col">
-      <div className="border-b border-zinc-200 px-8 pb-3.5 pt-5 dark:border-zinc-700">
+      <div className="border-b border-zinc-200 px-10 pb-5 pt-7 dark:border-zinc-700">
         <BoardSectionHeader
           icon={<Shield />}
           color="hsl(var(--foreground))"

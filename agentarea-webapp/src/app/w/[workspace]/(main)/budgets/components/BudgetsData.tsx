@@ -53,7 +53,7 @@ export async function BudgetsData() {
     <BoardColumns
       leftFraction={0.6}
       left={[
-        <div key="spend" className="px-8 pb-6 pt-5">
+        <div key="spend" className="px-10 pb-8 pt-7">
           <BudgetSpend
             spend={data.spend}
             trend={data.daily_spend}
@@ -62,12 +62,12 @@ export async function BudgetsData() {
         </div>,
         ...(data.usage
           ? [
-              <div key="usage" className="px-8 pb-6 pt-5">
+              <div key="usage" className="px-10 pb-8 pt-7">
                 <RuntimeUsageStats usage={data.usage} />
               </div>,
             ]
           : []),
-        <div key="agents" className="px-8 pb-6 pt-5">
+        <div key="agents" className="px-10 pb-8 pt-7">
           <BudgetAgents
             agents={data.top_agents}
             total={Number(data.spend.mtd_usd)}
@@ -78,7 +78,7 @@ export async function BudgetsData() {
       right={[
         <div key="money">
           <BalanceSection />
-          <div className="px-8 pb-6 pt-5">
+          <div className="px-10 pb-8 pt-7">
             <BudgetCap
               initialCap={cap}
               mtdSpend={Number(data.spend.mtd_usd)}

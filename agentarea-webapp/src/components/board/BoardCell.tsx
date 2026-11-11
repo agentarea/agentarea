@@ -19,7 +19,7 @@ export function BoardCell({
     <section
       className={cn(
         "relative flex min-h-0 min-w-0 flex-col",
-        padded && "px-8 pb-6 pt-5",
+        padded && "px-10 pb-8 pt-7",
         className
       )}
     >

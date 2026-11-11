@@ -40,7 +40,7 @@ export function ActivityPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-zinc-200 px-8 pb-3.5 pt-5 dark:border-zinc-700">
+      <div className="border-b border-zinc-200 px-10 pb-5 pt-7 dark:border-zinc-700">
         <BoardSectionHeader
           icon={<History />}
           color="hsl(var(--foreground))"
