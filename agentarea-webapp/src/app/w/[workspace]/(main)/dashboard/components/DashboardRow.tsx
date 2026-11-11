@@ -5,6 +5,7 @@ import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import Link from "@/components/WorkspaceLink";
 import type { StatusKind } from "@/lib/status";
+import { cn } from "@/lib/utils";
 
 export type RowAgentRef = { id: string; name: string };
 
@@ -42,7 +43,12 @@ export function DashboardRow({
       >
         <div className="flex w-full min-w-0 items-center gap-3 text-[12px] text-muted-foreground">
           <span className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="max-w-[45%] shrink-0 truncate text-[13px] font-medium text-foreground">
+            <span
+              className={cn(
+                "min-w-0 truncate text-[13px] font-medium text-foreground",
+                detail && "max-w-[70%] shrink-0"
+              )}
+            >
               {title}
             </span>
             {count != null && count > 1 && (

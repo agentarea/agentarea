@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
-import { SpendCard } from "@/app/w/[workspace]/(main)/dashboard/components/SpendCard";
+import { BalanceSection } from "@/components/BalanceSection";
+import { BoardColumns } from "@/components/board";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import {
   getDashboard,
@@ -7,9 +8,9 @@ import {
   getWorkspaceSettings,
 } from "@/lib/api-dashboard";
 import { apiErrorMessage } from "@/lib/api-errors";
-import { BudgetCapPanel } from "./BudgetCapPanel";
-import { BudgetsBoard } from "./BudgetsBoard";
-import { MonthOutlook } from "./MonthOutlook";
+import { BudgetAgents } from "./BudgetAgents";
+import { BudgetCap } from "./BudgetCap";
+import { BudgetSpend } from "./BudgetSpend";
 import { RuntimeUsageStats } from "./RuntimeUsageStats";
 
 export async function BudgetsData() {
@@ -49,33 +50,45 @@ export async function BudgetsData() {
   const currency = pricing.ok ? pricing.currency : null;
 
   return (
-    <BudgetsBoard
-      spend={
-        <SpendCard
-          spend={data.spend}
-          trend={data.daily_spend}
-          topAgents={data.top_agents}
-          currency={currency}
-          compact
-        />
-      }
-      outlook={
-        <MonthOutlook
-          today={Number(data.spend.today_usd)}
-          projected={amount(data.spend.projected_eom_usd)}
-          cap={cap}
-          runRateDays={7}
-          currency={currency}
-        />
-      }
-      usage={data.usage ? <RuntimeUsageStats usage={data.usage} /> : null}
-      capCard={
-        <BudgetCapPanel
-          initialCap={cap}
-          mtdSpend={Number(data.spend.mtd_usd)}
-          settingsError={settingsError}
-        />
-      }
+    <BoardColumns
+      leftFraction={0.6}
+      left={[
+        <div key="spend" className="px-6 pb-4 pt-3.5">
+          <BudgetSpend
+            spend={data.spend}
+            trend={data.daily_spend}
+            currency={currency}
+          />
+        </div>,
+        ...(data.usage
+          ? [
+              <div key="usage" className="px-6 pb-4 pt-3.5">
+                <RuntimeUsageStats usage={data.usage} />
+              </div>,
+            ]
+          : []),
+        <div key="agents" className="px-6 pb-4 pt-3.5">
+          <BudgetAgents
+            agents={data.top_agents}
+            total={Number(data.spend.mtd_usd)}
+            currency={currency}
+          />
+        </div>,
+      ]}
+      right={[
+        <div key="money">
+          <BalanceSection />
+          <div className="px-6 pb-4 pt-3.5">
+            <BudgetCap
+              initialCap={cap}
+              mtdSpend={Number(data.spend.mtd_usd)}
+              projected={amount(data.spend.projected_eom_usd)}
+              currency={currency}
+              settingsError={settingsError}
+            />
+          </div>
+        </div>,
+      ]}
     />
   );
 }

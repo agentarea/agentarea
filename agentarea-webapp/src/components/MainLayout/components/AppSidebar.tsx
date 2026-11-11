@@ -2,28 +2,29 @@
 
 import * as React from "react";
 import { useTranslations } from "next-intl";
-import { getPendingApprovalCountAction } from "@/components/Approvals/actions";
-import Link from "@/components/WorkspaceLink";
-import { useWorkspacePathname } from "@/hooks/useWorkspaceNavigation";
 import { Inbox, SquarePen } from "lucide-react";
+import { getPendingApprovalCountAction } from "@/components/Approvals/actions";
+import { Kbd } from "@/components/ui/kbd";
 import {
   SidebarGroup,
   SidebarHeader,
   SidebarMenuButton,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Kbd } from "@/components/ui/kbd";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import Link from "@/components/WorkspaceLink";
+import { useWorkspacePathname } from "@/hooks/useWorkspaceNavigation";
 import { cn } from "@/lib/utils";
 import type { Workspace } from "@/lib/workspaces";
 import { AppSidebarFooter } from "./AppSidebarFooter";
 import { NavHelp } from "./NavHelp";
-import { NavMain, navItemClassName } from "./NavMain";
+import { navItemClassName, NavMain } from "./NavMain";
 import { NavSearch } from "./NavSearch";
+import { SidebarBalance } from "./SidebarBalance";
 import { SidebarNavScroll } from "./SidebarNavScroll";
 import { TeamSwitcher } from "./TeamSwitcher";
 
@@ -159,7 +160,8 @@ export function AppSidebarContent({
       <SidebarNavScroll>
         <NavMain sections={data.navSections} />
       </SidebarNavScroll>
-      <SidebarGroup className="py-1">
+      <SidebarGroup className="gap-0 py-1 before:mx-2 before:mb-1 before:block before:border-t before:border-sidebar-border">
+        <SidebarBalance />
         <NavHelp />
       </SidebarGroup>
       <AppSidebarFooter />

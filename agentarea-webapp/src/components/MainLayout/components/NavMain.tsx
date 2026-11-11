@@ -9,10 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslations } from "next-intl";
-import Link from "@/components/WorkspaceLink";
-import { useWorkspacePathname } from "@/hooks/useWorkspaceNavigation";
 import { ChevronRight, type LucideIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
 import {
   Collapsible,
   CollapsibleContent,
@@ -36,6 +33,9 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import Link from "@/components/WorkspaceLink";
+import { useWorkspacePathname } from "@/hooks/useWorkspaceNavigation";
+import { cn } from "@/lib/utils";
 
 // useLayoutEffect has no meaning during SSR and React warns when it is called
 // there, so the server falls back to the passive one it can actually run.
@@ -58,6 +58,7 @@ type NavItem = {
 type NavSection = {
   label?: string;
   labelKey?: string;
+  icon?: LucideIcon;
   collapsible?: boolean;
   items: NavItem[];
 };
@@ -69,8 +70,10 @@ const SECTIONS_STORAGE_KEY = "navOpenSections";
 export const navItemClassName = cn(
   // Smoothly animate color/background changes when the active item switches
   "transition-colors duration-200 [&>svg]:transition-colors [&>svg]:duration-200",
-  // Icons are gray by default (light + dark)
-  "[&>svg]:text-zinc-400 dark:[&>svg]:text-zinc-500",
+  // One scale for every row: 13px label, 16px icon drawn at 1.75 so it weighs
+  // what the text weighs; the icon a step lighter than the label
+  "text-[13px] [&>svg]:[stroke-width:1.75]",
+  "[&>svg]:text-zinc-500 dark:[&>svg]:text-zinc-400",
   // Active: neutral gray bg (darker than hover, not bluish), distinct from hover
   "data-[active=true]:bg-zinc-200/80 dark:data-[active=true]:bg-zinc-700/50",
   // Active: no bold, normal text color
@@ -112,37 +115,47 @@ function NavSectionGroup({
   if (!collapsible || isIconSidebar) {
     return (
       <SidebarGroup>
-        {label && !isIconSidebar && <SidebarGroupLabel>{label}</SidebarGroupLabel>}
+        {label && !isIconSidebar && (
+          <SidebarGroupLabel>{label}</SidebarGroupLabel>
+        )}
         {children}
       </SidebarGroup>
     );
   }
 
+  // A collapsible section is a row like any other, its pages hang under it on
+  // a guide line.
+  const Icon = section.icon;
   return (
     <Collapsible open={open} onOpenChange={onOpenChange} asChild>
-      <SidebarGroup className={cn(!open && "py-0")}>
-        <SidebarGroupLabel asChild>
-          <CollapsibleTrigger className="group/section-trigger gap-1.5 text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground [&>svg]:size-3.5">
-            <span>{label}</span>
-            <ChevronRight
-              aria-hidden="true"
-              className="text-muted-foreground/70 transition-transform duration-200 group-data-[state=open]/section-trigger:rotate-90 motion-reduce:transition-none"
-            />
-          </CollapsibleTrigger>
-        </SidebarGroupLabel>
+      <SidebarGroup className="py-0">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <CollapsibleTrigger asChild>
+              <SidebarMenuButton
+                className={cn(navItemClassName, "group/section-trigger")}
+              >
+                {Icon && <Icon />}
+                <span>{label}</span>
+                <ChevronRight
+                  aria-hidden="true"
+                  className="ml-auto !size-3.5 transition-transform duration-200 group-data-[state=open]/section-trigger:rotate-90 motion-reduce:transition-none"
+                />
+              </SidebarMenuButton>
+            </CollapsibleTrigger>
+          </SidebarMenuItem>
+        </SidebarMenu>
         <CollapsibleContent className="aa-collapsible">
-          <div className="pt-1">{children}</div>
+          <div className="ml-[15px] border-l border-sidebar-border pb-1 pl-2">
+            {children}
+          </div>
         </CollapsibleContent>
       </SidebarGroup>
     </Collapsible>
   );
 }
 
-export function NavMain({
-  sections,
-}: {
-  sections: NavSection[];
-}) {
+export function NavMain({ sections }: { sections: NavSection[] }) {
   const items = sections.flatMap((s) => s.items);
   const pathname = useWorkspacePathname();
   const activeSectionIds = useMemo(
@@ -283,181 +296,207 @@ export function NavMain({
 
   return (
     <>
-    {sections.map((section, sectionIndex) => {
-    const sectionId = getSectionId(section, sectionIndex);
-    return (
-    <NavSectionGroup
-      key={sectionId}
-      section={section}
-      isIconSidebar={state === "collapsed" && !isMobile}
-      open={openSections.has(sectionId)}
-      onOpenChange={(next) =>
-        setOpenSections((prev) => {
-          const updated = new Set(prev);
-          if (next) {
-            updated.add(sectionId);
-          } else {
-            updated.delete(sectionId);
-          }
-          return updated;
-        })
-      }
-    >
-      <SidebarMenu>
-        {section.items.map((item) => {
-          if (item.items) {
-            // When collapsed, show a popout dropdown like TeamSwitcher/NavUser
-            if (state === "collapsed" && !isMobile) {
-              const isHovered = hoveredDropdownId === item.url;
-              return (
-                <SidebarMenuItem key={item.title}>
-                  <DropdownMenu open={isHovered} modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <SidebarMenuButton
-                        className="group/btn relative overflow-hidden transition-colors duration-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 data-[state=open]:bg-zinc-100 dark:data-[state=open]:bg-zinc-800"
-                        onMouseEnter={() => openOnHover(item.url)}
-                        onMouseLeave={() => closeOnHoverLeave(item.url)}
-                      >
-                        {item.icon && <item.icon className="transition-colors group-hover/btn:text-primary" />}
-                        {state === "collapsed" ? null : (
-                          <span className="font-medium">
-                            {item.titleKey ? t(item.titleKey) : item.title}
-                          </span>
-                        )}
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-0 bg-primary transition-[height] duration-300 group-hover/btn:h-6 rounded-r-full" />
-                      </SidebarMenuButton>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      side="right"
-                      sideOffset={0}
-                      className="animate-none data-[state=closed]:animate-none data-[state=open]:animate-none"
-                      onMouseEnter={() => openOnHover(item.url)}
-                      onMouseLeave={() => closeOnHoverLeave(item.url)}
-                      onCloseAutoFocus={(e) => e.preventDefault()}
-                    >
-                      <DropdownMenuLabel className="text-xs text-muted-foreground">
-                        {item.titleKey ? t(item.titleKey) : item.title}
-                      </DropdownMenuLabel>
-                      {item.items?.map((subItem) => (
-                        <DropdownMenuItem
-                          key={subItem.title}
-                          className="cursor-pointer gap-2 p-2"
-                          onSelect={closeDropdownImmediately}
-                          asChild
-                        >
-                          <Link
-                            href={subItem.url}
-                            onClick={closeDropdownImmediately}
-                            className="flex cursor-pointer items-center gap-2"
-                          >
-                            <ChevronRight className="size-3.5 shrink-0" />
-                            {subItem.titleKey
-                              ? t(subItem.titleKey)
-                              : subItem.title}
-                          </Link>
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </SidebarMenuItem>
-              );
+      {sections.map((section, sectionIndex) => {
+        const sectionId = getSectionId(section, sectionIndex);
+        const isIconSidebar = state === "collapsed" && !isMobile;
+        const nested =
+          !isIconSidebar &&
+          (section.collapsible ?? Boolean(section.labelKey ?? section.label));
+        return (
+          <NavSectionGroup
+            key={sectionId}
+            section={section}
+            isIconSidebar={isIconSidebar}
+            open={openSections.has(sectionId)}
+            onOpenChange={(next) =>
+              setOpenSections((prev) => {
+                const updated = new Set(prev);
+                if (next) {
+                  updated.add(sectionId);
+                } else {
+                  updated.delete(sectionId);
+                }
+                return updated;
+              })
             }
-            // Expanded: keep collapsible behavior
-            return (
-              <Collapsible
-                key={item.title}
-                asChild
-                defaultOpen={isCollapsibleOpen(item.url)}
-                open={isCollapsibleOpen(item.url)}
-                onOpenChange={(open) => {
-                  setOpenCollapsibles((prev) => {
-                    const next = new Set(prev);
-                    if (open) {
-                      next.add(item.url);
-                    } else {
-                      next.delete(item.url);
-                    }
-                    return next;
-                  });
-                }}
-                className="group/collapsible"
-              >
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      tooltip={item.titleKey ? t(item.titleKey) : item.title}
-                      className={cn(
-                        "group/btn relative overflow-hidden transition-colors duration-200",
-                        isItemActive(item.url) 
-                          ? "bg-zinc-100 dark:bg-zinc-800 font-medium text-primary" 
-                          : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-                      )}
+          >
+            <SidebarMenu>
+              {section.items.map((item) => {
+                if (item.items) {
+                  // When collapsed, show a popout dropdown like TeamSwitcher/NavUser
+                  if (state === "collapsed" && !isMobile) {
+                    const isHovered = hoveredDropdownId === item.url;
+                    return (
+                      <SidebarMenuItem key={item.title}>
+                        <DropdownMenu open={isHovered} modal={false}>
+                          <DropdownMenuTrigger asChild>
+                            <SidebarMenuButton
+                              className="group/btn relative overflow-hidden transition-colors duration-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 data-[state=open]:bg-zinc-100 dark:data-[state=open]:bg-zinc-800"
+                              onMouseEnter={() => openOnHover(item.url)}
+                              onMouseLeave={() => closeOnHoverLeave(item.url)}
+                            >
+                              {item.icon && (
+                                <item.icon className="transition-colors group-hover/btn:text-primary" />
+                              )}
+                              {state === "collapsed" ? null : (
+                                <span className="font-medium">
+                                  {item.titleKey
+                                    ? t(item.titleKey)
+                                    : item.title}
+                                </span>
+                              )}
+                              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-0 bg-primary transition-[height] duration-300 group-hover/btn:h-6 rounded-r-full" />
+                            </SidebarMenuButton>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="start"
+                            side="right"
+                            sideOffset={0}
+                            className="animate-none data-[state=closed]:animate-none data-[state=open]:animate-none"
+                            onMouseEnter={() => openOnHover(item.url)}
+                            onMouseLeave={() => closeOnHoverLeave(item.url)}
+                            onCloseAutoFocus={(e) => e.preventDefault()}
+                          >
+                            <DropdownMenuLabel className="text-xs text-muted-foreground">
+                              {item.titleKey ? t(item.titleKey) : item.title}
+                            </DropdownMenuLabel>
+                            {item.items?.map((subItem) => (
+                              <DropdownMenuItem
+                                key={subItem.title}
+                                className="cursor-pointer gap-2 p-2"
+                                onSelect={closeDropdownImmediately}
+                                asChild
+                              >
+                                <Link
+                                  href={subItem.url}
+                                  onClick={closeDropdownImmediately}
+                                  className="flex cursor-pointer items-center gap-2"
+                                >
+                                  <ChevronRight className="size-3.5 shrink-0" />
+                                  {subItem.titleKey
+                                    ? t(subItem.titleKey)
+                                    : subItem.title}
+                                </Link>
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </SidebarMenuItem>
+                    );
+                  }
+                  // Expanded: keep collapsible behavior
+                  return (
+                    <Collapsible
+                      key={item.title}
+                      asChild
+                      defaultOpen={isCollapsibleOpen(item.url)}
+                      open={isCollapsibleOpen(item.url)}
+                      onOpenChange={(open) => {
+                        setOpenCollapsibles((prev) => {
+                          const next = new Set(prev);
+                          if (open) {
+                            next.add(item.url);
+                          } else {
+                            next.delete(item.url);
+                          }
+                          return next;
+                        });
+                      }}
+                      className="group/collapsible"
                     >
-                      {item.icon && <item.icon className={cn("transition-colors duration-200", isItemActive(item.url) ? "text-primary" : "text-zinc-500 group-hover/btn:text-zinc-900 dark:text-zinc-400 dark:group-hover/btn:text-zinc-100")} />}
-                      <span className={cn("transition-colors", isItemActive(item.url) ? "text-primary" : "")}>
-                        {item.titleKey ? t(item.titleKey) : item.title}
-                      </span>
-                      
-                      {/* Active indicator strip */}
-                      {isItemActive(item.url) && (
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 bg-primary rounded-r-full" />
-                      )}
-                      
-                      <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 text-zinc-400 group-hover/btn:text-zinc-600 dark:group-hover/btn:text-zinc-300" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {item.items?.map((subItem) => (
-                        <SidebarMenuSubItem key={subItem.title}>
-                          <SidebarMenuSubButton
-                            asChild
-                            isActive={isItemActive(subItem.url)}
+                      <SidebarMenuItem>
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuButton
+                            tooltip={
+                              item.titleKey ? t(item.titleKey) : item.title
+                            }
                             className={cn(
-                              "transition-colors duration-200 relative overflow-hidden",
-                              isItemActive(subItem.url) 
-                                ? "bg-primary/5 text-primary font-medium"
-                                : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                              "group/btn relative overflow-hidden transition-colors duration-200",
+                              isItemActive(item.url)
+                                ? "bg-zinc-100 dark:bg-zinc-800 font-medium text-primary"
+                                : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                             )}
                           >
-                            <Link href={subItem.url}>
-                              {/* Dot indicator removed as requested */}
-                              <span>
-                                {subItem.titleKey
-                                  ? t(subItem.titleKey)
-                                  : subItem.title}
-                              </span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
-            );
-          }
-          return (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton
-                asChild
-                isActive={isItemActive(item.url)}
-                tooltip={item.titleKey ? t(item.titleKey) : item.title}
-                className={navItemClassName}
-              >
-                <Link href={item.url}>
-                  {item.icon && <item.icon />}
-                  <span>{item.titleKey ? t(item.titleKey) : item.title}</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          );
-        })}
-      </SidebarMenu>
-    </NavSectionGroup>
-    );
-    })}
+                            {item.icon && (
+                              <item.icon
+                                className={cn(
+                                  "transition-colors duration-200",
+                                  isItemActive(item.url)
+                                    ? "text-primary"
+                                    : "text-zinc-500 group-hover/btn:text-zinc-900 dark:text-zinc-400 dark:group-hover/btn:text-zinc-100"
+                                )}
+                              />
+                            )}
+                            <span
+                              className={cn(
+                                "transition-colors",
+                                isItemActive(item.url) ? "text-primary" : ""
+                              )}
+                            >
+                              {item.titleKey ? t(item.titleKey) : item.title}
+                            </span>
+
+                            {/* Active indicator strip */}
+                            {isItemActive(item.url) && (
+                              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 bg-primary rounded-r-full" />
+                            )}
+
+                            <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 text-zinc-400 group-hover/btn:text-zinc-600 dark:group-hover/btn:text-zinc-300" />
+                          </SidebarMenuButton>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <SidebarMenuSub>
+                            {item.items?.map((subItem) => (
+                              <SidebarMenuSubItem key={subItem.title}>
+                                <SidebarMenuSubButton
+                                  asChild
+                                  isActive={isItemActive(subItem.url)}
+                                  className={cn(
+                                    "transition-colors duration-200 relative overflow-hidden",
+                                    isItemActive(subItem.url)
+                                      ? "bg-primary/5 text-primary font-medium"
+                                      : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                                  )}
+                                >
+                                  <Link href={subItem.url}>
+                                    {/* Dot indicator removed as requested */}
+                                    <span>
+                                      {subItem.titleKey
+                                        ? t(subItem.titleKey)
+                                        : subItem.title}
+                                    </span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            ))}
+                          </SidebarMenuSub>
+                        </CollapsibleContent>
+                      </SidebarMenuItem>
+                    </Collapsible>
+                  );
+                }
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isItemActive(item.url)}
+                      tooltip={item.titleKey ? t(item.titleKey) : item.title}
+                      className={cn(navItemClassName, nested && "h-7")}
+                    >
+                      <Link href={item.url}>
+                        {item.icon && !nested && <item.icon />}
+                        <span>
+                          {item.titleKey ? t(item.titleKey) : item.title}
+                        </span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </NavSectionGroup>
+        );
+      })}
     </>
   );
 }

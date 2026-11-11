@@ -1,5 +1,4 @@
 import { getTranslations } from "next-intl/server";
-import { BalanceSection } from "@/components/BalanceSection";
 import { BoardColumns } from "@/components/board";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import { getDashboard, getPricingCurrency } from "@/lib/api-dashboard";
@@ -50,7 +49,6 @@ export async function DashboardData() {
             wallets={data.blockers.wallet_exhausted}
             currency={currency}
           />
-          <BalanceSection />
           <div className="flex flex-col px-6 pb-4 pt-3.5">
             <SpendCard
               spend={data.spend}
