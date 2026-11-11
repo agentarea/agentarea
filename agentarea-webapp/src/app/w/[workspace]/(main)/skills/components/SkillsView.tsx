@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { ArrowDownAZ, Clock, Rows3, Tag } from "lucide-react";
 import CatalogSuggestions from "@/components/CatalogSuggestions";
 import ContentBlock from "@/components/ContentBlock";
@@ -20,9 +19,13 @@ import {
   MenuSeparator,
 } from "@/components/ui/menu-row";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
+import {
+  useWorkspacePathname,
+  useWorkspaceRouter,
+} from "@/hooks/useWorkspaceNavigation";
 import { listSkillsAction } from "@/lib/server-actions";
+import { setUiView } from "@/lib/ui-prefs-client";
 import type { PaginatedSkills, Skill } from "@/types/skill";
-import { setCookie } from "@/utils/cookies";
 import { getValidTimestamp } from "@/utils/dateUtils";
 import CreateSkillButton from "./CreateSkillButton";
 import SkillRow from "./SkillRow";
@@ -201,7 +204,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
   // ---- toolbar control helpers ----
   const onView = (value: ViewKey) => {
     setView(value);
-    setCookie("view_skills", value);
+    setUiView("view_skills", value);
     syncUrl({ view: value });
   };
   const onGroup = (value: GroupKey) => {
@@ -343,7 +346,10 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
               hints={[
                 { text: t("noSkillsHintWrite"), href: "/skills/create" },
                 { text: t("noSkillsHintImport"), href: "/skills/create" },
-                { text: t("noSkillsHintInstall"), href: "/explore?type=skills" },
+                {
+                  text: t("noSkillsHintInstall"),
+                  href: "/explore?type=skills",
+                },
               ]}
               iconsType="skills"
               action={{

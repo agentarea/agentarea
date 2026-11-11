@@ -22,22 +22,19 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useIsMobile } from "@/hooks/use-mobile";
-import {
-  clampSidebarWidth,
-  SIDEBAR_WIDTH_COOKIE_NAME,
-  SIDEBAR_WIDTH_DEFAULT,
-  SIDEBAR_WIDTH_MAX,
-  SIDEBAR_WIDTH_MIN,
-} from "@/lib/sidebar-width";
+import { updateUiPrefs } from "@/lib/ui-prefs-client";
 import { cn } from "@/lib/utils";
 
-const SIDEBAR_COOKIE_NAME = "sidebar_state";
-const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
-const SIDEBAR_WIDTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+const SIDEBAR_WIDTH_DEFAULT = 240;
+const SIDEBAR_WIDTH_MIN = 200;
+const SIDEBAR_WIDTH_MAX = 360;
 const SIDEBAR_WIDTH_KEY_STEP = 16;
 const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
+
+const clampSidebarWidth = (width: number) =>
+  Math.round(Math.min(SIDEBAR_WIDTH_MAX, Math.max(SIDEBAR_WIDTH_MIN, width)));
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed";
@@ -99,7 +96,7 @@ const SidebarProvider = React.forwardRef<
     // The width is kept once a drag ends, not on every pointer move.
     React.useEffect(() => {
       if (resizing) return;
-      document.cookie = `${SIDEBAR_WIDTH_COOKIE_NAME}=${width}; path=/; max-age=${SIDEBAR_WIDTH_COOKIE_MAX_AGE}`;
+      updateUiPrefs({ sidebarWidth: width });
     }, [width, resizing]);
 
     // This is the internal state of the sidebar.
@@ -115,8 +112,7 @@ const SidebarProvider = React.forwardRef<
           _setOpen(openState);
         }
 
-        // This sets the cookie to keep the sidebar state.
-        document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+        updateUiPrefs({ sidebarOpen: openState });
       },
       [setOpenProp, open]
     );

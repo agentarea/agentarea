@@ -73,8 +73,8 @@ import {
 } from "@/lib/catalog-connections";
 import { getCategoryIcon } from "@/lib/category-icons";
 import type { StatusKind } from "@/lib/status";
+import { getUiView, setUiView } from "@/lib/ui-prefs-client";
 import { cn } from "@/lib/utils";
-import { getCookie, setCookie } from "@/utils/cookies";
 import {
   addCatalogSkillToAgentAction,
   fetchCatalogItemAction,
@@ -95,7 +95,7 @@ import {
   arr,
   connectionFacets,
   DEFAULT_SORT,
-  EXPLORE_VIEW_COOKIE,
+  EXPLORE_VIEW_KEY,
   FEATURED_TAG,
   HOSTING_LABELS,
   isCatalogHosting,
@@ -352,7 +352,7 @@ export function ExploreViewToggle({
   useEffect(() => {
     const hasParam = new URLSearchParams(window.location.search).has("view");
     if (hasParam) return;
-    const saved = getCookie(EXPLORE_VIEW_COOKIE);
+    const saved = getUiView(EXPLORE_VIEW_KEY);
     if ((saved === "table" || saved === "grid") && saved !== view) {
       void setView(saved);
     }
@@ -371,7 +371,7 @@ export function ExploreViewToggle({
       value={view}
       onChange={(v) => {
         // Persist so the choice survives leaving and returning to /explore.
-        setCookie(EXPLORE_VIEW_COOKIE, v);
+        setUiView(EXPLORE_VIEW_KEY, v);
         void setView(v as ViewMode);
       }}
     />
@@ -2826,7 +2826,7 @@ export function CatalogGallerySkeleton({
   const [view] = useState<ViewMode>(() => {
     if (typeof document === "undefined") return initialView;
     const fromUrl = new URLSearchParams(window.location.search).get("view");
-    const saved = fromUrl ?? getCookie(EXPLORE_VIEW_COOKIE);
+    const saved = fromUrl ?? getUiView(EXPLORE_VIEW_KEY);
     return saved === "table" || saved === "grid" ? saved : initialView;
   });
   const t = useTranslations("CatalogPage.search");

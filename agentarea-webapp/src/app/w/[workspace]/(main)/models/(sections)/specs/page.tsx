@@ -1,14 +1,14 @@
-import type { ProviderSpecWithModelsResponse } from "@/api/client/types.gen";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
-import { cookies } from "next/headers";
+import type { ProviderSpecWithModelsResponse } from "@/api/client/types.gen";
 import EmptyState from "@/components/EmptyState/EmptyState";
 import { listProviderSpecsWithModels } from "@/lib/api";
+import { readUiPrefs } from "@/lib/ui-prefs-server";
 import { getViewerCapabilities } from "@/lib/workspace-context";
 import ProviderSpecsView from "../../components/ProviderSpecsView";
 import ProvidersSkeleton from "../../components/ProvidersSkeleton";
 import {
-  MODELS_VIEW_COOKIE,
+  MODELS_VIEW_KEY,
   resolveViewMode,
   type ModelsViewMode,
 } from "../../components/viewMode";
@@ -22,10 +22,10 @@ export default async function ProviderSpecsPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const [tProviders, resolvedSearchParams, cookieStore] = await Promise.all([
+  const [tProviders, resolvedSearchParams, uiPrefs] = await Promise.all([
     getTranslations("ProvidersPage"),
     searchParams,
-    cookies(),
+    readUiPrefs(),
   ]);
   const searchQuery =
     typeof resolvedSearchParams.search === "string"
@@ -33,7 +33,7 @@ export default async function ProviderSpecsPage({
       : "";
   const tab = resolveViewMode(
     resolvedSearchParams.tab,
-    cookieStore.get(MODELS_VIEW_COOKIE)?.value
+    uiPrefs.views[MODELS_VIEW_KEY]
   );
 
   const skeletonColumns = [
@@ -74,7 +74,8 @@ async function ProviderSpecsContent({
 
   try {
     const providersResponse = await listProviderSpecsWithModels();
-    providerSpecs = (providersResponse.data as ProviderSpecWithModelsResponse[]) || [];
+    providerSpecs =
+      (providersResponse.data as ProviderSpecWithModelsResponse[]) || [];
     if (providersResponse.error) {
       loadFailed = true;
     }

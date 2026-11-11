@@ -4,9 +4,12 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import HeaderTabs from "@/components/HeaderTabs";
-import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { setCookie } from "@/utils/cookies";
-import { MODELS_VIEW_COOKIE, resolveViewMode } from "./viewMode";
+import {
+  useWorkspacePathname,
+  useWorkspaceRouter,
+} from "@/hooks/useWorkspaceNavigation";
+import { setUiView } from "@/lib/ui-prefs-client";
+import { MODELS_VIEW_KEY, resolveViewMode } from "./viewMode";
 
 /**
  * Grid/table toggle in the shared models header. Controlled rather than the
@@ -36,7 +39,7 @@ export default function ProviderHeaderTabs({
       value={view}
       onChange={(next) => {
         setLastView(next);
-        setCookie(MODELS_VIEW_COOKIE, next);
+        setUiView(MODELS_VIEW_KEY, next);
         const params = new URLSearchParams(searchParams.toString());
         params.set("tab", next);
         router.push(`${pathname}?${params.toString()}`, { scroll: false });

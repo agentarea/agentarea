@@ -1,11 +1,11 @@
-import type { Metadata } from "next";
 import { Suspense } from "react";
-import { cookies } from "next/headers";
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
 import { ViewModeTabs } from "@/components/HeaderTabs";
 import SearchInput from "@/components/SearchInput";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
+import { readUiPrefs } from "@/lib/ui-prefs-server";
 import CreateProjectButton from "./components/CreateProjectButton";
 import ProjectsContent from "./components/ProjectsContent";
 import ProjectsSkeleton from "./components/ProjectsSkeleton";
@@ -18,7 +18,9 @@ interface ProjectsPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-export default async function ProjectsPage({ searchParams }: ProjectsPageProps) {
+export default async function ProjectsPage({
+  searchParams,
+}: ProjectsPageProps) {
   const t = await getTranslations("ProjectsPage");
   const resolvedSearchParams = await searchParams;
   const searchQuery =
@@ -26,9 +28,9 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
       ? resolvedSearchParams.search
       : "";
 
-  // Read tab from URL or fallback to cookie
-  const cookieStore = await cookies();
-  const cookieTab = cookieStore.get("tab_projects")?.value;
+  // Read tab from URL, else the remembered view
+  const uiPrefs = await readUiPrefs();
+  const cookieTab = uiPrefs.views["tab_projects"];
   const tab =
     typeof resolvedSearchParams.tab === "string"
       ? resolvedSearchParams.tab
