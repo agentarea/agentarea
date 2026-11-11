@@ -124,6 +124,7 @@ class StreamSourceRepository(WorkspaceScopedRepository[StreamSourceORM]):
         webhook_id: str | None,
         webhook_config: dict[str, Any],
         event_templates: dict[str, Any] | None,
+        senders: dict[str, Any] | None = None,
     ) -> StreamSourceORM:
         """A source keys its credentials by its own id."""
         source = StreamSourceORM(
@@ -135,6 +136,7 @@ class StreamSourceRepository(WorkspaceScopedRepository[StreamSourceORM]):
             webhook_config=webhook_config,
             credential_key=source_id,
             event_templates=event_templates,
+            senders=senders,
             workspace_id=self.user_context.workspace_id,
             created_by=self.user_context.user_id,
         )

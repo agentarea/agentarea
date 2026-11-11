@@ -25,12 +25,13 @@ from agentarea_streams.domain import EventFilter, StreamError
 from agentarea_streams.domain.enums import SourceKind
 from agentarea_streams.domain.feed import FeedFilter
 from agentarea_streams.domain.processing import ProcessingStatus
-from agentarea_streams.domain.source_types import EventOverrides
+from agentarea_streams.domain.source_types import EventOverrides, Senders
 from agentarea_streams.schemas import (
     ForwardCreate,
     ProcessorCreate,
     ProcessorUpdate,
     SourceCreate,
+    SourceUpdate,
     StreamCreate,
 )
 from agentarea_triggers.infrastructure.reactions import ReactionRepository
@@ -41,6 +42,7 @@ from ..api.v1._stream_sources import (
     create_source,
     delete_stream_with_sources,
     release_source,
+    update_source,
 )
 from ..api.v1.streams import (
     SourceCreated,
@@ -264,6 +266,16 @@ class StreamsToolset(Toolset):
                 )
             ),
         ] = None,
+        senders: Annotated[
+            dict[str, Any] | None,
+            Field(
+                description=(
+                    'Who may write, for a type that admits senders (Telegram): {"allow": '
+                    '"owner"} (you, the default), {"allow": "members"} (linked people who '
+                    'may run the agent) or {"allow": "ids", "ids": ["123"]} (these account ids).'
+                )
+            ),
+        ] = None,
     ) -> str:
         """Add a webhook or poll source to a stream; a webhook source returns its public URL.
 
@@ -279,6 +291,7 @@ class StreamsToolset(Toolset):
                 event_templates=(
                     EventOverrides.model_validate(event_templates) if event_templates else None
                 ),
+                senders=Senders.model_validate(senders) if senders else None,
             )
         except ValidationError as error:
             raise ToolError(str(error)) from error
@@ -298,6 +311,45 @@ class StreamsToolset(Toolset):
             return SourceCreated(
                 **source_response(row).model_dump(), issued=issued
             ).model_dump_json()
+
+    @tool_method(
+        display_name="Change who may write to a source",
+        effect="write",
+        idempotent=True,
+        output=StreamSourceResponse,
+    )
+    @requires("edit", "stream", id_param="stream_id")
+    async def update_source(
+        self,
+        stream_id: StreamId,
+        source_id: Annotated[
+            str, Field(description="Source id (UUID), from `streams_list_sources`.")
+        ],
+        senders: Annotated[
+            dict[str, Any],
+            Field(
+                description=(
+                    '{"allow": "owner"}, {"allow": "members"} or {"allow": "ids", "ids": '
+                    '["123"]}; only types that admit senders (Telegram) take it.'
+                )
+            ),
+        ],
+    ) -> str:
+        """Change who may write to a source whose type admits senders (Telegram)."""
+        try:
+            payload = SourceUpdate(senders=Senders.model_validate(senders))
+        except ValidationError as error:
+            raise ToolError(str(error)) from error
+        async with platform_context() as (session, _u, repo_factory, _b, _sec):
+            try:
+                row = await update_source(
+                    UUID(stream_id), UUID(source_id), payload, service=_service(repo_factory)
+                )
+            except (HTTPException, StreamError) as error:
+                await session.rollback()
+                detail = error.detail if isinstance(error, HTTPException) else str(error)
+                raise ToolError(detail) from error
+            return source_response(row).model_dump_json()
 
     @tool_method(
         display_name="Remove stream source",

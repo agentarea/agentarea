@@ -37,7 +37,7 @@ from agentarea_common.identity.models import METHOD_PAIRING, TELEGRAM
 from agentarea_common.outbound import Destination, outbound_client
 from agentarea_streams.application.source_credentials import credential_secret_name
 from agentarea_streams.domain import StreamEvent
-from agentarea_streams.domain.source_types import Admission
+from agentarea_streams.domain.source_types import MEMBERS, Admission, Senders, SendersRecord
 from agentarea_streams.domain.templates import TemplateContext, render_first
 from agentarea_streams.infrastructure.catalog_source_types import CatalogSourceTypeRepository
 from agentarea_streams.infrastructure.orm import StreamSourceORM
@@ -51,6 +51,7 @@ LINK_COMMAND = "/start link_"
 CONFIRM_COMMAND = "/confirm"
 #: An unlinked or refused sender hears why at most once per this many seconds.
 NOTICE_INTERVAL_SECONDS = 86400
+PRIVATE_NOTICE = "This bot is private."
 
 MayRun = Callable[..., Awaitable[bool]]
 
@@ -91,10 +92,16 @@ class TelegramSender:
 
 @dataclass(frozen=True)
 class EventAdmission:
-    """The admission an event's source type asks for, and where its bot's credentials are."""
+    """The admission an event's source type asks for, and where its bot's credentials are.
+
+    ``senders`` is the source's own choice of who gets through; ``owner_id`` is
+    whoever made it, None for a source that never chose.
+    """
 
     admission: Admission
     credentials_secret: str
+    senders: Senders = MEMBERS
+    owner_id: str | None = None
 
 
 async def event_admission(session: AsyncSession, event: StreamEvent) -> EventAdmission | None:
@@ -132,7 +139,15 @@ async def event_admission(session: AsyncSession, event: StreamEvent) -> EventAdm
     return EventAdmission(
         admission=entry.admission,
         credentials_secret=credential_secret_name(slug, source.credential_key),
+        **_senders_of(source.senders),
     )
+
+
+def _senders_of(stored: Any) -> dict[str, Any]:
+    if not stored:
+        return {"senders": MEMBERS, "owner_id": None}
+    record = SendersRecord.model_validate(stored)
+    return {"senders": record.choice(), "owner_id": record.by}
 
 
 @dataclass(frozen=True)
@@ -144,7 +159,10 @@ class _BotOf:
 
 @dataclass(frozen=True)
 class Admitted:
+    """Who the run is for; ``sender`` names a listed sender the user answers for."""
+
     user_id: str
+    sender: str | None = None
 
 
 @dataclass(frozen=True)
@@ -229,12 +247,26 @@ class TelegramSenderAdmission:
             await self._confirm(session, bot, sender)
             return Refused("account link confirmation")
 
-        user_id = await self._identities(session).holder(TELEGRAM, sender.external_id)
-        if user_id is None:
-            await self._notify_once(
-                trigger, bot, sender, "unlinked", await self._unlinked_text(bot)
-            )
-            return Refused("the sender has not linked their Telegram account")
+        senders = door.senders
+        sender_key: str | None = None
+        if senders.allow == "ids":
+            if sender.external_id not in senders.ids:
+                await self._notify_once(trigger, bot, sender, "private", PRIVATE_NOTICE)
+                return Refused("the sender is not on the source's list")
+            if door.owner_id is None:
+                return Refused("the source has no owner to answer for its senders")
+            user_id = door.owner_id
+            sender_key = f"{TELEGRAM}:{sender.external_id}"
+        else:
+            user_id = await self._identities(session).holder(TELEGRAM, sender.external_id)
+            if user_id is None:
+                await self._notify_once(
+                    trigger, bot, sender, "unlinked", await self._unlinked_text(bot)
+                )
+                return Refused("the sender has not linked their Telegram account")
+            if senders.allow == "owner" and user_id != door.owner_id:
+                await self._notify_once(trigger, bot, sender, "private", PRIVATE_NOTICE)
+                return Refused(f"only the source's owner may write; {user_id} is not")
         if not await self._may_run(
             session,
             user_id=user_id,
@@ -249,7 +281,7 @@ class TelegramSenderAdmission:
                 "Your account doesn't have access to this agent. Ask its owner to grant it.",
             )
             return Refused(f"user {user_id} may not run agent {trigger.agent_id}")
-        return Admitted(user_id)
+        return Admitted(user_id, sender=sender_key)
 
     async def _redeem(self, bot: _BotOf, sender: TelegramSender, code: str) -> None:
         user_id = (

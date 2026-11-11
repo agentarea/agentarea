@@ -65,6 +65,7 @@ import type {
   SkillResponse,
   SkillUpdateRequest,
   SourceCreate,
+  SourceUpdate,
   TaskCreate,
   ToolCallApprovalDecision,
   TriggerCreate,
@@ -1541,6 +1542,20 @@ export const createStreamSource = async (
     path: { stream_id: streamId },
     body,
   });
+  return { data, error };
+};
+
+export const updateStreamSource = async (
+  streamId: string,
+  sourceId: string,
+  body: SourceUpdate
+) => {
+  const { data, error } =
+    await sdk.patchSourceV1StreamsStreamIdSourcesSourceIdPatch({
+      client: serverClient,
+      path: { stream_id: streamId, source_id: sourceId },
+      body,
+    });
   return { data, error };
 };
 

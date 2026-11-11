@@ -224,6 +224,7 @@ class TriggerSubscriptionHandler:
         # linked user the graph lets run it, and the run is theirs. Without the
         # admission wired, nobody gets through.
         caller: str | None = None
+        batch_key: str | None = None
         try:
             door = await event_admission(session, event)
         except LookupError as error:
@@ -238,6 +239,7 @@ class TriggerSubscriptionHandler:
             if isinstance(admission, Refused):
                 return HandlerResult(verdict=Verdict.SKIPPED, reason=admission.reason)
             caller = admission.user_id
+            batch_key = admission.sender or caller
         # The run acts as the agent, so the agent is what must still stand; who
         # configured the trigger lends it nothing and leaving stops nothing.
         if not await service.agent_stands(trigger.agent_id):
@@ -261,7 +263,14 @@ class TriggerSubscriptionHandler:
         )
         if isinstance(trigger, StreamTrigger) and trigger.batch is not None:
             return await self._join_batch(
-                service, trigger, trigger.batch, subscription, event, trigger_event, caller
+                service,
+                trigger,
+                trigger.batch,
+                subscription,
+                event,
+                trigger_event,
+                caller,
+                batch_key,
             )
         if caller is not None:
             service = self._service(
@@ -306,8 +315,13 @@ class TriggerSubscriptionHandler:
         event: StreamEvent,
         trigger_event: TriggerEvent,
         caller: str | None,
+        batch_key: str | None,
     ) -> HandlerResult:
-        """Hand an admitted event that meets the conditions to the trigger's open batch."""
+        """Hand an admitted event that meets the conditions to the trigger's open batch.
+
+        Each admitted sender has a batch of their own (``batch_key``), also when
+        several listed senders run as the one user who answers for them.
+        """
         if trigger.conditions:
             try:
                 verdict = await service.evaluate_trigger_verdict(trigger, trigger_event.data)
@@ -326,7 +340,7 @@ class TriggerSubscriptionHandler:
                 return HandlerResult(
                     verdict=Verdict.SKIPPED, reason=verdict.reason, score=verdict.score
                 )
-        workflow_id = batch_workflow_id(trigger.id, caller)
+        workflow_id = batch_workflow_id(trigger.id, batch_key)
         await self._batches.add(
             BatchSpec(
                 trigger_id=trigger.id,

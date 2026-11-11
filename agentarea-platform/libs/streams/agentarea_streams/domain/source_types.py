@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 #: The slug of the entry for a provider the catalog has no entry for.
 GENERIC_WEBHOOK = "generic_webhook"
@@ -211,6 +211,67 @@ class Admission(BaseModel):
     private_value: str = "private"
     #: Renders to ``true`` when the sender is a bot, which is never admitted.
     is_bot: Template | None = None
+
+
+class Senders(BaseModel):
+    """Which senders a source with an ``admission`` lets through to its agent.
+
+    ``owner``: only whoever added the source, once their account is linked.
+    ``members``: anyone linked whom the graph lets run the agent.
+    ``ids``: exactly these accounts at the provider, linked or not; the owner
+    answers for them, so their runs are the owner's.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    allow: Literal["owner", "members", "ids"]
+    ids: tuple[str, ...] = Field(default=(), max_length=100)
+
+    @field_validator("ids", mode="before")
+    @classmethod
+    def _one_of_each(cls, ids: Any) -> Any:
+        if isinstance(ids, list | tuple):
+            return tuple(dict.fromkeys(str(value).strip() for value in ids))
+        return ids
+
+    @model_validator(mode="after")
+    def _ids_belong_to_a_list(self) -> Senders:
+        if self.allow != "ids":
+            if self.ids:
+                raise ValueError(f"ids name senders only when allow is 'ids', not {self.allow!r}")
+            return self
+        if not self.ids:
+            raise ValueError("allow 'ids' needs at least one id")
+        if bad := [value for value in self.ids if not (value.isascii() and value.isdigit())]:
+            raise ValueError(f"ids are numeric account ids, not {bad}")
+        return self
+
+
+#: What a source added before senders could be chosen admits.
+MEMBERS = Senders(allow="members")
+
+
+class SendersRecord(Senders):
+    """A source's senders as stored: the choice and who made it.
+
+    Whoever chose answers for it: ``owner`` admits them, and the runs of a
+    listed sender are theirs, checked against what they may run.
+    """
+
+    by: str = Field(min_length=1)
+
+    def choice(self) -> Senders:
+        return Senders(allow=self.allow, ids=self.ids)
+
+
+def senders_to_store(admits: bool, chosen: Senders | None, by: str) -> dict[str, Any] | None:
+    """What a source keeps for its senders: on a type that admits them, the
+    choice (only ``by`` when none is given) and who made it; nothing otherwise.
+    """
+    if not admits:
+        return None
+    choice = chosen or Senders(allow="owner")
+    return SendersRecord(allow=choice.allow, ids=choice.ids, by=by).model_dump(mode="json")
 
 
 class Reply(BaseModel):

@@ -48,6 +48,7 @@ import {
   selectedMcpEvent,
   toMcpEventsRequest,
 } from "../mcpEventsSource";
+import { DEFAULT_SENDERS } from "../senders";
 import {
   missingSourceFields,
   sourceKinds,
@@ -58,6 +59,7 @@ import {
   type SourceKind,
 } from "../sourceRequest";
 import McpEventsSourceFields from "./McpEventsSourceFields";
+import SendersField from "./SendersField";
 
 const EMPTY: SourceFormValues = { secrets: {}, settings: {}, templates: {} };
 
@@ -334,6 +336,16 @@ export default function AddSourceDialog({
                   />
                 </div>
               ))}
+
+            {!mcpEvents && type?.admits_senders && (
+              <SendersField
+                id="source"
+                value={values.senders ?? DEFAULT_SENDERS}
+                onChange={(senders) =>
+                  setValues((previous) => ({ ...previous, senders }))
+                }
+              />
+            )}
 
             {type && takesEventTemplates(type) && (
               <div className="space-y-3">

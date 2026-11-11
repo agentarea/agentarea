@@ -37,7 +37,7 @@ from agentarea_streams.domain.source_types import SourceTypeEntry
 from agentarea_streams.domain.verification import VerificationError, configured
 from agentarea_streams.infrastructure.catalog_source_types import CatalogSourceTypeRepository
 from agentarea_streams.infrastructure.orm import StreamSourceORM
-from agentarea_streams.schemas import SecretRef, SourceCreate
+from agentarea_streams.schemas import SecretRef, SourceCreate, SourceUpdate
 from fastapi import HTTPException
 from pydantic import ValidationError
 
@@ -100,6 +100,10 @@ def check_source(entry: SourceTypeEntry, payload: SourceCreate) -> None:
                     status_code=422,
                     detail=f"{field.key} must be whsec_ and the base64 of 24 to 64 bytes",
                 )
+    if payload.senders is not None and entry.admission is None:
+        raise HTTPException(
+            status_code=422, detail=f"{name} sources let anyone through; they take no senders"
+        )
     if entry.verification is not None:
         try:
             configured(entry.verification, payload.config)
@@ -236,6 +240,7 @@ async def create_source(
             if payload.event_templates
             else None
         ),
+        senders=payload.senders,
     )
     await secret_manager.set_secret(
         credential_secret_name(entry.slug, source.id), json.dumps(stored)
@@ -243,6 +248,19 @@ async def create_source(
     for secret_id, field in references:
         await secret_catalog.add_reference(secret_id, SECRET_CONSUMER, str(source.id), field)
     return source, issued
+
+
+async def update_source(
+    stream_id: UUID, source_id: UUID, payload: SourceUpdate, *, service: StreamService
+) -> StreamSourceORM:
+    """Change who may write to a source whose type admits senders."""
+    source = await service.get_source(stream_id, source_id)
+    entry = await source_type_entry(service, source.webhook_type or "")
+    if entry.admission is None:
+        raise HTTPException(
+            status_code=422, detail=f"{entry.name} sources let anyone through; they take no senders"
+        )
+    return await service.set_source_senders(stream_id, source_id, payload.senders)
 
 
 async def release_source(

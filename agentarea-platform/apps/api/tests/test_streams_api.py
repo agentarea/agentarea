@@ -251,6 +251,7 @@ async def test_a_webhook_source_shows_its_public_url(client, service, graph, mon
             polled_at=None,
             poll_error=None,
             registered_url="https://api.example/webhooks/abc",
+            senders=None,
             created_at=NOW,
         )
     ]

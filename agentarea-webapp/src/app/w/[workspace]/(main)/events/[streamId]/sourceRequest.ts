@@ -1,5 +1,11 @@
 import type { SecretRef, SourceCreate } from "@/api/client/types.gen";
 import { GENERIC_WEBHOOK, type SourceType } from "@/lib/sourceTypes";
+import {
+  DEFAULT_SENDERS,
+  sendersReady,
+  toSenders,
+  type SendersFormValue,
+} from "./senders";
 
 export type SourceKind = NonNullable<SourceCreate["kind"]>;
 
@@ -14,6 +20,8 @@ export interface SourceFormValues {
   secrets: Record<string, string>;
   settings: Record<string, string>;
   templates: Partial<Record<TemplateField, string>>;
+  /** Who may write, for a type that admits senders; absent means only whoever adds it. */
+  senders?: SendersFormValue;
   /** Raw values of an MCP event's argument fields, by property name. */
   arguments?: Record<string, string | boolean>;
 }
@@ -58,6 +66,9 @@ export function toSourceRequest(
     credentials,
     config,
   };
+  if (type.admits_senders) {
+    body.senders = toSenders(values.senders ?? DEFAULT_SENDERS);
+  }
   if (takesEventTemplates(type)) {
     const templates: Partial<Record<TemplateField, string>> = {};
     for (const field of TEMPLATE_FIELDS) {
@@ -82,5 +93,8 @@ export function missingSourceFields(
     ...type.config
       .filter((f) => f.required && !f.issued && blank(values.settings[f.key]))
       .map((f) => f.key),
+    ...(type.admits_senders && !sendersReady(values.senders ?? DEFAULT_SENDERS)
+      ? ["senders"]
+      : []),
   ];
 }
