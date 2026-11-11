@@ -8,13 +8,13 @@ import {
   Gauge,
   Hammer,
   KeyRound,
-  Landmark,
   LayoutGrid,
   Library,
   Network,
   Plug,
   Radio,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Terminal,
   Users,
@@ -137,9 +137,9 @@ export const navData = {
       ],
     },
     {
-      label: "Govern",
-      labelKey: "govern",
-      icon: Landmark,
+      label: "Control",
+      labelKey: "control",
+      icon: SlidersHorizontal,
       items: [
         {
           title: "Network",

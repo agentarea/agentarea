@@ -107,8 +107,68 @@ function NavSectionGroup({
   children: ReactNode;
 }) {
   const t = useTranslations("Sidebar");
+  const pathname = useWorkspacePathname();
   const label = section.labelKey ? t(section.labelKey) : section.label;
   const collapsible = section.collapsible ?? Boolean(label);
+  const Icon = section.icon;
+
+  // On the icon rail a section is one icon; its pages open beside it.
+  if (collapsible && isIconSidebar && Icon) {
+    return (
+      <SidebarGroup className="py-0">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton
+                  aria-label={label}
+                  isActive={sectionHasActivePath(section, pathname)}
+                  className={cn(
+                    navItemClassName,
+                    "data-[state=open]:bg-sidebar-accent"
+                  )}
+                >
+                  <Icon />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                side="right"
+                align="start"
+                sideOffset={8}
+                className="min-w-44"
+                onCloseAutoFocus={(e) => e.preventDefault()}
+              >
+                <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                  {label}
+                </DropdownMenuLabel>
+                {section.items.map((item) => (
+                  <DropdownMenuItem
+                    key={item.url}
+                    asChild
+                    className={cn(
+                      "gap-2 text-[13px]",
+                      matchesPath(pathname, item.url) &&
+                        "bg-zinc-200/80 dark:bg-zinc-700/50"
+                    )}
+                  >
+                    <Link href={item.url}>
+                      {item.icon && (
+                        <item.icon
+                          className="size-4 text-zinc-500 dark:text-zinc-400"
+                          strokeWidth={1.75}
+                        />
+                      )}
+                      {item.titleKey ? t(item.titleKey) : item.title}
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarGroup>
+    );
+  }
 
   if (!collapsible || isIconSidebar) {
     return (
@@ -123,7 +183,6 @@ function NavSectionGroup({
 
   // A collapsible section is a row like any other, its pages hang under it on
   // a guide line.
-  const Icon = section.icon;
   return (
     <Collapsible open={open} onOpenChange={onOpenChange} asChild>
       <SidebarGroup className="py-0">
