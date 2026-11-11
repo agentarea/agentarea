@@ -41,6 +41,11 @@
         "username": {
           "type": "string",
           "title": "Username"
+        },
+        "picture": {
+          "type": "string",
+          "format": "uri",
+          "title": "Picture"
         }
       },
       "required": [
