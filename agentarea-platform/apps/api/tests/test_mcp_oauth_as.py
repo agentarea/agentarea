@@ -415,3 +415,36 @@ class TestDynamicClientRegistration:
 
         hydra.post("/oauth2/register", json={"client_name": "probe", "redirect_uris": REDIRECT})
         assert _FakeAsyncClient.sent[-1]["redirect_uris"] == REDIRECT
+
+    def test_refuses_callbacks_hydra_would_not_match_as_written(self, hydra):
+        """Wildcards, fragments and credentials in a callback are refused (RFC 6749 §3.1.2)."""
+        for uri in (
+            "https://*.evil.example/cb",
+            "https://*/cb",
+            "https://evil.example/cb#frag",
+            "https://user:pass@evil.example/cb",
+            "https://app.agentarea.ru@evil.example/cb",
+            "https:///cb",
+        ):
+            response = hydra.post(
+                "/oauth2/register", json={"client_name": "probe", "redirect_uris": [uri]}
+            )
+
+            assert response.status_code == 400, uri
+            assert response.json()["error"] == "invalid_redirect_uri"
+        assert _FakeAsyncClient.sent == []
+
+    def test_accepts_the_callbacks_real_clients_register(self, hydra):
+        for uri in (
+            "https://claude.ai/api/mcp/auth_callback",
+            "https://manufact.com/inspector/oauth/callback",
+            "http://localhost:3118/callback",
+            "http://127.0.0.1:50285/callback/mchcrPoY4sxk",
+            "http://[::1]:8080/cb",
+        ):
+            response = hydra.post(
+                "/oauth2/register", json={"client_name": "probe", "redirect_uris": [uri]}
+            )
+
+            assert response.status_code != 400, uri
+            assert _FakeAsyncClient.sent[-1]["redirect_uris"] == [uri]

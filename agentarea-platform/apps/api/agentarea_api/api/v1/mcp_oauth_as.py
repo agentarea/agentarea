@@ -20,6 +20,7 @@ keep advertising ourselves and serve the AS metadata + oauth2/* proxy below, so
 dynamic client registration still works on deployments that rely on the shim.
 """
 
+import json
 import re
 from urllib.parse import urlparse
 
@@ -293,6 +294,14 @@ _DCR_FIELDS = (
 _DCR_TOKEN_AUTH_METHODS = frozenset({"none", "client_secret_basic", "client_secret_post"})
 
 
+def _invalid_redirect_uri(description: str) -> Response:
+    return Response(
+        content=json.dumps({"error": "invalid_redirect_uri", "error_description": description}),
+        status_code=400,
+        headers={"Content-Type": "application/json"},
+    )
+
+
 @oauth_as_router.post(
     "/oauth2/register",
     dependencies=[
@@ -413,18 +422,21 @@ async def hydra_dcr_proxy(request: Request) -> Response:
             "::1",
         )
         if parsed.scheme != "https" and not is_loopback:
-            return Response(
-                content=_json.dumps(
-                    {
-                        "error": "invalid_redirect_uri",
-                        "error_description": (
-                            "redirect_uris must use https, or http to a loopback host "
-                            "for native clients"
-                        ),
-                    }
-                ),
-                status_code=400,
-                headers={"Content-Type": "application/json"},
+            return _invalid_redirect_uri(
+                "redirect_uris must use https, or http to a loopback host for native clients"
+            )
+        # The consent screen names the host the code goes to; a wildcard, a
+        # credential prefix ("app.agentarea.ru@evil.example") or a fragment would
+        # make that host something other than what the user reads.
+        if (
+            not parsed.hostname
+            or "*" in parsed.netloc
+            or "@" in parsed.netloc
+            or parsed.fragment
+            or "#" in str(uri)
+        ):
+            return _invalid_redirect_uri(
+                "redirect_uris must name one host, with no wildcard, credentials or fragment"
             )
 
     # Hydra requires client_uri to be a valid URL and contacts to be an array;
