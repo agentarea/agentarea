@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { Check } from "lucide-react";
+import { Check, TriangleAlert } from "lucide-react";
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { redirectTarget } from "./redirect-target";
 
 const KNOWN_SCOPES = ["openid", "profile", "email", "offline_access"] as const;
 
@@ -16,7 +17,9 @@ interface ConsentRequest {
     client_name?: string;
     client_id?: string;
     audience?: string[];
+    redirect_uris?: string[];
   };
+  request_url?: string;
   requested_scope?: string[];
   requested_access_token_audience?: string[];
   subject?: string;
@@ -108,6 +111,8 @@ export default function ConsentPage() {
     consentRequest?.client?.client_id ||
     t("defaultClient");
 
+  const target = consentRequest ? redirectTarget(consentRequest) : null;
+
   const scopes: string[] = consentRequest?.requested_scope || [];
 
   const scopeLabel = (scope: string) =>
@@ -154,6 +159,37 @@ export default function ConsentPage() {
               </div>
             )}
 
+            {target ? (
+              <div
+                className={
+                  target.loopback
+                    ? "border-border/60 bg-muted/30 mb-5 rounded-lg border p-4"
+                    : "border-amber-500/40 bg-amber-500/5 mb-5 rounded-lg border p-4"
+                }
+              >
+                <p className="text-foreground mb-1 text-xs font-medium uppercase tracking-wider">
+                  {t("redirectHeading")}
+                </p>
+                <p className="text-foreground break-all font-mono text-base font-semibold">
+                  {target.host}
+                </p>
+                <p className="text-muted-foreground mt-2 flex items-start gap-2 text-xs leading-relaxed">
+                  {!target.loopback && (
+                    <TriangleAlert className="mt-[1px] h-4 w-4 shrink-0 text-amber-600" />
+                  )}
+                  <span>
+                    {target.loopback
+                      ? t("redirectLoopback")
+                      : t("redirectUnverified", { clientName })}
+                  </span>
+                </p>
+              </div>
+            ) : (
+              <div className="text-destructive border-destructive/30 bg-destructive/5 mb-5 rounded-md border px-3 py-2 text-sm">
+                {t("redirectUnknown")}
+              </div>
+            )}
+
             {scopes.length > 0 && (
               <div className="border-border/60 bg-muted/30 mb-5 rounded-lg border p-4">
                 <p className="text-foreground mb-3 text-xs font-medium uppercase tracking-wider">
@@ -176,7 +212,7 @@ export default function ConsentPage() {
             <div className="flex flex-col gap-2">
               <Button
                 onClick={handleAccept}
-                disabled={submitting || !!error}
+                disabled={submitting || !!error || !target}
                 className="h-11 w-full rounded-md bg-[#2252b3] text-sm font-medium text-white shadow-sm hover:bg-[#1a3f8a]"
               >
                 {t("allow")}

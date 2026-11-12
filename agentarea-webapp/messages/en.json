@@ -3298,6 +3298,10 @@
     "footnote": "You can revoke access any time from Settings.",
     "allow": "Allow access",
     "deny": "Cancel",
+    "redirectHeading": "Allowing gives access to",
+    "redirectUnverified": "The name “{clientName}” was chosen by the app itself and is not verified. Allow only if you recognise this address.",
+    "redirectLoopback": "An app on this computer.",
+    "redirectUnknown": "Where the access would go cannot be determined, so it cannot be allowed.",
     "defaultClient": "an external application",
     "error": {
       "missingChallenge": "This authorization link is invalid or has expired.",
