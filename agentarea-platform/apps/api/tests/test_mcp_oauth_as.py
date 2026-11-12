@@ -422,7 +422,7 @@ class TestDynamicClientRegistration:
             "https://*.evil.example/cb",
             "https://*/cb",
             "https://evil.example/cb#frag",
-            "https://user:pass@evil.example/cb",
+            "https://user:pass@evil.example/cb",  # pragma: allowlist secret
             "https://app.agentarea.ru@evil.example/cb",
             "https:///cb",
         ):
