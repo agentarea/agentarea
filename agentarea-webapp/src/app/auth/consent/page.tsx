@@ -8,7 +8,6 @@ import { Check } from "lucide-react";
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { grantedAccessTokenAudience } from "./oauth-audience";
 
 const KNOWN_SCOPES = ["openid", "profile", "email", "offline_access"] as const;
 
@@ -64,28 +63,8 @@ export default function ConsentPage() {
     setSubmitting(true);
     try {
       const response = await fetch(
-        `/api/hydra/consent?challenge=${consentChallenge}&action=accept`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            grant_scope: consentRequest?.requested_scope || [
-              "openid",
-              "profile",
-              "email",
-            ],
-            grant_access_token_audience: grantedAccessTokenAudience(
-              consentRequest?.requested_access_token_audience,
-              consentRequest?.client?.audience
-            ),
-            session: {
-              id_token: {
-                email: consentRequest?.subject || "",
-                name: "Ory User",
-              },
-            },
-          }),
-        }
+        `/api/hydra/consent?challenge=${encodeURIComponent(consentChallenge)}&action=accept`,
+        { method: "PUT" }
       );
 
       if (response.ok) {
@@ -107,15 +86,8 @@ export default function ConsentPage() {
     setSubmitting(true);
     try {
       const response = await fetch(
-        `/api/hydra/consent?challenge=${consentChallenge}&action=reject`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            error: "access_denied",
-            error_description: "The user denied the request",
-          }),
-        }
+        `/api/hydra/consent?challenge=${encodeURIComponent(consentChallenge)}&action=reject`,
+        { method: "PUT" }
       );
 
       if (response.ok) {
