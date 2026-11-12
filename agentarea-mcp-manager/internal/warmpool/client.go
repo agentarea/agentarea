@@ -1044,6 +1044,8 @@ func taskPodFromTemplate(template corev1.Pod, namespace, workspaceID, taskID str
 	}
 	automountServiceAccountToken := false
 	pod.Spec.AutomountServiceAccountToken = &automountServiceAccountToken
+	enableServiceLinks := false
+	pod.Spec.EnableServiceLinks = &enableServiceLinks
 	pod.Spec.NodeName = ""
 	return pod
 }

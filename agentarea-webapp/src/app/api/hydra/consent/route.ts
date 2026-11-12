@@ -11,15 +11,14 @@
  * GET  /api/hydra/consent?challenge=<challenge>
  *   → fetch consent request details
  *
- * PUT  /api/hydra/consent?challenge=<challenge>&action=accept
- *   → accept the consent challenge (body forwarded as-is)
- *
- * PUT  /api/hydra/consent?challenge=<challenge>&action=reject
- *   → reject the consent challenge (body forwarded as-is)
+ * PUT  /api/hydra/consent?challenge=<challenge>&action=accept|reject
+ *   → decide the consent challenge; the request body is ignored and the
+ *     decision is built from the consent request (see decision-body.ts)
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getLiveSessionIdentityId } from "@/lib/auth-session";
+import { type ConsentRequest, consentDecisionBody } from "./decision-body";
 import { sessionMatchesConsentSubject } from "./subject-match";
 
 const HYDRA_ADMIN_URL =
@@ -27,6 +26,10 @@ const HYDRA_ADMIN_URL =
   process.env.AGENTAREA_AUTH_HYDRA_ADMIN_URL ||
   "http://localhost:4445";
 const KRATOS_PUBLIC_URL = process.env.ORY_SDK_URL || "http://localhost:4433";
+
+function consentUrl(suffix: string, challenge: string): string {
+  return `${HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/consent${suffix}?consent_challenge=${encodeURIComponent(challenge)}`;
+}
 
 async function requireSessionIdentity(
   request: NextRequest
@@ -50,9 +53,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const res = await fetch(
-      `${HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/consent?consent_challenge=${challenge}`
-    );
+    const res = await fetch(consentUrl("", challenge));
     const data = await res.json();
     if (
       res.ok &&
@@ -97,10 +98,9 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "No active session" }, { status: 401 });
   }
 
+  let consentRequest: ConsentRequest;
   try {
-    const consentRes = await fetch(
-      `${HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/consent?consent_challenge=${challenge}`
-    );
+    const consentRes = await fetch(consentUrl("", challenge));
     if (!consentRes.ok) {
       const errBody = await consentRes.text();
       console.error(
@@ -112,7 +112,7 @@ export async function PUT(request: NextRequest) {
         { status: consentRes.status }
       );
     }
-    const consentRequest = await consentRes.json();
+    consentRequest = await consentRes.json();
     if (
       !sessionMatchesConsentSubject(sessionIdentityId, consentRequest?.subject)
     ) {
@@ -132,23 +132,11 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  let body: unknown;
   try {
-    body = await request.json();
-  } catch {
-    body = {};
-  }
-
-  const hydraPath =
-    action === "accept"
-      ? `${HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/consent/accept?consent_challenge=${challenge}`
-      : `${HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/consent/reject?consent_challenge=${challenge}`;
-
-  try {
-    const res = await fetch(hydraPath, {
+    const res = await fetch(consentUrl(`/${action}`, challenge), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(consentDecisionBody(action, consentRequest)),
     });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });

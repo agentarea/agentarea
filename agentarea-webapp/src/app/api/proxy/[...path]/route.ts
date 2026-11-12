@@ -4,6 +4,7 @@ import { getAuthToken } from "@/lib/getAuthToken";
 import { resolveRequestWorkspaceSlug } from "@/lib/workspace-request";
 import { fillWorkspace } from "@/lib/workspace-url";
 import { WORKSPACE_QUERY_PARAM } from "@/lib/workspaces";
+import { isUnderVersionedApi } from "./api-path";
 import { buildProxyResponseHeaders } from "./response-headers";
 
 /**
@@ -45,6 +46,12 @@ async function handleRequest(
       `${env.AGENTAREA_API_URL}/${pathString}`,
       resolveRequestWorkspaceSlug(request)
     );
+    // A segment checked above can still resolve to a dot segment: "%2e%2e"
+    // arrives here once-decoded from "%252e%252e" and URL parsing treats it
+    // as "..". Judge the path the request will actually reach.
+    if (!isUnderVersionedApi(backendUrl, env.AGENTAREA_API_URL)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
 
     // Get query parameters from the request
     const { searchParams } = new URL(request.url);
