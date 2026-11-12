@@ -247,3 +247,40 @@ def test_event_data_cannot_override_identity():
     assert data["workspace_id"] == "ws-real"
     assert data["task_id"] == "t-1"
     assert data["agent_id"] == "a-1"
+
+
+def test_tool_result_keeps_structured_content_whole():
+    """An MCP App parses ``structured_content`` against its own schema.
+
+    Grafana's query_prometheus answers ``{"data": [...]}``; the event log's
+    content-key rule once turned that ``data`` into an omission string, and the
+    app could not draw the result it was opened over.
+    """
+    vector = [{"metric": {"__name__": "ALERTS"}, "value": [1793647243, "1"]}]
+    mgr = _mgr()
+    mgr.add_event(
+        EventTypes.TOOL_CALL_COMPLETED,
+        {
+            "tool_call_id": "tc-1",
+            "result": "PRIVATE_STDOUT_CANARY",
+            "structured_content": {"data": vector, "exploreUrl": "https://grafana/explore"},
+        },
+    )
+    data = _only_event(mgr)["data"]
+    assert data["structured_content"] == {
+        "data": vector,
+        "exploreUrl": "https://grafana/explore",
+    }
+    assert "PRIVATE_STDOUT_CANARY" not in json.dumps(data)
+
+
+def test_tool_result_structured_content_masks_secret_keys():
+    mgr = _mgr()
+    mgr.add_event(
+        EventTypes.TOOL_CALL_COMPLETED,
+        {"tool_call_id": "tc-1", "structured_content": {"api_key": "sk-live", "rows": 3}},
+    )
+    assert _only_event(mgr)["data"]["structured_content"] == {
+        "api_key": "[redacted]",
+        "rows": 3,
+    }

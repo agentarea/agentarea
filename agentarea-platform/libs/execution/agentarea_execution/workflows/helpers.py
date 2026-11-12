@@ -18,7 +18,11 @@ from agentarea_common.events.contract import (
     ensure_terminal_message,
     require_known_type,
 )
-from agentarea_common.events.redaction import MAX_EVENT_STRING_CHARS, sanitize_tool_event_value
+from agentarea_common.events.redaction import (
+    MAX_EVENT_STRING_CHARS,
+    reveal_tool_value,
+    sanitize_tool_event_value,
+)
 from agentarea_governance.domain.tool_calls import CONTROL_FLOW_TOOL_NAMES
 from temporalio import workflow
 
@@ -514,9 +518,14 @@ class EventManager:
         if event_type == "llm.call.completed":
             data = _sanitize_llm_completed_data(data)
         elif event_type == "tool.result":
-            sanitized = sanitize_tool_event_value(data)
+            structured = data.get("structured_content")
+            sanitized = sanitize_tool_event_value(
+                {key: value for key, value in data.items() if key != "structured_content"}
+            )
             if not isinstance(sanitized, dict):
                 raise ValueError("tool result event data must be a mapping")
+            if structured is not None:
+                sanitized["structured_content"] = reveal_tool_value(structured)
             data = sanitized
         event = {
             "event_id": str(uuid4()),

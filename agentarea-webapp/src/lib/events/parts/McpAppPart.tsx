@@ -58,19 +58,17 @@ function ChatMcpAppView({ app }: { app: ChatMcpApp }) {
   }, [app]);
 
   return (
-    <div className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-border">
-      {view.phase === "ready" && (
-        <div className="border-b border-border/70 bg-muted/20 px-3 py-1.5 text-[13px] font-medium text-foreground/80">
-          {view.app.title}
-        </div>
-      )}
+    <div className="flex min-w-0 flex-col">
       {view.phase === "loading" && (
-        <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
+        <div className="flex h-24 items-center justify-center rounded-xl border border-border text-sm text-muted-foreground">
           {t("loading")}
         </div>
       )}
       {view.phase === "failed" && (
-        <div role="alert" className="p-3 text-sm text-destructive">
+        <div
+          role="alert"
+          className="rounded-xl border border-border p-3 text-sm text-destructive"
+        >
           <p className="font-medium">{t("resourceError")}</p>
           <p className="mt-1 break-words text-muted-foreground">{view.error}</p>
         </div>
