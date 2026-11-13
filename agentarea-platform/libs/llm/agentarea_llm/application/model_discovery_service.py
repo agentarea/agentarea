@@ -1,6 +1,7 @@
 import logging
 from dataclasses import dataclass, field, replace
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 from agentarea_agents_sdk.models.provider_profiles import ModelListShape, ProviderProfile
@@ -113,6 +114,60 @@ class ModelDiscoveryService:
     def _build_headers(self, provider: ProviderProfile, api_key: str | None) -> dict[str, str]:
         return provider.build_headers(api_key)
 
+    @staticmethod
+    def _build_model_details_url(provider: ProviderProfile, models_url: str) -> str | None:
+        """Return the Ollama model-details endpoint for a native model listing."""
+        if provider.models_path != "/api/tags":
+            return None
+
+        parsed = urlsplit(models_url)
+        if not parsed.scheme or not parsed.netloc or not parsed.path.endswith("/api/tags"):
+            return None
+        return urlunsplit(
+            (parsed.scheme, parsed.netloc, f"{parsed.path[: -len('/api/tags')]}/api/show", "", "")
+        )
+
+    @staticmethod
+    def _context_window_from_model_info(model_info: object) -> int | None:
+        if not isinstance(model_info, dict):
+            return None
+        for key, value in model_info.items():
+            if isinstance(key, str) and key.endswith(".context_length"):
+                context_window = _positive_int_or_none(value)
+                if context_window is not None:
+                    return context_window
+        return _positive_int_or_none(model_info.get("context_length"))
+
+    async def _discover_native_models(
+        self,
+        client: httpx.AsyncClient,
+        provider: ProviderProfile,
+        models_url: str,
+        headers: dict[str, str],
+        data: dict,
+    ) -> list[DiscoveredModel]:
+        models = self._parse_response(provider, data)
+        details_url = self._build_model_details_url(provider, models_url)
+        if not details_url:
+            return models
+
+        for model in models:
+            try:
+                response = await client.post(
+                    details_url,
+                    headers=headers,
+                    json={"name": model.model_name},
+                )
+                response.raise_for_status()
+                model.context_window = self._context_window_from_model_info(
+                    response.json().get("model_info")
+                )
+            except Exception as error:
+                logger.warning(
+                    "Model metadata discovery failed for %s: %s", model.model_name, error
+                )
+        return models
+
     def _parse_response(self, provider: ProviderProfile, data: dict) -> list[DiscoveredModel]:
         models: list[DiscoveredModel] = []
         if provider.list_shape is ModelListShape.MODELS_NAME:
@@ -189,7 +244,12 @@ class ModelDiscoveryService:
                 resp = await client.get(url, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
-                models = self._parse_response(provider, data)
+                if provider.list_shape is ModelListShape.MODELS_NAME:
+                    models = await self._discover_native_models(
+                        client, provider, url, headers, data
+                    )
+                else:
+                    models = self._parse_response(provider, data)
                 logger.info("Discovered %d models for provider %s", len(models), provider_key)
                 return models
         except UnsafeUrlError:
