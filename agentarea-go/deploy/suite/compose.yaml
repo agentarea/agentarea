@@ -1,0 +1,106 @@
+# Behaviour-suite stack: the infrastructure of docker-compose.dev.yaml with
+# its own project name, its own volumes, host ports in 57000-57999 and no
+# published dev ports, so it runs beside the dev stack. Start it with
+# stack.sh, which passes this file after the dev file and with
+# --project-directory at the repo root (relative paths below resolve there).
+# The API and worker are `agentarea serve` and `agentarea worker` on the host.
+#
+# Host ports:
+#   57900 agentarea serve (host)
+#   57433 Kratos public   57434 Kratos admin
+#   57444 Hydra public    57445 Hydra admin
+#   57432 Postgres        57379 Valkey
+#   57088 OpenFGA HTTP    57233 Temporal
+#   57090 RustFS S3
+
+x-local: &local
+  pull_policy: never
+
+services:
+  postgres_init:
+    <<: *local
+
+  bucket-init:
+    <<: *local
+    container_name: !reset null
+
+  db:
+    <<: *local
+    ports: !override
+      - "127.0.0.1:57432:5432"
+
+  valkey:
+    <<: *local
+    container_name: !reset null
+    env_file: !reset []
+    ports: !override
+      - "127.0.0.1:57379:6379"
+    restart: !reset "no"
+
+  rustfs:
+    <<: *local
+    ports: !override
+      - "127.0.0.1:57090:9000"
+    command: /data
+
+  temporal-schema:
+    <<: *local
+
+  temporal:
+    <<: *local
+    container_name: !reset null
+    ports: !override
+      - "127.0.0.1:57233:7233"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "7233"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
+    restart: !reset "no"
+
+  temporal-namespace:
+    <<: *local
+
+  kratos-migrate:
+    <<: *local
+    volumes: !override
+      - ./agentarea-go/deploy/suite/.state/kratos:/etc/config/kratos
+
+  kratos:
+    <<: *local
+    ports: !override
+      - "127.0.0.1:57433:4433"
+      - "127.0.0.1:57434:4434"
+    volumes: !override
+      - ./agentarea-go/deploy/suite/.state/kratos:/etc/config/kratos
+    restart: !reset "no"
+
+  hydra-migrate:
+    <<: *local
+
+  hydra:
+    <<: *local
+    ports: !override
+      - "127.0.0.1:57444:4444"
+      - "127.0.0.1:57445:4445"
+    restart: !reset "no"
+
+  openfga-migrate:
+    <<: *local
+
+  openfga:
+    <<: *local
+    ports: !override
+      - "127.0.0.1:57088:8080"
+    restart: !reset "no"
+
+  mailpit:
+    <<: *local
+    ports: !reset []
+    volumes: !override
+      - mailpit_data:/data
+    restart: !reset "no"
+
+volumes:
+  mailpit_data:

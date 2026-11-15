@@ -1,0 +1,2 @@
+# Commands of cli.json the Go binary deliberately does not port: "<name> -- <reason>".
+agentarea-worker dev -- watchfiles restart of the Python worker

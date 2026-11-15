@@ -1,0 +1,6 @@
+# Workflows and activities of temporal.json Go deliberately does not register: "<name> -- <reason>".
+build_agent_config_activity -- folded into resolve_run_config_activity (decision 3c, runs/workflows/ACTIVITIES.md section 1)
+discover_available_tools_activity -- folded into resolve_run_config_activity (decision 3c)
+discover_tool_providers_activity -- folded into resolve_run_config_activity (decision 3c)
+resolve_agent_tools_activity -- folded into resolve_run_config_activity (decision 3c)
+resolve_model_activity -- folded into resolve_run_config_activity (decision 3c)

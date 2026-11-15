@@ -1,0 +1,275 @@
+{
+ "http.server.request.duration": {
+  "attributes": [
+   "http.request.method",
+   "http.route",
+   "http.response.status_code"
+  ],
+  "buckets": [
+   0.005,
+   0.01,
+   0.025,
+   0.05,
+   0.1,
+   0.25,
+   0.5,
+   1,
+   2.5,
+   5,
+   10,
+   30
+  ]
+ },
+ "http.client.request.duration": {
+  "attributes": [
+   "http.request.method",
+   "http.response.status_code",
+   "error.type"
+  ],
+  "buckets": [
+   0.005,
+   0.01,
+   0.025,
+   0.05,
+   0.1,
+   0.25,
+   0.5,
+   1,
+   2.5,
+   5,
+   10,
+   30
+  ]
+ },
+ "agentarea.process.uptime": {
+  "attributes": [],
+  "buckets": []
+ },
+ "agentarea.authz.duration": {
+  "attributes": [
+   "operation"
+  ],
+  "buckets": [
+   0.005,
+   0.01,
+   0.025,
+   0.05,
+   0.1,
+   0.25,
+   0.5,
+   1,
+   2.5,
+   5,
+   10,
+   30
+  ]
+ },
+ "agentarea.broker.group.lag": {
+  "attributes": [
+   "stream",
+   "group"
+  ],
+  "buckets": []
+ },
+ "agentarea.broker.group.pending": {
+  "attributes": [
+   "stream",
+   "group"
+  ],
+  "buckets": []
+ },
+ "agentarea.broker.group.oldest_pending": {
+  "attributes": [
+   "stream",
+   "group"
+  ],
+  "buckets": []
+ },
+ "agentarea.broker.dlq.length": {
+  "attributes": [
+   "stream"
+  ],
+  "buckets": []
+ },
+ "agentarea.broker.health": {
+  "attributes": [],
+  "buckets": []
+ },
+ "agentarea.run.transitions": {
+  "attributes": [
+   "status",
+   "failure_reason"
+  ],
+  "buckets": []
+ },
+ "agentarea.run.duration": {
+  "attributes": [
+   "status"
+  ],
+  "buckets": [
+   5,
+   15,
+   30,
+   60,
+   120,
+   300,
+   600,
+   1800,
+   3600,
+   7200,
+   21600
+  ]
+ },
+ "gen_ai.client.operation.duration": {
+  "attributes": [
+   "gen_ai.provider.name",
+   "gen_ai.request.model",
+   "gen_ai.operation.name",
+   "agentarea.llm.purpose",
+   "error.type"
+  ],
+  "buckets": [
+   0.25,
+   0.5,
+   1,
+   2,
+   5,
+   10,
+   20,
+   30,
+   60,
+   120,
+   300,
+   600
+  ]
+ },
+ "gen_ai.client.token.usage": {
+  "attributes": [
+   "gen_ai.provider.name",
+   "gen_ai.request.model",
+   "gen_ai.operation.name",
+   "agentarea.llm.purpose",
+   "gen_ai.token.type"
+  ],
+  "buckets": [
+   1,
+   4,
+   16,
+   64,
+   256,
+   1024,
+   4096,
+   16384,
+   65536,
+   262144,
+   1048576,
+   4194304
+  ]
+ },
+ "gen_ai.client.operation.time_to_first_chunk": {
+  "attributes": [
+   "gen_ai.provider.name",
+   "gen_ai.request.model",
+   "gen_ai.operation.name",
+   "agentarea.llm.purpose"
+  ],
+  "buckets": [
+   0.1,
+   0.25,
+   0.5,
+   1,
+   2,
+   5,
+   10,
+   20,
+   30,
+   60
+  ]
+ },
+ "agentarea.llm.in_flight": {
+  "attributes": [
+   "gen_ai.provider.name",
+   "gen_ai.request.model",
+   "gen_ai.operation.name",
+   "agentarea.llm.purpose"
+  ],
+  "buckets": []
+ },
+ "agentarea.tool.calls": {
+  "attributes": [
+   "agentarea.tool.kind",
+   "path",
+   "outcome"
+  ],
+  "buckets": []
+ },
+ "agentarea.tool.call.duration": {
+  "attributes": [
+   "agentarea.tool.kind",
+   "path",
+   "outcome"
+  ],
+  "buckets": [
+   0.05,
+   0.1,
+   0.25,
+   0.5,
+   1,
+   2.5,
+   5,
+   10,
+   30,
+   60,
+   120,
+   300,
+   900,
+   1800
+  ]
+ },
+ "agentarea.tool.in_flight": {
+  "attributes": [
+   "agentarea.tool.kind",
+   "path"
+  ],
+  "buckets": []
+ },
+ "agentarea.tool.oldest_in_flight": {
+  "attributes": [
+   "agentarea.tool.kind",
+   "path"
+  ],
+  "buckets": []
+ },
+ "mcp.client.operation.duration": {
+  "attributes": [
+   "mcp.method.name",
+   "error.type"
+  ],
+  "buckets": [
+   0.05,
+   0.1,
+   0.25,
+   0.5,
+   1,
+   2.5,
+   5,
+   10,
+   30,
+   60,
+   120,
+   300,
+   900,
+   1800
+  ]
+ },
+ "agentarea.mcp.client.era_renegotiated": {
+  "attributes": [
+   "error.type"
+  ],
+  "buckets": []
+ },
+ "agentarea.mcp.dispatch_stamp.dropped": {
+  "attributes": [],
+  "buckets": []
+ }
+}

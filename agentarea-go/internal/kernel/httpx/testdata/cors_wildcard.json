@@ -1,0 +1,108 @@
+[
+ {
+  "name": "preflight",
+  "request": {
+   "method": "OPTIONS",
+   "path": "/items",
+   "headers": {
+    "origin": "https://x.example",
+    "access-control-request-method": "POST",
+    "access-control-request-headers": "Authorization, Content-Type"
+   }
+  },
+  "status": 200,
+  "headers": {
+   "content-type": "text/plain; charset=utf-8",
+   "access-control-allow-origin": "*",
+   "access-control-allow-methods": "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT",
+   "access-control-allow-headers": "Authorization, Content-Type",
+   "access-control-max-age": "3600"
+  },
+  "body": "OK"
+ },
+ {
+  "name": "preflight_no_headers",
+  "request": {
+   "method": "OPTIONS",
+   "path": "/items",
+   "headers": {
+    "origin": "https://x.example",
+    "access-control-request-method": "PATCH"
+   }
+  },
+  "status": 200,
+  "headers": {
+   "content-type": "text/plain; charset=utf-8",
+   "access-control-allow-origin": "*",
+   "access-control-allow-methods": "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT",
+   "access-control-max-age": "3600"
+  },
+  "body": "OK"
+ },
+ {
+  "name": "simple",
+  "request": {
+   "method": "GET",
+   "path": "/raise/http_404",
+   "headers": {
+    "origin": "https://x.example"
+   }
+  },
+  "status": 404,
+  "headers": {
+   "content-type": "application/problem+json",
+   "access-control-allow-origin": "*"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404,\"code\":\"http_error\",\"detail\":\"Task not found\"}"
+ },
+ {
+  "name": "simple_unhandled",
+  "request": {
+   "method": "GET",
+   "path": "/raise/unhandled",
+   "headers": {
+    "origin": "https://x.example"
+   }
+  },
+  "status": 500,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Internal Server Error\",\"status\":500,\"code\":\"internal_error\",\"detail\":\"Internal Server Error\"}"
+ },
+ {
+  "name": "simple_too_large",
+  "request": {
+   "method": "POST",
+   "path": "/echo",
+   "content": "{                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        }",
+   "headers": {
+    "origin": "https://x.example",
+    "content-type": "application/json"
+   }
+  },
+  "status": 413,
+  "headers": {
+   "content-type": "application/json",
+   "access-control-allow-origin": "*"
+  },
+  "body": "{\"detail\":\"Request body too large\"}"
+ },
+ {
+  "name": "options_without_request_method",
+  "request": {
+   "method": "OPTIONS",
+   "path": "/items",
+   "headers": {
+    "origin": "https://x.example"
+   }
+  },
+  "status": 405,
+  "headers": {
+   "content-type": "application/problem+json",
+   "allow": "POST",
+   "access-control-allow-origin": "*"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Method Not Allowed\",\"status\":405,\"code\":\"http_error\",\"detail\":\"Method Not Allowed\"}"
+ }
+]

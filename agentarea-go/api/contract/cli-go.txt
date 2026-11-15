@@ -1,0 +1,10 @@
+# Every subcommand the Go binary runs (app.Subcommands), with what it is:
+# "<subcommand> = <python command>[, <python command>...]"; "<subcommand> = - <reason>" when it has no Python command.
+serve = agentarea-api serve
+migrate = agentarea-api migrate
+worker = agentarea-worker start
+dlq-replay = agentarea-api dlq-replay
+init-buckets = python -m agentarea_common.artifacts.bucket_init
+events = - the process of the Go agentarea-event-service
+mcp = - the process of the Go agentarea-mcp-manager
+all = - every role in one process

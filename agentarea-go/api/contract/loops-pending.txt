@@ -1,0 +1,6 @@
+# Background loops of loops.json no Go role starts yet: "<name> -- <reason>". The list only shrinks.
+worker:AnalyticsSender -- no product analytics sender (COVERAGE 32)
+worker:InstallationPulse -- no installation pulse (COVERAGE 32)
+api:AnalyticsSender -- no product analytics sender (COVERAGE 32)
+api:BrokerHealthMetrics -- no broker lag, pending or DLQ gauges (COVERAGE 34)
+worker:HealthServer -- the worker role serves no health endpoint for the kubelet probe

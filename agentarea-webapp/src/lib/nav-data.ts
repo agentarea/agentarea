@@ -7,6 +7,7 @@ import {
   GalleryVerticalEnd,
   Gauge,
   Hammer,
+  Inbox,
   KeyRound,
   LayoutGrid,
   Library,
@@ -48,6 +49,12 @@ export const navData = {
           titleKey: "dashboard",
           url: "/dashboard",
           icon: Gauge,
+        },
+        {
+          title: "Inbox",
+          titleKey: "inbox",
+          url: "/inbox",
+          icon: Inbox,
         },
         {
           title: "Apps",

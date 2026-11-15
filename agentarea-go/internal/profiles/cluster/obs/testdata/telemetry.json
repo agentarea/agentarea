@@ -1,0 +1,188 @@
+[
+ {
+  "env": {},
+  "result": {
+   "error": "AGENTAREA_OTEL_ENABLED is true but OTEL_EXPORTER_OTLP_ENDPOINT is not set (nor OTEL_EXPORTER_OTLP_TRACES_ENDPOINT and OTEL_EXPORTER_OTLP_METRICS_ENDPOINT)"
+  }
+ },
+ {
+  "env": {
+   "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318"
+  },
+  "result": {
+   "metrics_exporter": "otlp",
+   "traces_protocol": "http/protobuf",
+   "metrics_protocol": "http/protobuf",
+   "interval_ms": 15000
+  }
+ },
+ {
+  "env": {
+   "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://c:4318/v1/traces"
+  },
+  "result": {
+   "error": "AGENTAREA_OTEL_ENABLED is true and OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is set, but OTEL_EXPORTER_OTLP_METRICS_ENDPOINT is not: set it too, or set OTEL_EXPORTER_OTLP_ENDPOINT for every signal"
+  }
+ },
+ {
+  "env": {
+   "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://c",
+   "OTEL_METRICS_EXPORTER": "prometheus"
+  },
+  "result": {
+   "metrics_exporter": "prometheus",
+   "traces_protocol": "http/protobuf"
+  }
+ },
+ {
+  "env": {
+   "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://c",
+   "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "http://m"
+  },
+  "result": {
+   "metrics_exporter": "otlp",
+   "traces_protocol": "http/protobuf",
+   "metrics_protocol": "http/protobuf",
+   "interval_ms": 15000
+  }
+ },
+ {
+  "env": {
+   "OTEL_METRICS_EXPORTER": "none"
+  },
+  "result": {
+   "error": "AGENTAREA_OTEL_ENABLED is true but OTEL_EXPORTER_OTLP_ENDPOINT is not set (nor OTEL_EXPORTER_OTLP_TRACES_ENDPOINT)"
+  }
+ },
+ {
+  "env": {
+   "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318",
+   "OTEL_METRICS_EXPORTER": " Prometheus "
+  },
+  "result": {
+   "metrics_exporter": "prometheus",
+   "traces_protocol": "http/protobuf"
+  }
+ },
+ {
+  "env": {
+   "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318",
+   "OTEL_METRICS_EXPORTER": "console"
+  },
+  "result": {
+   "error": "OTEL_METRICS_EXPORTER='console' is not supported; use one of otlp, prometheus, none"
+  }
+ },
+ {
+  "env": {
+   "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318",
+   "OTEL_EXPORTER_OTLP_PROTOCOL": "GRPC"
+  },
+  "result": {
+   "metrics_exporter": "otlp",
+   "traces_protocol": "grpc",
+   "metrics_protocol": "grpc",
+   "interval_ms": 15000
+  }
+ },
+ {
+  "env": {
+   "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318",
+   "OTEL_EXPORTER_OTLP_PROTOCOL": "http/json"
+  },
+  "result": {
+   "error": "OTEL_EXPORTER_OTLP_PROTOCOL='http/json' is not supported; use one of http/protobuf, grpc"
+  }
+ },
+ {
+  "env": {
+   "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318",
+   "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL": "grpc",
+   "OTEL_EXPORTER_OTLP_PROTOCOL": "bad"
+  },
+  "result": {
+   "error": "OTEL_EXPORTER_OTLP_PROTOCOL='bad' is not supported; use one of http/protobuf, grpc"
+  }
+ },
+ {
+  "env": {
+   "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318",
+   "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL": "thrift"
+  },
+  "result": {
+   "error": "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL='thrift' is not supported; use one of http/protobuf, grpc"
+  }
+ },
+ {
+  "env": {
+   "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318",
+   "OTEL_METRIC_EXPORT_INTERVAL": "5000"
+  },
+  "result": {
+   "metrics_exporter": "otlp",
+   "traces_protocol": "http/protobuf",
+   "metrics_protocol": "http/protobuf",
+   "interval_ms": 5000
+  }
+ },
+ {
+  "env": {
+   "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318",
+   "OTEL_METRIC_EXPORT_INTERVAL": "5s"
+  },
+  "result": {
+   "error": "OTEL_METRIC_EXPORT_INTERVAL='5s' is not milliseconds"
+  }
+ },
+ {
+  "env": {
+   "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318",
+   "OTEL_METRIC_EXPORT_INTERVAL": "0"
+  },
+  "result": {
+   "error": "OTEL_METRIC_EXPORT_INTERVAL='0' must be positive"
+  }
+ },
+ {
+  "env": {
+   "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318",
+   "OTEL_SEMCONV_STABILITY_OPT_IN": "http"
+  },
+  "result": {
+   "metrics_exporter": "otlp",
+   "traces_protocol": "http/protobuf",
+   "metrics_protocol": "http/protobuf",
+   "interval_ms": 15000
+  }
+ },
+ {
+  "env": {
+   "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318",
+   "OTEL_SEMCONV_STABILITY_OPT_IN": "database, http"
+  },
+  "result": {
+   "metrics_exporter": "otlp",
+   "traces_protocol": "http/protobuf",
+   "metrics_protocol": "http/protobuf",
+   "interval_ms": 15000
+  }
+ },
+ {
+  "env": {
+   "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318",
+   "OTEL_SEMCONV_STABILITY_OPT_IN": "http/dup"
+  },
+  "result": {
+   "error": "OTEL_SEMCONV_STABILITY_OPT_IN='http/dup' conflicts with the stable HTTP metrics telemetry exports; unset it or include 'http'"
+  }
+ },
+ {
+  "env": {
+   "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318",
+   "OTEL_SEMCONV_STABILITY_OPT_IN": "http,http/dup"
+  },
+  "result": {
+   "error": "OTEL_SEMCONV_STABILITY_OPT_IN='http,http/dup' conflicts with the stable HTTP metrics telemetry exports; unset it or include 'http'"
+  }
+ }
+]

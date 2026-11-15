@@ -1,0 +1,20 @@
+version: "2"
+sql:
+  - engine: postgresql
+    schema: ../../../schema/migrations
+    queries: queries
+    gen:
+      go:
+        package: store
+        out: .
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        output_db_file_name: db.gen.go
+        output_models_file_name: models.gen.go
+        output_files_suffix: .gen
+        overrides:
+          - db_type: uuid
+            go_type: github.com/google/uuid.UUID
+          - db_type: uuid
+            nullable: true
+            go_type: github.com/google/uuid.NullUUID

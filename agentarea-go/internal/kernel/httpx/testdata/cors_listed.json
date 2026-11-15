@@ -1,0 +1,98 @@
+[
+ {
+  "name": "preflight_listed_ok",
+  "request": {
+   "method": "OPTIONS",
+   "path": "/items",
+   "headers": {
+    "origin": "https://app.example.test",
+    "access-control-request-method": "POST",
+    "access-control-request-headers": "authorization,x-custom"
+   }
+  },
+  "status": 200,
+  "headers": {
+   "content-type": "text/plain; charset=utf-8",
+   "access-control-allow-origin": "https://app.example.test",
+   "access-control-allow-methods": "GET, POST",
+   "access-control-allow-headers": "Accept, Accept-Language, Authorization, Content-Language, Content-Type, X-Custom",
+   "access-control-max-age": "600",
+   "vary": "Origin"
+  },
+  "body": "OK"
+ },
+ {
+  "name": "preflight_regex_ok",
+  "request": {
+   "method": "OPTIONS",
+   "path": "/items",
+   "headers": {
+    "origin": "https://pr-1.preview.example.test",
+    "access-control-request-method": "GET"
+   }
+  },
+  "status": 200,
+  "headers": {
+   "content-type": "text/plain; charset=utf-8",
+   "access-control-allow-origin": "https://pr-1.preview.example.test",
+   "access-control-allow-methods": "GET, POST",
+   "access-control-allow-headers": "Accept, Accept-Language, Authorization, Content-Language, Content-Type, X-Custom",
+   "access-control-max-age": "600",
+   "vary": "Origin"
+  },
+  "body": "OK"
+ },
+ {
+  "name": "preflight_all_bad",
+  "request": {
+   "method": "OPTIONS",
+   "path": "/items",
+   "headers": {
+    "origin": "https://evil.test",
+    "access-control-request-method": "DELETE",
+    "access-control-request-headers": "x-other"
+   }
+  },
+  "status": 400,
+  "headers": {
+   "content-type": "text/plain; charset=utf-8",
+   "access-control-allow-methods": "GET, POST",
+   "access-control-allow-headers": "Accept, Accept-Language, Authorization, Content-Language, Content-Type, X-Custom",
+   "access-control-max-age": "600",
+   "vary": "Origin"
+  },
+  "body": "Disallowed CORS origin, method, headers"
+ },
+ {
+  "name": "simple_listed",
+  "request": {
+   "method": "GET",
+   "path": "/raise/http_404",
+   "headers": {
+    "origin": "https://app.example.test"
+   }
+  },
+  "status": 404,
+  "headers": {
+   "content-type": "application/problem+json",
+   "access-control-allow-origin": "https://app.example.test",
+   "vary": "Origin"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404,\"code\":\"http_error\",\"detail\":\"Task not found\"}"
+ },
+ {
+  "name": "simple_not_listed",
+  "request": {
+   "method": "GET",
+   "path": "/raise/http_404",
+   "headers": {
+    "origin": "https://evil.test"
+   }
+  },
+  "status": 404,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404,\"code\":\"http_error\",\"detail\":\"Task not found\"}"
+ }
+]

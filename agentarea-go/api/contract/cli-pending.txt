@@ -1,0 +1,12 @@
+# Commands of cli.json the Go binary does not run yet: "<name> -- <reason>". The list only shrinks.
+agentarea-api reconcile -- the chart Job and compose run it; the operator role lands in phase 7 (COVERAGE 2)
+agentarea-api check-migrations -- documented for self-host (docs/self-host/database-and-migrations.md); migrate has no check mode
+agentarea-api status -- not ported yet; owner keeps it (2026-11-15)
+agentarea-api validate -- not ported yet; owner keeps it (2026-11-15)
+agentarea-worker status -- not ported yet; owner keeps it (2026-11-15)
+agentarea-worker validate -- not ported yet; owner keeps it (2026-11-15)
+agentarea-api skills move-bodies-to-packages -- not ported yet; owner keeps it (2026-11-15)
+agentarea-api skills move-own-copies-to-packages -- not ported yet; owner keeps it (2026-11-15)
+agentarea-api skills delete-moved-own-copies -- not ported yet; owner keeps it (2026-11-15)
+agentarea-api skills repin-catalog-installs -- not ported yet; owner keeps it (2026-11-15)
+agentarea-api skills refresh-stub-installs -- not ported yet; owner keeps it (2026-11-15)

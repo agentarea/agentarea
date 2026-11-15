@@ -1,0 +1,597 @@
+{
+ "issuer": "http://kratos.test:4433",
+ "audience": "agentarea-api",
+ "hydra_jwks": {
+  "keys": [
+   {
+    "kty": "RSA",
+    "key_ops": [
+     "verify"
+    ],
+    "n": "qjAAgMeBsM1Yoq4mn3j0BFa16bDB1jyT9DsXCWf20gdKfhdTG97VlMuC9yK8gvX9yFXAKk9Aznl1KSWoSThlefBRjkKn2Zz3LYbu5gDU8kb9byQszS4y7sjrdAkK7e_wGEmiV5CNFBn2fwoY1UTu0x_lHZDC5eZEGzPWmDd398M5_x7N6xM5M59FwGa55RObFzhez7HVOsasPkzj8apryXqWhY7oGGqvtjcSJAZJeNtuxmpgP4HMR5iRMz4GTcv4kM5Bf2axt3Om5HsOwT2Tct8ReWTuErLD5rmUySuxa4VNC9DBkulPM1CovximzR3oY-JJ0TYPxxg1VGsU-TllsQ",
+    "e": "AQAB",
+    "kid": "hydra-1",
+    "alg": "RS256",
+    "use": "sig"
+   },
+   {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "UEBlBIQLezWW4i4w-C_VwLun0s7aUBwYHSQr7LLBwTw",
+    "y": "VPBjjZaZwpwrJqnZlVlh9gNZ7zmx9sdIz-byTHccmIk",
+    "kid": "hydra-ec",
+    "use": "sig"
+   }
+  ]
+ },
+ "scenarios": [
+  {
+   "name": "normal",
+   "jwks_b64": "eyJrZXlzIjogW3sia3R5IjogIkVDIiwgImNydiI6ICJQLTI1NiIsICJ4IjogIjhjZGNicFdfM3hOZk4zOUNMTV9JRUVBc24ySDNYSVNjRWhhUWc2dnBrM3ciLCAieSI6ICJxQkFkZmtHRnV2ck1jS1c3V29tMFY1dkZiOWNfRHE5WEY2WUlMSkhMSU53IiwgImtpZCI6ICJrcmF0b3MtMSJ9LCB7Imt0eSI6ICJFQyIsICJjcnYiOiAiUC0zODQiLCAieCI6ICIzMXZYSmswSmsxaFFlQ3ItNzRwSWtRdktLNFR6TVBKc1UtUUFab1NWeTlxc0ZGTHktSEVLekNjdXIzb1dmTkdSIiwgInkiOiAidWY0T0pvVzhaR2FUWFlxeHVXZVdtcUV2dUcxV04zM3JXVFZwYkFoZmNXRWNIYV9BZExLVzFYVklCenVXRTdYMCIsICJraWQiOiAia3JhdG9zLTM4NCJ9XX0=",
+   "hydra_audience": "agentarea-mcp",
+   "tokens": [
+    "kratos_valid",
+    "kratos_valid_no_email",
+    "kratos_aud_list",
+    "kratos_expired",
+    "kratos_wrong_sig",
+    "kratos_wrong_aud",
+    "kratos_wrong_iss",
+    "kratos_missing_exp",
+    "kratos_missing_sub",
+    "kratos_empty_sub",
+    "kratos_no_kid",
+    "kratos_unknown_kid",
+    "kratos_iat_future",
+    "kratos_nbf_future",
+    "kratos_alg_hs256",
+    "kratos_p384_kid",
+    "kratos_sub_int",
+    "kratos_exp_str",
+    "kratos_iat_bad",
+    "kratos_aud_bad_format",
+    "kratos_iss_int",
+    "kratos_kid_int",
+    "kratos_crit_unsupported",
+    "kratos_b64_false",
+    "kratos_payload_list",
+    "kratos_no_alg",
+    "garbage",
+    "garbage_three",
+    "garbage_header_list",
+    "garbage_bad_padding",
+    "hydra_valid",
+    "hydra_aud_list",
+    "hydra_expired",
+    "hydra_wrong_aud",
+    "hydra_no_aud",
+    "hydra_client_credentials",
+    "hydra_no_sub",
+    "hydra_nbf_future",
+    "hydra_wrong_sig",
+    "hydra_alg_hs",
+    "hydra_iat_bad",
+    "hydra_ec_key_kid",
+    "hydra_no_exp"
+   ]
+  },
+  {
+   "name": "raw_json_jwks_no_hydra_audience",
+   "jwks_b64": "{\"keys\": [{\"kty\": \"EC\", \"crv\": \"P-256\", \"x\": \"8cdcbpW_3xNfN39CLM_IEEAsn2H3XIScEhaQg6vpk3w\", \"y\": \"qBAdfkGFuvrMcKW7Wom0V5vFb9c_Dq9XF6YILJHLINw\", \"kid\": \"kratos-1\"}, {\"kty\": \"EC\", \"crv\": \"P-384\", \"x\": \"31vXJk0Jk1hQeCr-74pIkQvKK4TzMPJsU-QAZoSVy9qsFFLy-HEKzCcur3oWfNGR\", \"y\": \"uf4OJoW8ZGaTXYqxuWeWmqEvuG1WN33rWTVpbAhfcWEcHa_AdLKW1XVIBzuWE7X0\", \"kid\": \"kratos-384\"}]}",
+   "hydra_audience": "",
+   "tokens": [
+    "kratos_valid",
+    "hydra_valid",
+    "hydra_expired",
+    "garbage"
+   ]
+  },
+  {
+   "name": "empty_jwks",
+   "jwks_b64": "",
+   "hydra_audience": "agentarea-mcp",
+   "tokens": [
+    "kratos_valid",
+    "hydra_valid",
+    "hydra_expired",
+    "garbage"
+   ]
+  },
+  {
+   "name": "undecodable_jwks",
+   "jwks_b64": "!!!notbase64",
+   "hydra_audience": "agentarea-mcp",
+   "tokens": [
+    "kratos_valid",
+    "hydra_valid"
+   ]
+  },
+  {
+   "name": "jwks_is_a_list",
+   "jwks_b64": "[1, 2]",
+   "hydra_audience": "agentarea-mcp",
+   "tokens": [
+    "kratos_valid",
+    "hydra_valid"
+   ]
+  }
+ ],
+ "tokens": {
+  "kratos_valid": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMCwiZW1haWwiOiJhQGIuYyJ9.oKuXZMFXL-JzdUWt8ovrD_ramh-VqJRSVr6Zd6QH8z9x5LAPdHjHkH52CUWMjk4vNAfmu5yfn1B6XyYBpKOCXA",
+  "kratos_valid_no_email": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.1Arr8vyNDFPIuAma6hJaP9njxQIB16yyShoaOCsLBqDF-jyR4Q0aPI7XcnNcwEQCQ3ybRUFMlgzZ3aOJ54QOMA",
+  "kratos_aud_list": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOlsib3RoZXIiLCJhZ2VudGFyZWEtYXBpIl0sImlzcyI6Imh0dHA6Ly9rcmF0b3MudGVzdDo0NDMzIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.HC5Wp6CQP8SiimlJSSYgZ2YyI4g-Ezhue6kN8D-MoN3RTSDSlZB_2Fb9E39uAPOdk8Z8wiYwx-pM_lvGsRQ22A",
+  "kratos_expired": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6OTQ2Njg0ODAwfQ.YwPCwh5UQMZa1NviPorGtp6eOqWOS3TkHI7JhGxcPnEjy4Y8XG3nrDeHkIKE1n3aAyaanVVfyqySI9tMB3LSDg",
+  "kratos_wrong_sig": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.SUSy1MDVDNqyLTv9ROzOpa06sZc9hrA-2P4RMKzaIwjUryP1hCePfy7tOHF1Q_OR9-lSy59d3B3gqFgqUJuSew",
+  "kratos_wrong_aud": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJub3BlIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.WjqyYMH1nSapwBRohCVPZN4tQ5bHIwgEMRTvJp_0yqDGp-32uNJ2j5CE8e2Xh0vnMhVSFyQ4H-t9ZJEJqjZjlw",
+  "kratos_wrong_iss": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2V2aWwiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.HomVoK0Yq6kG0_RANsoVxZ9DwLkwj02gjeAW4ZKSSLtFrX1-29EoDfjunzPaKaIRpHZ3V4IOiP2-97849LCsig",
+  "kratos_missing_exp": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDB9.qfAa2eu_VN17ROxc5MEHTRc50gZWAQI239fXneztX3JWqLML41UQJEBxS6hf_kddpavzuSlisl1GeXqGh4Z-0g",
+  "kratos_missing_sub": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.nzpOgyP2qlRN1JIGRt7StRy0AHIYj11ZpGIUccfAQjmYkUXaNYqSkfB1ap8WcQlIMegpxSMlMqhn7MFUMeBQzg",
+  "kratos_empty_sub": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOiIiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.foIwmJE7r4kWefsTEFmPQ2b5B9MbW8-6ttQwT_xLAklTxJxnFKvSdZ0-9-XwVbasN41qFzcyf2eCmZr_WtvZqg",
+  "kratos_no_kid": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.9EhSlRk-GNS5_fh3KuJIrwGLya3lsddZ0gjg4miBKIMBPCPnBB3bkEo1D4z9-jdlZzuRxiAbldkEW2zrE8tosw",
+  "kratos_unknown_kid": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im5vYm9keSIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.ldiA1Swgxfwn4JtivfeS3gb7GF6XS9NvwEKYeY_uc-9ihdAQtNxiaNeTz8EQkMPeoTeEpFBpDbQHBppDFEjjKQ",
+  "kratos_iat_future": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjQxMDI0NDQ4MDAsImV4cCI6NDEwMjQ0NDgwMH0.T-FozotvKyT8yocNqRkL4e8bv-SAfLxzwJZ5N4MuqrM1Ail4ryAj_rHs1aKSW-cgHCpZQu-Ya8ye7Gw1eGQi5g",
+  "kratos_nbf_future": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMCwibmJmIjo0MTAyNDQ0ODAwfQ.1rpT49YCkVArc0YuFVvEU6uI49mUIOCm0r0e5-DrcGxRBry9_yC_I9dRKiHbw6GXSlUoVKeuKmz1OGkJCXg5Xw",
+  "kratos_alg_hs256": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.cDnsFO1KyI2A5mbhvHJ1vg-IQDTdt1e96ajDYRJEHfo",
+  "kratos_p384_kid": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0zODQiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.AX7dkx95TB1GQQU-H8UJ-wNr5-T11VLisFX_1YrLT-73SkY_0RAOQ3uhAGdry6uEuYVkNcjmyuRLWAyXxpuOAw",
+  "kratos_sub_int": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOjEyMywiYXVkIjoiYWdlbnRhcmVhLWFwaSIsImlzcyI6Imh0dHA6Ly9rcmF0b3MudGVzdDo0NDMzIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.1rBd5xVmtodQ-4axj2Egyw8ji-cCxqphoAVcQw8roBVQUBjDpW7OYpkWXW3QckvYq5MFOYnesphkPVvvLQJExg",
+  "kratos_exp_str": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6IjQxMDI0NDQ4MDAifQ.tSiKr3iRIraTA7G50kihM-2Dstw16bixyIN0nXU7enDb67mHJGWgHqh_GiCmqzOcPguD_JCn_8ImGwKq0za4xw",
+  "kratos_iat_bad": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOiJhYmMiLCJleHAiOjQxMDI0NDQ4MDB9.5F4gdHM0R4qeifMyV6CbDlfFvFkLtJiMgyHFeMoqq1njUAT5Oz0OI09fxQ5sYXHvxvFblMJFo2BZPIJ06rCcow",
+  "kratos_aud_bad_format": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOnsieCI6MX0sImlzcyI6Imh0dHA6Ly9rcmF0b3MudGVzdDo0NDMzIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.hYJheeczqZWcZwZ1FkxRMg-5sF6HzusBtKtXTi5wBT4Ftsz-nQoGZSwd65qD2YVnDGYm1wBa7V3VMf-OEiEcQw",
+  "kratos_iss_int": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOiAidXNlci0xIiwgImF1ZCI6ICJhZ2VudGFyZWEtYXBpIiwgImlzcyI6IDUsICJpYXQiOiAxNzAwMDAwMDAwLCAiZXhwIjogNDEwMjQ0NDgwMH0.yEKCR3pK4V5sYAq8-6gQxzy5-rjz461VFEsurNCsrn4pMHpt7l4cNhk-hYQoefQW2dH47eZygRsXFRWVHEEQsA",
+  "kratos_kid_int": "eyJhbGciOiJFUzI1NiIsImtpZCI6NX0.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.eXPW2B85wmi0capEW5gSDbR5lrSAonadyuNuZiBhbU5XNnjJqWVU1QA_CHrGtRz8JHcsasyHT3xqnqxboT4ayg",
+  "kratos_crit_unsupported": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwiY3JpdCI6WyJleHAiXSwiZXhwIjoxfQ.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.lWFoqKiis7wsTwiDH7HXu0TMCs7MO2KlpYy1lELGgRtPRcTHzDYtLSG7MVuR2zV8_OZd7adIjz-rkzs1bH5Ftg",
+  "kratos_b64_false": "eyJhbGciOiAiRVMyNTYiLCAia2lkIjogImtyYXRvcy0xIiwgImI2NCI6IGZhbHNlLCAiY3JpdCI6IFsiYjY0Il19..c2ln",
+  "kratos_payload_list": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.W10._yrMAtyNm6cpOwMn0PRV-vfUTC9We6ChHDOvdMCeiOmHEpp2pva5LsmR9XywO7uQyjtschBa4RxghnJeWw3GrQ",
+  "kratos_no_alg": "eyJraWQiOiJrcmF0b3MtMSJ9.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.qCV2DZkZ4ApeFCUvXxEBmm02KhEXWiSFrNO4PfJwE50_06BgiRkENKHwvHOnIDKHqXoyMDdHXpV93YtDgk1F8g",
+  "garbage": "foo",
+  "garbage_three": "a.b.c",
+  "garbage_header_list": "WzFd.e30.c2ln",
+  "garbage_bad_padding": "eyJhbGciOiJFUzI1NiJ9===.e30.c2ln",
+  "hydra_valid": "eyJhbGciOiJSUzI1NiIsImtpZCI6Imh5ZHJhLTEiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJ1c2VyLTIiLCJhdWQiOiJhZ2VudGFyZWEtbWNwIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDAsImNsaWVudF9pZCI6ImNsaS0xIn0.AwHEbgh-gfGLXOXBALvHwr7CCbVFRhlGHB-QBHd6nfoGlpLxbmW-v6sSkC6R4Mv9ZQO8AgOzIZ519ltDRZ8vtC_lpfeJ9oVRpLPMYRk-HBnOlynmjINXRq_1Gx9m_in9Tyjjnd2QaZhxQoUdutmzkGsI3VpSD7Rz0bkT1mF0YfYaND3vBsqsMLFTUvqcfdwu94f068nihSICLacPx-nbdfoj8L7X8hyqxPaI4nfuklpsEuZ1uHZhXDfD3sOSGq_OG5Gy44C3D_oEu0NITKLgtDhPsW_gnUFjJUDHsMNFq1ueBawNGA_jJTDpFnIUc9NR4clNVJgYutHOmW6D5eAI4Q",
+  "hydra_aud_list": "eyJhbGciOiJSUzI1NiIsImtpZCI6Imh5ZHJhLTEiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJ1c2VyLTIiLCJhdWQiOlsieCIsImFnZW50YXJlYS1tY3AiXSwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDAsImNsaWVudF9pZCI6ImNsaS0xIn0.UNEQgiEhnxBWJXoAUwdASMcwKaFvGTeMphhIUOjsJ7qIY7t-T0e4dbuuhS0IyRt_s9WIPdpkjwyHpkUdqLd17DfYxJITJKdgEn1RSThUhWHBq5jDIxz-hI7BwiaUWLezzsD0cVudqokAYgHbb8W031sZCyxwPVhxsXjCOtEvPpZ6tC24ytHhAhDh1GIna2znWWaV6UVKus23-1cvntXn4WhDeAiO451wVPZZdCmGK4y4M2-6g4A0Qg7YoDxX5q7XImhn4X5-imsO-edmagY4CoqmVKkYjxJQk_QPQ04iAA4-4N6SjKkH-4ibzkoumwVHqxqfSdvAWVpKeIKwwFTsDQ",
+  "hydra_expired": "eyJhbGciOiJSUzI1NiIsImtpZCI6Imh5ZHJhLTEiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJ1c2VyLTIiLCJhdWQiOiJhZ2VudGFyZWEtbWNwIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjk0NjY4NDgwMCwiY2xpZW50X2lkIjoiY2xpLTEifQ.aNS3NaN5xD5HTZ5PTdQrFLJLrtuyzUScNdVHvR5GfV2NTilwOPGLqGYgsbSGtQqlH3-xF-LB44E5KxuRMQYrUoSILaZja5IYj7wUJClSOUWAw8BEU1R5DC4e-61STME71d7ZR4cmT1d-p6P4flFZ2M20hEjiw6qKG2GevZxwkDsedUrGdawUixM6ef7tl2N0zazolyZpfpCoP9qpxFFXO4Sh89c1IMMo5L6ewljQLygOiRS9JceQT942or_9UqB_SlT_Zp0_NEWrE7N5uwWDi9JICvLOuKGXC-e66CTQFEJqasBpTezKIJX_KRfzYfq_tgWNO3MqsuWCrE0Og72WZA",
+  "hydra_wrong_aud": "eyJhbGciOiJSUzI1NiIsImtpZCI6Imh5ZHJhLTEiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJ1c2VyLTIiLCJhdWQiOiJvdGhlciIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjo0MTAyNDQ0ODAwLCJjbGllbnRfaWQiOiJjbGktMSJ9.NCdK5TxYUbS0cZKD2dUwQWz_8mRNwzvrmNQlHHQhg6KWPfi1wqtRqQBMRmE4JPvRBORrnUqbAgBTSUXnqDmWLXO4pO-q_S8moMNPQs9NCHdJGUmlULTVdJtDQJFxDRZ1cMvAbB897i_coJjxeEH6xzmpFGB9v_YmdWEMYFeC-9wRMMAg0u8NnqVtqQazao393PNTc9-bwdYJaKth01RumDyvum2VzeqpA_s1yMfq1BAecjat_7Q8vctiwSCXZLDmMvCxEh5K1vwD52hFq5yVba26mzLnC7p9WMJBezBCn3H62p56S3EtuoGYyP6fbSjmBlZd-MtFouomPrOumRGtZw",
+  "hydra_no_aud": "eyJhbGciOiJSUzI1NiIsImtpZCI6Imh5ZHJhLTEiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJ1c2VyLTIiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMCwiY2xpZW50X2lkIjoiY2xpLTEifQ.VgKP2-KMTEsjlpEgzB2Z950NeVig1uBTtjmuC851NltI6MROfPr4D9zrMTKitsNY6DOVp3JoiZibdbSt-2whHo41nZoJTUdKPsO9dvYa8q2VcrImQl_7LMbr1i651sZoyY36TkKTQP5dtC9SZR_7eZGXDesxd80p4qe88D8ABCh91fBiLmLQ2B8HkIgDS-VRqbV_lTUnK1JdNooprVOJ2m5Hv45MZwJW1LElWxMqYuS_OgoTK_3H5gL0vI-9JAB2BmfAza0m24ICnJ5daI8VSDNXH6_1oDC6FBHAaivUCfHIFfQWYfjKpJu2CH-Q16GIan1m7SdLUGvVP5VuDWAwFg",
+  "hydra_client_credentials": "eyJhbGciOiJSUzI1NiIsImtpZCI6Imh5ZHJhLTEiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJjbGktMSIsImF1ZCI6ImFnZW50YXJlYS1tY3AiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMCwiY2xpZW50X2lkIjoiY2xpLTEifQ.i95B0DtHULZE7HFpIpR-nYozGhwlmAbsUWT-na7rqVwS-Krpgs5beC___TDyup-YyaPjp6swLPOMYoTlmzoUtvbHfT9hB5NLWccvyyjGxBZuPjaPz_5yKnP6ohE7wYRFWF56FooMpFHKbXciT0O-mkUKJv4N6yI1JUKsbYfRSeMIZxwcgxvuPx1XcrkvWrODQnDTtOUm2t99O0VAzkKqMaHILFmvPSyuiyKmnNCCdjasZxmJcPRP7A6JRcvUqZR59njIz2Rr6Q6qrWjBtHEzXqkIpJn_HUGd5CtFNVrNVz2ShEEP-UL4-vGtXGKi72cUqGjnChzVA2Eg_7-ybcCufg",
+  "hydra_no_sub": "eyJhbGciOiJSUzI1NiIsImtpZCI6Imh5ZHJhLTEiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOiJhZ2VudGFyZWEtbWNwIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDAsImNsaWVudF9pZCI6ImNsaS0xIn0.MC2_f9Od_sH_IlUyKfewYz8wHfw4eJ778bhNOUwDAS5ejF5QfuNUkQNGfSpixNWwkHWMTHVMiLK8q0xeYd0qbxzER0SxzobUwNd3tVl3OATM-zt5f-k2j2eAB9htK3x1MXDrROicRjkOUVGI0yzCAPf1L4VBXZMW7TF6tF6NJXl2d3htjWis1ycsihnUrBrIosjnDIeiiwethoJNvrvSjxYehT-AIjxILZlfJlBdLAtgIqu9Dd5lJmz_2JFjkipa4ZwpkBP3Vr4Iq--brA2zxy_caB8HGy9Ol8fuUIxl5NGq5tEO4zQw7a32FmVexhWRYri950eZeA1BVYiexxzIow",
+  "hydra_nbf_future": "eyJhbGciOiJSUzI1NiIsImtpZCI6Imh5ZHJhLTEiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJ1c2VyLTIiLCJhdWQiOiJhZ2VudGFyZWEtbWNwIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDAsImNsaWVudF9pZCI6ImNsaS0xIiwibmJmIjo0MTAyNDQ0ODAwfQ.MNmLbEZAbd7jDMWL1-zHpVsI02mXNXnu0fOr5w0bYRXMl1Ae8h6pKdlBxZufS7x3hXezOW6cp05RbDUCB93-oIc4jIwnIAV4-Xuo1AC2sJioOhpZILJnWHOTm9cAqbYVGhLErbB7hOC-egOEEto6g2xDAs9ceI6tcAGmiWpw_jUWXgSxHbJzM17kHfvjVgdM_lbaQyTJT52MDacNdajNvrk6gIS_LnIg9lMrSX8wC3cx-47kMgBlOt65DD1DggfXkCc8y0jlMXpjZ8tyyB9tTqPYY6VayMK2Et6seEQnceGm2-_xz_lamtg8FRPySTvKmo0puCsYTjUAHppmSnd8Fw",
+  "hydra_wrong_sig": "eyJhbGciOiJSUzI1NiIsImtpZCI6Imh5ZHJhLTEiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJ1c2VyLTIiLCJhdWQiOiJhZ2VudGFyZWEtbWNwIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDAsImNsaWVudF9pZCI6ImNsaS0xIn0.BqVsDwAlp_RSI-K4olRrWPx5TcDnKFFkL_krYxmqHA8rYGyly2a3KkGiO9xngNtxMsqpNbPdB1gvmWW0JRs9LIn3rKoaqqE62_JESv1HAWpSlG4Nu2HdSv4n1WFZ1HIUB99gQOjFZ65t4SBcvM8g3TGxc57zPCLuqIV-5KEfdhir-qLF5lBvXEcIZCqYEjprNAuEg8g6Yg1S-iGbc0bOKA0cpReoiGXl0dUTirEMl7TCoSpLS2H5HVtlhkxOe7gyAeeXh6UzrIuN_N5fapbvpb-L4iK2zdX3mNTj57LxeALdesNNDT7s09QA-r4Jpc5HEWnETylVoifFAp52_U6pPQ",
+  "hydra_alg_hs": "eyJhbGciOiJIUzI1NiIsImtpZCI6Imh5ZHJhLTEiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJ1c2VyLTIiLCJhdWQiOiJhZ2VudGFyZWEtbWNwIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDAsImNsaWVudF9pZCI6ImNsaS0xIn0.2vURn27S8lt9IYZO1mC-isCEjUoVIur9gMXF1NlIMsE",
+  "hydra_iat_bad": "eyJhbGciOiJSUzI1NiIsImtpZCI6Imh5ZHJhLTEiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJ1c2VyLTIiLCJhdWQiOiJhZ2VudGFyZWEtbWNwIiwiaWF0IjoieCIsImV4cCI6NDEwMjQ0NDgwMCwiY2xpZW50X2lkIjoiY2xpLTEifQ.faYPP4x-q2gv7hpc-31hSrnZjcHt3xaXyABXSI5VJbnZIodmIIy4MpQhEoVbFZKWja4ILPIUG1weNrM-IyvCgeG8os0A9dmFGF_BK20ki1sdTaMbB-G8WBDj8r6hg0ppSymw8Wju1zhAStkqs8SscyR2m6i1Dnhs6EIQlFSxUu0GSFgKJQG3m4IG5_mDDTUroNrymbiM4f18iWkrG-uY-jfgbYusKxzx9HPF2ZrRVfq8Hy8qWMSR9pSHB4l91_Od_UnHGFRIOCaFy4wCdV5HKgCivSnabVEzfLN-7aWbn7cgttVF2S8InDy9dw-RUyhm_hl2eR4MRYSomPvLbWWxIA",
+  "hydra_ec_key_kid": "eyJhbGciOiJSUzI1NiIsImtpZCI6Imh5ZHJhLWVjIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyLTIiLCJhdWQiOiJhZ2VudGFyZWEtbWNwIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDAsImNsaWVudF9pZCI6ImNsaS0xIn0.AwHEbgh-gfGLXOXBALvHwr7CCbVFRhlGHB-QBHd6nfoGlpLxbmW-v6sSkC6R4Mv9ZQO8AgOzIZ519ltDRZ8vtC_lpfeJ9oVRpLPMYRk-HBnOlynmjINXRq_1Gx9m_in9Tyjjnd2QaZhxQoUdutmzkGsI3VpSD7Rz0bkT1mF0YfYaND3vBsqsMLFTUvqcfdwu94f068nihSICLacPx-nbdfoj8L7X8hyqxPaI4nfuklpsEuZ1uHZhXDfD3sOSGq_OG5Gy44C3D_oEu0NITKLgtDhPsW_gnUFjJUDHsMNFq1ueBawNGA_jJTDpFnIUc9NR4clNVJgYutHOmW6D5eAI4Q",
+  "hydra_no_exp": "eyJhbGciOiJSUzI1NiIsImtpZCI6Imh5ZHJhLTEiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJ1c2VyLTIiLCJhdWQiOiJhZ2VudGFyZWEtbWNwIiwiaWF0IjoxNzAwMDAwMDAwLCJjbGllbnRfaWQiOiJjbGktMSJ9.nyhVHliJRPiUqanHn8Qt7whOOaX7mAP_90LNnaEL7gYyS2E9wa4IwP9xFBSDVYn42iiPNqMFP10LTJJpkPhnpDmeNP8yWIyJrZlPnvOgj3OZ-_orTqcrb7aJVhpvI9ykRqJaylkr-NyNTI224JFxm9tD89b5-1muCKVYhjl9h7mrsq_c-pECD3IAYXMg2UdUxDbFCS3kiYlazpn-2Ca70GTQirR4m3QZoYXFoD3YQBKokx9FgEF4xYrw6VBikKgH4H_a8REqy8_dlv7Ia7pxwPS-WFtEZIbTp633jYST_rgMKbplX8TMWNmmwEUfu3j_zk96o8vVyBQMJ2qiBhasTQ"
+ },
+ "results": {
+  "normal": {
+   "kratos_valid": {
+    "status": 200,
+    "user_id": "user-1",
+    "email": "a@b.c",
+    "kind": "session"
+   },
+   "kratos_valid_no_email": {
+    "status": 200,
+    "user_id": "user-1",
+    "email": "",
+    "kind": "session"
+   },
+   "kratos_aud_list": {
+    "status": 200,
+    "user_id": "user-1",
+    "email": "",
+    "kind": "session"
+   },
+   "kratos_expired": {
+    "status": 401,
+    "detail": "Token has expired",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_wrong_sig": {
+    "status": 401,
+    "detail": "Invalid token: Signature verification failed",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_wrong_aud": {
+    "status": 401,
+    "detail": "Invalid token: Audience doesn't match",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_wrong_iss": {
+    "status": 401,
+    "detail": "Invalid token: Invalid issuer",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_missing_exp": {
+    "status": 401,
+    "detail": "Invalid token: Token is missing the \"exp\" claim",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_missing_sub": {
+    "status": 401,
+    "detail": "Invalid token: Token is missing the \"sub\" claim",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_empty_sub": {
+    "status": 401,
+    "detail": "Token missing user ID",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_no_kid": {
+    "status": 401,
+    "detail": "Token header missing key ID",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_unknown_kid": {
+    "status": 401,
+    "detail": "Key not found in JWKS",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_iat_future": {
+    "status": 401,
+    "detail": "Invalid token: The token is not yet valid (iat)",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_nbf_future": {
+    "status": 401,
+    "detail": "Invalid token: The token is not yet valid (nbf)",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_alg_hs256": {
+    "status": 401,
+    "detail": "Invalid token: The specified alg value is not allowed",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_p384_kid": {
+    "status": 401,
+    "detail": "Error verifying token: The key's curve 'secp384r1' does not match the expected curve 'secp256r1' for this algorithm",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_sub_int": {
+    "status": 401,
+    "detail": "Invalid token: Subject must be a string",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_exp_str": {
+    "status": 401,
+    "detail": "Error verifying token: '<' not supported between instances of 'str' and 'float'",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_iat_bad": {
+    "status": 401,
+    "detail": "Invalid token: Issued At claim (iat) must be an integer.",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_aud_bad_format": {
+    "status": 401,
+    "detail": "Invalid token: Invalid claim format in token",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_iss_int": {
+    "status": 401,
+    "detail": "Invalid token: Payload Issuer (iss) must be a string",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_kid_int": {
+    "status": 0,
+    "raised": "InvalidTokenError"
+   },
+   "kratos_crit_unsupported": {
+    "status": 0,
+    "raised": "InvalidTokenError"
+   },
+   "kratos_b64_false": {
+    "status": 401,
+    "detail": "Invalid token: It is required that you pass in a value for the \"detached_payload\" argument to decode a message having the b64 header set to false.",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_payload_list": {
+    "status": 401,
+    "detail": "Invalid token: Invalid payload string: must be a json object",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "kratos_no_alg": {
+    "status": 401,
+    "detail": "Invalid token: Algorithm not specified",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "garbage": {
+    "status": 401,
+    "detail": "Invalid token: Not enough segments",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "garbage_three": {
+    "status": 401,
+    "detail": "Invalid token: Invalid header padding",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "garbage_header_list": {
+    "status": 401,
+    "detail": "Invalid token: Invalid header string: must be a json object",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "garbage_bad_padding": {
+    "status": 401,
+    "detail": "Invalid token: Invalid header padding",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "hydra_valid": {
+    "status": 200,
+    "user_id": "user-2",
+    "email": "",
+    "kind": "oauth"
+   },
+   "hydra_aud_list": {
+    "status": 200,
+    "user_id": "user-2",
+    "email": "",
+    "kind": "oauth"
+   },
+   "hydra_expired": {
+    "status": 401,
+    "detail": "Token has expired",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "hydra_wrong_aud": {
+    "status": 401,
+    "detail": "Token was not issued for this API",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "hydra_no_aud": {
+    "status": 401,
+    "detail": "Token is missing a required claim",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "hydra_client_credentials": {
+    "status": 401,
+    "detail": "OAuth token was issued to a client, not a signed-in user",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "hydra_no_sub": {
+    "status": 401,
+    "detail": "OAuth token names no user",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "hydra_nbf_future": {
+    "status": 401,
+    "detail": "Token is not valid yet",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "hydra_wrong_sig": {
+    "status": 401,
+    "detail": "Token signature is invalid",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "hydra_alg_hs": {
+    "status": 401,
+    "detail": "Invalid OAuth token",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "hydra_iat_bad": {
+    "status": 401,
+    "detail": "Invalid OAuth token",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "hydra_ec_key_kid": {
+    "status": 0,
+    "raised": "TypeError"
+   },
+   "hydra_no_exp": {
+    "status": 200,
+    "user_id": "user-2",
+    "email": "",
+    "kind": "oauth"
+   }
+  },
+  "raw_json_jwks_no_hydra_audience": {
+   "kratos_valid": {
+    "status": 200,
+    "user_id": "user-1",
+    "email": "a@b.c",
+    "kind": "session"
+   },
+   "hydra_valid": {
+    "status": 401,
+    "detail": "OAuth tokens are not accepted by this API",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "hydra_expired": {
+    "status": 401,
+    "detail": "OAuth tokens are not accepted by this API",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "garbage": {
+    "status": 401,
+    "detail": "Invalid token: Not enough segments",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   }
+  },
+  "empty_jwks": {
+   "kratos_valid": {
+    "status": 500,
+    "detail": "Internal server error during authentication",
+    "www_authenticate": ""
+   },
+   "hydra_valid": {
+    "status": 200,
+    "user_id": "user-2",
+    "email": "",
+    "kind": "oauth"
+   },
+   "hydra_expired": {
+    "status": 401,
+    "detail": "Token has expired",
+    "www_authenticate": "Bearer resource_metadata=\"http://localhost:8000/.well-known/oauth-protected-resource\""
+   },
+   "garbage": {
+    "status": 500,
+    "detail": "Internal server error during authentication",
+    "www_authenticate": ""
+   }
+  },
+  "undecodable_jwks": {
+   "kratos_valid": {
+    "status": 500,
+    "detail": "Internal server error during authentication",
+    "www_authenticate": ""
+   },
+   "hydra_valid": {
+    "status": 200,
+    "user_id": "user-2",
+    "email": "",
+    "kind": "oauth"
+   }
+  },
+  "jwks_is_a_list": {
+   "kratos_valid": {
+    "status": 500,
+    "detail": "Internal server error during authentication",
+    "www_authenticate": ""
+   },
+   "hydra_valid": {
+    "status": 200,
+    "user_id": "user-2",
+    "email": "",
+    "kind": "oauth"
+   }
+  }
+ },
+ "turn": {
+  "secret": "golden-turn-secret-0123456789abcdefghij",
+  "issued_at": 1700000000,
+  "issue": [
+   {
+    "claims": {
+     "turn_id": "7f1c2a8e-0000-4000-8000-000000000001",
+     "task_id": "5b0e6f3c-0000-4000-8000-000000000002",
+     "workspace_id": "ws-ünïcode-1",
+     "client_id": "9a9a9a9a-0000-4000-8000-000000000003",
+     "actor_type": "user",
+     "actor_id": "user-1",
+     "on_behalf_of": "user-1"
+    },
+    "ttl": 1000000000,
+    "token": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImFnZW50YXJlYS10dXJuIiwidHlwIjoiSldUIn0.eyJpc3MiOiJhZ2VudGFyZWEiLCJzdWIiOiJ1c2VyOnVzZXItMSIsImFjdCI6eyJzdWIiOiJjbGllbnQ6OWE5YTlhOWEtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAzIn0sImF1ZCI6InRhc2s6NWIwZTZmM2MtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAyIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjI3MDAwMDAwMDAsImp0aSI6IjdmMWMyYThlLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMSIsIndvcmtzcGFjZV9pZCI6IndzLVx1MDBmY25cdTAwZWZjb2RlLTEiLCJvYm8iOiJ1c2VyLTEifQ.ZGvQiOgzyIGY05ue0L27ZH6X16Z6aFcb7CaiOQv-73w"
+   },
+   {
+    "claims": {
+     "turn_id": "7f1c2a8e-0000-4000-8000-000000000011",
+     "task_id": "5b0e6f3c-0000-4000-8000-000000000012",
+     "workspace_id": "ws-1",
+     "client_id": "9a9a9a9a-0000-4000-8000-000000000013",
+     "actor_type": "agent",
+     "actor_id": "agent-9",
+     "on_behalf_of": "user-1"
+    },
+    "ttl": 1000000000,
+    "token": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImFnZW50YXJlYS10dXJuIiwidHlwIjoiSldUIn0.eyJpc3MiOiJhZ2VudGFyZWEiLCJzdWIiOiJhZ2VudDphZ2VudC05IiwiYWN0Ijp7InN1YiI6ImNsaWVudDo5YTlhOWE5YS0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMTMifSwiYXVkIjoidGFzazo1YjBlNmYzYy0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMTIiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MjcwMDAwMDAwMCwianRpIjoiN2YxYzJhOGUtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDExIiwid29ya3NwYWNlX2lkIjoid3MtMSIsIm9ibyI6InVzZXItMSJ9.PFDNusWUqsLLwxIDqIlY75zsfNfWc1OU0RF4QQRYIOI"
+   },
+   {
+    "claims": {
+     "turn_id": "7f1c2a8e-0000-4000-8000-000000000001",
+     "task_id": "5b0e6f3c-0000-4000-8000-000000000002",
+     "workspace_id": "ws-ünïcode-1",
+     "client_id": "9a9a9a9a-0000-4000-8000-000000000003",
+     "actor_type": "user",
+     "actor_id": "user-1",
+     "on_behalf_of": "user-1"
+    },
+    "ttl": 60,
+    "token": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImFnZW50YXJlYS10dXJuIiwidHlwIjoiSldUIn0.eyJpc3MiOiJhZ2VudGFyZWEiLCJzdWIiOiJ1c2VyOnVzZXItMSIsImFjdCI6eyJzdWIiOiJjbGllbnQ6OWE5YTlhOWEtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAzIn0sImF1ZCI6InRhc2s6NWIwZTZmM2MtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAyIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjE3MDAwMDAwNjAsImp0aSI6IjdmMWMyYThlLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMSIsIndvcmtzcGFjZV9pZCI6IndzLVx1MDBmY25cdTAwZWZjb2RlLTEiLCJvYm8iOiJ1c2VyLTEifQ.Dqdr6QKuccgAeyNh7o9by6R2t827_RMVWAt62BY8q2Q"
+   }
+  ],
+  "cases": {
+   "user": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImFnZW50YXJlYS10dXJuIiwidHlwIjoiSldUIn0.eyJpc3MiOiJhZ2VudGFyZWEiLCJzdWIiOiJ1c2VyOnVzZXItMSIsImFjdCI6eyJzdWIiOiJjbGllbnQ6OWE5YTlhOWEtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAzIn0sImF1ZCI6InRhc2s6NWIwZTZmM2MtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAyIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjI3MDAwMDAwMDAsImp0aSI6IjdmMWMyYThlLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMSIsIndvcmtzcGFjZV9pZCI6IndzLVx1MDBmY25cdTAwZWZjb2RlLTEiLCJvYm8iOiJ1c2VyLTEifQ.ZGvQiOgzyIGY05ue0L27ZH6X16Z6aFcb7CaiOQv-73w",
+   "agent": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImFnZW50YXJlYS10dXJuIiwidHlwIjoiSldUIn0.eyJpc3MiOiJhZ2VudGFyZWEiLCJzdWIiOiJhZ2VudDphZ2VudC05IiwiYWN0Ijp7InN1YiI6ImNsaWVudDo5YTlhOWE5YS0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMTMifSwiYXVkIjoidGFzazo1YjBlNmYzYy0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMTIiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MjcwMDAwMDAwMCwianRpIjoiN2YxYzJhOGUtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDExIiwid29ya3NwYWNlX2lkIjoid3MtMSIsIm9ibyI6InVzZXItMSJ9.PFDNusWUqsLLwxIDqIlY75zsfNfWc1OU0RF4QQRYIOI",
+   "expired": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImFnZW50YXJlYS10dXJuIiwidHlwIjoiSldUIn0.eyJpc3MiOiJhZ2VudGFyZWEiLCJzdWIiOiJ1c2VyOnVzZXItMSIsImFjdCI6eyJzdWIiOiJjbGllbnQ6OWE5YTlhOWEtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAzIn0sImF1ZCI6InRhc2s6NWIwZTZmM2MtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAyIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjE3MDAwMDAwNjAsImp0aSI6IjdmMWMyYThlLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMSIsIndvcmtzcGFjZV9pZCI6IndzLVx1MDBmY25cdTAwZWZjb2RlLTEiLCJvYm8iOiJ1c2VyLTEifQ.Dqdr6QKuccgAeyNh7o9by6R2t827_RMVWAt62BY8q2Q",
+   "tampered": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImFnZW50YXJlYS10dXJuIiwidHlwIjoiSldUIn0.eyJpc3MiOiJhZ2VudGFyZWEiLCJzdWIiOiJ1c2VyOnVzZXItMSIsImFjdCI6eyJzdWIiOiJjbGllbnQ6OWE5YTlhOWEtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAzIn0sImF1ZCI6InRhc2s6NWIwZTZmM2MtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAyIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjI3MDAwMDAwMDAsImp0aSI6IjdmMWMyYThlLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMSIsIndvcmtzcGFjZV9pZCI6IndzLVx1MDBmY25cdTAwZWZjb2RlLTEiLCJvYm8iOiJ1c2VyLTEifQ.YBeRNP0ZmFdETrz1Mwu9rTam0D4CWpMTaIUtPJDk2Yg",
+   "wrong_aud_prefix": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImFnZW50YXJlYS10dXJuIiwidHlwIjoiSldUIn0.eyJpc3MiOiJhZ2VudGFyZWEiLCJzdWIiOiJ1c2VyOnVzZXItMSIsImFjdCI6eyJzdWIiOiJjbGllbnQ6Yy0xIn0sImF1ZCI6ImpvYjp0LTEiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMCwianRpIjoidHVybi0xIiwid29ya3NwYWNlX2lkIjoid3MtMSIsIm9ibyI6InVzZXItMSJ9.KLjuiskwc83JSZC_HM4as2OHZ0xRe9Ik8klooUMHGqs",
+   "wrong_issuer": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImFnZW50YXJlYS10dXJuIiwidHlwIjoiSldUIn0.eyJpc3MiOiJldmlsIiwic3ViIjoidXNlcjp1c2VyLTEiLCJhY3QiOnsic3ViIjoiY2xpZW50OmMtMSJ9LCJhdWQiOiJ0YXNrOnQtMSIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJ0dXJuLTEiLCJ3b3Jrc3BhY2VfaWQiOiJ3cy0xIiwib2JvIjoidXNlci0xIn0.ZSjgKUvg868cfMo7f2uhTfCheZ0q7n5rcVfbLgb3aKc",
+   "bad_sub": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImFnZW50YXJlYS10dXJuIiwidHlwIjoiSldUIn0.eyJpc3MiOiJhZ2VudGFyZWEiLCJzdWIiOiJyb2JvdDp4IiwiYWN0Ijp7InN1YiI6ImNsaWVudDpjLTEifSwiYXVkIjoidGFzazp0LTEiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMCwianRpIjoidHVybi0xIiwid29ya3NwYWNlX2lkIjoid3MtMSIsIm9ibyI6InVzZXItMSJ9.rKPpN5t6wMPFvXwGoHxJejSAYNE6tvNi_NF0P3G1UaA",
+   "empty_actor": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImFnZW50YXJlYS10dXJuIiwidHlwIjoiSldUIn0.eyJpc3MiOiJhZ2VudGFyZWEiLCJzdWIiOiJ1c2VyOiIsImFjdCI6eyJzdWIiOiJjbGllbnQ6Yy0xIn0sImF1ZCI6InRhc2s6dC0xIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDAsImp0aSI6InR1cm4tMSIsIndvcmtzcGFjZV9pZCI6IndzLTEiLCJvYm8iOiJ1c2VyLTEifQ.pgwDbJtvt5edlhco9Yt3mw5kaaFJkGOeKeR8GkQD0kc",
+   "bad_act": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImFnZW50YXJlYS10dXJuIiwidHlwIjoiSldUIn0.eyJpc3MiOiJhZ2VudGFyZWEiLCJzdWIiOiJ1c2VyOnVzZXItMSIsImFjdCI6eyJzdWIiOiJydW5uZXI6Yy0xIn0sImF1ZCI6InRhc2s6dC0xIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDAsImp0aSI6InR1cm4tMSIsIndvcmtzcGFjZV9pZCI6IndzLTEiLCJvYm8iOiJ1c2VyLTEifQ.jidfLjBo2YU06J9qWdaLAc7H_ksalXzyntGE2ETkgJA",
+   "falsy_act": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImFnZW50YXJlYS10dXJuIiwidHlwIjoiSldUIn0.eyJpc3MiOiJhZ2VudGFyZWEiLCJzdWIiOiJ1c2VyOnVzZXItMSIsImFjdCI6IiIsImF1ZCI6InRhc2s6dC0xIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDAsImp0aSI6InR1cm4tMSIsIndvcmtzcGFjZV9pZCI6IndzLTEiLCJvYm8iOiJ1c2VyLTEifQ.qyUpazBFIg1Jrz6WhdPd014Hf7lLJVdt3souY8gjWD0",
+   "missing_jti": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImFnZW50YXJlYS10dXJuIiwidHlwIjoiSldUIn0.eyJpc3MiOiJhZ2VudGFyZWEiLCJzdWIiOiJ1c2VyOnVzZXItMSIsImFjdCI6eyJzdWIiOiJjbGllbnQ6Yy0xIn0sImF1ZCI6InRhc2s6dC0xIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDAsIndvcmtzcGFjZV9pZCI6IndzLTEiLCJvYm8iOiJ1c2VyLTEifQ.SAyyF1Q362mhz4MetbXjgtvLJsT0-yzXSDmwxGQyov4",
+   "missing_workspace": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImFnZW50YXJlYS10dXJuIiwidHlwIjoiSldUIn0.eyJpc3MiOiJhZ2VudGFyZWEiLCJzdWIiOiJ1c2VyOnVzZXItMSIsImFjdCI6eyJzdWIiOiJjbGllbnQ6Yy0xIn0sImF1ZCI6InRhc2s6dC0xIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDAsImp0aSI6InR1cm4tMSIsIm9ibyI6InVzZXItMSJ9.picRf5fIL-XtZx1NiLj9BnSstDqowNtN5kjdR34QD-Q",
+   "null_obo": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImFnZW50YXJlYS10dXJuIiwidHlwIjoiSldUIn0.eyJpc3MiOiJhZ2VudGFyZWEiLCJzdWIiOiJ1c2VyOnVzZXItMSIsImFjdCI6eyJzdWIiOiJjbGllbnQ6Yy0xIn0sImF1ZCI6InRhc2s6dC0xIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDAsImp0aSI6InR1cm4tMSIsIndvcmtzcGFjZV9pZCI6IndzLTEiLCJvYm8iOm51bGx9.KLnEnWDyDpE9BqOYqgK4wL57Cl3FNmpy2JWsgUaUyKw",
+   "not_a_turn": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtyYXRvcy0xIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyLTEiLCJhdWQiOiJhZ2VudGFyZWEtYXBpIiwiaXNzIjoiaHR0cDovL2tyYXRvcy50ZXN0OjQ0MzMiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMCwiZW1haWwiOiJhQGIuYyJ9.oKuXZMFXL-JzdUWt8ovrD_ramh-VqJRSVr6Zd6QH8z9x5LAPdHjHkH52CUWMjk4vNAfmu5yfn1B6XyYBpKOCXA",
+   "garbage": "foo"
+  },
+  "decoded": {
+   "user": {
+    "turn_id": "7f1c2a8e-0000-4000-8000-000000000001",
+    "task_id": "5b0e6f3c-0000-4000-8000-000000000002",
+    "workspace_id": "ws-ünïcode-1",
+    "client_id": "9a9a9a9a-0000-4000-8000-000000000003",
+    "actor_type": "user",
+    "actor_id": "user-1",
+    "on_behalf_of": "user-1"
+   },
+   "agent": {
+    "turn_id": "7f1c2a8e-0000-4000-8000-000000000011",
+    "task_id": "5b0e6f3c-0000-4000-8000-000000000012",
+    "workspace_id": "ws-1",
+    "client_id": "9a9a9a9a-0000-4000-8000-000000000013",
+    "actor_type": "agent",
+    "actor_id": "agent-9",
+    "on_behalf_of": "user-1"
+   },
+   "expired": null,
+   "tampered": null,
+   "wrong_aud_prefix": null,
+   "wrong_issuer": null,
+   "bad_sub": null,
+   "empty_actor": null,
+   "bad_act": null,
+   "falsy_act": null,
+   "missing_jti": null,
+   "missing_workspace": {
+    "raised": "KeyError"
+   },
+   "null_obo": {
+    "turn_id": "turn-1",
+    "task_id": "t-1",
+    "workspace_id": "ws-1",
+    "client_id": "c-1",
+    "actor_type": "user",
+    "actor_id": "user-1",
+    "on_behalf_of": "None"
+   },
+   "not_a_turn": null,
+   "garbage": null
+  },
+  "is_turn": {
+   "user": true,
+   "agent": true,
+   "expired": true,
+   "tampered": true,
+   "wrong_aud_prefix": true,
+   "wrong_issuer": true,
+   "bad_sub": true,
+   "empty_actor": true,
+   "bad_act": true,
+   "falsy_act": true,
+   "missing_jti": true,
+   "missing_workspace": true,
+   "null_obo": true,
+   "not_a_turn": false,
+   "garbage": false
+  }
+ },
+ "api_keys": [
+  {
+   "token": "aat_YxHz7wjfSq-aJp1UUSajhWXq9NN8SnuSh1bSh-dBJOo",
+   "prefix": "aat_YxHz7wjf",
+   "hash": "c919b6d099b314f9268ad2752fa729fc49ddb6b43f53eb1226901cda072d4285"
+  },
+  {
+   "token": "aat_KrpHzD4X0mw2HtDcU0WlSVQLilEVGvgCBN_cd9fR7uo",
+   "prefix": "aat_KrpHzD4X",
+   "hash": "bd90e089a6bf7168c1abb2fa7aa366a1e496678faa8ecbdd2594d064a37fd06a"
+  },
+  {
+   "token": "aat_HktleisGSYUJbwqz8VpLMu20GVlc-yR9-C1wZ9HPGvU",
+   "prefix": "aat_HktleisG",
+   "hash": "7a2e799f16caf07e5d9478235c2b80f74605b35b41b99ee87cb3a495d15521e4"
+  }
+ ]
+}
