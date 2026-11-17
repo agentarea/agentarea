@@ -204,6 +204,9 @@ func (x *Errors) Resolve(err error) (*Error, bool) {
 // Write renders err on w. The catch-all 500 is written as Starlette's
 // ServerErrorMiddleware writes it, outside CORS: it carries no CORS headers.
 func (x *Errors) Write(w http.ResponseWriter, r *http.Request, err error) {
+	if v := paramValidation(r, err); v != nil {
+		err = v
+	}
 	e, unhandled := x.Resolve(err)
 	x.logError(r, err, e.Status, e.Status >= http.StatusInternalServerError)
 	header := e.Header.Clone()

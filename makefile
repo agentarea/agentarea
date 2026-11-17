@@ -54,7 +54,7 @@ db-test-up: ## Start a throwaway Postgres (tmpfs) for check-db and print its env
 		sleep 1; \
 	done; \
 	docker exec $(DB_TEST_CONTAINER) pg_isready -U postgres -d agentarea_test >/dev/null || { echo "Postgres did not become ready" >&2; exit 1; }
-	@echo "export AGENTAREA_DB_TEST_URL=postgres://postgres:postgres@localhost:$(DB_TEST_PORT)/agentarea_test?sslmode=disable"
+	@echo "export AGENTAREA_DB_TEST_URL=postgres://postgres:postgres@localhost:$(DB_TEST_PORT)/agentarea_test?sslmode=disable" # pragma: allowlist secret
 
 db-test-down: ## Remove the check-db Postgres
 	docker rm -f $(DB_TEST_CONTAINER)
