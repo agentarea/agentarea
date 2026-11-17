@@ -3,6 +3,7 @@ package connections
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authz"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/config"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/db"
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/httpx"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/lifecycle"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/scope"
 	catalogapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/catalog/api"
@@ -75,6 +77,9 @@ type Deps struct {
 	Now    func() time.Time
 	// Counter counts connector checks and OAuth connects for usage analytics; nil counts nothing.
 	Counter analytics.Counter
+	// RateLimit limits anonymous OAuth client registration per address;
+	// required when the authorization-server routes are served.
+	RateLimit httpx.RateLimiter
 }
 
 // Module is connections, constructed once per process; a role picks which of its
@@ -218,13 +223,16 @@ func (m *Module) Serve() serve.Module {
 			if m.d.Workspace == nil || m.d.Admin == nil {
 				return nil
 			}
+			if m.svc.OAuthASReady() && m.d.RateLimit == nil {
+				return errors.New("connections: anonymous OAuth client registration (POST /oauth2/register) needs a rate limiter; none is wired")
+			}
 			toolsets, err := m.providers().Toolsets(m.d.APIURL)
 			if err != nil {
 				return err
 			}
 			handlers.Mount(rt.Mux.Chi(), rt.Errors,
 				handlers.Edge{Workspace: m.d.Workspace, Admin: m.d.Admin, Gate: m.d.Gate, Authenticate: m.d.Authenticate},
-				handlers.New(m.svc),
+				handlers.New(m.svc).WithRateLimit(m.d.RateLimit, m.d.Log),
 				handlers.Ports{OpenAPI: m.d.Graph != nil && m.d.Secrets != nil && m.d.Catalog != nil, MCPToolsets: toolsets,
 					Events: m.providers().EventsServer()})
 			return nil

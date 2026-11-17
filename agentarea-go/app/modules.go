@@ -167,6 +167,9 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 		if d.MCPRuntime != nil {
 			cd.Runtime = d.MCPRuntime
 		}
+		if d.Redis != nil {
+			cd.RateLimit = clusterhttpx.NewRateLimiter(d.Redis)
+		}
 		return cd
 	}())
 	gd := governance.Deps{DB: d.DB, Workspace: e.Workspace, Admin: e.Admin, Log: d.Log, Owners: governance.OwnersFrom(secrets.ResolveOwnerNames),

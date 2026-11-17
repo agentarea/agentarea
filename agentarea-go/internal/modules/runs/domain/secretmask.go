@@ -1,15 +1,13 @@
-package service
+package domain
 
 import (
+	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
-
-	"github.com/google/uuid"
 )
-
-type pgUUID = uuid.UUID
 
 const redacted = "[redacted]"
 
@@ -96,7 +94,7 @@ func maskedValue(v string) string {
 func maskNamed(s string, m []int, nameGroup, valueGroup int) string {
 	whole := s[m[0]:m[1]]
 	name := strings.ToLower(group(s, m, nameGroup))
-	if !secretName(name) || strings.HasSuffix(name, "authorization") {
+	if !SecretName(name) || strings.HasSuffix(name, "authorization") {
 		return whole
 	}
 	start, end := m[2*valueGroup]-m[0], m[2*valueGroup+1]-m[0]
@@ -135,4 +133,54 @@ func MaskInlineSecrets(text string) string {
 	out = replaceAll(maskMySQLPassword, out, nil, func(s string, m []int) string { return group(s, m, 1) + redacted })
 	out = replaceAll(maskSSHPass, out, nil, func(s string, m []int) string { return group(s, m, 1) + redacted })
 	return maskTokenShapes.ReplaceAllString(out, redacted)
+}
+
+// SecretName is _secret_name: a key whose value is a secret.
+func SecretName(name string) bool {
+	n := strings.ReplaceAll(strings.ToLower(name), "-", "_")
+	if strings.Contains(n, "passwd") {
+		return true
+	}
+	for _, f := range []string{"api_key", "authorization", "credential", "password", "secret", "token"} {
+		if strings.Contains(n, f) {
+			return true
+		}
+	}
+	return false
+}
+
+// RevealToolValue is reveal_tool_value: the value whole, a secret-shaped key's
+// value and the secrets inside a text masked.
+func RevealToolValue(value any, field string) any {
+	return reveal(value, field, 0)
+}
+
+func reveal(value any, field string, depth int) any {
+	if depth >= 10 {
+		return "[nested value omitted from event log]"
+	}
+	if field != "" && SecretName(field) {
+		return redacted
+	}
+	switch v := value.(type) {
+	case string:
+		return MaskInlineSecrets(v)
+	case []byte:
+		return eventOmission(len(v))
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for k, x := range v {
+			out[k] = reveal(x, k, depth+1)
+		}
+		return out
+	case []any:
+		out := make([]any, len(v))
+		for i, x := range v {
+			out[i] = reveal(x, "", depth+1)
+		}
+		return out
+	case nil, bool, int, int64, float64, json.Number:
+		return v
+	}
+	return fmt.Sprintf("[%T omitted from event log]", value)
 }

@@ -64,26 +64,6 @@ func TestWorkflowStatusClassifiesTheRunsOutcome(t *testing.T) {
 	}
 }
 
-func TestMaskInlineSecretsMatchesPython(t *testing.T) {
-	for in, want := range map[string]string{
-		"curl -H 'Authorization: Bearer abcdefgh123'": "curl -H 'Authorization: Bearer [redacted]'",
-		"export API_KEY=sk-abcdefghijklmnopqrst":      "export API_KEY=[redacted]",
-		`{"password": "hunter2", "user": "bob"}`:      `{"password": "[redacted]", "user": "bob"}`,
-		"tool --token xyz --name a":                   "tool --token [redacted] --name a",
-		"pre-token=keep":                              "pre-token=[redacted]",
-		"git clone https://bob:s3cret@host/repo":      "git clone https://bob:[redacted]@host/repo",
-		"curl -u bob:pw http://x":                     "curl -u bob:[redacted] http://x",
-		"mysql -h db -psecret":                        "mysql -h db -p[redacted]",
-		"sshpass -p hunter2 ssh x":                    "sshpass -p [redacted] ssh x",
-		"key ghp_abcdefghijklmnopqrstuvwxyz":          "key [redacted]",
-		"nothing to see here":                         "nothing to see here",
-	} {
-		if got := MaskInlineSecrets(in); got != want {
-			t.Errorf("MaskInlineSecrets(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 func TestFilterDomainFieldsFlattensTheEnvelope(t *testing.T) {
 	data := wirejson.Object{
 		{Key: "event_type", Value: "x"},

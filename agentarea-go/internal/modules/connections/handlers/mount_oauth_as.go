@@ -58,6 +58,9 @@ func mountOAuthAS(g group) {
 		return nil
 	}))
 	g.r.Method(http.MethodPost, "/oauth2/register", h(func(w http.ResponseWriter, r *http.Request) error {
+		if err := httpx.EnforceRateLimit(r.Context(), g.s.rate, g.s.log, httpx.OAuthRegisterScope, httpx.ClientIdentity(r), httpx.OAuthRegisterLimit); err != nil {
+			return err
+		}
 		body, err := io.ReadAll(io.LimitReader(r.Body, registerMaxBody+1))
 		if err != nil {
 			return err

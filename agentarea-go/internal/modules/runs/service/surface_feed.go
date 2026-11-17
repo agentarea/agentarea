@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"strings"
 	"time"
 
@@ -162,6 +163,10 @@ func feedEvent(r feedRow, b *feedBodies) (string, wirejson.Object, bool, error) 
 	return "", nil, false, nil
 }
 
+type pgUUID = uuid.UUID
+
+const redacted = "[redacted]"
+
 const nestedOmitted = "[nested value omitted from event log]"
 
 // nameVerdict is what sanitize_tool_event_value answers for a field name
@@ -210,30 +215,17 @@ func sanitizeOrdered(value any, field string, depth int) any {
 }
 
 // secretName is redaction._secret_name.
-func secretName(name string) bool {
-	n := strings.ReplaceAll(strings.ToLower(name), "-", "_")
-	if strings.Contains(n, "passwd") {
-		return true
-	}
-	for _, f := range []string{"api_key", "authorization", "credential", "password", "secret", "token"} {
-		if strings.Contains(n, f) {
-			return true
-		}
-	}
-	return false
-}
-
 // revealToolValue is reveal_tool_value: whole, secret-shaped keys and inline secrets masked.
 func revealToolValue(value any, field string, depth int) any {
 	if depth >= 10 {
 		return nestedOmitted
 	}
-	if field != "" && secretName(field) {
+	if field != "" && domain.SecretName(field) {
 		return redacted
 	}
 	switch v := value.(type) {
 	case string:
-		return MaskInlineSecrets(v)
+		return domain.MaskInlineSecrets(v)
 	case wirejson.Object:
 		out := make(wirejson.Object, len(v))
 		for i, m := range v {

@@ -2,6 +2,7 @@ package authn
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -24,22 +25,28 @@ const (
 	hydraJWKSMaxBody       = 1 << 20
 )
 
+const detailHydraIssuer = "Token was not issued by this API's authorization server"
+
 // hydra verifies Hydra-issued OAuth JWTs against Hydra's JWKS
-// (dependencies.py _try_hydra_token, PyJWKClient). Unlike PyJWKClient with
+// (dependencies.py _try_hydra_token, PyJWKClient), and, unlike Python, their
+// iss against the issuer Hydra's discovery document names, fetched and cached
+// with the JWKS. Unlike PyJWKClient with
 // cache_keys=True, a key is not remembered after it leaves the JWKS. Unlike
 // PyJWKClient, a token whose header does not parse never causes a fetch, a
 // failed fetch is not retried within the cooldown, and concurrent fetches
 // share one request made outside the lock.
 type hydra struct {
-	jwksURL   string
-	audience  string
-	challenge string
-	client    *http.Client
-	log       *slog.Logger
-	fetches   singleflight.Group
+	jwksURL      string
+	discoveryURL string
+	audience     string
+	challenge    string
+	client       *http.Client
+	log          *slog.Logger
+	fetches      singleflight.Group
 
 	mu        sync.Mutex
 	keys      []jwk
+	issuer    string
 	cachedAt  time.Time
 	lastFetch time.Time
 	failedAt  time.Time
@@ -50,12 +57,14 @@ type hydra struct {
 }
 
 func newHydra(cfg Config, client *http.Client, log *slog.Logger) *hydra {
+	base := strings.TrimRight(cfg.HydraURL, "/")
 	return &hydra{
-		jwksURL:   strings.TrimRight(cfg.HydraURL, "/") + "/.well-known/jwks.json",
-		audience:  cfg.HydraAudience,
-		challenge: port.Challenge(cfg.APIURL),
-		client:    client,
-		log:       log,
+		jwksURL:      base + "/.well-known/jwks.json",
+		discoveryURL: base + "/.well-known/openid-configuration",
+		audience:     cfg.HydraAudience,
+		challenge:    port.Challenge(cfg.APIURL),
+		client:       client,
+		log:          log,
 	}
 }
 
@@ -69,8 +78,8 @@ func newJWKSClient() *http.Client {
 	}
 }
 
-func (h *hydra) fetch(ctx context.Context) ([]jwk, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.jwksURL, nil)
+func (h *hydra) get(ctx context.Context, url string) (any, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -86,15 +95,29 @@ func (h *hydra) fetch(ctx context.Context) ([]jwk, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := loadJSON(body)
+	return loadJSON(body)
+}
+
+// fetch reads Hydra's issuer from its discovery document, then its JWKS.
+func (h *hydra) fetch(ctx context.Context) ([]jwk, string, error) {
+	doc, err := h.get(ctx, h.discoveryURL)
 	if err != nil {
-		return nil, err
+		return nil, "", err
+	}
+	obj, _ := doc.(map[string]any)
+	issuer, _ := obj["issuer"].(string)
+	if issuer == "" {
+		return nil, "", errors.New("hydra's discovery document names no issuer")
+	}
+	data, err := h.get(ctx, h.jwksURL)
+	if err != nil {
+		return nil, "", err
 	}
 	keys, err := signingKeys(data)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return keys, nil
+	return keys, issuer, nil
 }
 
 // signingKeys is get_signing_keys: the cached set while fresh, else a fetch.
@@ -117,14 +140,14 @@ func (h *hydra) signingKeys(ctx context.Context, now time.Time, refresh bool) ([
 	ch := h.fetches.DoChan("jwks", func() (any, error) {
 		fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), hydraJWKSTimeout)
 		defer cancel()
-		keys, err := h.fetch(fctx)
+		keys, issuer, err := h.fetch(fctx)
 		h.mu.Lock()
 		defer h.mu.Unlock()
 		if err != nil {
 			h.failure, h.failedAt = err, now
 			return nil, err
 		}
-		h.keys, h.cachedAt, h.lastFetch, h.failure = keys, now, now, nil
+		h.keys, h.issuer, h.cachedAt, h.lastFetch, h.failure = keys, issuer, now, now, nil
 		return keys, nil
 	})
 	select {
@@ -231,6 +254,13 @@ func (h *hydra) try(ctx context.Context, token string, now time.Time) (*port.Pri
 	if clientID, isStr := payload["client_id"].(string); isStr && clientID == subject {
 		h.log.Warn("Hydra token refused: subject is its own client", "client_id", subject)
 		return nil, h.refusal("OAuth token was issued to a client, not a signed-in user")
+	}
+	h.mu.Lock()
+	issuer := h.issuer
+	h.mu.Unlock()
+	if iss, _ := payload["iss"].(string); iss != issuer {
+		h.log.Warn("Hydra token refused: not issued by Hydra's issuer", "iss", payload["iss"], "issuer", issuer)
+		return nil, h.refusal(detailHydraIssuer)
 	}
 	return &port.Principal{
 		UserID:     subject,

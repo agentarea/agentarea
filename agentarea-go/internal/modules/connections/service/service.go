@@ -76,8 +76,9 @@ type Deps struct {
 
 // Service is the connections use cases.
 type Service struct {
-	d     Deps
-	perms authz.Permissions
+	d         Deps
+	perms     authz.Permissions
+	discovery hydraDiscoveryCache
 }
 
 // New builds the service.

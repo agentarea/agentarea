@@ -359,6 +359,9 @@ func TestTaskPodFromTemplatePreservesIsolationIdentity(t *testing.T) {
 	if pod.Spec.AutomountServiceAccountToken == nil || *pod.Spec.AutomountServiceAccountToken {
 		t.Fatal("task pod must not automount a service account token")
 	}
+	if pod.Spec.EnableServiceLinks == nil || *pod.Spec.EnableServiceLinks {
+		t.Fatal("task pod must not get the cluster's service links")
+	}
 	if pod.Spec.NodeName != "" {
 		t.Fatalf("node name = %q, want scheduler assignment", pod.Spec.NodeName)
 	}

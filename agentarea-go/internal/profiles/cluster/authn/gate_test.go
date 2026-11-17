@@ -719,7 +719,7 @@ func TestHydraTokens(t *testing.T) {
 	}, Deps{Store: w.store, Graph: w.graph, Now: w.nowFunc})
 	claims := func(sub string) map[string]any {
 		now := w.nowFunc().Unix()
-		return map[string]any{"sub": sub, "aud": "mcp", "iat": now, "exp": now + 600, "client_id": "cli", "workspace_id": "ws-foreign"}
+		return map[string]any{"sub": sub, "aud": "mcp", "iss": srv.URL, "iat": now, "exp": now + 600, "client_id": "cli", "workspace_id": "ws-foreign"}
 	}
 
 	p, err := gate.Verify(ctx, signRS256(t, k1, "h1", claims("u1")))
@@ -805,9 +805,9 @@ func hydraGate(t *testing.T, w *world, srv *httptest.Server) *Gate {
 	}, Deps{Store: w.store, Graph: w.graph, Now: w.nowFunc})
 }
 
-func hydraClaims(w *world) map[string]any {
+func hydraClaims(w *world, srv *httptest.Server) map[string]any {
 	now := w.nowFunc().Unix()
-	return map[string]any{"sub": "u1", "aud": "mcp", "iat": now, "exp": now + 600, "client_id": "cli"}
+	return map[string]any{"sub": "u1", "aud": "mcp", "iss": srv.URL, "iat": now, "exp": now + 600, "client_id": "cli"}
 }
 
 // A token whose header does not parse names no key: Hydra's JWKS is not asked.
@@ -825,7 +825,7 @@ func TestHydraParsesTheHeaderBeforeFetching(t *testing.T) {
 	if *fetches != 0 {
 		t.Fatalf("%d JWKS fetches for tokens with no readable header", *fetches)
 	}
-	if _, err := gate.Verify(ctx, signRS256(t, k1, "h1", hydraClaims(w))); err != nil {
+	if _, err := gate.Verify(ctx, signRS256(t, k1, "h1", hydraClaims(w, srv))); err != nil {
 		t.Fatal(err)
 	}
 	if *fetches != 1 {
@@ -839,7 +839,7 @@ func TestHydraCachesAFailedFetchForTheCooldown(t *testing.T) {
 	srv, fetches := jwksServer(t, func() []byte { return nil })
 	w := newWorld(t)
 	gate := hydraGate(t, w, srv)
-	token := signRS256(t, k1, "h1", hydraClaims(w))
+	token := signRS256(t, k1, "h1", hydraClaims(w, srv))
 	for range 5 {
 		_, err := gate.Verify(ctx, token)
 		wantRefusal(t, err, 401, "Key not found in JWKS")
@@ -877,7 +877,7 @@ func TestHydraFetchesOutsideTheLockOnce(t *testing.T) {
 	})
 	w := newWorld(t)
 	gate := hydraGate(t, w, srv)
-	known := signRS256(t, k1, "h1", hydraClaims(w))
+	known := signRS256(t, k1, "h1", hydraClaims(w, srv))
 	if _, err := gate.Verify(ctx, known); err != nil {
 		t.Fatal(err)
 	}
@@ -888,7 +888,7 @@ func TestHydraFetchesOutsideTheLockOnce(t *testing.T) {
 	served["h2"] = k2
 	mu.Unlock()
 	w.advance(31 * time.Second)
-	rotated := signRS256(t, k2, "h2", hydraClaims(w))
+	rotated := signRS256(t, k2, "h2", hydraClaims(w, srv))
 	var wg sync.WaitGroup
 	errs := make([]error, 3)
 	for i := range errs {
@@ -919,6 +919,58 @@ func TestHydraFetchesOutsideTheLockOnce(t *testing.T) {
 	}
 	if *fetches != 2 {
 		t.Errorf("concurrent refreshes made %d fetches in all, want 2", *fetches)
+	}
+}
+
+// Hydra signs only with its own issuer; a token naming another, or none, is
+// not one Hydra issued for this deployment.
+func TestHydraRequiresHydrasIssuer(t *testing.T) {
+	ctx := context.Background()
+	k1, _ := rsa.GenerateKey(rand.Reader, 2048)
+	srv, _ := jwksServer(t, func() []byte { return rsaJWKS(map[string]*rsa.PrivateKey{"h1": k1}) })
+	w := newWorld(t)
+	gate := hydraGate(t, w, srv)
+	claims := hydraClaims(w, srv)
+	if _, err := gate.Verify(ctx, signRS256(t, k1, "h1", claims)); err != nil {
+		t.Fatal(err)
+	}
+	for _, iss := range []any{"https://other-hydra.example", srv.URL + "/", "", 42, nil} {
+		claims["iss"] = iss
+		_, err := gate.Verify(ctx, signRS256(t, k1, "h1", claims))
+		wantRefusal(t, err, 401, detailHydraIssuer)
+	}
+	delete(claims, "iss")
+	_, err := gate.Verify(ctx, signRS256(t, k1, "h1", claims))
+	wantRefusal(t, err, 401, detailHydraIssuer)
+}
+
+// The issuer comes from Hydra's discovery document: without one the JWKS is
+// not trusted and the token is judged as Kratos's (401, not 500).
+func TestHydraWithoutDiscoveryIsUnavailable(t *testing.T) {
+	ctx := context.Background()
+	k1, _ := rsa.GenerateKey(rand.Reader, 2048)
+	for name, discovery := range map[string]func(http.ResponseWriter){
+		"down":      func(w http.ResponseWriter) { http.Error(w, "down", http.StatusServiceUnavailable) },
+		"no issuer": func(w http.ResponseWriter) { _, _ = w.Write([]byte(`{"jwks_uri":"x"}`)) },
+		"empty":     func(w http.ResponseWriter) { _, _ = w.Write([]byte(`{"issuer":""}`)) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/.well-known/openid-configuration":
+					discovery(rw)
+				case "/.well-known/jwks.json":
+					_, _ = rw.Write(rsaJWKS(map[string]*rsa.PrivateKey{"h1": k1}))
+				default:
+					http.NotFound(rw, r)
+				}
+			}))
+			t.Cleanup(srv.Close)
+			w := newWorld(t)
+			gate := hydraGate(t, w, srv)
+			_, err := gate.Verify(ctx, signRS256(t, k1, "h1", hydraClaims(w, srv)))
+			wantRefusal(t, err, 401, "Key not found in JWKS")
+		})
 	}
 }
 

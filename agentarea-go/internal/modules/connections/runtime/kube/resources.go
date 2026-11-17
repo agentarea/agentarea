@@ -207,6 +207,9 @@ func (b *Backend) deployment(name string, spec workload.Spec) (*appsv1.Deploymen
 		// MCP servers never call the API server; withholding the token keeps a
 		// hostile image from reaching the control plane with it.
 		AutomountServiceAccountToken: &never,
+		// The server's output reaches its owner, so its environment must not
+		// list the cluster's other services.
+		EnableServiceLinks: &never,
 		// The workload holds no state to flush; a long grace only holds the name.
 		TerminationGracePeriodSeconds: &grace,
 		ServiceAccountName:            b.cfg.PodServiceAccountName,

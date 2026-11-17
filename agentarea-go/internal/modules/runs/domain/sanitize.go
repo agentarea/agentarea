@@ -133,7 +133,19 @@ func sanitize(value any, fieldName string, depth int) any {
 
 // SanitizeToolResultData sanitizes a tool.result event's data as a whole.
 func SanitizeToolResultData(data map[string]any) map[string]any {
-	out, _ := sanitize(data, "", 0).(map[string]any)
+	structured, has := data["structured_content"]
+	rest := make(map[string]any, len(data))
+	for k, v := range data {
+		if k != "structured_content" {
+			rest[k] = v
+		}
+	}
+	out, _ := sanitize(rest, "", 0).(map[string]any)
+	// An MCP App parses structured_content against its own schema, so it stays
+	// whole; the MCP call already caps its size.
+	if has && structured != nil && out != nil {
+		out["structured_content"] = RevealToolValue(structured, "")
+	}
 	return out
 }
 

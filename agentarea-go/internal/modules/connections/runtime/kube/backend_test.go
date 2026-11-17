@@ -411,6 +411,9 @@ func TestPodGetsNoServiceAccountTokenAndStripsStdioTransport(t *testing.T) {
 	if pod.AutomountServiceAccountToken == nil || *pod.AutomountServiceAccountToken {
 		t.Fatal("instance pods must not mount the service account token")
 	}
+	if pod.EnableServiceLinks == nil || *pod.EnableServiceLinks {
+		t.Fatal("instance pods must not get the cluster's service links")
+	}
 	if got := strings.Join(pod.Containers[0].Args, " "); got != "--port 8080" {
 		t.Fatalf("args %q", got)
 	}

@@ -4,12 +4,14 @@ package handlers
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 
 	"github.com/google/uuid"
 
 	gen "github.com/agentarea/agentarea/agentarea-go/api/openapi/connections"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authn"
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/httpx"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/service"
 )
 
@@ -19,13 +21,21 @@ import (
 // be a wiring bug.
 type Server struct {
 	gen.StrictServerInterface
-	svc *service.Service
+	svc  *service.Service
+	rate httpx.RateLimiter
+	log  *slog.Logger
 }
 
 var _ gen.StrictServerInterface = (*Server)(nil)
 
 // New builds the server.
 func New(svc *service.Service) *Server { return &Server{svc: svc} }
+
+// WithRateLimit is the limiter anonymous client registration takes its token from.
+func (s *Server) WithRateLimit(rl httpx.RateLimiter, log *slog.Logger) *Server {
+	s.rate, s.log = rl, log
+	return s
+}
 
 // caller is the workspace caller the edge resolved; a route mounted without
 // the workspace middleware is a wiring bug.

@@ -15,14 +15,24 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/singleflight"
+
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/httpx/wirejson"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/netguard"
 )
 
-// hydraDocs caches Hydra's discovery document per Hydra URL once it was fetched.
-//
-//nolint:gochecknoglobals // a process cache, like the Python module-level one
-var hydraDocs sync.Map
+// hydraDiscoveryTTL is how long a fetched discovery document of Hydra is
+// served to the anonymous metadata routes.
+const hydraDiscoveryTTL = 5 * time.Minute
+
+// hydraDiscoveryCache is the last discovery document Hydra served; a failed
+// fetch is not kept, concurrent fetches share one request.
+type hydraDiscoveryCache struct {
+	flight    singleflight.Group
+	mu        sync.Mutex
+	doc       wirejson.Object
+	fetchedAt time.Time
+}
 
 const oaUuidPattern = `[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`
 
@@ -90,17 +100,46 @@ func (s *Service) fetchHydraDiscovery(ctx context.Context, timeout time.Duration
 	return doc, nil
 }
 
-// hydraDiscovery is _hydra_discovery: cached on first success, nil when unreachable.
-func (s *Service) hydraDiscovery(ctx context.Context) wirejson.Object {
-	if v, ok := hydraDocs.Load(s.hydraURL()); ok {
-		return v.(wirejson.Object)
+// cachedHydraDiscovery is Hydra's discovery document, fetched at most once
+// per hydraDiscoveryTTL. The document is shared: callers copy before changing it.
+func (s *Service) cachedHydraDiscovery(ctx context.Context) (wirejson.Object, error) {
+	c := &s.discovery
+	now := s.d.Now()
+	c.mu.Lock()
+	if c.doc != nil && now.Sub(c.fetchedAt) < hydraDiscoveryTTL {
+		doc := c.doc
+		c.mu.Unlock()
+		return doc, nil
 	}
-	doc, err := s.fetchHydraDiscovery(ctx, 5*time.Second)
+	c.mu.Unlock()
+	ch := c.flight.DoChan("discovery", func() (any, error) {
+		doc, err := s.fetchHydraDiscovery(context.WithoutCancel(ctx), 5*time.Second)
+		if err != nil {
+			return nil, err
+		}
+		c.mu.Lock()
+		c.doc, c.fetchedAt = doc, now
+		c.mu.Unlock()
+		return doc, nil
+	})
+	select {
+	case r := <-ch:
+		if r.Err != nil {
+			return nil, r.Err
+		}
+		return r.Val.(wirejson.Object), nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// hydraDiscovery is _hydra_discovery: nil when unreachable.
+func (s *Service) hydraDiscovery(ctx context.Context) wirejson.Object {
+	doc, err := s.cachedHydraDiscovery(ctx)
 	if err != nil {
 		s.d.Log.InfoContext(ctx, "Hydra discovery unavailable", "error", err)
 		return nil
 	}
-	hydraDocs.Store(s.hydraURL(), doc)
 	return doc
 }
 
@@ -154,7 +193,7 @@ func oaTruthyJSON(v any) bool {
 // AuthorizationServerMetadata is Hydra's document with the endpoints this API
 // proxies rewritten to it, issuer this API, registration our DCR proxy.
 func (s *Service) AuthorizationServerMetadata(ctx context.Context) (wirejson.Object, error) {
-	doc, err := s.fetchHydraDiscovery(ctx, 5*time.Second)
+	doc, err := s.cachedHydraDiscovery(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -283,10 +322,19 @@ func (s *Service) Registration(body []byte) (map[string]any, error) {
 		return nil, &DCRRefusal{"invalid_redirect_uri", "redirect_uris is required"}
 	}
 	for _, raw := range uris {
-		u, err := url.Parse(oaPyStr(raw))
+		s := oaPyStr(raw)
+		u, err := url.Parse(s)
 		loopback := err == nil && u.Scheme == "http" && slices.Contains(oaLoopbackHosts(), u.Hostname())
+		if err != nil && strings.HasPrefix(s, "https://") {
+			return nil, &DCRRefusal{"invalid_redirect_uri", "redirect_uris must name one host, with no wildcard, credentials or fragment"}
+		}
 		if err != nil || (u.Scheme != "https" && !loopback) {
 			return nil, &DCRRefusal{"invalid_redirect_uri", "redirect_uris must use https, or http to a loopback host for native clients"}
+		}
+		// The consent screen names the host the code goes to; a wildcard,
+		// credentials or a fragment would make it another host than the one read.
+		if u.Hostname() == "" || strings.Contains(u.Host, "*") || u.User != nil || u.Fragment != "" || strings.Contains(s, "#") {
+			return nil, &DCRRefusal{"invalid_redirect_uri", "redirect_uris must name one host, with no wildcard, credentials or fragment"}
 		}
 	}
 	if _, ok := data["client_uri"]; !ok {

@@ -24,6 +24,10 @@ func TestVerifyMatchesPythonForKratosAndHydraTokens(t *testing.T) {
 			}, Deps{})
 			for _, name := range sc.Tokens {
 				want := g.Results[sc.Name][name]
+				if want.Status == 200 && want.Kind == string(port.KindOAuth) {
+					// Python never checked a Hydra token's iss; these carry none.
+					want = outcome{Status: 401, Detail: detailHydraIssuer, WWWAuthenticate: port.Challenge("http://localhost:8000")}
+				}
 				t.Run(name, func(t *testing.T) {
 					p, err := gate.Verify(context.Background(), g.Tokens[name])
 					switch want.Status {

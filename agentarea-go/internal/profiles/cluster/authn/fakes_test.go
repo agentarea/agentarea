@@ -219,12 +219,19 @@ func loadGolden(t *testing.T) golden {
 	return g
 }
 
-// jwksServer serves body as Hydra's JWKS and counts fetches.
+// jwksServer serves body as Hydra's JWKS, with a discovery document naming
+// the server's own URL as issuer, and counts JWKS fetches.
 func jwksServer(t *testing.T, body func() []byte) (*httptest.Server, *int) {
 	t.Helper()
 	var mu sync.Mutex
 	fetches := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/.well-known/openid-configuration" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"issuer":"` + srv.URL + `","jwks_uri":"` + srv.URL + `/.well-known/jwks.json"}`))
+			return
+		}
 		if r.URL.Path != "/.well-known/jwks.json" {
 			http.NotFound(w, r)
 			return

@@ -2638,7 +2638,7 @@
         "save": "Save",
         "saveFailed": "Could not change who may write to the bot"
       },
-        "title": "Sources",
+      "title": "Sources",
       "empty": "No sources yet. Add one to collect events here without a trigger.",
       "add": "Add source",
       "signedWith": "Signature",
@@ -3289,6 +3289,7 @@
     "title": "Authorize {clientName}",
     "description": "{clientName} is requesting access to your AgentArea account. Only approve apps you recognize and trust.",
     "permissionsHeading": "It will be able to:",
+    "fullAccess": "Act as you in all your workspaces: run agents, read and change your data",
     "scope": {
       "openid": "Verify your identity",
       "profile": "Read your basic profile",

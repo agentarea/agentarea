@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -52,9 +53,31 @@ func (oauthStore) AttachConnectionAuth(context.Context, db.Session, uuid.UUID, u
 
 type oauthGate struct{ authn.Gate }
 
+// registerLimiter lets limit registrations through per identity, then refuses.
+type registerLimiter struct {
+	mu    sync.Mutex
+	limit int
+	taken map[string]int
+}
+
+func (l *registerLimiter) Take(_ context.Context, scope, identity string, limit int) (bool, int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if scope != httpx.OAuthRegisterScope || limit != httpx.OAuthRegisterLimit {
+		return false, 0, nil
+	}
+	l.taken[identity]++
+	return l.taken[identity] <= l.limit, 6, nil
+}
+
 // oauthHarness serves the OAuth routes against a fake Hydra; signedIn gates
 // the finish route's authentication.
 func oauthHarness(t *testing.T, signedIn bool) (*httptest.Server, oauthKV, *[]string) {
+	t.Helper()
+	return oauthHarnessLimited(t, signedIn, &registerLimiter{limit: 1 << 20, taken: map[string]int{}})
+}
+
+func oauthHarnessLimited(t *testing.T, signedIn bool, rate httpx.RateLimiter) (*httptest.Server, oauthKV, *[]string) {
 	t.Helper()
 	var hydraHits []string
 	hydra := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -115,7 +138,7 @@ func oauthHarness(t *testing.T, signedIn bool) (*httptest.Server, oauthKV, *[]st
 	})
 	errs := httpx.NewErrors("http://api", slog.New(slog.DiscardHandler), MapError)
 	r := chi.NewRouter()
-	Mount(r, errs, edge, New(svc), Ports{OpenAPI: true})
+	Mount(r, errs, edge, New(svc).WithRateLimit(rate, slog.New(slog.DiscardHandler)), Ports{OpenAPI: true})
 	s := httptest.NewServer(r)
 	t.Cleanup(s.Close)
 	return s, kv, &hydraHits
@@ -231,6 +254,19 @@ func TestOAuthASShim(t *testing.T) {
 	if resp.StatusCode != 400 || !strings.Contains(body, `"error":"invalid_redirect_uri"`) {
 		t.Fatalf("register refusal %d %s", resp.StatusCode, body)
 	}
+	for _, uri := range []string{"https://*.evil.example/cb", "https://*/cb", "https://evil.example/cb#frag",
+		"https://user:pass@evil.example/cb", "https://app.agentarea.example@evil.example/cb", "https:///cb"} {
+		resp, body = rawCall(t, s, "POST", "/oauth2/register", `{"redirect_uris":["`+uri+`"]}`)
+		if resp.StatusCode != 400 || !strings.Contains(body, `"error":"invalid_redirect_uri"`) {
+			t.Fatalf("callback %s: %d %s", uri, resp.StatusCode, body)
+		}
+	}
+	for _, uri := range []string{"https://claude.ai/api/mcp/auth_callback", "http://localhost:3118/callback",
+		"http://127.0.0.1:50285/callback/mchcrPoY4sxk", "http://[::1]:8080/cb"} {
+		if resp, body := rawCall(t, s, "POST", "/oauth2/register", `{"redirect_uris":["`+uri+`"]}`); resp.StatusCode != 201 {
+			t.Fatalf("callback %s: %d %s", uri, resp.StatusCode, body)
+		}
+	}
 	resp, body = rawCall(t, s, "POST", "/oauth2/register", `{"redirect_uris":["http://127.0.0.1:9/cb"],"scope":"openid"}`)
 	if resp.StatusCode != 201 || !strings.Contains(body, `"audience":["https://api.example"]`) {
 		t.Fatalf("register %d %s", resp.StatusCode, body)
@@ -256,5 +292,29 @@ func TestOAuthASShim(t *testing.T) {
 		if strings.Contains(h, "admin/clients") && !strings.HasPrefix(h, "POST") {
 			t.Fatalf("hydra admin hit %s", h)
 		}
+	}
+}
+
+// Anonymous client registration is limited per client address; the refusal
+// is the edge's 429 with Retry-After, and Hydra is not asked.
+func TestOAuthRegisterIsRateLimitedPerAddress(t *testing.T) {
+	limiter := &registerLimiter{limit: 2, taken: map[string]int{}}
+	s, _, hits := oauthHarnessLimited(t, true, limiter)
+	reg := `{"redirect_uris":["https://claude.ai/api/mcp/auth_callback"]}`
+	for range 2 {
+		if resp, body := rawCall(t, s, "POST", "/oauth2/register", reg); resp.StatusCode != 201 {
+			t.Fatalf("register %d %s", resp.StatusCode, body)
+		}
+	}
+	before := len(*hits)
+	resp, body := rawCall(t, s, "POST", "/oauth2/register", reg)
+	if resp.StatusCode != http.StatusTooManyRequests || resp.Header.Get("Retry-After") != "6" || !strings.Contains(body, "Rate limit exceeded") {
+		t.Fatalf("over the limit %d %q %s", resp.StatusCode, resp.Header.Get("Retry-After"), body)
+	}
+	if len(*hits) != before {
+		t.Fatalf("a limited registration reached Hydra: %v", (*hits)[before:])
+	}
+	if len(limiter.taken) != 1 || limiter.taken["ip:127.0.0.1"] != 3 {
+		t.Fatalf("buckets %v", limiter.taken)
 	}
 }

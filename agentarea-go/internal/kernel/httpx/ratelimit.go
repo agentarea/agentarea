@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // Rate-limit settings of api/rate_limit.py.
@@ -16,6 +17,9 @@ const (
 	RateLimitBucketTTL = 120
 	// A2ARPCLimit is the A2A JSON-RPC calls a caller may make a minute.
 	A2ARPCLimit = 300
+	// OAuthRegisterLimit is the anonymous OAuth client registrations an
+	// address may make a minute.
+	OAuthRegisterLimit = 10
 )
 
 // RateLimitScript is the token bucket every replica runs in Valkey, so all
@@ -76,8 +80,9 @@ func EnforceRateLimit(ctx context.Context, rl RateLimiter, log *slog.Logger, sco
 
 // Rate-limit scopes.
 const (
-	A2ARPCScope  = "a2a-rpc"
-	WebhookScope = "webhook"
+	A2ARPCScope        = "a2a-rpc"
+	WebhookScope       = "webhook"
+	OAuthRegisterScope = "oauth-register"
 )
 
 // A2AIdentity is limit_a2a_rpc's bucket: the API key or user that
@@ -89,9 +94,30 @@ func A2AIdentity(r *http.Request, apiKeyID, userID string) string {
 	case userID != "":
 		return "user:" + userID
 	}
+	return PeerIdentity(r)
+}
+
+// PeerIdentity is an anonymous caller's bucket: the peer address.
+func PeerIdentity(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil || host == "" {
 		host = "unknown"
 	}
 	return "ip:" + host
+}
+
+// ClientIdentity is an anonymous caller's bucket that survives a proxy: behind
+// a private or loopback peer, the address that proxy appended last to
+// X-Forwarded-For; otherwise the peer itself, so a direct caller cannot pick
+// its own bucket.
+func ClientIdentity(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	peer := net.ParseIP(host)
+	if err == nil && peer != nil && (peer.IsPrivate() || peer.IsLoopback()) {
+		hops := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+		if last := net.ParseIP(strings.TrimSpace(hops[len(hops)-1])); last != nil {
+			return "ip:" + last.String()
+		}
+	}
+	return PeerIdentity(r)
 }
