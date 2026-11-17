@@ -3,7 +3,7 @@
 {{ template "chart.description" . }}
 
 The AgentArea control plane runs MCP servers through a *data plane*: the
-mcp-manager binary in data-plane mode, serving an authenticated HTTP API that
+platform image's `agentarea mcp` role in data-plane mode, serving an authenticated HTTP API that
 creates, proxies and deletes MCP server workloads. This chart installs one on an
 **execution cluster** -- a cluster whose job is to run untrusted MCP servers,
 separate from the one the control plane lives on -- together with everything
@@ -102,7 +102,7 @@ sandboxes:
 ```
 
 Then, in the `agentarea` chart, point `sandboxRuntime.opensandbox` at
-`http://<address>:<port>` with the same key. mcp-manager must name the storage
+`http://<address>:<port>` with the same key. The sandbox adapter must name the storage
 limit `ephemeral-storage`: releases that still send `disk` have every sandbox pod
 rejected by the API server.
 

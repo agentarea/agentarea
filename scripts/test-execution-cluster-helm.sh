@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The chart must be able to point mcp-manager at a separate execution cluster,
+# The chart must be able to point the MCP runtime at a separate execution cluster,
 # and must refuse to render a half-configured one. A half-configuration that
 # rendered would deploy in-cluster mode silently: untrusted MCP servers and
 # agent sandboxes on the control plane's nodes, while the operator believes
@@ -61,12 +61,12 @@ def deployment(rendered: str, name: str) -> str:
 
 def config_value(rendered: str, key: str) -> str:
     for document in documents(rendered):
-        if "kind: ConfigMap" not in document or "-env-mcpmanager" not in document:
+        if "kind: ConfigMap" not in document or "-env-mcpruntime" not in document:
             continue
         match = re.search(rf'(?m)^\s*{key}:\s*"(.*)"\s*$', document)
-        assert match is not None, f"{key} missing from the mcp-manager ConfigMap"
+        assert match is not None, f"{key} missing from the mcp-runtime ConfigMap"
         return match.group(1)
-    raise AssertionError("missing rendered mcp-manager env ConfigMap")
+    raise AssertionError("missing rendered mcp-runtime env ConfigMap")
 
 
 # Unconfigured: in-cluster discovery. The variable is declared so the value is
@@ -79,7 +79,7 @@ assert "execution-kubeconfig" not in unconfigured
 path = config_value(configured, "KUBECONFIG")
 assert path == "/etc/agentarea/exec/kubeconfig", path
 
-for component in ("mcp-manager", "sandbox-runner"):
+for component in ("backend", "worker", "mcp-manager", "sandbox-runner"):
     rendered = deployment(configured, f"exec-cluster-agentarea-{component}")
     assert "name: KUBECONFIG" in rendered, component
     mount = re.search(

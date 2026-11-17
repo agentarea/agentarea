@@ -1,0 +1,605 @@
+[
+ {
+  "name": "raise_bad_request",
+  "request": {
+   "method": "GET",
+   "path": "/raise/bad_request"
+  },
+  "status": 400,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Bad Request\",\"status\":400,\"code\":\"bad_request\",\"detail\":\"Name must not be empty\"}"
+ },
+ {
+  "name": "raise_app_default",
+  "request": {
+   "method": "GET",
+   "path": "/raise/app_default"
+  },
+  "status": 500,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Internal Server Error\",\"status\":500,\"code\":\"internal_error\",\"detail\":\"Internal Server Error\"}"
+ },
+ {
+  "name": "raise_not_found_default",
+  "request": {
+   "method": "GET",
+   "path": "/raise/not_found_default"
+  },
+  "status": 404,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404,\"code\":\"not_found\",\"detail\":\"Not Found\"}"
+ },
+ {
+  "name": "raise_conflict",
+  "request": {
+   "method": "GET",
+   "path": "/raise/conflict"
+  },
+  "status": 409,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Conflict\",\"status\":409,\"code\":\"conflict\",\"detail\":\"Slug already taken\"}"
+ },
+ {
+  "name": "raise_permission_denied",
+  "request": {
+   "method": "GET",
+   "path": "/raise/permission_denied"
+  },
+  "status": 403,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Forbidden\",\"status\":403,\"code\":\"permission_denied\",\"detail\":\"Only admins may do this\"}"
+ },
+ {
+  "name": "raise_auth_default",
+  "request": {
+   "method": "GET",
+   "path": "/raise/auth_default"
+  },
+  "status": 401,
+  "headers": {
+   "content-type": "application/problem+json",
+   "www-authenticate": "Bearer resource_metadata=\"https://api.example.test/.well-known/oauth-protected-resource\""
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unauthorized\",\"status\":401,\"code\":\"authentication_failed\",\"detail\":\"Missing bearer token\"}"
+ },
+ {
+  "name": "raise_auth_own_header",
+  "request": {
+   "method": "GET",
+   "path": "/raise/auth_own_header"
+  },
+  "status": 401,
+  "headers": {
+   "content-type": "application/problem+json",
+   "www-authenticate": "Bearer error=\"invalid_token\""
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unauthorized\",\"status\":401,\"code\":\"authentication_failed\",\"detail\":\"Expired\"}"
+ },
+ {
+  "name": "raise_app_custom",
+  "request": {
+   "method": "GET",
+   "path": "/raise/app_custom"
+  },
+  "status": 418,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Custom Title\",\"status\":418,\"code\":\"teapot\",\"detail\":\"Teapot <refused> & \\\"quoted\\\" é   😀\",\"targets\":[\"b\",\"a\"],\"amount\":10.0,\"ratio\":0.1,\"big\":1e+16,\"small\":1e-05,\"huge\":1.5e+300,\"count\":3,\"none\":null,\"flag\":true,\"nested\":{\"z\":1,\"a\":[1.5,\"x\"]}}"
+ },
+ {
+  "name": "raise_budget_cap",
+  "request": {
+   "method": "GET",
+   "path": "/raise/budget_cap"
+  },
+  "status": 402,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Payment Required\",\"status\":402,\"code\":\"budget_cap_exceeded\",\"detail\":\"Monthly budget cap of 5.00 USD reached\",\"current_mtd_usd\":5.25,\"cap_usd\":5.0,\"currency\":\"USD\",\"workspace_id\":\"ws-1\",\"agent_id\":null}"
+ },
+ {
+  "name": "raise_unknown_status",
+  "request": {
+   "method": "GET",
+   "path": "/raise/unknown_status"
+  },
+  "status": 599,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Error\",\"status\":599,\"code\":\"odd\",\"detail\":\"odd\"}"
+ },
+ {
+  "name": "raise_ws_access_denied",
+  "request": {
+   "method": "GET",
+   "path": "/raise/ws_access_denied"
+  },
+  "status": 404,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404,\"code\":\"not_found\",\"detail\":\"The requested resource does not exist or you don't have access to it\"}"
+ },
+ {
+  "name": "raise_ws_missing_context",
+  "request": {
+   "method": "GET",
+   "path": "/raise/ws_missing_context"
+  },
+  "status": 400,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Bad Request\",\"status\":400,\"code\":\"missing_context\",\"detail\":\"Request must include valid workspace_id information\"}"
+ },
+ {
+  "name": "raise_ws_invalid_jwt",
+  "request": {
+   "method": "GET",
+   "path": "/raise/ws_invalid_jwt"
+  },
+  "status": 401,
+  "headers": {
+   "content-type": "application/problem+json",
+   "www-authenticate": "Bearer resource_metadata=\"https://api.example.test/.well-known/oauth-protected-resource\""
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unauthorized\",\"status\":401,\"code\":\"authentication_failed\",\"detail\":\"Invalid or missing authentication token\"}"
+ },
+ {
+  "name": "raise_ws_not_found",
+  "request": {
+   "method": "GET",
+   "path": "/raise/ws_not_found"
+  },
+  "status": 404,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404,\"code\":\"not_found\",\"detail\":\"The requested agent does not exist\"}"
+ },
+ {
+  "name": "raise_builtin_permission",
+  "request": {
+   "method": "GET",
+   "path": "/raise/builtin_permission"
+  },
+  "status": 403,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Forbidden\",\"status\":403,\"code\":\"permission_denied\",\"detail\":\"Read-only resource\"}"
+ },
+ {
+  "name": "raise_builtin_permission_empty",
+  "request": {
+   "method": "GET",
+   "path": "/raise/builtin_permission_empty"
+  },
+  "status": 403,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Forbidden\",\"status\":403,\"code\":\"permission_denied\",\"detail\":\"You do not have permission to perform this action\"}"
+ },
+ {
+  "name": "raise_http_404",
+  "request": {
+   "method": "GET",
+   "path": "/raise/http_404"
+  },
+  "status": 404,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404,\"code\":\"http_error\",\"detail\":\"Task not found\"}"
+ },
+ {
+  "name": "raise_http_429",
+  "request": {
+   "method": "GET",
+   "path": "/raise/http_429"
+  },
+  "status": 429,
+  "headers": {
+   "content-type": "application/problem+json",
+   "retry-after": "7"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Too Many Requests\",\"status\":429,\"code\":\"http_error\",\"detail\":\"Rate limit exceeded\"}"
+ },
+ {
+  "name": "raise_http_no_detail",
+  "request": {
+   "method": "GET",
+   "path": "/raise/http_no_detail"
+  },
+  "status": 503,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Service Unavailable\",\"status\":503,\"code\":\"http_error\",\"detail\":\"Service Unavailable\"}"
+ },
+ {
+  "name": "raise_integrity_unique",
+  "request": {
+   "method": "GET",
+   "path": "/raise/integrity_unique"
+  },
+  "status": 409,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Conflict\",\"status\":409,\"code\":\"conflict\",\"detail\":\"The request conflicts with the current state of the resource\"}"
+ },
+ {
+  "name": "raise_integrity_fk",
+  "request": {
+   "method": "GET",
+   "path": "/raise/integrity_fk"
+  },
+  "status": 409,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Conflict\",\"status\":409,\"code\":\"conflict\",\"detail\":\"The request conflicts with the current state of the resource\"}"
+ },
+ {
+  "name": "raise_integrity_not_null",
+  "request": {
+   "method": "GET",
+   "path": "/raise/integrity_not_null"
+  },
+  "status": 500,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Internal Server Error\",\"status\":500,\"code\":\"internal_error\",\"detail\":\"Internal Server Error\"}"
+ },
+ {
+  "name": "raise_unhandled",
+  "request": {
+   "method": "GET",
+   "path": "/raise/unhandled"
+  },
+  "status": 500,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Internal Server Error\",\"status\":500,\"code\":\"internal_error\",\"detail\":\"Internal Server Error\"}"
+ },
+ {
+  "name": "route_not_found",
+  "request": {
+   "method": "GET",
+   "path": "/nope"
+  },
+  "status": 404,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404,\"code\":\"http_error\",\"detail\":\"Not Found\"}"
+ },
+ {
+  "name": "method_not_allowed",
+  "request": {
+   "method": "DELETE",
+   "path": "/items"
+  },
+  "status": 405,
+  "headers": {
+   "content-type": "application/problem+json",
+   "allow": "POST"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Method Not Allowed\",\"status\":405,\"code\":\"http_error\",\"detail\":\"Method Not Allowed\"}"
+ },
+ {
+  "name": "validation_missing_body",
+  "request": {
+   "method": "POST",
+   "path": "/items",
+   "headers": {
+    "content-type": "application/json"
+   }
+  },
+  "status": 422,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"validation_error\",\"detail\":\"Request validation failed\",\"errors\":[{\"type\":\"missing\",\"loc\":[\"body\"],\"msg\":\"Field required\"}]}"
+ },
+ {
+  "name": "validation_empty_object",
+  "request": {
+   "method": "POST",
+   "path": "/items",
+   "json": {}
+  },
+  "status": 422,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"validation_error\",\"detail\":\"Request validation failed\",\"errors\":[{\"type\":\"missing\",\"loc\":[\"body\",\"name\"],\"msg\":\"Field required\"},{\"type\":\"missing\",\"loc\":[\"body\",\"count\"],\"msg\":\"Field required\"},{\"type\":\"missing\",\"loc\":[\"body\",\"kind\"],\"msg\":\"Field required\"}]}"
+ },
+ {
+  "name": "validation_types",
+  "request": {
+   "method": "POST",
+   "path": "/items",
+   "json": {
+    "name": "",
+    "count": "x",
+    "kind": "c",
+    "ratio": "r",
+    "tags": [
+     1,
+     null
+    ],
+    "nested": {
+     "x": "y"
+    },
+    "owner": "not-a-uuid",
+    "extra": 1
+   }
+  },
+  "status": 422,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"validation_error\",\"detail\":\"Request validation failed\",\"errors\":[{\"type\":\"string_too_short\",\"loc\":[\"body\",\"name\"],\"msg\":\"String should have at least 1 character\",\"ctx\":{\"min_length\":1}},{\"type\":\"int_parsing\",\"loc\":[\"body\",\"count\"],\"msg\":\"Input should be a valid integer, unable to parse string as an integer\"},{\"type\":\"literal_error\",\"loc\":[\"body\",\"kind\"],\"msg\":\"Input should be 'a' or 'b'\",\"ctx\":{\"expected\":\"'a' or 'b'\"}},{\"type\":\"float_parsing\",\"loc\":[\"body\",\"ratio\"],\"msg\":\"Input should be a valid number, unable to parse string as a number\"},{\"type\":\"string_type\",\"loc\":[\"body\",\"tags\",0],\"msg\":\"Input should be a valid string\"},{\"type\":\"string_type\",\"loc\":[\"body\",\"tags\",1],\"msg\":\"Input should be a valid string\"},{\"type\":\"int_parsing\",\"loc\":[\"body\",\"nested\",\"x\"],\"msg\":\"Input should be a valid integer, unable to parse string as an integer\"},{\"type\":\"uuid_parsing\",\"loc\":[\"body\",\"owner\"],\"msg\":\"Input should be a valid UUID, invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `n` at 1\",\"ctx\":{\"error\":\"invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `n` at 1\"}},{\"type\":\"extra_forbidden\",\"loc\":[\"body\",\"extra\"],\"msg\":\"Extra inputs are not permitted\"}]}"
+ },
+ {
+  "name": "validation_bounds",
+  "request": {
+   "method": "POST",
+   "path": "/items",
+   "json": {
+    "name": "toolong",
+    "count": 11,
+    "kind": "a"
+   }
+  },
+  "status": 422,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"validation_error\",\"detail\":\"Request validation failed\",\"errors\":[{\"type\":\"string_too_long\",\"loc\":[\"body\",\"name\"],\"msg\":\"String should have at most 5 characters\",\"ctx\":{\"max_length\":5}},{\"type\":\"less_than_equal\",\"loc\":[\"body\",\"count\"],\"msg\":\"Input should be less than or equal to 10\",\"ctx\":{\"le\":10}}]}"
+ },
+ {
+  "name": "validation_invalid_json",
+  "request": {
+   "method": "POST",
+   "path": "/items",
+   "content": "{\"name\": \"x\",",
+   "headers": {
+    "content-type": "application/json"
+   }
+  },
+  "status": 422,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"validation_error\",\"detail\":\"Request validation failed\",\"errors\":[{\"type\":\"json_invalid\",\"loc\":[\"body\",13],\"msg\":\"JSON decode error\",\"ctx\":{\"error\":\"Expecting property name enclosed in double quotes\"}}]}"
+ },
+ {
+  "name": "validation_body_not_object",
+  "request": {
+   "method": "POST",
+   "path": "/items",
+   "json": [
+    1,
+    2
+   ]
+  },
+  "status": 422,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"validation_error\",\"detail\":\"Request validation failed\",\"errors\":[{\"type\":\"model_attributes_type\",\"loc\":[\"body\"],\"msg\":\"Input should be a valid dictionary or object to extract fields from\"}]}"
+ },
+ {
+  "name": "validation_path_query",
+  "request": {
+   "method": "GET",
+   "path": "/items/xyz?flag=maybe&limit=0"
+  },
+  "status": 422,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"validation_error\",\"detail\":\"Request validation failed\",\"errors\":[{\"type\":\"uuid_parsing\",\"loc\":[\"path\",\"item_id\"],\"msg\":\"Input should be a valid UUID, invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `x` at 1\",\"ctx\":{\"error\":\"invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `x` at 1\"}},{\"type\":\"bool_parsing\",\"loc\":[\"query\",\"flag\"],\"msg\":\"Input should be a valid boolean, unable to interpret input\"},{\"type\":\"greater_than_equal\",\"loc\":[\"query\",\"limit\"],\"msg\":\"Input should be greater than or equal to 1\",\"ctx\":{\"ge\":1}}]}"
+ },
+ {
+  "name": "pagination_ok",
+  "request": {
+   "method": "GET",
+   "path": "/page?page=2&page_size=2"
+  },
+  "status": 200,
+  "headers": {
+   "content-type": "application/json"
+  },
+  "body": "{\"items\":[{\"n\":2,\"f\":1.0,\"s\":\"é\"},{\"n\":3,\"f\":1.0,\"s\":\"é\"}],\"total\":5,\"page\":2,\"page_size\":2,\"has_next\":true}"
+ },
+ {
+  "name": "pagination_page_zero",
+  "request": {
+   "method": "GET",
+   "path": "/page?page=0"
+  },
+  "status": 422,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"validation_error\",\"detail\":\"Request validation failed\",\"errors\":[{\"type\":\"greater_than_equal\",\"loc\":[\"query\",\"page\"],\"msg\":\"Input should be greater than or equal to 1\",\"ctx\":{\"ge\":1}}]}"
+ },
+ {
+  "name": "pagination_page_size_big",
+  "request": {
+   "method": "GET",
+   "path": "/page?page_size=101"
+  },
+  "status": 422,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"validation_error\",\"detail\":\"Request validation failed\",\"errors\":[{\"type\":\"less_than_equal\",\"loc\":[\"query\",\"page_size\"],\"msg\":\"Input should be less than or equal to 100\",\"ctx\":{\"le\":100}}]}"
+ },
+ {
+  "name": "pagination_page_too_big",
+  "request": {
+   "method": "GET",
+   "path": "/page?page=1000001"
+  },
+  "status": 422,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"validation_error\",\"detail\":\"Request validation failed\",\"errors\":[{\"type\":\"less_than_equal\",\"loc\":[\"query\",\"page\"],\"msg\":\"Input should be less than or equal to 1000000\",\"ctx\":{\"le\":1000000}}]}"
+ },
+ {
+  "name": "pagination_page_not_int",
+  "request": {
+   "method": "GET",
+   "path": "/page?page=abc"
+  },
+  "status": 422,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"validation_error\",\"detail\":\"Request validation failed\",\"errors\":[{\"type\":\"int_parsing\",\"loc\":[\"query\",\"page\"],\"msg\":\"Input should be a valid integer, unable to parse string as an integer\"}]}"
+ },
+ {
+  "name": "nul_in_path",
+  "request": {
+   "method": "GET",
+   "path": "/items/a%00b"
+  },
+  "status": 422,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"nul_character\",\"detail\":\"Request contains a NUL (U+0000) character, which cannot be stored\"}"
+ },
+ {
+  "name": "nul_in_query",
+  "request": {
+   "method": "GET",
+   "path": "/page?search=a%00b"
+  },
+  "status": 422,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"nul_character\",\"detail\":\"Request contains a NUL (U+0000) character, which cannot be stored\"}"
+ },
+ {
+  "name": "nul_in_json",
+  "request": {
+   "method": "POST",
+   "path": "/echo",
+   "json": {
+    "k": "a\u0000b"
+   }
+  },
+  "status": 422,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"nul_character\",\"detail\":\"Request contains a NUL (U+0000) character, which cannot be stored\"}"
+ },
+ {
+  "name": "nul_in_json_key",
+  "request": {
+   "method": "POST",
+   "path": "/echo",
+   "json": {
+    "a\u0000": 1
+   }
+  },
+  "status": 422,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"nul_character\",\"detail\":\"Request contains a NUL (U+0000) character, which cannot be stored\"}"
+ },
+ {
+  "name": "nul_escaped_json_problem",
+  "request": {
+   "method": "POST",
+   "path": "/echo",
+   "content": "{\"k\": \"\\u0000\"}",
+   "headers": {
+    "content-type": "application/problem+json"
+   }
+  },
+  "status": 422,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"nul_character\",\"detail\":\"Request contains a NUL (U+0000) character, which cannot be stored\"}"
+ },
+ {
+  "name": "nul_not_json",
+  "request": {
+   "method": "POST",
+   "path": "/echo",
+   "content": "{\"k\": \"\\u0000\"}",
+   "headers": {
+    "content-type": "text/plain"
+   }
+  },
+  "status": 422,
+  "headers": {
+   "content-type": "application/problem+json"
+  },
+  "body": "{\"type\":\"about:blank\",\"title\":\"Unprocessable Content\",\"status\":422,\"code\":\"validation_error\",\"detail\":\"Request validation failed\",\"errors\":[{\"type\":\"dict_type\",\"loc\":[\"body\"],\"msg\":\"Input should be a valid dictionary\"}]}"
+ },
+ {
+  "name": "body_declared_too_large",
+  "request": {
+   "method": "POST",
+   "path": "/echo",
+   "content": "{                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        }",
+   "headers": {
+    "content-type": "application/json"
+   }
+  },
+  "status": 413,
+  "headers": {
+   "content-type": "application/json"
+  },
+  "body": "{\"detail\":\"Request body too large\"}"
+ },
+ {
+  "name": "body_streamed_too_large",
+  "request": {
+   "method": "POST",
+   "path": "/echo",
+   "stream": [
+    "{\"a\": \"",
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "\"}"
+   ],
+   "headers": {
+    "content-type": "application/json"
+   }
+  },
+  "status": 413,
+  "headers": {
+   "content-type": "application/json"
+  },
+  "body": "{\"detail\":\"Request body too large\"}"
+ }
+]

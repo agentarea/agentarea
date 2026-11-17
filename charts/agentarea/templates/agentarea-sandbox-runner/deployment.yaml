@@ -26,20 +26,19 @@ spec:
       {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: sandbox-runner
-          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ default .Values.mcpManager.image.repository .Values.mcpSandboxRunner.image.repository }}:{{ default (default .Chart.AppVersion .Values.mcpManager.image.tag) .Values.mcpSandboxRunner.image.tag }}"
+          image: {{ include "agentarea.image" . | quote }}
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           {{- with .Values.global.security.containerSecurityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          command:
-            - /app/sandbox-runner
+          command: ["agentarea", "sandbox"]
           env:
             {{- include "agentarea.redis.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.redis.envs" . | nindent 12 }}
             {{- include "agentarea.redis.urlEnv" . | nindent 12 }}
             {{- include "agentarea.mcpManager.envs" . | nindent 12 }}
-            {{- include "agentarea.mcpManager.secrets.envs" . | nindent 12 }}
+            {{- include "agentarea.mcpRuntime.envs" . | nindent 12 }}
             {{- include "agentarea.storage.envs" . | nindent 12 }}
             {{- include "agentarea.storage.secrets.envs" . | nindent 12 }}
             - name: AGENTAREA_SANDBOX_ACTIVATION_SECRET
@@ -63,11 +62,8 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- $execKubeconfig := include "agentarea.mcpManager.executionKubeconfigPath" . }}
           volumeMounts:
-            # Scratch spool for sandbox file upload verification under
-            # readOnlyRootFilesystem: os.CreateTemp("", ...) resolves to /tmp
-            # in internal/sandboxruntime/manager.go (SandboxFileUpload).
+            # Scratch spool for sandbox file uploads under readOnlyRootFilesystem.
             - name: tmp
               mountPath: /tmp
             {{- include "agentarea.mcpManager.executionKubeconfigMount" . | nindent 12 }}

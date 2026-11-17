@@ -1,0 +1,18 @@
+# Every subcommand the Go binary runs (app.Subcommands), with what it is:
+# "<subcommand> = <python command>[, <python command>...]"; "<subcommand> = - <reason>" when it has no Python command.
+serve = agentarea-api serve
+migrate = agentarea-api migrate
+worker = agentarea-worker start
+dlq-replay = agentarea-api dlq-replay
+reconcile = agentarea-api reconcile
+init-buckets = python -m agentarea_common.artifacts.bucket_init
+events = - the process of the Go agentarea-event-service
+mcp = - the process of the Go agentarea-mcp-manager, with its sandbox control API
+sandbox = - the sandbox-runner process of agentarea-mcp-manager
+all = - every role in one process
+kratos-jwks = - the inline python3 script of the chart's kratos-jwks-init job
+check-migrations = agentarea-api check-migrations
+status = agentarea-api status, agentarea-worker status
+validate = agentarea-api validate, agentarea-worker validate
+skills = agentarea-api skills move-bodies-to-packages, agentarea-api skills move-own-copies-to-packages, agentarea-api skills delete-moved-own-copies, agentarea-api skills repin-catalog-installs, agentarea-api skills refresh-stub-installs
+operator = - the process of agentarea-operator (kopf run handler.py)

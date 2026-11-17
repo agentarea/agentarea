@@ -321,10 +321,10 @@ and a data-plane host never holds a database credential.
 
 | Component | What it does |
 |---|---|
-| **API** (Python, FastAPI) | Authentication, authorization and CRUD. Resolves policy and starts runs. Receives webhooks, relays events over SSE, serves MCP at `/mcp`. |
-| **Worker** (Python, Temporal) | Runs the agent loop and the governance gates around each call. |
-| **MCP manager** (Go) | Starts, wakes and reclaims sandboxes and hosted MCP servers on Docker or Kubernetes, or hands sandboxes to an external provider. |
-| **Event service** (Go) | Polls sources, runs schedules and chat channels, and turns what they produce into events and tasks. |
+| **API** (`agentarea serve`) | Authentication, authorization and CRUD. Resolves policy and starts runs. Receives webhooks, relays events over SSE, serves MCP at `/mcp`. |
+| **Worker** (`agentarea worker`, Temporal) | Runs the agent loop and the governance gates around each call. |
+| **MCP manager** (`agentarea mcp`) | Starts, wakes and reclaims sandboxes and hosted MCP servers on Docker or Kubernetes, or hands sandboxes to an external provider. |
+| **Event service** (`agentarea events`) | Polls sources, runs schedules and chat channels, and turns what they produce into events and tasks. |
 | **Dashboard** (Next.js) | Agents, network, runs, inbox, events, policies, budgets, catalog, audit. |
 | **Backing services** | PostgreSQL, Valkey, S3-compatible storage, Temporal, OpenFGA, Ory Kratos and Hydra. |
 
@@ -445,15 +445,14 @@ package that plugs into named extension points. It is not a fork.
 ## Repository
 
 ```
-agentarea-platform/      API, Temporal worker, domain libraries (Python)
-agentarea-webapp/        Dashboard (Next.js)
-agentarea-mcp-manager/   Sandbox and MCP server orchestration (Go)
-agentarea-event-service/ Sources, schedules and channels (Go)
-agentarea-operator/      Kubernetes operator: catalog sync, LLM provider configs
-agentarea-cli/           Terminal client (Node.js)
-charts/                  Helm charts: agentarea, agentarea-dataplane
-examples/                Bundles and deployment examples
-docs/                    Source for docs.agentarea.ai
+agentarea-platform/  The platform (Go): one binary, `agentarea <role>` for the API,
+                     worker, events, MCP and sandbox hosts, and the CRD operator
+agentarea-webapp/    Dashboard (Next.js)
+agentarea-cli/       Terminal client (Node.js)
+mcp-servers/         The mcp-base image and the platform's MCP apps
+charts/              Helm charts: agentarea, agentarea-dataplane
+examples/            Bundles and deployment examples
+docs/                Source for docs.agentarea.ai
 ```
 
 To work on AgentArea itself, clone the repository and run `make up-dev`, which builds

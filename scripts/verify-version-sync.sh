@@ -49,9 +49,9 @@ while IFS= read -r file; do
   fi
 done < <(find "$PROJECT_ROOT" -name "pyproject.toml" -type f)
 
-# Check the workspace members recorded in uv.lock: their versions follow the
-# pyproject files, and a lock left behind makes every `uv run` rewrite it.
-UV_LOCK="$PROJECT_ROOT/agentarea-platform/uv.lock"
+# Check the project recorded in the fuzz uv.lock: its version follows the
+# pyproject, and a lock left behind fails `uv sync --locked`.
+UV_LOCK="$PROJECT_ROOT/agentarea-platform/test/fuzz/uv.lock"
 if [ -f "$UV_LOCK" ]; then
   STALE_LOCK=$(awk -v expected="$EXPECTED_VERSION" '
     /^\[\[package\]\]/ { name = ""; version = "" }
@@ -61,32 +61,13 @@ if [ -f "$UV_LOCK" ]; then
   ' "$UV_LOCK")
   if [ -n "$STALE_LOCK" ]; then
     while IFS= read -r line; do
-      echo "❌ agentarea-platform/uv.lock $line (expected: $EXPECTED_VERSION)"
+      echo "❌ agentarea-platform/test/fuzz/uv.lock $line (expected: $EXPECTED_VERSION)"
       ERRORS=$((ERRORS + 1))
     done <<< "$STALE_LOCK"
   else
-    echo "✅ agentarea-platform/uv.lock workspace members: $EXPECTED_VERSION"
+    echo "✅ agentarea-platform/test/fuzz/uv.lock: $EXPECTED_VERSION"
   fi
 fi
-
-# Check Go version constants
-GO_VERSION_FILES=(
-  "$PROJECT_ROOT/agentarea-mcp-manager/internal/managerapp/app.go"
-  "$PROJECT_ROOT/agentarea-event-service/cmd/server/main.go"
-)
-
-for file in "${GO_VERSION_FILES[@]}"; do
-  if [ -f "$file" ]; then
-    GO_VERSION=$(grep -E 'const [Vv]ersion = ' "$file" | sed -E 's/const [Vv]ersion = "(.*)"/\1/')
-    REL_PATH=$(realpath --relative-to="$PROJECT_ROOT" "$file" 2>/dev/null || echo "$file")
-    if [ "$GO_VERSION" != "$EXPECTED_VERSION" ]; then
-      echo "❌ $REL_PATH: $GO_VERSION (expected: $EXPECTED_VERSION)"
-      ERRORS=$((ERRORS + 1))
-    else
-      echo "✅ $REL_PATH: $GO_VERSION"
-    fi
-  fi
-done
 
 # Check package.json
 PACKAGE_JSON="$PROJECT_ROOT/agentarea-webapp/package.json"

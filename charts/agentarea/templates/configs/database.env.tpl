@@ -8,7 +8,6 @@ AGENTAREA_DB_HOST: "{{ include "agentarea.database.host" . }}"
 AGENTAREA_DB_PORT: "{{ .Values.global.database.port }}"
 AGENTAREA_DB_NAME: "{{ .Values.global.database.name }}"
 AGENTAREA_DB_SSLMODE: "{{ .Values.global.database.sslMode }}"
-AGENTAREA_DB_TENANT_SCOPE: "{{ .Values.global.database.tenantScope }}"
 {{- end }}
 
 {{- define "agentarea.database.envs" }}
@@ -32,11 +31,6 @@ AGENTAREA_DB_TENANT_SCOPE: "{{ .Values.global.database.tenantScope }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-database
       key: AGENTAREA_DB_SSLMODE
-- name: AGENTAREA_DB_TENANT_SCOPE
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-database
-      key: AGENTAREA_DB_TENANT_SCOPE
 {{- end }}
 
 {{- define "agentarea.database.secrets.envs" }}

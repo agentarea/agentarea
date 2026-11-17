@@ -4,7 +4,7 @@
 // The skill is created here, disposably, so this journey doesn't depend on
 // skill_lifecycle having run first. The MCP attach is opportunistic: an
 // agent's `tools` array references an MCP instance BY NAME, not id (see
-// agentarea-platform/libs/bundles/.../installer.py — McpToolConfig(name=mcp.name)),
+// agentarea-platform/internal/modules/catalog/service/bundle_install.go),
 // so if a k6-prefixed instance already exists (from connection_lifecycle),
 // this reuses it instead of creating a second one — "if cheap" means "don't
 // do the extra network-verifying create just for this".

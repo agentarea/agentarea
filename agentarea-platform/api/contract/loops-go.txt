@@ -1,0 +1,34 @@
+# Every lifecycle component name the test finds in app/ and internal/ ("*" stands for a part built at run time), with what it is:
+# "<component> = <python loop>[, <python loop>...]" when a role starts it and it does those loops' work;
+# "<component> = - <reason>" when it has no Python loop; "<component> = ? <reason>" when no role starts it yet.
+agent worker = worker:TemporalWorker:agent
+trigger worker = worker:TemporalWorker:trigger
+schedules = worker:Schedule:UndispatchedTaskReconciler, worker:Schedule:CronScheduleSync
+outbox relay = worker:OutboxRelay
+stream event partitions = worker:PartitionMaintainer
+polled item backlog = worker:PolledItemConsumer, worker:StreamAutoclaimer:streams.ingest/ingest
+streams-subscription-changes = worker:SubscriptionChangeListener
+streams-events-view = worker:EventsView
+streams-router = worker:EventRouter
+external delivery * = worker:ExternalDelivery:consumers, worker:StreamAutoclaimer:streams.external/delivery
+external subscriber sweeper = worker:ExternalDelivery:sweeper
+mcp-container-monitor = worker:MCPContainerMonitor
+mcp-dispatch-stamps = worker:DispatchStampWriter, api:DispatchStampWriter
+pollers = - the Go agentarea-event-service, folded into the events role
+mcp = - the MCP gateway listener of the Go agentarea-mcp-manager (mcp role)
+mcp-reaper = - the workload reaper of the Go agentarea-mcp-manager
+workload hooks * = - extension workload hooks
+task reply delivery = worker:TaskEventDelivery
+task reply autoclaimer = worker:StreamAutoclaimer:tasks.events/delivery
+tasks-platform-projection = worker:PlatformProjection
+tasks-trigger-outcomes = worker:TriggerRunOutcomes
+mcp-host = - the data-plane MCP workload host listener of the Go agentarea-mcp-manager
+cost settlement = worker:CostSettlement
+health = worker:HealthServer
+ready = - marks a worker or events process ready once every component started (health.py mark_started)
+sandbox task GC = - deletes expired warm-pool task pods (mcp-manager startSandboxTaskGC)
+sandbox runner = - consumes sandbox executions (mcp-manager sandbox-runner and its embedded runner)
+broker health metrics = api:BrokerHealthMetrics
+analytics sender = worker:AnalyticsSender, api:AnalyticsSender
+installation pulse = worker:InstallationPulse
+operator = - the kopf handlers of agentarea-operator (LLMProviderConfig, PlatformConnection, PlatformEgressExit), not a Python loop

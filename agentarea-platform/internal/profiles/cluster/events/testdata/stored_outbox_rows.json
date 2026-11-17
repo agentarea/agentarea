@@ -1,0 +1,30 @@
+[
+  {
+    "id": "0c5d7f0e-6a51-4c9b-8f3e-1d2a4b6c8e01",
+    "created_at": "2026-11-12 09:30:00.250731",
+    "workspace_id": "ws-stored",
+    "created_by": "user-py",
+    "event_id": "4f0e2b1c-9d8a-4e7f-b6c5-3a2d1e0f9b81",
+    "event_type": "AgentUpdated",
+    "aggregate_id": "agent-1",
+    "aggregate_type": "agent",
+    "payload": {"event_id": "4f0e2b1c-9d8a-4e7f-b6c5-3a2d1e0f9b81", "timestamp": "2026-11-12T09:30:00.250000+00:00", "event_type": "AgentUpdated", "data": {"event_type": "AgentUpdated", "agent_id": "agent-1", "aggregate_id": "agent-1", "name": "é ünï"}},
+    "attempts": 0,
+    "last_error": null,
+    "next_attempt_at": null
+  },
+  {
+    "id": "7a1e3c5b-2d4f-4a6b-9c8d-0e1f2a3b4c02",
+    "created_at": "2026-11-12 09:31:00.000412",
+    "workspace_id": "ws-stored",
+    "created_by": "user-py",
+    "event_id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d62",
+    "event_type": "TaskStatusChanged",
+    "aggregate_id": "task-7",
+    "aggregate_type": "task",
+    "payload": {"event_id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d62", "timestamp": "2026-11-12T09:31:00+00:00", "event_type": "TaskStatusChanged", "data": {"event_type": "TaskStatusChanged", "task_id": "task-7", "old_status": "pending", "new_status": "running"}},
+    "attempts": 2,
+    "last_error": "ConnectionError: Error 111 connecting to valkey:6379. Connection refused.",
+    "next_attempt_at": "2026-01-02 00:00:04.000000"
+  }
+]

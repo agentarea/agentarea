@@ -1,0 +1,2359 @@
+[
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "grant_resource_owner",
+  "requests": [
+   {
+    "authorization": "Bearer tok",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:r1",
+        "relation": "project",
+        "user": "project:w1-root"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "Bearer tok",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:r1",
+        "relation": "reader",
+        "user": "User:u1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "Bearer tok",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:r1",
+        "relation": "writer",
+        "user": "User:u1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "Bearer tok",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:r1",
+        "relation": "manager",
+        "user": "User:u1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST write": [
+    {
+     "json": {}
+    }
+   ]
+  },
+  "result": null,
+  "token": "tok"
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "grant_agent_owner",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:a1",
+        "relation": "project",
+        "user": "project:w1-root"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:a1",
+        "relation": "reader",
+        "user": "User:u1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:a1",
+        "relation": "writer",
+        "user": "User:u1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:a1",
+        "relation": "manager",
+        "user": "User:u1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:a1",
+        "relation": "invoker",
+        "user": "User:u1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST write": [
+    {
+     "json": {}
+    }
+   ]
+  },
+  "result": null,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "grant_resource_owner_existing",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:r1",
+        "relation": "project",
+        "user": "project:w1-root"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:r1",
+        "relation": "reader",
+        "user": "User:u1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:r1",
+        "relation": "writer",
+        "user": "User:u1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:r1",
+        "relation": "manager",
+        "user": "User:u1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST write": [
+    {
+     "json": {
+      "code": "write_failed_due_to_invalid_input",
+      "message": "cannot write a tuple which already exists: user: 'User:u1', relation: 'reader', object: 'resource:r1': tuple to be written already existed or the tuple to be deleted did not exist"
+     },
+     "status": 400
+    }
+   ]
+  },
+  "result": null,
+  "token": ""
+ },
+ {
+  "error": "ResourceOwnershipError",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "grant_resource_owner_refused",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:r1",
+        "relation": "project",
+        "user": "project:w1-root"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST write": [
+    {
+     "json": {
+      "code": "validation_error",
+      "message": "invalid relation"
+     },
+     "status": 400
+    }
+   ]
+  },
+  "result": null,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "write_idempotent_existing",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:r1",
+        "relation": "reader",
+        "user": "User:u1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST write": [
+    {
+     "json": {
+      "code": "write_failed_due_to_invalid_input",
+      "message": "cannot write a tuple which already exists: user: 'User:u1', relation: 'reader', object: 'resource:r1': tuple to be written already existed or the tuple to be deleted did not exist"
+     },
+     "status": 400
+    }
+   ]
+  },
+  "result": false,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "delete_idempotent_missing",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "deletes": {
+      "tuple_keys": [
+       {
+        "object": "Workspace:w1",
+        "relation": "members",
+        "user": "User:u1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST write": [
+    {
+     "json": {
+      "code": "write_failed_due_to_invalid_input",
+      "message": "cannot delete a tuple which does not exist: user: 'User:u1', relation: 'members', object: 'Workspace:w1': tuple to be written already existed or the tuple to be deleted did not exist"
+     },
+     "status": 400
+    }
+   ]
+  },
+  "result": false,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "enroll_agent",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "Workspace:w1",
+        "relation": "members",
+        "user": "Agent:a1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "project:w1-root",
+        "relation": "reader",
+        "user": "Agent:a1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:a1",
+        "relation": "invoker",
+        "user": "Agent:a1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST write": [
+    {
+     "json": {}
+    }
+   ]
+  },
+  "result": null,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "withdraw_agent",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "deletes": {
+      "tuple_keys": [
+       {
+        "object": "Workspace:w1",
+        "relation": "members",
+        "user": "Agent:a1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "deletes": {
+      "tuple_keys": [
+       {
+        "object": "project:w1-root",
+        "relation": "reader",
+        "user": "Agent:a1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "deletes": {
+      "tuple_keys": [
+       {
+        "object": "resource:a1",
+        "relation": "invoker",
+        "user": "Agent:a1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST write": [
+    {
+     "json": {}
+    }
+   ]
+  },
+  "result": null,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "revoke_resource",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "page_size": 100,
+     "tuple_key": {
+      "object": "resource:r1"
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/read",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "continuation_token": "next",
+     "page_size": 100,
+     "tuple_key": {
+      "object": "resource:r1"
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/read",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "deletes": {
+      "tuple_keys": [
+       {
+        "object": "resource:r1",
+        "relation": "project",
+        "user": "project:w1-root"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "deletes": {
+      "tuple_keys": [
+       {
+        "object": "resource:r1",
+        "relation": "manager",
+        "user": "User:u1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "deletes": {
+      "tuple_keys": [
+       {
+        "object": "resource:r1",
+        "relation": "personal",
+        "user": "User:*"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST read": [
+    {
+     "json": {
+      "continuation_token": "next",
+      "tuples": [
+       {
+        "key": {
+         "condition": null,
+         "object": "resource:r1",
+         "relation": "project",
+         "user": "project:w1-root"
+        }
+       },
+       {
+        "key": {
+         "condition": null,
+         "object": "resource:r1",
+         "relation": "manager",
+         "user": "User:u1"
+        }
+       }
+      ]
+     }
+    },
+    {
+     "json": {
+      "continuation_token": "",
+      "tuples": [
+       {
+        "key": {
+         "condition": null,
+         "object": "resource:r1",
+         "relation": "personal",
+         "user": "User:*"
+        }
+       }
+      ]
+     }
+    }
+   ],
+   "POST write": [
+    {
+     "json": {}
+    }
+   ]
+  },
+  "result": null,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "seed_workspace",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "Workspace:w1",
+        "relation": "members",
+        "user": "User:u1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "Workspace:w1",
+        "relation": "admin",
+        "user": "User:u1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "project:w1-root",
+        "relation": "workspace",
+        "user": "Workspace:w1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST write": [
+    {
+     "json": {}
+    }
+   ]
+  },
+  "result": null,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "grant_workspace_membership",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "Workspace:w1",
+        "relation": "members",
+        "user": "User:u2"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "project:w1-root",
+        "relation": "reader",
+        "user": "User:u2"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST write": [
+    {
+     "json": {}
+    }
+   ]
+  },
+  "result": null,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "revoke_workspace_membership",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "deletes": {
+      "tuple_keys": [
+       {
+        "object": "Workspace:w1",
+        "relation": "members",
+        "user": "User:u2"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "deletes": {
+      "tuple_keys": [
+       {
+        "object": "project:w1-root",
+        "relation": "reader",
+        "user": "User:u2"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST write": [
+    {
+     "json": {}
+    }
+   ]
+  },
+  "result": null,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "revoke_workspace_membership_missing",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "deletes": {
+      "tuple_keys": [
+       {
+        "object": "Workspace:w1",
+        "relation": "members",
+        "user": "User:u2"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "deletes": {
+      "tuple_keys": [
+       {
+        "object": "project:w1-root",
+        "relation": "reader",
+        "user": "User:u2"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST write": [
+    {
+     "json": {
+      "code": "write_failed_due_to_invalid_input",
+      "message": "cannot delete a tuple which does not exist: user: 'User:u1', relation: 'members', object: 'Workspace:w1': tuple to be written already existed or the tuple to be deleted did not exist"
+     },
+     "status": 400
+    }
+   ]
+  },
+  "result": null,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "check_workspace_membership",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "authorization_model_id": "01JMODEL0000000000000000AA",
+     "tuple_key": {
+      "object": "Workspace:w1",
+      "relation": "members",
+      "user": "User:u2"
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/check",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST check": [
+    {
+     "json": {
+      "allowed": true
+     }
+    }
+   ]
+  },
+  "result": true,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "",
+  "name": "list_workspace_member_ids",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "page_size": 100,
+     "tuple_key": {
+      "object": "Workspace:w1",
+      "relation": "members"
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/read",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST read": [
+    {
+     "json": {
+      "tuples": [
+       {
+        "key": {
+         "condition": null,
+         "object": "Workspace:w1",
+         "relation": "members",
+         "user": "User:u2"
+        }
+       },
+       {
+        "key": {
+         "condition": null,
+         "object": "Workspace:w1",
+         "relation": "members",
+         "user": "Agent:a1"
+        }
+       },
+       {
+        "key": {
+         "condition": null,
+         "object": "Workspace:w1",
+         "relation": "members",
+         "user": "User:u1"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "result": [
+   "u1",
+   "u2"
+  ],
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "list_workspace_ids_for_member",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "page_size": 100,
+     "tuple_key": {
+      "object": "Workspace:",
+      "relation": "members",
+      "user": "User:u1"
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/read",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST read": [
+    {
+     "json": {
+      "tuples": [
+       {
+        "key": {
+         "condition": null,
+         "object": "Workspace:w2",
+         "relation": "members",
+         "user": "User:u1"
+        }
+       },
+       {
+        "key": {
+         "condition": null,
+         "object": "Workspace:w1",
+         "relation": "members",
+         "user": "User:u1"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "result": [
+   "w1",
+   "w2"
+  ],
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "readable_resource_ids",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "authorization_model_id": "01JMODEL0000000000000000AA",
+     "relation": "can_read",
+     "type": "resource",
+     "user": "User:u1"
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/list-objects",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST list-objects": [
+    {
+     "json": {
+      "objects": [
+       "resource:r2",
+       "resource:r1"
+      ]
+     }
+    }
+   ]
+  },
+  "result": [
+   "r1",
+   "r2"
+  ],
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "make_personal",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:c1",
+        "relation": "personal",
+        "user": "User:*"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:c1",
+        "relation": "personal",
+        "user": "Agent:*"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST write": [
+    {
+     "json": {}
+    }
+   ]
+  },
+  "result": null,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "share_with_workspace",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "deletes": {
+      "tuple_keys": [
+       {
+        "object": "resource:c1",
+        "relation": "personal",
+        "user": "User:*"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   },
+   {
+    "authorization": "",
+    "body": {
+     "deletes": {
+      "tuple_keys": [
+       {
+        "object": "resource:c1",
+        "relation": "personal",
+        "user": "Agent:*"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST write": [
+    {
+     "json": {}
+    }
+   ]
+  },
+  "result": null,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "lend_connection",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "writes": {
+      "tuple_keys": [
+       {
+        "object": "resource:c1",
+        "relation": "connection_user",
+        "user": "Agent:a1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST write": [
+    {
+     "json": {}
+    }
+   ]
+  },
+  "result": null,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "withdraw_connection",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "deletes": {
+      "tuple_keys": [
+       {
+        "object": "resource:c1",
+        "relation": "connection_user",
+        "user": "Agent:a1"
+       }
+      ]
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/write",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST write": [
+    {
+     "json": {}
+    }
+   ]
+  },
+  "result": null,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "is_connection_owner",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "authorization_model_id": "01JMODEL0000000000000000AA",
+     "tuple_key": {
+      "object": "resource:c1",
+      "relation": "manager",
+      "user": "User:u1"
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/check",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST check": [
+    {
+     "json": {
+      "allowed": false
+     }
+    }
+   ]
+  },
+  "result": false,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "personal_connection_ids",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "page_size": 100,
+     "tuple_key": {
+      "object": "resource:c1"
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/read",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST read": [
+    {
+     "json": {
+      "tuples": [
+       {
+        "key": {
+         "condition": null,
+         "object": "resource:c1",
+         "relation": "personal",
+         "user": "User:*"
+        }
+       },
+       {
+        "key": {
+         "condition": null,
+         "object": "resource:c1",
+         "relation": "personal",
+         "user": "Agent:*"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "result": [
+   "c1"
+  ],
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "permission_view",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "authorization_model_id": "01JMODEL0000000000000000AA",
+     "tuple_key": {
+      "object": "resource:r1",
+      "relation": "can_read",
+      "user": "Agent:a1"
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/check",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST check": [
+    {
+     "json": {
+      "allowed": true
+     }
+    }
+   ]
+  },
+  "result": true,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "permission_execute",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "authorization_model_id": "01JMODEL0000000000000000AA",
+     "tuple_key": {
+      "object": "resource:r1",
+      "relation": "can_invoke",
+      "user": "Agent:a1"
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/check",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST check": [
+    {
+     "json": {
+      "allowed": true
+     }
+    }
+   ]
+  },
+  "result": true,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "permission_use_secret",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "authorization_model_id": "01JMODEL0000000000000000AA",
+     "tuple_key": {
+      "object": "resource:r1",
+      "relation": "can_use_secret",
+      "user": "Agent:a1"
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/check",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST check": [
+    {
+     "json": {
+      "allowed": true
+     }
+    }
+   ]
+  },
+  "result": true,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "permission_use_connection",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "authorization_model_id": "01JMODEL0000000000000000AA",
+     "tuple_key": {
+      "object": "resource:r1",
+      "relation": "can_use_connection",
+      "user": "Agent:a1"
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/check",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST check": [
+    {
+     "json": {
+      "allowed": true
+     }
+    }
+   ]
+  },
+  "result": true,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "permission_configure",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "authorization_model_id": "01JMODEL0000000000000000AA",
+     "tuple_key": {
+      "object": "resource:r1",
+      "relation": "can_write",
+      "user": "Agent:a1"
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/check",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST check": [
+    {
+     "json": {
+      "allowed": true
+     }
+    }
+   ]
+  },
+  "result": true,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "permission_delete",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "authorization_model_id": "01JMODEL0000000000000000AA",
+     "tuple_key": {
+      "object": "resource:r1",
+      "relation": "can_manage",
+      "user": "Agent:a1"
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/check",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST check": [
+    {
+     "json": {
+      "allowed": true
+     }
+    }
+   ]
+  },
+  "result": true,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "permission_bogus",
+  "requests": [],
+  "responses": {
+   "POST check": [
+    {
+     "json": {
+      "allowed": true
+     }
+    }
+   ]
+  },
+  "result": false,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "permission_ungoverned",
+  "requests": [],
+  "responses": {},
+  "result": true,
+  "token": ""
+ },
+ {
+  "error": "OpenFGAError",
+  "model_id": "01JMODEL0000000000000000AA",
+  "name": "permission_check_error",
+  "requests": [
+   {
+    "authorization": "",
+    "body": {
+     "authorization_model_id": "01JMODEL0000000000000000AA",
+     "tuple_key": {
+      "object": "resource:r1",
+      "relation": "can_read",
+      "user": "User:u1"
+     }
+    },
+    "method": "POST",
+    "path": "/stores/01JSTORE0000000000000000AA/check",
+    "query": {}
+   }
+  ],
+  "responses": {
+   "POST check": [
+    {
+     "json": {
+      "code": "internal_error"
+     },
+     "status": 500
+    }
+   ]
+  },
+  "result": null,
+  "token": ""
+ },
+ {
+  "error": "",
+  "model_id": "",
+  "name": "bootstrap",
+  "requests": [
+   {
+    "authorization": "Bearer tok",
+    "body": null,
+    "method": "GET",
+    "path": "/stores",
+    "query": {
+     "page_size": "100"
+    }
+   },
+   {
+    "authorization": "Bearer tok",
+    "body": null,
+    "method": "GET",
+    "path": "/stores",
+    "query": {
+     "continuation_token": "p2",
+     "page_size": "100"
+    }
+   },
+   {
+    "authorization": "Bearer tok",
+    "body": null,
+    "method": "GET",
+    "path": "/stores/01JSTOREA/authorization-models",
+    "query": {
+     "page_size": "100"
+    }
+   }
+  ],
+  "responses": {
+   "GET authorization-models": [
+    {
+     "json": {
+      "authorization_models": [
+       {
+        "id": "01JOLDMODEL",
+        "schema_version": "1.1",
+        "type_definitions": [
+         {
+          "type": "User"
+         }
+        ]
+       },
+       {
+        "conditions": {},
+        "id": "01JMATCH",
+        "schema_version": "1.2",
+        "type_definitions": [
+         {
+          "metadata": {
+           "module": "agentarea",
+           "source_info": {
+            "file": "model.fga"
+           }
+          },
+          "type": "User"
+         },
+         {
+          "metadata": {
+           "module": "agentarea",
+           "source_info": {
+            "file": "model.fga"
+           }
+          },
+          "type": "Agent"
+         },
+         {
+          "metadata": {
+           "module": "agentarea",
+           "relations": {
+            "admin": {
+             "directly_related_user_types": [
+              {
+               "type": "User"
+              }
+             ]
+            },
+            "members": {
+             "directly_related_user_types": [
+              {
+               "type": "User"
+              },
+              {
+               "type": "Agent"
+              }
+             ]
+            }
+           },
+           "source_info": {
+            "file": "model.fga"
+           }
+          },
+          "relations": {
+           "admin": {
+            "this": {}
+           },
+           "members": {
+            "this": {}
+           }
+          },
+          "type": "Workspace"
+         },
+         {
+          "metadata": {
+           "module": "agentarea",
+           "relations": {
+            "can_manage": {
+             "directly_related_user_types": [
+              {
+               "type": "User",
+               "wildcard": {}
+              },
+              {
+               "type": "Agent",
+               "wildcard": {}
+              }
+             ]
+            },
+            "can_read": {
+             "directly_related_user_types": [
+              {
+               "type": "User",
+               "wildcard": {}
+              },
+              {
+               "type": "Agent",
+               "wildcard": {}
+              }
+             ]
+            },
+            "can_write": {
+             "directly_related_user_types": [
+              {
+               "type": "User",
+               "wildcard": {}
+              },
+              {
+               "type": "Agent",
+               "wildcard": {}
+              }
+             ]
+            }
+           },
+           "source_info": {
+            "file": "model.fga"
+           }
+          },
+          "relations": {
+           "can_manage": {
+            "this": {}
+           },
+           "can_read": {
+            "this": {}
+           },
+           "can_write": {
+            "this": {}
+           }
+          },
+          "type": "role"
+         },
+         {
+          "metadata": {
+           "module": "agentarea",
+           "relations": {
+            "assignee": {
+             "directly_related_user_types": [
+              {
+               "type": "User"
+              },
+              {
+               "type": "Agent"
+              }
+             ]
+            },
+            "can_manage": {},
+            "can_read": {},
+            "can_write": {},
+            "role": {
+             "directly_related_user_types": [
+              {
+               "type": "role"
+              }
+             ]
+            }
+           },
+           "source_info": {
+            "file": "model.fga"
+           }
+          },
+          "relations": {
+           "assignee": {
+            "this": {}
+           },
+           "can_manage": {
+            "intersection": {
+             "child": [
+              {
+               "computedUserset": {
+                "relation": "assignee"
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "can_manage"
+                },
+                "tupleset": {
+                 "relation": "role"
+                }
+               }
+              }
+             ]
+            }
+           },
+           "can_read": {
+            "intersection": {
+             "child": [
+              {
+               "computedUserset": {
+                "relation": "assignee"
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "can_read"
+                },
+                "tupleset": {
+                 "relation": "role"
+                }
+               }
+              }
+             ]
+            }
+           },
+           "can_write": {
+            "intersection": {
+             "child": [
+              {
+               "computedUserset": {
+                "relation": "assignee"
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "can_write"
+                },
+                "tupleset": {
+                 "relation": "role"
+                }
+               }
+              }
+             ]
+            }
+           },
+           "role": {
+            "this": {}
+           }
+          },
+          "type": "role_assignment"
+         },
+         {
+          "metadata": {
+           "module": "agentarea",
+           "relations": {
+            "can_manage": {},
+            "can_read": {},
+            "can_write": {},
+            "manager": {
+             "directly_related_user_types": [
+              {
+               "type": "User"
+              },
+              {
+               "type": "Agent"
+              }
+             ]
+            },
+            "parent": {
+             "directly_related_user_types": [
+              {
+               "type": "project"
+              }
+             ]
+            },
+            "reader": {
+             "directly_related_user_types": [
+              {
+               "type": "User"
+              },
+              {
+               "type": "Agent"
+              }
+             ]
+            },
+            "role_assignment": {
+             "directly_related_user_types": [
+              {
+               "type": "role_assignment"
+              }
+             ]
+            },
+            "workspace": {
+             "directly_related_user_types": [
+              {
+               "type": "Workspace"
+              }
+             ]
+            },
+            "writer": {
+             "directly_related_user_types": [
+              {
+               "type": "User"
+              },
+              {
+               "type": "Agent"
+              }
+             ]
+            }
+           },
+           "source_info": {
+            "file": "model.fga"
+           }
+          },
+          "relations": {
+           "can_manage": {
+            "union": {
+             "child": [
+              {
+               "computedUserset": {
+                "relation": "manager"
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "can_manage"
+                },
+                "tupleset": {
+                 "relation": "role_assignment"
+                }
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "can_manage"
+                },
+                "tupleset": {
+                 "relation": "parent"
+                }
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "admin"
+                },
+                "tupleset": {
+                 "relation": "workspace"
+                }
+               }
+              }
+             ]
+            }
+           },
+           "can_read": {
+            "union": {
+             "child": [
+              {
+               "computedUserset": {
+                "relation": "reader"
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "can_read"
+                },
+                "tupleset": {
+                 "relation": "role_assignment"
+                }
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "can_read"
+                },
+                "tupleset": {
+                 "relation": "parent"
+                }
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "admin"
+                },
+                "tupleset": {
+                 "relation": "workspace"
+                }
+               }
+              }
+             ]
+            }
+           },
+           "can_write": {
+            "union": {
+             "child": [
+              {
+               "computedUserset": {
+                "relation": "writer"
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "can_write"
+                },
+                "tupleset": {
+                 "relation": "role_assignment"
+                }
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "can_write"
+                },
+                "tupleset": {
+                 "relation": "parent"
+                }
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "admin"
+                },
+                "tupleset": {
+                 "relation": "workspace"
+                }
+               }
+              }
+             ]
+            }
+           },
+           "manager": {
+            "this": {}
+           },
+           "parent": {
+            "this": {}
+           },
+           "reader": {
+            "this": {}
+           },
+           "role_assignment": {
+            "this": {}
+           },
+           "workspace": {
+            "this": {}
+           },
+           "writer": {
+            "this": {}
+           }
+          },
+          "type": "project"
+         },
+         {
+          "metadata": {
+           "module": "agentarea",
+           "relations": {
+            "can_invoke": {},
+            "can_manage": {},
+            "can_read": {},
+            "can_use_connection": {},
+            "can_use_secret": {},
+            "can_write": {},
+            "connection_user": {
+             "directly_related_user_types": [
+              {
+               "type": "User"
+              },
+              {
+               "type": "Agent"
+              }
+             ]
+            },
+            "invoker": {
+             "directly_related_user_types": [
+              {
+               "type": "User"
+              },
+              {
+               "type": "Agent"
+              },
+              {
+               "relation": "members",
+               "type": "Workspace"
+              }
+             ]
+            },
+            "manager": {
+             "directly_related_user_types": [
+              {
+               "type": "User"
+              },
+              {
+               "type": "Agent"
+              }
+             ]
+            },
+            "personal": {
+             "directly_related_user_types": [
+              {
+               "type": "User",
+               "wildcard": {}
+              },
+              {
+               "type": "Agent",
+               "wildcard": {}
+              }
+             ]
+            },
+            "project": {
+             "directly_related_user_types": [
+              {
+               "type": "project"
+              }
+             ]
+            },
+            "reader": {
+             "directly_related_user_types": [
+              {
+               "type": "User"
+              },
+              {
+               "type": "Agent"
+              }
+             ]
+            },
+            "role_assignment": {
+             "directly_related_user_types": [
+              {
+               "type": "role_assignment"
+              }
+             ]
+            },
+            "secret_user": {
+             "directly_related_user_types": [
+              {
+               "type": "User"
+              },
+              {
+               "type": "Agent"
+              }
+             ]
+            },
+            "writer": {
+             "directly_related_user_types": [
+              {
+               "type": "User"
+              },
+              {
+               "type": "Agent"
+              }
+             ]
+            }
+           },
+           "source_info": {
+            "file": "model.fga"
+           }
+          },
+          "relations": {
+           "can_invoke": {
+            "computedUserset": {
+             "relation": "invoker"
+            }
+           },
+           "can_manage": {
+            "union": {
+             "child": [
+              {
+               "computedUserset": {
+                "relation": "manager"
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "can_manage"
+                },
+                "tupleset": {
+                 "relation": "role_assignment"
+                }
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "can_manage"
+                },
+                "tupleset": {
+                 "relation": "project"
+                }
+               }
+              }
+             ]
+            }
+           },
+           "can_read": {
+            "union": {
+             "child": [
+              {
+               "computedUserset": {
+                "relation": "reader"
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "can_read"
+                },
+                "tupleset": {
+                 "relation": "role_assignment"
+                }
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "can_read"
+                },
+                "tupleset": {
+                 "relation": "project"
+                }
+               }
+              }
+             ]
+            }
+           },
+           "can_use_connection": {
+            "union": {
+             "child": [
+              {
+               "computedUserset": {
+                "relation": "connection_user"
+               }
+              },
+              {
+               "computedUserset": {
+                "relation": "manager"
+               }
+              },
+              {
+               "difference": {
+                "base": {
+                 "computedUserset": {
+                  "relation": "can_read"
+                 }
+                },
+                "subtract": {
+                 "computedUserset": {
+                  "relation": "personal"
+                 }
+                }
+               }
+              }
+             ]
+            }
+           },
+           "can_use_secret": {
+            "union": {
+             "child": [
+              {
+               "computedUserset": {
+                "relation": "secret_user"
+               }
+              },
+              {
+               "computedUserset": {
+                "relation": "manager"
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "can_manage"
+                },
+                "tupleset": {
+                 "relation": "project"
+                }
+               }
+              }
+             ]
+            }
+           },
+           "can_write": {
+            "union": {
+             "child": [
+              {
+               "computedUserset": {
+                "relation": "writer"
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "can_write"
+                },
+                "tupleset": {
+                 "relation": "role_assignment"
+                }
+               }
+              },
+              {
+               "tupleToUserset": {
+                "computedUserset": {
+                 "relation": "can_write"
+                },
+                "tupleset": {
+                 "relation": "project"
+                }
+               }
+              }
+             ]
+            }
+           },
+           "connection_user": {
+            "this": {}
+           },
+           "invoker": {
+            "this": {}
+           },
+           "manager": {
+            "this": {}
+           },
+           "personal": {
+            "this": {}
+           },
+           "project": {
+            "this": {}
+           },
+           "reader": {
+            "this": {}
+           },
+           "role_assignment": {
+            "this": {}
+           },
+           "secret_user": {
+            "this": {}
+           },
+           "writer": {
+            "this": {}
+           }
+          },
+          "type": "resource"
+         }
+        ]
+       }
+      ]
+     }
+    }
+   ],
+   "GET stores": [
+    {
+     "json": {
+      "continuation_token": "p2",
+      "stores": [
+       {
+        "created_at": "2026-02-01T00:00:00Z",
+        "id": "01JSTOREB",
+        "name": "agentarea"
+       },
+       {
+        "created_at": "2025-01-01T00:00:00Z",
+        "id": "01JOTHER",
+        "name": "other"
+       }
+      ]
+     }
+    },
+    {
+     "json": {
+      "continuation_token": "",
+      "stores": [
+       {
+        "created_at": "2026-01-01T00:00:00Z",
+        "id": "01JSTOREA",
+        "name": "agentarea"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "result": {
+   "model_id": "01JMATCH",
+   "store_id": "01JSTOREA"
+  },
+  "token": "tok"
+ }
+]

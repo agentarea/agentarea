@@ -42,6 +42,7 @@ spec:
         - name: dataplane
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["agentarea", "mcp"]
           {{- if not $host.enabled }}
           ports:
             - name: http
@@ -59,7 +60,6 @@ spec:
                   key: {{ include "dataplane.tokenSecretKey" . }}
             # Declared, not detected.
             - { name: AGENTAREA_MCP_BACKEND, value: kubernetes }
-            - { name: AGENTAREA_K8S_ENABLED, value: "true" }
             - { name: AGENTAREA_K8S_NAMESPACE, value: {{ $w.namespace | quote }} }
             - { name: AGENTAREA_K8S_RUNTIME_CLASS, value: {{ $w.runtimeClassName | quote }} }
             - { name: AGENTAREA_K8S_READONLY_ROOT, value: {{ $w.readOnlyRootFilesystem | toString | quote }} }
@@ -68,13 +68,8 @@ spec:
             - { name: AGENTAREA_K8S_CPU_LIMIT, value: {{ $w.resources.limits.cpu | quote }} }
             - { name: AGENTAREA_K8S_MEMORY_LIMIT, value: {{ $w.resources.limits.memory | quote }} }
             - { name: AGENTAREA_MCP_ISOLATION, value: {{ $w.isolationTier | quote }} }
-            - { name: AGENTAREA_MCP_MAX_CONTAINERS, value: {{ $w.maxInstances | toString | quote }} }
             # A data plane has no Core API to sync against -- it is told what to run.
             - { name: AGENTAREA_LOG_LEVEL, value: {{ .Values.dataPlane.logLevel | quote }} }
-            - { name: AGENTAREA_SANDBOX_LEASE_TTL, value: {{ .Values.sandboxPolicy.taskLeaseTTL | quote }} }
-            - { name: AGENTAREA_SANDBOX_IDLE_TTL, value: {{ .Values.sandboxPolicy.taskIdleTTL | quote }} }
-            - { name: AGENTAREA_SANDBOX_PROVISION_TIMEOUT, value: {{ .Values.sandboxPolicy.providerProvisioningTimeout | quote }} }
-            - { name: AGENTAREA_SANDBOX_SESSION_TTL, value: {{ .Values.sandboxPolicy.providerSessionTTL | quote }} }
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -96,6 +91,13 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

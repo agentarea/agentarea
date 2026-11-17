@@ -17,6 +17,26 @@ helm install agentarea agentarea/agentarea \
 - Helm 3.8+
 - PV provisioner for PostgreSQL/RustFS persistence (if enabled)
 
+## Required values
+
+`mcpManager.packageImages.repository` has no default: name a registry repository
+the cluster can push to and pull from (with `mcpManager.packageImages.registrySecret`
+when it needs credentials). MCP servers started from npm/PyPI packages run as images
+built into it, and the backend, worker and mcp-manager refuse to start without it.
+
+```yaml
+mcpManager:
+  packageImages:
+    repository: registry.example.com/agentarea/mcp-packages
+    registrySecret: mcp-packages-registry
+```
+
+## Custom resources
+
+The chart installs the `LLMProviderConfig`, `PlatformConnection` and
+`PlatformEgressExit` CRDs (`crds/`); the `operator` role reconciles them.
+Example resources are in [`examples/`](examples/).
+
 ## Installing with external services
 
 If you have existing PostgreSQL, Redis or S3-compatible storage, disable bundled dependencies and set endpoints:
@@ -57,11 +77,14 @@ The following table lists configurable parameters of the chart and their default
 | fullnameOverride | string | `""` |  |
 | telemetry.enabled | bool | `false` | Install tracing and metrics in every first-party process (AGENTAREA_OTEL_ENABLED). Off, nothing is emitted and nothing is required. |
 | telemetry.otlpEndpoint | string | `""` | OTLP/HTTP base URL of the collector, without a /v1/... path, e.g. http://otel-gateway.monitoring:4318. Required when telemetry.enabled. |
-| global.edition | string | `"community"` |  |
+| global.edition | string | `"oss"` | Edition the platform reports (AGENTAREA_EDITION): oss or enterprise. |
+| global.spendCurrency | string | `"USD"` | Currency spend caps count and tool costs are declared in (ISO 4217, AGENTAREA_SPEND_CURRENCY). Enterprise: billing's ledger currency. |
 | global.version | string | `"0.0.3"` |  |
 | global.cluster.type | string | `"kubernetes"` |  |
 | global.cluster.name | string | `"agentarea"` |  |
 | global.deploymentEnv | string | `"production"` |  |
+| global.image.repository | string | `"agentarea/agentarea-platform"` | The agentarea image: one binary that runs every server role (serve, worker, events, mcp, sandbox) and the jobs (migrate, reconcile, init-buckets). An edition ships its own image built over the same binary. |
+| global.image.tag | string | `""` |  |
 | global.image.pullPolicy | string | `"IfNotPresent"` |  |
 | global.image.registry | string | `""` |  |
 | global.image.pullSecrets | list | `[]` |  |
@@ -84,12 +107,11 @@ The following table lists configurable parameters of the chart and their default
 | global.database.name | string | `"agentarea"` |  |
 | global.database.ssl | bool | `false` |  |
 | global.database.sslMode | string | `"disable"` |  |
-| global.database.tenantScope | string | `"log"` | AGENTAREA_DB_TENANT_SCOPE: what an ORM query on a workspace-scoped table does when no workspace is bound. "log" runs it unfiltered and warns once per call site; "enforce" refuses it. Ship "log", clear the warnings, then flip. |
 | global.database.maxConnections | int | `100` |  |
 | global.database.connectionTimeout | string | `"30s"` |  |
 | global.database.migrations.runAtStartup | bool | `true` |  |
 | global.database.migrations.initializationTimeout | string | `"300s"` |  |
-| global.database.migrations.command | list | `["agentarea-api","migrate"]` | Command the migration job runs in the API image, from /app/apps/api. An installed extension can name its own command, which must also run the core migrations. |
+| global.database.migrations.command | list | `["agentarea","migrate"]` | Command the migration job runs in the agentarea image. An installed extension can name its own command, which must also run the core migrations. |
 | global.redis.host | string | `""` |  |
 | global.redis.port | int | `6379` |  |
 | global.redis.url | string | `""` |  |
@@ -154,9 +176,6 @@ The following table lists configurable parameters of the chart and their default
 | global.workloads.resources.sidecarContainer.memory.limit | string | `"256Mi"` |  |
 | global.serviceMesh.enabled | bool | `false` |  |
 | global.serviceMesh.type | string | `"istio"` |  |
-| global.monitoring.health.enabled | bool | `true` |  |
-| global.monitoring.health.port | int | `8001` |  |
-| global.monitoring.health.path | string | `"/health"` |  |
 | global.analytics.enabled | bool | `true` | Send AgentArea anonymous usage statistics from the backend and worker: a daily count of agents, runs and connectors, never names, prompts, output or secrets. Not OpenTelemetry. false sends nothing. Field list: https://docs.agentarea.ai/self-host/analytics |
 | global.analytics.signupHookSecret | string | `""` | Existing Secret whose key `signup-hook-key` the backend reads as AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY: the key an Ory Kratos after-registration hook presents to /internal/analytics/signups to record each sign-up's channel. Empty, that endpoint answers 404. |
 | global.analytics.ownDomains | list | `[]` | Domains of this installation's own sites, read by the backend as AGENTAREA_ANALYTICS_OWN_DOMAINS: a sign-up referred from one of them or a subdomain counts as no channel rather than a referral. Empty: none. |
@@ -191,13 +210,10 @@ The following table lists configurable parameters of the chart and their default
 | ingress.tls | list | `[]` |  |
 | backend.enabled | bool | `true` |  |
 | backend.replicaCount | int | `1` |  |
-| backend.workers | int | `1` | Uvicorn worker processes per pod. One process is one event loop, so one pod serves about one CPU core's worth of Python however large its CPU limit is. Prefer replicas over workers -- a pool inside the pod hides a stuck worker from the probes, which poll the pod, not the process. Raise this only when a deliberately larger CPU limit would otherwise go unused. |
 | backend.preStopDelay | int | `5` | Seconds the pod keeps serving after it is marked for deletion, covering the gap before its removal from the Service endpoints has propagated. |
-| backend.shutdownTimeout | int | `20` | Seconds uvicorn then waits for open connections to finish. Must be finite: the API serves SSE, and those connections never close on their own. |
+| backend.shutdownTimeout | int | `20` | Seconds the server then waits for open connections to finish. Must be finite: the API serves SSE, and those connections never close on their own. |
 | backend.terminationGracePeriodSeconds | int | `30` | Total budget the kubelet allows for the two above before SIGKILL. Keep it above preStopDelay + shutdownTimeout, or draining is cut short. |
-| backend.image.repository | string | `"agentarea/agentarea-api"` |  |
-| backend.image.tag | string | `""` |  |
-| backend.image.pullPolicy | string | `""` |  |
+| backend.tmpVolume | object | `{"sizeLimit":"1Gi"}` | Scratch space at /tmp under the read-only root filesystem. |
 | backend.service.type | string | `"ClusterIP"` |  |
 | backend.service.port | int | `8000` |  |
 | backend.service.annotations | object | `{}` |  |
@@ -255,9 +271,7 @@ The following table lists configurable parameters of the chart and their default
 | frontend.extraContainers | list | `[]` |  |
 | worker.enabled | bool | `true` |  |
 | worker.replicaCount | int | `1` |  |
-| worker.image.repository | string | `"agentarea/agentarea-worker"` |  |
-| worker.image.tag | string | `""` |  |
-| worker.image.pullPolicy | string | `""` |  |
+| worker.tmpVolume | object | `{"sizeLimit":"1Gi"}` | Scratch space at /tmp under the read-only root filesystem. |
 | worker.healthPort | int | `8081` | Port of the worker's health endpoint, passed to the container as AGENTAREA_WORKER_HEALTH_PORT. /readyz answers 200 once the database, the authorization backend and Redis are reachable and every Temporal worker is polling; /livez answers 200 while the event loop responds. |
 | worker.outageWait.retryWindow | string | `"5m"` | How long a call retries before the run starts waiting. |
 | worker.outageWait.backoff | string | `"1m,5m,10m"` | Pauses between retries while the run waits, comma-separated. |
@@ -283,9 +297,6 @@ The following table lists configurable parameters of the chart and their default
 | worker.waitForDependencies | bool | `false` |  |
 | eventService.enabled | bool | `true` |  |
 | eventService.replicaCount | int | `1` |  |
-| eventService.image.repository | string | `"agentarea/agentarea-events"` |  |
-| eventService.image.tag | string | `""` |  |
-| eventService.image.pullPolicy | string | `""` |  |
 | eventService.port | int | `8002` |  |
 | eventService.pollInterval | string | `"30s"` |  |
 | eventService.maxPollers | int | `10` |  |
@@ -311,8 +322,6 @@ The following table lists configurable parameters of the chart and their default
 | platformNetworkPolicy.extraEgress | list | `[]` |  |
 | mcpManager.enabled | bool | `true` |  |
 | mcpManager.replicaCount | int | `1` |  |
-| mcpManager.image.repository | string | `"agentarea/agentarea-mcp-manager"` |  |
-| mcpManager.image.tag | string | `""` |  |
 | mcpManager.service.type | string | `"ClusterIP"` |  |
 | mcpManager.service.port | int | `80` |  |
 | mcpManager.serviceAccount.create | bool | `true` |  |
@@ -326,7 +335,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.serverless.startupTimeout | string | `"5m"` |  |
 | mcpManager.mcpBase.image.repository | string | `"agentarea/agentarea-mcp-base"` |  |
 | mcpManager.mcpBase.image.tag | string | `""` |  |
-| mcpManager.packageImages.repository | string | `""` | Registry repository where immutable images built from npm/PyPI packages are stored. Leave empty to use the local Docker daemon with the Docker backend; Kubernetes and data-plane backends require a repository. |
+| mcpManager.packageImages.repository | required | `""` | Registry repository where immutable images built from npm/PyPI packages are stored, e.g. `registry.example.com/agentarea/mcp-packages`. The chart runs the Kubernetes or data-plane backend, which pull these images from a registry: with it empty the backend, worker and mcp-manager refuse to start. Only the Docker backend (compose) keeps them in the local daemon. |
 | mcpManager.packageImages.registrySecret | string | `""` | Existing dockerconfigjson Secret used to authenticate package-image registry lookups and pushes. The Secret is mounted read-only in the manager. |
 | mcpManager.packageImages.importTimeout | string | `"15m"` | Maximum time allowed for one package-image import. |
 | mcpManager.dataPlane.allowInsecure | bool | `false` |  |
@@ -439,8 +448,6 @@ The following table lists configurable parameters of the chart and their default
 | sandboxRuntime.cube.template | string | `""` |  |
 | mcpSandboxRunner.enabled | bool | `true` |  |
 | mcpSandboxRunner.replicaCount | int | `1` |  |
-| mcpSandboxRunner.image.repository | string | `""` |  |
-| mcpSandboxRunner.image.tag | string | `""` |  |
 | mcpSandboxRunner.serviceAccount.create | bool | `true` |  |
 | mcpSandboxRunner.serviceAccount.name | string | `""` |  |
 | mcpSandboxRunner.serviceAccount.annotations | object | `{}` |  |
@@ -534,6 +541,18 @@ The following table lists configurable parameters of the chart and their default
 | registryReconcile.registries[6].name | string | `"system-source-types"` |  |
 | registryReconcile.registries[6].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/source-types.json"` |  |
 | registryReconcile.registries[6].recommendation_priority | int | `10` |  |
+| operator.enabled | bool | `false` |  |
+| operator.serviceAccount.create | bool | `true` |  |
+| operator.serviceAccount.name | string | `""` |  |
+| operator.serviceAccount.annotations | object | `{}` |  |
+| operator.secretNamespaces | list | `[]` | Namespaces besides the release namespace whose Secrets the operator may read (a resource's apiKeySecretRef/tokenSecretRef resolve in its own namespace). |
+| operator.resources | object | `{}` |  |
+| operator.podAnnotations | object | `{}` |  |
+| operator.podLabels | object | `{}` |  |
+| operator.nodeSelector | object | `{}` |  |
+| operator.tolerations | list | `[]` |  |
+| operator.affinity | object | `{}` |  |
+| operator.extraEnv | list | `[]` |  |
 | openfga.enabled | bool | `true` |  |
 | openfga.replicaCount | int | `1` |  |
 | openfga.image.repository | string | `"openfga/openfga"` |  |

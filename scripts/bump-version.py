@@ -108,27 +108,8 @@ def main():
     except subprocess.CalledProcessError as e:
         print(f"⚠️  Warning: Failed to update Chart.yaml appVersion: {e.stderr}")
 
-    # Update Go version constants
-    go_version_files = [
-        root_dir / 'agentarea-mcp-manager' / 'internal' / 'managerapp' / 'app.go',
-        root_dir / 'agentarea-event-service' / 'cmd' / 'server' / 'main.go',
-    ]
-
-    for go_file in go_version_files:
-        if go_file.exists():
-            content = go_file.read_text()
-            updated = re.sub(
-                r'const ([vV])ersion = "[^"]*"',
-                rf'const \1ersion = "{new_version}"',
-                content
-            )
-
-            if updated != content:
-                go_file.write_text(updated)
-                print(f"✅ Updated {go_file.relative_to(root_dir)}")
-
     # The committed OpenAPI specs carry the app version in info.version, and
-    # CI's openapi-drift check compares them with what the backend serves.
+    # the binary serves its copy of the webapp spec.
     openapi_specs = [
         root_dir / 'agentarea-webapp' / 'src' / 'api' / 'openapi.json',
         root_dir / 'docs' / 'api-reference' / 'openapi.json',
@@ -152,25 +133,24 @@ def main():
                 spec.write_text(updated)
                 print(f"✅ Updated {spec.relative_to(root_dir)}")
 
-    # Refresh uv.lock: the workspace members are editable entries carrying their
-    # own version, so bumping the pyproject files alone leaves the lock behind.
-    # CI runs `uv sync` without --frozen and silently rewrites it, which hides
-    # the drift until someone gets an unrelated dirty uv.lock in their diff.
-    platform_dir = root_dir / 'agentarea-platform'
-    if (platform_dir / 'uv.lock').exists():
+    # Refresh the fuzz project's uv.lock: it records the project's own version,
+    # so bumping its pyproject alone leaves the lock behind and `uv sync
+    # --locked` in CI refuses it.
+    fuzz_dir = root_dir / 'agentarea-platform' / 'test' / 'fuzz'
+    if (fuzz_dir / 'uv.lock').exists():
         try:
             subprocess.run(
                 ['uv', 'lock'],
-                cwd=platform_dir,
+                cwd=fuzz_dir,
                 capture_output=True,
                 text=True,
                 check=True,
             )
-            print("✅ Updated agentarea-platform/uv.lock")
+            print("✅ Updated agentarea-platform/test/fuzz/uv.lock")
         except FileNotFoundError:
-            sys.exit("❌ uv not found: agentarea-platform/uv.lock cannot follow the bump")
+            sys.exit("❌ uv not found: agentarea-platform/test/fuzz/uv.lock cannot follow the bump")
         except subprocess.CalledProcessError as e:
-            sys.exit(f"❌ Failed to refresh agentarea-platform/uv.lock: {e.stderr}")
+            sys.exit(f"❌ Failed to refresh agentarea-platform/test/fuzz/uv.lock: {e.stderr}")
 
     print(f"\n✅ All versions bumped to {new_version}")
 

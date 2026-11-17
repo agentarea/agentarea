@@ -23,10 +23,6 @@ spec:
       targetPort: http
       protocol: TCP
       name: http
-    - port: {{ .Values.global.monitoring.health.port }}
-      targetPort: health
-      protocol: TCP
-      name: health
   selector:
     {{- include "agentarea.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: backend

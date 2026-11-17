@@ -76,6 +76,15 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: {{ include "agentarea.fullname" . }}-env-application
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+data:
+  {{- include "agentarea.application.configVars" . | nindent 2 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: {{ include "agentarea.fullname" . }}-env-frontend
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}
@@ -90,3 +99,12 @@ metadata:
     {{- include "agentarea.labels" . | nindent 4 }}
 data:
   {{- include "agentarea.mcpManager.configVars" . | nindent 2 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentarea.fullname" . }}-env-mcpruntime
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+data:
+  {{- include "agentarea.mcpRuntime.configVars" . | nindent 2 }}

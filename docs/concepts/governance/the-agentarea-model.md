@@ -36,7 +36,7 @@ resource, and revoking it must not leave orphans behind.
 
 ## The deployed model
 
-The model is `agentarea-platform/libs/common/agentarea_common/rebac/openfga/model.fga`, an OpenFGA module (schema 1.2) that ships
+The model is `agentarea-platform/internal/profiles/cluster/authz/model/model.fga`, an OpenFGA module (schema 1.2) that ships
 inside the platform image and is loaded into OpenFGA at startup. Seven types:
 
 ```text

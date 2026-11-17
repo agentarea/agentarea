@@ -190,24 +190,26 @@ export default function ConsentPage() {
               </div>
             )}
 
-            {scopes.length > 0 && (
-              <div className="border-border/60 bg-muted/30 mb-5 rounded-lg border p-4">
-                <p className="text-foreground mb-3 text-xs font-medium uppercase tracking-wider">
-                  {t("permissionsHeading")}
-                </p>
-                <ul className="space-y-2.5">
-                  {scopes.map((scope) => (
-                    <li
-                      key={scope}
-                      className="text-foreground/90 flex items-start gap-2.5 text-sm leading-snug"
-                    >
-                      <Check className="text-foreground/60 mt-[2px] h-4 w-4 shrink-0" />
-                      <span>{scopeLabel(scope)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <div className="border-border/60 bg-muted/30 mb-5 rounded-lg border p-4">
+              <p className="text-foreground mb-3 text-xs font-medium uppercase tracking-wider">
+                {t("permissionsHeading")}
+              </p>
+              <ul className="space-y-2.5">
+                <li className="text-foreground flex items-start gap-2.5 text-sm font-medium leading-snug">
+                  <Check className="text-foreground/60 mt-[2px] h-4 w-4 shrink-0" />
+                  <span>{t("fullAccess")}</span>
+                </li>
+                {scopes.map((scope) => (
+                  <li
+                    key={scope}
+                    className="text-foreground/90 flex items-start gap-2.5 text-sm leading-snug"
+                  >
+                    <Check className="text-foreground/60 mt-[2px] h-4 w-4 shrink-0" />
+                    <span>{scopeLabel(scope)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
             <div className="flex flex-col gap-2">
               <Button

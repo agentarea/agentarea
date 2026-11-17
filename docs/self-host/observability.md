@@ -225,17 +225,20 @@ a fixed attribute allowlist enforced by the SDK.
   <Step title="Use the health endpoints">
     | Service | Path | Port |
     |---|---|---|
-    | Backend API | `/health` | 8000 |
-    | MCP Manager | `/health` | 80 in-cluster, 7999 under Compose |
+    | Backend API | `/health`, `/livez`, `/readyz` | 8000 |
+    | Worker | `/livez`, `/readyz` | 8081 (`AGENTAREA_WORKER_HEALTH_PORT`) |
+    | Event service | `/livez`, `/readyz` | `eventService.port` |
+    | MCP Manager | `/healthz`, `/readyz` | 80 in-cluster, 7999 under Compose |
+
+    `/livez` answers while the process runs; `/readyz` answers 200 once every
+    component has started (and, on the worker, every Temporal worker polls its
+    queue). The chart probes these.
 
     The API response carries connection health, which is the useful part:
 
     ```json
     {"status":"healthy","service":"agentarea-api","version":"0.1.0","connections":{},"timestamp":"..."}
     ```
-
-    The chart's `global.monitoring.health.port` (8001) does not move this endpoint;
-    the API serves `/health` on its normal port.
 
     The chart's liveness and readiness probes for the backend, frontend, and event
     service are configurable under `<service>.livenessProbe` and
@@ -365,10 +368,6 @@ curl -s http://localhost:8000/health | jq .
     The worker does not have `AGENTAREA_OTEL_ENABLED` set. Context propagation across
     activities comes from the Temporal plugin, which is only registered on the
     worker.
-  </Accordion>
-  <Accordion title="Setting `global.monitoring.health.port` did not move the health endpoint">
-    It names a container and Service port only; nothing in the API reads it.
-    `/health` stays on the service port.
   </Accordion>
   <Accordion title="Worker logs are overwhelming">
     The worker hardcodes `DEBUG` at its `setup_logging` call. `AGENTAREA_LOG_LEVEL` on the

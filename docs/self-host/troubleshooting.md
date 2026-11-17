@@ -125,15 +125,13 @@ is the agent, not the deployment.
     Then the schema state:
 
     ```bash
-    docker compose -f docker-compose.yaml exec -w /app/apps/api app alembic current
-    docker compose -f docker-compose.yaml exec -w /app/apps/api app alembic heads
+    docker compose -f docker-compose.yaml exec app agentarea check-migrations
     ```
 
-    Mismatched output means migrations have not fully applied. Migrations must run
-    from `/app/apps/api` — `alembic.ini` uses a relative `script_location`, so
-    running from the repository root fails with a missing-`script_location` error.
+    A non-zero exit means a migration set is behind its latest version: run
+    `docker compose -f docker-compose.yaml run --rm app_migrations`.
 
-    For `relation already exists`, `Can't locate revision`, and multiple heads, see
+    For `relation already exists` and a database at an unknown revision, see
     [database and migrations](/self-host/database-and-migrations).
   </Step>
 
@@ -247,7 +245,7 @@ curl -s http://localhost:8000/health | jq .
 
 # schema at head
 kubectl exec -n agentarea deploy/agentarea-backend -- \
-  sh -c 'cd /app/apps/api && alembic current && alembic heads'
+  agentarea check-migrations
 
 # no errors in the last minute
 kubectl logs -n agentarea -l app.kubernetes.io/instance=agentarea \

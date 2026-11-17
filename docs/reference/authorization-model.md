@@ -13,7 +13,7 @@ last_updated: 2026-10-12
 ---
 
 The relationship graph that authorizes access to resources. Authority for this
-page is `agentarea-platform/libs/common/agentarea_common/rebac/openfga/model.fga`; the deployable payload
+page is `agentarea-platform/internal/profiles/cluster/authz/model/model.fga`; the deployable payload
 `authorization-model.json` next to it is generated from it and ships in the image.
 
 ## Synopsis

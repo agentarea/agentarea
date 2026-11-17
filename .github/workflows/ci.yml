@@ -32,26 +32,18 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-env:
-  PYTHON_VERSION: "3.14"
-
 jobs:
   changes:
     runs-on: ubuntu-latest
     # Skip path filtering when called as reusable workflow (run everything)
     if: github.event_name != 'workflow_call'
     outputs:
-      platform: ${{ steps.filter.outputs.platform }}
-      platform_libs: ${{ steps.filter.outputs.platform_libs }}
-      api: ${{ steps.filter.outputs.api }}
-      worker: ${{ steps.filter.outputs.worker }}
+      go: ${{ steps.filter.outputs.go }}
       webapp: ${{ steps.filter.outputs.webapp }}
       cli: ${{ steps.filter.outputs.cli }}
-      mcp_manager: ${{ steps.filter.outputs.mcp_manager }}
+      mcp_runner: ${{ steps.filter.outputs.mcp_runner }}
       mcp_base: ${{ steps.filter.outputs.mcp_base }}
       mcp_apps: ${{ steps.filter.outputs.mcp_apps }}
-      operator: ${{ steps.filter.outputs.operator }}
-      events: ${{ steps.filter.outputs.events }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -65,31 +57,26 @@ jobs:
           # component whose own files the bump does not touch (mcp-base) was skipped and
           # the retag found no X.Y.Z-<sha> source image (v0.0.16).
           filters: |
-            platform:
+            go:
               - 'agentarea-platform/**'
-            platform_libs:
-              - 'agentarea-platform/libs/**'
-            api:
-              - 'agentarea-platform/apps/api/**'
+              # openapi-fresh checks the generated handlers against this spec.
+              - 'agentarea-webapp/src/api/openapi.json'
               - 'VERSION'
-              - 'agentarea-platform/pyproject.toml'
-              - 'agentarea-platform/uv.lock'
-            worker:
-              - 'agentarea-platform/apps/worker/**'
-              - 'VERSION'
-              - 'agentarea-platform/pyproject.toml'
-              - 'agentarea-platform/uv.lock'
             webapp:
               - 'agentarea-webapp/**'
               - 'VERSION'
             cli:
               - 'agentarea-cli/**'
-            mcp_manager:
-              - 'agentarea-mcp-manager/**'
-              - 'VERSION'
             mcp_runner:
-              - 'agentarea-mcp-manager/Dockerfile.runner'
-              - 'agentarea-mcp-manager/cmd/activation-service/**'
+              - 'agentarea-platform/Dockerfile.runner'
+              - 'agentarea-platform/sandbox-runtime/**'
+              - 'agentarea-platform/cmd/activation-service/**'
+              - 'agentarea-platform/cmd/exec-supervisor/**'
+              - 'agentarea-platform/internal/modules/sandbox/backends/{activationauth,publishedsecrets,sandboxruntime,workspace}/**'
+              - 'agentarea-platform/internal/modules/sandbox/supervisor/**'
+              - 'agentarea-platform/go.mod'
+              - 'agentarea-platform/go.sum'
+              - 'VERSION'
             mcp_base:
               - 'mcp-servers/mcp-base/**'
               - 'VERSION'
@@ -97,12 +84,6 @@ jobs:
               - 'mcp-servers/mcp-apps-kit/**'
               - 'mcp-servers/mcp-apps-tasks/**'
               - 'mcp-servers/mcp-apps-crm/**'
-              - 'VERSION'
-            operator:
-              - 'agentarea-operator/**'
-              - 'VERSION'
-            events:
-              - 'agentarea-event-service/**'
               - 'VERSION'
 
   version-check:
@@ -148,222 +129,52 @@ jobs:
       - name: Check environment variable naming
         run: python scripts/check_env_naming.py
 
-  platform-lint:
+  go-check:
     runs-on: ubuntu-latest
     needs: changes
-    # Always run when: called as reusable workflow, on main, on release PRs, or if platform changes detected
+    # Always run when: called as reusable workflow, on main, on release PRs, or if Go changes detected
     if: |
       always() && !cancelled() && (
         github.event_name == 'workflow_call' ||
         github.ref == 'refs/heads/main' ||
         (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-        needs.changes.outputs.platform == 'true'
+        needs.changes.outputs.go == 'true'
       )
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Setup Go
+        uses: actions/setup-go@v7
         with:
-          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
-          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
-          version: "0.13.3"
-          enable-cache: true
-          cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
+          go-version-file: agentarea-platform/go.mod
+          cache-dependency-path: agentarea-platform/go.sum
 
-      - name: Set up Python
-        run: uv python install ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        working-directory: agentarea-platform
-        run: uv sync --all-extras --group dev --group lint
-
-      - name: Lint (ruff check, ruff format --check, pyright)
-        run: make -C agentarea-platform lint
-
-  platform-test:
-    runs-on: ubuntu-latest
-    needs: [changes, platform-lint]
-    env:
-      TEMPORAL_TEST_SERVER_DOWNLOAD_DIR: /tmp/temporal-test-server
-      TEMPORAL_TEST_SERVER_DOWNLOAD_ATTEMPTS: "5"
-    # Always run when: called as reusable workflow, on main, on release PRs, or if platform changes detected
-    if: |
-      always() && !cancelled() && needs.platform-lint.result == 'success' && (
-        github.event_name == 'workflow_call' ||
-        github.ref == 'refs/heads/main' ||
-        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-        needs.changes.outputs.platform == 'true'
-      )
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      # Must match GOLANGCI_LINT_VERSION in agentarea-platform/Makefile.
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
-          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
-          version: "0.13.3"
-          enable-cache: true
-          cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
+          version: v2.15.0
+          install-only: true
 
-      - name: Set up Python
-        run: uv python install ${{ env.PYTHON_VERSION }}
+      - name: Build, vet, test, lint, architecture checks
+        run: make -C agentarea-platform check
 
-      - name: Install dependencies
-        working-directory: agentarea-platform
-        run: |
-          uv sync --group dev
-
-      - name: Run tests
-        run: make -C agentarea-platform test
-
-  platform-build:
-    runs-on: ubuntu-latest
-    needs: [changes, platform-test]
-    # Always run when: called as reusable workflow, on main, on release PRs, or if platform changes detected
-    if: |
-      always() && !cancelled() && needs.platform-test.result == 'success' && (
-        github.event_name == 'workflow_call' ||
-        github.ref == 'refs/heads/main' ||
-        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-        needs.changes.outputs.platform == 'true'
-      )
-    strategy:
-      matrix:
-        component: [api, worker]
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        with:
-          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
-          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
-          version: "0.13.3"
-          enable-cache: true
-          cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
-
-      - name: Set up Python
-        run: uv python install ${{ env.PYTHON_VERSION }}
-
-      - name: Build package
-        run: make -C agentarea-platform build-${{ matrix.component }}
-
-  # test:
-  #   runs-on: ubuntu-latest
-  #   services:
-  #     postgres:
-  #       image: postgres:15
-  #       env:
-  #         POSTGRES_PASSWORD: postgres
-  #         POSTGRES_DB: agentarea_test
-  #       options: >-
-  #         --health-cmd pg_isready
-  #         --health-interval 10s
-  #         --health-timeout 5s
-  #         --health-retries 5
-      
-  #     valkey:
-  #       image: valkey/valkey:8
-  #       options: >-
-  #         --health-cmd "valkey-cli ping"
-  #         --health-interval 10s
-  #         --health-timeout 5s
-  #         --health-retries 5
-
-  #   steps:
-  #     - uses: actions/checkout@v7
-      
-  #     - name: Install uv
-  #       uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-  #       with:
-  #         enable-cache: true
-  #         cache-dependency-glob: "core/**/pyproject.toml"
-
-  #     - name: Set up Python
-  #       run: uv python install ${{ env.PYTHON_VERSION }}
-
-  #     - name: Install dependencies
-  #       working-directory: core
-  #       run: |
-  #         uv sync --group test
-  #         uv sync --group dev
-
-  #     - name: Run tests
-  #       working-directory: core
-  #       env:
-  #         AGENTAREA_REDIS_URL: redis://localhost:6379/0
-  #       run: |
-  #         uv run pytest tests/ \
-  #           --cov-report=xml \
-  #           --cov-report=term \
-  #           --junitxml=test-results.xml \
-  #           -n auto
-
-  #     - name: Upload coverage to Codecov
-  #       uses: codecov/codecov-action@v7
-  #       with:
-  #         file: ./core/coverage.xml
-  #         flags: unittests
-  #         name: codecov-umbrella
-
-  #     - name: Upload test results
-  #       uses: actions/upload-artifact@v7
-  #       if: always()
-  #       with:
-  #         name: test-results
-  #         path: core/test-results.xml
-
-  # build:
-  #   runs-on: ubuntu-latest
-  #   needs: [lint, test]
-  #   strategy:
-  #     matrix:
-  #       component: [api, worker]
-    
-  #   steps:
-  #     - uses: actions/checkout@v7
-      
-  #     - name: Install uv
-  #       uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-  #       with:
-  #         enable-cache: true
-
-  #     - name: Install uv (act fallback)
-  #       run: |
-  #         curl -Ls https://astral.sh/uv/install.sh | sh
-  #         echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-  #     - name: Set up Python
-  #       run: uv python install ${{ env.PYTHON_VERSION }}
-
-  #     - name: Build package
-  #       working-directory: core
-  #       run: uv build apps/${{ matrix.component }}
-
-  #     - name: Upload build artifacts
-  #       uses: actions/upload-artifact@v7
-  #       with:
-  #         name: ${{ matrix.component }}-dist
-  #         path: core/dist/
-
-  docker-api:
+  docker-platform:
     # Always build to validate, but only push on main when not skipped
     if: |
-      (github.ref == 'refs/heads/main' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
+      (github.ref == 'refs/heads/main' && needs.changes.outputs.go == 'true') ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
       inputs.skip-docker ||
       inputs.rebuild-images
-    needs: [changes, version-check, platform-lint, platform-test, platform-build]
+    needs: [changes, version-check, go-check]
     permissions:
       packages: write
       contents: read
     uses: ./.github/workflows/docker-build-push.yml
     with:
-      component: api
+      component: platform
       context: agentarea-platform
-      dockerfile: agentarea-platform/apps/api/Dockerfile
+      dockerfile: agentarea-platform/Dockerfile
       use-private-registry: false
       push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
     secrets:
@@ -374,62 +185,6 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
 
-  performance:
-    runs-on: ubuntu-latest
-    needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.platform == 'true'
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        with:
-          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
-          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
-          version: "0.13.3"
-
-      # Runs unconditionally, so on real GitHub Actions it reinstalls uv over the
-      # version setup-uv just pinned. Pinned to the same version so both paths agree
-      # rather than this one silently winning with whatever is latest.
-      - name: Install uv (act fallback)
-        run: |
-          curl -Ls https://astral.sh/uv/0.13.3/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Set up Python
-        run: uv python install ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        working-directory: agentarea-platform
-        run: uv sync --group dev
-
-      - name: Benchmark build performance
-        run: make -s -C agentarea-platform bench-build >> "$GITHUB_STEP_SUMMARY"
-  docker-worker:
-    # Always build to validate, but only push on main when not skipped
-    if: |
-      (github.ref == 'refs/heads/main' && (needs.changes.outputs.worker == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
-      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      inputs.skip-docker ||
-      inputs.rebuild-images
-    needs: [changes, version-check, platform-lint, platform-test, platform-build]
-    permissions:
-      packages: write
-      contents: read
-    uses: ./.github/workflows/docker-build-push.yml
-    with:
-      component: worker
-      context: agentarea-platform
-      dockerfile: agentarea-platform/apps/worker/Dockerfile
-      use-private-registry: false
-      push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
-      DOCKER_REGISTRY_MIRROR: ${{ secrets.DOCKER_REGISTRY_MIRROR }}
-      DOCKER_REGISTRY_MIRROR_PATH: ${{ secrets.DOCKER_REGISTRY_MIRROR_PATH }}
-      DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
-      DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-frontend:
     # Always build to validate, but only push on main when not skipped
     if: |
@@ -455,65 +210,14 @@ jobs:
       DOCKER_REGISTRY_MIRROR_PATH: ${{ secrets.DOCKER_REGISTRY_MIRROR_PATH }}
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
-  docker-operator:
-    # Always build to validate, but only push on main when not skipped
-    if: |
-      (github.ref == 'refs/heads/main' && needs.changes.outputs.operator == 'true') ||
-      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      inputs.skip-docker ||
-      inputs.rebuild-images
-    needs: [changes, version-check]
-    permissions:
-      packages: write
-      contents: read
-    uses: ./.github/workflows/docker-build-push.yml
-    with:
-      component: operator
-      context: agentarea-operator
-      dockerfile: agentarea-operator/Dockerfile
-      use-private-registry: false
-      push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
-      DOCKER_REGISTRY_MIRROR: ${{ secrets.DOCKER_REGISTRY_MIRROR }}
-      DOCKER_REGISTRY_MIRROR_PATH: ${{ secrets.DOCKER_REGISTRY_MIRROR_PATH }}
-      DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
-      DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
-  docker-agentarea-mcp-manager:
-    # Always build to validate, but only push on main when not skipped
-    if: |
-      (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true') ||
-      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      inputs.skip-docker ||
-      inputs.rebuild-images
-    needs: [changes, version-check, mcp-manager-lint-test]
-    permissions:
-      packages: write
-      contents: read
-    uses: ./.github/workflows/docker-build-push.yml
-    with:
-      component: mcp-manager
-      context: agentarea-mcp-manager
-      dockerfile: agentarea-mcp-manager/Dockerfile
-      use-private-registry: false
-      push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
-      DOCKER_REGISTRY_MIRROR: ${{ secrets.DOCKER_REGISTRY_MIRROR }}
-      DOCKER_REGISTRY_MIRROR_PATH: ${{ secrets.DOCKER_REGISTRY_MIRROR_PATH }}
-      DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
-      DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
-
   docker-agentarea-mcp-runner:
     # Build the mutable runner used by package-install=allowed pools.
     if: |
-      (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true') ||
+      (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_runner == 'true') ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
       inputs.skip-docker ||
       inputs.rebuild-images
-    needs: [changes, version-check, mcp-manager-lint-test]
+    needs: [changes, version-check, go-check]
     permissions:
       packages: write
       contents: read
@@ -521,8 +225,8 @@ jobs:
     with:
       component: mcp-runner
       image-name: agentarea/agentarea-mcp-runner
-      context: agentarea-mcp-manager
-      dockerfile: agentarea-mcp-manager/Dockerfile.runner
+      context: agentarea-platform
+      dockerfile: agentarea-platform/Dockerfile.runner
       build-args: |
         AGENTAREA_SANDBOX_MANAGED_ENV=mutable
       use-private-registry: false
@@ -538,11 +242,11 @@ jobs:
   docker-agentarea-mcp-runner-locked:
     # Build the immutable runner used by package-install=locked pools.
     if: |
-      (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true') ||
+      (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_runner == 'true') ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
       inputs.skip-docker ||
       inputs.rebuild-images
-    needs: [changes, version-check, mcp-manager-lint-test]
+    needs: [changes, version-check, go-check]
     permissions:
       packages: write
       contents: read
@@ -550,8 +254,8 @@ jobs:
     with:
       component: mcp-runner-locked
       image-name: agentarea/agentarea-mcp-runner-locked
-      context: agentarea-mcp-manager
-      dockerfile: agentarea-mcp-manager/Dockerfile.runner
+      context: agentarea-platform
+      dockerfile: agentarea-platform/Dockerfile.runner
       build-args: |
         AGENTAREA_SANDBOX_MANAGED_ENV=immutable
       use-private-registry: false
@@ -776,125 +480,6 @@ jobs:
       - name: Run tests
         run: pnpm -C agentarea-cli run check
 
-  mcp-manager-lint-test:
-    runs-on: ubuntu-latest
-    needs: changes
-    # Always run when: called as reusable workflow, on main, on release PRs, or if mcp_manager changes detected
-    if: |
-      always() && !cancelled() && (
-        github.event_name == 'workflow_call' ||
-        github.ref == 'refs/heads/main' ||
-        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-        needs.changes.outputs.mcp_manager == 'true'
-      )
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Setup Go
-        uses: actions/setup-go@v7
-        with:
-          go-version: '1.27'
-          cache-dependency-path: agentarea-mcp-manager/go.sum
-
-      # Must match GOLANGCI_LINT_VERSION in agentarea-mcp-manager/Makefile.
-      - name: Install golangci-lint
-        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
-        with:
-          version: v2.15.0
-          install-only: true
-
-      - name: Build, test, lint
-        run: make -C agentarea-mcp-manager check
-
-  events-lint-test:
-    runs-on: ubuntu-latest
-    needs: changes
-    if: |
-      always() && !cancelled() && (
-        github.event_name == 'workflow_call' ||
-        github.ref == 'refs/heads/main' ||
-        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-        needs.changes.outputs.events == 'true'
-      )
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Setup Go
-        uses: actions/setup-go@v7
-        with:
-          go-version: '1.27'
-          cache-dependency-path: agentarea-event-service/go.sum
-
-      # Must match GOLANGCI_LINT_VERSION in agentarea-event-service/Makefile.
-      - name: Install golangci-lint
-        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
-        with:
-          version: v2.15.0
-          install-only: true
-
-      - name: Build, test, lint
-        run: make -C agentarea-event-service check
-
-  docker-events:
-    if: |
-      (github.ref == 'refs/heads/main' && needs.changes.outputs.events == 'true') ||
-      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      inputs.skip-docker ||
-      inputs.rebuild-images
-    needs: [changes, version-check, events-lint-test]
-    permissions:
-      packages: write
-      contents: read
-    uses: ./.github/workflows/docker-build-push.yml
-    with:
-      component: events
-      context: agentarea-event-service
-      dockerfile: agentarea-event-service/Dockerfile
-      use-private-registry: false
-      push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
-      DOCKER_REGISTRY_MIRROR: ${{ secrets.DOCKER_REGISTRY_MIRROR }}
-      DOCKER_REGISTRY_MIRROR_PATH: ${{ secrets.DOCKER_REGISTRY_MIRROR_PATH }}
-      DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
-      DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
-
-  # Only the DB-gated tests/test_provider_config_sql_db.py runs today, inside
-  # migrations-gate (it needs the real migrated schema). These are the other
-  # two suites, which mock everything out and need no database.
-  operator-test:
-    runs-on: ubuntu-latest
-    needs: changes
-    if: |
-      always() && !cancelled() && (
-        github.event_name == 'workflow_call' ||
-        github.ref == 'refs/heads/main' ||
-        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-        needs.changes.outputs.operator == 'true'
-      )
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        with:
-          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
-          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
-          version: "0.13.3"
-          enable-cache: true
-          cache-dependency-glob: "agentarea-operator/pyproject.toml"
-
-      - name: Set up Python
-        run: uv python install ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        working-directory: agentarea-operator
-        run: uv sync --group dev
-
-      - name: Run tests
-        run: make -C agentarea-operator check
-
   # The pack mode that builds package images lives in the mcp-base image, so
   # its tests run against the image's own pinned requirements.
   mcp-base-test:
@@ -919,25 +504,19 @@ jobs:
         working-directory: mcp-servers/mcp-base
         run: uv run --no-project --python 3.14 --with-requirements requirements.txt --with pytest python -m pytest -q tests
 
-  # Migration safety gate: a broken or conflicting migration is a top cause of
-  # prod incidents. Prove migrations apply cleanly on a fresh DB, that there is
-  # exactly one head (no unmerged branches), and that a downgrade roundtrips.
-  migrations-gate:
+  # Migration safety gate: the migration sets apply to a fresh database, and every
+  # suite whose rules only SQL enforces (unique constraints, RESTRICT foreign
+  # keys, triggers, partial indexes) runs against the migrated schema. Without
+  # AGENTAREA_DB_TEST_URL those suites skip, so go-check alone never runs them.
+  go-db:
     runs-on: ubuntu-latest
     needs: changes
-    # Also runs on mcp_manager and operator changes: this job owns the only
-    # database carrying the real migrated schema, and both write hand-written SQL
-    # against it that is checked below. Either side can break the pairing — a
-    # migration dropping a column, or the SQL starting to reference one — so all
-    # of them must trigger the gate.
     if: |
       always() && !cancelled() && (
         github.event_name == 'workflow_call' ||
         github.ref == 'refs/heads/main' ||
         (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-        needs.changes.outputs.platform == 'true' ||
-        needs.changes.outputs.mcp_manager == 'true' ||
-        needs.changes.outputs.operator == 'true'
+        needs.changes.outputs.go == 'true'
       )
     services:
       postgres:
@@ -954,42 +533,16 @@ jobs:
         ports:
           - 5432:5432
     env:
-      # What the platform reads to connect. The POSTGRES_* above are the postgres
-      # image's own contract ("create this user and database") and are not these.
-      AGENTAREA_DB_USER: postgres
-      AGENTAREA_DB_PASSWORD: postgres
-      AGENTAREA_DB_HOST: localhost
-      AGENTAREA_DB_PORT: "5432"
-      AGENTAREA_DB_NAME: agentarea_test
+      AGENTAREA_DB_TEST_URL: postgres://postgres:postgres@localhost:5432/agentarea_test?sslmode=disable
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        with:
-          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
-          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
-          version: "0.13.3"
-          enable-cache: true
-          cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
-
-      - name: Set up Python
-        run: uv python install ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        working-directory: agentarea-platform
-        run: uv sync --group dev
-
-      # The MCP manager's Go SQL is checked against the migrated schema too.
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.27'
-          cache-dependency-path: agentarea-mcp-manager/go.sum
+          go-version-file: agentarea-platform/go.mod
+          cache-dependency-path: agentarea-platform/go.sum
 
-      # Migrations heads/upgrade/roundtrip, then every schema-backed suite
-      # (Python, MCP manager Go SQL, operator SQL). The list lives in
-      # agentarea-platform/scripts/check-db.sh.
       - name: Migrations + schema-backed suites
         run: make -C agentarea-platform check-db
 
@@ -997,7 +550,7 @@ jobs:
   # oss-base.json and builds the enterprise overlay from exactly these tags.
   notify-enterprise:
     runs-on: ubuntu-latest
-    needs: [docker-api, docker-worker, docker-agentarea-mcp-manager]
+    needs: [docker-platform]
     if: |
       always() && github.ref == 'refs/heads/main' && !inputs.skip-docker &&
       contains(needs.*.result, 'success')
@@ -1019,15 +572,11 @@ jobs:
       - name: Dispatch oss-images-published
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
-          API: ${{ needs.docker-api.result }}
-          WORKER: ${{ needs.docker-worker.result }}
-          MCP_MANAGER: ${{ needs.docker-agentarea-mcp-manager.result }}
+          PLATFORM: ${{ needs.docker-platform.result }}
         run: |
           set -euo pipefail
           components=""
-          [ "$API" != "success" ] || components="$components api"
-          [ "$WORKER" != "success" ] || components="$components worker"
-          [ "$MCP_MANAGER" != "success" ] || components="$components mcp-manager"
+          [ "$PLATFORM" != "success" ] || components="$components platform"
           version="$(tr -d '\n' < VERSION)"
           echo "dispatching ${version}-${GITHUB_SHA:0:7}:${components}"
           gh api "repos/${{ github.repository_owner }}/agentarea-enterprise/dispatches" \
@@ -1047,28 +596,19 @@ jobs:
       - version-check
       - jwks-perms-check
       - env-naming
-      - platform-lint
-      - platform-test
-      - platform-build
-      - migrations-gate
+      - go-check
+      - go-db
       - webapp-lint
       - webapp-build
       - webapp-test
       - cli-test
-      - mcp-manager-lint-test
       - mcp-base-test
-      - events-lint-test
-      - operator-test
-      - docker-api
-      - docker-worker
+      - docker-platform
       - docker-frontend
-      - docker-operator
-      - docker-agentarea-mcp-manager
       - docker-agentarea-mcp-runner
       - docker-agentarea-mcp-runner-locked
       - docker-agentarea-mcp-base
       - docker-agentarea-mcp-apps
-      - docker-events
     steps:
       - name: Verify no required job failed
         run: |

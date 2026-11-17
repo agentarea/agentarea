@@ -1,0 +1,5249 @@
+{
+ "app_routes": 355,
+ "routes": [
+  {
+   "method": "GET",
+   "path": "/",
+   "name": "root",
+   "operation_id": "root__get",
+   "router_file": "apps/api/agentarea_api/main.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": []
+  },
+  {
+   "method": "GET",
+   "path": "/.well-known/jwks.json",
+   "name": "hydra_jwks_proxy",
+   "operation_id": "hydra_jwks_proxy__well_known_jwks_json_get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_oauth_as.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "oauth-as"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/.well-known/oauth-authorization-server",
+   "name": "oauth_authorization_server_metadata",
+   "operation_id": "oauth_authorization_server_metadata__well_known_oauth_authorization_server_get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_oauth_as.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "oauth-as"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/.well-known/oauth-protected-resource",
+   "name": "oauth_protected_resource_metadata",
+   "operation_id": "oauth_protected_resource_metadata__well_known_oauth_protected_resource_get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_oauth_as.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "oauth-as"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/.well-known/oauth-protected-resource/{resource_path:path}",
+   "name": "oauth_protected_resource_metadata_by_path",
+   "operation_id": "oauth_protected_resource_metadata_by_path__well_known_oauth_protected_resource__resource_path__get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_oauth_as.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "oauth-as"
+   ]
+  },
+  {
+   "method": "*",
+   "path": "/client-mcp",
+   "name": null,
+   "operation_id": null,
+   "router_file": "apps/api/agentarea_api/api/v1/client_mcp.py",
+   "in_openapi": false,
+   "streaming": "mounted",
+   "asgi_app": "ClientMCPScopeMiddleware",
+   "host": null
+  },
+  {
+   "method": "GET",
+   "path": "/docs",
+   "name": "swagger_ui_html",
+   "operation_id": null,
+   "router_file": ".venv/lib/python3.14/site-packages/fastapi/applications.py",
+   "in_openapi": false,
+   "streaming": "none",
+   "host": null
+  },
+  {
+   "method": "GET",
+   "path": "/docs/oauth2-redirect",
+   "name": "swagger_ui_redirect",
+   "operation_id": null,
+   "router_file": ".venv/lib/python3.14/site-packages/fastapi/applications.py",
+   "in_openapi": false,
+   "streaming": "none",
+   "host": null
+  },
+  {
+   "method": "GET",
+   "path": "/health",
+   "name": "health",
+   "operation_id": "health_health_get",
+   "router_file": "apps/api/agentarea_api/main.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": []
+  },
+  {
+   "method": "GET",
+   "path": "/health",
+   "name": "health_check",
+   "operation_id": "health_check_health_get",
+   "router_file": "apps/api/agentarea_api/main.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": []
+  },
+  {
+   "method": "POST",
+   "path": "/internal/analytics/signups",
+   "name": "record_signup",
+   "operation_id": "record_signup_internal_analytics_signups_post",
+   "router_file": "apps/api/agentarea_api/api/internal/analytics_signups.py",
+   "in_openapi": false,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "internal"
+   ]
+  },
+  {
+   "method": "*",
+   "path": "/mcp",
+   "name": null,
+   "operation_id": null,
+   "router_file": "libs/agentarea-agents-sdk/agentarea_agents_sdk/mcp_server/auth.py",
+   "in_openapi": false,
+   "streaming": "mounted",
+   "asgi_app": "MCPAuthMiddleware",
+   "host": null
+  },
+  {
+   "method": "*",
+   "path": "/mcp/clients",
+   "name": null,
+   "operation_id": null,
+   "router_file": "apps/api/agentarea_api/api/v1/client_mcp.py",
+   "in_openapi": false,
+   "streaming": "mounted",
+   "asgi_app": "ClientMCPScopeMiddleware",
+   "host": null
+  },
+  {
+   "method": "*",
+   "path": "/mcp/w",
+   "name": null,
+   "operation_id": null,
+   "router_file": "libs/agentarea-agents-sdk/agentarea_agents_sdk/mcp_server/__init__.py",
+   "in_openapi": false,
+   "streaming": "mounted",
+   "asgi_app": "PinnedWorkspaceMiddleware",
+   "host": null
+  },
+  {
+   "method": "GET",
+   "path": "/oauth2/auth",
+   "name": "hydra_auth_redirect",
+   "operation_id": "hydra_auth_redirect_oauth2_auth_get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_oauth_as.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "oauth-as"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/oauth2/register",
+   "name": "hydra_dcr_proxy",
+   "operation_id": "hydra_dcr_proxy_oauth2_register_post",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_oauth_as.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "oauth-as"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/oauth2/{path:path}",
+   "name": "hydra_oauth2_proxy",
+   "operation_id": "hydra_oauth2_proxy_oauth2__path__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_oauth_as.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "oauth-as"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/oauth2/{path:path}",
+   "name": "hydra_oauth2_proxy",
+   "operation_id": "hydra_oauth2_proxy_oauth2__path__get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_oauth_as.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "oauth-as"
+   ]
+  },
+  {
+   "method": "PATCH",
+   "path": "/oauth2/{path:path}",
+   "name": "hydra_oauth2_proxy",
+   "operation_id": "hydra_oauth2_proxy_oauth2__path__patch",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_oauth_as.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "oauth-as"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/oauth2/{path:path}",
+   "name": "hydra_oauth2_proxy",
+   "operation_id": "hydra_oauth2_proxy_oauth2__path__post",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_oauth_as.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "oauth-as"
+   ]
+  },
+  {
+   "method": "PUT",
+   "path": "/oauth2/{path:path}",
+   "name": "hydra_oauth2_proxy",
+   "operation_id": "hydra_oauth2_proxy_oauth2__path__put",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_oauth_as.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "oauth-as"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/openapi.json",
+   "name": "openapi",
+   "operation_id": null,
+   "router_file": ".venv/lib/python3.14/site-packages/fastapi/applications.py",
+   "in_openapi": false,
+   "streaming": "none",
+   "host": null
+  },
+  {
+   "method": "GET",
+   "path": "/redoc",
+   "name": "redoc_html",
+   "operation_id": null,
+   "router_file": ".venv/lib/python3.14/site-packages/fastapi/applications.py",
+   "in_openapi": false,
+   "streaming": "none",
+   "host": null
+  },
+  {
+   "method": "*",
+   "path": "/static",
+   "name": "static",
+   "operation_id": null,
+   "router_file": ".venv/lib/python3.14/site-packages/starlette/staticfiles.py",
+   "in_openapi": false,
+   "streaming": "mounted",
+   "asgi_app": "StaticFiles",
+   "host": null
+  },
+  {
+   "method": "GET",
+   "path": "/v1/agents/{agent_id}/.well-known/",
+   "name": "get_agent_well_known_index",
+   "operation_id": "get_agent_well_known_index_v1_agents__agent_id___well_known__get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_well_known.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "public"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/agents/{agent_id}/.well-known/a2a-info.json",
+   "name": "get_agent_a2a_info",
+   "operation_id": "get_agent_a2a_info_v1_agents__agent_id___well_known_a2a_info_json_get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_well_known.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "public"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/agents/{agent_id}/.well-known/agent-card.json",
+   "name": "get_agent_well_known_card",
+   "operation_id": "get_agent_well_known_card_v1_agents__agent_id___well_known_agent_card_json_get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_well_known.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "public"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/agents/{agent_id}/a2a/rpc",
+   "name": "handle_agent_jsonrpc",
+   "operation_id": "handle_agent_jsonrpc_v1_agents__agent_id__a2a_rpc_post",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_a2a.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/agents/{agent_id}/a2a/well-known",
+   "name": "get_agent_well_known",
+   "operation_id": "get_agent_well_known_v1_agents__agent_id__a2a_well_known_get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_a2a.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/analytics",
+   "name": "get_analytics",
+   "operation_id": "get_analytics_v1_analytics_get",
+   "router_file": "apps/api/agentarea_api/api/v1/analytics.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "analytics"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/invitations/accept",
+   "name": "accept_invitation",
+   "operation_id": "accept_invitation_v1_invitations_accept_post",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_invitations.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "workspace-invitations"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/invitations/preview",
+   "name": "preview_invitation",
+   "operation_id": "preview_invitation_v1_invitations_preview_post",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_invitations.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "workspace-invitations"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/mcp/{instance_id}/mcp",
+   "name": "proxy_instance",
+   "operation_id": "proxy_instance_v1_mcp__instance_id__mcp_delete",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_proxy.py",
+   "in_openapi": true,
+   "streaming": "mounted",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-proxy"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/mcp/{instance_id}/mcp",
+   "name": "proxy_instance",
+   "operation_id": "proxy_instance_v1_mcp__instance_id__mcp_get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_proxy.py",
+   "in_openapi": true,
+   "streaming": "mounted",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-proxy"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/mcp/{instance_id}/mcp",
+   "name": "proxy_instance",
+   "operation_id": "proxy_instance_v1_mcp__instance_id__mcp_post",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_proxy.py",
+   "in_openapi": true,
+   "streaming": "mounted",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-proxy"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/me/external-identities",
+   "name": "list_external_identities",
+   "operation_id": "list_external_identities_v1_me_external_identities_get",
+   "router_file": "apps/api/agentarea_api/api/v1/external_identities.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "external-identities"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/me/external-identities/telegram/link",
+   "name": "start_telegram_link",
+   "operation_id": "start_telegram_link_v1_me_external_identities_telegram_link_post",
+   "router_file": "apps/api/agentarea_api/api/v1/external_identities.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "external-identities"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/me/external-identities/{identity_id}",
+   "name": "unlink_external_identity",
+   "operation_id": "unlink_external_identity_v1_me_external_identities__identity_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/external_identities.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "external-identities"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/oauth/callback",
+   "name": "oauth_callback",
+   "operation_id": "oauth_callback_v1_oauth_callback_get",
+   "router_file": "apps/api/agentarea_api/api/v1/oauth_connect.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "public",
+    "oauth-connect"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/oauth/finish",
+   "name": "oauth_finish",
+   "operation_id": "oauth_finish_v1_oauth_finish_post",
+   "router_file": "apps/api/agentarea_api/api/v1/oauth_connect.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "oauth-connect"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/pricing/currency",
+   "name": "get_pricing_currency",
+   "operation_id": "get_pricing_currency_v1_pricing_currency_get",
+   "router_file": "apps/api/agentarea_api/api/v1/pricing.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "pricing"
+   ]
+  },
+  {
+   "method": "WS",
+   "path": "/v1/runner/connect",
+   "name": "connect_runner",
+   "operation_id": null,
+   "router_file": "apps/api/agentarea_api/api/v1/harness_runner.py",
+   "in_openapi": false,
+   "streaming": "WS",
+   "host": null
+  },
+  {
+   "method": "PUT",
+   "path": "/v1/runner/tasks/{task_id}/files/{file_path:path}",
+   "name": "upload_task_file",
+   "operation_id": "upload_task_file_v1_runner_tasks__task_id__files__file_path__put",
+   "router_file": "apps/api/agentarea_api/api/v1/harness_runner.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "harness runner"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/runner/whoami",
+   "name": "runner_whoami",
+   "operation_id": "runner_whoami_v1_runner_whoami_get",
+   "router_file": "apps/api/agentarea_api/api/v1/harness_runner.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "harness runner"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces",
+   "name": "list_workspaces",
+   "operation_id": "list_workspaces_v1_workspaces_get",
+   "router_file": "apps/api/agentarea_api/api/v1/workspaces.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "workspaces"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces",
+   "name": "create_workspace",
+   "operation_id": "create_workspace_v1_workspaces_post",
+   "router_file": "apps/api/agentarea_api/api/v1/workspaces.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "workspaces"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/a2a/agent-cards",
+   "name": "read_agent_card",
+   "operation_id": "read_agent_card_v1_a2a_agent_cards_post",
+   "router_file": "apps/api/agentarea_api/api/v1/a2a_agent_cards.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "a2a"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/access-control/check",
+   "name": "check_permission",
+   "operation_id": "check_permission_v1_access_control_check_post",
+   "router_file": "apps/api/agentarea_api/api/v1/access_control.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "access-control"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/access-control/graph",
+   "name": "get_graph",
+   "operation_id": "get_graph_v1_access_control_graph_get",
+   "router_file": "apps/api/agentarea_api/api/v1/access_control.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "access-control"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/access-control/relationships",
+   "name": "delete_relationship",
+   "operation_id": "delete_relationship_v1_access_control_relationships_delete",
+   "router_file": "apps/api/agentarea_api/api/v1/access_control.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "access-control"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/access-control/relationships",
+   "name": "list_relationships",
+   "operation_id": "list_relationships_v1_access_control_relationships_get",
+   "router_file": "apps/api/agentarea_api/api/v1/access_control.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "access-control"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/access-control/relationships",
+   "name": "create_relationship",
+   "operation_id": "create_relationship_v1_access_control_relationships_post",
+   "router_file": "apps/api/agentarea_api/api/v1/access_control.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "access-control"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/access-control/resolve",
+   "name": "resolve_access",
+   "operation_id": "resolve_access_v1_access_control_resolve_post",
+   "router_file": "apps/api/agentarea_api/api/v1/access_control.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "access-control"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/access-control/sync",
+   "name": "sync_grants",
+   "operation_id": "sync_grants_v1_access_control_sync_post",
+   "router_file": "apps/api/agentarea_api/api/v1/access_control.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "access-control"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents",
+   "name": "list_agents",
+   "operation_id": "list_agents_v1_agents_get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agents"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/",
+   "name": "list_agents",
+   "operation_id": "list_agents_v1_agents__get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agents"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/agents/",
+   "name": "create_agent",
+   "operation_id": "create_agent_v1_agents__post",
+   "router_file": "apps/api/agentarea_api/api/v1/agents.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agents"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/presets",
+   "name": "list_agent_presets",
+   "operation_id": "list_agent_presets_v1_agents_presets_get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agents"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/tools",
+   "name": "get_all_tools",
+   "operation_id": "get_all_tools_v1_agents_tools_get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agents"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}",
+   "name": "delete_agent",
+   "operation_id": "delete_agent_v1_agents__agent_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/agents.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agents"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}",
+   "name": "get_agent",
+   "operation_id": "get_agent_v1_agents__agent_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agents"
+   ]
+  },
+  {
+   "method": "PATCH",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}",
+   "name": "update_agent",
+   "operation_id": "update_agent_v1_agents__agent_id__patch",
+   "router_file": "apps/api/agentarea_api/api/v1/agents.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agents"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/install",
+   "name": "install_agent",
+   "operation_id": "install_agent_v1_agents__agent_id__install_post",
+   "router_file": "apps/api/agentarea_api/api/v1/agents.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agents"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/overview",
+   "name": "get_agent_overview",
+   "operation_id": "get_agent_overview_v1_agents__agent_id__overview_get",
+   "router_file": "apps/api/agentarea_api/api/v1/agent_overview.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "dashboard"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/restore",
+   "name": "restore_agent",
+   "operation_id": "restore_agent_v1_agents__agent_id__restore_post",
+   "router_file": "apps/api/agentarea_api/api/v1/agents.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agents"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/",
+   "name": "list_agent_tasks",
+   "operation_id": "list_agent_tasks_v1_agents__agent_id__tasks__get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/",
+   "name": "create_task_for_agent_with_stream",
+   "operation_id": "create_task_for_agent_with_stream_v1_agents__agent_id__tasks__post",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "SSE",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/schedule",
+   "name": "schedule_task_for_agent",
+   "operation_id": "schedule_task_for_agent_v1_agents__agent_id__tasks_schedule_post",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/sync",
+   "name": "create_task_for_agent_sync",
+   "operation_id": "create_task_for_agent_sync_v1_agents__agent_id__tasks_sync_post",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}",
+   "name": "cancel_agent_task",
+   "operation_id": "cancel_agent_task_v1_agents__agent_id__tasks__task_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}",
+   "name": "get_agent_task",
+   "operation_id": "get_agent_task_v1_agents__agent_id__tasks__task_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/a2ui/action",
+   "name": "send_a2ui_action",
+   "operation_id": "send_a2ui_action_v1_agents__agent_id__tasks__task_id__a2ui_action_post",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/artifacts",
+   "name": "list_task_artifacts",
+   "operation_id": "list_task_artifacts_v1_agents__agent_id__tasks__task_id__artifacts_get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/artifacts/files/{artifact_path:path}",
+   "name": "download_task_artifact",
+   "operation_id": "download_task_artifact_v1_agents__agent_id__tasks__task_id__artifacts_files__artifact_path__get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/command",
+   "name": "send_task_command",
+   "operation_id": "send_task_command_v1_agents__agent_id__tasks__task_id__command_post",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/escalations",
+   "name": "list_pending_escalations",
+   "operation_id": "list_pending_escalations_v1_agents__agent_id__tasks__task_id__escalations_get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/events",
+   "name": "get_task_events",
+   "operation_id": "get_task_events_v1_agents__agent_id__tasks__task_id__events_get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/events/stream",
+   "name": "stream_task_events",
+   "operation_id": "stream_task_events_v1_agents__agent_id__tasks__task_id__events_stream_get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "SSE",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/input",
+   "name": "submit_task_input",
+   "operation_id": "submit_task_input_v1_agents__agent_id__tasks__task_id__input_post",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/pause",
+   "name": "pause_agent_task",
+   "operation_id": "pause_agent_task_v1_agents__agent_id__tasks__task_id__pause_post",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/resolve-escalation",
+   "name": "resolve_task_escalation",
+   "operation_id": "resolve_task_escalation_v1_agents__agent_id__tasks__task_id__resolve_escalation_post",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/resume",
+   "name": "resume_agent_task",
+   "operation_id": "resume_agent_task_v1_agents__agent_id__tasks__task_id__resume_post",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/retry",
+   "name": "retry_agent_task",
+   "operation_id": "retry_agent_task_v1_agents__agent_id__tasks__task_id__retry_post",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/sandbox/files",
+   "name": "list_task_sandbox_files",
+   "operation_id": "list_task_sandbox_files_v1_agents__agent_id__tasks__task_id__sandbox_files_get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/sandbox/files/{file_path:path}",
+   "name": "read_task_sandbox_file",
+   "operation_id": "read_task_sandbox_file_v1_agents__agent_id__tasks__task_id__sandbox_files__file_path__get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/status",
+   "name": "get_agent_task_status",
+   "operation_id": "get_agent_task_status_v1_agents__agent_id__tasks__task_id__status_get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/summary",
+   "name": "get_task_summary",
+   "operation_id": "get_task_summary_v1_agents__agent_id__tasks__task_id__summary_get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "agent-tasks"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/wallet",
+   "name": "delete_wallet",
+   "operation_id": "delete_wallet_v1_agents__agent_id__wallet_delete",
+   "router_file": "apps/api/agentarea_api/api/v1/wallet.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "wallet"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/wallet",
+   "name": "get_wallet",
+   "operation_id": "get_wallet_v1_agents__agent_id__wallet_get",
+   "router_file": "apps/api/agentarea_api/api/v1/wallet.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "wallet"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/wallet",
+   "name": "create_wallet",
+   "operation_id": "create_wallet_v1_agents__agent_id__wallet_post",
+   "router_file": "apps/api/agentarea_api/api/v1/wallet.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "wallet"
+   ]
+  },
+  {
+   "method": "PUT",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/wallet",
+   "name": "update_wallet",
+   "operation_id": "update_wallet_v1_agents__agent_id__wallet_put",
+   "router_file": "apps/api/agentarea_api/api/v1/wallet.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "wallet"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/wallet/balance",
+   "name": "get_wallet_balance",
+   "operation_id": "get_wallet_balance_v1_agents__agent_id__wallet_balance_get",
+   "router_file": "apps/api/agentarea_api/api/v1/wallet.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "wallet"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/wallet/fund",
+   "name": "fund_wallet",
+   "operation_id": "fund_wallet_v1_agents__agent_id__wallet_fund_post",
+   "router_file": "apps/api/agentarea_api/api/v1/wallet.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "wallet"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/agents/{agent_id}/wallet/payments",
+   "name": "get_payment_history",
+   "operation_id": "get_payment_history_v1_agents__agent_id__wallet_payments_get",
+   "router_file": "apps/api/agentarea_api/api/v1/wallet.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "wallet"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/api-keys/",
+   "name": "list_api_keys",
+   "operation_id": "list_api_keys_v1_api_keys__get",
+   "router_file": "apps/api/agentarea_api/api/v1/api_keys.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "api-keys"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/api-keys/",
+   "name": "create_api_key",
+   "operation_id": "create_api_key_v1_api_keys__post",
+   "router_file": "apps/api/agentarea_api/api/v1/api_keys.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "api-keys"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/api-keys/{token_id}",
+   "name": "revoke_api_key",
+   "operation_id": "revoke_api_key_v1_api_keys__token_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/api_keys.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "api-keys"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/api-keys/{token_id}",
+   "name": "get_api_key",
+   "operation_id": "get_api_key_v1_api_keys__token_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/api_keys.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "api-keys"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/audit-logs/",
+   "name": "list_audit_logs",
+   "operation_id": "list_audit_logs_v1_audit_logs__get",
+   "router_file": "apps/api/agentarea_api/api/v1/audit.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "audit"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/balance",
+   "name": "get_balance",
+   "operation_id": "get_balance_v1_balance_get",
+   "router_file": "apps/api/agentarea_api/api/v1/dashboard.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "dashboard"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/bundles/analyze",
+   "name": "analyze_bundle",
+   "operation_id": "analyze_bundle_v1_bundles_analyze_post",
+   "router_file": "apps/api/agentarea_api/api/v1/bundles.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "bundles"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/bundles/install",
+   "name": "install_bundle",
+   "operation_id": "install_bundle_v1_bundles_install_post",
+   "router_file": "apps/api/agentarea_api/api/v1/bundles.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "bundles"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/clients/",
+   "name": "list_clients",
+   "operation_id": "list_clients_v1_clients__get",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/clients/",
+   "name": "create_client",
+   "operation_id": "create_client_v1_clients__post",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/clients/platform-toolsets",
+   "name": "list_platform_toolsets",
+   "operation_id": "list_platform_toolsets_v1_clients_platform_toolsets_get",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/clients/{client_id}",
+   "name": "delete_client",
+   "operation_id": "delete_client_v1_clients__client_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/clients/{client_id}",
+   "name": "get_client",
+   "operation_id": "get_client_v1_clients__client_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "PATCH",
+   "path": "/v1/workspaces/{workspace}/clients/{client_id}",
+   "name": "update_client",
+   "operation_id": "update_client_v1_clients__client_id__patch",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/clients/{client_id}/agent",
+   "name": "harness_agent",
+   "operation_id": "harness_agent_v1_clients__client_id__agent_post",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/clients/{client_id}/mcp-instances",
+   "name": "add_mcp_instance_to_client",
+   "operation_id": "add_mcp_instance_to_client_v1_clients__client_id__mcp_instances_post",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/clients/{client_id}/mcp-instances/{mcp_instance_id}",
+   "name": "remove_mcp_instance_from_client",
+   "operation_id": "remove_mcp_instance_from_client_v1_clients__client_id__mcp_instances__mcp_instance_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/clients/{client_id}/openapi-connections",
+   "name": "add_openapi_connection_to_client",
+   "operation_id": "add_openapi_connection_to_client_v1_clients__client_id__openapi_connections_post",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/clients/{client_id}/openapi-connections/{connection_id}",
+   "name": "remove_openapi_connection_from_client",
+   "operation_id": "remove_openapi_connection_from_client_v1_clients__client_id__openapi_connections__connection_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/clients/{client_id}/platform-toolsets",
+   "name": "add_platform_toolset_to_client",
+   "operation_id": "add_platform_toolset_to_client_v1_clients__client_id__platform_toolsets_post",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/clients/{client_id}/platform-toolsets/{toolset:path}",
+   "name": "remove_platform_toolset_from_client",
+   "operation_id": "remove_platform_toolset_from_client_v1_clients__client_id__platform_toolsets__toolset__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/clients/{client_id}/runner-keys",
+   "name": "list_runner_keys",
+   "operation_id": "list_runner_keys_v1_clients__client_id__runner_keys_get",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/clients/{client_id}/runner-keys",
+   "name": "issue_runner_key",
+   "operation_id": "issue_runner_key_v1_clients__client_id__runner_keys_post",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/clients/{client_id}/runner-keys/{key_id}",
+   "name": "revoke_runner_key",
+   "operation_id": "revoke_runner_key_v1_clients__client_id__runner_keys__key_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/clients/{client_id}/skills",
+   "name": "add_skill_to_client",
+   "operation_id": "add_skill_to_client_v1_clients__client_id__skills_post",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/clients/{client_id}/skills/{skill_id}",
+   "name": "remove_skill_from_client",
+   "operation_id": "remove_skill_from_client_v1_clients__client_id__skills__skill_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/clients.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "clients"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/dashboard",
+   "name": "get_dashboard",
+   "operation_id": "get_dashboard_v1_dashboard_get",
+   "router_file": "apps/api/agentarea_api/api/v1/dashboard.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "dashboard"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/egress-exits/",
+   "name": "list_egress_exits",
+   "operation_id": "list_egress_exits_v1_egress_exits__get",
+   "router_file": "apps/api/agentarea_api/api/v1/egress_exits.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "egress-exits"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/egress-exits/",
+   "name": "create_egress_exit",
+   "operation_id": "create_egress_exit_v1_egress_exits__post",
+   "router_file": "apps/api/agentarea_api/api/v1/egress_exits.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "egress-exits"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/egress-exits/{exit_id}",
+   "name": "delete_egress_exit",
+   "operation_id": "delete_egress_exit_v1_egress_exits__exit_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/egress_exits.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "egress-exits"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/egress-exits/{exit_id}",
+   "name": "get_egress_exit",
+   "operation_id": "get_egress_exit_v1_egress_exits__exit_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/egress_exits.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "egress-exits"
+   ]
+  },
+  {
+   "method": "PATCH",
+   "path": "/v1/workspaces/{workspace}/egress-exits/{exit_id}",
+   "name": "update_egress_exit",
+   "operation_id": "update_egress_exit_v1_egress_exits__exit_id__patch",
+   "router_file": "apps/api/agentarea_api/api/v1/egress_exits.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "egress-exits"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/export",
+   "name": "export_workspace_config",
+   "operation_id": "export_workspace_config_v1_export_get",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_config.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "workspace-config"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/files",
+   "name": "list_workspace_files",
+   "operation_id": "list_workspace_files_v1_files_get",
+   "router_file": "apps/api/agentarea_api/api/v1/files.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "files"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/files/directories",
+   "name": "create_workspace_directory",
+   "operation_id": "create_workspace_directory_v1_files_directories_post",
+   "router_file": "apps/api/agentarea_api/api/v1/files.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "files"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/files/download/{file_path:path}",
+   "name": "stream_workspace_file",
+   "operation_id": "stream_workspace_file_v1_files_download__file_path__get",
+   "router_file": "apps/api/agentarea_api/api/v1/files.py",
+   "in_openapi": true,
+   "streaming": "stream-body",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "files"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/files/history",
+   "name": "workspace_file_history",
+   "operation_id": "workspace_file_history_v1_files_history_get",
+   "router_file": "apps/api/agentarea_api/api/v1/files.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "files"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/files/move",
+   "name": "move_workspace_file",
+   "operation_id": "move_workspace_file_v1_files_move_post",
+   "router_file": "apps/api/agentarea_api/api/v1/files.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "files"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/files/restore/{file_path:path}",
+   "name": "restore_workspace_file",
+   "operation_id": "restore_workspace_file_v1_files_restore__file_path__post",
+   "router_file": "apps/api/agentarea_api/api/v1/files.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "files"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/files/upload-url",
+   "name": "create_attachment_upload_url",
+   "operation_id": "create_attachment_upload_url_v1_files_upload_url_post",
+   "router_file": "apps/api/agentarea_api/api/v1/files.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "files"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/files/upload-urls",
+   "name": "plan_workspace_uploads",
+   "operation_id": "plan_workspace_uploads_v1_files_upload_urls_post",
+   "router_file": "apps/api/agentarea_api/api/v1/files.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "files"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/files/{file_path:path}",
+   "name": "delete_workspace_file",
+   "operation_id": "delete_workspace_file_v1_files__file_path__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/files.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "files"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/files/{file_path:path}",
+   "name": "download_workspace_file",
+   "operation_id": "download_workspace_file_v1_files__file_path__get",
+   "router_file": "apps/api/agentarea_api/api/v1/files.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "files"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/governance/effective-policy/preview",
+   "name": "preview_effective_policy",
+   "operation_id": "preview_effective_policy_v1_governance_effective_policy_preview_post",
+   "router_file": "apps/api/agentarea_api/api/v1/governance.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "governance"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/governance/task-policy-snapshots/{task_id}",
+   "name": "get_task_policy_snapshot",
+   "operation_id": "get_task_policy_snapshot_v1_governance_task_policy_snapshots__task_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/governance.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "governance"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/inbox/",
+   "name": "get_inbox_items",
+   "operation_id": "get_inbox_items_v1_inbox__get",
+   "router_file": "apps/api/agentarea_api/api/v1/inbox.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "inbox"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/inbox/decisions",
+   "name": "list_approval_decisions",
+   "operation_id": "list_approval_decisions_v1_inbox_decisions_get",
+   "router_file": "apps/api/agentarea_api/api/v1/inbox.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "inbox"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/invitations",
+   "name": "list_invitations",
+   "operation_id": "list_invitations_v1_invitations_get",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_invitations.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "workspace-invitations"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/invitations",
+   "name": "create_invitation",
+   "operation_id": "create_invitation_v1_invitations_post",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_invitations.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "workspace-invitations"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/invitations/{invitation_id}",
+   "name": "revoke_invitation",
+   "operation_id": "revoke_invitation_v1_invitations__invitation_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_invitations.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "workspace-invitations"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/logo",
+   "name": "delete_workspace_logo",
+   "operation_id": "delete_workspace_logo_v1_logo_delete",
+   "router_file": "apps/api/agentarea_api/api/v1/workspaces.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "workspaces"
+   ]
+  },
+  {
+   "method": "PUT",
+   "path": "/v1/workspaces/{workspace}/logo",
+   "name": "upload_workspace_logo",
+   "operation_id": "upload_workspace_logo_v1_logo_put",
+   "router_file": "apps/api/agentarea_api/api/v1/workspaces.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "workspaces"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/mcp-auth-configs/",
+   "name": "list_mcp_auth_configs",
+   "operation_id": "list_mcp_auth_configs_v1_mcp_auth_configs__get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_auth_configs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-auth-configs"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/mcp-auth-configs/",
+   "name": "create_mcp_auth_config",
+   "operation_id": "create_mcp_auth_config_v1_mcp_auth_configs__post",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_auth_configs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-auth-configs"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/mcp-auth-configs/{config_id}",
+   "name": "delete_mcp_auth_config",
+   "operation_id": "delete_mcp_auth_config_v1_mcp_auth_configs__config_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_auth_configs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-auth-configs"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/mcp-auth-configs/{config_id}",
+   "name": "get_mcp_auth_config",
+   "operation_id": "get_mcp_auth_config_v1_mcp_auth_configs__config_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_auth_configs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-auth-configs"
+   ]
+  },
+  {
+   "method": "PUT",
+   "path": "/v1/workspaces/{workspace}/mcp-auth-configs/{config_id}",
+   "name": "update_mcp_auth_config",
+   "operation_id": "update_mcp_auth_config_v1_mcp_auth_configs__config_id__put",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_auth_configs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-auth-configs"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/mcp-oauth-links/",
+   "name": "create_oauth_link",
+   "operation_id": "create_oauth_link_v1_mcp_oauth_links__post",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_oauth_links.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-oauth-links"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/mcp-oauth-links/instance/{instance_id}",
+   "name": "list_oauth_links_for_instance",
+   "operation_id": "list_oauth_links_for_instance_v1_mcp_oauth_links_instance__instance_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_oauth_links.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-oauth-links"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/mcp-oauth-links/{link_id}",
+   "name": "revoke_oauth_link",
+   "operation_id": "revoke_oauth_link_v1_mcp_oauth_links__link_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_oauth_links.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-oauth-links"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/mcp-oauth-links/{link_id}",
+   "name": "get_oauth_link",
+   "operation_id": "get_oauth_link_v1_mcp_oauth_links__link_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_oauth_links.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-oauth-links"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/",
+   "name": "list_mcp_server_instances",
+   "operation_id": "list_mcp_server_instances_v1_mcp_server_instances__get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/",
+   "name": "create_mcp_server_instance",
+   "operation_id": "create_mcp_server_instance_v1_mcp_server_instances__post",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/check",
+   "name": "check_mcp_server_instance_configuration",
+   "operation_id": "check_mcp_server_instance_configuration_v1_mcp_server_instances_check_post",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/health/containers",
+   "name": "get_containers_health",
+   "operation_id": "get_containers_health_v1_mcp_server_instances_health_containers_get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/tool-policies",
+   "name": "list_mcp_server_instance_tool_policies",
+   "operation_id": "list_mcp_server_instance_tool_policies_v1_mcp_server_instances_tool_policies_get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/validate",
+   "name": "validate_instance_spec",
+   "operation_id": "validate_instance_spec_v1_mcp_server_instances_validate_post",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/validate-connection",
+   "name": "validate_connection",
+   "operation_id": "validate_connection_v1_mcp_server_instances_validate_connection_post",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/with-spec",
+   "name": "create_mcp_server_connection",
+   "operation_id": "create_mcp_server_connection_v1_mcp_server_instances_with_spec_post",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}",
+   "name": "delete_mcp_server_instance",
+   "operation_id": "delete_mcp_server_instance_v1_mcp_server_instances__instance_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}",
+   "name": "get_mcp_server_instance",
+   "operation_id": "get_mcp_server_instance_v1_mcp_server_instances__instance_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "PATCH",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}",
+   "name": "update_mcp_server_instance",
+   "operation_id": "update_mcp_server_instance_v1_mcp_server_instances__instance_id__patch",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/consumers",
+   "name": "list_mcp_server_instance_consumers",
+   "operation_id": "list_mcp_server_instance_consumers_v1_mcp_server_instances__instance_id__consumers_get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/discover-tools",
+   "name": "discover_mcp_server_instance_tools",
+   "operation_id": "discover_mcp_server_instance_tools_v1_mcp_server_instances__instance_id__discover_tools_post",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/environment",
+   "name": "get_instance_environment",
+   "operation_id": "get_instance_environment_v1_mcp_server_instances__instance_id__environment_get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/oauth-link",
+   "name": "create_oauth_link",
+   "operation_id": "create_oauth_link_v1_mcp_server_instances__instance_id__oauth_link_post",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/oauth-links",
+   "name": "list_oauth_links",
+   "operation_id": "list_oauth_links_v1_mcp_server_instances__instance_id__oauth_links_get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/probe",
+   "name": "probe_instance_auth",
+   "operation_id": "probe_instance_auth_v1_mcp_server_instances__instance_id__probe_post",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "PUT",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/sharing",
+   "name": "set_mcp_server_instance_sharing",
+   "operation_id": "set_mcp_server_instance_sharing_v1_mcp_server_instances__instance_id__sharing_put",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/test-auth",
+   "name": "run_test_auth",
+   "operation_id": "run_test_auth_v1_mcp_server_instances__instance_id__test_auth_post",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/tool-policies",
+   "name": "get_mcp_server_instance_tool_policies",
+   "operation_id": "get_mcp_server_instance_tool_policies_v1_mcp_server_instances__instance_id__tool_policies_get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/verify",
+   "name": "verify_mcp_server_instance",
+   "operation_id": "verify_mcp_server_instance_v1_mcp_server_instances__instance_id__verify_post",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_server_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-server-instances"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/mcp-servers/",
+   "name": "list_mcp_servers",
+   "operation_id": "list_mcp_servers_v1_mcp_servers__get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_servers_specifications.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-servers"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/mcp-servers/",
+   "name": "create_mcp_server",
+   "operation_id": "create_mcp_server_v1_mcp_servers__post",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_servers_specifications.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-servers"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/mcp-servers/{server_id}",
+   "name": "delete_mcp_server",
+   "operation_id": "delete_mcp_server_v1_mcp_servers__server_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_servers_specifications.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-servers"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/mcp-servers/{server_id}",
+   "name": "get_mcp_server",
+   "operation_id": "get_mcp_server_v1_mcp_servers__server_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_servers_specifications.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-servers"
+   ]
+  },
+  {
+   "method": "PATCH",
+   "path": "/v1/workspaces/{workspace}/mcp-servers/{server_id}",
+   "name": "update_mcp_server",
+   "operation_id": "update_mcp_server_v1_mcp_servers__server_id__patch",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_servers_specifications.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-servers"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/mcp-servers/{server_id}/deploy",
+   "name": "deploy_mcp_server",
+   "operation_id": "deploy_mcp_server_v1_mcp_servers__server_id__deploy_post",
+   "router_file": "apps/api/agentarea_api/api/v1/mcp_servers_specifications.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "mcp-servers"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/members",
+   "name": "list_members",
+   "operation_id": "list_members_v1_members_get",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_invitations.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "workspace-invitations"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/members/{user_id}",
+   "name": "remove_member",
+   "operation_id": "remove_member_v1_members__user_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_invitations.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "workspace-invitations"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/model-instances/",
+   "name": "list_model_instances",
+   "operation_id": "list_model_instances_v1_model_instances__get",
+   "router_file": "apps/api/agentarea_api/api/v1/model_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "model-instances"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/model-instances/",
+   "name": "create_model_instance",
+   "operation_id": "create_model_instance_v1_model_instances__post",
+   "router_file": "apps/api/agentarea_api/api/v1/model_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "model-instances"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/model-instances/bulk",
+   "name": "create_model_instances_bulk",
+   "operation_id": "create_model_instances_bulk_v1_model_instances_bulk_post",
+   "router_file": "apps/api/agentarea_api/api/v1/model_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "model-instances"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/model-instances/test",
+   "name": "validate_model_instance",
+   "operation_id": "validate_model_instance_v1_model_instances_test_post",
+   "router_file": "apps/api/agentarea_api/api/v1/model_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "model-instances"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/model-instances/{instance_id}",
+   "name": "delete_model_instance",
+   "operation_id": "delete_model_instance_v1_model_instances__instance_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/model_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "model-instances"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/model-instances/{instance_id}",
+   "name": "get_model_instance",
+   "operation_id": "get_model_instance_v1_model_instances__instance_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/model_instances.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "model-instances"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/model-specs/",
+   "name": "list_model_specs",
+   "operation_id": "list_model_specs_v1_model_specs__get",
+   "router_file": "apps/api/agentarea_api/api/v1/model_specs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "model-specs"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/model-specs/",
+   "name": "create_model_spec",
+   "operation_id": "create_model_spec_v1_model_specs__post",
+   "router_file": "apps/api/agentarea_api/api/v1/model_specs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "model-specs"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/model-specs/by-provider/{provider_spec_id}",
+   "name": "list_model_specs_by_provider",
+   "operation_id": "list_model_specs_by_provider_v1_model_specs_by_provider__provider_spec_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/model_specs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "model-specs"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/model-specs/by-provider/{provider_spec_id}/{model_name}",
+   "name": "get_model_spec_by_provider_and_name",
+   "operation_id": "get_model_spec_by_provider_and_name_v1_model_specs_by_provider__provider_spec_id___model_name__get",
+   "router_file": "apps/api/agentarea_api/api/v1/model_specs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "model-specs"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/model-specs/upsert",
+   "name": "upsert_model_spec",
+   "operation_id": "upsert_model_spec_v1_model_specs_upsert_post",
+   "router_file": "apps/api/agentarea_api/api/v1/model_specs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "model-specs"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/model-specs/{model_spec_id}",
+   "name": "delete_model_spec",
+   "operation_id": "delete_model_spec_v1_model_specs__model_spec_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/model_specs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "model-specs"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/model-specs/{model_spec_id}",
+   "name": "get_model_spec",
+   "operation_id": "get_model_spec_v1_model_specs__model_spec_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/model_specs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "model-specs"
+   ]
+  },
+  {
+   "method": "PATCH",
+   "path": "/v1/workspaces/{workspace}/model-specs/{model_spec_id}",
+   "name": "update_model_spec",
+   "operation_id": "update_model_spec_v1_model_specs__model_spec_id__patch",
+   "router_file": "apps/api/agentarea_api/api/v1/model_specs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "model-specs"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/network/people-access",
+   "name": "get_network_people_access",
+   "operation_id": "get_network_people_access_v1_network_people_access_get",
+   "router_file": "apps/api/agentarea_api/api/v1/network_people.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "network"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/network/topology",
+   "name": "get_network_topology",
+   "operation_id": "get_network_topology_v1_network_topology_get",
+   "router_file": "apps/api/agentarea_api/api/v1/network.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "network"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/oauth/authorize",
+   "name": "oauth_authorize",
+   "operation_id": "oauth_authorize_v1_oauth_authorize_post",
+   "router_file": "apps/api/agentarea_api/api/v1/oauth_connect.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "oauth-connect"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/oauth/preflight",
+   "name": "oauth_preflight",
+   "operation_id": "oauth_preflight_v1_oauth_preflight_get",
+   "router_file": "apps/api/agentarea_api/api/v1/oauth_connect.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "oauth-connect"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/openapi-connections/",
+   "name": "list_connections",
+   "operation_id": "list_connections_v1_openapi_connections__get",
+   "router_file": "apps/api/agentarea_api/api/v1/openapi_connections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "openapi-connections"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/openapi-connections/",
+   "name": "create_connection",
+   "operation_id": "create_connection_v1_openapi_connections__post",
+   "router_file": "apps/api/agentarea_api/api/v1/openapi_connections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "openapi-connections"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/openapi-connections/from-catalog/{catalog_item_id}",
+   "name": "get_catalog_connect_form",
+   "operation_id": "get_catalog_connect_form_v1_openapi_connections_from_catalog__catalog_item_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/openapi_connections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "openapi-connections"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/openapi-connections/from-catalog/{catalog_item_id}",
+   "name": "connect_catalog_api",
+   "operation_id": "connect_catalog_api_v1_openapi_connections_from_catalog__catalog_item_id__post",
+   "router_file": "apps/api/agentarea_api/api/v1/openapi_connections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "openapi-connections"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/openapi-connections/preview-spec",
+   "name": "preview_spec",
+   "operation_id": "preview_spec_v1_openapi_connections_preview_spec_post",
+   "router_file": "apps/api/agentarea_api/api/v1/openapi_connections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "openapi-connections"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/openapi-connections/{connection_id}",
+   "name": "delete_connection",
+   "operation_id": "delete_connection_v1_openapi_connections__connection_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/openapi_connections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "openapi-connections"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/openapi-connections/{connection_id}",
+   "name": "get_connection",
+   "operation_id": "get_connection_v1_openapi_connections__connection_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/openapi_connections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "openapi-connections"
+   ]
+  },
+  {
+   "method": "PATCH",
+   "path": "/v1/workspaces/{workspace}/openapi-connections/{connection_id}",
+   "name": "update_connection",
+   "operation_id": "update_connection_v1_openapi_connections__connection_id__patch",
+   "router_file": "apps/api/agentarea_api/api/v1/openapi_connections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "openapi-connections"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/openapi-connections/{connection_id}/discover-tools",
+   "name": "discover_tools",
+   "operation_id": "discover_tools_v1_openapi_connections__connection_id__discover_tools_post",
+   "router_file": "apps/api/agentarea_api/api/v1/openapi_connections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "openapi-connections"
+   ]
+  },
+  {
+   "method": "PUT",
+   "path": "/v1/workspaces/{workspace}/openapi-connections/{connection_id}/sharing",
+   "name": "set_connection_sharing",
+   "operation_id": "set_connection_sharing_v1_openapi_connections__connection_id__sharing_put",
+   "router_file": "apps/api/agentarea_api/api/v1/openapi_connections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "openapi-connections"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/openapi-connections/{connection_id}/tool-policies",
+   "name": "get_connection_tool_policies",
+   "operation_id": "get_connection_tool_policies_v1_openapi_connections__connection_id__tool_policies_get",
+   "router_file": "apps/api/agentarea_api/api/v1/openapi_connections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "openapi-connections"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/policies",
+   "name": "list_policy_rules",
+   "operation_id": "list_policy_rules_v1_policies_get",
+   "router_file": "apps/api/agentarea_api/api/v1/policies.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "policies"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/policies",
+   "name": "create_policy_rule",
+   "operation_id": "create_policy_rule_v1_policies_post",
+   "router_file": "apps/api/agentarea_api/api/v1/policies.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "policies"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/policies/{rule_id}",
+   "name": "delete_policy_rule",
+   "operation_id": "delete_policy_rule_v1_policies__rule_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/policies.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "policies"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/policies/{rule_id}",
+   "name": "get_policy_rule",
+   "operation_id": "get_policy_rule_v1_policies__rule_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/policies.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "policies"
+   ]
+  },
+  {
+   "method": "PATCH",
+   "path": "/v1/workspaces/{workspace}/policies/{rule_id}",
+   "name": "update_policy_rule",
+   "operation_id": "update_policy_rule_v1_policies__rule_id__patch",
+   "router_file": "apps/api/agentarea_api/api/v1/policies.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "policies"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/principals",
+   "name": "resolve_principals",
+   "operation_id": "resolve_principals_v1_principals_get",
+   "router_file": "apps/api/agentarea_api/api/v1/principals.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "principals"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/projects/",
+   "name": "list_projects",
+   "operation_id": "list_projects_v1_projects__get",
+   "router_file": "apps/api/agentarea_api/api/v1/projects.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "projects"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/projects/",
+   "name": "create_project",
+   "operation_id": "create_project_v1_projects__post",
+   "router_file": "apps/api/agentarea_api/api/v1/projects.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "projects"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/projects/{project_id}",
+   "name": "delete_project",
+   "operation_id": "delete_project_v1_projects__project_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/projects.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "projects"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/projects/{project_id}",
+   "name": "get_project",
+   "operation_id": "get_project_v1_projects__project_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/projects.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "projects"
+   ]
+  },
+  {
+   "method": "PATCH",
+   "path": "/v1/workspaces/{workspace}/projects/{project_id}",
+   "name": "update_project",
+   "operation_id": "update_project_v1_projects__project_id__patch",
+   "router_file": "apps/api/agentarea_api/api/v1/projects.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "projects"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/projects/{project_id}/agents",
+   "name": "add_agent_to_project",
+   "operation_id": "add_agent_to_project_v1_projects__project_id__agents_post",
+   "router_file": "apps/api/agentarea_api/api/v1/projects.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "projects"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/projects/{project_id}/agents/{agent_id}",
+   "name": "remove_agent_from_project",
+   "operation_id": "remove_agent_from_project_v1_projects__project_id__agents__agent_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/projects.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "projects"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/projects/{project_id}/files",
+   "name": "list_project_files",
+   "operation_id": "list_project_files_v1_projects__project_id__files_get",
+   "router_file": "apps/api/agentarea_api/api/v1/projects.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "projects"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/projects/{project_id}/files/download/{file_path:path}",
+   "name": "stream_project_file",
+   "operation_id": "stream_project_file_v1_projects__project_id__files_download__file_path__get",
+   "router_file": "apps/api/agentarea_api/api/v1/projects.py",
+   "in_openapi": true,
+   "streaming": "stream-body",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "projects"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/projects/{project_id}/files/upload-urls",
+   "name": "plan_project_uploads",
+   "operation_id": "plan_project_uploads_v1_projects__project_id__files_upload_urls_post",
+   "router_file": "apps/api/agentarea_api/api/v1/projects.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "projects"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/projects/{project_id}/files/{file_path:path}",
+   "name": "delete_project_file",
+   "operation_id": "delete_project_file_v1_projects__project_id__files__file_path__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/projects.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "projects"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/projects/{project_id}/files/{file_path:path}",
+   "name": "download_project_file",
+   "operation_id": "download_project_file_v1_projects__project_id__files__file_path__get",
+   "router_file": "apps/api/agentarea_api/api/v1/projects.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "projects"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/projects/{project_id}/mcp-instances",
+   "name": "add_mcp_instance_to_project",
+   "operation_id": "add_mcp_instance_to_project_v1_projects__project_id__mcp_instances_post",
+   "router_file": "apps/api/agentarea_api/api/v1/projects.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "projects"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/projects/{project_id}/mcp-instances/{mcp_instance_id}",
+   "name": "remove_mcp_instance_from_project",
+   "operation_id": "remove_mcp_instance_from_project_v1_projects__project_id__mcp_instances__mcp_instance_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/projects.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "projects"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/projects/{project_id}/skills",
+   "name": "add_skill_to_project",
+   "operation_id": "add_skill_to_project_v1_projects__project_id__skills_post",
+   "router_file": "apps/api/agentarea_api/api/v1/projects.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "projects"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/projects/{project_id}/skills/{skill_id}",
+   "name": "remove_skill_from_project",
+   "operation_id": "remove_skill_from_project_v1_projects__project_id__skills__skill_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/projects.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "projects"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/provider-configs/",
+   "name": "list_provider_configs",
+   "operation_id": "list_provider_configs_v1_provider_configs__get",
+   "router_file": "apps/api/agentarea_api/api/v1/provider_configs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "provider-configs"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/provider-configs/",
+   "name": "create_provider_config",
+   "operation_id": "create_provider_config_v1_provider_configs__post",
+   "router_file": "apps/api/agentarea_api/api/v1/provider_configs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "provider-configs"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/provider-configs/admin/{provider_key}/logo",
+   "name": "get_provider_logo",
+   "operation_id": "get_provider_logo_v1_provider_configs_admin__provider_key__logo_get",
+   "router_file": "apps/api/agentarea_api/api/v1/provider_configs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "provider-configs"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/provider-configs/discover-preview",
+   "name": "discover_models_preview",
+   "operation_id": "discover_models_preview_v1_provider_configs_discover_preview_post",
+   "router_file": "apps/api/agentarea_api/api/v1/provider_configs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "provider-configs"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/provider-configs/with-instances",
+   "name": "list_provider_configs_with_instances",
+   "operation_id": "list_provider_configs_with_instances_v1_provider_configs_with_instances_get",
+   "router_file": "apps/api/agentarea_api/api/v1/provider_configs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "provider-configs"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/provider-configs/{config_id}",
+   "name": "delete_provider_config",
+   "operation_id": "delete_provider_config_v1_provider_configs__config_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/provider_configs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "provider-configs"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/provider-configs/{config_id}",
+   "name": "get_provider_config",
+   "operation_id": "get_provider_config_v1_provider_configs__config_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/provider_configs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "provider-configs"
+   ]
+  },
+  {
+   "method": "PATCH",
+   "path": "/v1/workspaces/{workspace}/provider-configs/{config_id}",
+   "name": "patch_provider_config",
+   "operation_id": "patch_provider_config_v1_provider_configs__config_id__patch",
+   "router_file": "apps/api/agentarea_api/api/v1/provider_configs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "provider-configs"
+   ]
+  },
+  {
+   "method": "PUT",
+   "path": "/v1/workspaces/{workspace}/provider-configs/{config_id}",
+   "name": "update_provider_config",
+   "operation_id": "update_provider_config_v1_provider_configs__config_id__put",
+   "router_file": "apps/api/agentarea_api/api/v1/provider_configs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "provider-configs"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/provider-configs/{config_id}/discover",
+   "name": "discover_models",
+   "operation_id": "discover_models_v1_provider_configs__config_id__discover_post",
+   "router_file": "apps/api/agentarea_api/api/v1/provider_configs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "provider-configs"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/provider-specs/",
+   "name": "list_provider_specs",
+   "operation_id": "list_provider_specs_v1_provider_specs__get",
+   "router_file": "apps/api/agentarea_api/api/v1/provider_specs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "provider-specs"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/provider-specs/by-key/{provider_key}",
+   "name": "get_provider_spec_by_key",
+   "operation_id": "get_provider_spec_by_key_v1_provider_specs_by_key__provider_key__get",
+   "router_file": "apps/api/agentarea_api/api/v1/provider_specs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "provider-specs"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/provider-specs/with-models",
+   "name": "list_provider_specs_with_models",
+   "operation_id": "list_provider_specs_with_models_v1_provider_specs_with_models_get",
+   "router_file": "apps/api/agentarea_api/api/v1/provider_specs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "provider-specs"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/provider-specs/{provider_spec_id}",
+   "name": "get_provider_spec",
+   "operation_id": "get_provider_spec_v1_provider_specs__provider_spec_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/provider_specs.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "provider-specs"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/registries/",
+   "name": "list_registries",
+   "operation_id": "list_registries_v1_registries__get",
+   "router_file": "apps/api/agentarea_api/api/v1/registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/registries/",
+   "name": "create_registry",
+   "operation_id": "create_registry_v1_registries__post",
+   "router_file": "apps/api/agentarea_api/api/v1/registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/registries/catalog/browse",
+   "name": "browse_catalog",
+   "operation_id": "browse_catalog_v1_registries_catalog_browse_get",
+   "router_file": "apps/api/agentarea_api/api/v1/registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/registries/catalog/items/{item_id}",
+   "name": "delete_catalog_item",
+   "operation_id": "delete_catalog_item_v1_registries_catalog_items__item_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/registries/catalog/items/{item_id}",
+   "name": "get_catalog_item",
+   "operation_id": "get_catalog_item_v1_registries_catalog_items__item_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "PATCH",
+   "path": "/v1/workspaces/{workspace}/registries/catalog/items/{item_id}",
+   "name": "update_catalog_item",
+   "operation_id": "update_catalog_item_v1_registries_catalog_items__item_id__patch",
+   "router_file": "apps/api/agentarea_api/api/v1/registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/registries/catalog/items/{item_id}/update",
+   "name": "update_item_spec",
+   "operation_id": "update_item_spec_v1_registries_catalog_items__item_id__update_post",
+   "router_file": "apps/api/agentarea_api/api/v1/registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/registries/catalog/search",
+   "name": "search_catalog",
+   "operation_id": "search_catalog_v1_registries_catalog_search_get",
+   "router_file": "apps/api/agentarea_api/api/v1/registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/registries/{registry_id}",
+   "name": "delete_registry",
+   "operation_id": "delete_registry_v1_registries__registry_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/registries/{registry_id}",
+   "name": "get_registry",
+   "operation_id": "get_registry_v1_registries__registry_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "PATCH",
+   "path": "/v1/workspaces/{workspace}/registries/{registry_id}",
+   "name": "update_registry",
+   "operation_id": "update_registry_v1_registries__registry_id__patch",
+   "router_file": "apps/api/agentarea_api/api/v1/registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/registries/{registry_id}/items",
+   "name": "list_registry_items",
+   "operation_id": "list_registry_items_v1_registries__registry_id__items_get",
+   "router_file": "apps/api/agentarea_api/api/v1/registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/registries/{registry_id}/items",
+   "name": "create_catalog_item",
+   "operation_id": "create_catalog_item_v1_registries__registry_id__items_post",
+   "router_file": "apps/api/agentarea_api/api/v1/registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/registries/{registry_id}/sync",
+   "name": "sync_registry",
+   "operation_id": "sync_registry_v1_registries__registry_id__sync_post",
+   "router_file": "apps/api/agentarea_api/api/v1/registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/registries/{registry_id}/update-all",
+   "name": "update_all_specs",
+   "operation_id": "update_all_specs_v1_registries__registry_id__update_all_post",
+   "router_file": "apps/api/agentarea_api/api/v1/registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/sandboxes",
+   "name": "list_sandboxes",
+   "operation_id": "list_sandboxes_v1_sandboxes_get",
+   "router_file": "apps/api/agentarea_api/api/v1/sandboxes.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "sandboxes"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/secrets",
+   "name": "list_secrets",
+   "operation_id": "list_secrets_v1_secrets_get",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_secrets.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "secrets"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/secrets",
+   "name": "create_secret",
+   "operation_id": "create_secret_v1_secrets_post",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_secrets.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "secrets"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/secrets/{secret_id}",
+   "name": "delete_secret",
+   "operation_id": "delete_secret_v1_secrets__secret_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_secrets.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "secrets"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/secrets/{secret_id}",
+   "name": "get_secret",
+   "operation_id": "get_secret_v1_secrets__secret_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_secrets.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "secrets"
+   ]
+  },
+  {
+   "method": "PATCH",
+   "path": "/v1/workspaces/{workspace}/secrets/{secret_id}",
+   "name": "update_secret_description",
+   "operation_id": "update_secret_description_v1_secrets__secret_id__patch",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_secrets.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "secrets"
+   ]
+  },
+  {
+   "method": "PUT",
+   "path": "/v1/workspaces/{workspace}/secrets/{secret_id}/value",
+   "name": "rotate_secret",
+   "operation_id": "rotate_secret_v1_secrets__secret_id__value_put",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_secrets.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "secrets"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/settings",
+   "name": "get_workspace_settings",
+   "operation_id": "get_workspace_settings_v1_settings_get",
+   "router_file": "apps/api/agentarea_api/api/v1/dashboard.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "dashboard"
+   ]
+  },
+  {
+   "method": "PUT",
+   "path": "/v1/workspaces/{workspace}/settings",
+   "name": "update_workspace_settings",
+   "operation_id": "update_workspace_settings_v1_settings_put",
+   "router_file": "apps/api/agentarea_api/api/v1/dashboard.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "dashboard"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/skill-collections/",
+   "name": "list_collections",
+   "operation_id": "list_collections_v1_skill_collections__get",
+   "router_file": "apps/api/agentarea_api/api/v1/skill_collections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skill-collections"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/skill-collections/",
+   "name": "create_collection",
+   "operation_id": "create_collection_v1_skill_collections__post",
+   "router_file": "apps/api/agentarea_api/api/v1/skill_collections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skill-collections"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/skill-collections/{collection_id}",
+   "name": "delete_collection",
+   "operation_id": "delete_collection_v1_skill_collections__collection_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/skill_collections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skill-collections"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/skill-collections/{collection_id}",
+   "name": "get_collection",
+   "operation_id": "get_collection_v1_skill_collections__collection_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/skill_collections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skill-collections"
+   ]
+  },
+  {
+   "method": "PUT",
+   "path": "/v1/workspaces/{workspace}/skill-collections/{collection_id}",
+   "name": "update_collection",
+   "operation_id": "update_collection_v1_skill_collections__collection_id__put",
+   "router_file": "apps/api/agentarea_api/api/v1/skill_collections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skill-collections"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/skill-collections/{collection_id}/skills",
+   "name": "add_skill_to_collection",
+   "operation_id": "add_skill_to_collection_v1_skill_collections__collection_id__skills_post",
+   "router_file": "apps/api/agentarea_api/api/v1/skill_collections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skill-collections"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/skill-collections/{collection_id}/skills/{skill_id}",
+   "name": "remove_skill_from_collection",
+   "operation_id": "remove_skill_from_collection_v1_skill_collections__collection_id__skills__skill_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/skill_collections.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skill-collections"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/skills",
+   "name": "list_skills",
+   "operation_id": "list_skills_v1_skills_get",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/skills",
+   "name": "create_skill",
+   "operation_id": "create_skill_v1_skills_post",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/skills/update-all",
+   "name": "update_all_skills",
+   "operation_id": "update_all_skills_v1_skills_update_all_post",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/skills/upload",
+   "name": "upload_skill",
+   "operation_id": "upload_skill_v1_skills_upload_post",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/skills/{skill_id}",
+   "name": "delete_skill",
+   "operation_id": "delete_skill_v1_skills__skill_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/skills/{skill_id}",
+   "name": "get_skill",
+   "operation_id": "get_skill_v1_skills__skill_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "PUT",
+   "path": "/v1/workspaces/{workspace}/skills/{skill_id}",
+   "name": "update_skill",
+   "operation_id": "update_skill_v1_skills__skill_id__put",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/skills/{skill_id}/content",
+   "name": "get_skill_content",
+   "operation_id": "get_skill_content_v1_skills__skill_id__content_get",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/skills/{skill_id}/files",
+   "name": "list_skill_files",
+   "operation_id": "list_skill_files_v1_skills__skill_id__files_get",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/skills/{skill_id}/files/{path:path}",
+   "name": "get_skill_file",
+   "operation_id": "get_skill_file_v1_skills__skill_id__files__path__get",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/skills/{skill_id}/flatten",
+   "name": "flatten_skill_members",
+   "operation_id": "flatten_skill_members_v1_skills__skill_id__flatten_get",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/skills/{skill_id}/install",
+   "name": "install_skill",
+   "operation_id": "install_skill_v1_skills__skill_id__install_post",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/skills/{skill_id}/members",
+   "name": "list_skill_members",
+   "operation_id": "list_skill_members_v1_skills__skill_id__members_get",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/skills/{skill_id}/members",
+   "name": "add_skill_member",
+   "operation_id": "add_skill_member_v1_skills__skill_id__members_post",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/skills/{skill_id}/members/{child_skill_id}",
+   "name": "remove_skill_member",
+   "operation_id": "remove_skill_member_v1_skills__skill_id__members__child_skill_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/skills/{skill_id}/update",
+   "name": "update_installed_skill",
+   "operation_id": "update_installed_skill_v1_skills__skill_id__update_post",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/skills/{skill_id}/versions",
+   "name": "list_skill_versions",
+   "operation_id": "list_skill_versions_v1_skills__skill_id__versions_get",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/skills/{skill_id}/versions/{version_id}/rollback",
+   "name": "rollback_skill",
+   "operation_id": "rollback_skill_v1_skills__skill_id__versions__version_id__rollback_post",
+   "router_file": "apps/api/agentarea_api/api/v1/skills.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "skills"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/streams/",
+   "name": "list_streams",
+   "operation_id": "list_streams_v1_streams__get",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/streams/",
+   "name": "create_stream",
+   "operation_id": "create_stream_v1_streams__post",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/streams/events",
+   "name": "list_workspace_events",
+   "operation_id": "list_workspace_events_v1_streams_events_get",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/streams/events/live",
+   "name": "stream_workspace_events",
+   "operation_id": "stream_workspace_events_v1_streams_events_live_get",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "SSE",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/streams/events/{event_id}",
+   "name": "get_event_by_id",
+   "operation_id": "get_event_by_id_v1_streams_events__event_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/streams/source-types",
+   "name": "list_source_types",
+   "operation_id": "list_source_types_v1_streams_source_types_get",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/streams/{stream_id}",
+   "name": "delete_stream",
+   "operation_id": "delete_stream_v1_streams__stream_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/streams/{stream_id}",
+   "name": "get_stream",
+   "operation_id": "get_stream_v1_streams__stream_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/streams/{stream_id}/events",
+   "name": "list_events",
+   "operation_id": "list_events_v1_streams__stream_id__events_get",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/streams/{stream_id}/events/{sequence}",
+   "name": "get_event",
+   "operation_id": "get_event_v1_streams__stream_id__events__sequence__get",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/streams/{stream_id}/forwards",
+   "name": "create_forward",
+   "operation_id": "create_forward_v1_streams__stream_id__forwards_post",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/streams/{stream_id}/processors",
+   "name": "create_processor",
+   "operation_id": "create_processor_v1_streams__stream_id__processors_post",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/streams/{stream_id}/processors/{subscription_id}",
+   "name": "delete_processor",
+   "operation_id": "delete_processor_v1_streams__stream_id__processors__subscription_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "PATCH",
+   "path": "/v1/workspaces/{workspace}/streams/{stream_id}/processors/{subscription_id}",
+   "name": "update_processor",
+   "operation_id": "update_processor_v1_streams__stream_id__processors__subscription_id__patch",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/streams/{stream_id}/sources",
+   "name": "list_sources",
+   "operation_id": "list_sources_v1_streams__stream_id__sources_get",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/streams/{stream_id}/sources",
+   "name": "add_source",
+   "operation_id": "add_source_v1_streams__stream_id__sources_post",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/streams/{stream_id}/sources/{source_id}",
+   "name": "delete_source",
+   "operation_id": "delete_source_v1_streams__stream_id__sources__source_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "PATCH",
+   "path": "/v1/workspaces/{workspace}/streams/{stream_id}/sources/{source_id}",
+   "name": "patch_source",
+   "operation_id": "patch_source_v1_streams__stream_id__sources__source_id__patch",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/streams/{stream_id}/subscriptions",
+   "name": "list_subscriptions",
+   "operation_id": "list_subscriptions_v1_streams__stream_id__subscriptions_get",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/streams/{stream_id}/subscriptions/{subscription_id}",
+   "name": "delete_forward",
+   "operation_id": "delete_forward_v1_streams__stream_id__subscriptions__subscription_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/streams/{stream_id}/subscriptions/{subscription_id}/outcomes",
+   "name": "list_outcomes",
+   "operation_id": "list_outcomes_v1_streams__stream_id__subscriptions__subscription_id__outcomes_get",
+   "router_file": "apps/api/agentarea_api/api/v1/streams.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "streams"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/task-definitions/",
+   "name": "list_task_definitions",
+   "operation_id": "list_task_definitions_v1_task_definitions__get",
+   "router_file": "apps/api/agentarea_api/api/v1/task_definitions.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "task-definitions"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/task-definitions/",
+   "name": "create_task_definition",
+   "operation_id": "create_task_definition_v1_task_definitions__post",
+   "router_file": "apps/api/agentarea_api/api/v1/task_definitions.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "task-definitions"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/task-definitions/{definition_id}",
+   "name": "delete_task_definition",
+   "operation_id": "delete_task_definition_v1_task_definitions__definition_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/task_definitions.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "task-definitions"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/task-definitions/{definition_id}",
+   "name": "get_task_definition",
+   "operation_id": "get_task_definition_v1_task_definitions__definition_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/task_definitions.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "task-definitions"
+   ]
+  },
+  {
+   "method": "PUT",
+   "path": "/v1/workspaces/{workspace}/task-definitions/{definition_id}",
+   "name": "update_task_definition",
+   "operation_id": "update_task_definition_v1_task_definitions__definition_id__put",
+   "router_file": "apps/api/agentarea_api/api/v1/task_definitions.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "task-definitions"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/task-definitions/{definition_id}/run",
+   "name": "run_task_definition",
+   "operation_id": "run_task_definition_v1_task_definitions__definition_id__run_post",
+   "router_file": "apps/api/agentarea_api/api/v1/task_definitions.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "task-definitions"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/tasks/",
+   "name": "get_all_tasks",
+   "operation_id": "get_all_tasks_v1_tasks__get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "tasks"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/tasks/{task_id}",
+   "name": "get_task_by_id",
+   "operation_id": "get_task_by_id_v1_tasks__task_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "tasks"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/tasks/{task_id}/continue",
+   "name": "continue_task_execution",
+   "operation_id": "continue_task_execution_v1_tasks__task_id__continue_post",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_tasks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "tasks"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/tool-call-approvals",
+   "name": "list_tool_call_approvals",
+   "operation_id": "list_tool_call_approvals_v1_tool_call_approvals_get",
+   "router_file": "apps/api/agentarea_api/api/v1/tool_call_approvals.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "tool-call-approvals"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/tool-call-approvals/{approval_id}",
+   "name": "get_tool_call_approval",
+   "operation_id": "get_tool_call_approval_v1_tool_call_approvals__approval_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/tool_call_approvals.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "tool-call-approvals"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/tool-call-approvals/{approval_id}/decide",
+   "name": "decide_tool_call_approval",
+   "operation_id": "decide_tool_call_approval_v1_tool_call_approvals__approval_id__decide_post",
+   "router_file": "apps/api/agentarea_api/api/v1/tool_call_approvals.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "tool-call-approvals"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/triggers/",
+   "name": "list_triggers",
+   "operation_id": "list_triggers_v1_triggers__get",
+   "router_file": "apps/api/agentarea_api/api/v1/triggers.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "triggers"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/triggers/",
+   "name": "create_trigger",
+   "operation_id": "create_trigger_v1_triggers__post",
+   "router_file": "apps/api/agentarea_api/api/v1/triggers.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "triggers"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/triggers/health",
+   "name": "triggers_health_check",
+   "operation_id": "triggers_health_check_v1_triggers_health_get",
+   "router_file": "apps/api/agentarea_api/api/v1/triggers.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "triggers"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/triggers/{trigger_id}",
+   "name": "delete_trigger",
+   "operation_id": "delete_trigger_v1_triggers__trigger_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/triggers.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "triggers"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/triggers/{trigger_id}",
+   "name": "get_trigger",
+   "operation_id": "get_trigger_v1_triggers__trigger_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/triggers.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "triggers"
+   ]
+  },
+  {
+   "method": "PUT",
+   "path": "/v1/workspaces/{workspace}/triggers/{trigger_id}",
+   "name": "update_trigger",
+   "operation_id": "update_trigger_v1_triggers__trigger_id__put",
+   "router_file": "apps/api/agentarea_api/api/v1/triggers.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "triggers"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/triggers/{trigger_id}/correlations",
+   "name": "get_execution_correlations",
+   "operation_id": "get_execution_correlations_v1_triggers__trigger_id__correlations_get",
+   "router_file": "apps/api/agentarea_api/api/v1/triggers.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "triggers"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/triggers/{trigger_id}/disable",
+   "name": "disable_trigger",
+   "operation_id": "disable_trigger_v1_triggers__trigger_id__disable_post",
+   "router_file": "apps/api/agentarea_api/api/v1/triggers.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "triggers"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/triggers/{trigger_id}/enable",
+   "name": "enable_trigger",
+   "operation_id": "enable_trigger_v1_triggers__trigger_id__enable_post",
+   "router_file": "apps/api/agentarea_api/api/v1/triggers.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "triggers"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/triggers/{trigger_id}/execute",
+   "name": "execute_trigger",
+   "operation_id": "execute_trigger_v1_triggers__trigger_id__execute_post",
+   "router_file": "apps/api/agentarea_api/api/v1/triggers.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "triggers"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/triggers/{trigger_id}/executions",
+   "name": "get_execution_history",
+   "operation_id": "get_execution_history_v1_triggers__trigger_id__executions_get",
+   "router_file": "apps/api/agentarea_api/api/v1/triggers.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "triggers"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/triggers/{trigger_id}/metrics",
+   "name": "get_execution_metrics",
+   "operation_id": "get_execution_metrics_v1_triggers__trigger_id__metrics_get",
+   "router_file": "apps/api/agentarea_api/api/v1/triggers.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "triggers"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/triggers/{trigger_id}/run",
+   "name": "run_trigger_now",
+   "operation_id": "run_trigger_now_v1_triggers__trigger_id__run_post",
+   "router_file": "apps/api/agentarea_api/api/v1/triggers.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "triggers"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/triggers/{trigger_id}/status",
+   "name": "get_trigger_status",
+   "operation_id": "get_trigger_status_v1_triggers__trigger_id__status_get",
+   "router_file": "apps/api/agentarea_api/api/v1/triggers.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "triggers"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/triggers/{trigger_id}/timeline",
+   "name": "get_execution_timeline",
+   "operation_id": "get_execution_timeline_v1_triggers__trigger_id__timeline_get",
+   "router_file": "apps/api/agentarea_api/api/v1/triggers.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "triggers"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/workspace-registries",
+   "name": "list_workspace_registries",
+   "operation_id": "list_workspace_registries_v1_workspace_registries_get",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/workspace-registries",
+   "name": "create_workspace_registry",
+   "operation_id": "create_workspace_registry_v1_workspace_registries_post",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "DELETE",
+   "path": "/v1/workspaces/{workspace}/workspace-registries/{registry_id}",
+   "name": "delete_workspace_registry",
+   "operation_id": "delete_workspace_registry_v1_workspace_registries__registry_id__delete",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/v1/workspaces/{workspace}/workspace-registries/{registry_id}",
+   "name": "get_workspace_registry",
+   "operation_id": "get_workspace_registry_v1_workspace_registries__registry_id__get",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "PATCH",
+   "path": "/v1/workspaces/{workspace}/workspace-registries/{registry_id}",
+   "name": "update_workspace_registry",
+   "operation_id": "update_workspace_registry_v1_workspace_registries__registry_id__patch",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/v1/workspaces/{workspace}/workspace-registries/{registry_id}/sync",
+   "name": "sync_workspace_registry",
+   "operation_id": "sync_workspace_registry_v1_workspace_registries__registry_id__sync_post",
+   "router_file": "apps/api/agentarea_api/api/v1/workspace_registries.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "v1",
+    "protected",
+    "registries"
+   ]
+  },
+  {
+   "method": "GET",
+   "path": "/webhooks/health",
+   "name": "webhook_health_check",
+   "operation_id": "webhook_health_check_webhooks_health_get",
+   "router_file": "apps/api/agentarea_api/api/v1/webhooks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "webhooks",
+    "webhooks"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/webhooks/{webhook_id}",
+   "name": "handle_webhook",
+   "operation_id": "handle_webhook_webhooks__webhook_id__post",
+   "router_file": "apps/api/agentarea_api/api/v1/webhooks.py",
+   "in_openapi": true,
+   "streaming": "none",
+   "host": null,
+   "tags": [
+    "webhooks",
+    "webhooks"
+   ]
+  },
+  {
+   "method": "POST",
+   "path": "/",
+   "name": "handle_agent_host_jsonrpc",
+   "operation_id": "handle_agent_host_jsonrpc__agent_id___post",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_a2a.py",
+   "in_openapi": false,
+   "streaming": "none",
+   "host": "{agent_id:uuid}.a2a.localhost",
+   "tags": []
+  },
+  {
+   "method": "GET",
+   "path": "/.well-known/agent-card.json",
+   "name": "get_agent_host_card",
+   "operation_id": "get_agent_host_card__agent_id___well_known_agent_card_json_get",
+   "router_file": "apps/api/agentarea_api/api/v1/agents_a2a.py",
+   "in_openapi": false,
+   "streaming": "none",
+   "host": "{agent_id:uuid}.a2a.localhost",
+   "tags": []
+  }
+ ]
+}

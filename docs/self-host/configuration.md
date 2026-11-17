@@ -80,13 +80,6 @@ Consumed by the backend, worker, and event service.
 | `AGENTAREA_DB_SSLMODE` | `global.database.sslMode` | `disable` |
 | `AGENTAREA_DB_USER` | Secret `global.secrets.postgresql`, key `username` | generated |
 | `AGENTAREA_DB_PASSWORD` | Secret `global.secrets.postgresql`, key `password` | generated |
-| `AGENTAREA_DB_URL` | composed from the five above | `postgresql://$(AGENTAREA_DB_USER):$(AGENTAREA_DB_PASSWORD)@$(AGENTAREA_DB_HOST):$(AGENTAREA_DB_PORT)/$(AGENTAREA_DB_NAME)?sslmode=<sslMode>` |
-| `AGENTAREA_DB_TENANT_SCOPE` | `global.database.tenantScope` | `log` |
-
-`AGENTAREA_DB_TENANT_SCOPE` is required and has no default in the platform. It
-decides what an ORM query on a workspace-scoped table does when nothing bound a
-workspace: `log` runs it unfiltered and logs one warning per call site, `enforce`
-refuses it. Deploy with `log`, clear the warnings, then switch to `enforce`.
 
 `global.database.maxConnections` and `global.database.connectionTimeout` exist in
 `values.yaml` but are not rendered into any environment variable by
@@ -167,6 +160,7 @@ without them, and refuses them while RustFS is enabled.
 | `AGENTAREA_AUTH_KRATOS_ADMIN_URL` | `kratos.urls.admin` | in-cluster `<release>-kratos-admin:4434` |
 | `AGENTAREA_APP_URL` | derived from the frontend ingress | `http://localhost:3000` |
 | `AGENTAREA_A2A_AGENT_URL` | `global.envVars.AGENTAREA_A2A_AGENT_URL` | `http://{agent_id}.a2a.localhost:8000` |
+| `AGENTAREA_TELEGRAM_WEBHOOK_URL` | `backend.extraEnv` | empty (Telegram posts to `AGENTAREA_API_URL/webhooks/{webhook_id}`) |
 | `SMTP_CONNECTION_URI` / `SMTP_FROM_EMAIL` / `SMTP_FROM_NAME` | `kratos.smtp.*` | empty (invitations are link-only) |
 | `AGENTAREA_MCP_OAUTH_APPS` | Secret `global.mcpOAuthApps.existingSecret`, key `global.mcpOAuthApps.existingSecretKey` | unset (no platform OAuth apps) |
 
@@ -313,7 +307,8 @@ are not rendered into environment variables.
 
 An empty `AGENTAREA_MCP_PACKAGE_REPO` uses the local Docker image store only when
 the manager's backend is Docker; Kubernetes and data-plane backends require a
-repository.
+repository, and the chart runs one of those, so the value is required: the
+backend, worker and mcp-manager refuse to start without it.
 
 `mcpManager.packageImages.registrySecret` names an existing
 `kubernetes.io/dockerconfigjson` Secret. The manager projects its
@@ -465,7 +460,7 @@ It also reads, from the groups above:
 |---|---|---|
 | Consumer group | `mcpSandboxRunner.consumerGroup` | `agentarea-sandbox-runners` |
 | Batch size | `mcpSandboxRunner.batchSize` | `1` |
-| Image | `mcpSandboxRunner.image` | falls back to `mcpManager.image` |
+| Image | `global.image` (the platform image, `agentarea sandbox`) | `agentarea/agentarea-platform` |
 | Max command duration | `mcpManager.warmPool.maxExecutionTimeoutSeconds` | `1800` |
 
 The runner consumes sandbox execution requests from Redis Streams. In Docker
@@ -544,19 +539,23 @@ included. `AGENTAREA_HTTP_ALLOW_PRIVATE=true` admits every private address and
 belongs only on a single-tenant install. `docker-compose.dev.yaml` allows
 `localhost,host.docker.internal`; `docker-compose.yaml` allows nothing.
 
-### Spend currency (not in `config.yaml`)
+### Edition and spend currency (group `application`)
 
-Read by `SpendSettings` in the backend and the worker.
+Rendered into every platform role (backend, worker, event service, mcp-manager,
+operator, the registry-reconcile Job).
 
 | Variable | Helm value | Default |
 |---|---|---|
-| `AGENTAREA_SPEND_CURRENCY` | none (set it in the env values) | `USD` |
+| `AGENTAREA_EDITION` | `global.edition` | `oss` |
+| `AGENTAREA_SPEND_CURRENCY` | `global.spendCurrency` | `USD` |
+
+`AGENTAREA_EDITION` is `oss` or `enterprise`; usage analytics report it.
 
 The one currency spend caps count and tool costs are declared in, as an ISO 4217
 code. Nothing converts other currencies: a tool cost declared in another currency is
 recorded in that currency and shown as not covered by caps. With the enterprise
 billing extension installed, billing's ledger currency is the source of truth and
-this must name it, or the backend and the worker refuse to start.
+this must name it, or every platform role refuses to start.
 
 ### Docker Compose variables
 

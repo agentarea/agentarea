@@ -1,0 +1,2 @@
+# Background loops of loops.json Go deliberately does not run: "<name> -- <reason>".
+api:MCPStatusEventsRouter -- dead: tails MCPServerInstanceStatusChanged only to log it, and its producer is gone (COVERAGE Dead Python)

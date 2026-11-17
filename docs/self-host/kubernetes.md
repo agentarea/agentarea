@@ -162,6 +162,19 @@ you install, not after.
     it is better than silently running on runc.
   </Step>
 
+  <Step title="Name the package image registry">
+    MCP servers started from npm or PyPI packages run as images the platform builds
+    and pushes to a registry the cluster pulls from. `mcpManager.packageImages.repository`
+    has no default, and the backend, worker and mcp-manager refuse to start without it:
+
+    ```yaml
+    mcpManager:
+      packageImages:
+        repository: registry.example.com/agentarea/mcp-packages
+        registrySecret: mcp-packages-registry   # dockerconfigjson, when the registry needs credentials
+    ```
+  </Step>
+
   <Step title="Install">
     ```bash
     helm install agentarea agentarea/agentarea \
@@ -179,8 +192,8 @@ you install, not after.
     installing; see [secrets backends](/self-host/secrets-backends).
 
     The install runs Jobs in this order: create the auxiliary databases, run
-    `agentarea-api migrate` (the `db-migration` Job, working directory
-    `/app/apps/api`), then `agentarea-api reconcile` (the `registry-reconcile` Job,
+    `agentarea migrate` (the `db-migration` Job), then `agentarea reconcile`
+    (the `registry-reconcile` Job,
     which creates and syncs the [platform registries](/self-host/catalog-registries):
     LLM providers and models, MCP servers, curated skills, built-in agents and
     event source types). The

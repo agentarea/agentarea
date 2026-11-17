@@ -30,6 +30,10 @@ Check the Job explicitly.
 - A verified backup — see [back up and restore](/self-host/backup-and-recovery)
 - The version you are upgrading to, and the one you are on
 - For Kubernetes: `helm` and `kubectl` against the target namespace
+- Coming from a Python release (0.1.x): no task run in flight. The Go worker
+  cannot resume a workflow the Python worker started; such a run retries forever
+  with `unknown marker name`. Let running tasks finish, or cancel them, before
+  the upgrade.
 </Info>
 
 ## Steps
@@ -37,9 +41,13 @@ Check the Job explicitly.
 <Steps titleSize="h3">
   <Step title="Choose a tag to pin">
     Images are published to Docker Hub as
-    `agentarea/agentarea-<component>` for components `agentarea-api`,
-    `agentarea-worker`, `agentarea-frontend`, `agentarea-mcp-manager`,
-    `agentarea-events`, and `agentarea-mcp-runner`.
+    `agentarea/agentarea-<component>` for components `agentarea-platform`,
+    `agentarea-frontend`, `agentarea-mcp-runner` and `agentarea-mcp-base`.
+    `agentarea-platform` is one binary whose roles are the API, worker, event
+    service, MCP manager, sandbox runner, operator and migration Job
+    (`agentarea serve`, `worker`, `events`, `mcp`, `sandbox`, `operator`, `migrate`);
+    it replaces the `agentarea-api`, `agentarea-worker`, `agentarea-events`,
+    `agentarea-mcp-manager` and `agentarea-operator` images.
 
     | Tag | Mutable | Produced by |
     |---|---|---|
@@ -173,7 +181,7 @@ Check the Job explicitly.
     an `agentarea.` prefix, drop the prefix: the namespace adds it. An open task
     page loses its live tail at the switch and picks it up again on reload.
 
-    The API, worker, `agentarea-events` and `agentarea-mcp-manager` all publish
+    The API, worker, event service and MCP manager all publish
     under the namespace. Roll them to the same release together; while versions
     are mixed, old and new components write to different keys.
 
@@ -287,7 +295,7 @@ Check the Job explicitly.
 
 ## Graph migrations
 
-The migration Job (`agentarea-api migrate`) also brings the authorization
+The migration Job (`agentarea migrate`) also brings the authorization
 graph up to date with rows a release made graph resources, after the schema
 migration and in the same run. Each step applies once, is recorded in the
 `graph_migrations` table, and is idempotent; a failed step fails the Job and
@@ -306,11 +314,10 @@ kubectl get pods -n agentarea \
 docker compose -f docker-compose.yaml images
 ```
 
-Confirm the schema is at the head the new code expects — these must match:
+Confirm the schema is at the head the new code expects:
 
 ```bash
-kubectl exec -n agentarea deploy/agentarea-backend -- \
-  sh -c 'cd /app/apps/api && alembic current && alembic heads'
+kubectl exec -n agentarea deploy/agentarea-backend -- agentarea check-migrations
 ```
 
 Confirm the API answers and reports the expected version:

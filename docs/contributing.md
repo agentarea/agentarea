@@ -101,24 +101,6 @@ For feature requests, please describe:
 ### Code Style
 
 <Tabs>
-  <Tab title="Python (Backend)">
-    ```python
-    # Use ruff for formatting
-    uv run ruff format
-
-    # Use ruff for linting and import sorting
-    uv run ruff check --fix
-
-    # Use pyright for type checking
-    uv run pyright
-
-    # Follow PEP 8 and use descriptive names
-    def create_agent_instance(agent_config: AgentConfig) -> Agent:
-        """Create a new agent instance with the given configuration."""
-        pass
-    ```
-  </Tab>
-
   <Tab title="TypeScript (Frontend)">
     ```typescript
     // Use Prettier for formatting
@@ -140,24 +122,11 @@ For feature requests, please describe:
     ```
   </Tab>
 
-  <Tab title="Go (MCP Manager)">
-    ```go
-    // Use gofmt for formatting
-    go fmt ./...
-
-    // Use golint for linting
-    golint ./...
-
-    // Follow Go conventions
-    type AgentConfig struct {
-        Name  string `json:"name"`
-        Model string `json:"model"`
-        Tools []string `json:"tools"`
-    }
-
-    func CreateAgent(config AgentConfig) (*Agent, error) {
-        // Implementation
-    }
+  <Tab title="Go (Backend)">
+    ```bash
+    # gofmt, go vet, golangci-lint (pinned version) and the layering checks:
+    # exactly what CI's go-check runs
+    make -C agentarea-platform check
     ```
   </Tab>
 </Tabs>
@@ -181,20 +150,18 @@ For feature requests, please describe:
 </CardGroup>
 
 ```bash
-# Run all Python tests
-make agentarea-platform-test
-# or
-cd agentarea-platform && uv run pytest
-
-# Run specific test suites
-cd agentarea-platform && uv run pytest tests/unit/
-cd agentarea-platform && uv run pytest tests/integration/
-npm test # Frontend tests
-
-# Run Go tests
+# Backend tests
 make test-go
 # or
-cd agentarea-mcp-manager && go test ./...
+cd agentarea-platform && go test ./...
+
+# Schema-backed suites (a disposable Postgres)
+make db-test-up && make check-db && make db-test-down
+
+# Schemathesis fuzz of a running stack
+make test-api-fuzz
+
+npm test # Frontend tests
 ```
 
 ### Documentation
@@ -256,11 +223,11 @@ Add screenshots for UI changes
 
 ```
 agentarea/
-├── agentarea-platform/     # Python backend (FastAPI + Temporal)
-│   ├── apps/               # API, worker, CLI apps
-│   └── libs/               # Domain libraries (uv workspace)
+├── agentarea-platform/     # Go backend: one binary, every server role
+│   ├── app/                # roles and module wiring
+│   ├── internal/           # kernel, domain modules, adapters, migrations
+│   └── test/               # behaviour suite and API fuzz
 ├── agentarea-webapp/       # Next.js frontend + packages
-├── agentarea-mcp-manager/  # Go MCP server orchestration
 ├── agentarea-cli/          # Node.js CLI (Ink/React)
 ├── charts/                 # Helm charts
 ├── docs/                   # Mintlify documentation

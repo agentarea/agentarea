@@ -23,12 +23,13 @@ code that is no longer proposed.
 
 - [`AGENTS.md`](../../../AGENTS.md) — repository layout and cross-cutting
   anti-patterns.
-- [`agentarea-platform/AGENTS.md`](../../../agentarea-platform/AGENTS.md) — DDD
-  layering, DI, extension points, alembic rules.
+- [`agentarea-platform/internal/kernel/README.md`](../../../agentarea-platform/internal/kernel/README.md)
+  and [`agentarea-platform/tools/archgen/main.go`](../../../agentarea-platform/tools/archgen/main.go)
+  — kernel ports and the layering the lint enforces.
+- [`agentarea-platform/internal/schema/README.md`](../../../agentarea-platform/internal/schema/README.md)
+  — migration rules.
 - [`agentarea-webapp/AGENTS.md`](../../../agentarea-webapp/AGENTS.md) — server
   actions, generated contracts, list-page and icon conventions.
-- [`agentarea-mcp-manager/AGENTS.md`](../../../agentarea-mcp-manager/AGENTS.md) —
-  Go service conventions.
 - [`.agents/notes/`](../../notes/) — design rationale. Disagreeing with a note is
   a design discussion, not an automatic veto.
 
@@ -38,9 +39,10 @@ review the semantic gaps neither those nor CI can detect.
 
 ## Blocking requirements
 
-1. **Workspace isolation holds.** Every repository takes a `UserContext`; every
-   persisted model carries `WorkspaceScopedMixin`; services receive a
-   `RepositoryFactory` rather than constructing sessions. A query that reaches
+1. **Workspace isolation holds.** A store queries only through the `db.Session`
+   it is handed, which carries the workspace the call acts in; workspace-less
+   tables go through `db.Global` (`agentarea-platform/internal/kernel/db`). A
+   new `Global` use needs a reason. A query that reaches
    the database without workspace scoping is a cross-tenant data leak, not a
    style issue — trace the new query to the scoping that constrains it, and do
    not accept "the caller filters it" as the constraint.
@@ -52,29 +54,25 @@ review the semantic gaps neither those nor CI can detect.
    the CLI too; it has silently rotted on an invented vocabulary before.
 
 3. **Failures are loud.** No silent fallback to a default when required config is
-   absent, and no swallowed exception. An `except` clause that does not re-raise
-   logs with `exc_info=True`. Config that is missing fails at startup with a
+   absent, and no swallowed error. An error that is not returned is logged with
+   its cause. Config that is missing fails at startup with a
    clear message rather than degrading into a surprising runtime mode.
 
-4. **Extension points are classified.** A new `agentarea.extensions` entry point
-   is either a **selector** (exactly one active implementation, chosen by
-   explicit config, extension is only a fallback, resolved implementation is
-   logged) or **additive** (layers on, "installed ⇒ active" is correct). An
-   installed selector extension silently overriding explicit config is the bug
-   class this rule exists to prevent. Selector wiring lives in both
-   `apps/api/.../main.py` and `apps/worker/.../main.py` — check both moved
-   together.
+4. **Extension points are additive.** Every `ext.With*` option
+   (`agentarea-platform/ext/ext.go`) layers on: present means active, a failing
+   factory stops the process, and registering a single-valued point twice is a
+   startup error. A new option that silently overrides explicit config is the
+   bug class this rule exists to prevent.
 
 5. **Security dependencies are required, never optional.** Secret managers, auth,
    and encryption are constructor requirements, not `| None` parameters that
    degrade into an unprotected path when unset.
 
-6. **Migrations are self-contained and single-headed.** ISO-timestamp filename
-   (`YYYYMMDD_HHMM_<slug>.py`), revision id ≤ 32 characters
-   (`alembic_version.version_num` is `VARCHAR(32)`), `down_revision` pointing at
-   the real head, no imports from `agentarea_common` or any domain lib. The
-   letter-pair scheme is retired; do not extend it. Two heads after a merge is
-   the common failure — it needs a merge revision, not a renamed file.
+6. **Migrations are append-only goose files.** The next number in
+   `agentarea-platform/internal/schema/migrations/` (`NNNNN_<slug>.sql`); a
+   shipped file, `00001_baseline.sql` included, is never edited. Two branches
+   taking the same number is the common failure after a merge — renumber the
+   later one.
 
 7. **Frontend contracts are generated, not written.** No hand-written type or Zod
    schema mirroring a backend contract, no `as any` on a response, no
@@ -84,26 +82,27 @@ review the semantic gaps neither those nor CI can detect.
 
 ## Manual checks
 
-- **Ownership boundaries.** The Python platform does not control sandbox or MCP
-  instance lifecycle; the Go manager owns it, with lease expiry rather than
-  explicit delete. Reject platform code that starts, stops, or reaps a runtime.
+- **Ownership boundaries.** Sandbox and MCP instance lifecycle belongs to the
+  `mcp` and `sandbox` roles, with lease expiry rather than explicit delete.
+  Reject code in other modules that starts, stops, or reaps a runtime.
 - **Authorization vocabulary.** This project's model is ReBAC. Review describing
   it as RBAC signals the author is reasoning about the wrong model. Tool calls
   clear three distinct layers (disclosure, task-policy deny-by-default, and the
   grant check) plus a second enforcement path through the governance interceptor
   pipeline — a change to one layer that does not account for the others leaves a
   bypass.
-- **Layering.** `libs/` never imports from `apps/`. Domain → application →
-  infrastructure, not the reverse. A service constructed without DI registration
-  works in the test that constructs it directly and nowhere else.
+- **Layering.** A module imports the kernel, itself and other modules' `api`
+  only; `make -C agentarea-platform check` enforces it. A service built in a
+  test but not wired in `agentarea-platform/app/` works in that test and
+  nowhere else.
 - **Worker reachability.** Code registered only in the API process is invisible
   to worker-run agents. When a diff adds a capability agents are supposed to use,
   confirm the worker can actually reach it.
-- **Money.** Costs, budgets, and balances use `Money` from
-  `agentarea_common.money`. A `float` anywhere in a monetary path is a rounding
-  bug waiting for a large number.
-- **Audit.** New audit events go through `agentarea_common.audit`
-  (`AuditService`, `@audited`), not the legacy `audit_logger`.
+- **Money.** Costs, budgets, and balances use `money.Decimal` from
+  `agentarea-platform/internal/kernel/money`. A `float` anywhere in a monetary
+  path is a rounding bug waiting for a large number.
+- **Audit.** New audit events go through the governance module's audit service
+  (`agentarea-platform/internal/modules/governance/service/audit.go`).
 - **Test strength.** An assertion must fail on the regression it claims to guard.
   Tests that restate the implementation, or that mock the very boundary under
   test, prove nothing. For authorization and task-execution changes, a passing
