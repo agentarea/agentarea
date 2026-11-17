@@ -113,6 +113,7 @@ def main():
     openapi_specs = [
         root_dir / 'agentarea-webapp' / 'src' / 'api' / 'openapi.json',
         root_dir / 'docs' / 'api-reference' / 'openapi.json',
+        root_dir / 'agentarea-platform' / 'api' / 'openapi' / 'openapi.json',
     ]
 
     for spec in openapi_specs:
