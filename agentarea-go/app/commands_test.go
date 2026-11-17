@@ -49,11 +49,11 @@ func TestDLQReplayUsage(t *testing.T) {
 	}
 }
 
-// TestDLQReplayMovesDeadLettersBack needs AGENTAREA_TEST_REDIS_URL.
+// TestDLQReplayMovesDeadLettersBack needs AGENTAREA_REDIS_TEST_URL.
 func TestDLQReplayMovesDeadLettersBack(t *testing.T) {
-	redisURL := os.Getenv("AGENTAREA_TEST_REDIS_URL")
+	redisURL := os.Getenv("AGENTAREA_REDIS_TEST_URL")
 	if redisURL == "" {
-		t.Skip("AGENTAREA_TEST_REDIS_URL not set")
+		t.Skip("AGENTAREA_REDIS_TEST_URL not set")
 	}
 	ctx := context.Background()
 	ns := "dlq" + strings.ReplaceAll(uuid.NewString()[:8], "-", "")

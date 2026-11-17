@@ -22,6 +22,9 @@ type ProviderHTTPError struct {
 	ProviderMessage string
 }
 
+// HTTPStatus is the status the provider answered.
+func (e *ProviderHTTPError) HTTPStatus() int { return e.StatusCode }
+
 func (e *ProviderHTTPError) Error() string {
 	return fmt.Sprintf("Provider returned HTTP %d: %s", e.StatusCode, e.ProviderMessage)
 }

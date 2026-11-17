@@ -21,6 +21,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/openapispec"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/payment"
 	governanceapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/governance/api"
+	runsapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/runs/api"
 )
 
 // OperationTool is one operation of an OpenAPI connection served as a tool.
@@ -139,24 +140,35 @@ func (s *Service) callConnectionTool(ctx context.Context, c authn.Caller, connec
 	if op == nil {
 		return ToolResult{Text: fmt.Sprintf("%s has no tool %s", conn.Name, tool), IsError: true}, nil
 	}
-	if judge {
-		policy, err := s.callerPolicy(ctx, c)
-		if err != nil {
-			return ToolResult{}, err
-		}
-		name, names := OpenAPIToolNames(conn.ID, conn.Name, op.Operation)
-		d := governanceapi.DecideToolPolicy(&policy, name, names)
-		actor := "user"
-		if c.ClientID != "" {
-			actor = "client"
-		}
-		if err := s.auditToolCall(ctx, c, "openapi_connection", conn.ID, actor, name, args, d, nil); err != nil {
-			return ToolResult{}, err
-		}
-		if d.Action != governanceapi.ToolAllow {
-			return ToolResult{Text: "Tool call refused: " + d.Reason, IsError: true}, nil
-		}
+	call := func() (ToolResult, error) {
+		return s.runOperation(ctx, c, conn, op.Operation, args)
 	}
+	if !judge {
+		return call()
+	}
+	policy, err := s.callerPolicy(ctx, c)
+	if err != nil {
+		return ToolResult{}, err
+	}
+	name, names := OpenAPIToolNames(conn.ID, conn.Name, op.Operation)
+	d := governanceapi.DecideToolPolicy(&policy, name, names)
+	audit := toolAudit{resourceType: "openapi_connection", resourceID: conn.ID, actorType: actorOf(c), name: name, args: args}
+	held := func() runsapi.HeldCall {
+		return heldCall(c, &policy, name, names, "", conn.Name, op.Operation, "", args, d.Reason)
+	}
+	out, refused, err := s.judged(ctx, c, c.ClientID, audit, d, held, openAPIBinding(conn.ID, op.Operation), func() (any, error) {
+		return call()
+	})
+	if err != nil {
+		return ToolResult{}, err
+	}
+	if refused != "" {
+		return ToolResult{Text: refused, IsError: true}, nil
+	}
+	return out.(ToolResult), nil
+}
+
+func (s *Service) runOperation(ctx context.Context, c authn.Caller, conn domain.Connection, operation string, args json.RawMessage) (ToolResult, error) {
 	arguments := map[string]any{}
 	if len(bytes.TrimSpace(args)) > 0 && string(bytes.TrimSpace(args)) != "null" {
 		dec := json.NewDecoder(bytes.NewReader(args))
@@ -165,7 +177,7 @@ func (s *Service) callConnectionTool(ctx context.Context, c authn.Caller, connec
 			return ToolResult{Text: "Invalid arguments: " + err.Error(), IsError: true}, nil
 		}
 	}
-	res := s.callOperation(ctx, c.Workspace, c.UserID, conn, op.Operation, arguments, nil)
+	res := s.callOperation(ctx, c.Workspace, c.UserID, conn, operation, arguments, nil)
 	text := res.Result
 	if !res.Success {
 		text = res.Error

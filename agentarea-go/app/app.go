@@ -146,6 +146,10 @@ func (b *Build) runRole(ctx context.Context, r role, args []string) error {
 		return b.runEvents(ctx)
 	case "mcp":
 		return b.runMCP(ctx)
+	case "sandbox":
+		return b.runSandbox(ctx)
+	case "operator":
+		return b.runOperator(ctx)
 	case "all":
 		return b.runAll(ctx)
 	}

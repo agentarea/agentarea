@@ -44,6 +44,8 @@ type ToolCall struct {
 	WorkflowID, RunID, ActivityID string
 	Attempt                       int
 	Heartbeat                     func()
+	// ClientID is the registered client a call outside a run came from.
+	ClientID string
 }
 
 // ToolResult is the tool's answer with what it cost the run.
@@ -83,6 +85,27 @@ func connectionOf(b api.ToolBinding) *connection {
 	return c
 }
 
+// callConnection is _tool_connection: the connection the call runs on with what its connector
+// declares the tool costs now, or why the call cannot be priced.
+func (s *Service) callConnection(ctx context.Context, ws scope.Workspace, in ToolCall) (*connection, string, error) {
+	conn := connectionOf(in.Binding)
+	if conn == nil || in.Binding.Cost != nil || s.d.ToolCosts == nil {
+		return conn, "", nil
+	}
+	cost, err := s.d.ToolCosts.ToolCost(ctx, ws, in.Binding)
+	var bad *api.CostDeclarationError
+	if errors.As(err, &bad) {
+		return nil, "the cost of this call cannot be known: " + bad.Msg, nil
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	if cost != nil {
+		conn.cost, conn.connector, conn.payer = cost, cost.Connector, cost.Payer
+	}
+	return conn, "", nil
+}
+
 func toolNamesOf(b api.ToolBinding) domain.ToolNames {
 	if b.Source == "code" || b.Source == "" {
 		return domain.ToolNames{NameAllows: true, Restricting: b.RestrictingNames}
@@ -93,6 +116,9 @@ func toolNamesOf(b api.ToolBinding) domain.ToolNames {
 func callRef(in ToolCall) string {
 	if in.TaskID != "" && in.ToolCallID != "" {
 		return in.TaskID + ":" + in.ToolCallID
+	}
+	if in.TaskID == "" && in.WorkflowID == "" && in.ToolCallID != "" {
+		return in.ToolCallID
 	}
 	return in.WorkflowID + ":" + in.RunID + ":" + in.ActivityID
 }
@@ -138,14 +164,20 @@ func (s *Service) ExecuteTool(ctx context.Context, p Principal, in ToolCall) (To
 	case action == domain.ToolRequireApproval && !in.PolicyApprovalGranted:
 		return s.auditedDenial(ctx, p, in, reason+"; approval must be resolved before activity execution")
 	}
-	conn := connectionOf(in.Binding)
+	conn, refusal, err := s.callConnection(ctx, ws, in)
+	if err != nil {
+		return ToolResult{}, err
+	}
+	if refusal != "" {
+		return s.auditedDenial(ctx, p, in, refusal)
+	}
 	b, refusal := s.beforeCall(ctx, p, in, conn)
 	if refusal == "" {
 		var pending *pendingCost
 		if b.converted {
 			pending = &pendingCost{amount: b.amount, currency: b.currency}
 		}
-		refusal, err = s.toolSpendRefusal(ctx, p, in, conn, pending)
+		refusal, err = s.toolSpendRefusal(ctx, ws, p, in, conn, pending)
 		if err != nil {
 			s.voidHold(ctx, b.holdID, "the spend gate failed")
 			return ToolResult{}, err
@@ -301,7 +333,7 @@ func (s *Service) auditedDenial(ctx context.Context, p Principal, in ToolCall, r
 
 // toolSpendRefusal is spend_cap_refusal: every cap the call falls under,
 // summed over its current lines, with the call's known cost counted.
-func (s *Service) toolSpendRefusal(ctx context.Context, p Principal, in ToolCall, conn *connection, pending *pendingCost) (string, error) {
+func (s *Service) toolSpendRefusal(ctx context.Context, ws scope.Workspace, p Principal, in ToolCall, conn *connection, pending *pendingCost) (string, error) {
 	budget := in.Policy.Budget
 	if s.d.Caps != nil {
 		live, err := s.budget(ctx, p)
@@ -311,18 +343,14 @@ func (s *Service) toolSpendRefusal(ctx context.Context, p Principal, in ToolCall
 		budget = mergeBudget(live, in.Policy.Budget)
 	}
 	caps := toolSpendCaps(budget, toolCallScope{
-		TaskID: in.TaskID, AgentID: p.AgentID, HasConnection: conn != nil, ConnectionID: connID(conn), Tool: connTool(conn),
+		TaskID: in.TaskID, AgentID: p.AgentID, ClientID: in.ClientID, HasConnection: conn != nil, ConnectionID: connID(conn), Tool: connTool(conn),
 	}, string(s.d.Pricing.Currency()))
 	if len(caps) == 0 {
 		return "", nil
 	}
-	ws, err := workspace(p)
-	if err != nil {
-		return "", err
-	}
 	now := s.now()
 	var refusal string
-	err = s.readSession(ctx, ws, func(tx db.Session) error {
+	err := s.readSession(ctx, ws, func(tx db.Session) error {
 		for _, c := range caps {
 			since := monthStart(now)
 			if c.PerRun {
@@ -364,6 +392,15 @@ func (s *Service) dispatch(ctx context.Context, p Principal, in ToolCall) (ToolO
 	caller, ok := s.d.Tools[in.Binding.Source]
 	if sb := s.sandboxCaller(in); sb != nil {
 		caller, ok = sb, true
+	}
+	if w := s.webCaller(in); w != nil {
+		caller, ok = w, true
+	}
+	if c := s.contextCaller(in); c != nil {
+		caller, ok = c, true
+	}
+	if m := s.mediaCaller(in); m != nil {
+		caller, ok = m, true
 	}
 	if !ok {
 		return ToolOutput{Result: fmt.Sprintf("MCP tool error: Unknown tool: %s", in.ToolName), Error: "Unknown tool: " + in.ToolName, Source: "builtin"}, nil
@@ -657,7 +694,7 @@ func toolCostLine(in ToolCall, p Principal, conn *connection, u usage, now time.
 		TaskID: in.TaskID, AgentID: p.AgentID, SubjectType: domain.SubjectTool, SubjectID: subjectID,
 		SubjectName: capped(subjectName), CallRef: capped(ref), Amount: u.amount.String(), Currency: u.currency,
 		Source: u.source, Payer: u.payer, Evidence: evidence, VendorCost: &vendor, VendorCurrency: &vendorCurrency,
-		Estimate: u.estimate, OccurredAt: now, Quantity: &quantity, Unit: &unit,
+		Estimate: u.estimate, OccurredAt: now, Quantity: &quantity, Unit: &unit, ClientID: in.ClientID,
 	}
 }
 

@@ -1,6 +1,8 @@
 // Package domain of insights: entities and rules; standard library and this module only.
 package domain
 
+import "time"
+
 // CollectorURL is where analytics events are sent (analytics/constants.py).
 const CollectorURL = "https://analytics.agentarea.ai"
 
@@ -23,4 +25,11 @@ type Balance struct {
 	Amount        *string
 	SpendPerDay   *string
 	RunwayDays    *string
+}
+
+// Installation is the installation row as the pulse reads it; LastPulse is nil before the first.
+type Installation struct {
+	ID        string
+	CreatedAt time.Time
+	LastPulse *time.Time
 }

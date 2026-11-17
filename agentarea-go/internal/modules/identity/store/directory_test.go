@@ -57,14 +57,27 @@ func TestKratosDirectory(t *testing.T) {
 	}
 }
 
-type kv struct{ key, value string }
+type kv struct {
+	key, value string
+	all        map[string]string
+}
 
 func (k *kv) SetEX(_ context.Context, key, value string, ttl time.Duration) error {
 	if ttl != 600*time.Second {
 		return errors.New("ttl")
 	}
 	k.key, k.value = key, value
+	if k.all == nil {
+		k.all = map[string]string{}
+	}
+	k.all[key] = value
 	return nil
+}
+
+func (k *kv) GetDel(_ context.Context, key string) (string, error) {
+	v := k.all[key]
+	delete(k.all, key)
+	return v, nil
 }
 
 func TestLinkCodesStoreOnlyADigest(t *testing.T) {
@@ -75,5 +88,29 @@ func TestLinkCodesStoreOnlyADigest(t *testing.T) {
 	}
 	if len(code) != 32 || store.value != "user" || !strings.HasPrefix(store.key, LinkCodePrefix+":") || strings.Contains(store.key, code) {
 		t.Fatalf("code %q stored %+v", code, store)
+	}
+}
+
+func TestLinkCodesRedeemOnceThenConfirmFromTheSameAccount(t *testing.T) {
+	ctx := context.Background()
+	codes := LinkCodes{KV: &kv{}}
+	code, err := codes.Issue(ctx, "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u, ok, err := codes.Redeem(ctx, code, "telegram", "42"); err != nil || !ok || u != "user" {
+		t.Fatalf("redeem %q %v %v", u, ok, err)
+	}
+	if _, ok, _ := codes.Redeem(ctx, code, "telegram", "42"); ok {
+		t.Fatal("a code redeemed twice")
+	}
+	if _, ok, _ := codes.Confirm(ctx, "telegram", "43"); ok {
+		t.Fatal("another account confirmed")
+	}
+	if u, ok, err := codes.Confirm(ctx, "telegram", "42"); err != nil || !ok || u != "user" {
+		t.Fatalf("confirm %q %v %v", u, ok, err)
+	}
+	if _, ok, _ := codes.Confirm(ctx, "telegram", "42"); ok {
+		t.Fatal("confirmed twice")
 	}
 }

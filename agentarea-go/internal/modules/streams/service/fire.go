@@ -274,7 +274,7 @@ func (f firer) start(ctx context.Context, def *TaskDefinitionText) (Firing, erro
 	if len(t.Conditions) == 0 || r.SkipConditions {
 		return f.submit(ctx, def)
 	}
-	v, err := domain.EvaluateConditions(t.Conditions, r.Data)
+	v, err := f.s.evaluate(ctx, f.ws, t, r.Data)
 	if err != nil {
 		return Firing{}, err
 	}
@@ -299,7 +299,9 @@ func (f firer) submit(ctx context.Context, def *TaskDefinitionText) (Firing, err
 		ex, err := f.record(ctx, ExecFailed, NoTaskText, "", time.Since(began))
 		return Firing{Outcome: OutcomeError, Reason: NoTaskText, Execution: ex}, err
 	}
-	params := in.stamp(buildTaskParameters(t, r.Data, r.FiredBy, r.Delivery, def, f.s.now()))
+	params := buildTaskParameters(t, r.Data, r.FiredBy, r.Delivery, def, f.s.now())
+	f.s.extractParameters(ctx, f.ws, t, askedParameters(t, def), r.Data, params)
+	params = in.stamp(params)
 	taskID := r.TaskID
 	if taskID == "" {
 		taskID = uuid.NewString()

@@ -73,6 +73,7 @@ environment below. To set it yourself: `eval "$(deploy/suite/stack.sh env)"`.
 | `BASE_URL` | Origin of the backend under test, e.g. `http://localhost:57900`. |
 | `SUITE_KRATOS_PUBLIC_URL` | Kratos public API, for the login flow. |
 | `SUITE_KRATOS_ADMIN_URL` | Kratos admin API, to create and delete identities. |
+| `SUITE_STACK_HOST` | Optional. The host a containerised stack reaches this machine at (`host.docker.internal`); test servers hand the stack URLs on it instead of 127.0.0.1. |
 
 All three are required; a suite package's `TestMain` (`harness.Main`) exits 2
 without them. These are test-harness names, read under `/test/` only, which

@@ -5,18 +5,24 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
+	"strconv"
 	"strings"
 
+	"github.com/agentarea/agentarea/agentarea-go/api/openapi"
 	"github.com/agentarea/agentarea/agentarea-go/ext"
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/analytics"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authz"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/config"
+	kdurable "github.com/agentarea/agentarea/agentarea-go/internal/kernel/durable"
 	kevents "github.com/agentarea/agentarea/agentarea-go/internal/kernel/events"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/lifecycle"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/money"
 	knetguard "github.com/agentarea/agentarea/agentarea-go/internal/kernel/netguard"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/agents"
+	catalogapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/catalog/api"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/identity"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/insights"
 	runsservice "github.com/agentarea/agentarea/agentarea-go/internal/modules/runs/service"
@@ -37,7 +43,11 @@ import (
 // parts are what a process runs of the module set: the HTTP API, the
 // Temporal workers, the stream consumers. The all role runs every part.
 type parts struct {
-	serve, worker, events bool
+	serve, worker, events, operator bool
+	// reconcile runs the catalog reconcile once, then the process exits.
+	reconcile *catalogapi.ReconcileOptions
+	// job runs once over the module set, then the process exits.
+	job func(ctx context.Context, m *moduleSet) error
 }
 
 func (b *Build) runServe(ctx context.Context) error {
@@ -68,8 +78,17 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 	agentsCfg := agents.LoadConfig(l)
 	insightsCfg := insights.LoadConfig(l)
 	runSettings := runsservice.LoadRunSettings(l)
-	webhookURL, _ := l.OptionalEnv("TELEGRAM_WEBHOOK_URL")
+	webhookURL, _ := l.OptionalEnv("AGENTAREA_TELEGRAM_WEBHOOK_URL")
 	callsTools := p.serve || p.worker
+	var health *processHealth
+	var healthAddr string
+	switch {
+	case p.serve:
+	case p.worker:
+		health, healthAddr = &processHealth{}, net.JoinHostPort("", strconv.Itoa(l.IntEnv("AGENTAREA_WORKER_HEALTH_PORT", 8081)))
+	case p.events:
+		health, healthAddr = &processHealth{}, cfg.Addr
+	}
 	var mcpCfg mcpConfig
 	if callsTools {
 		mcpCfg = loadMCPConfig(l)
@@ -106,6 +125,10 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 	if err != nil {
 		return fmt.Errorf("identity directory: %w", err)
 	}
+	mailer, err := identity.NewMailer(identityCfg, &net.Dialer{})
+	if err != nil {
+		return fmt.Errorf("transactional mail: %w", err)
+	}
 	dur, err := durable.OpenLazy(config.New(b.lookup), log)
 	if err != nil {
 		return fmt.Errorf("temporal: %w", err)
@@ -138,6 +161,10 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 	if err != nil {
 		return fmt.Errorf("stream event dedup: %w", err)
 	}
+	senderNotices, err := events.NewDedup(profile.Redis, ns, streamsservice.NoticePrefix, streamsservice.NoticeInterval)
+	if err != nil {
+		return fmt.Errorf("sender notice cache: %w", err)
+	}
 	writeQuota, err := quota.New(profile.Redis, ns)
 	if err != nil {
 		return fmt.Errorf("event write quota: %w", err)
@@ -146,14 +173,21 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 	d := coreDeps{
 		DB: profile.DB, Graph: profile.Graph, APIURL: cfg.Edge.APIURL, AppURL: cfg.AppURL, Log: log, Lookup: b.lookup,
 		Broker: profile.Broker, Redis: profile.Redis, Blob: profile.Blob, Secrets: profile.Secrets,
-		Durable: dur, Extensions: exts, Directory: directory, Sandbox: sandboxCfg, Outbound: outbound, Agents: agentsCfg, Insights: insightsCfg,
+		Durable: dur, Extensions: exts, Directory: directory, Mailer: mailer, Counter: &analytics.Handle{}, Sandbox: sandboxCfg, Outbound: outbound, Agents: agentsCfg, Insights: insightsCfg,
 		LiveTurns: profile.LiveTurns, TurnTokens: profile.TurnTokens, RunSettings: runSettings, Telemetry: telemetry,
-		Streams: streamsPlumbing{Bus: bus, Dedup: streamDedup, Quota: writeQuota, Settings: settings, WebhookURL: webhookURL, Consume: p.events},
+		Streams: streamsPlumbing{Bus: bus, Dedup: streamDedup, Notices: senderNotices, Quota: writeQuota, Settings: settings, WebhookURL: webhookURL, Consume: p.events},
 	}
 	g := lifecycle.NewGroup(lifecycle.Options{StartupTimeout: common.StartupTimeout, ShutdownTimeout: common.ShutdownTimeout})
+	if health != nil {
+		g.Add(health.listener(healthAddr, log))
+	}
 	if callsTools {
-		if d.MCPRuntime, err = newMCPRuntime(ctx, mcpCfg, mcpDeps{DB: profile.DB, Secrets: profile.Secrets, Outbound: outbound, Hooks: exts.WorkloadHooks, Log: log}); err != nil {
+		var sampler ext.RuntimeSampler
+		if d.MCPRuntime, sampler, err = newMCPRuntime(ctx, mcpCfg, mcpDeps{DB: profile.DB, Secrets: profile.Secrets, Outbound: outbound, Hooks: exts.WorkloadHooks, Log: log}); err != nil {
 			return fmt.Errorf("mcp runtime: %w", err)
+		}
+		if err := attachWorkloads(ctx, exts.WorkloadHooks, ext.Workloads{Redis: profile.Redis, Backend: mcpCfg.Runtime.Backend, Runtime: sampler}); err != nil {
+			return err
 		}
 	}
 	e := newEdge(profile.Gate, authz.Admins{})
@@ -169,29 +203,44 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 	if len(missing) > 0 {
 		return fmt.Errorf("%s: no implementation yet for %s", name, strings.Join(missing, ", "))
 	}
+	if p.job != nil {
+		return p.job(ctx, m)
+	}
+	if p.operator {
+		if err := addOperator(g, m, outbound, log); err != nil {
+			return err
+		}
+	}
+	if p.reconcile != nil {
+		res, err := m.catalog.Reconcile().Reconcile(ctx, *p.reconcile)
+		if err != nil {
+			return err
+		}
+		return reportReconcile(b.stdout, len(p.reconcile.Manifest), res, p.reconcile.WorkspaceRegistries)
+	}
+	if p.serve || p.worker {
+		g.Add(m.insights.AnalyticsSender())
+	}
 	if p.serve {
 		modules := append(m.http(), b.extensionModules(ctx, extDeps, e.extension())...)
-		srv, err := serve.New(cfg, serve.Options{Version: buildVersion(), Checks: profile.Checks()}, log, append(modules, slashRedirect())...)
+		srv, err := serve.New(cfg, serve.Options{Version: buildVersion(), Checks: profile.Checks(), OpenAPI: openapi.Spec()}, log, append(modules, slashRedirect())...)
 		if err != nil {
 			return err
 		}
 		g.Add(srv)
 		if common.OTelEnabled {
-			unregister, err := registerBrokerHealth(profile, pcfg.Events.Partitions, log)
-			if err != nil {
-				return err
-			}
-			defer unregister()
+			g.Add(brokerHealth(profile, pcfg.Events.Partitions, log))
 		}
 	}
 	if callsTools {
 		g.Add(m.connections.DispatchStamps())
 	}
 	if p.worker {
-		if err := b.addWorker(ctx, g, dur, m, exts, spend, log); err != nil {
+		if err := b.addWorker(ctx, g, dur, m, exts, spend, health, log); err != nil {
 			return err
 		}
 		g.Add(m.connections.Monitor())
+		g.Add(m.insights.InstallationPulse())
 	}
 	if p.events {
 		if err := addEvents(g, profile, pcfg, pollCfg, replyCfg, m, bus, log); err != nil {
@@ -209,13 +258,19 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 			}
 		}
 	}
+	if health != nil {
+		g.Add(health.ready())
+	}
 	return g.Run(ctx)
 }
 
 // addWorker registers runs on the agent and trigger queues, keeps its
 // schedules, and adds both workers.
-func (b *Build) addWorker(ctx context.Context, g *lifecycle.Group, dur *durable.Durable, m *moduleSet, exts *extensions, spend money.Currency, log *slog.Logger) error {
+func (b *Build) addWorker(ctx context.Context, g *lifecycle.Group, dur *durable.Durable, m *moduleSet, exts *extensions, spend money.Currency, health *processHealth, log *slog.Logger) error {
 	agentW, triggerW := dur.AgentWorker(), dur.TriggerWorker()
+	if health != nil {
+		health.pollers = map[string]kdurable.Worker{dur.Config.Queues.Agent: agentW, dur.Config.Queues.Trigger: triggerW}
+	}
 	m.runs.Register(agentW)
 	m.runs.RegisterTriggers(triggerW)
 	if err := registered(agentW, m.runs.AgentActivities()); err != nil {
@@ -226,6 +281,9 @@ func (b *Build) addWorker(ctx context.Context, g *lifecycle.Group, dur *durable.
 	}
 	schedules := m.runs.Schedules()
 	g.Add(lifecycle.Loop("schedules", func(ctx context.Context) error {
+		if err := dur.WaitNamespace(ctx); err != nil || ctx.Err() != nil {
+			return err
+		}
 		for _, s := range schedules {
 			if err := dur.Scheduler().Ensure(ctx, s); err != nil {
 				if ctx.Err() != nil {
@@ -240,8 +298,8 @@ func (b *Build) addWorker(ctx context.Context, g *lifecycle.Group, dur *durable.
 	log.InfoContext(ctx, "worker configured", slog.String("agent_queue", dur.Config.Queues.Agent),
 		slog.String("trigger_queue", dur.Config.Queues.Trigger), slog.Any("limits", dur.Config.Limits),
 		slog.String("billing_currency", string(exts.CustomerPricing.Currency())), slog.String("spend_currency", string(spend)))
-	g.Add(durable.Component("agent worker", agentW))
-	g.Add(durable.Component("trigger worker", triggerW))
+	g.Add(durable.Worker("agent worker", dur, agentW))
+	g.Add(durable.Worker("trigger worker", dur, triggerW))
 	g.Add(m.runs.Settlement())
 	return nil
 }

@@ -217,12 +217,17 @@ type AuditSink interface {
 	Emit(ctx context.Context, event map[string]any) error
 }
 
-// WorkloadHooks is the mcp-manager overlay's composition bundle, read by the
-// mcp role. Every field is optional. The sandbox attach points (Sandbox,
-// Artifacts) join with the sandbox fold-in.
+// WorkloadHooks is the mcp-manager and sandbox-runner overlay's composition
+// bundle, read by every process that runs MCP workloads or sandboxes: the mcp
+// and sandbox roles, a data-plane host, and serve, worker and all, which start
+// MCP workloads themselves. Every field is optional.
 type WorkloadHooks struct {
+	// Attach runs once, after the process built what it runs and before it
+	// serves or calls any other hook; an error stops the process.
+	Attach func(ctx context.Context, w Workloads) error
 	// Run starts after every component is built and before traffic is
-	// accepted; returning before the role is asked to stop is a failure.
+	// accepted; returning before the role is asked to stop is a failure. It
+	// runs in the mcp role, a data-plane host and all.
 	Run func(ctx context.Context) error
 	// Close runs after Run returned and before core connections close.
 	Close func() error
@@ -241,12 +246,20 @@ type WorkloadHooks struct {
 	// MCPOperations sees MCP workload creations, deletions and boundaries;
 	// an error on a started creation refuses the start.
 	MCPOperations MCPOperationObserver
+	// Sandboxes sees an external sandbox provider's sessions.
+	Sandboxes SandboxObserver
+	// TaskPods sees the Kubernetes built-in sandbox's task pods.
+	TaskPods TaskPodObserver
+	// Artifacts sees every artifact publication.
+	Artifacts ArtifactObserver
 }
 
-// MCPWorkload is the part of an MCP workload a hook may change.
+// MCPWorkload is the part of an MCP workload a hook may change, and the
+// egress exit its instance's json_spec names ("" for none), which it may not.
 type MCPWorkload struct {
 	Environment map[string]string
 	Labels      map[string]string
+	EgressExit  string
 }
 
 // MCPLifecycleChange is the lifecycle row a transition left. Transition is

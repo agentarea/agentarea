@@ -164,11 +164,11 @@ func TestMigrationSetsFollowTheCore(t *testing.T) {
 	}
 }
 
-// TestMigrateAppliesCoreThenExtensions needs AGENTAREA_TEST_POSTGRES_URL.
+// TestMigrateAppliesCoreThenExtensions needs AGENTAREA_DB_TEST_URL.
 func TestMigrateAppliesCoreThenExtensions(t *testing.T) {
-	raw := os.Getenv("AGENTAREA_TEST_POSTGRES_URL")
+	raw := os.Getenv("AGENTAREA_DB_TEST_URL")
 	if raw == "" {
-		t.Skip("AGENTAREA_TEST_POSTGRES_URL not set")
+		t.Skip("AGENTAREA_DB_TEST_URL not set")
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -195,10 +195,16 @@ func TestMigrateAppliesCoreThenExtensions(t *testing.T) {
 		"AGENTAREA_DB_HOST": u.Hostname(), "AGENTAREA_DB_PORT": u.Port(), "AGENTAREA_DB_NAME": name,
 		"AGENTAREA_DB_USER": u.User.Username(), "AGENTAREA_DB_PASSWORD": pw, "AGENTAREA_DB_SSLMODE": "disable",
 	})
+	if err := b.Run(ctx, []string{"check-migrations"}); !errors.Is(err, ErrMigrationsPending) {
+		t.Fatalf("check-migrations on an empty database: %v", err)
+	}
 	for range 2 {
 		if err := b.Run(ctx, []string{"migrate"}); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := b.Run(ctx, []string{"check-migrations"}); err != nil {
+		t.Fatalf("check-migrations after migrate: %v", err)
 	}
 	u.Path = "/" + name
 	conn, err := schema.Open(u.String())

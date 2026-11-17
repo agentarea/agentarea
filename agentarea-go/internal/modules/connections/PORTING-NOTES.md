@@ -366,15 +366,8 @@ written (the queue drops when full).
 
 ## Blocked / not ported
 
-- OpenAPI: a direct `CallConnectionTool` call (`/v1/mcp/{id}/mcp`, client
-  bundles) has no approval link, audit row, spend cap or metering. A call the
-  policy holds for approval is refused with the policy's reason.
-- OpenAPI: catalog_connector / catalog_spec (the registry_items metering
-  reads) belong to runs metering and are not ported. Cost-declaration payer
-  checks (`CheckPayers`) are not run on create.
-
-- `/mcp/clients/{id}`: approval of held calls, spend caps and cost_entries
-  (runs owns cost_entries) for client tool calls.
+- OpenAPI: cost-declaration payer checks (`CheckPayers`) are not run on
+  create; they run when a call is priced (`ToolCost`).
 - MCP Events server side (mcp_events.py): streams.
 - Platform toolsets: every tool of mcp-tools.json not named in
   `api/contract/tools-pending.txt` is served (registry_test.go holds the
@@ -411,15 +404,18 @@ fields as runs' `service.ToolSet` (struct conversion).
   narrowed by `allowed_tools` (raw names); `load_mode: searchable` puts them
   in SearchableTools (binding still set) instead of Tools.
   OpenAPIOperationTools maps the attachment name to every operation tool.
-- Code: `agentarea/files`, `agentarea/shell` (schemas in
-  `service/codetools.go`) and the platform toolsets of mcp-tools.json
+- Code: `agentarea/files`, `agentarea/shell`, `agentarea/context`,
+  `agentarea/web`, `agentarea/media` (schemas in `service/codetools.go`;
+  media's binding carries the attachment's `image_model_id` /
+  `video_model_id`, which runs' media caller resolves) and the platform
+  toolsets of mcp-tools.json
   (`platform_pinned`), one tool per method: the toolset name for a
   one-method toolset (`shell`), else `<toolset>_<method>`; disabled_methods
   dropped. PolicyNames are the namespace and the toolset name.
 - ToolProviders: one per attachment (MCP named by its server label).
-- Not offered: math/web/media/context/triggers code toolsets (no Go
-  callers yet; logged as unknown), remote A2A delegates (`agent` with
-  a2a_url), connector cost declarations (`Binding.Cost`), Method/Path of
+- Not offered: math/triggers code toolsets (no Go callers yet; logged
+  as unknown), remote A2A delegates (`agent` with
+  a2a_url), Method/Path of
   OpenAPI bindings (connections re-resolves at call time).
 - Platform toolset tools run through `Module.PlatformTools()` (app's
   `Tools["code"]` caller): the same registry as `/mcp/w/{workspace}`, called
@@ -526,3 +522,35 @@ Deviations:
   `TestMPPPaysOnlyTempoUSDStablecoins`.
 - An OpenAPI paid answer goes through the ordinary response decoding
   (response_transform, metering); Python returned the paid body raw.
+
+- MCP server specs (`/mcp-servers`, `service/specs.go`): the toolset's
+  create_spec now grants the creator ownership as the route does (Python left a
+  spec its creator could not read or edit). A catalog item or another
+  workspace's spec is never written: update, delete and deploy act on the
+  workspace's row only, so a catalog id is 403 from the PDP or 404, never a
+  write of a projection. `is_public` is stored on with-spec too (Python's
+  service did, the Go port had dropped it). The catalog half of the list is
+  only the registries the workspace sees (Python listed every workspace
+  registry's items).
+
+## Calls outside a run (client MCP, `/v1/mcp/{id}`, OpenAPI)
+
+`judged` (`service/heldcalls.go`) is `_layered_call` past the PDP. A held call
+goes through runs' `HeldCalls.Gate` (tool_call_approvals) in the transaction
+that writes its audit row with `approval_id`; an allowed or approved call goes
+through runs' `ClientToolCalls.RunClientCall`: its price read now
+(`ToolCost`, mcp_tool_connection / openapi_tool_connection), a hold on the
+platform's key, the spend caps (a cap narrowed to the client counts), the
+call, its cost lines with `client_id` and no task. A run's call reads the
+same `ToolCost` when the binding carries none (`Binding.Cost` is never set
+by `RunTools`).
+
+## Analytics counters
+
+`connector_check` (`mcp/verification.py`) at each verification verdict, and `oauth_connect`
+(`oauth_connect/service.py`) at the same thirteen sites: `started`, `succeeded`, and `failed:<why>`
+for not_authorizable, oauth_app_required, dcr_failed, invalid_state, missing_code, other_user,
+connection_gone, workspace_gone, the code exchange's reason, and the provider's RFC 6749 error
+(`other` outside the list). `provider` is the issuer's host only when a platform app serves it and
+it is in `PUBLIC_ISSUER_HOSTS`, else `custom`; `unknown` before a flow names one
+(`service/oauth_counts.go`, tests `service/oauth_counts_test.go`).

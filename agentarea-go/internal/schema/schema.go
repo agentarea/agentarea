@@ -165,6 +165,63 @@ func Migrate(ctx context.Context, db *sql.DB, set Set) error {
 	return nil
 }
 
+// State is where a database stands for one set, read without changing it.
+type State struct {
+	Set string
+	// Tracked is whether the set's goose version table exists; Current is its
+	// version then, and Alembic the revisions of the Alembic stream it continues otherwise.
+	Tracked bool
+	Current int64
+	Alembic []string
+	// Head is the set's latest goose version, and Pending whether any file is unapplied.
+	Head    int64
+	Pending bool
+}
+
+// UpToDate is whether Migrate has nothing left to do for the set.
+func (s State) UpToDate() bool { return s.Tracked && !s.Pending }
+
+// Status reads where db stands for set (check_migrations).
+func Status(ctx context.Context, db *sql.DB, set Set) (State, error) {
+	st := State{Set: set.Name}
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return st, fmt.Errorf("schema %s: %w", set.Name, err)
+	}
+	defer func() { _ = conn.Close() }()
+	if st.Tracked, err = relationExists(ctx, conn, set.VersionTable); err != nil {
+		return st, fmt.Errorf("schema %s: %w", set.Name, err)
+	}
+	store, err := database.NewStore(database.DialectPostgres, set.VersionTable)
+	if err != nil {
+		return st, fmt.Errorf("schema %s: %w", set.Name, err)
+	}
+	provider, err := goose.NewProvider("", db, set.Migrations, goose.WithStore(store), goose.WithDisableGlobalRegistry(true))
+	if err != nil {
+		return st, fmt.Errorf("schema %s: %w", set.Name, err)
+	}
+	sources := provider.ListSources()
+	if len(sources) > 0 {
+		st.Head = sources[len(sources)-1].Version
+	}
+	if !st.Tracked {
+		st.Pending = true
+		if set.AlembicTable != "" {
+			if st.Alembic, err = alembicRevisions(ctx, conn, set.AlembicTable); err != nil {
+				return st, fmt.Errorf("schema %s: %w", set.Name, err)
+			}
+		}
+		return st, nil
+	}
+	if st.Current, err = provider.GetDBVersion(ctx); err != nil {
+		return st, fmt.Errorf("schema %s: %w", set.Name, err)
+	}
+	if st.Pending, err = provider.HasPending(ctx); err != nil {
+		return st, fmt.Errorf("schema %s: %w", set.Name, err)
+	}
+	return st, nil
+}
+
 // RevisionError is returned for a database at an Alembic revision other than the head.
 type RevisionError struct {
 	Set       string

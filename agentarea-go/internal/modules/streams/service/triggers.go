@@ -130,6 +130,9 @@ func (s *Service) Create(ctx context.Context, n domain.NewTrigger) (domain.Trigg
 	if err != nil {
 		return domain.Trigger{}, err
 	}
+	if err := s.checkConditionModels(ctx, ws, n.Conditions); err != nil {
+		return domain.Trigger{}, err
+	}
 	now := s.now()
 	id := uuid.New()
 	t := domain.Trigger{
@@ -292,6 +295,9 @@ func (s *Service) validateUpdate(ctx context.Context, c authn.Caller, cur domain
 	}
 	if p.Conditions != nil {
 		if err := domain.CheckConditions(p.Conditions); err != nil {
+			return err
+		}
+		if err := s.checkConditionModels(ctx, c.Workspace, p.Conditions); err != nil {
 			return err
 		}
 	}

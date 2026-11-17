@@ -10,7 +10,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/analytics"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/db"
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/lifecycle"
+	"github.com/agentarea/agentarea/agentarea-go/internal/modules/insights/domain"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/insights/handlers"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/insights/service"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/insights/store"
@@ -34,6 +37,12 @@ type Deps struct {
 	Admin func(ctx context.Context) error
 	Now   func() time.Time
 	Log   *slog.Logger
+	// Counter is the process's analytics counter handle the started sender is attached to.
+	Counter *analytics.Handle
+	// Collector is the vendor transport analytics batches are posted over.
+	Collector http.RoundTripper
+	// Version is the build's version every analytics event carries.
+	Version string
 }
 
 // Later are the reads of modules app builds after insights (runs, streams,
@@ -46,13 +55,38 @@ type Module struct {
 	d     Deps
 	later *Later
 	svc   *service.Service
+	an    *service.Analytics
 }
 
 // New constructs the module.
 func New(d Deps) *Module {
 	m := &Module{d: d}
 	m.build()
+	m.an = service.NewAnalytics(service.AnalyticsDeps{
+		DB: d.DB, Installations: store.Installation{}, Lock: store.Installation{}, Signups: store.Signups{},
+		Collector: store.Collector{URL: domain.CollectorURL, Transport: d.Collector}, Counter: d.Counter,
+		Pulse: func() service.PulseReads {
+			if m.later == nil {
+				return service.PulseReads{}
+			}
+			return m.later.Pulse
+		},
+		Enabled: d.Config.AnalyticsEnabled, Version: d.Version, Edition: d.Config.Edition,
+		SignupHookKey: d.Config.SignupHookKey, OwnDomains: d.Config.OwnDomains, Now: d.Now, Log: d.Log,
+	})
 	return m
+}
+
+// AnalyticsSender is start_analytics and stop_analytics: off, or failing to start, it sends
+// nothing and fails nothing; on, it sends hourly and once more at stop.
+func (m *Module) AnalyticsSender() lifecycle.Component {
+	return lifecycle.Func("analytics sender", m.an.Start, m.an.Stop)
+}
+
+// InstallationPulse is the daily pulse: every replica ticks hourly, the one holding the lock sends.
+// Add it after AnalyticsSender; without a started sender it sends nothing.
+func (m *Module) InstallationPulse() lifecycle.Component {
+	return lifecycle.Loop("installation pulse", func(ctx context.Context) error { return m.an.RunPulse(ctx, service.PulseTick) })
 }
 
 // Use sets the reads of modules built after insights; call it before serving.
@@ -90,6 +124,7 @@ func (m *Module) Serve() serve.Module {
 				return errNotWired
 			}
 			handlers.Mount(rt.Mux.Chi(), rt.Errors, m.d.Workspace, m.d.Principal, handlers.New(m.svc))
+			handlers.MountSignups(rt.Mux.Chi(), rt.Errors, m.an)
 			return nil
 		},
 	}

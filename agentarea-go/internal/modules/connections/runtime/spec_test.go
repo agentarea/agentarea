@@ -120,6 +120,31 @@ func TestSpecHookRefusal(t *testing.T) {
 	}
 }
 
+func TestSpecHookSeesTheEgressExitTheSpecNames(t *testing.T) {
+	d := testDeps(&fakeBackend{}, time.Second)
+	var seen []string
+	d.SpecHook = func(_ context.Context, _, _ string, s *workload.Spec) error {
+		seen = append(seen, s.EgressExit)
+		return nil
+	}
+	for _, exit := range []any{"client-x", nil} {
+		if _, err := build(t, d, map[string]any{"type": "command", "command": "x", "egress_exit": exit}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !slices.Equal(seen, []string{"client-x", ""}) {
+		t.Fatalf("hook saw %q", seen)
+	}
+	for _, bad := range []any{42, []any{"client-x"}} {
+		if _, err := build(t, d, map[string]any{"type": "command", "command": "x", "egress_exit": bad}); err == nil || !strings.Contains(err.Error(), "egress_exit") {
+			t.Fatalf("egress_exit %#v: %v", bad, err)
+		}
+	}
+	if raw, _ := json.Marshal(workload.Spec{EgressExit: "client-x"}); strings.Contains(string(raw), "client-x") {
+		t.Fatal("the exit reached the wire spec")
+	}
+}
+
 func TestContextMustBeExactlyEnabled(t *testing.T) {
 	for _, bad := range []any{true, map[string]any{"enabled": false}, map[string]any{"enabled": true, "x": 1}} {
 		if _, err := contextEnabled(map[string]any{"context": bad}); err == nil {

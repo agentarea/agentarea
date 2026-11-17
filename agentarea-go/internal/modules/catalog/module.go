@@ -73,8 +73,10 @@ type SpecUse = service.SpecUse
 // Module is catalog, constructed once per process; a role picks which of its
 // parts run.
 type Module struct {
-	d   Deps
-	svc *service.Service
+	d          Deps
+	svc        *service.Service
+	bundles    *service.Bundles
+	bundlesErr error
 }
 
 // New constructs the module.
@@ -138,8 +140,14 @@ func (m *Module) Serve() serve.Module {
 		Name:   m.Name(),
 		Errors: handlers.MapError,
 		Mount: func(rt serve.Routes) error {
-			handlers.Mount(rt.Mux.Chi(), rt.Errors, m.d.Workspace, handlers.New(m.svc, m.d.Connections, m.d.Pricing, m.d.Admin).WithRateLimit(m.d.RateLimit, m.d.Log))
+			if m.bundlesErr != nil {
+				return m.bundlesErr
+			}
+			handlers.Mount(rt.Mux.Chi(), rt.Errors, m.d.Workspace, handlers.New(m.svc, m.d.Connections, m.d.Pricing, m.d.Admin).WithRateLimit(m.d.RateLimit, m.d.Log).WithBundles(m.bundles))
 			return nil
 		},
 	}
 }
+
+// Platform is the operator's writes of platform-declared catalog rows.
+func (m *Module) Platform() api.PlatformDeclarations { return m.svc.Platform() }

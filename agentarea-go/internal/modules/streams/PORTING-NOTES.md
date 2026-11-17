@@ -73,8 +73,7 @@ All 41 operations of the `streams` tag are mounted when their ports are wired.
 
 ## Blocked (needs another module's api)
 
-- MCP Events sources need connections to expose an instance's auth config, manager and events (`MCPEventSources`);
-  until then an `mcp_events` source is refused with 422.
+- MCP Events sources read the instance through connections' `MCPEventSources` (app adapts it).
 - No sandbox processor runner yet: the `events` role starts with a warning and every processor reaction is retried
   until dead-lettered.
 
@@ -85,12 +84,18 @@ All 41 operations of the `streams` tag are mounted when their ports are wired.
   Go stores and sends the full message (a restarted task in Python lost the event block).
 - Trigger conditions: rule, combined and legacy `field_matches` are evaluated as Python does (`domain/conditions.go`,
   Python's ==, ordering and str() over JSON; TypeErrors in Python's words), at fire, batch join and the cron
-  condition activity; a verdict's skip and score are recorded. LLM conditions are refused at save (501) and an
-  undecided one at fire: models/api exposes no model kind, no decision call, and no ledger port for the spend.
-  Integral JSON floats read as ints (5.0 is 5); dict keys iterate sorted.
-- Telegram sender admission is not wired (an event behind a door is an error reaction): identity/api has no
-  `Holder(provider, external_id)`, `Link(user, provider, external_id, method)`, nor link-code `Redeem`/`Confirm`
-  (identity has only `Issue`).
+  condition activity; a verdict's skip and score are recorded. Integral JSON floats read as ints (5.0 is 5); dict
+  keys iterate sorted.
+- LLM conditions (`service/llm.go`, `domain/llm_conditions.go`): a chat model answers the prompt as JSON, a decision
+  model answers System One's `condition_met` choice; the instance must be chat or decision at save. Each call goes
+  through runs' `OneShotModels` (spend caps of the trigger's agent, billing hold, charge, a task-less model line with
+  `purpose`/`trigger_id`). The line carries the trigger's agent_id (Python wrote None), so the agent's caps count it.
+  No `TRIGGERS_LLM_ENABLED` switch: Python's default (on) is the only behaviour.
+- `llm_parameter_extraction`: Python named no model for the call, so it always failed and was logged; Go asks the
+  agent's own model. Extracted keys never override a set parameter, a reserved one, or a resource key
+  (mcps, mcp, mcp_servers, skills, files). A failure is logged and the task starts without them.
+- Telegram sender admission (`service/admission.go`) runs on identity's `MessengerLinks` (holder, link-code
+  redeem and `/confirm`); refused senders hear why once a day (`telegram-sender-notice`).
 - A2A push notifications are not sent: nothing writes `a2a_push_configs` (Python's helpers are unused and Go has no
   A2A tasks), so the delivery group has no A2A target.
 - A platform event's summary of a non-string value is compact JSON (Python: `str()` of the dict).
@@ -127,7 +132,7 @@ All 41 operations of the `streams` tag are mounted when their ports are wired.
 - `compare_digest` on a non-ASCII value raised TypeError (500); Go compares bytes (verification tests).
 - `add_source`/`delete_source` wrote the source, its credentials and references in separate steps; now one transaction
   with the reference staged (service `TestAGithubSource…`, `TestAPickedSecret…`).
-- Event service: pollers registered at API_URL even when TELEGRAM_WEBHOOK_URL was set
+- Event service: pollers registered at API_URL even when AGENTAREA_TELEGRAM_WEBHOOK_URL was set
   (`TestPollersRegisterAtTheURLTheAPIShows`); a malformed poll interval / max pollers was ignored, now fails startup
   (`TestAMalformedPollSettingFailsStartup`); one never-ingestable item held the cursor forever, now logged and skipped
   (`TestAnItemNoRetryCanIngestDoesNotHoldTheCursor`).

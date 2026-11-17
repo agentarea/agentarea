@@ -131,14 +131,6 @@ func (x response) VisitSyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncP
 	return x.visit(w)
 }
 
-func (*Server) AnalyzeBundleV1BundlesAnalyzePost(context.Context, gen.AnalyzeBundleV1BundlesAnalyzePostRequestObject) (gen.AnalyzeBundleV1BundlesAnalyzePostResponseObject, error) {
-	return nil, errUnmounted
-}
-
-func (*Server) InstallBundleV1BundlesInstallPost(context.Context, gen.InstallBundleV1BundlesInstallPostRequestObject) (gen.InstallBundleV1BundlesInstallPostResponseObject, error) {
-	return nil, errUnmounted
-}
-
 func (*Server) ListMcpServersV1McpServersGet(context.Context, gen.ListMcpServersV1McpServersGetRequestObject) (gen.ListMcpServersV1McpServersGetResponseObject, error) {
 	return nil, errUnmounted
 }

@@ -24,6 +24,9 @@ func TestToolsAreNotAnAgentID(t *testing.T) {
 	w := h.NewWorkspace(t)
 	w.Owner.Get(t, w.Path("/agents/tools?include=nothing")).Expect(http.StatusOK).Match([]any{})
 	w.Owner.Get(t, w.Path("/agents/tools?mcp_instance_id=nope")).Expect(http.StatusUnprocessableEntity)
+	w.Owner.Get(t, w.Path("/agents/tools?include=mcp")).Expect(http.StatusOK).Match([]any{})
+	w.Owner.Get(t, w.Path("/agents/tools?include=mcp&mcp_instance_id=00000000-0000-4000-8000-000000000000")).Expect(http.StatusOK).Match([]any{})
+	w.Owner.Get(t, w.Path("/agents/tools")).Expect(http.StatusOK).Array()
 	for _, tool := range w.Owner.Get(t, w.Path("/agents/tools?include=code")).Expect(http.StatusOK).Array() {
 		o := tool.(map[string]any)
 		if o["type"] != "code" || o["mcp_instance_id"] != nil || o["input_schema"] == nil {

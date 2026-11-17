@@ -85,6 +85,12 @@ func (s *Service) mcpDeclaration(ctx context.Context, ws scope.Workspace, inst d
 	if err != nil || !ok {
 		return nil, err
 	}
+	return mcpDeclarationOf(spec, tool)
+}
+
+// mcpDeclarationOf is the declaration a catalog server's metadata makes for tool: its own, else
+// the default.
+func mcpDeclarationOf(spec map[string]any, tool string) (map[string]any, error) {
 	metadata, _ := spec["metadata"].(map[string]any)
 	raw, present := metadata[metaCost]
 	if !present || raw == nil {

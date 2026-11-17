@@ -149,8 +149,8 @@ func WithAuditSink(f Factory[AuditSink]) Option {
 }
 
 // WithWorkloadHooks replaces mcp-manager's managerapp Options (ControlPlane
-// hooks and DataPlane routes), used by the enterprise overlay of mcp-manager
-// and sandbox-runner.
+// hooks and DataPlane routes) and sandbox-runner's runner configuration, used
+// by the enterprise overlay of both.
 func WithWorkloadHooks(f Factory[WorkloadHooks]) Option {
 	return func(s *Set) {
 		if f == nil {

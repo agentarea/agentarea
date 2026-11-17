@@ -260,3 +260,29 @@ func TestServerStopEndsStreamsAndUpgrades(t *testing.T) {
 		t.Logf("stream ended with %v", err)
 	}
 }
+
+func TestOpenAPIAndDocsPages(t *testing.T) {
+	spec := []byte(`{"openapi":"3.1.0","paths":{}}`)
+	s := edge(t, Options{OpenAPI: spec})
+	resp, body := call(t, "GET", s.URL+"/openapi.json")
+	if resp.StatusCode != 200 || body != string(spec) || resp.Header.Get("Content-Type") != "application/json" {
+		t.Fatalf("openapi.json: %d %s %q", resp.StatusCode, resp.Header.Get("Content-Type"), body)
+	}
+	for path, want := range map[string]string{
+		"/docs": "url: '/openapi.json'", "/docs/oauth2-redirect": "swaggerUIRedirectOauth2", "/redoc": `spec-url="/openapi.json"`,
+	} {
+		resp, body := call(t, "GET", s.URL+path)
+		if resp.StatusCode != 200 || !strings.Contains(body, want) || resp.Header.Get("Content-Type") != htmlType {
+			t.Errorf("%s: %d %s", path, resp.StatusCode, resp.Header.Get("Content-Type"))
+		}
+	}
+}
+
+func TestNoSpecServesNoDocs(t *testing.T) {
+	s := edge(t, Options{})
+	for _, path := range []string{"/openapi.json", "/docs", "/redoc"} {
+		if resp, _ := call(t, "GET", s.URL+path); resp.StatusCode != 404 {
+			t.Errorf("%s: %d", path, resp.StatusCode)
+		}
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/analytics"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/blob"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/events"
@@ -251,13 +252,15 @@ type EntitlementGate interface {
 // Deps are what the run's activities need. Billing nil holds and charges
 // nothing; Entitlement nil gates no model call; Telemetry nil records nothing.
 type Deps struct {
-	DB          db.Database
-	Blob        blob.Store
-	Events      TaskEvents
-	Audit       governanceapi.AuditWriter
-	Pricing     money.CustomerPricing
-	Billing     money.ToolBilling
-	Caps        governanceapi.Budgets
+	DB      db.Database
+	Blob    blob.Store
+	Events  TaskEvents
+	Audit   governanceapi.AuditWriter
+	Pricing money.CustomerPricing
+	Billing money.ToolBilling
+	Caps    governanceapi.Budgets
+	// ToolCosts reads a connection's declared cost when a call is made; nil meters none.
+	ToolCosts   api.ToolCosts
 	Agents      agentsapi.Definitions
 	Resolver    modelsapi.Resolver
 	Definitions RunDefinitions
@@ -267,15 +270,25 @@ type Deps struct {
 	Skills      SkillPackages
 	Runner      RunnerSocket
 	Models      modelsapi.Caller
-	Tools       map[string]ToolCaller
+	// Describer and Decider serve the model calls made outside a run (OneShotModels).
+	Describer modelsapi.Describer
+	Decider   modelsapi.Decider
+	// Media and VideoJobs serve the agentarea/media toolset.
+	Media     modelsapi.Media
+	VideoJobs modelsapi.VideoJobs
+	Tools     map[string]ToolCaller
+	// Web are the agentarea/web toolset's transports.
+	Web         WebClients
 	Settings    RunSettings
 	Entitlement EntitlementGate
 	Telemetry   RunTelemetry
 	// Vendor reads what a settled tool call cost from its vendor (connections);
 	// the settlement worker needs it.
 	Vendor VendorCosts
-	Now    func() time.Time
-	Log    *slog.Logger
+	// Counter counts refused model calls for usage analytics; nil counts nothing.
+	Counter analytics.Counter
+	Now     func() time.Time
+	Log     *slog.Logger
 }
 
 // BrokerEvents is TaskEvents over the kernel broker.

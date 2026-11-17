@@ -56,7 +56,7 @@ func (a *x402API) serve(t *testing.T) string {
 		_, _ = w.Write([]byte(`{"answer":42}`))
 	}))
 	t.Cleanup(srv.Close)
-	return srv.URL
+	return h.StackURL(srv.URL)
 }
 
 // An agent with an x402 wallet pays the 402 its OpenAPI tool meets: the call

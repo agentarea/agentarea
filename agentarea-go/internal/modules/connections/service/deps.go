@@ -204,6 +204,7 @@ type OAuthStore interface {
 // CatalogAPIItem is a one-click API catalog item (CatalogApiItem).
 type CatalogAPIItem struct {
 	ID          uuid.UUID
+	ExternalID  string
 	Name        string
 	Description *string
 	Spec        map[string]any

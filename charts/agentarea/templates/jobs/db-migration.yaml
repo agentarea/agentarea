@@ -52,13 +52,12 @@ spec:
               memory: 64Mi
       containers:
         - name: migration
-          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ default .Chart.AppVersion .Values.backend.image.tag }}"
+          image: {{ include "agentarea.image" . | quote }}
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           {{- with .Values.global.security.containerSecurityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          workingDir: /app/apps/api
           command:
             {{- toYaml .Values.global.database.migrations.command | nindent 12 }}
           envFrom:

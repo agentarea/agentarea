@@ -16,13 +16,14 @@ const insertCostLine = `-- name: InsertCostLine :execrows
 INSERT INTO cost_entries (
     id, workspace_id, created_by, event_id, category, task_id, agent_id, subject_type,
     subject_id, subject_name, call_ref, amount, currency, provider_cost_usd, source, evidence,
-    occurred_at, payer, vendor_cost, vendor_currency, estimate, correlation_id, causation_id, quantity, unit
+    occurred_at, payer, vendor_cost, vendor_currency, estimate, correlation_id, causation_id, quantity, unit, client_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8,
     $9, $10, $11, $12::text::numeric,
     $13, $14::text::numeric, $15, $16::text::jsonb,
     $17, $18, $19::text::numeric, $20, $21,
-    $22, $23, $24::text::numeric, $25
+    $22, $23, $24::text::numeric, $25,
+    $26::uuid
 ) ON CONFLICT (event_id, category) DO NOTHING
 `
 
@@ -52,6 +53,7 @@ type InsertCostLineParams struct {
 	CausationID     pgtype.Text
 	Quantity        pgtype.Text
 	Unit            pgtype.Text
+	ClientID        uuid.NullUUID
 }
 
 func (q *Queries) InsertCostLine(ctx context.Context, arg InsertCostLineParams) (int64, error) {
@@ -81,6 +83,7 @@ func (q *Queries) InsertCostLine(ctx context.Context, arg InsertCostLineParams) 
 		arg.CausationID,
 		arg.Quantity,
 		arg.Unit,
+		arg.ClientID,
 	)
 	if err != nil {
 		return 0, err
@@ -98,6 +101,7 @@ WHERE c.workspace_id = $1 AND c.occurred_at >= $2
   AND ($6::text IS NULL OR c.category = $6::text)
   AND ($7::text IS NULL OR (c.subject_type = 'tool' AND c.subject_id = $7::text))
   AND ($8::text IS NULL OR c.subject_name = $8::text)
+  AND ($9::uuid IS NULL OR c.client_id = $9::uuid)
 `
 
 type SumSpendSinceParams struct {
@@ -109,6 +113,7 @@ type SumSpendSinceParams struct {
 	Category     pgtype.Text
 	ConnectionID pgtype.Text
 	Tool         pgtype.Text
+	ClientID     uuid.NullUUID
 }
 
 func (q *Queries) SumSpendSince(ctx context.Context, arg SumSpendSinceParams) (string, error) {
@@ -121,6 +126,7 @@ func (q *Queries) SumSpendSince(ctx context.Context, arg SumSpendSinceParams) (s
 		arg.Category,
 		arg.ConnectionID,
 		arg.Tool,
+		arg.ClientID,
 	)
 	var total string
 	err := row.Scan(&total)

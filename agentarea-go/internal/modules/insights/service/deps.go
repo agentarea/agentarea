@@ -46,6 +46,8 @@ type Reads struct {
 	Members     authz.Reader
 	Pricing     money.CustomerPricing
 	Usage       money.UsageSource
+	// Pulse are the owners' parts of the installation pulse.
+	Pulse PulseReads
 }
 
 // Deps are the service's ports.

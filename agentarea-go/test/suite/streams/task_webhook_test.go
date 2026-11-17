@@ -77,7 +77,7 @@ func (r *replyHost) serve(t *testing.T) string {
 		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 	}))
 	t.Cleanup(srv.Close)
-	return srv.URL
+	return h.StackURL(srv.URL)
 }
 
 func (r *replyHost) webhooks() []webhookCall {

@@ -64,6 +64,51 @@ func (m *memSpecs) CatalogJSONSpec(context.Context, scope.Workspace, string) (ma
 	return nil, false, nil
 }
 
+func (m *memSpecs) List(_ context.Context, ws scope.Workspace, _ catalogapi.MCPSpecQuery) ([]catalogapi.MCPSpec, int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []catalogapi.MCPSpec
+	for _, s := range m.specs {
+		if s.WorkspaceID == ws.ID() {
+			out = append(out, s)
+		}
+	}
+	return out, len(out), nil
+}
+
+func (m *memSpecs) BySlug(_ context.Context, ws scope.Workspace, slug string) (catalogapi.MCPSpec, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, s := range m.specs {
+		if s.WorkspaceID == ws.ID() && s.Slug == slug {
+			return s, true, nil
+		}
+	}
+	return catalogapi.MCPSpec{}, false, nil
+}
+
+func (m *memSpecs) Update(_ context.Context, tx db.Session, sp catalogapi.MCPSpec, _ string) (catalogapi.MCPSpec, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cur, ok := m.specs[sp.ID]
+	if !ok || cur.WorkspaceID != tx.Workspace().ID() {
+		return catalogapi.MCPSpec{}, false, nil
+	}
+	m.specs[sp.ID] = sp
+	return sp, true, nil
+}
+
+func (m *memSpecs) Delete(_ context.Context, tx db.Session, id string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cur, ok := m.specs[id]
+	if !ok || cur.WorkspaceID != tx.Workspace().ID() {
+		return false, nil
+	}
+	delete(m.specs, id)
+	return true, nil
+}
+
 // recGraph records the tuples written.
 type recGraph struct {
 	mu     sync.Mutex
@@ -168,9 +213,9 @@ type instFixture struct {
 
 func newInstFixture(t *testing.T) *instFixture {
 	t.Helper()
-	dsn := os.Getenv("AGENTAREA_TEST_POSTGRES_URL")
+	dsn := os.Getenv("AGENTAREA_DB_TEST_URL")
 	if dsn == "" {
-		t.Skip("AGENTAREA_TEST_POSTGRES_URL is not set")
+		t.Skip("AGENTAREA_DB_TEST_URL is not set")
 	}
 	sqlDB, err := schema.Open(dsn)
 	if err != nil {

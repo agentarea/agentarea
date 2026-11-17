@@ -11,9 +11,9 @@ import (
 )
 
 func TestRateLimiterAgainstValkey(t *testing.T) {
-	url := os.Getenv("AGENTAREA_TEST_REDIS_URL")
+	url := os.Getenv("AGENTAREA_REDIS_TEST_URL")
 	if url == "" {
-		t.Skip("AGENTAREA_TEST_REDIS_URL is not set")
+		t.Skip("AGENTAREA_REDIS_TEST_URL is not set")
 	}
 	rl, client, err := DialRateLimiter(url)
 	if err != nil {

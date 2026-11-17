@@ -122,6 +122,9 @@ WHITELIST = {
     "REGISTRIES_CONFIG",
     # what the manager hands a platform-run MCP app container (mcp-apps-kit reads them)
     "MCP_MANAGER_URL", "MCP_INSTANCE_ID", "MCP_STORAGE_TOKEN", "MCP_CONTEXT_KEY",
+    # what the runtime sets on every MCP container and reads back from a running
+    # one to find its port; renaming them strands the containers already running
+    "MCP_SERVICE_NAME", "MCP_CONTAINER_PORT",
 }
 
 # Fixture and tooling paths hold throwaway names, not deployed configuration.

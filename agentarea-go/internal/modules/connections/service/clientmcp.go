@@ -20,6 +20,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/mcpserver"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/toolname"
 	governanceapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/governance/api"
+	runsapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/runs/api"
 )
 
 // ClientPlatform is the platform toolsets a client carries, served as on
@@ -489,10 +490,6 @@ func (b *clientBackend) decide(name string) governanceapi.ToolDecision {
 	return governanceapi.DecideToolPolicy(&b.policy, name, b.names(name))
 }
 
-func refusal(text string) mcpserve.Result {
-	return mcpserve.Result{Content: []mcpserve.Content{{Type: "text", Text: "Tool call refused: " + text}}, IsError: true}
-}
-
 func textResult(text string, isError bool) mcpserve.Result {
 	return mcpserve.Result{Content: []mcpserve.Content{{Type: "text", Text: text}}, IsError: isError}
 }
@@ -557,22 +554,31 @@ func (b *clientBackend) activateSkill(name string) string {
 	return "Unknown skill '" + name + "'. Available: " + strings.Join(names, ", ")
 }
 
-// governed is _layered_call without the spend caps and approvals (see
-// PORTING-NOTES): the PDP judges the call, the verdict is audited before
-// anything runs, and only an allowed call runs.
+// governed is _layered_call: the PDP judges the call, then judged passes it
+// through its approval or runs' layer before it runs.
 func (b *clientBackend) governed(ctx context.Context, name string, args json.RawMessage, meta map[string]any, run func() (any, error)) (any, error) {
 	d := b.decide(name)
-	if d.Action == governanceapi.ToolRequireApproval {
-		d = governanceapi.ToolDecision{Action: governanceapi.ToolDeny,
-			Reason: d.Reason + "; approval of a held call is not served on this endpoint yet"}
+	instanceID, connector, raw := "", "AgentArea", name
+	var binding runsapi.ToolBinding
+	if op, ok := b.operation(name); ok {
+		connector, raw = op.connectionName, op.operation
+		binding = openAPIBinding(op.connectionID, op.operation)
+	} else if m, r, ok := b.owner(name); ok && !b.platformNames[name] {
+		instanceID, connector, raw = m.inst.ID, m.inst.Name, r
+		binding = mcpBinding(m.inst.ID, r)
 	}
-	if err := b.audit(ctx, name, args, d, meta); err != nil {
+	held := func() runsapi.HeldCall {
+		return heldCall(b.c, &b.policy, name, b.names(name), instanceID, connector, raw, b.clientName, args, d.Reason)
+	}
+	a := toolAudit{resourceType: "client", resourceID: b.clientID, actorType: b.actorType, name: name, args: args, extra: meta}
+	out, refused, err := b.s.judged(ctx, b.c, b.clientID, a, d, held, binding, run)
+	if err != nil {
 		return nil, err
 	}
-	if !d.Allowed() {
-		return refusal(d.Reason), nil
+	if refused != "" {
+		return textResult(refused, true), nil
 	}
-	return run()
+	return out, nil
 }
 
 func argumentKeys(args json.RawMessage) []string {
@@ -586,15 +592,22 @@ func argumentKeys(args json.RawMessage) []string {
 	return keys
 }
 
-// audit is _audit_tool_call: one row per verdict, in its own transaction,
-// argument keys only.
-func (b *clientBackend) audit(ctx context.Context, name string, args json.RawMessage, d governanceapi.ToolDecision, extra map[string]any) error {
-	return b.s.auditToolCall(ctx, b.c, "client", b.clientID, b.actorType, name, args, d, extra)
-}
-
 // auditToolCall files one verdict against the resource the call went
 // through, before the call runs, in its own transaction.
 func (s *Service) auditToolCall(ctx context.Context, c authn.Caller, resourceType, resourceID, actorType, name string,
+	args json.RawMessage, d governanceapi.ToolDecision, extra map[string]any) error {
+	if s.d.Audit == nil {
+		s.d.Log.WarnContext(ctx, "Tool call not audited: no audit writer", "resource_type", resourceType, "resource_id", resourceID,
+			"tool", name, "decision", string(d.Action))
+		return nil
+	}
+	return s.d.DB.Write(ctx, c.Workspace, func(ctx context.Context, tx db.Session) error {
+		return s.recordToolCall(ctx, tx, c, resourceType, resourceID, actorType, name, args, d, extra)
+	})
+}
+
+// recordToolCall is _record_tool_call: the verdict's audit row in tx, argument keys only.
+func (s *Service) recordToolCall(ctx context.Context, tx db.Session, c authn.Caller, resourceType, resourceID, actorType, name string,
 	args json.RawMessage, d governanceapi.ToolDecision, extra map[string]any) error {
 	if s.d.Audit == nil {
 		s.d.Log.WarnContext(ctx, "Tool call not audited: no audit writer", "resource_type", resourceType, "resource_id", resourceID,
@@ -609,12 +622,9 @@ func (s *Service) auditToolCall(ctx context.Context, c authn.Caller, resourceTyp
 	for k, v := range extra {
 		meta[k] = v
 	}
-	rec := governanceapi.AuditRecord{
+	return s.d.Audit.RecordOnce(ctx, tx, governanceapi.AuditRecord{
 		EventID: s.d.NewID().String(), Action: action, ResourceType: resourceType, ResourceID: resourceID,
 		ActorType: actorType, ActorID: c.UserID, Metadata: meta,
-	}
-	return s.d.DB.Write(ctx, c.Workspace, func(ctx context.Context, tx db.Session) error {
-		return s.d.Audit.RecordOnce(ctx, tx, rec)
 	})
 }
 

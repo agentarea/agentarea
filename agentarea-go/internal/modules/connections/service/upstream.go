@@ -351,11 +351,11 @@ func (s *Service) contextKey(ctx context.Context, inst domain.Instance, spec map
 		if !domain.Truthy(inst.JSONSpec[domain.ContextSigningFlag]) {
 			return "", nil
 		}
-		got, err := s.instanceSecrets(ctx, inst, []string{domain.ContextSecretEnv})
+		got, err := s.instanceSecrets(ctx, inst, []string{domain.ContextSecretName})
 		if err != nil {
 			return "", err
 		}
-		return got[domain.ContextSecretEnv], nil
+		return got[domain.ContextSecretName], nil
 	case domain.IsContainer(inst.Transport) && contextEnabled(spec):
 		if s.d.Config.GatewaySecret == "" {
 			return "", &domain.Unavailable{Msg: errGatewayNotConfig}

@@ -561,11 +561,12 @@ linters:
             - "$all"
             - "!**/internal/modules/sandbox/backends/**"
             - "!**/internal/modules/connections/runtime/kube/**"
+            - "!**/internal/modules/catalog/operator/**"
           deny:
             - pkg: "k8s.io/client-go"
-              desc: "only the workload backends (sandbox/backends, connections/runtime/kube) talk to Kubernetes"
+              desc: "only the workload backends (sandbox/backends, connections/runtime/kube) and the operator (catalog/operator) talk to Kubernetes"
             - pkg: "sigs.k8s.io/controller-runtime"
-              desc: "only the workload backends (sandbox/backends, connections/runtime/kube) talk to Kubernetes"
+              desc: "only the workload backends (sandbox/backends, connections/runtime/kube) and the operator (catalog/operator) talk to Kubernetes"
         exec-supervisor:
           list-mode: strict
           files:

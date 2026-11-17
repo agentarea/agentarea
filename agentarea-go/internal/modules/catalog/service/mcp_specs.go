@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -22,6 +23,12 @@ type MCPSpecStore interface {
 	SlugTaken(ctx context.Context, s db.Session, slug string) (bool, error)
 	Insert(ctx context.Context, s db.Session, r store.MCPSpecRow) (api.MCPSpec, error)
 	SetJSONSpec(ctx context.Context, s db.Session, id uuid.UUID, spec map[string]any) (bool, error)
+	BySlug(ctx context.Context, s db.Session, slug string) (api.MCPSpec, bool, error)
+	Tenant(ctx context.Context, s db.Session, f store.MCPSpecFilter, limit, offset int32) ([]api.MCPSpec, int, error)
+	Instantiated(ctx context.Context, s db.Session, f store.MCPSpecFilter) ([]uuid.UUID, error)
+	CatalogPage(ctx context.Context, s db.Session, exclude, itemIDs []uuid.UUID, tag, search *string, limit, offset int32) ([]store.CatalogMCPItem, int, error)
+	Update(ctx context.Context, s db.Session, sp api.MCPSpec, updatedBy string, now time.Time) (api.MCPSpec, bool, error)
+	Delete(ctx context.Context, s db.Session, id uuid.UUID) (bool, error)
 }
 
 // MCPSpecs implements api.MCPSpecs (MCPServerRepository as connections uses it).
@@ -382,4 +389,85 @@ func DeriveMCPEnvSchema(spec any) []any {
 		return []any{}
 	}
 	return NormalizeMCPEnvSchema(candidates[0]["environmentVariables"])
+}
+
+func uuids(ids []string) []uuid.UUID {
+	if ids == nil {
+		return nil
+	}
+	out := make([]uuid.UUID, 0, len(ids))
+	for _, id := range ids {
+		if u, err := uuid.Parse(id); err == nil {
+			out = append(out, u)
+		}
+	}
+	return out
+}
+
+// List is list_servers: a projection is always an active, non-public spec,
+// so a filter for another status or for public specs pages the tenant half
+// alone.
+func (x MCPSpecs) List(ctx context.Context, ws scope.Workspace, q api.MCPSpecQuery) (out []api.MCPSpec, total int, err error) {
+	f := store.MCPSpecFilter{Readable: uuids(q.Readable), SpecIDs: uuids(q.SpecIDs), Status: q.Status, IsPublic: q.IsPublic, Tag: q.Tag, Search: q.Search}
+	if f.Readable == nil {
+		f.Readable = []uuid.UUID{}
+	}
+	err = x.s.read(ctx, ws, func(sess db.Session) error {
+		tenant, tenantTotal, err := x.st.Tenant(ctx, sess, f, int32(q.Limit), int32(q.Offset))
+		if err != nil {
+			return err
+		}
+		for i := range tenant {
+			if tenant[i], err = x.hydrate(ctx, sess, tenant[i]); err != nil {
+				return err
+			}
+		}
+		out, total = tenant, tenantTotal
+		if (q.Status != nil && *q.Status != "active") || (q.IsPublic != nil && *q.IsPublic) {
+			return nil
+		}
+		exclude, err := x.st.Instantiated(ctx, sess, f)
+		if err != nil {
+			return err
+		}
+		items, catalogTotal, err := x.st.CatalogPage(ctx, sess, exclude, f.SpecIDs, q.Tag, q.Search,
+			int32(max(0, q.Limit-len(tenant))), int32(max(0, q.Offset-tenantTotal)))
+		if err != nil {
+			return err
+		}
+		for _, it := range items {
+			out = append(out, ProjectCatalogMCPItem(it))
+		}
+		total += catalogTotal
+		return nil
+	})
+	return out, total, err
+}
+
+// BySlug is get_by_slug.
+func (x MCPSpecs) BySlug(ctx context.Context, ws scope.Workspace, slug string) (out api.MCPSpec, ok bool, err error) {
+	err = x.s.read(ctx, ws, func(sess db.Session) error {
+		out, ok, err = x.st.BySlug(ctx, sess, slug)
+		return err
+	})
+	return out, ok, err
+}
+
+// Update rewrites the workspace's row from sp.
+func (x MCPSpecs) Update(ctx context.Context, tx db.Session, sp api.MCPSpec, updatedBy string) (api.MCPSpec, bool, error) {
+	out, ok, err := x.st.Update(ctx, tx, sp, updatedBy, x.s.d.Now())
+	if err != nil || !ok {
+		return out, ok, err
+	}
+	out, err = x.hydrate(ctx, tx, out)
+	return out, err == nil, err
+}
+
+// Delete removes the workspace's row.
+func (x MCPSpecs) Delete(ctx context.Context, tx db.Session, id string) (bool, error) {
+	u, err := uuid.Parse(id)
+	if err != nil {
+		return false, nil
+	}
+	return x.st.Delete(ctx, tx, u)
 }

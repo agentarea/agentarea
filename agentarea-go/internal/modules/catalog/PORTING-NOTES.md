@@ -2,7 +2,7 @@
 
 Python paths are relative to `agentarea-platform/`. Dossier: `.omc/research/go-migration/dossiers/catalog.md`.
 
-## Mounted (31 of 41 operations)
+## Mounted (33 of 41 operations)
 
 registries: list, create, get, patch, delete, items list, item create, item patch,
 item delete, catalog search, item update-spec, update-all, sync. workspace-registries:
@@ -13,6 +13,9 @@ upsert. Implemented, not mounted until `Deps.Connections` and `Deps.Pricing` are
 wired: catalog browse, catalog item get. `Module.Specs()` (catalog/api.Specs)
 serves models; `Module.UseModels(models.SpecUse())` hands back models' spec use
 (models is built after catalog), and the provider lists mount only with it.
+bundles: analyze, install (`handlers/bundles.go`), mounted once app calls
+`Module.UseBundles` with every owner (agents, connections, streams, governance,
+models, the edit check); without one they stay unmounted with a WARN.
 
 Wiring: `Admin` (requires_workspace_admin) gates the model-spec and
 workspace-registry writes as a route dependency, before validation, like
@@ -23,18 +26,13 @@ builds `icon_url` (build_icon_url, namespace `providers`).
 
 ## Blocked / not ported
 
-- Browse and item get: a connection's card needs `readable_catalog_connections`
-  (connections + the graph's readable ids) and `price_catalog_items` (billing
-  quote, compute estimate). Ports `service.CatalogConnections` and
-  `service.CatalogPricing`; connections/api has only `Lookup`, billing exposes no
-  quote: both stay nil in app.
 - Item update-spec / update-all port the API process's `RegistryService` (no
   provider or model spec repository, `libs/registry/agentarea_registry/application/service.py:1396-1440`):
   mcp_servers items rewrite the installed `mcp_servers` row (catalog's table),
   llm items refuse with 400, the rest do nothing.
-- mcp-servers (6): the graph's readable ids, the PDP, the governance audit writer,
-  events, and `libs/mcp` projections (connections). bundles analyze/install:
-  agents, governance, connections and streams. There is no `fmt` route.
+- bundles: there is no `fmt` route (Python has none either).
+- mcp-servers (6) are served by connections (`handlers/mount_specs.go`) over
+  `MCPSpecs` List/BySlug/Update/Delete; catalog's generated stubs stay unmounted.
 
 ## Fixed Python bugs
 
@@ -73,6 +71,25 @@ list/get/create/patch or matches the item-write message.
   rendered it with `provider_spec_id: "None"` (`model_specs.py:95`), a string the
   schema declares a UUID. Same test.
 
+Bundles (analyze/install, 2026-11-17). The webapp Bundles page and `agentarea
+deploy <dir>` send the request shapes Python validated; none relies on these:
+
+- A json_spec `command` that is not a string is reported as "command MCP has no
+  'command'"; Python called `.strip()` on it and answered 500
+  (`libs/bundles/agentarea_bundles/application/analyzer.py`, `mcp_is_unsupported`).
+- A new channel is made whole or not at all: streams' `CreateChannel` deletes the
+  stream when its source or trigger fails, and `AddSource` validates the
+  credentials against the catalog entry and writes the `channel_cred:` secret;
+  Python wrote stream, source, secret and trigger as four commits and stored the
+  credentials unvalidated (`application/installer.py:_install_channels`).
+- A bundle MCP's own spec and its instance are created in one transaction
+  (connections `CreateInstanceWithSpec`); Python committed the spec first and
+  deleted it again by compensation.
+- A skill rename, agent create/update or trigger write the owner refuses as
+  invalid input answers 400 `bundle_install_failed` with its message; Python let
+  a `ValueError` from `skill_service.update` or an unlisted exception class
+  through as 500 (`apps/api/agentarea_api/api/v1/bundles.py:install_bundle`).
+
 ## Kept
 
 - POST `/registries/` answers 200, POST `/workspace-registries` 201; item delete
@@ -101,6 +118,24 @@ list/get/create/patch or matches the item-write message.
 - PATCH `/workspace-registries/{id}` with `name` or `is_active` null answers 409
   without writing (Python's flush hits NOT NULL, also 409) after the same source
   validation.
+- Bundles: YAML is read by go-yaml as YAML 1.2 under the same node, depth,
+  alias and merge-key limits: `yes`/`no`/`on`/`off` are strings, a timestamp is
+  text, and a YAML error's text is go-yaml's, not PyYAML's. A validation error's
+  text (`BundleParseError`) is pydantic's without the `input_value` and URL lines.
+- Bundles: a catalog MCP (`catalog: <external_id>`) is looked up among the
+  registries the workspace sees, first in browse order (`CatalogMCPItemByExternalID`).
+- Bundles: the reasoning-effort check of a planned agent resolves its model
+  through models' resolver; an unknown or refused model instance is reported as
+  the agent's problem ("Model instance '<id>' does not exist in this workspace." /
+  "... cannot be used: ...") instead of failing the analyze.
+- Bundles: an install error the owner answers 400 or 422 is re-raised as 400
+  `bundle_install_failed` with `issues: []`; 403, 404 and 409 pass through as the
+  owner answered them.
+- Bundles: a refused `source_url` answers 400 with netguard's message, not
+  `validate_url`'s; the fetched body is decoded as UTF-8 with replacement, not by
+  the response's charset.
+- Bundles: the rewritten channel credentials JSON has its keys sorted (a Go map);
+  Python kept insertion order. No reader depends on the order.
 
 ## MCP specs for connections
 
@@ -163,9 +198,11 @@ Mirror: agents `CatalogMirror()` (store_catalog_item per item; a GitHub-pointer 
 registry with credentials fails loudly, only public repositories are read; a rate limit stops
 the rest of the sync's GitHub reads). `Installs()` serves agents' presets, installs and run
 provenance; `Folder` reads a skill folder at its pin over the commit archive.
-Still nil: `Connections` and `Pricing` (browse and item get stay unmounted:
-connections has no readable catalog-connection card read, billing no quote and the
-MCP runtime no instance reservation). `MCPInventory()` serves identity's explorer.
+`Connections` is connections' `CatalogConnections` and `Pricing` is
+app/catalog_pricing.go (price_catalog_items: billing's quote on the platform's key,
+the vendor cost otherwise, and the hosted instance's hour from the MCP runtime's
+reservation), so browse and item get are mounted. `MCPInventory()` serves
+identity's explorer.
 
 ## Wiring needed (as the porter left it)
 
@@ -182,5 +219,27 @@ unmounted without them):
 - `PlatformSecrets api.PlatformSecrets` (platform secret id by id or name; record the
   registry as consumer).
 - `RateLimit httpx.RateLimiter` (Valkey token bucket) for workspace sync.
-- `Connections` and `Pricing` still mount browse and item get.
 - The `operator` role calls `catalog.Module.Reconcile().Reconcile(ctx, api.ReconcileOptions{...})`.
+
+## Operator (`operator/`, role `agentarea operator`)
+
+Python: `agentarea-operator/handler.py` (kopf). Watches `llmproviderconfigs`, `platformconnections` and
+`platformegressexits` (agentarea.io/v1alpha1) in every namespace, in-cluster or through KUBECONFIG. Ids,
+status fields and texts, retry delays (60 s, 30 s for a Secret, 600 s for a catalog entry), the hourly
+rediscovery and token resync, and "no delete handler" are Python's. Rows are written through their owners:
+catalog (`model_specs`, `mcp_servers`, `registry_items` read), models (`provider_configs`, `model_instances`),
+connections (`mcp_server_instances`, `openapi_connections`), governance (`egress_exits`); keys and tokens through
+the secret manager. Test: `app/operator_db_test.go` (real schema, twice, no duplicates).
+
+Deviations:
+- One transaction per owning module (specs, then configuration + key + instances; server, then instance +
+  token), not one for the whole resource. Every write is idempotent on derived ids, so a failure between them
+  is retried and converges.
+- Keys go through the configured secret backend (Infisical too); Python wrote Fernet rows directly.
+- Every resource is reconciled when first seen, so also on every operator start; kopf skipped unchanged ones.
+- Discovery uses the outbound egress the model calls use (vendor for platform, member for a workspace); an
+  OpenAPI spec is fetched and parsed by connections (`openapispec.ParseSpec`, the guarded fetch). Python's were
+  unguarded `httpx.get`.
+- The default-tag warning reads `model_instances.name` (the operator writes the model name there), not
+  `model_specs.model_name`.
+- No leader election: run one replica, as the Python deployment did.

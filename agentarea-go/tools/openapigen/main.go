@@ -1,5 +1,6 @@
 // Command openapigen turns the Python-exported spec into one oapi-codegen
-// package per module under api/openapi/<module>/ (plan decision 13).
+// package per module under api/openapi/<module>/ (plan decision 13), and
+// copies the spec to api/openapi/openapi.json, which the serve role publishes.
 //
 //	go run ./tools/openapigen          regenerate
 //	go run ./tools/openapigen -check   fail when regenerating would change a file
@@ -71,6 +72,13 @@ func run(specPath, routesPath, out string, check bool) error {
 			return fmt.Errorf("oapi-codegen %s: %w\n%s", m, err, b)
 		}
 	}
+	raw, err := os.ReadFile(specPath)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dst, "openapi.json"), raw, 0o644); err != nil {
+		return err
+	}
 	if !check {
 		return nil
 	}
@@ -85,6 +93,11 @@ func compare(fresh, committed string) error {
 		if errA != nil || errB != nil || !bytes.Equal(a, b) {
 			bad = append(bad, m)
 		}
+	}
+	a, errA := os.ReadFile(filepath.Join(fresh, "openapi.json"))
+	b, errB := os.ReadFile(filepath.Join(committed, "openapi.json"))
+	if errA != nil || errB != nil || !bytes.Equal(a, b) {
+		bad = append(bad, "openapi.json")
 	}
 	sort.Strings(bad)
 	if len(bad) > 0 {

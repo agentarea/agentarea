@@ -6,7 +6,7 @@
 # The API and worker are `agentarea serve` and `agentarea worker` on the host.
 #
 # Host ports:
-#   57900 agentarea serve (host)
+#   57900 agentarea serve (host)   57881 worker health   57882 events health
 #   57433 Kratos public   57434 Kratos admin
 #   57444 Hydra public    57445 Hydra admin
 #   57432 Postgres        57379 Valkey

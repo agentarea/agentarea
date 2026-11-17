@@ -9,7 +9,9 @@ import (
 
 // APIItem is a one-click API catalog item (CatalogApiItem).
 type APIItem struct {
-	ID          string
+	ID string
+	// ExternalID is the catalog id billing and caps know a connection made from it by.
+	ExternalID  string
 	Name        string
 	Description *string
 	// Spec is the item's spec, numbers kept as written (json.Number).

@@ -100,15 +100,26 @@ func (h *TriggerHandler) handle(ctx context.Context, sub domain.Subscription, e 
 	if own != "" {
 		return skippedResult(fmt.Sprintf("the event comes from task %s, which this trigger started", own)), nil
 	}
-	door, err := svc.AdmissionDoor(ctx, ws, e)
+	door, err := svc.EventAdmission(ctx, ws, e)
 	if errors.Is(err, service.ErrAdmissionLookup) {
 		h.d.Log.ErrorContext(ctx, "Event cannot be admitted", "event_id", e.ID, "error", err)
 		return errorResult("sender admission: " + err.Error()), nil
 	} else if err != nil {
 		return store.Result{}, err
 	}
-	if door {
-		return errorResult("no sender admission is wired for this source"), nil
+	var caller, batchKey string
+	if door != nil {
+		admitted, refused, err := svc.Admit(ctx, ws, t, e, *door)
+		if errors.Is(err, service.ErrAdmissionUnwired) {
+			return errorResult(err.Error()), nil
+		}
+		if err != nil {
+			return store.Result{}, err
+		}
+		if refused != "" {
+			return skippedResult(refused), nil
+		}
+		caller, batchKey = admitted.UserID, firstOf(admitted.Sender, admitted.UserID)
 	}
 	stands, err := svc.AgentStands(ctx, ws, t.AgentID)
 	if err != nil {
@@ -135,7 +146,7 @@ func (h *TriggerHandler) handle(ctx context.Context, sub domain.Subscription, e 
 	}
 	te := service.StreamTriggerEvent(e, name, body)
 	if t.Batch != nil {
-		return h.joinBatch(ctx, t, sub, e, te.Data)
+		return h.joinBatch(ctx, t, sub, e, te.Data, caller, batchKey)
 	}
 	delivery, err := svc.FiringDelivery(ctx, ws, e, t.ID, t.Session, te.Data["body"])
 	if err != nil {
@@ -155,7 +166,8 @@ func (h *TriggerHandler) handle(ctx context.Context, sub domain.Subscription, e 
 		RaiseRetryable: true,
 		Delivery:       &delivery,
 		Cause:          &cause,
-		Actor:          sub.CreatedBy,
+		Caller:         caller,
+		Actor:          firstOf(caller, sub.CreatedBy),
 	})
 	if errors.Is(err, domain.ErrNotFound) {
 		return errorResult("trigger no longer exists"), nil
@@ -184,9 +196,12 @@ func verdictOf(outcome string) string {
 	return domain.VerdictError
 }
 
-func (h *TriggerHandler) joinBatch(ctx context.Context, t domain.Trigger, sub domain.Subscription, e domain.Event, data map[string]any) (store.Result, error) {
+// joinBatch hands an admitted event that meets the conditions to the trigger's open batch; each
+// admitted sender has a batch of their own (batchKey), also when several listed senders run as
+// the one user who answers for them.
+func (h *TriggerHandler) joinBatch(ctx context.Context, t domain.Trigger, sub domain.Subscription, e domain.Event, data map[string]any, caller, batchKey string) (store.Result, error) {
 	if len(t.Conditions) > 0 {
-		v, err := domain.EvaluateConditions(t.Conditions, data)
+		v, err := h.d.Service.Evaluate(ctx, t, data)
 		if err != nil {
 			h.d.Log.WarnContext(ctx, "Trigger could not decide an event", "trigger_id", t.ID, "event_id", e.ID, "error", err)
 			return errorResult(err.Error()), nil
@@ -205,10 +220,10 @@ func (h *TriggerHandler) joinBatch(ctx context.Context, t domain.Trigger, sub do
 	if t.Batch.MaxEvents != nil && *t.Batch.MaxEvents > 0 && *t.Batch.MaxEvents < limit {
 		most = *t.Batch.MaxEvents
 	}
-	workflowID := domain.BatchWorkflowID(t.ID, "")
+	workflowID := domain.BatchWorkflowID(t.ID, batchKey)
 	spec := service.BatchSpec{
 		TriggerID: t.ID, SubscriptionID: sub.ID, WorkspaceID: sub.WorkspaceID, ConfiguredBy: sub.CreatedBy,
-		Window: window, MaxEvents: most,
+		Caller: caller, Window: window, MaxEvents: most,
 	}
 	if err := h.d.Service.AddToBatch(ctx, spec, e.ID, workflowID); err != nil {
 		return store.Result{}, err
@@ -394,4 +409,13 @@ func NewExternal(d Deps) *ExternalHandler {
 		d.Now = time.Now
 	}
 	return &ExternalHandler{d: d}
+}
+
+func firstOf(vs ...string) string {
+	for _, v := range vs {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

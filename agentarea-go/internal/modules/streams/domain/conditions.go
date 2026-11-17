@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -249,12 +250,10 @@ func LLMConditions(c any) []map[string]any {
 	return nil
 }
 
-// CheckConditionModels is validate_condition_models up to what this server can read: an LLM
-// condition must name a model instance id. A well-named one is refused with ErrConditionsNotPorted,
-// since models exposes neither the instance's kind nor a call that could answer it.
+// CheckConditionModels is validate_condition_models up to what needs no store: an LLM condition
+// must name a model instance id. The service then checks the instance's kind (ModelsOfConditions).
 func CheckConditionModels(c map[string]any) error {
-	conds := LLMConditions(c)
-	for _, cond := range conds {
+	for _, cond := range LLMConditions(c) {
 		id := cond["model_id"]
 		if !pyTruthy(id) {
 			return Invalid("An LLM condition needs a model_id: the chat or decision model instance that evaluates it")
@@ -262,9 +261,6 @@ func CheckConditionModels(c map[string]any) error {
 		if !pyUUID(pyStr(id)) {
 			return Invalid(fmt.Sprintf("Condition model_id '%s' is not a model instance id", pyStr(id)))
 		}
-	}
-	if len(conds) > 0 {
-		return ErrConditionsNotPorted
 	}
 	return nil
 }
@@ -285,11 +281,11 @@ func CheckConditions(c map[string]any) error {
 
 // EvaluateConditions is evaluate_trigger_verdict: a trigger without conditions passes; an error is
 // ErrConditionUndecided. Only a body of nothing but field_matches falls back to the rule check.
-func EvaluateConditions(conditions, event map[string]any) (ConditionVerdict, error) {
+func EvaluateConditions(ctx context.Context, conditions, event map[string]any, judge LLMJudge) (ConditionVerdict, error) {
 	if len(conditions) == 0 {
 		return ConditionVerdict{Met: true, Reason: "trigger has no conditions"}, nil
 	}
-	v, err := evaluateStructured(conditions, event)
+	v, err := evaluateStructured(ctx, conditions, event, judge)
 	if err == nil {
 		return v, nil
 	}
@@ -323,7 +319,7 @@ func fieldMatches(c, event map[string]any) (ConditionVerdict, error) {
 }
 
 // evaluateStructured is LLMConditionEvaluator.evaluate_structured: a failure is a *conditionError.
-func evaluateStructured(c any, event map[string]any) (ConditionVerdict, error) {
+func evaluateStructured(ctx context.Context, c any, event map[string]any, judge LLMJudge) (ConditionVerdict, error) {
 	m, ok := c.(map[string]any)
 	if !ok {
 		return ConditionVerdict{}, condErr("Condition evaluation failed: %s", noAttribute(c, "get"))
@@ -338,9 +334,9 @@ func evaluateStructured(c any, event map[string]any) (ConditionVerdict, error) {
 	case ConditionRule:
 		v, err = evaluateRule(m, event)
 	case ConditionLLM:
-		v, err = evaluateLLM(m)
+		v, err = evaluateLLM(ctx, m, event, judge)
 	default:
-		v, err = evaluateCombined(m, event)
+		v, err = evaluateCombined(ctx, m, event, judge)
 	}
 	var ce *conditionError
 	if err != nil && !errors.As(err, &ce) {
@@ -447,10 +443,26 @@ func applyOperator(op, actual, expected any) (bool, error) {
 	return false, condErr("Unknown operator: %s", pyStr(op))
 }
 
-func evaluateLLM(c map[string]any) (ConditionVerdict, error) {
-	if !pyTruthy(getOr(c, "description", "")) {
+func evaluateLLM(ctx context.Context, c, event map[string]any, judge LLMJudge) (ConditionVerdict, error) {
+	description := getOr(c, "description", "")
+	if !pyTruthy(description) {
 		return ConditionVerdict{}, condErr("LLM condition description is required")
 	}
+	q := LLMQuestion{Description: pyStr(description), Event: event}
+	if fields, err := pyIter(getOr(c, "context_fields", []any{})); err != nil {
+		return ConditionVerdict{}, err
+	} else if len(fields) > 0 {
+		q.Context = map[string]any{}
+		for _, f := range fields {
+			key := pyStr(f)
+			q.Context[key], _ = ValueAt(event, key)
+		}
+	}
+	examples, err := pyIter(getOr(c, "examples", []any{}))
+	if err != nil {
+		return ConditionVerdict{}, err
+	}
+	q.Examples = examples
 	raw := c["model_id"]
 	if !pyTruthy(raw) {
 		return ConditionVerdict{}, condErr("LLM condition has no model_id")
@@ -458,10 +470,14 @@ func evaluateLLM(c map[string]any) (ConditionVerdict, error) {
 	if !pyUUID(pyStr(raw)) {
 		return ConditionVerdict{}, condErr("LLM condition model_id '%s' is not a model instance id", pyStr(raw))
 	}
-	return ConditionVerdict{}, condErr("LLM condition on model instance %s cannot be evaluated: this server has no condition model calls yet", pyStr(raw))
+	q.ModelID = pyUUIDString(pyStr(raw))
+	if judge == nil {
+		return ConditionVerdict{}, condErr("LLM condition on model instance %s cannot be evaluated: no condition model calls are wired", q.ModelID)
+	}
+	return judge(ctx, q)
 }
 
-func evaluateCombined(c, event map[string]any) (ConditionVerdict, error) {
+func evaluateCombined(ctx context.Context, c, event map[string]any, judge LLMJudge) (ConditionVerdict, error) {
 	conds := c["conditions"]
 	if !pyTruthy(conds) {
 		return ConditionVerdict{}, condErr("Combined condition needs at least one sub-condition")
@@ -479,7 +495,7 @@ func evaluateCombined(c, event map[string]any) (ConditionVerdict, error) {
 	}
 	verdicts := make([]ConditionVerdict, 0, len(items))
 	for _, sub := range items {
-		v, err := evaluateStructured(sub, event)
+		v, err := evaluateStructured(ctx, sub, event, judge)
 		if err != nil {
 			return ConditionVerdict{}, err
 		}
@@ -837,6 +853,13 @@ func pyReprValue(v any) string {
 }
 
 // pyUUID is whether UUID(s) parses: hex digits, with optional braces, hyphens and urn:uuid: prefix.
+// pyUUIDString is str(UUID(s)) of an id pyUUID accepts.
+func pyUUIDString(s string) string {
+	h := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(s, "urn:", ""), "uuid:", ""))
+	h = strings.ReplaceAll(strings.Trim(h, "{}"), "-", "")
+	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:32]
+}
+
 func pyUUID(s string) bool {
 	h := strings.ReplaceAll(strings.ReplaceAll(s, "urn:", ""), "uuid:", "")
 	h = strings.ReplaceAll(strings.Trim(h, "{}"), "-", "")

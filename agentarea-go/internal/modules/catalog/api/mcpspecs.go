@@ -45,6 +45,7 @@ type MCPSpec struct {
 // MCPSpecNew is a spec row a connection creates in its workspace.
 type MCPSpecNew struct {
 	Name           string
+	IsPublic       bool
 	Description    string
 	Version        string
 	DockerImageURL *string
@@ -85,6 +86,28 @@ type MCPSpecs interface {
 	// for a spec (its own for platform data, the registry item's for a
 	// workspace copy, none for a member's own spec).
 	CatalogJSONSpec(ctx context.Context, ws scope.Workspace, id string) (map[string]any, bool, error)
+	// List is list_servers: the workspace's readable rows first, then the
+	// catalog items none of them instantiates, paged together.
+	List(ctx context.Context, ws scope.Workspace, q MCPSpecQuery) ([]MCPSpec, int, error)
+	// BySlug is get_by_slug: the workspace's row with that slug.
+	BySlug(ctx context.Context, ws scope.Workspace, slug string) (MCPSpec, bool, error)
+	// Update rewrites the workspace's row sp.ID from sp in tx; false when the
+	// workspace has no such row.
+	Update(ctx context.Context, tx db.Session, sp MCPSpec, updatedBy string) (MCPSpec, bool, error)
+	// Delete removes the workspace's row id in tx.
+	Delete(ctx context.Context, tx db.Session, id string) (bool, error)
+}
+
+// MCPSpecQuery is list_servers' filters; nil is no filter. Readable narrows
+// the workspace's rows only, SpecIDs both halves.
+type MCPSpecQuery struct {
+	Readable      []string
+	SpecIDs       []string
+	Status        *string
+	IsPublic      *bool
+	Tag           *string
+	Search        *string
+	Limit, Offset int
 }
 
 // ErrSlugsExhausted is resolve_unique_slug running out of suffixes; its text is Python's.

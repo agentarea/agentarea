@@ -17,11 +17,17 @@ type instanceIDArgs struct {
 	InstanceID string `json:"instance_id"`
 }
 
-// specsUnserved is the refusal of a spec tool catalog has no capability for.
-func specsUnserved(tool, capability string) toolDef {
-	return toolDef{call: func(context.Context, authn.Caller, json.RawMessage) (any, error) {
-		return nil, &toolError{"mcp_servers_" + tool + " is not served yet: catalog has no MCP server spec " + capability}
-	}}
+// specJSON is _serialize_server.
+func specJSON(s connectionsapi.MCPSpec) map[string]any {
+	tags := s.Tags
+	if tags == nil {
+		tags = []any{}
+	}
+	return map[string]any{
+		"id": s.ID, "name": s.Name, "description": s.Description, "version": s.Version,
+		"tags": tags, "is_public": s.IsPublic, "remote_url": s.RemoteURL,
+		"docker_image_url": s.DockerImageURL, "status": s.Status,
+	}
 }
 
 func connectActionJSON(a *connectionsapi.ConnectAction) map[string]any {
@@ -95,21 +101,120 @@ func asObject(v any) (map[string]any, error) {
 
 // mcpServerTools is tools/mcp_servers_toolset.py.
 func mcpServerTools(m connectionsapi.PlatformMCPServers) map[string]toolDef {
-	createSpec := specsUnserved("create_spec", "writes")
-	createSpec.title, createSpec.effect = "Create MCP server spec", effectWrite
-	updateSpec := specsUnserved("update_spec", "writes")
-	updateSpec.title, updateSpec.effect, updateSpec.idempotent = "Update MCP server spec", effectWrite, true
-	deleteSpec := specsUnserved("delete_spec", "writes")
-	deleteSpec.title, deleteSpec.effect, deleteSpec.idempotent = "Delete MCP server spec", effectDestructive, true
-	listing := specsUnserved("list_specs", "listing")
 	return map[string]toolDef{
-		"create_spec": createSpec,
-		"update_spec": updateSpec,
-		"delete_spec": deleteSpec,
+		"create_spec": {title: "Create MCP server spec", effect: effectWrite, call: func(ctx context.Context, c authn.Caller, args json.RawMessage) (any, error) {
+			in, err := decodeArgs[struct {
+				Name           string   `json:"name"`
+				Description    string   `json:"description"`
+				DockerImageURL *string  `json:"docker_image_url"`
+				RemoteURL      *string  `json:"remote_url"`
+				Version        *string  `json:"version"`
+				Tags           []string `json:"tags"`
+				IsPublic       bool     `json:"is_public"`
+				EnvSchemaJSON  string   `json:"env_schema_json"`
+				CmdJSON        string   `json:"cmd_json"`
+				JSONSpecJSON   string   `json:"json_spec_json"`
+				RegistryURL    *string  `json:"registry_url"`
+			}](args)
+			if err != nil {
+				return nil, err
+			}
+			tags := []any{}
+			for _, t := range in.Tags {
+				tags = append(tags, t)
+			}
+			version := "1.0.0"
+			if in.Version != nil {
+				version = *in.Version
+			}
+			fields := map[string]any{"name": in.Name, "description": in.Description, "docker_image_url": in.DockerImageURL,
+				"remote_url": in.RemoteURL, "version": version, "tags": tags, "is_public": in.IsPublic,
+				"registry_url": in.RegistryURL}
+			doc, err := toolDocumentOf(fields,
+				jsonArg{"env_schema", "env_schema_json", in.EnvSchemaJSON},
+				jsonArg{"cmd", "cmd_json", in.CmdJSON},
+				jsonArg{"json_spec", "json_spec_json", in.JSONSpecJSON})
+			if err != nil {
+				return nil, err
+			}
+			sp, err := m.CreateSpec(ctx, c, doc)
+			if err != nil {
+				return nil, err
+			}
+			return specJSON(sp), nil
+		}},
+		"update_spec": {title: "Update MCP server spec", effect: effectWrite, idempotent: true, call: func(ctx context.Context, c authn.Caller, args json.RawMessage) (any, error) {
+			in, err := decodeArgs[struct {
+				SpecID         string    `json:"spec_id"`
+				Name           *string   `json:"name"`
+				Description    *string   `json:"description"`
+				DockerImageURL *string   `json:"docker_image_url"`
+				RemoteURL      *string   `json:"remote_url"`
+				Version        *string   `json:"version"`
+				Tags           *[]string `json:"tags"`
+				IsPublic       *bool     `json:"is_public"`
+				Status         *string   `json:"status"`
+				EnvSchemaJSON  string    `json:"env_schema_json"`
+				CmdJSON        string    `json:"cmd_json"`
+				JSONSpecJSON   string    `json:"json_spec_json"`
+				RegistryURL    *string   `json:"registry_url"`
+			}](args)
+			if err != nil {
+				return nil, err
+			}
+			fields := map[string]any{}
+			for key, v := range map[string]*string{"name": in.Name, "description": in.Description,
+				"docker_image_url": in.DockerImageURL, "remote_url": in.RemoteURL, "version": in.Version,
+				"status": in.Status, "registry_url": in.RegistryURL} {
+				if v != nil {
+					fields[key] = *v
+				}
+			}
+			if in.Tags != nil {
+				fields["tags"] = *in.Tags
+			}
+			if in.IsPublic != nil {
+				fields["is_public"] = *in.IsPublic
+			}
+			if len(fields) == 0 && in.EnvSchemaJSON == "" && in.CmdJSON == "" && in.JSONSpecJSON == "" {
+				return nil, &toolError{"no fields to update"}
+			}
+			doc, err := toolDocumentOf(fields,
+				jsonArg{"env_schema", "env_schema_json", in.EnvSchemaJSON},
+				jsonArg{"cmd", "cmd_json", in.CmdJSON},
+				jsonArg{"json_spec", "json_spec_json", in.JSONSpecJSON})
+			if err != nil {
+				return nil, err
+			}
+			sp, err := m.UpdateSpec(ctx, c, in.SpecID, doc)
+			if errors.Is(err, connectionsapi.ErrNotFound) {
+				return nil, &toolError{"MCP server spec not found"}
+			}
+			if err != nil {
+				return nil, err
+			}
+			return specJSON(sp), nil
+		}},
+		"delete_spec": {title: "Delete MCP server spec", effect: effectDestructive, idempotent: true, call: func(ctx context.Context, c authn.Caller, args json.RawMessage) (any, error) {
+			in, err := decodeArgs[struct {
+				SpecID string `json:"spec_id"`
+			}](args)
+			if err != nil {
+				return nil, err
+			}
+			deleted, err := m.DeleteSpec(ctx, c, in.SpecID)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"deleted": deleted}, nil
+		}},
 		"list_specs": {title: "List MCP server specs", effect: effectRead, call: func(ctx context.Context, c authn.Caller, args json.RawMessage) (any, error) {
 			in, err := decodeArgs[struct {
-				Limit  *int `json:"limit"`
-				Offset int  `json:"offset"`
+				IsPublic bool   `json:"is_public"`
+				Tag      string `json:"tag"`
+				Search   string `json:"search"`
+				Limit    *int   `json:"limit"`
+				Offset   int    `json:"offset"`
 			}](args)
 			if err != nil {
 				return nil, err
@@ -124,7 +229,25 @@ func mcpServerTools(m connectionsapi.PlatformMCPServers) map[string]toolDef {
 			if in.Offset < 0 {
 				return nil, &toolError{fmt.Sprintf("offset must not be negative, got %d", in.Offset)}
 			}
-			return listing.call(ctx, c, args)
+			q := connectionsapi.SpecListing{Limit: limit, Offset: in.Offset}
+			if in.IsPublic {
+				q.IsPublic = &in.IsPublic
+			}
+			if in.Tag != "" {
+				q.Tag = &in.Tag
+			}
+			if in.Search != "" {
+				q.Search = &in.Search
+			}
+			specs, total, err := m.ListSpecs(ctx, c, q)
+			if err != nil {
+				return nil, err
+			}
+			items := make([]map[string]any, len(specs))
+			for i, sp := range specs {
+				items[i] = specJSON(sp)
+			}
+			return map[string]any{"items": items, "total": total}, nil
 		}},
 		"get_spec": {title: "Get MCP server spec", effect: effectRead, call: func(ctx context.Context, c authn.Caller, args json.RawMessage) (any, error) {
 			in, err := decodeArgs[struct {
@@ -140,16 +263,9 @@ func mcpServerTools(m connectionsapi.PlatformMCPServers) map[string]toolDef {
 			if err != nil {
 				return nil, err
 			}
-			tags := s.Tags
-			if tags == nil {
-				tags = []any{}
-			}
-			return map[string]any{
-				"id": s.ID, "name": s.Name, "description": s.Description, "version": s.Version,
-				"tags": tags, "is_public": s.IsPublic, "remote_url": s.RemoteURL,
-				"docker_image_url": s.DockerImageURL, "status": s.Status,
-				"env_schema": s.EnvSchema, "registry_url": s.RegistryURL,
-			}, nil
+			out := specJSON(s)
+			out["env_schema"], out["registry_url"] = s.EnvSchema, s.RegistryURL
+			return out, nil
 		}},
 		"create": {title: "Create MCP server instance", effect: effectWrite, openWorld: true, call: func(ctx context.Context, c authn.Caller, args json.RawMessage) (any, error) {
 			in, err := decodeArgs[struct {

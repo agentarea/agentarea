@@ -25,9 +25,9 @@ const serverSpecID = "spec-docker"
 
 func testPools(t *testing.T) *db.Pools {
 	t.Helper()
-	dsn := os.Getenv("AGENTAREA_TEST_POSTGRES_URL")
+	dsn := os.Getenv("AGENTAREA_DB_TEST_URL")
 	if dsn == "" {
-		t.Skip("AGENTAREA_TEST_POSTGRES_URL is not set")
+		t.Skip("AGENTAREA_DB_TEST_URL is not set")
 	}
 	sqlDB, err := schema.Open(dsn)
 	if err != nil {

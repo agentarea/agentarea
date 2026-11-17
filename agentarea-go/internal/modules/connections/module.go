@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/analytics"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authz"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/config"
@@ -19,6 +20,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/mcpserver"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/service"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/store"
+	runsapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/runs/api"
 	walletapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/wallet/api"
 	"github.com/agentarea/agentarea/agentarea-go/internal/serve"
 )
@@ -71,6 +73,8 @@ type Deps struct {
 	AppURL string
 	Log    *slog.Logger
 	Now    func() time.Time
+	// Counter counts connector checks and OAuth connects for usage analytics; nil counts nothing.
+	Counter analytics.Counter
 }
 
 // Module is connections, constructed once per process; a role picks which of its
@@ -81,8 +85,10 @@ type Module struct {
 	lookup  *service.Lookup
 	loadErr error
 	// toolsets is Later.Toolsets, read when serving and calling.
-	toolsets *Toolsets
-	wallets  walletapi.Wallets
+	toolsets    *Toolsets
+	wallets     walletapi.Wallets
+	heldCalls   runsapi.HeldCalls
+	clientCalls runsapi.ClientToolCalls
 }
 
 // New constructs the module.
@@ -124,6 +130,22 @@ func (m *Module) Use(l Later) {
 	m.build()
 }
 
+// UseHeldCalls sets runs' approval gate of held calls; runs is built after connections.
+func (m *Module) UseHeldCalls(h runsapi.HeldCalls) {
+	m.heldCalls = h
+	m.svc.UseHeldCalls(h)
+}
+
+// UseClientCalls sets runs' pricing, caps and metering of calls outside a run; runs is built
+// after connections.
+func (m *Module) UseClientCalls(c runsapi.ClientToolCalls) {
+	m.clientCalls = c
+	m.svc.UseClientCalls(c)
+}
+
+// ToolCosts reads what a connection declares a tool call costs, when the call is made.
+func (m *Module) ToolCosts() runsapi.ToolCosts { return m.svc }
+
 // UseWallets sets the agents' wallets runs' calls pay their 402s from; wallet
 // is built after connections.
 func (m *Module) UseWallets(w walletapi.Wallets) {
@@ -149,8 +171,10 @@ func (m *Module) build() {
 		Instances: store.Instances{}, Secrets: d.Secrets, Catalog: d.Catalog, Graph: d.Graph,
 		Specs: d.Specs, Runtime: d.Runtime, Agents: d.Agents, Policies: d.Policies, Approvals: d.Approvals, Out: d.Out, KV: d.KV,
 		Config: d.Config, Admin: d.Admin, APIURL: d.APIURL, AppURL: d.AppURL, Log: d.Log, Now: d.Now,
-		ClientBundles: d.ClientBundles, Audit: d.Audit,
+		ClientBundles: d.ClientBundles, Audit: d.Audit, Counter: d.Counter,
 		Wallets:      m.wallets,
+		HeldCalls:    m.heldCalls,
+		ClientCalls:  m.clientCalls,
 		OAuthStore:   store.OAuthConnect{},
 		CatalogItems: items,
 	})
@@ -219,6 +243,12 @@ func (e moduleExports) ExportInstances(ctx context.Context, c authn.Caller) ([]a
 	return e.m.svc.ExportInstances(ctx, c)
 }
 
+// CatalogConnections lists the caller's connections per catalog item.
+func (m *Module) CatalogConnections() api.CatalogConnections { return m.svc }
+
+// MCPToolCatalogue lists the MCP tools GET /agents/tools shows.
+func (m *Module) MCPToolCatalogue() api.MCPToolCatalogue { return m.svc }
+
 // MCPTools is the MCP tool call path runs use.
 func (m *Module) MCPTools() api.MCPTools { return moduleTools{m} }
 
@@ -241,3 +271,9 @@ func (c settledCosts) SettledDeclaration(ctx context.Context, ws scope.Workspace
 func (c settledCosts) FetchSettlement(ctx context.Context, ws scope.Workspace, userID, connectionID, url string) (int, []byte, error) {
 	return c.m.svc.FetchSettlement(ctx, ws, userID, connectionID, url)
 }
+
+// MCPEventSources reads the instances an MCP Events source may name.
+func (m *Module) MCPEventSources() api.MCPEventSources { return m.svc }
+
+// Platform is the operator's writes of platform-declared connections.
+func (m *Module) Platform() api.PlatformConnections { return m.svc }

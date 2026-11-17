@@ -44,5 +44,5 @@ func (s *Service) APIItem(ctx context.Context, ws scope.Workspace, id string) (a
 	if !ok || !r.IsActive || r.RegistryType != "mcp_servers" || spec["connection_type"] != "openapi" {
 		return api.APIItem{}, api.ErrNotAPIItem
 	}
-	return api.APIItem{ID: it.ID, Name: it.Name, Description: it.Description, Spec: spec}, nil
+	return api.APIItem{ID: it.ID, ExternalID: it.ExternalID, Name: it.Name, Description: it.Description, Spec: spec}, nil
 }

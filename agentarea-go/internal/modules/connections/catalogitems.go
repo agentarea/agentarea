@@ -29,5 +29,5 @@ func (c catalogItems) CatalogAPIItem(ctx context.Context, ws scope.Workspace, id
 	if err != nil {
 		return service.CatalogAPIItem{}, err
 	}
-	return service.CatalogAPIItem{ID: parsed, Name: it.Name, Description: it.Description, Spec: it.Spec}, nil
+	return service.CatalogAPIItem{ID: parsed, ExternalID: it.ExternalID, Name: it.Name, Description: it.Description, Spec: it.Spec}, nil
 }

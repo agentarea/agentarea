@@ -110,9 +110,9 @@ func (b *skillBlob) PresignGet(_ context.Context, key string, _ time.Duration) (
 
 func skillDB(t *testing.T) db.Database {
 	t.Helper()
-	dsn := os.Getenv("AGENTAREA_TEST_POSTGRES_URL")
+	dsn := os.Getenv("AGENTAREA_DB_TEST_URL")
 	if dsn == "" {
-		t.Skip("AGENTAREA_TEST_POSTGRES_URL is not set")
+		t.Skip("AGENTAREA_DB_TEST_URL is not set")
 	}
 	sqlDB, err := schema.Open(dsn)
 	if err != nil {

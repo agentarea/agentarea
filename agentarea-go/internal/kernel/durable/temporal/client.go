@@ -8,9 +8,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"log/slog"
 	"os"
 	"strings"
+	"time"
+
+	"go.temporal.io/api/serviceerror"
+	"go.temporal.io/api/workflowservice/v1"
 
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/contrib/envconfig"
@@ -122,3 +128,37 @@ func (c *Client) SDK() client.Client { return c.sdk }
 
 // Close closes the connection.
 func (c *Client) Close() { c.sdk.Close() }
+
+// NamespacePoll is how often WaitNamespace asks again for a namespace not yet registered.
+const NamespacePoll = 2 * time.Second
+
+// WaitNamespace returns once the client's namespace is registered, so a worker started beside
+// Temporal (or before its namespace job ran) waits instead of exiting. Any other failure to
+// describe it is returned.
+func (c *Client) WaitNamespace(ctx context.Context) error {
+	logged := false
+	for {
+		_, err := c.sdk.WorkflowService().DescribeNamespace(ctx, &workflowservice.DescribeNamespaceRequest{Namespace: c.namespace})
+		if err == nil {
+			if logged {
+				c.logger.InfoContext(ctx, "temporal namespace is registered", "namespace", c.namespace)
+			}
+			return nil
+		}
+		if _, missing := errors.AsType[*serviceerror.NamespaceNotFound](err); !missing {
+			if ctx.Err() != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || status.Code(err) == codes.Canceled || status.Code(err) == codes.DeadlineExceeded) {
+				return nil
+			}
+			return fmt.Errorf("describe temporal namespace %s: %w", c.namespace, err)
+		}
+		if !logged {
+			c.logger.WarnContext(ctx, "temporal namespace is not registered yet; waiting", "namespace", c.namespace)
+			logged = true
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(NamespacePoll):
+		}
+	}
+}

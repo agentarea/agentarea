@@ -141,8 +141,8 @@ type CreatedInvitation struct {
 }
 
 // CreateInvitation is create_invitation; the caller is a workspace admin
-// (requires_workspace_admin ran at the edge). Mail is not configured in the
-// Go backend, so an addressed invitation reports not_configured.
+// (requires_workspace_admin ran at the edge). An addressed invitation is then
+// mailed when the deployment has transactional mail.
 func (s *Service) CreateInvitation(ctx context.Context, c authn.Caller, email *string, expiresInDays *int) (CreatedInvitation, error) {
 	days := DefaultExpiryDays
 	if expiresInDays != nil {
@@ -170,11 +170,7 @@ func (s *Service) CreateInvitation(ctx context.Context, c authn.Caller, email *s
 	if err := s.audit(ctx, c, "member.invite", "invitation", inv.ID, map[string]any{"resource_name": recipient}); err != nil {
 		return CreatedInvitation{}, err
 	}
-	delivery := domain.DeliveryNotRequested
-	if email != nil && *email != "" {
-		s.log.InfoContext(ctx, "No transactional mail configured; invitation is link-only", "recipient", *email)
-		delivery = domain.DeliveryNotConfigured
-	}
+	delivery := s.deliverInvitation(ctx, c, email, token)
 	return CreatedInvitation{Invitation: inv, Token: token, EmailDelivery: delivery}, nil
 }
 

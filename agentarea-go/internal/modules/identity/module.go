@@ -12,6 +12,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/config"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/events"
+	kmail "github.com/agentarea/agentarea/agentarea-go/internal/kernel/mail"
 	agentsapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/agents/api"
 	governanceapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/governance/api"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/identity/api"
@@ -25,11 +26,41 @@ import (
 type Config struct {
 	// KratosAdminURL is where identities are resolved (AuthSettings.KRATOS_ADMIN_URL).
 	KratosAdminURL string
+	// SMTP is the platform's transactional mail (EmailSettings); no server means none.
+	SMTP store.SMTPSettings
 }
 
-// LoadConfig reads identity's settings.
+// LoadConfig reads identity's settings. SMTP_* are the deployment's own names, shared with
+// Kratos' courier (config/email.py).
 func LoadConfig(l *config.Loader) Config {
-	return Config{KratosAdminURL: l.StringEnv("AGENTAREA_AUTH_KRATOS_ADMIN_URL", "http://kratos:4434")}
+	c := Config{
+		KratosAdminURL: l.StringEnv("AGENTAREA_AUTH_KRATOS_ADMIN_URL", "http://kratos:4434"),
+		SMTP: store.SMTPSettings{
+			Host:            l.StringEnv("SMTP_HOST", ""),
+			Port:            l.IntEnv("SMTP_PORT", 1025),
+			Username:        l.StringEnv("SMTP_USERNAME", ""),
+			Password:        l.StringEnv("SMTP_PASSWORD", ""),
+			Protocol:        l.OneOfEnv("SMTP_PROTOCOL", "smtp", "smtp", "smtps"),
+			DisableSTARTTLS: l.BoolEnv("SMTP_DISABLE_STARTTLS", true),
+			SkipSSLVerify:   l.BoolEnv("SMTP_SKIP_SSL_VERIFY", true),
+			ConnectionURI:   l.StringEnv("SMTP_CONNECTION_URI", ""),
+			FromEmail:       l.StringEnv("SMTP_FROM_EMAIL", ""),
+			FromName:        l.StringEnv("SMTP_FROM_NAME", "AgentArea"),
+		},
+	}
+	if _, err := store.NewSMTPMailer(c.SMTP, nil); err != nil {
+		l.Fail("SMTP_FROM_EMAIL", err)
+	}
+	return c
+}
+
+// NewMailer is the platform's mail over d; nil when cfg names no SMTP server.
+func NewMailer(cfg Config, d kmail.Dialer) (service.Mailer, error) {
+	m, err := store.NewSMTPMailer(cfg.SMTP, d)
+	if err != nil || m == nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // NewDirectory is the Kratos identity directory for cfg.
@@ -60,6 +91,10 @@ type Deps struct {
 	// Resources is nil until agents and connections provide the explorer's
 	// reads; the explorer routes other than sync are then unmounted.
 	Resources service.Resources
+	// Mailer is nil when the deployment has no transactional mail; AppURL is the
+	// webapp's base an invitation link points at.
+	Mailer service.Mailer
+	AppURL string
 	// Workspace, Principal and Admin are the edge's admission (see handlers.Edge).
 	Workspace func(http.Handler) http.Handler
 	Principal func(http.Handler) http.Handler
@@ -94,6 +129,7 @@ func New(d Deps) *Module {
 		DB: d.DB, Store: store.Store{}, Graph: d.Graph, Reader: reader, Agents: d.Agents,
 		OnWorkspaceCreated: d.OnWorkspaceCreated, Directory: d.Directory, Logos: d.Logos,
 		LinkCodes: d.LinkCodes, Audit: d.Audit, Resources: d.Resources, Now: d.Now,
+		Mailer: d.Mailer, AppURL: d.AppURL,
 	}, d.Log)}
 }
 

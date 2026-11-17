@@ -11,6 +11,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
+
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/money"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/scope"
@@ -83,4 +85,19 @@ type TaskRequest struct {
 	ExecutionTurns        *int64
 	MaxIterations         any
 	RequiresHumanApproval bool
+}
+
+// DeclaredEgressExit is a platform exit leaving through a hop of the egress proxy's own
+// configuration; it holds no credentials.
+type DeclaredEgressExit struct {
+	ID          uuid.UUID
+	Name        string
+	Description *string
+	Via         string
+	RemoteDNS   bool
+}
+
+// EgressExitDeclarations is what the operator writes of egress exits; idempotent.
+type EgressExitDeclarations interface {
+	DeclareEgressExit(ctx context.Context, e DeclaredEgressExit) error
 }

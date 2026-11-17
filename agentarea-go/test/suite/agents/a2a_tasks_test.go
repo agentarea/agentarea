@@ -73,7 +73,7 @@ func (f *fakeModel) serve(t *testing.T) string {
 		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 	}))
 	t.Cleanup(srv.Close)
-	return srv.URL
+	return h.StackURL(srv.URL)
 }
 
 func (f *fakeModel) holding(on bool) {

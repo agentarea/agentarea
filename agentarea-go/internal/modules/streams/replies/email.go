@@ -8,15 +8,14 @@ import (
 	"fmt"
 	"mime"
 	"mime/multipart"
-	"net"
 	"net/mail"
-	"net/smtp"
 	"net/textproto"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	kmail "github.com/agentarea/agentarea/agentarea-go/internal/kernel/mail"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/netguard"
 )
 
@@ -93,81 +92,44 @@ func (e Email) Send(ctx context.Context, s Send, message string) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, smtpTimeout)
 	defer cancel()
-	conn, err := e.Dialer.DialContext(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(port)))
-	if err != nil {
-		if errors.Is(err, netguard.ErrUnsafe) {
-			return fatalf("email channel: SMTP host refused: %v", err)
+	useTLS, _ := strconv.ParseBool(creds["use_tls"])
+	server := kmail.Server{Host: host, Port: port, Username: creds["username"], Password: creds["password"],
+		ImplicitTLS: useTLS, StartTLS: kmail.StartTLSIfOffered, TLS: e.TLS}
+	return sendError(kmail.Send(ctx, e.Dialer, server, from, to, raw))
+}
+
+// sendError is a failed session as email.py classified it: a refused host or a rejected login is
+// final, anything else retried.
+func sendError(err error) error {
+	var me *kmail.Error
+	if err == nil || !errors.As(err, &me) {
+		return err
+	}
+	switch me.Stage {
+	case kmail.StageDial:
+		if errors.Is(me.Err, netguard.ErrUnsafe) {
+			return fatalf("email channel: SMTP host refused: %v", me.Err)
 		}
-		return fmt.Errorf("email channel: SMTP transport error: %w", err)
-	}
-	defer func() { _ = conn.Close() }()
-	if dl, ok := ctx.Deadline(); ok {
-		_ = conn.SetDeadline(dl)
-	}
-	cfg := &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}
-	if e.TLS != nil {
-		cfg = e.TLS.Clone()
-		cfg.ServerName = host
-	}
-	if useTLS, _ := strconv.ParseBool(creds["use_tls"]); useTLS {
-		conn = tls.Client(conn, cfg)
-	}
-	c, err := smtp.NewClient(conn, host)
-	if err != nil {
-		return fmt.Errorf("email channel: SMTP transport error: %w", err)
-	}
-	defer func() { _ = c.Close() }()
-	if _, isTLS := conn.(*tls.Conn); !isTLS {
-		if ok, _ := c.Extension("STARTTLS"); ok {
-			if err := c.StartTLS(cfg); err != nil {
-				return fmt.Errorf("email channel: STARTTLS failed: %w", err)
-			}
+		return fmt.Errorf("email channel: SMTP transport error: %w", me.Err)
+	case kmail.StageGreeting:
+		return fmt.Errorf("email channel: SMTP transport error: %w", me.Err)
+	case kmail.StageStartTLS:
+		return fmt.Errorf("email channel: STARTTLS failed: %w", me.Err)
+	case kmail.StageAuth:
+		var pe *textproto.Error
+		if errors.As(me.Err, &pe) && pe.Code == 535 {
+			return fatalf("email channel: SMTP authentication failed: %v", me.Err)
 		}
+		return smtpError(me.Err)
+	case kmail.StageQuit:
+		return me.Err
+	case kmail.StageSend:
+		return smtpError(me.Err)
 	}
-	if user := creds["username"]; user != "" {
-		if err := c.Auth(plainAuth{user: user, password: creds["password"]}); err != nil {
-			var pe *textproto.Error
-			if errors.As(err, &pe) && pe.Code == 535 {
-				return fatalf("email channel: SMTP authentication failed: %v", err)
-			}
-			return smtpError(err)
-		}
-	}
-	if err := c.Mail(from); err != nil {
-		return smtpError(err)
-	}
-	if err := c.Rcpt(to); err != nil {
-		return smtpError(err)
-	}
-	w, err := c.Data()
-	if err != nil {
-		return smtpError(err)
-	}
-	if _, err := w.Write(raw); err != nil {
-		return smtpError(err)
-	}
-	if err := w.Close(); err != nil {
-		return smtpError(err)
-	}
-	return c.Quit()
+	return smtpError(me.Err)
 }
 
 func smtpError(err error) error { return fmt.Errorf("email channel: SMTP error: %w", err) }
-
-// plainAuth is AUTH PLAIN on any connection, as aiosmtplib logs in: net/smtp's PlainAuth refuses
-// a cleartext connection to anything but localhost.
-type plainAuth struct{ user, password string }
-
-func (a plainAuth) Start(*smtp.ServerInfo) (string, []byte, error) {
-	return "PLAIN", []byte("\x00" + a.user + "\x00" + a.password), nil
-}
-
-func (a plainAuth) Next(_ []byte, more bool) ([]byte, error) {
-	if more {
-		return nil, errors.New("unexpected server challenge")
-	}
-	return nil, nil
-}
 
 // BuildReply is the multipart/alternative reply: a plain-text part and the HTML message.
 func BuildReply(from, to, subject, inReplyTo string, references []string, message string) ([]byte, error) {

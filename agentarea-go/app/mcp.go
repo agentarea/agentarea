@@ -35,6 +35,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/runtime/packages"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/runtime/workload"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/service"
+	"github.com/agentarea/agentarea/agentarea-go/internal/modules/sandbox/plane"
 	"github.com/agentarea/agentarea/agentarea-go/internal/profiles/cluster/netguard"
 	clusterobs "github.com/agentarea/agentarea/agentarea-go/internal/profiles/cluster/obs"
 	"github.com/agentarea/agentarea/agentarea-go/internal/profiles/cluster/secrets"
@@ -83,8 +84,9 @@ type mcpDeps struct {
 	Log      *slog.Logger
 }
 
-// newMCPRuntime builds the backend the configuration names and the runtime over it.
-func newMCPRuntime(ctx context.Context, c mcpConfig, d mcpDeps) (*runtime.Runtime, error) {
+// newMCPRuntime builds the backend the configuration names, the runtime over
+// it, and the backend's usage sampler.
+func newMCPRuntime(ctx context.Context, c mcpConfig, d mcpDeps) (*runtime.Runtime, ext.RuntimeSampler, error) {
 	rd := runtime.Deps{
 		Config: c.Runtime, DB: d.DB, Secrets: d.Secrets, Log: d.Log, Meter: otel.Meter(kobs.MeterScope),
 		Specs:     catalog.New(catalog.Deps{DB: d.DB, Authority: authz.WorkspaceScoped{}, Log: d.Log}).MCPSpecs(),
@@ -92,30 +94,31 @@ func newMCPRuntime(ctx context.Context, c mcpConfig, d mcpDeps) (*runtime.Runtim
 		Workloads: d.Outbound.Transport(knetguard.Internal),
 		URLs:      d.Outbound.Transport(knetguard.Member),
 	}
+	var sampler ext.RuntimeSampler
 	switch c.Runtime.Backend {
 	case runtime.BackendDocker:
 		b, err := docker.New(c.Docker, d.Log.With("backend", "docker"))
 		if err != nil {
-			return nil, fmt.Errorf("docker backend: %w", err)
+			return nil, nil, fmt.Errorf("docker backend: %w", err)
 		}
-		rd.Backend, rd.Validator = b, dockerValidator(b)
+		rd.Backend, rd.Validator, sampler = b, dockerValidator(b), b.Sampler("")
 	case runtime.BackendKubernetes:
 		b, err := kube.New(c.Kube, d.Log.With("backend", "kubernetes"))
 		if err != nil {
-			return nil, fmt.Errorf("kubernetes backend: %w", err)
+			return nil, nil, fmt.Errorf("kubernetes backend: %w", err)
 		}
 		if err := b.EnsureNamespace(ctx); err != nil {
-			return nil, fmt.Errorf("kubernetes backend: %w", err)
+			return nil, nil, fmt.Errorf("kubernetes backend: %w", err)
 		}
-		rd.Backend = b
+		rd.Backend, sampler = b, b.Sampler("")
 	case runtime.BackendDataplane:
 		b, err := dataplane.NewClient(c.Dataplane, d.Outbound.Transport(knetguard.Internal))
 		if err != nil {
-			return nil, fmt.Errorf("data-plane backend: %w", err)
+			return nil, nil, fmt.Errorf("data-plane backend: %w", err)
 		}
-		rd.Backend, rd.Remote = b, b
+		rd.Backend, rd.Remote, sampler = b, b, b
 	default:
-		return nil, fmt.Errorf("MCP backend %q is not one of docker, kubernetes, dataplane", c.Runtime.Backend)
+		return nil, nil, fmt.Errorf("MCP backend %q is not one of docker, kubernetes, dataplane", c.Runtime.Backend)
 	}
 	applyWorkloadHooks(&rd, d.Hooks)
 	rd.Packages = func(rt *runtime.Runtime) (runtime.Packages, error) {
@@ -129,7 +132,11 @@ func newMCPRuntime(ctx context.Context, c mcpConfig, d mcpDeps) (*runtime.Runtim
 		}
 		return packages.New(o)
 	}
-	return runtime.New(rd)
+	rt, err := runtime.New(rd)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rt, sampler, nil
 }
 
 func dockerValidator(b *docker.Backend) runtime.Validator {
@@ -178,6 +185,7 @@ func (b *Build) runMCPControl(ctx context.Context, l *config.Loader, common conf
 	outCfg := knetguard.LoadConfig(l)
 	spend := money.LoadSpendCurrency(l)
 	mc := loadMCPConfig(l)
+	sc := plane.LoadConfig(l)
 	if err := l.Err(); err != nil {
 		return fmt.Errorf("configuration: %w", err)
 	}
@@ -210,7 +218,7 @@ func (b *Build) runMCPControl(ctx context.Context, l *config.Loader, common conf
 		return err
 	}
 	defer func() { err = errors.Join(err, exts.Close()) }()
-	rt, err := newMCPRuntime(ctx, mc, mcpDeps{DB: pools, Secrets: sf, Outbound: outbound, Hooks: exts.WorkloadHooks, Log: log})
+	rt, sampler, err := newMCPRuntime(ctx, mc, mcpDeps{DB: pools, Secrets: sf, Outbound: outbound, Hooks: exts.WorkloadHooks, Log: log})
 	if err != nil {
 		return err
 	}
@@ -220,6 +228,15 @@ func (b *Build) runMCPControl(ctx context.Context, l *config.Loader, common conf
 	}
 	mux := http.NewServeMux()
 	gw.Routes(mux)
+	sb, err := plane.Open(ctx, sc, sandboxBuiltin(mc.Runtime.Backend), sandboxHooks(exts.WorkloadHooks, false), log.With("component", "sandbox"))
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, sb.Close()) }()
+	var artifacts ext.ArtifactStorage
+	if err := sb.Routes(ctx, mux, artifactHooks(exts.WorkloadHooks, &artifacts)...); err != nil {
+		return err
+	}
 	if mc.Storage.ManagerURL != "" {
 		store, err := storage.NewObjectStore(mc.Blob)
 		if err != nil {
@@ -241,8 +258,16 @@ func (b *Build) runMCPControl(ctx context.Context, l *config.Loader, common conf
 		}
 		w.WriteHeader(http.StatusOK)
 	})
+	if err := attachWorkloads(ctx, exts.WorkloadHooks, ext.Workloads{Redis: sb.Redis(), Backend: mc.Runtime.Backend,
+		Runtime: sampler, SandboxProvider: sb.Provider, Allocations: sb.Allocations(), Artifacts: artifacts}); err != nil {
+		return err
+	}
 	g := lifecycle.NewGroup(lifecycle.Options{StartupTimeout: common.StartupTimeout, ShutdownTimeout: common.ShutdownTimeout})
 	g.Add(newHTTPComponent("mcp", addr, mux, log), &runComponent{name: "mcp-reaper", run: rt.Run, log: log})
+	g.Add(&runComponent{name: "sandbox task GC", run: sb.GC, log: log})
+	if sb.EmbeddedRunner() {
+		g.Add(&runComponent{name: "sandbox runner", run: sb.Run, log: log})
+	}
 	for i, h := range exts.WorkloadHooks {
 		if h.Run != nil {
 			g.Add(&runComponent{name: fmt.Sprintf("workload hooks %d", i+1), run: h.Run, close: h.Close, log: log})
@@ -264,16 +289,18 @@ func (b *Build) runMCPHost(ctx context.Context, l *config.Loader, common config.
 	default:
 		l.Fail("AGENTAREA_MCP_BACKEND", errors.New("a data-plane host runs workloads itself: docker or kubernetes"))
 	}
-	spend := money.LoadSpendCurrency(l)
 	if err := l.Err(); err != nil {
 		return fmt.Errorf("configuration: %w", err)
 	}
 	log := newLogger(b.stderr, common).With("component", "mcp-host")
 	var backend workload.Backend
+	var sampler ext.RuntimeSampler
 	if rc.Backend == runtime.BackendDocker {
-		if backend, err = docker.New(dc, log.With("backend", "docker")); err != nil {
+		dk, err := docker.New(dc, log.With("backend", "docker"))
+		if err != nil {
 			return fmt.Errorf("docker backend: %w", err)
 		}
+		backend, sampler = dk, dk.Sampler(hc.ID)
 	} else {
 		kb, err := kube.New(kc, log.With("backend", "kubernetes"))
 		if err != nil {
@@ -282,14 +309,17 @@ func (b *Build) runMCPHost(ctx context.Context, l *config.Loader, common config.
 		if err := kb.EnsureNamespace(ctx); err != nil {
 			return fmt.Errorf("kubernetes backend: %w", err)
 		}
-		backend = kb
+		backend, sampler = kb, kb.Sampler(hc.ID)
 	}
 	extDeps := ext.Deps{Logger: log, Config: config.New(b.lookup)}
-	exts, err := b.resolveExtensions(ctx, extDeps, spend)
+	exts, err := b.resolveWorkloadHooks(ctx, extDeps)
 	if err != nil {
 		return err
 	}
 	defer func() { err = errors.Join(err, exts.Close()) }()
+	if err := attachWorkloads(ctx, exts.WorkloadHooks, ext.Workloads{Host: true, Backend: rc.Backend, Runtime: sampler}); err != nil {
+		return err
+	}
 	handler, err := dataplane.NewHost(hc, backend, log, func(r httpx.Router) error {
 		for _, h := range exts.WorkloadHooks {
 			if h.HostRoutes == nil {
@@ -348,7 +378,7 @@ func applyWorkloadHooks(rd *runtime.Deps, hooks []ext.WorkloadHooks) {
 	}
 	if len(specHooks) > 0 {
 		rd.SpecHook = func(ctx context.Context, instanceID, workspaceID string, spec *workload.Spec) error {
-			w := ext.MCPWorkload{Environment: spec.Environment, Labels: spec.Labels}
+			w := ext.MCPWorkload{Environment: spec.Environment, Labels: spec.Labels, EgressExit: spec.EgressExit}
 			for _, f := range specHooks {
 				if err := f(ctx, instanceID, workspaceID, &w); err != nil {
 					return err
@@ -485,3 +515,15 @@ func (c *runComponent) Stop(ctx context.Context) error {
 }
 
 func (c *runComponent) Failed() <-chan error { return c.failed }
+
+// sandboxBuiltin is the built-in sandbox beside an MCP backend: the shared
+// executor with docker, the warm pool with kubernetes, none on a data plane.
+func sandboxBuiltin(backend string) string {
+	switch backend {
+	case runtime.BackendDocker:
+		return plane.BuiltinDocker
+	case runtime.BackendKubernetes:
+		return plane.BuiltinKubernetes
+	}
+	return ""
+}

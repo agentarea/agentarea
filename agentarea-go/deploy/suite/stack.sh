@@ -22,6 +22,8 @@ project=aa-suite
 
 api_port=57900
 db_port=57432
+worker_health_port=57881
+events_port=57882
 
 fail() {
   printf 'error: %s\n' "$*" >&2
@@ -136,8 +138,10 @@ AGENTAREA_S3_BUCKET=documents
 AGENTAREA_S3_ARTIFACTS_BUCKET=artifacts
 AGENTAREA_API_URL=http://localhost:$api_port
 AGENTAREA_TEMPORAL_QUEUE=agent-tasks
-TEMPORAL_ADDRESS=localhost:57233
+TEMPORAL_ADDRESS=127.0.0.1:57233
 TEMPORAL_NAMESPACE=default
+AGENTAREA_WORKER_HEALTH_PORT=$worker_health_port
+AGENTAREA_ANALYTICS_ENABLED=false
 EOF
   chmod 600 "$state/go.env"
 }
@@ -183,6 +187,10 @@ start() {
     # shellcheck source=/dev/null
     . "$state/go.env"
     set +a
+    # events serves its health on HOST:PORT, which serve already holds.
+    if [ "$role" = events ]; then
+      PORT=$events_port
+    fi
     nohup "$state/agentarea" "$role" > "$state/$role.log" 2>&1 &
     echo $! > "$state/$role.pid"
   )
@@ -192,9 +200,15 @@ running() {
   [ -f "$state/$1.pid" ] && kill -0 "$(cat "$state/$1.pid")" 2>/dev/null
 }
 
+# stop signals the role and waits for it to exit, so a restart can bind its port.
 stop() {
   if running "$1"; then
     kill "$(cat "$state/$1.pid")" 2>/dev/null || true
+    deadline=$(($(date +%s) + 60))
+    while running "$1"; do
+      [ "$(date +%s)" -lt "$deadline" ] || fail "agentarea $1 did not exit"
+      sleep 1
+    done
   fi
   rm -f "$state/$1.pid"
 }
@@ -207,12 +221,23 @@ cmd_up() {
   (cd "$gomod" && go build -o "$state/agentarea" ./cmd/agentarea) || fail "go build failed"
   migrate || fail "agentarea migrate failed (log: $state/migrate.log)"
   seed || fail "the suite catalog rows did not apply"
+  # The worker gives up on a Temporal that is not serving yet; the namespace
+  # job finishes once it is.
+  deadline=$(($(date +%s) + 180))
+  until [ "$(compose ps -a --format '{{.State}} {{.ExitCode}}' temporal-namespace 2>/dev/null)" = "exited 0" ]; do
+    [ "$(date +%s)" -lt "$deadline" ] || fail "the Temporal namespace was not registered"
+    sleep 2
+  done
   for role in $roles; do
     stop "$role"
     start "$role"
   done
   wait_http "http://localhost:$api_port/health" 60 ||
     { cat "$state/serve.log" >&2; fail "agentarea serve did not answer /health on :$api_port"; }
+  wait_http "http://localhost:$worker_health_port/readyz" 60 ||
+    { cat "$state/worker.log" >&2; fail "agentarea worker did not answer /readyz on :$worker_health_port"; }
+  wait_http "http://localhost:$events_port/readyz" 60 ||
+    { cat "$state/events.log" >&2; fail "agentarea events did not answer /readyz on :$events_port"; }
   sleep 3
   for role in $roles; do
     running "$role" || { cat "$state/$role.log" >&2; fail "agentarea $role exited"; }

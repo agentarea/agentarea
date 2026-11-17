@@ -37,3 +37,34 @@ func (q *Queries) InsertInstallation(ctx context.Context, arg InsertInstallation
 	_, err := q.db.Exec(ctx, insertInstallation, arg.ID, arg.Now)
 	return err
 }
+
+const lockInstallationForPulse = `-- name: LockInstallationForPulse :one
+SELECT id, created_at, last_pulse_at FROM installation LIMIT 1 FOR UPDATE
+`
+
+type LockInstallationForPulseRow struct {
+	ID          string
+	CreatedAt   pgtype.Timestamp
+	LastPulseAt pgtype.Timestamp
+}
+
+func (q *Queries) LockInstallationForPulse(ctx context.Context) (LockInstallationForPulseRow, error) {
+	row := q.db.QueryRow(ctx, lockInstallationForPulse)
+	var i LockInstallationForPulseRow
+	err := row.Scan(&i.ID, &i.CreatedAt, &i.LastPulseAt)
+	return i, err
+}
+
+const setLastPulse = `-- name: SetLastPulse :exec
+UPDATE installation SET last_pulse_at = $1, updated_at = $1 WHERE id = $2
+`
+
+type SetLastPulseParams struct {
+	At pgtype.Timestamp
+	ID string
+}
+
+func (q *Queries) SetLastPulse(ctx context.Context, arg SetLastPulseParams) error {
+	_, err := q.db.Exec(ctx, setLastPulse, arg.At, arg.ID)
+	return err
+}

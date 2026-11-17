@@ -1,6 +1,7 @@
 package domain_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -71,14 +72,14 @@ func TestRuleConditionsDecideAsPythonDoes(t *testing.T) {
 	}
 	for _, c := range cases {
 		cond := jsonMap(t, `{"type": "rule", "logic": "AND", "rules": [`+c.rule+`]}`)
-		v, err := domain.EvaluateConditions(cond, event)
+		v, err := domain.EvaluateConditions(context.Background(), cond, event, nil)
 		if err != nil || v.Met != c.met {
 			t.Errorf("%s: met=%v err=%v, want %v", c.rule, v.Met, err, c.met)
 		}
 	}
 	or := jsonMap(t, `{"type": "rule", "logic": "or", "rules": [
 		{"field": "n", "operator": "eq", "value": 1}, {"field": "s", "operator": "eq", "value": "Hello"}]}`)
-	if v, err := domain.EvaluateConditions(or, event); err != nil || !v.Met || v.Reason != "rule (OR): 1 of 2 rules matched" {
+	if v, err := domain.EvaluateConditions(context.Background(), or, event, nil); err != nil || !v.Met || v.Reason != "rule (OR): 1 of 2 rules matched" {
 		t.Fatalf("or = %+v %v", v, err)
 	}
 }
@@ -90,11 +91,11 @@ func TestConditionErrorsAreUndecidedWithPythonsWords(t *testing.T) {
 		`{"type": "rule", "logic": "AND", "rules": [{"field": "n", "operator": "like", "value": 5}]}`:     "Trigger conditions could not be evaluated: Unknown operator: like",
 		`{"type": "rule", "logic": "XOR", "rules": [{"field": "n", "operator": "exists"}]}`:               "Trigger conditions could not be evaluated: Unknown rule logic: XOR",
 		`{"type": "combined", "logic": "AND", "conditions": ["x"]}`:                                       "Trigger conditions could not be evaluated: Condition evaluation failed: 'str' object has no attribute 'get'",
-		`{"type": "llm", "description": "urgent", "model_id": "4a0b2b5e8d4f4a529a433f3b1c1f2d10"}`:        "Trigger conditions could not be evaluated: LLM condition on model instance 4a0b2b5e8d4f4a529a433f3b1c1f2d10 cannot be evaluated: this server has no condition model calls yet",
+		`{"type": "llm", "description": "urgent", "model_id": "4a0b2b5e8d4f4a529a433f3b1c1f2d10"}`:        "Trigger conditions could not be evaluated: LLM condition on model instance 4a0b2b5e-8d4f-4a52-9a43-3f3b1c1f2d10 cannot be evaluated: no condition model calls are wired",
 		`{"field_matches": [1]}`: "Trigger conditions could not be evaluated: 'list' object has no attribute 'items'",
 	}
 	for body, want := range cases {
-		_, err := domain.EvaluateConditions(jsonMap(t, body), event)
+		_, err := domain.EvaluateConditions(context.Background(), jsonMap(t, body), event, nil)
 		if !errors.Is(err, domain.ErrConditionUndecided) || err.Error() != want {
 			t.Errorf("%s\n got %v\nwant %s", body, err, want)
 		}
@@ -106,20 +107,20 @@ func TestCombinedConditionsAndFieldMatches(t *testing.T) {
 	and := jsonMap(t, `{"type": "combined", "logic": "and", "conditions": [
 		{"type": "rule", "logic": "AND", "rules": [{"field": "body.action", "operator": "eq", "value": "opened"}]},
 		{"type": "rule", "logic": "AND", "rules": [{"field": "body.n", "operator": "gt", "value": 5}]}]}`)
-	v, err := domain.EvaluateConditions(and, event)
+	v, err := domain.EvaluateConditions(context.Background(), and, event, nil)
 	if err != nil || v.Met || v.Reason != "AND: rule (AND): 1 of 1 rules matched; rule (AND): 0 of 1 rules matched" {
 		t.Fatalf("combined = %+v %v", v, err)
 	}
 	fm := jsonMap(t, `{"field_matches": {"body.action": "closed"}}`)
-	v, err = domain.EvaluateConditions(fm, event)
+	v, err = domain.EvaluateConditions(context.Background(), fm, event, nil)
 	if err != nil || v.Met || v.Reason != "body.action is 'opened', not 'closed'" {
 		t.Fatalf("field_matches = %+v %v", v, err)
 	}
 	fm = jsonMap(t, `{"field_matches": {"body.action": "opened", "body.n": 2.0}}`)
-	if v, err := domain.EvaluateConditions(fm, event); err != nil || !v.Met {
+	if v, err := domain.EvaluateConditions(context.Background(), fm, event, nil); err != nil || !v.Met {
 		t.Fatalf("field_matches met = %+v %v", v, err)
 	}
-	if v, err := domain.EvaluateConditions(map[string]any{}, event); err != nil || !v.Met {
+	if v, err := domain.EvaluateConditions(context.Background(), map[string]any{}, event, nil); err != nil || !v.Met {
 		t.Fatalf("no conditions = %+v %v", v, err)
 	}
 }

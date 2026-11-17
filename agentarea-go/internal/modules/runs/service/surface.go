@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/analytics"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authz"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/db"
@@ -64,8 +65,10 @@ type SurfaceDeps struct {
 	AuditReader governanceapi.AuditReader
 	// ToolHints reads an MCP tool's safety hint (connections); nil answers every hint null.
 	ToolHints ToolHints
-	Now       func() time.Time
-	Log       *slog.Logger
+	// Counter counts runs a spend cap refused for usage analytics; nil counts nothing.
+	Counter analytics.Counter
+	Now     func() time.Time
+	Log     *slog.Logger
 }
 
 // Surface serves the runs routes.

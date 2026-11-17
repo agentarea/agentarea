@@ -284,6 +284,7 @@ type oauthFixture struct {
 	specs   oaSpecs
 	caller  authn.Caller
 	now     time.Time
+	counts  *oaCounts
 }
 
 func newOAuthFixture(t *testing.T, p *oauthProvider, cfg Config) *oauthFixture {
@@ -301,6 +302,7 @@ func newOAuthFixture(t *testing.T, p *oauthProvider, cfg Config) *oauthFixture {
 		specs:  oaSpecs{rows: map[string]catalogapi.MCPSpec{}},
 		caller: authn.Caller{Principal: authn.Principal{UserID: "owner", AccessibleWorkspaces: []string{ws.ID()}}, Workspace: ws},
 		now:    time.Unix(1_700_000_000, 0).UTC(),
+		counts: &oaCounts{},
 	}
 	rt := http.DefaultTransport
 	if p != nil {
@@ -311,7 +313,7 @@ func newOAuthFixture(t *testing.T, p *oauthProvider, cfg Config) *oauthFixture {
 		Catalog: func(scope.Workspace, ksecrets.Actor) ksecrets.Catalog { return &memCatalog{} },
 		Graph:   oaGraph{}, Specs: f.specs, Out: oaOut{rt}, KV: f.kv, OAuthStore: f.store, CatalogItems: f.items,
 		Config: cfg, APIURL: "https://api.example", AppURL: "https://app.example",
-		Now: func() time.Time { return f.now },
+		Now: func() time.Time { return f.now }, Counter: f.counts,
 	})
 	return f
 }

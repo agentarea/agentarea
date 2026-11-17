@@ -25,6 +25,9 @@ func (m *Module) UseExport(w service.ExportWorkspaces, mcps service.ExportMCPs, 
 	m.d.ExportWorkspaces, m.d.ExportMCPs, m.d.ExportTriggers = w, mcps, triggers
 }
 
+// UseToolsMCP sets the MCP tools GET /agents/tools lists (connections module).
+func (m *Module) UseToolsMCP(t service.ToolsMCP) { m.d.ToolsMCP = t }
+
 // WorkspaceConfig is what the workspace_config toolset calls; nil without a full graph.
 func (m *Module) WorkspaceConfig() api.WorkspaceConfig {
 	if m.svc == nil {

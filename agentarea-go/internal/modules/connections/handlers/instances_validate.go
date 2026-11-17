@@ -346,7 +346,7 @@ func serverCreate(f fields) catalogapi.MCPSpecNew {
 	if tags, _ := f.strList("tags", false); tags != nil {
 		n.Tags = tags
 	}
-	f.boolean("is_public")
+	n.IsPublic, _ = f.boolean("is_public")
 	n.EnvSchema, _ = f.dictList("env_schema")
 	if n.EnvSchema == nil {
 		n.EnvSchema = []any{}

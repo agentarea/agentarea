@@ -83,7 +83,7 @@ func (p *Scheduling) EvaluateConditions(ctx context.Context, id string, eventDat
 	if err != nil || !ok {
 		return false, err
 	}
-	v, err := domain.EvaluateConditions(t.Conditions, eventData)
+	v, err := p.s.Evaluate(ctx, t, eventData)
 	return v.Met, err
 }
 

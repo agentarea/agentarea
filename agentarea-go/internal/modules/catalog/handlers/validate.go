@@ -41,6 +41,8 @@ type input struct {
 	modelFilter     service.ModelFilter
 	newModel        service.NewModelSpec
 	modelFields     store.SpecFields
+	analyze         service.AnalyzeRequest
+	install         service.InstallRequest
 }
 
 type inputKey struct{}

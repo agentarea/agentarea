@@ -17,3 +17,15 @@ VALUES
      '{"instruction": "Help the suite", "preferred_models": ["suite-chat"], "tools": [{"type": "code", "name": "agentarea/files", "settings": {"requires_user_confirmation": true}}], "skills": ["suite-helper", "no-such-skill"], "triggers": []}',
      '["preset"]', 'suite-preset', 'agents', 100, true, 'official')
 ON CONFLICT (id) DO NOTHING;
+-- A paid connections entry the browse suite prices: the workspace's own key
+-- (no billing in the stack), so the vendor cost is what it shows.
+INSERT INTO registries (id, name, registry_type, source_type, source_url, scope, mode, trust)
+VALUES ('5e1f0000-0000-4000-8000-000000000103', 'suite-connections', 'mcp_servers', 'managed', 'managed://suite', 'platform', 'mirror', 'official')
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO registry_items (id, registry_id, external_id, name, description, version, spec, tags, sort_key,
+    registry_type, registry_priority, registry_active, registry_trust, protocol, hosting, pricing, category)
+VALUES ('5e1f0000-0000-4000-8000-000000000113', '5e1f0000-0000-4000-8000-000000000103', 'suite-paid', 'Suite Paid',
+     'A paid connector the suite browses', '1.0.0',
+     '{"raw_spec": {"name": "suite-paid", "metadata": {"agentarea:payers": ["workspace"], "agentarea:cost": {"default": {"source": "rate", "rate": {"amount": "0.02", "currency": "USD"}}}}}}',
+     '[]', 'suite-paid', 'mcp_servers', 100, true, 'official', 'mcp', 'vendor', 'paid', 'search')
+ON CONFLICT (id) DO NOTHING;

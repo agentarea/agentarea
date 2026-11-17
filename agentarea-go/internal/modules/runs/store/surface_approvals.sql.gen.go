@@ -12,6 +12,176 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const gateConsumeApproved = `-- name: GateConsumeApproved :one
+UPDATE tool_call_approvals SET status = 'consumed'
+WHERE id = (
+    SELECT a.id FROM tool_call_approvals a
+    WHERE a.workspace_id = $1 AND a.created_by = $2
+      AND a.mcp_instance_id IS NOT DISTINCT FROM $3::uuid
+      AND a.tool = $4 AND a.arguments_hash = $5
+      AND a.status = 'approved' AND a.expires_at > $6
+    ORDER BY a.decided_at LIMIT 1)
+  AND workspace_id = $1 AND status = 'approved' AND expires_at > $6
+RETURNING id, decided_by, comment
+`
+
+type GateConsumeApprovedParams struct {
+	WorkspaceID   string
+	CreatedBy     string
+	McpInstanceID uuid.NullUUID
+	Tool          string
+	ArgumentsHash string
+	Now           pgtype.Timestamptz
+}
+
+type GateConsumeApprovedRow struct {
+	ID        uuid.UUID
+	DecidedBy pgtype.Text
+	Comment   pgtype.Text
+}
+
+func (q *Queries) GateConsumeApproved(ctx context.Context, arg GateConsumeApprovedParams) (GateConsumeApprovedRow, error) {
+	row := q.db.QueryRow(ctx, gateConsumeApproved,
+		arg.WorkspaceID,
+		arg.CreatedBy,
+		arg.McpInstanceID,
+		arg.Tool,
+		arg.ArgumentsHash,
+		arg.Now,
+	)
+	var i GateConsumeApprovedRow
+	err := row.Scan(&i.ID, &i.DecidedBy, &i.Comment)
+	return i, err
+}
+
+const gateCreatePending = `-- name: GateCreatePending :one
+INSERT INTO tool_call_approvals (id, workspace_id, created_by, client_id, client_name, mcp_instance_id, connector, tool,
+    policy_name, arguments, arguments_hash, status, reason, approvers, expires_at, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6::uuid,
+    $7, $8, $9, $10::jsonb, $11, 'pending', $12, $13::jsonb,
+    $14, $15::timestamp, $15::timestamp)
+ON CONFLICT DO NOTHING
+RETURNING id
+`
+
+type GateCreatePendingParams struct {
+	ID            uuid.UUID
+	WorkspaceID   string
+	CreatedBy     string
+	ClientID      pgtype.Text
+	ClientName    pgtype.Text
+	McpInstanceID uuid.NullUUID
+	Connector     string
+	Tool          string
+	PolicyName    string
+	Arguments     []byte
+	ArgumentsHash string
+	Reason        string
+	Approvers     []byte
+	ExpiresAt     pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamp
+}
+
+func (q *Queries) GateCreatePending(ctx context.Context, arg GateCreatePendingParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, gateCreatePending,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.CreatedBy,
+		arg.ClientID,
+		arg.ClientName,
+		arg.McpInstanceID,
+		arg.Connector,
+		arg.Tool,
+		arg.PolicyName,
+		arg.Arguments,
+		arg.ArgumentsHash,
+		arg.Reason,
+		arg.Approvers,
+		arg.ExpiresAt,
+		arg.CreatedAt,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const gateExpireLapsed = `-- name: GateExpireLapsed :exec
+UPDATE tool_call_approvals SET status = 'expired'
+WHERE workspace_id = $1 AND created_by = $2
+  AND mcp_instance_id IS NOT DISTINCT FROM $3::uuid
+  AND tool = $4 AND arguments_hash = $5
+  AND status IN ('pending', 'approved') AND expires_at <= $6
+`
+
+type GateExpireLapsedParams struct {
+	WorkspaceID   string
+	CreatedBy     string
+	McpInstanceID uuid.NullUUID
+	Tool          string
+	ArgumentsHash string
+	Now           pgtype.Timestamptz
+}
+
+func (q *Queries) GateExpireLapsed(ctx context.Context, arg GateExpireLapsedParams) error {
+	_, err := q.db.Exec(ctx, gateExpireLapsed,
+		arg.WorkspaceID,
+		arg.CreatedBy,
+		arg.McpInstanceID,
+		arg.Tool,
+		arg.ArgumentsHash,
+		arg.Now,
+	)
+	return err
+}
+
+const gateFindLive = `-- name: GateFindLive :one
+SELECT id, decided_by, comment, connector, tool FROM tool_call_approvals
+WHERE workspace_id = $1 AND created_by = $2
+  AND mcp_instance_id IS NOT DISTINCT FROM $3::uuid
+  AND tool = $4 AND arguments_hash = $5
+  AND status = $6 AND expires_at > $7
+ORDER BY created_at DESC LIMIT 1
+`
+
+type GateFindLiveParams struct {
+	WorkspaceID   string
+	CreatedBy     string
+	McpInstanceID uuid.NullUUID
+	Tool          string
+	ArgumentsHash string
+	Status        string
+	Now           pgtype.Timestamptz
+}
+
+type GateFindLiveRow struct {
+	ID        uuid.UUID
+	DecidedBy pgtype.Text
+	Comment   pgtype.Text
+	Connector string
+	Tool      string
+}
+
+func (q *Queries) GateFindLive(ctx context.Context, arg GateFindLiveParams) (GateFindLiveRow, error) {
+	row := q.db.QueryRow(ctx, gateFindLive,
+		arg.WorkspaceID,
+		arg.CreatedBy,
+		arg.McpInstanceID,
+		arg.Tool,
+		arg.ArgumentsHash,
+		arg.Status,
+		arg.Now,
+	)
+	var i GateFindLiveRow
+	err := row.Scan(
+		&i.ID,
+		&i.DecidedBy,
+		&i.Comment,
+		&i.Connector,
+		&i.Tool,
+	)
+	return i, err
+}
+
 const surfaceApproval = `-- name: SurfaceApproval :one
 SELECT id, created_by, client_id, client_name, mcp_instance_id, connector, tool, policy_name,
     arguments::text AS arguments, status, reason, approvers::text AS approvers, decided_by, decided_at,

@@ -25,6 +25,8 @@ func codePlanes() map[string]string {
 
 func ref(s string) *string { return &s }
 
+const webNamespace = "agentarea/web"
+
 func sandboxCodeToolsets() []CodeToolset {
 	method := func(name, effect, desc string) CodeToolMethod {
 		return CodeToolMethod{Name: name, DisplayName: name, Description: desc, Effect: ref(effect)}
@@ -46,6 +48,30 @@ func sandboxCodeToolsets() []CodeToolset {
 				"stopped when it returns, so the shell cannot do anything later on its own.",
 			RequiresUserConfirmation: true, Methods: []CodeToolMethod{
 				method("bash", "destructive", "Run a bash command and return stdout, stderr, and the exit code."),
+			}},
+		{Name: "agentarea/context", DisplayName: "Organization Context", Category: "utility", Plane: ref("runtime"),
+			Description: "Read the organization library: shared reference files the organization keeps " +
+				"for every task (read-only).",
+			Methods: []CodeToolMethod{
+				method("list_org_files", "read", "List files in the organization library (shared, read-only)."),
+				method("read_org_file", "read", "Read a text file from the organization library (shared, read-only)."),
+			}},
+		{Name: webNamespace, DisplayName: "Web Tools", Category: "information", Plane: ref("runtime"),
+			Description:              "Search the web and read web pages into the conversation.",
+			RequiresUserConfirmation: true, Methods: []CodeToolMethod{
+				method("fetch_webpage", "read", "Read a web page (HTML, text or JSON) and return its text and links. Opens only "+
+					"links already seen in this task: in the request, search results or pages read "+
+					"before. Binary content (images, PDFs, archives) is refused; download it with "+
+					"the shell."),
+				method("search_web", "read", "Search the public web; returns titles, links and snippets."),
+			}},
+		{Name: "agentarea/media", DisplayName: "Media Generation", Category: "media", Plane: ref("runtime"),
+			Description: "Generate images and videos with the workspace's image and video models; " +
+				"the files are saved to the task workspace.",
+			Methods: []CodeToolMethod{
+				method("generate_image", "write", "Generate an image from a text prompt and save it to the task workspace."),
+				method("generate_video", "write", "Start generating a video from a text prompt; returns a job id for get_video."),
+				method("get_video", "write", "Check a video job; once it is done the video is saved to the task workspace."),
 			}},
 	}
 }

@@ -140,9 +140,18 @@ func (g *Group) wait(ctx context.Context, started []Component) error {
 	}
 }
 
+// canceler is a component that can be told to wind down before it is
+// waited on, so background loops finish together rather than one by one.
+type canceler interface{ cancelRun() }
+
 func (g *Group) stop(started []Component) error {
 	stopCtx, cancel := withTimeout(context.Background(), g.opts.ShutdownTimeout)
 	defer cancel()
+	for i := len(started) - 1; i >= 0; i-- {
+		if c, ok := started[i].(canceler); ok {
+			c.cancelRun()
+		}
+	}
 	var errs []error
 	for i := len(started) - 1; i >= 0; i-- {
 		if err := started[i].Stop(stopCtx); err != nil {
@@ -223,6 +232,12 @@ func (l *loop) Start(context.Context) error {
 		l.mu.Unlock()
 	}()
 	return nil
+}
+
+func (l *loop) cancelRun() {
+	if l.cancel != nil {
+		l.cancel()
+	}
 }
 
 func (l *loop) Stop(ctx context.Context) error {

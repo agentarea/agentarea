@@ -71,3 +71,22 @@ func (e exportTriggers) ExportTriggers(ctx context.Context, c authn.Caller) ([]a
 	}
 	return out, nil
 }
+
+// toolsMCP is connections' MCP tool catalogue as GET /agents/tools reads it.
+type toolsMCP struct {
+	x connectionsapi.MCPToolCatalogue
+}
+
+var _ agentsservice.ToolsMCP = toolsMCP{}
+
+func (t toolsMCP) InstanceTools(ctx context.Context, c authn.Caller, instanceID string) ([]agentsservice.ToolsMCPInstance, error) {
+	got, err := t.x.ToolInstances(ctx, c, instanceID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]agentsservice.ToolsMCPInstance, len(got))
+	for i, g := range got {
+		out[i] = agentsservice.ToolsMCPInstance{ID: g.ID, Name: g.Name, Tools: g.Tools}
+	}
+	return out, nil
+}

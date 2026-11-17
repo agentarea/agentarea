@@ -95,3 +95,19 @@ func (p platformConnectorTools) Call(ctx context.Context, c authn.Caller, connec
 func (p platformMCPServers) GetSpec(ctx context.Context, c authn.Caller, id string) (api.MCPSpec, error) {
 	return p.h().GetSpec(ctx, c, id)
 }
+
+func (p platformMCPServers) CreateSpec(ctx context.Context, c authn.Caller, doc json.RawMessage) (api.MCPSpec, error) {
+	return p.h().CreateSpec(ctx, c, doc)
+}
+
+func (p platformMCPServers) UpdateSpec(ctx context.Context, c authn.Caller, id string, doc json.RawMessage) (api.MCPSpec, error) {
+	return p.h().UpdateSpec(ctx, c, id, doc)
+}
+
+func (p platformMCPServers) DeleteSpec(ctx context.Context, c authn.Caller, id string) (bool, error) {
+	return p.h().DeleteSpec(ctx, c, id)
+}
+
+func (p platformMCPServers) ListSpecs(ctx context.Context, c authn.Caller, q api.SpecListing) ([]api.MCPSpec, int, error) {
+	return p.h().ListSpecs(ctx, c, q)
+}

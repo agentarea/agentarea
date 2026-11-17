@@ -14,8 +14,6 @@ func MapError(err error) (*httpx.Error, bool) {
 	var inv *domain.ValidationError
 	var se *domain.StreamError
 	switch {
-	case errors.Is(err, domain.ErrConditionsNotPorted):
-		return httpx.HTTPError(http.StatusNotImplemented, err.Error()), true
 	case errors.Is(err, domain.ErrNoSubscription):
 		return httpx.Conflict(err.Error()), true
 	case errors.Is(err, authz.ErrDenied):

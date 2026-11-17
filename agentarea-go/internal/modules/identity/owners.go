@@ -10,3 +10,6 @@ import (
 func (m *Module) WorkspaceOwners() api.WorkspaceOwners {
 	return service.WorkspaceOwners{DB: m.d.DB, Store: store.Store{}}
 }
+
+// MessengerLinks is the link handshake messenger bots run for their senders.
+func (m *Module) MessengerLinks() api.MessengerLinks { return m.svc }

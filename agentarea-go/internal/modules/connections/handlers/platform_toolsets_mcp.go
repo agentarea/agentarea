@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authn"
+	catalogapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/catalog/api"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/api"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/domain"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/service"
@@ -177,6 +178,18 @@ func (t MCPServersToolset) Verify(ctx context.Context, c authn.Caller, instanceI
 	return instanceOut(v).Verification, action, nil
 }
 
+func toolSpec(s catalogapi.MCPSpec) api.MCPSpec {
+	remote := s.RemoteURL
+	if holdsPlatformAddress(s) {
+		remote = nil
+	}
+	return api.MCPSpec{
+		ID: s.ID, Name: s.Name, Description: s.Description, Version: s.Version, Tags: s.Tags,
+		IsPublic: s.IsPublic, RemoteURL: remote, DockerImageURL: s.DockerImageURL, Status: s.Status,
+		EnvSchema: s.EnvSchema, RegistryURL: s.RegistryURL,
+	}
+}
+
 func (t MCPServersToolset) GetSpec(ctx context.Context, c authn.Caller, specID string) (api.MCPSpec, error) {
 	if _, err := uuid.Parse(specID); err != nil {
 		return api.MCPSpec{}, err
@@ -193,9 +206,67 @@ func (t MCPServersToolset) GetSpec(ctx context.Context, c authn.Caller, specID s
 			return api.MCPSpec{}, toolRefusal(err)
 		}
 	}
-	return api.MCPSpec{
-		ID: s.ID, Name: s.Name, Description: s.Description, Version: s.Version, Tags: s.Tags,
-		IsPublic: s.IsPublic, RemoteURL: s.RemoteURL, DockerImageURL: s.DockerImageURL, Status: s.Status,
-		EnvSchema: s.EnvSchema, RegistryURL: s.RegistryURL,
-	}, nil
+	return toolSpec(s), nil
+}
+
+func (t MCPServersToolset) CreateSpec(ctx context.Context, c authn.Caller, doc json.RawMessage) (api.MCPSpec, error) {
+	o, err := toolDocument(doc)
+	if err != nil {
+		return api.MCPSpec{}, err
+	}
+	in, err := checkedInput(o, specCreateBody)
+	if err != nil {
+		return api.MCPSpec{}, err
+	}
+	s, err := t.Svc.CreateSpec(ctx, c, in.spec.create)
+	if err != nil {
+		return api.MCPSpec{}, validationText(err)
+	}
+	return toolSpec(s), nil
+}
+
+func (t MCPServersToolset) UpdateSpec(ctx context.Context, c authn.Caller, specID string, doc json.RawMessage) (api.MCPSpec, error) {
+	id, err := requireOn(ctx, t.Svc, c, "edit", "mcp_server", "spec_id", specID)
+	if err != nil {
+		return api.MCPSpec{}, err
+	}
+	o, err := toolDocument(doc)
+	if err != nil {
+		return api.MCPSpec{}, err
+	}
+	in, err := checkedInput(o, specUpdateBody)
+	if err != nil {
+		return api.MCPSpec{}, err
+	}
+	s, err := t.Svc.UpdateSpec(ctx, c, id.String(), in.spec.patch)
+	if err != nil {
+		return api.MCPSpec{}, notFoundAs(validationText(err), api.ErrNotFound)
+	}
+	return toolSpec(s), nil
+}
+
+func (t MCPServersToolset) DeleteSpec(ctx context.Context, c authn.Caller, specID string) (bool, error) {
+	id, err := requireOn(ctx, t.Svc, c, "delete", "mcp_server", "spec_id", specID)
+	if err != nil {
+		return false, err
+	}
+	err = t.Svc.DeleteSpec(ctx, c, id.String())
+	var nf *domain.NotFound
+	if errors.As(err, &nf) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func (t MCPServersToolset) ListSpecs(ctx context.Context, c authn.Caller, q api.SpecListing) ([]api.MCPSpec, int, error) {
+	specs, total, err := t.Svc.ListSpecs(ctx, c, catalogapi.MCPSpecQuery{IsPublic: q.IsPublic, Tag: q.Tag, Search: q.Search,
+		Limit: q.Limit, Offset: q.Offset})
+	if err != nil {
+		return nil, 0, err
+	}
+	out := make([]api.MCPSpec, len(specs))
+	for i, s := range specs {
+		out[i] = toolSpec(s)
+	}
+	return out, total, nil
 }

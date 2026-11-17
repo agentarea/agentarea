@@ -702,6 +702,7 @@ func (s *Service) OAuthAuthorize(ctx context.Context, c authn.Caller, req Author
 	p, err := t.profile(ctx)
 	var na *notAuthorizable
 	if errors.As(err, &na) {
+		s.countOAuth("unknown", "failed:not_authorizable")
 		return "", uuid.Nil, oaHttpErr(na.status, na.detail)
 	}
 	if err != nil {
@@ -782,7 +783,9 @@ func (s *Service) OAuthAuthorize(ctx context.Context, c authn.Caller, req Author
 	if err := s.d.KV.SetEx(ctx, "oauth_state:"+token, string(raw), oauthStateTTL); err != nil {
 		return "", uuid.Nil, err
 	}
-	return oaAuthorizeURL(p, clientID, s.OAuthCallbackURI(), challenge, token, requested), connID, nil
+	loc := oaAuthorizeURL(p, clientID, s.OAuthCallbackURI(), challenge, token, requested)
+	s.countOAuth(s.oauthProvider(p.Issuer), "started")
+	return loc, connID, nil
 }
 
 // ownClient is _own_client: the connection's own app, for whoever may put its credential to use.
@@ -809,6 +812,7 @@ func (s *Service) ownClient(ctx context.Context, c authn.Caller, own domain.Auth
 		var inv *domain.Invalid
 		if errors.As(err, &inv) {
 			s.d.Log.WarnContext(ctx, "Own OAuth app is incomplete", "auth_config_id", a.ID, "error", err)
+			s.countOAuth(s.oauthProvider(p.Issuer), "failed:oauth_app_required")
 			return oaAppRequired(inv.Msg+" Enter the OAuth app's client ID and secret again.", p.Issuer)
 		}
 		return err
@@ -829,6 +833,7 @@ func (s *Service) autoClient(ctx context.Context, t oauthTarget, p oauthProfile)
 		id, secret, err := s.registerClient(ctx, p.RegistrationEndpoint, s.OAuthCallbackURI())
 		if err != nil {
 			s.d.Log.InfoContext(ctx, "DCR failed", "issuer", p.Issuer, "error", err)
+			s.countOAuth(s.oauthProvider(p.Issuer), "failed:dcr_failed")
 			return p, resolvedApp{}, oaAppRequired(fmt.Sprintf("Dynamic client registration with %s failed (%v). Connect with an OAuth app you registered with this provider.", p.Issuer, err), p.Issuer)
 		}
 		r := resolvedApp{clientID: id, config: map[string]any{"client_id": id, "credential_mode": "dynamic"}, credentials: map[string]any{}}
@@ -837,6 +842,7 @@ func (s *Service) autoClient(ctx context.Context, t oauthTarget, p oauthProfile)
 		}
 		return p, r, nil
 	}
+	s.countOAuth(s.oauthProvider(p.Issuer), "failed:oauth_app_required")
 	return p, resolvedApp{}, oaAppRequired(t.required(p), p.Issuer)
 }
 
@@ -990,6 +996,7 @@ func (s *Service) OAuthReceive(ctx context.Context, state, code, oauthErr, descr
 		}
 	}
 	if flow == nil {
+		s.countOAuth("unknown", "failed:"+oauthFailure(oauthErr, "invalid_state"))
 		if oauthErr != "" {
 			return oaWithQuery(s.frontendBase("")+"/", [2]string{"oauth", "error"}, [2]string{"reason", oaFirstNonEmpty(description, oauthErr)}), nil
 		}
@@ -999,6 +1006,7 @@ func (s *Service) OAuthReceive(ctx context.Context, state, code, oauthErr, descr
 		if flow.WorkspaceSlug == "" {
 			return s.workspaceGone(*flow), nil
 		}
+		s.countOAuth("unknown", "failed:"+oauthFailure(oauthErr, "missing_code"))
 		reason := oaFirstNonEmpty(description, oaFirstNonEmpty(oauthErr, "missing_code"))
 		return oaWithQuery(s.landingURL(*flow, flow.WorkspaceSlug), [2]string{"oauth", "error"}, [2]string{"reason", reason}), nil
 	}
@@ -1014,6 +1022,7 @@ func (s *Service) OAuthReceive(ctx context.Context, state, code, oauthErr, descr
 }
 
 func (s *Service) workspaceGone(f oauthState) string {
+	s.countOAuth("unknown", "failed:workspace_gone")
 	return oaWithQuery(s.frontendBase(f.ReturnTo)+"/", [2]string{"oauth", "error"}, [2]string{"reason", "workspace_gone"})
 }
 
@@ -1025,6 +1034,7 @@ func (s *Service) OAuthFinish(ctx context.Context, p authn.Principal, token stri
 		return "", err
 	}
 	if !ok {
+		s.countOAuth("unknown", "failed:invalid_state")
 		return "", oaHttpErr(400, "Invalid or expired OAuth sign-in")
 	}
 	var r returnedFlow
@@ -1035,6 +1045,7 @@ func (s *Service) OAuthFinish(ctx context.Context, p authn.Principal, token stri
 	if flow.UserID != p.UserID || !slices.Contains(p.AccessibleWorkspaces, flow.WorkspaceID) {
 		s.d.Log.WarnContext(ctx, "OAuth finish refused", "target_kind", flow.TargetKind, "connection_id", flow.ConnectionID,
 			"workspace_id", flow.WorkspaceID, "started_by", flow.UserID, "finished_by", p.UserID)
+		s.countOAuth("unknown", "failed:other_user")
 		return "", oaHttpErr(403, "This sign-in was started by someone else")
 	}
 	c, err := enter(ctx, flow.WorkspaceID)
@@ -1059,6 +1070,7 @@ func (s *Service) OAuthFinish(ctx context.Context, p authn.Principal, token stri
 			return err
 		}
 		if !ok {
+			s.countOAuth("unknown", "failed:connection_gone")
 			return oaHttpErr(400, "OAuth connection no longer exists")
 		}
 		a = got
@@ -1068,6 +1080,7 @@ func (s *Service) OAuthFinish(ctx context.Context, p authn.Principal, token stri
 	})
 	var ex *exchangeError
 	if errors.As(err, &ex) {
+		s.countOAuth(s.oauthProvider(authConfigIssuer(a.Config)), "failed:"+ex.reason)
 		return oaWithQuery(landing, [2]string{"oauth", "error"}, [2]string{"reason", ex.reason}), nil
 	}
 	if err != nil {
@@ -1111,6 +1124,7 @@ func (s *Service) OAuthFinish(ctx context.Context, p authn.Principal, token stri
 	if flow.TargetKind == kindMCPInstance {
 		s.VerifyInBackground(c.Workspace, connID)
 	}
+	s.countOAuth(s.oauthProvider(authConfigIssuer(a.Config)), "succeeded")
 	return oaWithQuery(landing, [2]string{"oauth", "success"}), nil
 }
 

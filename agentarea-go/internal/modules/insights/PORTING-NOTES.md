@@ -16,11 +16,40 @@ Mounted: 8 of 9 operations in `api/openapi/insights` (the ninth, `GET /health`, 
 
 `GET /` and `GET /health` are the serve edge's root routes (`internal/serve`), not this module's.
 
-Not mounted:
+`POST /internal/analytics/signups` (`api/internal/analytics_signups.py`, Kratos's
+after-registration hook, ADR-0047) is mounted raw by `handlers/signups.go`, outside `/v1` and the
+spec: 404 without `AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY`, 401 when `Authorization` is not the key,
+422 on a bad body, else 204.
 
-- `POST /internal/analytics/signups` (`api/internal/analytics_signups.py:42-87`, hand-registered, outside the spec). Stores `signup_attributions` and then queues a `sign_up` event for the analytics sender. The sender (`libs/common/agentarea_common/analytics/sender.py`, hourly flush and flush at stop) and the attribution parser (`attribution.py:66-123`) are not ported, and the flush loop needs a lifecycle hook the serve module does not have. Mounting the route without the sender would store a signup and never send it.
+## Analytics
 
-The analytics background subsystem (sender, daily pulse, counters, `start_analytics`) is not ported.
+`service/analytics_runtime.go` is `start_analytics`, `InstallationPulse` and the sign-up hook over
+one `Sender` (`service/sender.go`, `analytics/sender.py`). Components: `analytics sender` in serve
+and worker (start: the installation row and the NOTICE, hourly sends; stop: a last send), and
+`installation pulse` in worker (hourly tick, `pg_try_advisory_xact_lock(4107726903118)`, due a day
+after `last_pulse_at`). A start that fails is logged and leaves analytics off; it never fails the
+process. Counters reach the sender through `kernel/analytics.Handle`, which app passes to runs
+(`run_refused`: spend caps, billing refusals, the PRE_LLM entitlement deny) and connections
+(`connector_check` at every verification verdict, `oauth_connect` through the connect flow); before the sender starts, or with analytics
+off, nothing is counted.
+
+The pulse reads each foreign table through its owner (decision 3a): a narrow `TenantCounter`
+(`api/tenant_counts.go`, SQL in `store/tenant_counts.go`) in identity, runs, agents, connections,
+catalog, models, streams and governance, counts keyed by their own ids and naming their Python
+source. `service/pulse.go` composes them as `collect_pulse` did in one session: the size buckets,
+the activation milestones, the median's rounding and every `custom` label are decided there. Test on
+postgres: `app/pulse_db_test.go`.
+
+Deviations:
+- A collector batch over `http.RoundTripper` of the vendor destination; no transport fails the
+  batch (logged, dropped) instead of reaching the internet unproxied.
+- A sign-up hook with a bad key is refused before its body is read; FastAPI read and parsed the
+  JSON first, so a malformed body without the key answered 422 rather than 401.
+- `created_at` without an offset is read as UTC; pydantic read it in the process's local zone.
+- The pulse reads the owners' tables over the read pool, outside the lock's transaction; Python
+  read them in the locking session. The lock still decides who sends.
+
+`oauth_connect` is counted by connections at Python's thirteen sites (see its notes).
 
 ## Reads from other modules
 

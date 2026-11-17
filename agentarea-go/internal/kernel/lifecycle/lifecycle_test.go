@@ -116,3 +116,23 @@ func TestShutdownIsBounded(t *testing.T) {
 		t.Fatal("shutdown not bounded")
 	}
 }
+
+func TestLoopsWindDownTogether(t *testing.T) {
+	g := NewGroup(Options{ShutdownTimeout: time.Second})
+	for _, name := range []string{"a", "b", "c", "d", "e"} {
+		g.Add(Loop(name, func(ctx context.Context) error {
+			<-ctx.Done()
+			time.Sleep(150 * time.Millisecond)
+			return ctx.Err()
+		}))
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	began := time.Now()
+	if err := g.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if took := time.Since(began); took > 500*time.Millisecond {
+		t.Fatalf("five loops that each take 150ms to finish stopped in %v: one after another", took)
+	}
+}

@@ -148,3 +148,6 @@ func (l lazyExecutor) Query(ctx context.Context, workflowID, query string, out a
 func (l lazyExecutor) Update(ctx context.Context, workflowID, update string, out any, args ...any) error {
 	return l.src.Executor().Update(ctx, workflowID, update, out, args...)
 }
+
+// HeldCalls passes calls outside a run that the policy holds through their approval.
+func (m *Surface) HeldCalls() api.HeldCalls { return m.s }

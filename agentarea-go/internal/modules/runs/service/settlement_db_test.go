@@ -364,9 +364,9 @@ func TestSettleURLEscapesEveryReservedByte(t *testing.T) {
 // freshDB is a database of its own: the settlement worker claims lines of every workspace.
 func freshDB(t *testing.T) db.Database {
 	t.Helper()
-	dsn := os.Getenv("AGENTAREA_TEST_POSTGRES_URL")
+	dsn := os.Getenv("AGENTAREA_DB_TEST_URL")
 	if dsn == "" {
-		t.Skip("AGENTAREA_TEST_POSTGRES_URL is not set")
+		t.Skip("AGENTAREA_DB_TEST_URL is not set")
 	}
 	admin, err := schema.Open(dsn)
 	if err != nil {
@@ -382,7 +382,7 @@ func freshDB(t *testing.T) db.Database {
 		t.Fatal(err)
 	}
 	u.Path = "/" + name
-	t.Setenv("AGENTAREA_TEST_POSTGRES_URL", u.String())
+	t.Setenv("AGENTAREA_DB_TEST_URL", u.String())
 	return openDB(t)
 }
 

@@ -58,6 +58,8 @@ type ModelPrices struct {
 	Output        *money.Decimal `json:"output"`
 	CachedInput   *money.Decimal `json:"cached_input"`
 	CacheCreation *money.Decimal `json:"cache_creation"`
+	Image         *money.Decimal `json:"image,omitempty"`
+	VideoSecond   *money.Decimal `json:"video_second,omitempty"`
 }
 
 // ProviderProfile is the provider spec's HTTP contract as a chat call needs it.

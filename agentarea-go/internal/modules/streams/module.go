@@ -2,6 +2,7 @@
 package streams
 
 import (
+	runsapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/runs/api"
 	"net/http"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/lifecycle"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/netguard"
 	governanceapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/governance/api"
+	identityapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/identity/api"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/api"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/handlers"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/router"
@@ -64,6 +66,15 @@ type Deps struct {
 	Out netguard.Clients
 	// MCPEventSources reads MCP server instances for MCP Events sources (connections' store).
 	MCPEventSources service.MCPEventSources
+	// ModelKinds, Models and AgentModels decide LLM conditions and extract LLM parameters.
+	ModelKinds  service.ModelKinds
+	Models      runsapi.OneShotModels
+	AgentModels service.AgentModels
+	// Links, Owners and Notices admit the senders of messenger sources; AppURL is where they link.
+	Links   identityapi.MessengerLinks
+	Owners  identityapi.WorkspaceOwners
+	Notices events.Dedup
+	AppURL  string
 	// Tasks is runs' task creation; nil leaves run/execute and trigger firing unmounted.
 	Tasks service.Tasks
 	// TaskReads is runs' task statuses and costs; nil shows none.
@@ -111,7 +122,8 @@ func New(d Deps) *Module {
 		Bus: d.Bus, Broker: d.Broker, Dedup: d.Dedup, Quota: d.Quota, Tasks: d.Tasks, Audit: d.Audit,
 		TaskReads: d.TaskReads, FiringTasks: d.FiringTasks, TaskOutcomes: d.TaskOutcomes, Executor: d.Executor,
 		APIURL: d.APIURL, WebhookURL: d.WebhookURL, Settings: d.Settings, Now: d.Now, Log: d.Log,
-		Out: d.Out, MCPEventSources: d.MCPEventSources,
+		Out: d.Out, MCPEventSources: d.MCPEventSources, ModelKinds: d.ModelKinds, Models: d.Models, AgentModels: d.AgentModels,
+		Links: d.Links, Owners: d.Owners, Notices: d.Notices, AppURL: d.AppURL,
 	})}
 }
 

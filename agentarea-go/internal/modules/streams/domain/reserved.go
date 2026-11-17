@@ -39,3 +39,16 @@ func RefuseReserved(p map[string]any) error {
 	sort.Strings(names)
 	return Invalid(fmt.Sprintf("%s is set by the trigger that received the event and cannot be supplied", names[0]))
 }
+
+// ExtractedKeyAllowed is whether an LLM-extracted parameter may join a task's parameters: not
+// already set, not reserved, and naming no resource (event-derived data grants no capabilities).
+func ExtractedKeyAllowed(params map[string]any, key string) bool {
+	if _, set := params[key]; set || reservedTaskParameter(key) {
+		return false
+	}
+	switch key {
+	case "mcps", "mcp", "mcp_servers", "skills", "files":
+		return false
+	}
+	return true
+}

@@ -24,12 +24,12 @@ var (
 	_ Querier = (*pgxpool.Pool)(nil)
 )
 
-// testConfig is AGENTAREA_TEST_POSTGRES_URL as a Config; the test is skipped without it.
+// testConfig is AGENTAREA_DB_TEST_URL as a Config; the test is skipped without it.
 func testConfig(t *testing.T) Config {
 	t.Helper()
-	raw := os.Getenv("AGENTAREA_TEST_POSTGRES_URL")
+	raw := os.Getenv("AGENTAREA_DB_TEST_URL")
 	if raw == "" {
-		t.Skip("AGENTAREA_TEST_POSTGRES_URL not set")
+		t.Skip("AGENTAREA_DB_TEST_URL not set")
 	}
 	u, err := url.Parse(raw)
 	if err != nil {

@@ -16,6 +16,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/httpx"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/httpx/wirejson"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/lifecycle"
+	"github.com/agentarea/agentarea/agentarea-go/internal/serve/apidocs"
 	"github.com/agentarea/agentarea/agentarea-go/internal/serve/static"
 )
 
@@ -52,6 +53,9 @@ type Options struct {
 	Now func() time.Time
 	// Checks gate GET /readyz.
 	Checks []lifecycle.Checker
+	// OpenAPI is the document served at /openapi.json, with Swagger UI at
+	// /docs and ReDoc at /redoc; nil serves none of them.
+	OpenAPI []byte
 }
 
 // Assembly is the built edge.
@@ -112,7 +116,10 @@ const (
 
 const readyCheckTimeout = 2 * time.Second
 
-// rootRoutes are main.py's own routes (GET /, GET /health) and the probes.
+const htmlType = "text/html; charset=utf-8"
+
+// rootRoutes are main.py's own routes (GET /, GET /health), FastAPI's
+// /openapi.json, /docs and /redoc, and the probes.
 func rootRoutes(opts Options) func(Routes) error {
 	now := opts.Now
 	if now == nil {
@@ -130,6 +137,12 @@ func rootRoutes(opts Options) func(Routes) error {
 				{Key: "timestamp", Value: isoformat(now())},
 			}
 		}))
+		if opts.OpenAPI != nil {
+			rt.Mux.Handle("GET /openapi.json", rawHandler("application/json", opts.OpenAPI))
+			rt.Mux.Handle("GET /docs", rawHandler(htmlType, apidocs.Swagger()))
+			rt.Mux.Handle("GET /docs/oauth2-redirect", rawHandler(htmlType, apidocs.OAuth2Redirect()))
+			rt.Mux.Handle("GET /redoc", rawHandler(htmlType, apidocs.ReDoc()))
+		}
 		files := staticFiles(rt.Errors, static.FS())
 		rt.Mux.Handle("GET /static/{path...}", files)
 		rt.Mux.Handle("HEAD /static/{path...}", files)
@@ -173,6 +186,13 @@ func isoformat(t time.Time) string {
 		return t.Format("2006-01-02T15:04:05")
 	}
 	return t.Format("2006-01-02T15:04:05.000000")
+}
+
+func rawHandler(contentType string, body []byte) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", contentType)
+		_, _ = w.Write(body)
+	})
 }
 
 func jsonHandler(f func(r *http.Request) (int, wirejson.Object)) http.Handler {

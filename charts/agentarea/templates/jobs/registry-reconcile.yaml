@@ -53,15 +53,14 @@ spec:
               memory: 64Mi
       containers:
         - name: reconcile
-          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ default .Chart.AppVersion .Values.backend.image.tag }}"
+          image: {{ include "agentarea.image" . | quote }}
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           {{- with .Values.global.security.containerSecurityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          workingDir: /app/apps/api
           command:
-            - agentarea-api
+            - agentarea
             - reconcile
             {{- if .Values.registryReconcile.workspaceRegistries }}
             - --workspace-registries
@@ -86,8 +85,11 @@ spec:
             # secret store, as the backend does.
             {{- include "agentarea.storage.envs" . | nindent 12 }}
             {{- include "agentarea.storage.secrets.envs" . | nindent 12 }}
+            {{- include "agentarea.redis.secrets.envs" . | nindent 12 }}
+            {{- include "agentarea.redis.envs" . | nindent 12 }}
+            {{- include "agentarea.redis.urlEnv" . | nindent 12 }}
             {{- include "agentarea.application.secrets.envs" . | nindent 12 }}
-            # Registry definitions consumed by `agentarea-api reconcile`
+            # Registry definitions consumed by `agentarea reconcile`
             # (JSON array; bound to the --registries-config option via envvar).
             - name: REGISTRIES_CONFIG
               value: {{ .Values.registryReconcile.registries | toJson | quote }}

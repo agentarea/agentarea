@@ -51,7 +51,7 @@ func (m *Module) Pollers(p PollerDeps) ([]lifecycle.Component, error) {
 }
 
 // pollingDeps is the poll manager over the module: the source's own ingest, the catalog's
-// entries, and the API's public webhook URL (TELEGRAM_WEBHOOK_URL over AGENTAREA_API_URL), so a
+// entries, and the API's public webhook URL (AGENTAREA_TELEGRAM_WEBHOOK_URL over AGENTAREA_API_URL), so a
 // provider is registered at the URL the API shows for the source.
 func (m *Module) pollingDeps(p PollerDeps, log *slog.Logger) polling.Deps {
 	mcp := polling.NewMCPClient(p.Config.ManagerURL, p.GatewaySecret, m.d.Out.Transport(netguard.Internal))

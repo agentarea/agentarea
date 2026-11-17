@@ -118,10 +118,10 @@ func lists() []list {
 		},
 		list{
 			name:  "kubernetes-only-in-workload-backends",
-			files: []string{"$all", "!**/internal/modules/sandbox/backends/**", "!**/internal/modules/connections/runtime/kube/**"},
+			files: []string{"$all", "!**/internal/modules/sandbox/backends/**", "!**/internal/modules/connections/runtime/kube/**", "!**/internal/modules/catalog/operator/**"},
 			deny: map[string]string{
-				"k8s.io/client-go":               "only the workload backends (sandbox/backends, connections/runtime/kube) talk to Kubernetes",
-				"sigs.k8s.io/controller-runtime": "only the workload backends (sandbox/backends, connections/runtime/kube) talk to Kubernetes",
+				"k8s.io/client-go":               "only the workload backends (sandbox/backends, connections/runtime/kube) and the operator (catalog/operator) talk to Kubernetes",
+				"sigs.k8s.io/controller-runtime": "only the workload backends (sandbox/backends, connections/runtime/kube) and the operator (catalog/operator) talk to Kubernetes",
 			},
 		},
 		list{

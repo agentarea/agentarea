@@ -52,13 +52,13 @@ func (d testDB) TrySessionLock(context.Context, db.LockKey, func(context.Context
 func (d testDB) Ping(ctx context.Context) error { return d.pool.Ping(ctx) }
 func (d testDB) Close()                         { d.pool.Close() }
 
-// openTestDB migrates the goose baseline onto AGENTAREA_TEST_POSTGRES_URL and
+// openTestDB migrates the goose baseline onto AGENTAREA_DB_TEST_URL and
 // skips when it is unset.
 func openTestDB(t *testing.T) testDB {
 	t.Helper()
-	dsn := os.Getenv("AGENTAREA_TEST_POSTGRES_URL")
+	dsn := os.Getenv("AGENTAREA_DB_TEST_URL")
 	if dsn == "" {
-		t.Skip("AGENTAREA_TEST_POSTGRES_URL is not set")
+		t.Skip("AGENTAREA_DB_TEST_URL is not set")
 	}
 	sqlDB, err := schema.Open(dsn)
 	if err != nil {

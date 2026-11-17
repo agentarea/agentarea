@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/analytics"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/durable"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/money"
@@ -375,6 +376,12 @@ func (s *Service) gateModelCall(ctx context.Context, p Principal, model api.Reso
 	switch res.Action {
 	case "deny":
 		errType = "GovernanceDeniedError"
+		code, ok := res.Metadata["entitlement_code"].(string)
+		if !ok {
+			analytics.RunRefused(s.d.Counter, nil)
+		} else {
+			analytics.RunRefused(s.d.Counter, &code)
+		}
 	case "escalate":
 		errType = "EscalationRequiredError"
 	default:

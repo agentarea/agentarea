@@ -28,12 +28,12 @@ func (t replyTasks) OutcomeTask(_ context.Context, _ scope.Workspace, id string)
 	return x, ok, nil
 }
 
-// TestTaskRepliesOverValkey needs AGENTAREA_TEST_REDIS_URL: task reply delivery on the real broker
+// TestTaskRepliesOverValkey needs AGENTAREA_REDIS_TEST_URL: task reply delivery on the real broker
 // sends a task's end to its webhook once and leaves nothing pending.
 func TestTaskRepliesOverValkey(t *testing.T) {
-	url := os.Getenv("AGENTAREA_TEST_REDIS_URL")
+	url := os.Getenv("AGENTAREA_REDIS_TEST_URL")
 	if url == "" {
-		t.Skip("AGENTAREA_TEST_REDIS_URL is not set")
+		t.Skip("AGENTAREA_REDIS_TEST_URL is not set")
 	}
 	opts, err := redis.ParseURL(url)
 	if err != nil {

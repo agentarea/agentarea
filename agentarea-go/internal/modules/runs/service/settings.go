@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/config"
@@ -21,6 +22,7 @@ func LoadRunSettings(l *config.Loader) RunSettings {
 		},
 		SkillsWindowShare: 0.3,
 	}
+	s.ToolSearchURL = strings.TrimRight(l.StringEnv("AGENTAREA_TOOL_SEARCH_URL", ""), "/")
 	for _, part := range l.ListEnv("AGENTAREA_TASK_OUTAGE_WAIT_BACKOFF", []string{"1m", "5m", "10m"}) {
 		d, err := config.ParseDuration(part)
 		if err != nil || d <= 0 {

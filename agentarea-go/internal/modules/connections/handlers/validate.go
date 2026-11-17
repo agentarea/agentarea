@@ -30,6 +30,7 @@ type input struct {
 	status        *string
 	pattern       *string
 	instance      instanceInput
+	spec          specInput
 }
 
 // linkNew is OAuthLinkCreateRequest, validated.

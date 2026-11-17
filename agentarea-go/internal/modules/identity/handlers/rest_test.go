@@ -71,6 +71,12 @@ type codes struct{}
 
 func (codes) Issue(context.Context, string) (string, error) { return "CODE", nil }
 
+func (codes) Redeem(context.Context, string, string, string) (string, bool, error) {
+	return "", false, nil
+}
+
+func (codes) Confirm(context.Context, string, string) (string, bool, error) { return "", false, nil }
+
 type noLogos struct{}
 
 func (noLogos) Put(context.Context, string, io.Reader, int64, blob.PutOptions) error { return nil }

@@ -48,6 +48,9 @@ type Spec struct {
 	InstanceID    string            `json:"instance_id"`
 	WorkspaceID   string            `json:"workspace_id,omitempty"`
 	ServiceName   string            `json:"service_name"`
+	// EgressExit is the exit the instance's json_spec names, for the spec hook;
+	// it never reaches a backend.
+	EgressExit string `json:"-"`
 }
 
 // Resources are the requests and limits of a workload.

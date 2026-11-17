@@ -45,7 +45,7 @@ func (b *memBlob) Get(_ context.Context, key string) (io.ReadCloser, blob.Info, 
 	defer b.mu.Unlock()
 	data, ok := b.m[key]
 	if !ok {
-		return nil, blob.Info{}, errors.New("not found")
+		return nil, blob.Info{}, blob.ErrNotFound
 	}
 	return io.NopCloser(bytes.NewReader(data)), blob.Info{Key: key, Size: int64(len(data))}, nil
 }

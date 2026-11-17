@@ -288,14 +288,18 @@ func (d TaskDelivery) stamp(p map[string]any) {
 	}
 }
 
-// buildTaskParameters is _build_task_parameters without the LLM extraction (not ported).
-func buildTaskParameters(t domain.Trigger, triggerData map[string]any, firedBy string, d *TaskDelivery, def *TaskDefinitionText, now time.Time) map[string]any {
-	asked := t.TaskParameters
+// askedParameters are the parameters a firing asks for: the saved task's, else the trigger's.
+func askedParameters(t domain.Trigger, def *TaskDefinitionText) map[string]any {
 	if def != nil {
-		asked = def.Parameters
+		return def.Parameters
 	}
+	return t.TaskParameters
+}
+
+// buildTaskParameters is _build_task_parameters up to its LLM extraction (Service.extractParameters).
+func buildTaskParameters(t domain.Trigger, triggerData map[string]any, firedBy string, d *TaskDelivery, def *TaskDefinitionText, now time.Time) map[string]any {
 	p := map[string]any{}
-	for k, v := range domain.DropReserved(asked) {
+	for k, v := range domain.DropReserved(askedParameters(t, def)) {
 		p[k] = v
 	}
 	p["trigger_id"] = t.ID

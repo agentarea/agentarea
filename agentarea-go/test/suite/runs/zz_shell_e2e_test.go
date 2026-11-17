@@ -60,7 +60,7 @@ func TestShellToolRunsInTheSandbox(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := w.Owner.Post(t, w.Path("/provider-configs/"), map[string]any{
-		"provider_spec_id": suiteProvider, "name": "Fake", "api_key": "sk-suite", "endpoint_url": srv.URL,
+		"provider_spec_id": suiteProvider, "name": "Fake", "api_key": "sk-suite", "endpoint_url": h.StackURL(srv.URL),
 	}).Expect(http.StatusOK).Object()
 	inst := w.Owner.Post(t, w.Path("/model-instances/"), map[string]any{
 		"provider_config_id": cfg["id"], "model_spec_id": suiteChat, "name": "Fake chat",
@@ -93,6 +93,9 @@ func TestShellToolRunsInTheSandbox(t *testing.T) {
 		return fmt.Errorf("status %v", final["status"])
 	})
 	types, byType := taskEvents(t, w.Owner.Get(t, w.Path(tasks+taskID+"/events")).Expect(http.StatusOK).JSON())
+	if rt := byType["runtime.discovered"]; rt["error"] != nil {
+		t.Skipf("the stack serves no sandbox: %v", rt["error"])
+	}
 	r, ok := byType["tool.result"]
 	b, _ := json.Marshal(r)
 	t.Logf("offered %v; events %v; tool.result %s", offered, types, b)

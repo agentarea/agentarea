@@ -39,7 +39,7 @@ func newRunsSurface(e *edge, d coreDeps, p runsProviders) *runs.Surface {
 			return d.Durable.Config.Queues.Agent
 		},
 		Service: runsservice.SurfaceDeps{DB: d.DB, Broker: d.Broker, Agents: p.Agents.Lookup(), Definitions: p.Agents.Definitions(), Secrets: d.Secrets.Manager, Currency: func() string { return string(d.Extensions.CustomerPricing.Currency()) }, AppURL: d.AppURL, Log: d.Log,
-			AuditReader: p.Governance.AuditReader(), Policies: p.Governance.RunPolicies(),
+			Counter: d.Counter, AuditReader: p.Governance.AuditReader(), Policies: p.Governance.RunPolicies(),
 			Permissions: func(ctx context.Context, c authn.Caller, permission, resourceType, resourceID string) error {
 				return authz.NewPermissions(d.Graph, d.Log).Require(ctx, c, permission, resourceType, resourceID)
 			},
@@ -129,4 +129,23 @@ func (f streamsFiringTasks) Definition(ctx context.Context, ws scope.Workspace, 
 func (f streamsFiringTasks) Origin(ctx context.Context, ws scope.Workspace, taskID string) (streamsapi.TaskOrigin, bool, error) {
 	o, ok, err := f.tasks.Origin(ctx, ws, taskID)
 	return streamsapi.TaskOrigin{OriginType: o.OriginType, OriginID: o.OriginID, CausationID: o.CausationID}, ok, err
+}
+
+// lateOneShotModels reaches runs' model calls outside a run, built after streams.
+type lateOneShotModels struct{ m *moduleSet }
+
+func (l lateOneShotModels) Chat(ctx context.Context, ws scope.Workspace, who runsapi.ModelCallFor, in runsapi.ChatOnce) (string, error) {
+	return l.m.runs.OneShotModels().Chat(ctx, ws, who, in)
+}
+
+func (l lateOneShotModels) Decide(ctx context.Context, ws scope.Workspace, who runsapi.ModelCallFor, in runsapi.DecideOnce) (map[string]map[string]any, error) {
+	return l.m.runs.OneShotModels().Decide(ctx, ws, who, in)
+}
+
+// agentModels answers streams' "the model instance the agent runs on".
+type agentModels struct{ d agentsapi.Definitions }
+
+func (a agentModels) AgentModel(ctx context.Context, ws scope.Workspace, agentID string) (string, error) {
+	def, err := a.d.Definition(ctx, ws, agentID)
+	return def.ModelID, err
 }

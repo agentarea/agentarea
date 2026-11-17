@@ -167,6 +167,7 @@ without them, and refuses them while RustFS is enabled.
 | `AGENTAREA_AUTH_KRATOS_ADMIN_URL` | `kratos.urls.admin` | in-cluster `<release>-kratos-admin:4434` |
 | `AGENTAREA_APP_URL` | derived from the frontend ingress | `http://localhost:3000` |
 | `AGENTAREA_A2A_AGENT_URL` | `global.envVars.AGENTAREA_A2A_AGENT_URL` | `http://{agent_id}.a2a.localhost:8000` |
+| `AGENTAREA_TELEGRAM_WEBHOOK_URL` | `backend.extraEnv` | empty (Telegram posts to `AGENTAREA_API_URL/webhooks/{webhook_id}`) |
 | `SMTP_CONNECTION_URI` / `SMTP_FROM_EMAIL` / `SMTP_FROM_NAME` | `kratos.smtp.*` | empty (invitations are link-only) |
 | `AGENTAREA_MCP_OAUTH_APPS` | Secret `global.mcpOAuthApps.existingSecret`, key `global.mcpOAuthApps.existingSecretKey` | unset (no platform OAuth apps) |
 

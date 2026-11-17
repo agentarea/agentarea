@@ -23,8 +23,6 @@ spec:
         checksum/config: {{ include (print $.Template.BasePath "/env-configmap.yaml") . | sha256sum }}
     spec:
       {{- $dockerBackend := eq (default "kubernetes" .Values.mcpManager.backend) "docker" }}
-      {{- $execKubeconfig := include "agentarea.mcpManager.executionKubeconfigPath" . }}
-      {{- $packageRegistrySecret := .Values.mcpManager.packageImages.registrySecret | default "" }}
       serviceAccountName: {{ include "agentarea.mcpManagerServiceAccountName" . }}
       {{- if not $dockerBackend }}
       {{- with .Values.global.security.podSecurityContext }}
@@ -35,8 +33,9 @@ spec:
       {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: mcp-manager
-          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.mcpManager.image.repository }}:{{ default .Chart.AppVersion .Values.mcpManager.image.tag }}"
+          image: {{ include "agentarea.image" . | quote }}
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          command: ["agentarea", "mcp"]
           {{- if .Values.mcpManager.securityContext }}
           {{/* Explicit operator override -- e.g. the "docker" backend, which needs
                privileged access to the mounted Docker socket and cannot use the
@@ -102,19 +101,8 @@ spec:
                   key: {{ include "agentarea.mcpGatewaySecretKey" . }}
             {{- include "agentarea.sandboxRuntime.envs" . | nindent 12 }}
             {{- include "agentarea.mcpManager.envs" . | nindent 12 }}
-            {{- include "agentarea.telemetry.envs" (dict "root" . "image" .Values.mcpManager.image) | nindent 12 }}
-            {{- include "agentarea.mcpManager.secrets.envs" . | nindent 12 }}
-            {{- if $packageRegistrySecret }}
-            - name: DOCKER_CONFIG
-              value: /etc/agentarea/mcp-registry
-            {{- end }}
-            {{- $ip := .Values.mcpManager.instancePod }}
-            {{- if and $ip (or $ip.labels $ip.annotations $ip.nodeSelector $ip.tolerations $ip.affinity $ip.imagePullSecrets $ip.priorityClassName) }}
-            # Operator customization for spawned MCP instance pods (one JSON blob;
-            # parsed by the manager into the instance pod spec).
-            - name: AGENTAREA_K8S_INSTANCE_POD
-              value: {{ $ip | toJson | quote }}
-            {{- end }}
+            {{- include "agentarea.mcpRuntime.podEnvs" . | nindent 12 }}
+            {{- include "agentarea.telemetry.envs" (dict "root" . "image" .Values.global.image) | nindent 12 }}
             {{- if or .Values.mcpManager.envVars .Values.global.envVars }}
             {{- $mcpEnv := default dict .Values.mcpManager.envVars -}}
             {{- $globalEnv := default dict .Values.global.envVars -}}
@@ -141,56 +129,30 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /readyz
               port: http
             initialDelaySeconds: 20
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 6
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /healthz
               port: http
             initialDelaySeconds: 60
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 6
           volumeMounts:
-            # Scratch spool for artifact/upload verification under
-            # readOnlyRootFilesystem: os.CreateTemp("", ...) resolves to /tmp
-            # in internal/artifactstore/repository.go (PublishStream),
-            # internal/api/sandbox_artifacts_handler.go (download staging)
-            # and internal/sandboxruntime/manager.go (SandboxFileUpload).
+            # Scratch spool for artifact and upload staging under
+            # readOnlyRootFilesystem: os.CreateTemp resolves to /tmp.
             - name: tmp
               mountPath: /tmp
-            {{- if $packageRegistrySecret }}
-            # Registry credentials for package-image lookup and push.
-            - name: mcp-package-registry
-              mountPath: /etc/agentarea/mcp-registry
-              readOnly: true
-            {{- end }}
-            {{- if $dockerBackend }}
-            # Docker backend: drive containers through the host Docker socket.
-            - name: docker-sock
-              mountPath: /var/run/docker.sock
-            {{- end }}
-            {{- include "agentarea.mcpManager.executionKubeconfigMount" . | nindent 12 }}
+            {{- include "agentarea.mcpRuntime.volumeMounts" . | nindent 12 }}
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: {{ .Values.mcpManager.tmpVolume.sizeLimit | quote }}
-        {{- if $dockerBackend }}
-        - name: docker-sock
-          hostPath:
-            path: /var/run/docker.sock
-            type: Socket
-        {{- end }}
-        {{- if $packageRegistrySecret }}
-        - name: mcp-package-registry
-          secret:
-            secretName: {{ $packageRegistrySecret | quote }}
-            items:
-              - key: .dockerconfigjson
-                path: config.json
-        {{- end }}
-        {{- include "agentarea.mcpManager.executionKubeconfigVolume" . | nindent 8 }}
+        {{- include "agentarea.mcpRuntime.volumes" . | nindent 8 }}
 {{- end }}

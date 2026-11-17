@@ -54,12 +54,30 @@ module's (dossier), so none are here.
   `allowed: false` on a graph error (`:785`) while `/check` answers 503 (`:733`).
 - `linked_at` is a naive datetime, serialised without `Z` (`external_identities.py:44`).
 
+## Invitation mail
+
+An addressed invitation is mailed after the row is stored (`service/invitation_email.go`,
+`deliver_invitation_for_workspace`): `sent`, `failed` (logged without the link), or
+`not_configured` when the deployment has no SMTP. The settings are the deployment's own
+`SMTP_*` names (`config/email.py`, shared with Kratos' courier): `SMTP_CONNECTION_URI` wins
+over the discrete `SMTP_HOST`/`PORT`/`USERNAME`/`PASSWORD`/`PROTOCOL`/`DISABLE_STARTTLS`/
+`SKIP_SSL_VERIFY`; `SMTP_FROM_EMAIL` and `SMTP_FROM_NAME` are the sender. The SMTP session is
+`internal/kernel/mail`, which the streams email reply channel also sends through.
+
+Deviations:
+- The HTML body escapes the workspace name and the link; Python interpolated them raw, so a
+  workspace named `<b>x</b>` rendered markup in the invitee's mail. Test:
+  `service/invitation_email_test.go` `TestAddressedInvitationIsMailedWithItsLink`.
+- A server named without `SMTP_FROM_EMAIL` fails startup; Python's `build_mailer` returned no
+  mailer and every invitation silently answered `not_configured`. Test:
+  `store/mailer_test.go` `TestNoServerIsNoMailAndAServerNeedsASender`.
+- Reading the workspace's name failing answers `failed`; Python let the exception out of
+  `deliver_invitation_for_workspace` after the invitation was committed.
+
 ## Not ported (gaps)
 
 - Governance's `provision_default_policies` on workspace creation
   (`workspaces.py:67-89`). `service.Deps.OnWorkspaceCreated` is the hook and it is nil.
-- Invitation mail: an addressed invitation answers
-  `email_delivery: "not_configured"`.
 - `invited_by_display_name` is always null, because no identity directory is
   wired (`workspace_invitations.py:207`).
 

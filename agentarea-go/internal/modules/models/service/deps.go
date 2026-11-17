@@ -56,6 +56,8 @@ type Deps struct {
 	Catalog Catalog
 	Secrets Secrets
 	Out     Outbound
+	// VideoJobs is the video_generation_jobs table; nil keeps no video jobs.
+	VideoJobs VideoJobStore
 	// Admin refuses a caller who does not administer the workspace (assert_workspace_admin).
 	Admin func(ctx context.Context) error
 	// Pricing names the billing currency.

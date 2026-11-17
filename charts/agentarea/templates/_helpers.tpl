@@ -550,3 +550,87 @@ image's tag. Empty while telemetry.enabled is off.
 {{- end }}
 {{- end }}
 {{- end }}
+
+{{/*
+The agentarea image every server role and job runs.
+*/}}
+{{- define "agentarea.image" -}}
+{{- $g := .Values.global.image -}}
+{{- printf "%s%s%s:%s" $g.registry (ternary "/" "" (ne $g.registry "")) $g.repository (default .Chart.AppVersion $g.tag) -}}
+{{- end }}
+
+{{/*
+The MCP runtime runs in every process that starts or calls MCP workloads
+(backend, worker, mcp-manager). These helpers give each the same settings,
+credentials and mounts, so no two of them drive the backend differently.
+*/}}
+{{- define "agentarea.mcpRuntime.podEnvs" -}}
+{{ include "agentarea.mcpRuntime.envs" . }}
+{{ include "agentarea.mcpRuntime.secrets.envs" . }}
+{{- if .Values.mcpManager.packageImages.registrySecret }}
+- name: DOCKER_CONFIG
+  value: /etc/agentarea/mcp-registry
+{{- end }}
+{{- $ip := .Values.mcpManager.instancePod }}
+{{- if and $ip (or $ip.labels $ip.annotations $ip.nodeSelector $ip.tolerations $ip.affinity $ip.imagePullSecrets $ip.priorityClassName) }}
+# Operator customization for spawned MCP instance pods (one JSON blob, parsed
+# into the instance pod spec).
+- name: AGENTAREA_K8S_INSTANCE_POD
+  value: {{ $ip | toJson | quote }}
+{{- end }}
+{{- end }}
+
+{{- define "agentarea.mcpRuntime.volumeMounts" -}}
+{{- if .Values.mcpManager.packageImages.registrySecret }}
+# Registry credentials for package-image lookup and push.
+- name: mcp-package-registry
+  mountPath: /etc/agentarea/mcp-registry
+  readOnly: true
+{{- end }}
+{{- if eq (default "kubernetes" .Values.mcpManager.backend) "docker" }}
+# Docker backend: drive containers through the host Docker socket.
+- name: docker-sock
+  mountPath: /var/run/docker.sock
+{{- end }}
+{{- include "agentarea.mcpManager.executionKubeconfigMount" . }}
+{{- end }}
+
+{{- define "agentarea.mcpRuntime.volumes" -}}
+{{- if eq (default "kubernetes" .Values.mcpManager.backend) "docker" }}
+- name: docker-sock
+  hostPath:
+    path: /var/run/docker.sock
+    type: Socket
+{{- end }}
+{{- with .Values.mcpManager.packageImages.registrySecret }}
+- name: mcp-package-registry
+  secret:
+    secretName: {{ . | quote }}
+    items:
+      - key: .dockerconfigjson
+        path: config.json
+{{- end }}
+{{- include "agentarea.mcpManager.executionKubeconfigVolume" . }}
+{{- end }}
+
+{{/*
+The authorization graph every agentarea process reads.
+*/}}
+{{- define "agentarea.authz.envs" -}}
+{{- if .Values.openfga.enabled }}
+- name: AGENTAREA_AUTHZ_BACKEND
+  value: "openfga"
+- name: AGENTAREA_AUTHZ_FGA_URL
+  value: "http://{{ include "agentarea.fullname" . }}-openfga:{{ .Values.openfga.service.httpPort | default 8080 }}"
+- name: AGENTAREA_AUTHZ_FGA_STORE_ID
+  value: {{ .Values.openfga.accessControl.storeId | quote }}
+- name: AGENTAREA_AUTHZ_FGA_MODEL_ID
+  value: {{ .Values.openfga.accessControl.authorizationModelId | quote }}
+- name: AGENTAREA_AUTHZ_FGA_BOOTSTRAP
+  value: {{ .Values.openfga.accessControl.autoBootstrap | quote }}
+- name: AGENTAREA_AUTHZ_FGA_APPLY_MODEL
+  value: {{ .Values.openfga.accessControl.autoApplyModel | quote }}
+- name: AGENTAREA_AUTHZ_FGA_STORE_NAME
+  value: {{ .Values.openfga.accessControl.storeName | default "agentarea" | quote }}
+{{- end }}
+{{- end }}

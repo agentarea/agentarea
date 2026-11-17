@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/analytics"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/money"
 	modelsapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/models/api"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/runs/api"
@@ -36,6 +37,12 @@ func billingRefusal(code, reason, phase string) error {
 	})
 }
 
+// refuseCall is billing refusing a model call, counted for usage analytics (count_run_refused).
+func (s *Service) refuseCall(code, reason string) error {
+	analytics.RunRefused(s.d.Counter, &code)
+	return billingRefusal(code, reason, "pre_llm_call")
+}
+
 // estimateVendorCost is the most a call can cost: its prompt, roughly, and every output token; nil when unpriced.
 func estimateVendorCost(messages []domain.ModelMessage, maxTokens int, prices api.ModelPrices) *money.Decimal {
 	if prices.Input == nil || prices.Output == nil {
@@ -58,7 +65,7 @@ func (s *Service) holdModelCall(ctx context.Context, p Principal, model api.Reso
 		return f, nil
 	}
 	if estimate == nil {
-		return f, billingRefusal("model_unpriced", fmt.Sprintf("model %s declares no price to hold a call on the platform's credentials against", model.ModelID), "pre_llm_call")
+		return f, s.refuseCall("model_unpriced", fmt.Sprintf("model %s declares no price to hold a call on the platform's credentials against", model.ModelID))
 	}
 	bctx, cancel := s.billingCtx(ctx)
 	defer cancel()
@@ -68,10 +75,10 @@ func (s *Service) holdModelCall(ctx context.Context, p Principal, model api.Reso
 	})
 	if err != nil {
 		s.d.Log.ErrorContext(ctx, "billing could not authorize the model call", "model", model.ModelID, "error", err)
-		return f, billingRefusal("billing_unavailable", "billing is temporarily unavailable", "pre_llm_call")
+		return f, s.refuseCall("billing_unavailable", "billing is temporarily unavailable")
 	}
 	if !hold.Allowed {
-		return f, billingRefusal(hold.Code, hold.Reason, "pre_llm_call")
+		return f, s.refuseCall(hold.Code, hold.Reason)
 	}
 	f.holdID, f.heldCurrency, f.estimate = hold.HoldID, string(hold.Currency), *estimate
 	if hold.Amount != nil {

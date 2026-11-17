@@ -46,6 +46,8 @@ type Store interface {
 	DeactivateAPIKey(ctx context.Context, s db.Session, id uuid.UUID, now time.Time) error
 	ListExternalIdentities(ctx context.Context, q db.Querier, userID string) ([]domain.ExternalIdentity, error)
 	RevokeExternalIdentity(ctx context.Context, q db.Querier, userID string, id uuid.UUID, now time.Time) (bool, error)
+	ExternalIdentityHolder(ctx context.Context, q db.Querier, provider, externalID string) (string, bool, error)
+	InsertExternalIdentity(ctx context.Context, q db.Querier, userID, provider, externalID, method string, now time.Time) (domain.ExternalIdentity, error)
 }
 
 // GraphReader is what identity reads from the authorization graph: member
@@ -75,6 +77,11 @@ type Logos interface {
 // LinkCodes issues messenger link codes (identity/linking.py LinkCodes).
 type LinkCodes interface {
 	Issue(ctx context.Context, userID string) (string, error)
+	// Redeem spends code from the messenger account and returns the user awaiting its
+	// confirmation; false when the code is unknown, used or expired.
+	Redeem(ctx context.Context, code, provider, externalID string) (string, bool, error)
+	// Confirm consumes what the account redeemed; false when nothing waits.
+	Confirm(ctx context.Context, provider, externalID string) (string, bool, error)
 }
 
 // Named is a workspace row the access explorer shows by name.
@@ -128,6 +135,10 @@ type Deps struct {
 	// Resources is nil until agents and connections expose these reads; the
 	// explorer routes that need them are not mounted.
 	Resources Resources
+	// Mailer is nil when the deployment has no transactional mail.
+	Mailer Mailer
+	// AppURL is the webapp's base, where an invitation link points.
+	AppURL string
 	// Outbox queues an event in the caller's transaction; events.Publish when nil.
 	Outbox func(ctx context.Context, tx db.Session, createdBy string, e events.Envelope) error
 	// Now is the process clock; rows Python stamps with datetime.now() get

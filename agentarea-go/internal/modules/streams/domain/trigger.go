@@ -28,8 +28,6 @@ var (
 	ErrNotFound = errors.New("trigger not found")
 	// ErrNoSubscription: the trigger has no stream subscription to change.
 	ErrNoSubscription = errors.New("trigger has no stream subscription")
-	// ErrConditionsNotPorted: an LLM condition cannot be stored yet (models exposes no kind or decision call).
-	ErrConditionsNotPorted = errors.New("LLM trigger conditions are not supported by this server yet")
 )
 
 // ValidationError is a refused trigger configuration (TriggerValidationError): a 400.

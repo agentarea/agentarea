@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/analytics"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/scope"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/domain"
@@ -270,6 +271,9 @@ func (s *Service) verifyRow(ctx context.Context, ws scope.Workspace, id uuid.UUI
 				"Referenced MCP server spec was not found.", locked.ServerSpecID))
 			result = &v
 			_, err := s.d.Instances.SetVerification(ctx, tx, id, v)
+			if err == nil {
+				s.countCheck(v)
+			}
 			return err
 		}
 		if locked.Verification.Status == domain.VerifyInProgress && !force && !s.staleInProgress(locked.Verification) {
@@ -299,7 +303,19 @@ func (s *Service) verifyRow(ctx context.Context, ws scope.Workspace, id uuid.UUI
 		}
 		return err
 	})
+	if err == nil {
+		s.countCheck(v.v)
+	}
 	return v.v, err
+}
+
+// countCheck counts a verification that reached its verdict (connector_check).
+func (s *Service) countCheck(v domain.Verification) {
+	outcome := "ok"
+	if v.Error != nil {
+		outcome = v.Error.Code
+	}
+	analytics.Count(s.d.Counter, "connector_check", map[string]string{"kind": "mcp", "outcome": outcome})
 }
 
 type probed struct {

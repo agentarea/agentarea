@@ -540,3 +540,17 @@ func settleID(v any) (string, bool) {
 	}
 	return "", false
 }
+
+// DeclaredRate is parse_cost_model over one cost declaration: the rate's
+// amount, currency and unit when its source is a rate, nil otherwise.
+func DeclaredRate(raw any) (rate *money.Decimal, currency, unit string, err error) {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return nil, "", "", costErr("a cost declaration is an object")
+	}
+	cm, err := parseCostModel(m)
+	if err != nil || cm.source != sourceRate {
+		return nil, "", "", err
+	}
+	return cm.rate, cm.currency, cm.unit, nil
+}

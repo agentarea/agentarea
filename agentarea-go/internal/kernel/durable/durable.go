@@ -115,6 +115,8 @@ type Worker interface {
 	// Run polls until ctx ends, then drains for AGENTAREA_TEMPORAL_SHUTDOWN_GRACE.
 	// A registration error, or the worker stopping on its own, is returned.
 	Run(ctx context.Context) error
+	// Polling reports whether Run has started the worker and it still polls.
+	Polling() bool
 }
 
 // ApplicationError is an activity failure as the workflow sees it: Type is

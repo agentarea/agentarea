@@ -116,8 +116,9 @@ func InstanceSecretName(instanceID, name string) string {
 	return "mcp_instance_" + instanceID + "_" + name
 }
 
-// ContextSecretEnv is the env name the context-signing secret is stored under.
-const ContextSecretEnv = "AGENTAREA_CONTEXT_SECRET"
+// ContextSecretName is the secret slot an instance's context-signing secret is
+// stored under (tool_context.py CONTEXT_SECRET_NAME); no process reads it from the environment.
+const ContextSecretName = "AGENTAREA_CONTEXT_SECRET"
 
 // StringList is the strings of a decoded JSON list; anything else is none.
 func StringList(v any) []string {

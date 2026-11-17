@@ -159,6 +159,13 @@ func (r *Runtime) buildSpec(ctx context.Context, inst *instance) (workload.Spec,
 		mergeEnv(&spec, map[string]string{contextKeyEnv: ContextKey([]byte(r.d.Config.GatewaySecret), inst.ID)})
 	}
 	if r.d.SpecHook != nil {
+		if raw, ok := js["egress_exit"]; ok && raw != nil {
+			exit, isName := raw.(string)
+			if !isName {
+				return workload.Spec{}, errors.New("json_spec.egress_exit must be an exit name")
+			}
+			spec.EgressExit = exit
+		}
 		if err := r.d.SpecHook(ctx, inst.ID, inst.WorkspaceID, &spec); err != nil {
 			r.d.Log.Error("instance spec hook refused the instance", "instance_id", inst.ID, "error", err)
 			return workload.Spec{}, fmt.Errorf("instance spec hook: %w", err)

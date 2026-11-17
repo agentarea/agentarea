@@ -54,32 +54,33 @@ func (s *Service) EventBody(ctx context.Context, e domain.Event) (any, error) {
 // ErrAdmissionLookup is event_admission's LookupError: a door that cannot be checked stays shut.
 var ErrAdmissionLookup = errors.New("sender admission lookup")
 
-// AdmissionDoor reports whether the event's source type admits its sender through an admission
-// (event_admission returning a door); an ErrAdmissionLookup error when it cannot be read.
-func (s *Service) AdmissionDoor(ctx context.Context, ws scope.Workspace, e domain.Event) (bool, error) {
+// EventAdmission is event_admission: what admits the sender of e; nil when its source type admits
+// anyone. An ErrAdmissionLookup error when the source or type cannot be read, or a type with an
+// admission names no source: a door that cannot be checked stays shut.
+func (s *Service) EventAdmission(ctx context.Context, ws scope.Workspace, e domain.Event) (*Door, error) {
 	if e.SourceID == nil {
 		if e.SourceType == nil {
-			return false, nil
+			return nil, nil
 		}
 		entry, ok, err := s.SourceTypeEntry(ctx, *e.SourceType)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 		if !ok {
-			return false, fmt.Errorf("%w: source type %q of event %s is not in the catalog", ErrAdmissionLookup, *e.SourceType, e.ID)
+			return nil, fmt.Errorf("%w: source type %q of event %s is not in the catalog", ErrAdmissionLookup, *e.SourceType, e.ID)
 		}
 		if entry.Admission == nil {
-			return false, nil
+			return nil, nil
 		}
-		return false, fmt.Errorf("%w: event %s of source type %q names no source to admit its sender through",
+		return nil, fmt.Errorf("%w: event %s of source type %q names no source to admit its sender through",
 			ErrAdmissionLookup, e.ID, *e.SourceType)
 	}
 	src, ok, err := s.sourceOf(ctx, ws, e)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	if !ok {
-		return false, fmt.Errorf("%w: source %s of event %s is gone", ErrAdmissionLookup, *e.SourceID, e.ID)
+		return nil, fmt.Errorf("%w: source %s of event %s is gone", ErrAdmissionLookup, *e.SourceID, e.ID)
 	}
 	slug := ""
 	if src.SourceType != nil {
@@ -87,18 +88,26 @@ func (s *Service) AdmissionDoor(ctx context.Context, ws scope.Workspace, e domai
 	}
 	entry, ok, err := s.SourceTypeEntry(ctx, slug)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	if !ok {
-		return false, fmt.Errorf("%w: source type %q of event %s is not in the catalog", ErrAdmissionLookup, slug, e.ID)
+		return nil, fmt.Errorf("%w: source type %q of event %s is not in the catalog", ErrAdmissionLookup, slug, e.ID)
 	}
 	if entry.Admission == nil {
-		return false, nil
+		return nil, nil
 	}
 	if src.CredentialKey == nil {
-		return false, fmt.Errorf("%w: source %s has no credentials", ErrAdmissionLookup, src.ID)
+		return nil, fmt.Errorf("%w: source %s has no credentials", ErrAdmissionLookup, src.ID)
 	}
-	return true, nil
+	door := &Door{Admission: *entry.Admission, Source: src, Slug: slug, Senders: domain.Senders{Allow: domain.SendersMembers}}
+	if len(src.Senders) > 0 {
+		chosen, ok := domain.SendersRecordOf(src.Senders)
+		if !ok {
+			return nil, fmt.Errorf("%w: source %s stores a senders choice that cannot be read", ErrAdmissionLookup, src.ID)
+		}
+		door.Senders, door.OwnerID = chosen, *chosen.By
+	}
+	return door, nil
 }
 
 func (s *Service) sourceOf(ctx context.Context, ws scope.Workspace, e domain.Event) (domain.Source, bool, error) {

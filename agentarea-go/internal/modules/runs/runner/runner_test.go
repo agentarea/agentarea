@@ -184,6 +184,7 @@ func (fakeWorker) RegisterWorkflow(durable.Workflow)      {}
 func (fakeWorker) RegisterActivity(durable.Activity)      {}
 func (fakeWorker) Kinds() map[string]durable.ActivityKind { return nil }
 func (fakeWorker) Run(ctx context.Context) error          { <-ctx.Done(); return nil }
+func (fakeWorker) Polling() bool                          { return true }
 func (w *fakeWorkers) Executor() durable.Executor         { return nil }
 func (w *fakeWorkers) NewWorker(q string, l durable.Limits) durable.Worker {
 	w.mu.Lock()

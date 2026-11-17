@@ -51,6 +51,8 @@ type CostLine struct {
 	OccurredAt      time.Time
 	Quantity        *string
 	Unit            *string
+	// ClientID is the registered client a call outside a run came from.
+	ClientID string
 }
 
 func uuidLike(s string) bool {

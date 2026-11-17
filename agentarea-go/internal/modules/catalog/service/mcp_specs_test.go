@@ -68,6 +68,60 @@ func (f *fakeMCPSpecs) SetJSONSpec(_ context.Context, _ db.Session, id uuid.UUID
 	return true, nil
 }
 
+func (f *fakeMCPSpecs) BySlug(context.Context, db.Session, string) (api.MCPSpec, bool, error) {
+	return api.MCPSpec{}, false, nil
+}
+
+func (f *fakeMCPSpecs) Tenant(_ context.Context, _ db.Session, filter store.MCPSpecFilter, limit, offset int32) ([]api.MCPSpec, int, error) {
+	var rows []api.MCPSpec
+	for _, id := range filter.Readable {
+		if sp, ok := f.own[id]; ok {
+			rows = append(rows, sp)
+		}
+	}
+	total := len(rows)
+	if int(offset) >= total {
+		return nil, total, nil
+	}
+	return rows[offset:min(total, int(offset+limit))], total, nil
+}
+
+func (f *fakeMCPSpecs) Instantiated(_ context.Context, _ db.Session, filter store.MCPSpecFilter) ([]uuid.UUID, error) {
+	out := []uuid.UUID{}
+	for _, id := range filter.Readable {
+		if sp, ok := f.own[id]; ok && sp.RegistryItemID != nil {
+			out = append(out, uuid.MustParse(*sp.RegistryItemID))
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeMCPSpecs) CatalogPage(_ context.Context, _ db.Session, exclude, _ []uuid.UUID, _, _ *string, limit, offset int32) ([]store.CatalogMCPItem, int, error) {
+	var rows []store.CatalogMCPItem
+	for id, it := range f.items {
+		skip := false
+		for _, e := range exclude {
+			skip = skip || e == id
+		}
+		if !skip {
+			rows = append(rows, it)
+		}
+	}
+	total := len(rows)
+	if limit <= 0 || int(offset) >= total {
+		return nil, total, nil
+	}
+	return rows[offset:min(total, int(offset+limit))], total, nil
+}
+
+func (f *fakeMCPSpecs) Update(context.Context, db.Session, api.MCPSpec, string, time.Time) (api.MCPSpec, bool, error) {
+	return api.MCPSpec{}, false, nil
+}
+
+func (f *fakeMCPSpecs) Delete(context.Context, db.Session, uuid.UUID) (bool, error) {
+	return false, nil
+}
+
 func mcpSpecs(f *fakeMCPSpecs) MCPSpecs {
 	s := New(Deps{DB: fakeDB{}, Now: func() time.Time { return time.Unix(0, 0) }})
 	return MCPSpecs{s: s, st: f, newID: uuid.New}
@@ -233,5 +287,35 @@ func TestDeriveMCPEnvSchema(t *testing.T) {
 	declared := decoded(t, `{"connection_type":"url","env_schema":[{"name":"D","isRequired":null,"required":true}]}`)
 	if got := DeriveMCPEnvSchema(declared); got[0].(map[string]any)["isRequired"] != true {
 		t.Fatalf("declared env = %v", got)
+	}
+}
+
+func TestListPagesTenantRowsThenTheCatalogTheyDoNotInstantiate(t *testing.T) {
+	f := newFakeMCPSpecs()
+	installed, other := uuid.New(), uuid.New()
+	f.items[installed] = store.CatalogMCPItem{ID: installed.String(), Name: "Installed", Spec: map[string]any{}}
+	f.items[other] = store.CatalogMCPItem{ID: other.String(), Name: "Other", Spec: map[string]any{}}
+	mine := uuid.New()
+	item := installed.String()
+	f.own[mine] = api.MCPSpec{ID: mine.String(), Name: "Mine", RegistryItemID: &item, EnvSchema: []any{map[string]any{"name": "K"}}}
+	x := mcpSpecs(f)
+	ws, _ := scope.NewWorkspace("ws", "ws")
+
+	got, total, err := x.List(context.Background(), ws, api.MCPSpecQuery{Readable: []string{mine.String()}, Limit: 1})
+	if err != nil || total != 2 || len(got) != 1 || got[0].ID != mine.String() {
+		t.Fatalf("first page %+v total %d err %v", got, total, err)
+	}
+	got, total, _ = x.List(context.Background(), ws, api.MCPSpecQuery{Readable: []string{mine.String()}, Limit: 1, Offset: 1})
+	if total != 2 || len(got) != 1 || got[0].ID != other.String() || !got[0].Projection {
+		t.Fatalf("second page %+v total %d", got, total)
+	}
+	draft := "draft"
+	got, total, _ = x.List(context.Background(), ws, api.MCPSpecQuery{Readable: []string{mine.String()}, Status: &draft, Limit: 10})
+	if total != 1 || len(got) != 1 {
+		t.Fatalf("a draft filter reached the catalog: %+v total %d", got, total)
+	}
+	got, total, _ = x.List(context.Background(), ws, api.MCPSpecQuery{Limit: 10})
+	if total != 2 || len(got) != 2 {
+		t.Fatalf("nothing readable: %+v total %d", got, total)
 	}
 }

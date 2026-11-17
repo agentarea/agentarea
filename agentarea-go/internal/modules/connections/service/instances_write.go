@@ -277,7 +277,7 @@ func (s *Service) createInstance(ctx context.Context, c authn.Caller, in Instanc
 			}
 		}
 		if in.ContextSecret != nil && *in.ContextSecret != "" {
-			if err := m.Set(ctx, domain.InstanceSecretName(inst.ID, domain.ContextSecretEnv), *in.ContextSecret); err != nil {
+			if err := m.Set(ctx, domain.InstanceSecretName(inst.ID, domain.ContextSecretName), *in.ContextSecret); err != nil {
 				return err
 			}
 		}
@@ -462,7 +462,7 @@ func (s *Service) UpdateInstance(ctx context.Context, c authn.Caller, id uuid.UU
 		}
 		if p.ContextSecretSet {
 			spec = withoutKey(spec, domain.ContextSigningFlag)
-			name := domain.InstanceSecretName(cur.ID, domain.ContextSecretEnv)
+			name := domain.InstanceSecretName(cur.ID, domain.ContextSecretName)
 			if p.ContextSecret != nil && *p.ContextSecret != "" {
 				if err := m.Set(ctx, name, *p.ContextSecret); err != nil {
 					return err
@@ -530,7 +530,7 @@ func (s *Service) DeleteInstance(ctx context.Context, c authn.Caller, id uuid.UU
 		m := s.d.Secrets.Manager(tx, c.UserID)
 		names := cur.EnvVars()
 		if domain.Truthy(cur.JSONSpec[domain.ContextSigningFlag]) {
-			names = append(names, domain.ContextSecretEnv)
+			names = append(names, domain.ContextSecretName)
 		}
 		for _, n := range names {
 			if _, err := m.Delete(ctx, domain.InstanceSecretName(cur.ID, n)); err != nil {

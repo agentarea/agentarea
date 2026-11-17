@@ -141,3 +141,26 @@ func TestSyncAndRemoveNeedTheRightCaller(t *testing.T) {
 	w.Owner.Delete(t, w.Path("/workspace-registries/"+missing)).Expect(http.StatusNotFound).
 		Match(h.Problem(http.StatusNotFound, "http_error", "Registry not found"))
 }
+
+func TestBrowseShowsConnectionsAndPrices(t *testing.T) {
+	w := h.NewWorkspace(t)
+	page := w.Owner.Get(t, w.Path("/registries/catalog/browse?registry_type=mcp_servers&q=suite%20paid")).Expect(http.StatusOK).Object()
+	items, _ := page["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("browse %v", page)
+	}
+	item := items[0].(map[string]any)
+	if conns, ok := item["workspace_connections"].([]any); !ok || len(conns) != 0 {
+		t.Fatalf("workspace_connections %v", item["workspace_connections"])
+	}
+	pricing, _ := item["pricing"].(map[string]any)
+	from, _ := pricing["price_from"].(map[string]any)
+	if pricing["kind"] != "paid" || from["amount"] != "0.02" || from["basis"] != "vendor_cost" || from["currency"] != "USD" {
+		t.Fatalf("pricing %v", item["pricing"])
+	}
+	got := w.Owner.Get(t, w.Path("/registries/catalog/items/5e1f0000-0000-4000-8000-000000000113")).Expect(http.StatusOK).Object()
+	if got["name"] != "Suite Paid" || got["pricing"] == nil {
+		t.Fatalf("item %v", got)
+	}
+	w.Owner.Get(t, w.Path("/registries/catalog/items/5e1f0000-0000-4000-8000-0000000009ff")).Expect(http.StatusNotFound)
+}

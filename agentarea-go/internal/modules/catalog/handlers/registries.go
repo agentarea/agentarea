@@ -27,6 +27,8 @@ type Server struct {
 	admin       func(context.Context) error
 	rate        httpx.RateLimiter
 	log         *slog.Logger
+	bundles     *service.Bundles
+	errs        *httpx.Errors
 }
 
 var _ gen.StrictServerInterface = (*Server)(nil)

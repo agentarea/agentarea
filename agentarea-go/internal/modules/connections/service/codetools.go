@@ -83,6 +83,55 @@ func sandboxToolsets() []CodeToolset {
 	}
 }
 
+// runtimeToolsets are the code toolsets runs executes itself, outside the
+// sandbox (context_toolset.py, web_toolset.py, media_toolset.py).
+func runtimeToolsets() []CodeToolset {
+	return []CodeToolset{
+		{Namespace: "agentarea/context", Description: "Read the organization library: shared reference files the organization keeps " +
+			"for every task (read-only).", Methods: []CodeMethod{
+			{Method: "list_org_files", Description: "List files in the organization library (shared, read-only). These are the " +
+				"organization's durable shared files, distinct from your own task files (the files tool).",
+				Parameters: obj(map[string]any{"prefix": map[string]any{"type": "string", "default": "",
+					"description": "Only paths starting with this; empty lists all."}})},
+			{Method: "read_org_file", Description: "Read a text file from the organization library (shared, read-only).",
+				Parameters: obj(map[string]any{"path": str("Path as list_org_files returns it.")}, "path")},
+		}},
+		{Namespace: "agentarea/web", Description: "Search the web and read web pages into the conversation.", Methods: []CodeMethod{
+			{Method: "fetch_webpage", Description: "Read a web page (HTML, text or JSON) and return its text and links. Opens only " +
+				"links already seen in this task: in the request, search results or pages read before. Binary content " +
+				"(images, PDFs, archives) is refused; download it with the shell.",
+				Parameters: obj(map[string]any{
+					"url":             str("Full http(s) URL of the page."),
+					"timeout_seconds": map[string]any{"type": "number", "default": 15.0, "description": "Seconds to wait for the page."},
+				}, "url")},
+			{Method: "search_web", Description: "Search the public web; returns titles, links and snippets.",
+				Parameters: obj(map[string]any{
+					"query":       str("What to search for, as you would type it."),
+					"max_results": map[string]any{"type": "integer", "default": 8, "description": "How many results, 1 to 20."},
+				}, "query")},
+		}},
+		{Namespace: "agentarea/media", Description: "Generate images and videos with the workspace's image and video models; " +
+			"the files are saved to the task workspace.", Methods: []CodeMethod{
+			{Method: "generate_image", Description: "Generate an image from a text prompt and save it to the task workspace.",
+				Parameters: obj(map[string]any{
+					"prompt": str("What the image shows."),
+					"size": map[string]any{"type": []any{"string", "null"}, "default": nil,
+						"description": "Optional WIDTHxHEIGHT hint such as 1024x1536."},
+				}, "prompt")},
+			{Method: "generate_video", Description: "Start generating a video from a text prompt; returns a job id for get_video. " +
+				"Generation takes minutes: poll get_video with the job id.",
+				Parameters: obj(map[string]any{
+					"prompt":       str("What the video shows."),
+					"duration":     map[string]any{"type": []any{"integer", "null"}, "default": nil, "description": "Length in seconds."},
+					"resolution":   map[string]any{"type": []any{"string", "null"}, "default": nil, "description": "Resolution such as 720p."},
+					"aspect_ratio": map[string]any{"type": []any{"string", "null"}, "default": nil, "description": "Aspect ratio such as 16:9."},
+				}, "prompt")},
+			{Method: "get_video", Description: "Check a video job; once it is done the video is saved to the task workspace.",
+				Parameters: obj(map[string]any{"job_id": str("The job id generate_video returned.")}, "job_id")},
+		}},
+	}
+}
+
 // platformToolsets are the platform toolsets as the workspace-pinned MCP
 // mount lists them (mcp-tools.json), one method per tool.
 func platformToolsets() ([]CodeToolset, error) {
@@ -126,7 +175,7 @@ func CodeToolsets() (map[string]CodeToolset, error) {
 		return nil, err
 	}
 	out := map[string]CodeToolset{}
-	for _, t := range append(platform, sandboxToolsets()...) {
+	for _, t := range append(append(platform, sandboxToolsets()...), runtimeToolsets()...) {
 		out[t.Namespace] = t
 	}
 	return out, nil

@@ -9,6 +9,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type InstalledBundle struct {
+	ID            uuid.UUID
+	CreatedAt     pgtype.Timestamp
+	UpdatedAt     pgtype.Timestamp
+	WorkspaceID   string
+	CreatedBy     string
+	Name          string
+	DisplayName   pgtype.Text
+	Description   pgtype.Text
+	SchemaVersion string
+	Status        string
+	Canonical     []byte
+	InstallResult []byte
+}
+
 type McpServer struct {
 	ID             uuid.UUID
 	Name           string

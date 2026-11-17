@@ -23,9 +23,9 @@ type env struct {
 
 func testEnv(t *testing.T) env {
 	t.Helper()
-	e := env{pgURL: os.Getenv("AGENTAREA_TEST_POSTGRES_URL"), redisURL: os.Getenv("AGENTAREA_TEST_REDIS_URL")}
+	e := env{pgURL: os.Getenv("AGENTAREA_DB_TEST_URL"), redisURL: os.Getenv("AGENTAREA_REDIS_TEST_URL")}
 	if e.pgURL == "" || e.redisURL == "" {
-		t.Skip("AGENTAREA_TEST_POSTGRES_URL and AGENTAREA_TEST_REDIS_URL not set")
+		t.Skip("AGENTAREA_DB_TEST_URL and AGENTAREA_REDIS_TEST_URL not set")
 	}
 	return e
 }

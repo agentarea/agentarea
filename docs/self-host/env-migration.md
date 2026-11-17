@@ -454,6 +454,15 @@ topic and broker key.
 | `OUTBOUND_PRIVATE_ALLOWLIST` | `AGENTAREA_HTTP_PRIVATE_ALLOWLIST` |
 | `WEBAPP_PUBLIC_ORIGIN` | `AGENTAREA_APP_ORIGIN` |
 
+### Test harness
+
+Read only by the Go test suites that need a real database or broker.
+
+| Was | Is |
+|---|---|
+| `AGENTAREA_TEST_POSTGRES_URL` | `AGENTAREA_DB_TEST_URL` |
+| `AGENTAREA_TEST_REDIS_URL` | `AGENTAREA_REDIS_TEST_URL` |
+
 ### Listen address
 
 | Was | Is |

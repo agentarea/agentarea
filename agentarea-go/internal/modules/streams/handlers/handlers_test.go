@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/httpx"
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/scope"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/handlers"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/service"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/store/storetest"
@@ -34,7 +36,7 @@ func newRig(t *testing.T) *rig {
 	svc := service.New(service.Deps{
 		DB: storetest.DB{Pool: pool}, Graph: &storetest.Graph{AllowAll: true},
 		Agents: storetest.Agents{Known: map[string]bool{agent: true}}, Schedules: &storetest.Schedules{},
-		TriggerQueue: "trigger-schedules",
+		TriggerQueue: "trigger-schedules", ModelKinds: noModels{},
 	})
 	errs := httpx.NewErrors("http://api.test", slog.Default(), handlers.MapError)
 	r := chi.NewRouter()
@@ -117,6 +119,12 @@ func TestListReturnsArray(t *testing.T) {
 	}
 }
 
+type noModels struct{}
+
+func (noModels) ModelKind(context.Context, scope.Workspace, string) (string, bool, error) {
+	return "", false, nil
+}
+
 func TestRefusals(t *testing.T) {
 	g := newRig(t)
 	body := cronBody(g.agent)
@@ -126,8 +134,9 @@ func TestRefusals(t *testing.T) {
 		t.Fatalf("conditions = %d %s", rec.Code, rec.Body.String())
 	}
 	body["conditions"] = map[string]any{"description": "urgent", "model_id": "4a0b2b5e-8d4f-4a52-9a43-3f3b1c1f2d10"}
-	if rec := g.do(http.MethodPost, "/", body); rec.Code != http.StatusNotImplemented {
-		t.Fatalf("llm conditions = %d", rec.Code)
+	if rec := g.do(http.MethodPost, "/", body); rec.Code != http.StatusBadRequest ||
+		!strings.Contains(rec.Body.String(), "does not exist in this workspace") {
+		t.Fatalf("llm conditions = %d %s", rec.Code, rec.Body.String())
 	}
 	body["conditions"] = map[string]any{"type": "rule", "logic": "OR", "rules": []any{map[string]any{"field": "a", "operator": "exists"}}}
 	if rec := g.do(http.MethodPost, "/", body); rec.Code != http.StatusCreated && rec.Code != http.StatusOK ||

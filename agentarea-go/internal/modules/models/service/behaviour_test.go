@@ -552,3 +552,14 @@ func TestDiscoveryRefusesAnOversizedListing(t *testing.T) {
 		t.Fatalf("a 9 MiB listing: %v", err)
 	}
 }
+
+type rubPricing struct{}
+
+func (rubPricing) Currency() money.Currency { return "RUB" }
+
+func TestCurrencyComesFromTheExtension(t *testing.T) {
+	svc := New(Deps{Pricing: func() money.CustomerPricing { return rubPricing{} }})
+	if svc.Currency() != "RUB" {
+		t.Fatal(svc.Currency())
+	}
+}

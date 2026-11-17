@@ -16,6 +16,9 @@ import (
 type RunSettings struct {
 	OutageWait        api.OutageWait
 	SkillsWindowShare float64
+	// ToolSearchURL is the SearXNG-compatible service search_web asks
+	// (AGENTAREA_TOOL_SEARCH_URL); empty, every search answers an error.
+	ToolSearchURL string
 }
 
 // ResolveInput is what a run starts from (ResolveRunConfigRequest).

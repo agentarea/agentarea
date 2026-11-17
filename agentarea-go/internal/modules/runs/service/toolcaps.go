@@ -13,6 +13,7 @@ import (
 // toolCallScope is what of a call the caps narrow by.
 type toolCallScope struct {
 	TaskID, AgentID    string
+	ClientID           string
 	HasConnection      bool
 	ConnectionID, Tool string
 }
@@ -59,7 +60,7 @@ func toolSpendCaps(budget *api.BudgetPolicy, call toolCallScope, billing string)
 		case c.Category == "llm",
 			c.Category == "tools" && !call.HasConnection && c.Tool == "",
 			perRun && call.TaskID == "",
-			c.ClientID != "",
+			c.ClientID != "" && c.ClientID != call.ClientID,
 			c.ConnectionID != "" && (!call.HasConnection || c.ConnectionID != call.ConnectionID),
 			c.Tool != "" && (!call.HasConnection || c.Tool != call.Tool),
 			c.OwnAgent && call.AgentID == "":
@@ -71,6 +72,8 @@ func toolSpendCaps(budget *api.BudgetPolicy, call toolCallScope, billing string)
 			narrowed = "tool"
 		case c.ConnectionID != "":
 			narrowed = "connection"
+		case c.ClientID != "":
+			narrowed = "client"
 		case c.Category == "tools":
 			narrowed = "tools"
 		case c.OwnAgent:
@@ -80,7 +83,7 @@ func toolSpendCaps(budget *api.BudgetPolicy, call toolCallScope, billing string)
 		if perRun {
 			label = strings.TrimSpace("run " + narrowed)
 		}
-		scope := store.SpendScope{ConnectionID: c.ConnectionID, Tool: c.Tool}
+		scope := store.SpendScope{ConnectionID: c.ConnectionID, Tool: c.Tool, ClientID: c.ClientID}
 		if c.OwnAgent {
 			scope.AgentID = call.AgentID
 		}

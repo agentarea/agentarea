@@ -200,3 +200,11 @@ func PyFloat(f float64) string {
 	}
 	return s
 }
+
+// PyDumpsCanonical is json.dumps(v, sort_keys=True, separators=(",", ":")): ASCII escapes, no
+// whitespace.
+func PyDumpsCanonical(v any) string {
+	var b strings.Builder
+	pyEncode(&b, v, ",", ":", true)
+	return b.String()
+}

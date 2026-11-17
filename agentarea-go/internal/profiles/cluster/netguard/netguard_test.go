@@ -177,3 +177,19 @@ func TestLoadTrust(t *testing.T) {
 	}
 	_ = resp.Body.Close()
 }
+
+func TestPublicIgnoresMemberAllowlist(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	defer srv.Close()
+	_, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	loop := netip.MustParseAddr("127.0.0.1")
+	o := newOutbound(t, kernel.Config{PrivateAllowlist: []string{"svc.local"}}, resolver{"svc.local": {loop}}, noProxy)
+
+	if _, err := o.Client(kernel.Member, 0).Get("http://svc.local:" + port + "/"); err != nil {
+		t.Fatalf("member: %v", err)
+	}
+	_, err := o.Client(kernel.Public, 0).Get("http://svc.local:" + port + "/")
+	if !errors.Is(err, kernel.ErrUnsafe) {
+		t.Fatalf("public reached an allowlisted private host: %v", err)
+	}
+}

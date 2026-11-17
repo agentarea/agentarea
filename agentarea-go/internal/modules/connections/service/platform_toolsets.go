@@ -21,6 +21,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/openapispec"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/toolname"
 	governanceapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/governance/api"
+	runsapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/runs/api"
 )
 
 // allConnections are the connections the workspace sees matching f, newest first.
@@ -143,9 +144,28 @@ type catalogConnection struct {
 // readable connections made from the catalog item, exclude left out,
 // oldest first.
 func (s *Service) OtherCatalogConnections(ctx context.Context, c authn.Caller, itemID, exclude string) ([]api.CatalogConnection, error) {
+	found, err := s.catalogConnections(ctx, c, []string{itemID}, exclude)
+	return found[itemID], err
+}
+
+// CatalogConnections is readable_catalog_connections: per catalog item, the
+// caller's readable connections made from it, oldest first. Items without
+// any are absent.
+func (s *Service) CatalogConnections(ctx context.Context, c authn.Caller, itemIDs []string) (map[string][]api.CatalogConnection, error) {
+	return s.catalogConnections(ctx, c, itemIDs, "")
+}
+
+func (s *Service) catalogConnections(ctx context.Context, c authn.Caller, itemIDs []string, exclude string) (map[string][]api.CatalogConnection, error) {
+	wanted := map[string]bool{}
+	for _, id := range itemIDs {
+		wanted[id] = true
+	}
+	if len(wanted) == 0 {
+		return map[string][]api.CatalogConnection{}, nil
+	}
 	readable, err := s.ReadableIDs(ctx, c)
 	if err != nil || len(readable) == 0 {
-		return nil, err
+		return map[string][]api.CatalogConnection{}, err
 	}
 	var instances []domain.Instance
 	err = s.read(ctx, c, func(sess db.Session) (err error) {
@@ -155,7 +175,7 @@ func (s *Service) OtherCatalogConnections(ctx context.Context, c authn.Caller, i
 	if err != nil {
 		return nil, err
 	}
-	var found []catalogConnection
+	found := map[string][]catalogConnection{}
 	items := map[string]string{}
 	for _, inst := range instances {
 		if _, ok := readable[inst.ID]; !ok || inst.WorkspaceID != c.Workspace.ID() || inst.ID == exclude || inst.ServerSpecID == "" {
@@ -168,8 +188,8 @@ func (s *Service) OtherCatalogConnections(ctx context.Context, c authn.Caller, i
 			}
 			items[inst.ServerSpecID] = item
 		}
-		if item == itemID {
-			found = append(found, catalogConnection{api.CatalogConnection{ID: inst.ID, Kind: "mcp", Name: inst.Name}, inst.CreatedAt})
+		if wanted[item] {
+			found[item] = append(found[item], catalogConnection{api.CatalogConnection{ID: inst.ID, Kind: "mcp", Name: inst.Name}, inst.CreatedAt})
 		}
 	}
 	conns, err := s.allConnections(ctx, c, ConnectionFilter{})
@@ -178,20 +198,25 @@ func (s *Service) OtherCatalogConnections(ctx context.Context, c authn.Caller, i
 	}
 	for _, conn := range conns {
 		if _, ok := readable[conn.ID]; !ok || conn.WorkspaceID != c.Workspace.ID() || conn.ID == exclude ||
-			conn.RegistryItemID == nil || *conn.RegistryItemID != itemID {
+			conn.RegistryItemID == nil || !wanted[*conn.RegistryItemID] {
 			continue
 		}
-		found = append(found, catalogConnection{api.CatalogConnection{ID: conn.ID, Kind: "openapi", Name: conn.Name}, conn.CreatedAt})
+		item := *conn.RegistryItemID
+		found[item] = append(found[item], catalogConnection{api.CatalogConnection{ID: conn.ID, Kind: "openapi", Name: conn.Name}, conn.CreatedAt})
 	}
-	sort.SliceStable(found, func(i, j int) bool {
-		if !found[i].created.Equal(found[j].created) {
-			return found[i].created.Before(found[j].created)
+	out := make(map[string][]api.CatalogConnection, len(found))
+	for item, list := range found {
+		sort.SliceStable(list, func(i, j int) bool {
+			if !list[i].created.Equal(list[j].created) {
+				return list[i].created.Before(list[j].created)
+			}
+			return list[i].Name < list[j].Name
+		})
+		conns := make([]api.CatalogConnection, len(list))
+		for i, f := range list {
+			conns[i] = f.CatalogConnection
 		}
-		return found[i].Name < found[j].Name
-	})
-	out := make([]api.CatalogConnection, len(found))
-	for i, f := range found {
-		out[i] = f.CatalogConnection
+		out[item] = conns
 	}
 	return out, nil
 }
@@ -304,7 +329,7 @@ func (s *Service) FullConnection(ctx context.Context, c authn.Caller, id uuid.UU
 // CallInstanceTool is call_instance_tool: one of inst's tools run as c, the
 // way a client's endpoint runs it. The caller's policy judges the call and
 // the verdict is audited against the instance before anything runs; a call
-// held for approval is refused (approval links are not served here yet).
+// held for approval goes through its approval.
 func (s *Service) CallInstanceTool(ctx context.Context, c authn.Caller, inst domain.Instance, raw string, args json.RawMessage) (map[string]any, error) {
 	policy, err := s.callerPolicy(ctx, c)
 	if err != nil {
@@ -315,20 +340,25 @@ func (s *Service) CallInstanceTool(ctx context.Context, c authn.Caller, inst dom
 		Aliases:     []string{toolname.MCPToolTarget(inst.ID, raw)},
 		Restricting: toolname.MCPNarrowingNames(inst.Name, raw),
 	})
-	if d.Action == governanceapi.ToolRequireApproval {
-		d = governanceapi.ToolDecision{Action: governanceapi.ToolDeny,
-			Reason: d.Reason + "; approval of a held call is not served on this endpoint yet"}
+	audit := toolAudit{resourceType: "mcp_instance", resourceID: inst.ID, actorType: actorOf(c), name: name, args: args,
+		extra: map[string]any{"mcp_instance_id": inst.ID}}
+	held := func() runsapi.HeldCall {
+		names := governanceapi.ToolNames{Aliases: []string{toolname.MCPToolTarget(inst.ID, raw)}, Restricting: toolname.MCPNarrowingNames(inst.Name, raw)}
+		return heldCall(c, &policy, name, names, inst.ID, inst.Name, raw, "", args, d.Reason)
 	}
-	actor := "user"
-	if c.ClientID != "" {
-		actor = "client"
-	}
-	if err := s.auditToolCall(ctx, c, "mcp_instance", inst.ID, actor, name, args, d, map[string]any{"mcp_instance_id": inst.ID}); err != nil {
+	out, refused, err := s.judged(ctx, c, c.ClientID, audit, d, held, mcpBinding(inst.ID, raw), func() (any, error) {
+		return s.runInstanceTool(ctx, c, inst, raw, args)
+	})
+	if err != nil {
 		return nil, err
 	}
-	if !d.Allowed() {
-		return map[string]any{"content": []map[string]any{{"type": "text", "text": "Tool call refused: " + d.Reason}}, "isError": true}, nil
+	if refused != "" {
+		return map[string]any{"content": []map[string]any{{"type": "text", "text": refused}}, "isError": true}, nil
 	}
+	return out.(map[string]any), nil
+}
+
+func (s *Service) runInstanceTool(ctx context.Context, c authn.Caller, inst domain.Instance, raw string, args json.RawMessage) (map[string]any, error) {
 	up, err := s.UpstreamFor(ctx, c.Workspace, inst, &CallerContext{UserID: c.UserID, UserEmail: c.Email, ClientID: c.ClientID, Tool: raw})
 	var invalid *domain.Invalid
 	if errors.As(err, &invalid) && invalid.Msg == errNoUpstreamURL {

@@ -76,6 +76,7 @@ func Mount(r chi.Router, errs *httpx.Errors, e Edge, s *Server, ports Ports) {
 	mountOAuthAS(g)
 	mountProxy(g)
 	mountMCP(g)
+	mountSpecs(g)
 	if !ports.OpenAPI {
 		return
 	}

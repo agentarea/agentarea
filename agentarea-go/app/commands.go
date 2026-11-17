@@ -24,8 +24,20 @@ type command struct {
 func commands() []command {
 	return []command{
 		{name: "init-buckets", summary: "create the storage buckets and their browser CORS allowlist", run: (*Build).runInitBuckets},
+		{name: "reconcile", summary: "make the platform registries what the manifest says and sync them: reconcile [--registries-config json] [--config-file path] [--source url]... [--force] [--workspace-registries]",
+			run: (*Build).runReconcile},
 		{name: "dlq-replay", summary: "move dead letters back to the stream each came from: dlq-replay <dlq> [--start id] [--end id]",
 			run: (*Build).runDLQReplay},
+		{name: "check-migrations", summary: "report each migration set's applied and latest version; fail when one is behind",
+			run: (*Build).runCheckMigrations},
+		{name: "status", summary: "print the listen address, database and Temporal connection as configured",
+			run: (*Build).runStatus},
+		{name: "validate", summary: "load the configuration, reach the database and report whether migrations are at head",
+			run: (*Build).runValidate},
+		{name: "skills", summary: "skill package maintenance: skills <move-bodies-to-packages|move-own-copies-to-packages|delete-moved-own-copies|repin-catalog-installs|refresh-stub-installs> [--dry-run] [--min-age-hours n]",
+			run: (*Build).runSkills},
+		{name: "kratos-jwks", summary: "create the Secret with the key Kratos signs session JWTs with, once: kratos-jwks --secret name --kid id --namespace ns",
+			run: (*Build).runKratosJWKS},
 	}
 }
 

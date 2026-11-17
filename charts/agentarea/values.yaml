@@ -38,6 +38,11 @@ global:
   
   # Image configuration
   image:
+    # -- The agentarea image: one binary that runs every server role (serve,
+    # worker, events, mcp, sandbox) and the jobs (migrate, reconcile,
+    # init-buckets). An edition ships its own image built over the same binary.
+    repository: agentarea/agentarea-platform
+    tag: ""  # Defaults to the chart appVersion
     pullPolicy: IfNotPresent
     registry: ""  # Optional: Set custom registry (e.g., "myregistry.com", "ghcr.io")
     pullSecrets: []  # Optional: List of image pull secret names
@@ -108,10 +113,6 @@ global:
     # SSL configuration
     ssl: false
     sslMode: "disable"
-    # -- AGENTAREA_DB_TENANT_SCOPE: what an ORM query on a workspace-scoped table
-    # does when no workspace is bound. "log" runs it unfiltered and warns once per
-    # call site; "enforce" refuses it. Ship "log", clear the warnings, then flip.
-    tenantScope: "log"
     # Connection pool settings
     maxConnections: 100
     connectionTimeout: 30s
@@ -119,10 +120,10 @@ global:
     migrations:
       runAtStartup: true
       initializationTimeout: 300s
-      # -- Command the migration job runs in the API image, from /app/apps/api.
-      # An installed extension can name its own command, which must also run the
-      # core migrations.
-      command: ["agentarea-api", "migrate"]
+      # -- Command the migration job runs in the agentarea image. An installed
+      # extension can name its own command, which must also run the core
+      # migrations.
+      command: ["agentarea", "migrate"]
 
   # Redis client configuration consumed by AgentArea services.
   #
@@ -297,14 +298,6 @@ global:
     enabled: false
     type: "istio"  # istio, linkerd
 
-  # Monitoring configuration
-  monitoring:
-    # Health checks
-    health:
-      enabled: true
-      port: 8001
-      path: "/health"
-
   # Anonymous usage analytics (AGENTAREA_ANALYTICS_ENABLED)
   analytics:
     # -- Send AgentArea anonymous usage statistics from the backend and worker: a
@@ -408,26 +401,18 @@ backend:
   enabled: true
   replicaCount: 1
 
-  # -- Uvicorn worker processes per pod. One process is one event loop, so one
-  # pod serves about one CPU core's worth of Python however large its CPU limit
-  # is. Prefer replicas over workers -- a pool inside the pod hides a stuck
-  # worker from the probes, which poll the pod, not the process. Raise this only
-  # when a deliberately larger CPU limit would otherwise go unused.
-  workers: 1
-
   # -- Seconds the pod keeps serving after it is marked for deletion, covering
   # the gap before its removal from the Service endpoints has propagated.
   preStopDelay: 5
-  # -- Seconds uvicorn then waits for open connections to finish. Must be
+  # -- Seconds the server then waits for open connections to finish. Must be
   # finite: the API serves SSE, and those connections never close on their own.
   shutdownTimeout: 20
   # -- Total budget the kubelet allows for the two above before SIGKILL. Keep it
   # above preStopDelay + shutdownTimeout, or draining is cut short.
   terminationGracePeriodSeconds: 30
-  image:
-    repository: agentarea/agentarea-api
-    tag: ""  # Defaults to the chart appVersion
-    pullPolicy: ""  # Overrides global.image.pullPolicy if set
+  # -- Scratch space at /tmp under the read-only root filesystem.
+  tmpVolume:
+    sizeLimit: 1Gi
 
   service:
     type: ClusterIP
@@ -550,10 +535,9 @@ frontend:
 worker:
   enabled: true
   replicaCount: 1
-  image:
-    repository: agentarea/agentarea-worker
-    tag: ""  # Defaults to the chart appVersion
-    pullPolicy: ""  # Overrides global.image.pullPolicy if set
+  # -- Scratch space at /tmp under the read-only root filesystem.
+  tmpVolume:
+    sizeLimit: 1Gi
 
   # -- Port of the worker's health endpoint, passed to the container as
   # AGENTAREA_WORKER_HEALTH_PORT. /readyz answers 200 once the database, the
@@ -646,10 +630,6 @@ worker:
 eventService:
   enabled: true
   replicaCount: 1
-  image:
-    repository: agentarea/agentarea-events
-    tag: ""  # Defaults to the chart appVersion
-    pullPolicy: ""  # Overrides global.image.pullPolicy if set
   # Service port
   port: 8002
   # How often the set of stream sources is read again; each poll source polls
@@ -707,9 +687,6 @@ platformNetworkPolicy:
 mcpManager:
   enabled: true
   replicaCount: 1
-  image:
-    repository: agentarea/agentarea-mcp-manager
-    tag: ""  # Defaults to the chart appVersion
   service:
     type: ClusterIP
     port: 80
@@ -1131,9 +1108,6 @@ sandboxRuntime:
 mcpSandboxRunner:
   enabled: true
   replicaCount: 1
-  image:
-    repository: "" # Defaults to mcpManager.image.repository
-    tag: ""        # Defaults to mcpManager.image.tag
 
   # Dedicated service account, separate from mcp-manager's. The runner drives
   # the same Kubernetes backend/warm-pool client and so is bound to the same
@@ -1295,7 +1269,7 @@ jobs:
     enabled: true
 
 # Registry reconcile (replaces the standalone agentarea-operator).
-# A post-migration Job runs `agentarea-api reconcile`, which ensures each
+# A post-migration Job runs `agentarea reconcile`, which ensures each
 # registry exists and syncs it via the platform RegistryService (the same code
 # path the API and CLI use). Idempotent: re-runs on every install/upgrade.
 # Disable to bring your own catalog or start empty.

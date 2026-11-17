@@ -16,6 +16,13 @@ type CatalogConnection struct {
 	ID, Kind, Name string
 }
 
+// CatalogConnections lists the caller's connections made from catalog items.
+type CatalogConnections interface {
+	// CatalogConnections is readable_catalog_connections: per item id, the
+	// connections the graph lets the caller read, oldest first.
+	CatalogConnections(ctx context.Context, c authn.Caller, itemIDs []string) (map[string][]CatalogConnection, error)
+}
+
 // ConnectAction is a link a person must open before the connection can be used.
 type ConnectAction struct {
 	URL, Message string
@@ -35,6 +42,13 @@ type MCPSpec struct {
 	RegistryURL                    *string
 }
 
+// SpecListing is list_specs' filters; nil is no filter.
+type SpecListing struct {
+	IsPublic      *bool
+	Tag, Search   *string
+	Limit, Offset int
+}
+
 // MCPInstance is an MCP server instance as the mcp_servers toolset returns it.
 type MCPInstance struct {
 	ID, Name     string
@@ -48,8 +62,7 @@ type MCPInstance struct {
 }
 
 // PlatformMCPServers is what the platform mcp_servers toolset calls
-// (tools/mcp_servers_toolset.py). Catalog serves no MCP spec writes or
-// listing yet, so of the spec tools only get_spec is here. Each method checks
+// (tools/mcp_servers_toolset.py). Each method checks
 // what the tool's authorization marker demands (the REST route's relation);
 // documents are checked with the REST bodies' rules. A refusal is an error
 // whose text the toolset reports.
@@ -57,6 +70,15 @@ type PlatformMCPServers interface {
 	// GetSpec returns ErrNotFound for an unknown spec; a tenant spec needs
 	// read on it, catalog data does not.
 	GetSpec(ctx context.Context, c authn.Caller, specID string) (MCPSpec, error)
+	// CreateSpec takes an MCPServerCreate document; the caller owns the spec.
+	CreateSpec(ctx context.Context, c authn.Caller, doc json.RawMessage) (MCPSpec, error)
+	// UpdateSpec takes an MCPServerUpdate document; ErrNotFound for a spec
+	// the workspace does not have.
+	UpdateSpec(ctx context.Context, c authn.Caller, specID string, doc json.RawMessage) (MCPSpec, error)
+	// DeleteSpec is false when there was no such spec.
+	DeleteSpec(ctx context.Context, c authn.Caller, specID string) (bool, error)
+	// ListSpecs is a page of the readable workspace specs then the catalog, and the total.
+	ListSpecs(ctx context.Context, c authn.Caller, q SpecListing) ([]MCPSpec, int, error)
 	// Create takes an MCPServerInstanceCreate document; the connect action is probed.
 	Create(ctx context.Context, c authn.Caller, doc json.RawMessage) (MCPInstance, error)
 	// Update takes an MCPServerInstanceUpdate document; ErrNotFound for an

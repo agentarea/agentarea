@@ -16,7 +16,7 @@ func (openClients) Transport(netguard.Destination) http.RoundTripper { return ht
 func (openClients) Dialer() netguard.Dialer                          { return &net.Dialer{} }
 
 // The event service registered a provider at AGENTAREA_API_URL/webhooks/<id> while the API
-// showed TELEGRAM_WEBHOOK_URL/webhooks/<id> when that was set: the provider posted where the
+// showed AGENTAREA_TELEGRAM_WEBHOOK_URL/webhooks/<id> when that was set: the provider posted where the
 // source was not shown, and the API reported the source unregistered.
 func TestPollersRegisterAtTheURLTheAPIShows(t *testing.T) {
 	m := New(Deps{APIURL: "https://api.example", WebhookURL: "https://hooks.example/", Out: openClients{}})

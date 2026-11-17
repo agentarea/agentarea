@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/analytics"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/httpx"
@@ -431,7 +432,12 @@ func monthStartUTC(t time.Time) time.Time {
 }
 
 // enforceBudget is _enforce_budget_cap with the run's effective budget.
-func (s *Surface) enforceBudget(ctx context.Context, ws scope.Workspace, b *governanceapi.Budget, agentID string) error {
+func (s *Surface) enforceBudget(ctx context.Context, ws scope.Workspace, b *governanceapi.Budget, agentID string) (err error) {
+	defer func() {
+		if r := (*Refusal)(nil); errors.As(err, &r) {
+			analytics.Count(s.d.Counter, "run_refused", map[string]string{"reason": "budget_cap"})
+		}
+	}()
 	if b == nil || (b.MonthlySpendCapUSD == nil && b.AgentMonthlySpendCapUSD == nil && len(b.SpendCaps) == 0) {
 		return nil
 	}

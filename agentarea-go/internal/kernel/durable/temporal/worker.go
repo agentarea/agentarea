@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"sync/atomic"
 
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/interceptor"
@@ -25,6 +26,7 @@ type Worker struct {
 	errs   []error
 	fatal  chan error
 	sdk    worker.Worker
+	poll   atomic.Bool
 }
 
 var _ durable.Worker = (*Worker)(nil)
@@ -115,6 +117,8 @@ func (w *Worker) register(what string, fn func()) {
 
 func (w *Worker) Kinds() map[string]durable.ActivityKind { return maps.Clone(w.kinds) }
 
+func (w *Worker) Polling() bool { return w.poll.Load() }
+
 // Run polls until ctx ends or the worker stops on its own; a worker that
 // stopped polling is an error, as in main.py:521-550. Stopping waits for
 // running activities up to the shutdown grace.
@@ -125,6 +129,8 @@ func (w *Worker) Run(ctx context.Context) error {
 	if err := w.sdk.Start(); err != nil {
 		return fmt.Errorf("start worker on %s: %w", w.queue, err)
 	}
+	w.poll.Store(true)
+	defer w.poll.Store(false)
 	select {
 	case <-ctx.Done():
 		w.sdk.Stop()

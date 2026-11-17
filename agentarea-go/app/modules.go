@@ -2,11 +2,14 @@ package app
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net/http"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/analytics"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authz"
 	kblob "github.com/agentarea/agentarea/agentarea-go/internal/kernel/blob"
@@ -21,6 +24,7 @@ import (
 	agentsservice "github.com/agentarea/agentarea/agentarea-go/internal/modules/agents/service"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/catalog"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections"
+	connectionsapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/api"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/runtime"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/governance"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/identity"
@@ -62,8 +66,12 @@ type coreDeps struct {
 	Outbound   *netguard.Outbound
 	// Directory resolves Kratos identities (member removal, invitations).
 	Directory identityservice.Directory
-	Agents    agents.Config
-	Insights  insights.Config
+	// Counter is the process's analytics counter handle; it counts once insights' sender started.
+	Counter *analytics.Handle
+	// Mailer sends invitations; nil when the deployment has no SMTP.
+	Mailer   identityservice.Mailer
+	Agents   agents.Config
+	Insights insights.Config
 	// LiveTurns and TurnTokens are nil without AGENTAREA_MCP_GATEWAY_SECRET.
 	LiveTurns  *clusterauthn.LiveTurns
 	TurnTokens *clusterauthn.TurnTokens
@@ -81,6 +89,7 @@ type coreDeps struct {
 type streamsPlumbing struct {
 	Bus        *kevents.Bus
 	Dedup      *events.Dedup
+	Notices    *events.Dedup
 	Quota      streamsservice.WriteQuota
 	Settings   streamsservice.Settings
 	WebhookURL string
@@ -148,7 +157,7 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 			},
 			Workspace: e.Workspace, Admin: e.Admin, Gate: e.gate, Authenticate: e.Principal,
 			Agents: m.agents.AgentTools(), ClientBundles: m.agents.ClientBundles(), KV: connections.RedisKV(d.Redis),
-			Lookup: d.Lookup, APIURL: d.APIURL, AppURL: d.AppURL, Log: d.Log}
+			Lookup: d.Lookup, APIURL: d.APIURL, AppURL: d.AppURL, Log: d.Log, Counter: d.Counter}
 		if d.Outbound != nil {
 			cd.Out = d.Outbound
 		}
@@ -171,6 +180,7 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 		OnWorkspaceCreated: m.governance.ProvisionDefaults, Directory: d.Directory, Audit: m.governance.Audit(),
 		Resources: explorerResources{lookup: m.agents.Lookup(), inventory: m.agents.Inventory(), mcp: lateMCPInventory{m: m}},
 		Workspace: e.Workspace, Principal: e.Principal, Admin: e.Admin, Log: d.Log,
+		Mailer: d.Mailer, AppURL: d.AppURL,
 	}
 	if artifacts != nil {
 		id.Logos = artifacts
@@ -206,8 +216,9 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 				return nil
 			}
 			return d.Extensions.AccountBalance
-		}()})
+		}(), Counter: d.Counter, Collector: vendorTransport(d.Outbound), Version: buildVersion()})
 	m.runsSurface = newRunsSurface(e, d, runsProviders{Agents: m.agents, Governance: m.governance, Models: m.models, Sandbox: m.sandbox})
+	m.connections.UseHeldCalls(m.runsSurface.HeldCalls())
 	m.agents.UseA2A(m.runsSurface.A2A(), a2aPushSecrets{db: d.DB, f: d.Secrets}, func(ctx context.Context, rawURL string) error {
 		_, err := d.Outbound.Guard().CheckURL(ctx, rawURL)
 		return err
@@ -216,10 +227,13 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 		Broker: d.Broker, Redis: d.Redis, Files: harness, Workers: d.Durable, Tokens: d.TurnTokens, Live: d.LiveTurns, Log: d.Log})
 	m.streamsDeps = streamsDeps(e, d, m)
 	m.streams = streams.New(m.streamsDeps)
+	m.catalog.UseBundles(catalogBundles(d, m))
 	m.agents.UseExport(exportWorkspaces{m: m.identity.Members()}, exportMCPs{x: m.connections.MCPExports()}, exportTriggers{x: m.streams.TriggerExports()})
+	m.agents.UseToolsMCP(toolsMCP{x: m.connections.MCPToolCatalogue()})
 	m.wallet = wallet.New(wallet.Deps{DB: d.DB, Agents: m.agents.Lookup(), Secrets: d.Secrets, Workspace: e.Workspace, Admin: e.Admin, Log: d.Log})
 	m.connections.UseWallets(m.wallet.Wallets())
 	m.runs = runs.New(runsDeps(d, m, harness))
+	m.connections.UseClientCalls(m.runs.ClientToolCalls())
 	m.insights.Use(insightsPorts(d, m))
 	m.useLateToolsets()
 	return m
@@ -232,6 +246,18 @@ func catalogDeps(e *edge, d coreDeps, m *moduleSet) catalog.Deps {
 		},
 		Uses: lateItemUses{m: m}, Credentials: registryCredentials(d.DB, d.Secrets), PlatformSecrets: platformSecrets{db: d.DB, f: d.Secrets},
 		Mirror: m.agents.CatalogMirror()}
+	cd.Connections = catalogConnections{x: m.connections.CatalogConnections()}
+	pricing := catalogPricing{pricing: func() money.CustomerPricing { return money.USDAtProviderCost{} }, log: d.Log}
+	if d.Extensions != nil {
+		pricing.pricing = func() money.CustomerPricing { return d.Extensions.CustomerPricing }
+		if d.Extensions.ToolBilling != nil {
+			pricing.billing = d.Extensions.ToolBilling
+		}
+	}
+	if d.MCPRuntime != nil {
+		pricing.reservation = &reservationReader{read: d.MCPRuntime.Reservation, log: d.Log, now: time.Now}
+	}
+	cd.Pricing = pricing
 	if d.Outbound != nil {
 		cd.Net = d.Outbound
 	}
@@ -248,7 +274,10 @@ func streamsDeps(e *edge, d coreDeps, m *moduleSet) streams.Deps {
 		SecretCatalog: func(ws kscope.Workspace, actor ksecrets.Actor) ksecrets.Catalog {
 			return d.secretCatalog(nil, ws, actor)
 		},
-		Out: d.Outbound, APIURL: d.APIURL, WebhookURL: p.WebhookURL, Settings: p.Settings, Processors: processorRunner{p: m.sandbox.Processors()}}
+		Out: d.Outbound, APIURL: d.APIURL, WebhookURL: p.WebhookURL, Settings: p.Settings, Processors: processorRunner{p: m.sandbox.Processors()},
+		Links: m.identity.MessengerLinks(), Owners: m.identity.WorkspaceOwners(), AppURL: d.AppURL,
+		MCPEventSources: mcpEventSources{s: m.connections.MCPEventSources()},
+		ModelKinds:      m.models.ModelKinds(), Models: lateOneShotModels{m: m}, AgentModels: agentModels{d: m.agents.Definitions()}}
 	streamsRunsPorts(&sd, m.runsSurface, m.agents)
 	if d.Durable != nil {
 		sd.Schedules, sd.Executor, sd.TriggerQueue = d.Durable.Scheduler(), d.Durable.Executor(), d.Durable.Config.Queues.Trigger
@@ -263,7 +292,7 @@ func streamsDeps(e *edge, d coreDeps, m *moduleSet) streams.Deps {
 		sd.RateLimiter = clusterhttpx.NewRateLimiter(d.Redis)
 	}
 	if p.Bus != nil {
-		sd.Bus, sd.Dedup, sd.Quota = p.Bus, p.Dedup, p.Quota
+		sd.Bus, sd.Dedup, sd.Quota, sd.Notices = p.Bus, p.Dedup, p.Quota, p.Notices
 		if p.Consume {
 			sd.Subscriber = p.Bus
 		}
@@ -275,7 +304,9 @@ func streamsDeps(e *edge, d coreDeps, m *moduleSet) streams.Deps {
 func runsDeps(d coreDeps, m *moduleSet, store kblob.Store) runs.Deps {
 	svc := runsservice.Deps{
 		DB: d.DB, Blob: store, Audit: m.governance.Audit(), Caps: m.governance.Budgets(), Policies: m.governance.RunPolicies(),
-		Agents: m.agents.Definitions(), Resolver: m.models.Resolver(), Models: m.models.Caller(),
+		ToolCosts: m.connections.ToolCosts(),
+		Agents:    m.agents.Definitions(), Resolver: m.models.Resolver(), Models: m.models.Caller(),
+		Describer: m.models.Describer(), Decider: m.models.Decider(), Media: m.models.Media(), VideoJobs: m.models.VideoJobs(),
 		Runtime: m.sandbox.Runtime(), Workspace: m.sandbox.TaskWorkspace(),
 		Tools: map[string]runsservice.ToolCaller{
 			"mcp":     mcpCaller{t: m.connections.MCPTools()},
@@ -286,7 +317,10 @@ func runsDeps(d coreDeps, m *moduleSet, store kblob.Store) runs.Deps {
 		Definitions: newRunDefinitions(runTools{t: m.connections.RunTools()}, runSkillsPort{s: m.agents.RunSkills()},
 			runInstructionsPort{p: m.projects.RunInstructions()}, runInputsPort{i: m.sandbox.RunInputs()}),
 		Skills: skillPackages{s: m.agents.RunSkills()},
-		Vendor: m.connections.SettledCosts(),
+		Vendor: m.connections.SettledCosts(), Counter: d.Counter,
+	}
+	if d.Outbound != nil {
+		svc.Web = runsservice.WebClients{Public: d.Outbound.Transport(knetguard.Public), Vendor: d.Outbound.Transport(knetguard.Vendor)}
 	}
 	if d.Broker != nil {
 		svc.Events = runsservice.BrokerEvents{Broker: d.Broker}
@@ -330,4 +364,30 @@ type redisSetEX struct{ c *redis.Client }
 
 func (r redisSetEX) SetEX(ctx context.Context, key, value string, ttl time.Duration) error {
 	return r.c.Set(ctx, key, value, ttl).Err()
+}
+
+func (r redisSetEX) GetDel(ctx context.Context, key string) (string, error) {
+	v, err := r.c.GetDel(ctx, key).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", nil
+	}
+	return v, err
+}
+
+// vendorTransport is the transport to fixed third-party services; nil without outbound clients.
+func vendorTransport(o *netguard.Outbound) http.RoundTripper {
+	if o == nil {
+		return nil
+	}
+	return o.Transport(knetguard.Vendor)
+}
+
+// mcpEventSources is connections' instances as streams' MCP Events sources read them.
+type mcpEventSources struct {
+	s connectionsapi.MCPEventSources
+}
+
+func (a mcpEventSources) MCPEventSource(ctx context.Context, ws kscope.Workspace, id string) (streamsservice.MCPEventInstance, bool, error) {
+	inst, ok, err := a.s.MCPEventSource(ctx, ws, id)
+	return streamsservice.MCPEventInstance{AuthConfigID: inst.AuthConfigID, ManagedBy: inst.ManagedBy, Events: inst.Events}, ok, err
 }

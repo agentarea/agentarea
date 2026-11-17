@@ -13,7 +13,9 @@ require (
 )
 
 require (
+	connectrpc.com/connect v1.18.1 // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
+	github.com/alibaba/OpenSandbox/sdks/sandbox/go v1.2.0 // indirect
 	github.com/alicebob/miniredis/v2 v2.38.0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.43.0 // indirect
@@ -96,6 +98,7 @@ require (
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/openfga/go-sdk v0.8.3 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.24.1 // indirect
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/prometheus/common v0.72.0 // indirect

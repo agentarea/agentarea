@@ -45,7 +45,7 @@ type Module struct {
 // New constructs the module.
 func New(d Deps) *Module {
 	return &Module{d: d, svc: service.New(service.Deps{
-		DB: d.DB, Store: store.Store{}, Catalog: d.Catalog, Secrets: d.Secrets, Out: d.Out, Admin: d.Admin, Pricing: d.Pricing,
+		DB: d.DB, Store: store.Store{}, VideoJobs: store.VideoJobs{}, Catalog: d.Catalog, Secrets: d.Secrets, Out: d.Out, Admin: d.Admin, Pricing: d.Pricing,
 		LocalHost: d.LocalHost, APIURL: d.APIURL, Now: d.Now,
 	})}
 }
@@ -79,3 +79,18 @@ func (m *Module) Serve() serve.Module {
 
 // SpecUses is which specs configs and instances are on, for catalog sync.
 func (m *Module) SpecUses() api.SpecUses { return service.SpecUses{} }
+
+// Describer resolves an instance for one call of a kind outside a run.
+func (m *Module) Describer() api.Describer { return m.svc }
+
+// Decider is the decision model call.
+func (m *Module) Decider() api.Decider { return m.svc }
+
+// Media is the image and video model calls.
+func (m *Module) Media() api.Media { return m.svc }
+
+// VideoJobs keeps the workspace's video generation jobs.
+func (m *Module) VideoJobs() api.VideoJobs { return m.svc }
+
+// Declared is the operator's writes of declared provider configurations.
+func (m *Module) Declared() api.DeclaredProviders { return m.svc }

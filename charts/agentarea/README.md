@@ -62,6 +62,8 @@ The following table lists configurable parameters of the chart and their default
 | global.cluster.type | string | `"kubernetes"` |  |
 | global.cluster.name | string | `"agentarea"` |  |
 | global.deploymentEnv | string | `"production"` |  |
+| global.image.repository | string | `"agentarea/agentarea-platform"` | The agentarea image: one binary that runs every server role (serve, worker, events, mcp, sandbox) and the jobs (migrate, reconcile, init-buckets). An edition ships its own image built over the same binary. |
+| global.image.tag | string | `""` |  |
 | global.image.pullPolicy | string | `"IfNotPresent"` |  |
 | global.image.registry | string | `""` |  |
 | global.image.pullSecrets | list | `[]` |  |
@@ -84,12 +86,11 @@ The following table lists configurable parameters of the chart and their default
 | global.database.name | string | `"agentarea"` |  |
 | global.database.ssl | bool | `false` |  |
 | global.database.sslMode | string | `"disable"` |  |
-| global.database.tenantScope | string | `"log"` | AGENTAREA_DB_TENANT_SCOPE: what an ORM query on a workspace-scoped table does when no workspace is bound. "log" runs it unfiltered and warns once per call site; "enforce" refuses it. Ship "log", clear the warnings, then flip. |
 | global.database.maxConnections | int | `100` |  |
 | global.database.connectionTimeout | string | `"30s"` |  |
 | global.database.migrations.runAtStartup | bool | `true` |  |
 | global.database.migrations.initializationTimeout | string | `"300s"` |  |
-| global.database.migrations.command | list | `["agentarea-api","migrate"]` | Command the migration job runs in the API image, from /app/apps/api. An installed extension can name its own command, which must also run the core migrations. |
+| global.database.migrations.command | list | `["agentarea","migrate"]` | Command the migration job runs in the agentarea image. An installed extension can name its own command, which must also run the core migrations. |
 | global.redis.host | string | `""` |  |
 | global.redis.port | int | `6379` |  |
 | global.redis.url | string | `""` |  |
@@ -191,13 +192,10 @@ The following table lists configurable parameters of the chart and their default
 | ingress.tls | list | `[]` |  |
 | backend.enabled | bool | `true` |  |
 | backend.replicaCount | int | `1` |  |
-| backend.workers | int | `1` | Uvicorn worker processes per pod. One process is one event loop, so one pod serves about one CPU core's worth of Python however large its CPU limit is. Prefer replicas over workers -- a pool inside the pod hides a stuck worker from the probes, which poll the pod, not the process. Raise this only when a deliberately larger CPU limit would otherwise go unused. |
 | backend.preStopDelay | int | `5` | Seconds the pod keeps serving after it is marked for deletion, covering the gap before its removal from the Service endpoints has propagated. |
-| backend.shutdownTimeout | int | `20` | Seconds uvicorn then waits for open connections to finish. Must be finite: the API serves SSE, and those connections never close on their own. |
+| backend.shutdownTimeout | int | `20` | Seconds the server then waits for open connections to finish. Must be finite: the API serves SSE, and those connections never close on their own. |
 | backend.terminationGracePeriodSeconds | int | `30` | Total budget the kubelet allows for the two above before SIGKILL. Keep it above preStopDelay + shutdownTimeout, or draining is cut short. |
-| backend.image.repository | string | `"agentarea/agentarea-api"` |  |
-| backend.image.tag | string | `""` |  |
-| backend.image.pullPolicy | string | `""` |  |
+| backend.tmpVolume | object | `{"sizeLimit":"1Gi"}` | Scratch space at /tmp under the read-only root filesystem. |
 | backend.service.type | string | `"ClusterIP"` |  |
 | backend.service.port | int | `8000` |  |
 | backend.service.annotations | object | `{}` |  |
@@ -255,9 +253,7 @@ The following table lists configurable parameters of the chart and their default
 | frontend.extraContainers | list | `[]` |  |
 | worker.enabled | bool | `true` |  |
 | worker.replicaCount | int | `1` |  |
-| worker.image.repository | string | `"agentarea/agentarea-worker"` |  |
-| worker.image.tag | string | `""` |  |
-| worker.image.pullPolicy | string | `""` |  |
+| worker.tmpVolume | object | `{"sizeLimit":"1Gi"}` | Scratch space at /tmp under the read-only root filesystem. |
 | worker.healthPort | int | `8081` | Port of the worker's health endpoint, passed to the container as AGENTAREA_WORKER_HEALTH_PORT. /readyz answers 200 once the database, the authorization backend and Redis are reachable and every Temporal worker is polling; /livez answers 200 while the event loop responds. |
 | worker.outageWait.retryWindow | string | `"5m"` | How long a call retries before the run starts waiting. |
 | worker.outageWait.backoff | string | `"1m,5m,10m"` | Pauses between retries while the run waits, comma-separated. |
@@ -283,9 +279,6 @@ The following table lists configurable parameters of the chart and their default
 | worker.waitForDependencies | bool | `false` |  |
 | eventService.enabled | bool | `true` |  |
 | eventService.replicaCount | int | `1` |  |
-| eventService.image.repository | string | `"agentarea/agentarea-events"` |  |
-| eventService.image.tag | string | `""` |  |
-| eventService.image.pullPolicy | string | `""` |  |
 | eventService.port | int | `8002` |  |
 | eventService.pollInterval | string | `"30s"` |  |
 | eventService.maxPollers | int | `10` |  |
@@ -311,8 +304,6 @@ The following table lists configurable parameters of the chart and their default
 | platformNetworkPolicy.extraEgress | list | `[]` |  |
 | mcpManager.enabled | bool | `true` |  |
 | mcpManager.replicaCount | int | `1` |  |
-| mcpManager.image.repository | string | `"agentarea/agentarea-mcp-manager"` |  |
-| mcpManager.image.tag | string | `""` |  |
 | mcpManager.service.type | string | `"ClusterIP"` |  |
 | mcpManager.service.port | int | `80` |  |
 | mcpManager.serviceAccount.create | bool | `true` |  |
@@ -439,8 +430,6 @@ The following table lists configurable parameters of the chart and their default
 | sandboxRuntime.cube.template | string | `""` |  |
 | mcpSandboxRunner.enabled | bool | `true` |  |
 | mcpSandboxRunner.replicaCount | int | `1` |  |
-| mcpSandboxRunner.image.repository | string | `""` |  |
-| mcpSandboxRunner.image.tag | string | `""` |  |
 | mcpSandboxRunner.serviceAccount.create | bool | `true` |  |
 | mcpSandboxRunner.serviceAccount.name | string | `""` |  |
 | mcpSandboxRunner.serviceAccount.annotations | object | `{}` |  |

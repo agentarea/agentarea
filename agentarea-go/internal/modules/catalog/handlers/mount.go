@@ -49,6 +49,7 @@ func Mount(r chi.Router, errs *httpx.Errors, workspace func(http.Handler) http.H
 		}),
 		ErrorHandlerFunc: errs.Write,
 	}
+	s.errs = errs
 	base := r.With(workspace)
 	on := func(rq request) chi.Router { return base.With(rq.middleware(errs)) }
 	write := func(rq request) chi.Router { return base.With(s.platformWrite(errs), rq.middleware(errs)) }
@@ -89,6 +90,11 @@ func Mount(r chi.Router, errs *httpx.Errors, workspace func(http.Handler) http.H
 	}
 	if s.admin != nil && s.rate != nil && s.svc.HasSync() {
 		admin(request{pathUUIDs: reg, query: forceQuery}).Post(wr+"/{registry_id}/sync", w.SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPost)
+	}
+
+	if s.bundles != nil {
+		on(request{body: analyzeBody}).Post(httpx.WorkspacePrefix+"/bundles/analyze", w.AnalyzeBundleV1BundlesAnalyzePost)
+		on(request{body: installBody}).Post(httpx.WorkspacePrefix+"/bundles/install", w.InstallBundleV1BundlesInstallPost)
 	}
 
 	ps := httpx.WorkspacePrefix + "/provider-specs"

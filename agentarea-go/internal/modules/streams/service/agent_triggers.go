@@ -55,6 +55,9 @@ func (s *Service) CheckNew(ctx context.Context, c authn.Caller, n domain.NewTrig
 	if _, _, err := s.validateNew(n); err != nil {
 		return err
 	}
+	if err := s.checkConditionModels(ctx, c.Workspace, n.Conditions); err != nil {
+		return err
+	}
 	if n.Type != domain.TypeStream || n.StreamID == nil {
 		return nil
 	}

@@ -16,6 +16,7 @@ import (
 	ksecrets "github.com/agentarea/agentarea/agentarea-go/internal/kernel/secrets"
 	catalogapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/catalog/api"
 	governanceapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/governance/api"
+	identityapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/identity/api"
 	runsapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/runs/api"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/api"
 )
@@ -23,6 +24,16 @@ import (
 // Agents is what triggers read of agents: whether the workspace has the agent (agents' Lookup).
 type Agents interface {
 	AgentExists(ctx context.Context, ws scope.Workspace, id string) (bool, error)
+}
+
+// ModelKinds is the kind of a model instance the workspace sees (models' ModelKinds).
+type ModelKinds interface {
+	ModelKind(ctx context.Context, ws scope.Workspace, id string) (kind string, found bool, err error)
+}
+
+// AgentModels is the model instance an agent runs on (agents' Definitions).
+type AgentModels interface {
+	AgentModel(ctx context.Context, ws scope.Workspace, agentID string) (string, error)
 }
 
 // SourceTypes is catalog's source-type entries (registry_items of type source_types).
@@ -51,6 +62,10 @@ type Deps struct {
 	Graph authz.Graph
 	// Agents answers whether an agent exists (agents module api).
 	Agents Agents
+	// ModelKinds, Models and AgentModels serve LLM conditions and LLM parameter extraction.
+	ModelKinds  ModelKinds
+	Models      runsapi.OneShotModels
+	AgentModels AgentModels
 	// Schedules keeps the cron schedules; nil leaves cron schedules unapplied and logged.
 	Schedules durable.Scheduler
 	// TriggerQueue is AGENTAREA_TRIGGER_QUEUE, the task queue cron schedules start their firings on.
@@ -83,7 +98,7 @@ type Deps struct {
 	Audit governanceapi.AuditWriter
 	// APIURL is the public base of the webhook URLs (AGENTAREA_API_URL).
 	APIURL string
-	// WebhookURL overrides APIURL for webhook URLs (TELEGRAM_WEBHOOK_URL); empty for none.
+	// WebhookURL overrides APIURL for webhook URLs (AGENTAREA_TELEGRAM_WEBHOOK_URL); empty for none.
 	WebhookURL string
 	// Settings are AGENTAREA_EVENT_* and AGENTAREA_TRIGGER_* values.
 	Settings Settings
@@ -92,6 +107,15 @@ type Deps struct {
 	Out netguard.Clients
 	// MCPEventSources reads an MCP server instance for an MCP Events source; nil refuses those sources.
 	MCPEventSources MCPEventSources
+	// Links is identity's messenger link handshake; with Owners and Notices it admits the senders
+	// of a source type with an admission. Nil refuses every such event.
+	Links identityapi.MessengerLinks
+	// Owners reads who owns a workspace (may_run).
+	Owners identityapi.WorkspaceOwners
+	// Notices is the once-a-day cache of what a refused sender was told (telegram-sender-notice).
+	Notices events.Dedup
+	// AppURL is the webapp's public base (AGENTAREA_APP_URL): where a sender links their account.
+	AppURL string
 	// Executor starts and cancels trigger batch workflows (signal-with-start); nil leaves batched
 	// triggers erroring and open batches uncancelled.
 	Executor durable.Executor
@@ -144,7 +168,6 @@ type Settings struct {
 	MaxAttempts    int
 	BatchMaxEvents int
 	WebhookRate    int
-	LLMConditions  bool
 }
 
 // DefaultSettings are Python's defaults.

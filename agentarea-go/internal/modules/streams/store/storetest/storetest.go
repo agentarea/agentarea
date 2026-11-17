@@ -21,13 +21,13 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/schema"
 )
 
-// Pool opens the test Postgres named by AGENTAREA_TEST_POSTGRES_URL with the
+// Pool opens the test Postgres named by AGENTAREA_DB_TEST_URL with the
 // core schema migrated, or skips the test when it is not set.
 func Pool(t testing.TB) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("AGENTAREA_TEST_POSTGRES_URL")
+	dsn := os.Getenv("AGENTAREA_DB_TEST_URL")
 	if dsn == "" {
-		t.Skip("AGENTAREA_TEST_POSTGRES_URL is not set")
+		t.Skip("AGENTAREA_DB_TEST_URL is not set")
 	}
 	sqlDB, err := schema.Open(dsn)
 	if err != nil {

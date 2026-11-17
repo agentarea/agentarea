@@ -100,6 +100,7 @@ func (m *Module) Missing() []string {
 		{"sandbox runtime (sandbox)", s.Runtime == nil}, {"task workspace (sandbox)", s.Workspace == nil},
 		{"skill packages (catalog)", s.Skills == nil}, {"tool callers (connections)", len(s.Tools) == 0},
 		{"vendor settlement (connections)", s.Vendor == nil},
+		{"web clients (netguard)", s.Web.Public == nil || s.Web.Vendor == nil},
 		{"executor", m.d.Executor == nil}, {"agent queue", m.d.AgentQueue == ""},
 	} {
 		if p.nil {
@@ -114,3 +115,9 @@ func (m *Module) Missing() []string {
 func (m *Module) Settlement() lifecycle.Component {
 	return lifecycle.Loop("cost settlement", m.svc.RunSettlement)
 }
+
+// ClientToolCalls prices, caps and meters calls made outside a run.
+func (m *Module) ClientToolCalls() api.ClientToolCalls { return m.svc }
+
+// OneShotModels are the funded model calls made outside a run.
+func (m *Module) OneShotModels() api.OneShotModels { return m.svc }

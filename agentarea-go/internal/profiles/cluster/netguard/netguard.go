@@ -57,6 +57,7 @@ func LoadTrust(extra string) (*Trust, error) {
 // Outbound hands out the client of each destination.
 type Outbound struct {
 	guard    *kernel.Guard
+	public   *kernel.Guard
 	trust    *Trust
 	log      *slog.Logger
 	proxy    func(*url.URL) (*url.URL, error)
@@ -92,9 +93,14 @@ func New(cfg kernel.Config, trust *Trust, log *slog.Logger, opts Options) (*Outb
 	if opts.Dial == nil {
 		opts.Dial = (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext
 	}
+	publicPolicy, err := kernel.NewAddressPolicy(false, nil)
+	if err != nil {
+		return nil, err
+	}
 	o := &Outbound{
-		guard: &kernel.Guard{Policy: policy, Resolver: opts.Resolver},
-		trust: trust, log: log, proxy: opts.Proxy, dial: opts.Dial,
+		guard:  &kernel.Guard{Policy: policy, Resolver: opts.Resolver},
+		public: &kernel.Guard{Policy: publicPolicy, Resolver: opts.Resolver},
+		trust:  trust, log: log, proxy: opts.Proxy, dial: opts.Dial,
 	}
 	o.vendor = o.transport(func(r *http.Request) (*url.URL, error) { return o.proxy(r.URL) }, opts.Dial)
 	o.internal = o.transport(nil, opts.Dial)
@@ -114,7 +120,9 @@ func (o *Outbound) transport(proxy func(*http.Request) (*url.URL, error), dial f
 func (o *Outbound) Transport(dest kernel.Destination) http.RoundTripper {
 	switch dest {
 	case kernel.Member:
-		return &pinned{o: o}
+		return &pinned{o: o, guard: o.guard}
+	case kernel.Public:
+		return &pinned{o: o, guard: o.public}
 	case kernel.Vendor:
 		return o.vendor
 	case kernel.Internal:
@@ -147,7 +155,10 @@ type vetted struct {
 	proxy *url.URL
 }
 
-type pinned struct{ o *Outbound }
+type pinned struct {
+	o     *Outbound
+	guard *kernel.Guard
+}
 
 // RoundTrip is PinnedSender.send.
 func (p *pinned) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -159,7 +170,7 @@ func (p *pinned) RoundTrip(req *http.Request) (*http.Response, error) {
 	if host == "" {
 		return nil, &kernel.URLError{Msg: "URL has no host"}
 	}
-	addrs, err := p.o.guard.Vet(req.Context(), host, false)
+	addrs, err := p.guard.Vet(req.Context(), host, false)
 	if err != nil {
 		return nil, err
 	}

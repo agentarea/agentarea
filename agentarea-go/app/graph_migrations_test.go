@@ -21,11 +21,11 @@ func TestGraphMigrationsAreInOrder(t *testing.T) {
 	}
 }
 
-// TestGraphMigrationStepFailsUnrecorded needs AGENTAREA_TEST_POSTGRES_URL.
+// TestGraphMigrationStepFailsUnrecorded needs AGENTAREA_DB_TEST_URL.
 func TestGraphMigrationStepFailsUnrecorded(t *testing.T) {
-	raw := os.Getenv("AGENTAREA_TEST_POSTGRES_URL")
+	raw := os.Getenv("AGENTAREA_DB_TEST_URL")
 	if raw == "" {
-		t.Skip("AGENTAREA_TEST_POSTGRES_URL not set")
+		t.Skip("AGENTAREA_DB_TEST_URL not set")
 	}
 	u, err := url.Parse(raw)
 	if err != nil {

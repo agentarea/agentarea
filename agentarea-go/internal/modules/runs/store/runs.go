@@ -371,6 +371,10 @@ func (Runs) InsertCostLine(ctx context.Context, s db.Session, l domain.CostLine,
 	if err != nil {
 		return false, err
 	}
+	clientID, err := nullUUID(l.ClientID)
+	if err != nil {
+		return false, err
+	}
 	evidence := l.Evidence
 	if evidence == nil {
 		evidence = map[string]any{}
@@ -386,7 +390,7 @@ func (Runs) InsertCostLine(ctx context.Context, s db.Session, l domain.CostLine,
 		ProviderCostUsd: textPtr(l.ProviderCostUSD), Source: l.Source, Evidence: string(ev), OccurredAt: tstz(l.OccurredAt),
 		Payer: l.Payer, VendorCost: textPtr(l.VendorCost), VendorCurrency: textPtr(l.VendorCurrency), Estimate: l.Estimate,
 		CorrelationID: text(chain.CorrelationID), CausationID: text(chain.CausationID),
-		Quantity: textPtr(l.Quantity), Unit: textPtr(l.Unit),
+		Quantity: textPtr(l.Quantity), Unit: textPtr(l.Unit), ClientID: clientID,
 	})
 	return n > 0, err
 }
@@ -398,6 +402,7 @@ type SpendScope struct {
 	Category     string
 	ConnectionID string
 	Tool         string
+	ClientID     string
 }
 
 // SumSpendSince is the total of the workspace's current lines in currency since a UTC instant.
@@ -410,10 +415,14 @@ func (Runs) SumSpendSince(ctx context.Context, s db.Session, since time.Time, cu
 	if err != nil {
 		return "", err
 	}
+	clientID, err := nullUUID(scope.ClientID)
+	if err != nil {
+		return "", err
+	}
 	return New(s.Q()).SumSpendSince(ctx, SumSpendSinceParams{
 		WorkspaceID: s.Workspace().ID(), Since: tstz(since), Currency: text(currency),
 		AgentID: agentID, TaskID: taskID, Category: text(scope.Category),
-		ConnectionID: text(scope.ConnectionID), Tool: text(scope.Tool),
+		ConnectionID: text(scope.ConnectionID), Tool: text(scope.Tool), ClientID: clientID,
 	})
 }
 

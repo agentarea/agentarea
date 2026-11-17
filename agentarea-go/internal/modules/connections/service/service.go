@@ -9,9 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/analytics"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authz"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/db"
+	runsapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/runs/api"
 	walletapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/wallet/api"
 )
 
@@ -50,13 +52,19 @@ type Deps struct {
 	Audit         AuditWriter
 	// Wallets pays the 402s of runs' calls from the agent's wallet; nil pays none.
 	Wallets walletapi.Wallets
-	Config  Config
+	// HeldCalls is runs' approval gate of calls the policy holds; nil refuses them.
+	HeldCalls runsapi.HeldCalls
+	// ClientCalls prices, caps and meters calls outside a run; nil runs them unmetered.
+	ClientCalls runsapi.ClientToolCalls
+	Config      Config
 	// Admin refuses a caller in ctx who is not an admin of its workspace.
 	Admin func(ctx context.Context) error
 	// APIURL and AppURL are the public bases of the API and the webapp.
 	APIURL string
 	AppURL string
 	Log    *slog.Logger
+	// Counter counts connector checks and OAuth connects for usage analytics; nil counts nothing.
+	Counter analytics.Counter
 	// Now is the clock; nil is time.Now.
 	Now func() time.Time
 	// NewID mints row ids; nil is uuid.New.

@@ -80,5 +80,19 @@ func Component(name string, w kernel.Worker) lifecycle.Component {
 	return lifecycle.Loop(name, w.Run)
 }
 
+// WaitNamespace returns once the Temporal namespace is registered; nil when ctx ends first.
+func (d *Durable) WaitNamespace(ctx context.Context) error { return d.client.WaitNamespace(ctx) }
+
+// Worker runs w in a lifecycle group once the namespace is registered: it fails the group when
+// the worker stops polling, and is not ready until it polls.
+func Worker(name string, d *Durable, w kernel.Worker) lifecycle.Component {
+	return lifecycle.Loop(name, func(ctx context.Context) error {
+		if err := d.WaitNamespace(ctx); err != nil || ctx.Err() != nil {
+			return err
+		}
+		return w.Run(ctx)
+	})
+}
+
 // Close closes the connection; workers must have stopped.
 func (d *Durable) Close() { d.client.Close() }

@@ -106,6 +106,10 @@ const (
 	// Internal is a service of the deployment itself: called directly,
 	// never through the proxy.
 	Internal
+	// Public is an address an agent chose: every hop is resolved, vetted
+	// and pinned like a member's, but only public addresses pass, whatever
+	// AGENTAREA_HTTP_PRIVATE_ALLOWLIST admits for members.
+	Public
 )
 
 // Clients hands out the HTTP client for each destination.

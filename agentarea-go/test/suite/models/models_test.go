@@ -48,10 +48,17 @@ func createConfig(t *testing.T, w *h.Workspace, body map[string]any) map[string]
 	return w.Owner.Post(t, w.Path("/provider-configs/"), body).Expect(http.StatusOK).Object()
 }
 
+// Every caller sees the deployment's one currency; which one it is (USD, or
+// the pricing extension's) is the service's unit tests' concern.
 func TestPricingCurrency(t *testing.T) {
 	w := h.NewWorkspace(t)
+	seen := map[any]bool{}
 	for _, c := range []*h.Client{w.Owner, w.Member, w.Outsider, w.APIKey(t)} {
-		c.Get(t, "/v1/pricing/currency").Expect(http.StatusOK).Match(map[string]any{"currency": "USD"})
+		body := c.Get(t, "/v1/pricing/currency").Expect(http.StatusOK).Match(map[string]any{"currency": h.Pattern(`^[A-Z]{3}$`)}).Object()
+		seen[body["currency"]] = true
+	}
+	if len(seen) != 1 {
+		t.Fatalf("callers see different currencies: %v", seen)
 	}
 	w.Anonymous.Get(t, "/v1/pricing/currency").Expect(http.StatusUnauthorized)
 }
@@ -186,7 +193,7 @@ func fakeProvider(t *testing.T, status int) string {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	return srv.URL
+	return h.StackURL(srv.URL)
 }
 
 func TestTestRouteNeverEchoesTheProvider(t *testing.T) {

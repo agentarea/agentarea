@@ -119,3 +119,6 @@ func OwnersFrom[K ~struct{ Type, ID string }](resolve func(context.Context, db.S
 		return out, nil
 	}
 }
+
+// EgressExits is the operator's writes of platform egress exits.
+func (m *Module) EgressExits() api.EgressExitDeclarations { return m.svc }

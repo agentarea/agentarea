@@ -50,7 +50,7 @@ func TestEveryUnportedRoleSaysNotImplemented(t *testing.T) {
 		t.Fatalf("role table %v", names)
 	}
 	for _, name := range want {
-		if name == "serve" || name == "migrate" || name == "worker" || name == "mcp" || name == "events" || name == "all" {
+		if name == "serve" || name == "migrate" || name == "worker" || name == "mcp" || name == "sandbox" || name == "events" || name == "all" || name == "operator" {
 			continue
 		}
 		b, _ := quiet()

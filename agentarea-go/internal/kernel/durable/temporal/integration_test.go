@@ -224,3 +224,24 @@ func TestIntegration(t *testing.T) {
 		t.Fatalf("worker stop: %v", err)
 	}
 }
+
+func TestAWorkerWaitsForItsNamespace(t *testing.T) {
+	env := testEnv(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	c, err := Dial(ctx, durable.Config{MaxCached: 10}, env, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	if err := c.WaitNamespace(ctx); err != nil {
+		t.Fatalf("registered namespace: %v", err)
+	}
+	c.namespace = fmt.Sprintf("absent-%d", time.Now().UnixNano())
+	waitCtx, stop := context.WithTimeout(ctx, NamespacePoll+time.Second)
+	defer stop()
+	began := time.Now()
+	if err := c.WaitNamespace(waitCtx); err != nil || time.Since(began) < NamespacePoll {
+		t.Fatalf("absent namespace returned %v after %s", err, time.Since(began))
+	}
+}
