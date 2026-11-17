@@ -1,9 +1,9 @@
 version: "3.8"
 
-# The platform roles build from agentarea-platform: `agentarea serve` (app),
-# `worker`, `events`, `mcp` (mcp-manager), `migrate`, `reconcile` and
-# `init-buckets`. Rebuild after a change: `docker compose -f
-# docker-compose.dev.yaml up -d --build app agentarea-worker`.
+# The platform roles build from agentarea-platform: `agentarea all` (app: the
+# API, the Temporal worker and the event consumers in one process), `mcp`
+# (mcp-manager), `migrate`, `reconcile` and `init-buckets`. Rebuild after a
+# change: `docker compose -f docker-compose.dev.yaml up -d --build app`.
 x-platform: &platform
   image: agentarea/agentarea-platform:dev
   build:
@@ -126,8 +126,8 @@ services:
   app:
     <<: *platform
     container_name: agentarea-backend
-    command: ["serve"]
-    # Root for the mounted docker socket: serve runs the MCP runtime in process.
+    command: ["all"]
+    # Root for the mounted docker socket: the API and the worker run the MCP runtime in process.
     user: "0"
     ports:
       - "8000:8000"
@@ -135,6 +135,10 @@ services:
     environment:
       <<: *platform-env
       PORT: "8000"
+      AGENTAREA_TEMPORAL_MAX_ACTIVITIES: "10"
+      AGENTAREA_TEMPORAL_MAX_WORKFLOWS: "5"
+      AGENTAREA_EVENT_POLL_INTERVAL: 30s
+      AGENTAREA_EVENT_MAX_POLLERS: "10"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     extra_hosts:
@@ -146,6 +150,8 @@ services:
         condition: service_healthy
       valkey:
         condition: service_started
+      temporal-namespace:
+        condition: service_completed_successfully
       app_migrations:
         condition: service_completed_successfully
     healthcheck:
@@ -544,35 +550,6 @@ services:
     stdin_open: true
     tty: true
 
-  agentarea-worker:
-    <<: *platform
-    container_name: agentarea-worker
-    command: ["worker"]
-    user: "0"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      db:
-        condition: service_healthy
-      valkey:
-        condition: service_started
-      temporal-namespace:
-        condition: service_completed_successfully
-      app_migrations:
-        condition: service_completed_successfully
-    environment:
-      <<: *platform-env
-      AGENTAREA_TEMPORAL_MAX_ACTIVITIES: "10"
-      AGENTAREA_TEMPORAL_MAX_WORKFLOWS: "5"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - temporal-network
-      - default
-      - auth-network
-      - mcp-network
-    restart: unless-stopped
-
   # Creates the storage buckets and their browser CORS allowlist: browsers PUT
   # presigned uploads straight to rustfs. The Helm bucket-init hook does the
   # same in Kubernetes.
@@ -589,27 +566,6 @@ services:
       AGENTAREA_S3_CORS_ORIGINS: ${AGENTAREA_S3_CORS_ORIGINS:-http://localhost:3000}
     networks:
       - default
-
-  agentarea-events:
-    <<: *platform
-    container_name: agentarea-events
-    command: ["events"]
-    depends_on:
-      db:
-        condition: service_healthy
-      valkey:
-        condition: service_started
-      app_migrations:
-        condition: service_completed_successfully
-    environment:
-      <<: *platform-env
-      AGENTAREA_EVENT_POLL_INTERVAL: 30s
-      AGENTAREA_EVENT_MAX_POLLERS: "10"
-    networks:
-      - default
-      - temporal-network
-      - auth-network
-    restart: unless-stopped
 
   # Ory Kratos Migration
   kratos-migrate:
