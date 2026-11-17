@@ -26,6 +26,8 @@ func commands() []command {
 		{name: "init-buckets", summary: "create the storage buckets and their browser CORS allowlist", run: (*Build).runInitBuckets},
 		{name: "reconcile", summary: "make the platform registries what the manifest says and sync them: reconcile [--registries-config json] [--config-file path] [--source url]... [--force] [--workspace-registries]",
 			run: (*Build).runReconcile},
+		{name: "declare", summary: "reconcile the operator's resources from manifests once, without a cluster: declare -f <file|dir>... [--secrets-dir dir] [--namespace ns]",
+			run: (*Build).runDeclare},
 		{name: "dlq-replay", summary: "move dead letters back to the stream each came from: dlq-replay <dlq> [--start id] [--end id]",
 			run: (*Build).runDLQReplay},
 		{name: "check-migrations", summary: "report each migration set's applied and latest version; fail when one is behind",

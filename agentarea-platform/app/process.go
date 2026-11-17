@@ -47,6 +47,8 @@ type parts struct {
 	serve, worker, events, operator bool
 	// reconcile runs the catalog reconcile once, then the process exits.
 	reconcile *catalogapi.ReconcileOptions
+	// declare reconciles the operator's resources read from manifests once, then the process exits.
+	declare *declareJob
 	// job runs once over the module set, then the process exits.
 	job func(ctx context.Context, m *moduleSet) error
 }
@@ -208,6 +210,9 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 	}
 	if p.job != nil {
 		return p.job(ctx, m)
+	}
+	if p.declare != nil {
+		return runDeclared(ctx, b.stdout, m, outbound, log, *p.declare)
 	}
 	if p.operator {
 		if err := addOperator(g, m, outbound, log); err != nil {

@@ -24,16 +24,19 @@ func addOperator(g *lifecycle.Group, m *moduleSet, out knetguard.Clients, log *s
 	if err != nil {
 		return err
 	}
-	r := operator.New(operator.Deps{
-		Catalog: m.catalog.Platform(), Models: m.models.Declared(), Connections: m.connections.Platform(),
-		Egress: m.governance.EgressExits(), Secrets: secrets, Log: log,
-		PlatformHTTP:  &http.Client{Transport: out.Transport(knetguard.Vendor)},
-		WorkspaceHTTP: &http.Client{Transport: out.Transport(knetguard.Member)},
-	})
-	c, err := operator.NewController(cfg, namespace, r, log)
+	c, err := operator.NewController(cfg, namespace, newReconciler(m, out, secrets, log), log)
 	if err != nil {
 		return err
 	}
 	g.Add(lifecycle.Loop("operator", c.Run))
 	return nil
+}
+
+func newReconciler(m *moduleSet, out knetguard.Clients, secrets operator.SecretReader, log *slog.Logger) *operator.Reconciler {
+	return operator.New(operator.Deps{
+		Catalog: m.catalog.Platform(), Models: m.models.Declared(), Connections: m.connections.Platform(),
+		Egress: m.governance.EgressExits(), Secrets: secrets, Log: log,
+		PlatformHTTP:  &http.Client{Transport: out.Transport(knetguard.Vendor)},
+		WorkspaceHTTP: &http.Client{Transport: out.Transport(knetguard.Member)},
+	})
 }
