@@ -6,9 +6,8 @@ type part struct {
 	runs   string
 }
 
-// role is one subcommand. Roles mirror today's processes (api, worker,
-// event-service, mcp-manager, sandbox-runner, operator); every role talks to
-// the one database the Python backend uses.
+// role is one subcommand: one deployed process (api, worker, event-service,
+// mcp-manager, sandbox-runner, operator, ...). Every role talks to one database.
 type role struct {
 	name           string
 	summary        string
@@ -24,7 +23,7 @@ type role struct {
 // variable (rule 6).
 func roles() []role {
 	return []role{
-		{name: "serve", summary: "HTTP API; during the migration a fallback proxy to Python",
+		{name: "serve", summary: "HTTP API",
 			serviceAccount: "agentarea-serve",
 			parts: []part{
 				{"identity", "http"}, {"projects", "http"}, {"agents", "http"},
