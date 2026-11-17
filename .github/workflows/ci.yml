@@ -147,7 +147,22 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version-file: agentarea-platform/go.mod
-          cache-dependency-path: agentarea-platform/go.sum
+          cache: false
+
+      # setup-go keys its cache on go.sum alone and saves only on a miss, so the
+      # build cache froze at the last go.sum change. Main saves after every run;
+      # every run restores main's newest snapshot.
+      - name: Restore Go caches
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+            ~/.cache/golangci-lint
+          key: go-check-${{ runner.os }}-${{ hashFiles('agentarea-platform/go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-check-${{ runner.os }}-${{ hashFiles('agentarea-platform/go.sum') }}-
+            go-check-${{ runner.os }}-
 
       # Must match GOLANGCI_LINT_VERSION in agentarea-platform/Makefile.
       - name: Install golangci-lint
@@ -155,9 +170,20 @@ jobs:
         with:
           version: v2.15.0
           install-only: true
+          skip-cache: true
 
       - name: Build, vet, test, lint, architecture checks
         run: make -C agentarea-platform check
+
+      - name: Save Go caches
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+            ~/.cache/golangci-lint
+          key: go-check-${{ runner.os }}-${{ hashFiles('agentarea-platform/go.sum') }}-${{ github.sha }}
 
   docker-platform:
     # Always build to validate, but only push on main when not skipped
@@ -541,10 +567,30 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version-file: agentarea-platform/go.mod
-          cache-dependency-path: agentarea-platform/go.sum
+          cache: false
+
+      - name: Restore Go caches
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-db-${{ runner.os }}-${{ hashFiles('agentarea-platform/go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-db-${{ runner.os }}-${{ hashFiles('agentarea-platform/go.sum') }}-
+            go-db-${{ runner.os }}-
 
       - name: Migrations + schema-backed suites
         run: make -C agentarea-platform check-db
+
+      - name: Save Go caches
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-db-${{ runner.os }}-${{ hashFiles('agentarea-platform/go.sum') }}-${{ github.sha }}
 
   # Tells agentarea-enterprise which images this run published. It pins them in its
   # oss-base.json and builds the enterprise overlay from exactly these tags.
