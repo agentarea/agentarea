@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"regexp"
 	"slices"
 	"strings"
@@ -224,6 +225,9 @@ func validatedPriority(p *int) (int, error) {
 	}
 	if *p < 0 {
 		return 0, valueErr("recommendation_priority must be a non-negative integer, got %d", *p)
+	}
+	if *p > math.MaxInt32 {
+		return 0, valueErr("recommendation_priority must be at most %d, got %d", math.MaxInt32, *p)
 	}
 	return *p, nil
 }

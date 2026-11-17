@@ -268,10 +268,11 @@ func optionalInt(v any, present bool) (*int, error) {
 	if !ok {
 		return nil, fmt.Errorf("%w: %v is not an integer", ErrProjection, v)
 	}
-	i, err := strconv.Atoi(n.String())
+	i64, err := strconv.ParseInt(n.String(), 10, 32)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrProjection, err)
 	}
+	i := int(i64)
 	return &i, nil
 }
 

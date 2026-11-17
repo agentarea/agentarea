@@ -264,7 +264,7 @@ func nonNegInt(v any) (int, bool) {
 		return 0, false
 	}
 	i, err := strconv.Atoi(string(n))
-	return i, err == nil && i >= 0
+	return i, err == nil && i >= 0 && i <= math.MaxInt32
 }
 
 // rankFields is rank_fields: a declared non-negative int rank.

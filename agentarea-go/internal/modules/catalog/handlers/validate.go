@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"math"
 	"net/http"
 	"net/url"
 
@@ -349,7 +348,7 @@ func registryCreateBody(v any, in *input, errs fieldErrs) {
 	if u, _ := str(o, "source_url", 0, 0, true, errs); u != nil {
 		n.SourceURL = *u
 	}
-	in.priority, _ = intField(o, "recommendation_priority", 0, math.MaxInt64, errs)
+	in.priority, _ = intField(o, "recommendation_priority", 0, int32Max, errs)
 	n.Mode, n.Trust = "mirror", "official"
 	if m, _ := literalField(o, "mode", modes(), false, errs); m != nil {
 		n.Mode = *m
@@ -372,7 +371,7 @@ func registryUpdateBody(v any, in *input, errs fieldErrs) {
 	p.Description.Value, p.Description.Set = str(o, "description", 0, 0, true, errs)
 	p.SourceURL.Value, p.SourceURL.Set = str(o, "source_url", 0, 0, true, errs)
 	p.IsActive.Value, p.IsActive.Set = boolField(o, "is_active", errs)
-	p.RecommendationPriority.Value, p.RecommendationPriority.Set = intField(o, "recommendation_priority", 0, math.MaxInt64, errs)
+	p.RecommendationPriority.Value, p.RecommendationPriority.Set = intField(o, "recommendation_priority", 0, int32Max, errs)
 	p.Mode.Value, p.Mode.Set = literalField(o, "mode", modes(), true, errs)
 	p.Trust.Value, p.Trust.Set = literalField(o, "trust", trusts(), true, errs)
 }
@@ -403,7 +402,7 @@ func itemCreateBody(v any, in *input, errs fieldErrs) {
 	if n.Tags == nil {
 		n.Tags = json.RawMessage("[]")
 	}
-	n.RecommendationRank, _ = intField(o, "recommendation_rank", 0, math.MaxInt64, errs)
+	n.RecommendationRank, _ = intField(o, "recommendation_rank", 0, int32Max, errs)
 }
 
 func itemUpdateBody(v any, in *input, errs fieldErrs) {

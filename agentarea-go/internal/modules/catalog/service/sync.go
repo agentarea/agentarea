@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"reflect"
 	"slices"
 	"strings"
@@ -904,6 +905,9 @@ func optInt(v any) (*int, error) {
 	i64, err := n.Int64()
 	if err != nil {
 		return nil, entryErr("%v is not an integer", v)
+	}
+	if i64 < math.MinInt32 || i64 > math.MaxInt32 {
+		return nil, entryErr("%v is out of range for a 32-bit integer", v)
 	}
 	i := int(i64)
 	return &i, nil

@@ -211,13 +211,13 @@ func activateHandler(w http.ResponseWriter, r *http.Request) {
 
 	body, err := readActivationRequestBody(r)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "invalid request: %v"}`, err), http.StatusBadRequest)
+		jsonError(w, fmt.Sprintf("invalid request: %v", err), http.StatusBadRequest)
 		return
 	}
 	var req ActivateRequest
 	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&req); err != nil {
 		logger.Error("Failed to decode request", "error", err)
-		http.Error(w, fmt.Sprintf(`{"error": "invalid request: %v"}`, err), http.StatusBadRequest)
+		jsonError(w, fmt.Sprintf("invalid request: %v", err), http.StatusBadRequest)
 		return
 	}
 	logger.Info("Request decoded", "image", req.MCPImage, "port", req.Port, "command", req.Command)
@@ -232,21 +232,21 @@ func activateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := ValidatePort(req.Port); err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+		jsonError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	// Security: Validate image name
 	if err := ValidateImageName(req.MCPImage); err != nil {
 		logger.Error("Image validation failed", "error", err, "image", req.MCPImage)
-		http.Error(w, fmt.Sprintf(`{"error": "invalid image name: %s"}`, err.Error()), http.StatusBadRequest)
+		jsonError(w, fmt.Sprintf("invalid image name: %s", err.Error()), http.StatusBadRequest)
 		return
 	}
 
 	// Security: Validate image hash
 	if err := ValidateHash(req.MCPImageHash); err != nil {
 		logger.Error("Hash validation failed", "error", err)
-		http.Error(w, fmt.Sprintf(`{"error": "invalid image hash: %s"}`, err.Error()), http.StatusBadRequest)
+		jsonError(w, fmt.Sprintf("invalid image hash: %s", err.Error()), http.StatusBadRequest)
 		return
 	}
 	if !authorizeActivationRequest(w, r, activationauth.ScopeActivate, activationauth.Identity{
@@ -259,7 +259,7 @@ func activateHandler(w http.ResponseWriter, r *http.Request) {
 	if len(req.Command) > 0 {
 		if err := ValidateCommandArgs(req.Command); err != nil {
 			logger.Error("Command validation failed", "error", err)
-			http.Error(w, fmt.Sprintf(`{"error": "invalid command: %s"}`, err.Error()), http.StatusBadRequest)
+			jsonError(w, fmt.Sprintf("invalid command: %s", err.Error()), http.StatusBadRequest)
 			return
 		}
 	}
@@ -275,7 +275,7 @@ func activateHandler(w http.ResponseWriter, r *http.Request) {
 	if err := activate(req); err != nil {
 		status = "waiting"
 		logger.Error("Activation failed", "error", err)
-		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
+		jsonError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -749,6 +749,11 @@ func executeOutputLimits(req *ExecuteRequest) (int64, int64, error) {
 	return stdoutLimit, stderrLimit, nil
 }
 
+func jsonError(w http.ResponseWriter, msg string, status int) {
+	body, _ := json.Marshal(map[string]string{"error": msg})
+	http.Error(w, string(body), status)
+}
+
 func executeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
@@ -760,17 +765,17 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 
 	body, err := readActivationRequestBody(r)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "invalid request: %v"}`, err), http.StatusBadRequest)
+		jsonError(w, fmt.Sprintf("invalid request: %v", err), http.StatusBadRequest)
 		return
 	}
 	req, err := decodeExecuteRequest(bytes.NewReader(body))
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "invalid request: %v"}`, err), http.StatusBadRequest)
+		jsonError(w, fmt.Sprintf("invalid request: %v", err), http.StatusBadRequest)
 		return
 	}
 
 	if err := validateExecuteRequestFields(req); err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+		jsonError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if !authorizeActivationRequest(w, r, activationauth.ScopeExecute, activationauth.Identity{
@@ -792,7 +797,7 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 
 	stdoutLimit, stderrLimit, err := executeOutputLimits(req)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+		jsonError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -809,7 +814,7 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 
 	workspaceDir, err := resolveExecutionWorkspace(req.WorkspaceID, req.TaskID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+		jsonError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	// Resolve the non-root identity to run the untrusted command as. When the
@@ -817,7 +822,7 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 	// would expose PID1's environment (incl. the activation secret) via /proc.
 	credential, err := sandboxCommandCredential()
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
+		jsonError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if credential != nil &&
@@ -1437,7 +1442,7 @@ func parseFileUpload(r *http.Request) (fileUpload, int, error) {
 func fileContentPutHandler(w http.ResponseWriter, r *http.Request) {
 	upload, status, err := parseFileUpload(r)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), status)
+		jsonError(w, err.Error(), status)
 		return
 	}
 	workspaceID := upload.workspaceID
@@ -1460,12 +1465,12 @@ func fileContentPutHandler(w http.ResponseWriter, r *http.Request) {
 
 	credential, err := sandboxCommandCredential()
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": %q}`, err.Error()), http.StatusInternalServerError)
+		jsonError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	workspaceDir, err := resolveExecutionWorkspace(workspaceID, taskID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": %q}`, err.Error()), http.StatusBadRequest)
+		jsonError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if err := prepareTaskWorkspace(workspaceDir, credential); err != nil {
@@ -1570,7 +1575,7 @@ func fileContentGetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": %q}`, err.Error()), http.StatusBadRequest)
+		jsonError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	root, err := os.OpenRoot(workspaceDir)
@@ -1658,12 +1663,12 @@ func workspaceTaskHandler(w http.ResponseWriter, r *http.Request) {
 func filesPutHandler(w http.ResponseWriter, r *http.Request) {
 	body, err := readActivationRequestBody(r)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "invalid request: %v"}`, err), http.StatusBadRequest)
+		jsonError(w, fmt.Sprintf("invalid request: %v", err), http.StatusBadRequest)
 		return
 	}
 	var req FilesPutRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "invalid request: %v"}`, err), http.StatusBadRequest)
+		jsonError(w, fmt.Sprintf("invalid request: %v", err), http.StatusBadRequest)
 		return
 	}
 	if req.WorkspaceID == "" || req.TaskID == "" {
@@ -1703,12 +1708,12 @@ func filesPutHandler(w http.ResponseWriter, r *http.Request) {
 	// command (which runs as that uid) could not read or overwrite it.
 	credential, err := sandboxCommandCredential()
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
+		jsonError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	workspaceDir, err := resolveExecutionWorkspace(req.WorkspaceID, req.TaskID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+		jsonError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if err := prepareTaskWorkspace(workspaceDir, credential); err != nil {
@@ -1757,7 +1762,7 @@ func filesPutHandler(w http.ResponseWriter, r *http.Request) {
 func filesGetHandler(w http.ResponseWriter, r *http.Request) {
 	body, err := readActivationRequestBody(r)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "invalid request: %v"}`, err), http.StatusBadRequest)
+		jsonError(w, fmt.Sprintf("invalid request: %v", err), http.StatusBadRequest)
 		return
 	}
 	query := r.URL.Query()
@@ -1802,7 +1807,7 @@ func filesGetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+		jsonError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	root, err := os.OpenRoot(workspaceDir)
@@ -1815,7 +1820,7 @@ func filesGetHandler(w http.ResponseWriter, r *http.Request) {
 	if query.Has("list") {
 		paths, err := listWorkspaceFiles(root, query.Get("list"))
 		if err != nil {
-			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+			jsonError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -1895,18 +1900,18 @@ func workspaceWritebackHandler(w http.ResponseWriter, r *http.Request) {
 	defer endRequest()
 	body, err := readActivationRequestBody(r)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "invalid writeback request: %v"}`, err), http.StatusBadRequest)
+		jsonError(w, fmt.Sprintf("invalid writeback request: %v", err), http.StatusBadRequest)
 		return
 	}
 	var req workspace.WritebackRequest
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "invalid writeback request: %v"}`, err), http.StatusBadRequest)
+		jsonError(w, fmt.Sprintf("invalid writeback request: %v", err), http.StatusBadRequest)
 		return
 	}
 	if err := workspace.ValidateIdentifier("workspace_id", req.WorkspaceID); err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err), http.StatusBadRequest)
+		jsonError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if err := workspace.ValidateIdentifier("task_id", req.TaskID); err != nil || req.BaseGeneration < 0 || req.FencingToken <= 0 {
@@ -1921,7 +1926,7 @@ func workspaceWritebackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	workspaceDir, err := resolveExecutionWorkspace(req.WorkspaceID, req.TaskID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err), http.StatusBadRequest)
+		jsonError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	root, err := os.OpenRoot(workspaceDir)
@@ -1963,19 +1968,19 @@ func workspaceWritebackHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		file, openErr := root.Open(clean)
 		if openErr != nil {
-			http.Error(w, fmt.Sprintf(`{"error": "output %s is missing"}`, clean), http.StatusConflict)
+			jsonError(w, fmt.Sprintf("output %s is missing", clean), http.StatusConflict)
 			return
 		}
 		info, statErr := file.Stat()
 		if statErr != nil || !info.Mode().IsRegular() || info.Size() != upload.Size {
 			file.Close()
-			http.Error(w, fmt.Sprintf(`{"error": "output %s size/type changed"}`, clean), http.StatusConflict)
+			jsonError(w, fmt.Sprintf("output %s size/type changed", clean), http.StatusConflict)
 			return
 		}
 		hasher := sha256.New()
 		if _, hashErr := io.Copy(hasher, file); hashErr != nil || hex.EncodeToString(hasher.Sum(nil)) != upload.SHA256 {
 			file.Close()
-			http.Error(w, fmt.Sprintf(`{"error": "output %s checksum changed"}`, clean), http.StatusConflict)
+			jsonError(w, fmt.Sprintf("output %s checksum changed", clean), http.StatusConflict)
 			return
 		}
 		_, _ = file.Seek(0, io.SeekStart)
@@ -1990,12 +1995,12 @@ func workspaceWritebackHandler(w http.ResponseWriter, r *http.Request) {
 		putResponse, uploadErr := client.Do(putRequest)
 		file.Close()
 		if uploadErr != nil {
-			http.Error(w, fmt.Sprintf(`{"error": "output %s upload failed"}`, clean), http.StatusBadGateway)
+			jsonError(w, fmt.Sprintf("output %s upload failed", clean), http.StatusBadGateway)
 			return
 		}
 		putResponse.Body.Close()
 		if putResponse.StatusCode < 200 || putResponse.StatusCode >= 300 {
-			http.Error(w, fmt.Sprintf(`{"error": "output %s upload returned status %d"}`, clean, putResponse.StatusCode), http.StatusBadGateway)
+			jsonError(w, fmt.Sprintf("output %s upload returned status %d", clean, putResponse.StatusCode), http.StatusBadGateway)
 			return
 		}
 		response.Receipts = append(response.Receipts, workspace.UploadReceipt{RelativePath: clean, ObjectURI: upload.ObjectURI})

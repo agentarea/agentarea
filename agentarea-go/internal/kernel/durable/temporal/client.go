@@ -8,8 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"log/slog"
 	"os"
 	"strings"
@@ -146,7 +144,9 @@ func (c *Client) WaitNamespace(ctx context.Context) error {
 			return nil
 		}
 		if _, missing := errors.AsType[*serviceerror.NamespaceNotFound](err); !missing {
-			if ctx.Err() != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || status.Code(err) == codes.Canceled || status.Code(err) == codes.DeadlineExceeded) {
+			// Once ctx is done the process is stopping; whatever shape the SDK's
+			// retry gave the interrupted call, it is not a failure to report.
+			if ctx.Err() != nil {
 				return nil
 			}
 			return fmt.Errorf("describe temporal namespace %s: %w", c.namespace, err)
