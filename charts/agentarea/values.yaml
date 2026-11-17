@@ -1329,7 +1329,7 @@ registryReconcile:
 
 # Operator (`agentarea operator`): reconciles the LLMProviderConfig,
 # PlatformConnection and PlatformEgressExit resources (CRDs in crds/) declared
-# in any namespace into the platform's providers, connections and egress exits.
+# in the release namespace into the platform's providers, connections and egress exits.
 # Off by default: an install without GitOps-declared providers does not need it.
 operator:
   enabled: false
@@ -1337,9 +1337,6 @@ operator:
     create: true
     name: ""
     annotations: {}
-  # -- Namespaces besides the release namespace whose Secrets the operator may read
-  # (a resource's apiKeySecretRef/tokenSecretRef resolve in its own namespace).
-  secretNamespaces: []
   resources: {}
   podAnnotations: {}
   podLabels: {}

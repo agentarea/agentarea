@@ -40,7 +40,8 @@ type item struct {
 	periodic              bool
 }
 
-// Controller watches the declared resources in every namespace and reconciles each change.
+// Controller watches the declared resources in its own namespace and reconciles each change.
+// Two releases sharing a cluster each reconcile only their own declarations.
 type Controller struct {
 	r       *Reconciler
 	dyn     dynamic.Interface
@@ -49,18 +50,20 @@ type Controller struct {
 	log     *slog.Logger
 }
 
-// ClusterConfig is the in-cluster service account, else the ambient kubeconfig (KUBECONFIG).
-func ClusterConfig() (*rest.Config, error) {
-	cfg, inCluster := rest.InClusterConfig()
-	if inCluster == nil {
-		return cfg, nil
-	}
-	cfg, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		clientcmd.NewDefaultClientConfigLoadingRules(), &clientcmd.ConfigOverrides{}).ClientConfig()
+// ClusterConfig is the in-cluster service account and the pod's namespace, else the ambient
+// kubeconfig (KUBECONFIG) and its context's namespace.
+func ClusterConfig() (*rest.Config, string, error) {
+	kc := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		clientcmd.NewDefaultClientConfigLoadingRules(), &clientcmd.ConfigOverrides{})
+	cfg, err := kc.ClientConfig()
 	if err != nil {
-		return nil, fmt.Errorf("no cluster to watch: not in a cluster (%w) and no kubeconfig (%w)", inCluster, err)
+		return nil, "", fmt.Errorf("no cluster to watch: not in a cluster and no kubeconfig: %w", err)
 	}
-	return cfg, nil
+	ns, _, err := kc.Namespace()
+	if err != nil {
+		return nil, "", fmt.Errorf("the namespace to watch: %w", err)
+	}
+	return cfg, ns, nil
 }
 
 // Secrets reads Kubernetes Secrets through the core API.
@@ -87,14 +90,18 @@ func (s Secrets) Read(ctx context.Context, namespace, name, key string) (string,
 	return "", fmt.Errorf("Key '%s' not found in Secret '%s'", key, name) //nolint:staticcheck // the status text operators read
 }
 
-// NewController builds the controller over cfg.
-func NewController(cfg *rest.Config, r *Reconciler, log *slog.Logger) (*Controller, error) {
+// NewController builds the controller over cfg, watching namespace.
+func NewController(cfg *rest.Config, namespace string, r *Reconciler, log *slog.Logger) (*Controller, error) {
 	dyn, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
-	return &Controller{r: r, dyn: dyn, factory: dynamicinformer.NewDynamicSharedInformerFactory(dyn, Resync),
-		queue: workqueue.NewTypedDelayingQueue[item](), log: log}, nil
+	return newController(dyn, namespace, r, log), nil
+}
+
+func newController(dyn dynamic.Interface, namespace string, r *Reconciler, log *slog.Logger) *Controller {
+	return &Controller{r: r, dyn: dyn, factory: dynamicinformer.NewFilteredDynamicSharedInformerFactory(dyn, Resync, namespace, nil),
+		queue: workqueue.NewTypedDelayingQueue[item](), log: log}
 }
 
 // Name implements lifecycle.Component.
