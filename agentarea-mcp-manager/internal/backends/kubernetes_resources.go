@@ -375,6 +375,9 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 						// kube-apiserver; withholding the SA token means a hostile
 						// image cannot use it to reach the control plane.
 						AutomountServiceAccountToken: boolPtr(false),
+						// The server's output reaches its owner, so its environment
+						// must not list the cluster's other services.
+						EnableServiceLinks: boolPtr(false),
 						// Nothing is flushed on the way out — the workload holds no
 						// durable state — so the default 30s only keeps a reaped
 						// instance occupying its name and quota.
