@@ -14,9 +14,9 @@ func (b *Build) runOperator(ctx context.Context) error {
 	return b.runParts(ctx, "operator", parts{operator: true})
 }
 
-// addOperator watches the declared resources of the cluster this process runs in (or KUBECONFIG's).
+// addOperator watches the declared resources in the namespace this process runs in (or KUBECONFIG's context).
 func addOperator(g *lifecycle.Group, m *moduleSet, out knetguard.Clients, log *slog.Logger) error {
-	cfg, err := operator.ClusterConfig()
+	cfg, namespace, err := operator.ClusterConfig()
 	if err != nil {
 		return err
 	}
@@ -30,7 +30,7 @@ func addOperator(g *lifecycle.Group, m *moduleSet, out knetguard.Clients, log *s
 		PlatformHTTP:  &http.Client{Transport: out.Transport(knetguard.Vendor)},
 		WorkspaceHTTP: &http.Client{Transport: out.Transport(knetguard.Member)},
 	})
-	c, err := operator.NewController(cfg, r, log)
+	c, err := operator.NewController(cfg, namespace, r, log)
 	if err != nil {
 		return err
 	}

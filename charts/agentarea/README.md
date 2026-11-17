@@ -545,7 +545,6 @@ The following table lists configurable parameters of the chart and their default
 | operator.serviceAccount.create | bool | `true` |  |
 | operator.serviceAccount.name | string | `""` |  |
 | operator.serviceAccount.annotations | object | `{}` |  |
-| operator.secretNamespaces | list | `[]` | Namespaces besides the release namespace whose Secrets the operator may read (a resource's apiKeySecretRef/tokenSecretRef resolve in its own namespace). |
 | operator.resources | object | `{}` |  |
 | operator.podAnnotations | object | `{}` |  |
 | operator.podLabels | object | `{}` |  |
