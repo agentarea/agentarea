@@ -130,13 +130,20 @@ func (c *Client) Close() { c.sdk.Close() }
 // NamespacePoll is how often WaitNamespace asks again for a namespace not yet registered.
 const NamespacePoll = 2 * time.Second
 
+// NamespaceDescribeTimeout bounds one describe call. The SDK retries an
+// unreachable server inside the call until its deadline, so without a bound
+// a worker pointed at a dead address would wait silently instead of failing.
+const NamespaceDescribeTimeout = 5 * time.Second
+
 // WaitNamespace returns once the client's namespace is registered, so a worker started beside
 // Temporal (or before its namespace job ran) waits instead of exiting. Any other failure to
 // describe it is returned.
 func (c *Client) WaitNamespace(ctx context.Context) error {
 	logged := false
 	for {
-		_, err := c.sdk.WorkflowService().DescribeNamespace(ctx, &workflowservice.DescribeNamespaceRequest{Namespace: c.namespace})
+		call, cancel := context.WithTimeout(ctx, NamespaceDescribeTimeout)
+		_, err := c.sdk.WorkflowService().DescribeNamespace(call, &workflowservice.DescribeNamespaceRequest{Namespace: c.namespace})
+		cancel()
 		if err == nil {
 			if logged {
 				c.logger.InfoContext(ctx, "temporal namespace is registered", "namespace", c.namespace)
@@ -149,7 +156,7 @@ func (c *Client) WaitNamespace(ctx context.Context) error {
 			if ctx.Err() != nil {
 				return nil
 			}
-			return fmt.Errorf("describe temporal namespace %s: %w", c.namespace, err)
+			return fmt.Errorf("describe temporal namespace %s (server unreachable or failing): %w", c.namespace, err)
 		}
 		if !logged {
 			c.logger.WarnContext(ctx, "temporal namespace is not registered yet; waiting", "namespace", c.namespace)

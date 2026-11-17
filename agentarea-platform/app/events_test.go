@@ -5,7 +5,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
+
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/durable/temporal"
 )
 
 func TestEventsRefusesMissingPollerConfiguration(t *testing.T) {
@@ -53,13 +54,13 @@ func TestRolesStartWithEveryPort(t *testing.T) {
 	for _, role := range []string{"serve", "worker", "events", "all"} {
 		b, out := quiet()
 		b.lookup = mapLookup(roleVars())
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*temporal.NamespaceDescribeTimeout)
 		err := b.Run(ctx, []string{role})
 		cancel()
 		switch {
 		case role == "serve" && err != nil:
 			t.Errorf("serve: %v\n%s", err, out)
-		case role != "serve" && (err == nil || !strings.Contains(err.Error(), "connection refused")):
+		case role != "serve" && (err == nil || (!strings.Contains(err.Error(), "connection refused") && !strings.Contains(err.Error(), "server unreachable"))):
 			t.Errorf("%s: want a dial failure, got %v\n%s", role, err, out)
 		}
 	}
