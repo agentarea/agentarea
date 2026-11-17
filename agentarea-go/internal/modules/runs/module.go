@@ -94,7 +94,7 @@ func (m *Module) Missing() []string {
 	}{
 		{"database", s.DB == nil}, {"blob store", s.Blob == nil}, {"task events", s.Events == nil},
 		{"audit writer (governance)", s.Audit == nil}, {"spend caps (governance)", s.Caps == nil},
-		{"run policies (governance)", s.Policies == nil}, {"agent definitions (agents)", s.Agents == nil},
+		{"run policies (governance)", s.Policies == nil}, {"agent definitions (agents)", s.Agents == nil}, {"catalog agents (agents)", s.CatalogAgents == nil},
 		{"model resolver (models)", s.Resolver == nil}, {"model caller (models)", s.Models == nil},
 		{"run definitions (connections, catalog, projects)", s.Definitions == nil},
 		{"sandbox runtime (sandbox)", s.Runtime == nil}, {"task workspace (sandbox)", s.Workspace == nil},

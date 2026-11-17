@@ -11,6 +11,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authz"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/blob"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/db"
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/scope"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/agents/api"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/agents/handlers"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/agents/service"
@@ -33,7 +34,11 @@ type Deps struct {
 	CodeTools   service.CodeTools
 	// Triggers makes the triggers sent with a new agent (streams); nil answers 501 for them.
 	Triggers service.AgentTriggers
-	Config   Config
+	// Wallets deletes a deleted agent's wallet keys (wallet); nil leaves them.
+	Wallets service.WalletCredentials
+	// Secrets finds the secret a remote delegate is bound to (the secret catalog).
+	Secrets service.DelegateSecrets
+	Config  Config
 	// Audit writes the audit trail (governance); nil leaves it unwritten.
 	Audit govapi.AuditWriter
 	// Blob is the artifacts bucket (skill packages).
@@ -72,7 +77,7 @@ func New(d Deps) *Module {
 	if g, ok := d.Graph.(service.Graph); ok || d.Graph == nil {
 		m.svc = service.New(service.Deps{
 			DB: d.DB, Graph: g, Models: d.Models, Approvals: d.Approvals, Connections: d.Connections,
-			Presence: d.Presence, CodeTools: d.CodeTools, Triggers: d.Triggers, A2AAgentURL: d.Config.A2AAgentURL, Now: d.Now,
+			Presence: d.Presence, CodeTools: d.CodeTools, Triggers: d.Triggers, Wallets: d.Wallets, Secrets: d.Secrets, A2AAgentURL: d.Config.A2AAgentURL, Now: d.Now,
 			Audit: d.Audit, Admin: d.Admin, Log: d.Log,
 		})
 	}
@@ -103,6 +108,21 @@ func (m *Module) Definitions() api.Definitions {
 		return nil
 	}
 	return service.Definitions{Service: m.svc}
+}
+
+// CatalogRuns runs a catalog agent the workspace has not installed; it reads
+// the catalog ports at run time, after Use. Nil without a full graph.
+func (m *Module) CatalogRuns() api.CatalogRuns {
+	if m.svc == nil {
+		return nil
+	}
+	return lateCatalogRuns{m: m}
+}
+
+type lateCatalogRuns struct{ m *Module }
+
+func (l lateCatalogRuns) CatalogDefinition(ctx context.Context, ws scope.Workspace, userID, agentID string) (api.Definition, error) {
+	return service.CatalogRun{S: l.m.svc, Items: l.m.d.CatalogItems, Policy: l.m.d.SkillInstallPolicy}.CatalogDefinition(ctx, ws, userID, agentID)
 }
 
 // Serve is the module's HTTP surface.
@@ -144,8 +164,9 @@ func (m *Module) AgentsToolset() api.Agents {
 
 // Later are the ports of modules app builds after agents.
 type Later struct {
-	Audit          govapi.AuditWriter
-	ClientMCPNames service.ClientMCPNames
+	Audit             govapi.AuditWriter
+	ClientMCPNames    service.ClientMCPNames
+	ClientConnections service.ClientConnections
 	// Models validates model_id; Connections binds MCP names and lends connections.
 	Models      service.Models
 	Connections service.Connections
@@ -163,6 +184,7 @@ type Later struct {
 func (m *Module) Use(l Later) {
 	m.d.Audit = l.Audit
 	m.d.ClientMCPNames = l.ClientMCPNames
+	m.d.ClientConnections = l.ClientConnections
 	if l.Models != nil {
 		m.d.Models = l.Models
 	}

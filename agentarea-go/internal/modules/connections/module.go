@@ -89,6 +89,7 @@ type Module struct {
 	wallets     walletapi.Wallets
 	heldCalls   runsapi.HeldCalls
 	clientCalls runsapi.ClientToolCalls
+	egressExits service.EgressExitBinding
 }
 
 // New constructs the module.
@@ -115,6 +116,9 @@ type Later struct {
 	// mounted and when a run calls a tool, so app sets the providers of
 	// modules it builds after connections on it before serving.
 	Toolsets *Toolsets
+	// EgressExits is governance's binding check, set only where the edition
+	// enforces egress exits.
+	EgressExits service.EgressExitBinding
 }
 
 // Toolsets are the providers of the platform toolsets /mcp serves; a nil
@@ -126,6 +130,7 @@ type Toolsets = mcpserver.Providers
 func (m *Module) Use(l Later) {
 	m.d.Specs, m.d.Policies, m.d.Approvals, m.d.Audit = l.Specs, l.Policies, l.Approvals, l.Audit
 	m.d.APIItems = l.APIItems
+	m.egressExits = l.EgressExits
 	m.toolsets = l.Toolsets
 	m.build()
 }
@@ -175,6 +180,7 @@ func (m *Module) build() {
 		Wallets:      m.wallets,
 		HeldCalls:    m.heldCalls,
 		ClientCalls:  m.clientCalls,
+		EgressExits:  m.egressExits,
 		OAuthStore:   store.OAuthConnect{},
 		CatalogItems: items,
 	})
@@ -186,6 +192,9 @@ func (*Module) Name() string { return "connections" }
 // Lookup is what other modules read about MCP server instances, OpenAPI
 // connections and their platform flags.
 func (m *Module) Lookup() api.Lookup { return m.lookup }
+
+// Attachable is what attaching a connection to a client reads.
+func (m *Module) Attachable() api.Attachable { return m.lookup }
 
 // Loans binds agents' MCP tool names and lends connections to agents; nil
 // when Deps.Graph cannot write.
@@ -216,7 +225,8 @@ func (m *Module) Serve() serve.Module {
 			handlers.Mount(rt.Mux.Chi(), rt.Errors,
 				handlers.Edge{Workspace: m.d.Workspace, Admin: m.d.Admin, Gate: m.d.Gate, Authenticate: m.d.Authenticate},
 				handlers.New(m.svc),
-				handlers.Ports{OpenAPI: m.d.Graph != nil && m.d.Secrets != nil && m.d.Catalog != nil, MCPToolsets: toolsets})
+				handlers.Ports{OpenAPI: m.d.Graph != nil && m.d.Secrets != nil && m.d.Catalog != nil, MCPToolsets: toolsets,
+					Events: m.providers().EventsServer()})
 			return nil
 		},
 	}
@@ -243,8 +253,29 @@ func (e moduleExports) ExportInstances(ctx context.Context, c authn.Caller) ([]a
 	return e.m.svc.ExportInstances(ctx, c)
 }
 
-// CatalogConnections lists the caller's connections per catalog item.
-func (m *Module) CatalogConnections() api.CatalogConnections { return m.svc }
+// CatalogConnections lists the caller's connections per catalog item; catalog
+// takes it before Use rebuilds the service, so it reads the service when called.
+func (m *Module) CatalogConnections() api.CatalogConnections { return catalogConnections{m} }
+
+type catalogConnections struct{ m *Module }
+
+func (c catalogConnections) CatalogConnections(ctx context.Context, caller authn.Caller, itemIDs []string) (map[string][]api.CatalogConnection, error) {
+	return c.m.svc.CatalogConnections(ctx, caller, itemIDs)
+}
+
+// EgressBindings is what egress exits read and do of the instances bound to
+// one; it reads the service when called, as Use rebuilds it.
+func (m *Module) EgressBindings() api.EgressBindings { return egressBindings{m} }
+
+type egressBindings struct{ m *Module }
+
+func (e egressBindings) BoundToEgressExit(ctx context.Context, ws scope.Workspace, exitID string) ([]api.EgressBoundInstance, error) {
+	return e.m.svc.BoundToEgressExit(ctx, ws, exitID)
+}
+
+func (e egressBindings) RetireBeforeMutation(ctx context.Context, instanceID string) error {
+	return e.m.svc.RetireBeforeMutation(ctx, instanceID)
+}
 
 // MCPToolCatalogue lists the MCP tools GET /agents/tools shows.
 func (m *Module) MCPToolCatalogue() api.MCPToolCatalogue { return m.svc }

@@ -346,14 +346,14 @@ func TestDelegationBoundedByParent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pol, snap, err := f.sv.Delegation(ctx, api.RunPrincipal{Workspace: f.ws, UserID: "u"}, api.DelegationRequest{UpperBound: parent, RunBudget: mustMoney(t, "5")})
+	pol, snap, err := f.sv.Delegation(ctx, api.RunPrincipal{Workspace: f.ws, UserID: "u"}, api.DelegationRequest{TargetAgentID: "researcher", UpperBound: parent, RunBudget: mustMoney(t, "5")})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if pol.Budget.RunBudgetUSD.String() != "5" || snap.Revision != 1 || len(snap.LimitCeilings) == 0 {
 		t.Fatalf("got %+v %+v", pol.Budget, snap)
 	}
-	if _, _, err := f.sv.Delegation(ctx, api.RunPrincipal{Workspace: f.ws}, api.DelegationRequest{UpperBound: parent, RunBudget: mustMoney(t, "0")}); err == nil {
+	if _, _, err := f.sv.Delegation(ctx, api.RunPrincipal{Workspace: f.ws}, api.DelegationRequest{TargetAgentID: "researcher", UpperBound: parent, RunBudget: mustMoney(t, "0")}); err == nil {
 		t.Fatal("zero run budget delegated")
 	}
 	tight := parent
@@ -361,8 +361,38 @@ func TestDelegationBoundedByParent(t *testing.T) {
 	one := mustMoney(t, "1")
 	b.RunBudgetUSD = &one
 	tight.Budget = &b
-	if _, _, err := f.sv.Delegation(ctx, api.RunPrincipal{Workspace: f.ws}, api.DelegationRequest{UpperBound: tight, RunBudget: mustMoney(t, "5")}); !errors.Is(err, api.ErrPolicyRefused) {
+	if _, _, err := f.sv.Delegation(ctx, api.RunPrincipal{Workspace: f.ws}, api.DelegationRequest{TargetAgentID: "researcher", UpperBound: tight, RunBudget: mustMoney(t, "5")}); !errors.Is(err, api.ErrPolicyRefused) {
 		t.Fatalf("child looser than parent: %v", err)
+	}
+}
+
+func TestDelegationInheritsTighterParentLimits(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	if err := f.sv.ProvisionDefaults(ctx, nil, f.ws, "creator"); err != nil {
+		t.Fatal(err)
+	}
+	turns := int64(24)
+	coordinator := api.RunPrincipal{Workspace: f.ws, UserID: "u", AgentID: "coordinator"}
+	parent, err := f.sv.Resolve(ctx, coordinator, &api.Policy{Execution: &api.Execution{MaxModelTurns: &turns}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pol, snap, err := f.sv.Delegation(ctx, coordinator, api.DelegationRequest{TargetAgentID: "researcher", UpperBound: parent, RunBudget: mustMoney(t, "5")})
+	if err != nil {
+		t.Fatalf("a delegate under a tighter parent was refused: %v", err)
+	}
+	if *pol.Execution.MaxModelTurns != 24 || *snap.EffectivePolicy.Execution.MaxModelTurns != 24 {
+		t.Fatalf("child turns %d, want the parent's 24", *pol.Execution.MaxModelTurns)
+	}
+	f.rules.rows = append(f.rules.rows, domain.Rule{SubjectType: "agent", SubjectID: "researcher", Target: "execution", Effect: "cap", Enabled: true,
+		Params: obj("max_model_turns", json.Number("10"))})
+	pol, _, err = f.sv.Delegation(ctx, coordinator, api.DelegationRequest{TargetAgentID: "researcher", UpperBound: parent, RunBudget: mustMoney(t, "5")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *pol.Execution.MaxModelTurns != 10 {
+		t.Fatalf("child turns %d, want the delegate's own 10", *pol.Execution.MaxModelTurns)
 	}
 }
 

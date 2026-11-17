@@ -290,8 +290,15 @@ Security review fixes (2026-11-15):
   message, not Pydantic 422 entries.
 - Instances: a failed synchronous verify after a URL create is logged, the
   create still answers 201 with the stored verification.
-- Instances: egress exits are refused ("egress exits need the enterprise
-  edition") until the enterprise extension is ported.
+- Egress exits: `json_spec.egress_exit` and a server's `egress.required` are
+  refused ("egress exits need the enterprise edition") unless app passes
+  `Later.EgressExits` (governance's `RequireBindable`), which it does only
+  when the `egress_exits` entry point is built. Where a workload hook is
+  registered, a malformed `egress` object fails the runtime spec, as the
+  old overlay refused it. The workload hook receives the
+  bound exit and the merged requirement as `ext.MCPWorkload.EgressExit` /
+  `EgressRequired`. `EgressBindings` gives governance the instances bound to
+  an exit and retires them before a route change.
 
 - OAuth: platform-managed credentials are read from `service.PlatformWorkspace()`
   (id "platform"); callers of `AuthHeaders` for a managed config pass that
@@ -414,9 +421,11 @@ fields as runs' `service.ToolSet` (struct conversion).
   dropped. PolicyNames are the namespace and the toolset name.
 - ToolProviders: one per attachment (MCP named by its server label).
 - Not offered: math/triggers code toolsets (no Go callers yet; logged
-  as unknown), remote A2A delegates (`agent` with
-  a2a_url), Method/Path of
-  OpenAPI bindings (connections re-resolves at call time).
+  as unknown), Method/Path of
+  OpenAPI bindings (connections re-resolves at call time). Delegates,
+  local and remote (`agent` with a2a_url), are offered by runs; a remote
+  delegate's call runs through `Module.RemoteAgents()` (app's
+  `Tools["remote_agent"]` caller).
 - Platform toolset tools run through `Module.PlatformTools()` (app's
   `Tools["code"]` caller): the same registry as `/mcp/w/{workspace}`, called
   as the run's agent in the run's workspace, so per-tool admin checks refuse

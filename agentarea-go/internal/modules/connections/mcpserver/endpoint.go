@@ -72,7 +72,9 @@ func (e *Refusal) Error() string { return e.Msg }
 type Endpoint struct {
 	Info    Info
 	Backend func(r *http.Request) (Backend, error)
-	Log     *slog.Logger
+	// Events serves the events extension; nil neither advertises nor serves it.
+	Events *EventsHandler
+	Log    *slog.Logger
 }
 
 func (e *Endpoint) log() *slog.Logger {
@@ -224,11 +226,15 @@ func (e *Endpoint) capabilities() map[string]any {
 	if e.Info.Prompts {
 		caps["prompts"] = map[string]any{"listChanged": false}
 	}
-	if len(e.Info.Extensions) > 0 {
-		ext := map[string]any{}
-		for k, v := range e.Info.Extensions {
-			ext[k] = v
-		}
+	ext := map[string]any{}
+	for k, v := range e.Info.Extensions {
+		ext[k] = v
+	}
+	if e.Events != nil {
+		ext[EventsExtension] = eventsSettings()
+		caps["events"] = eventsSettings()
+	}
+	if len(ext) > 0 {
 		caps["extensions"] = ext
 	}
 	return caps
@@ -286,6 +292,11 @@ func (e *Endpoint) dispatch(r *http.Request, req Request, params map[string]any,
 			return nil, &Error{Code: CodeMethodNotFound, Message: "Method not found"}
 		}
 		return map[string]any{"prompts": []any{}}, nil
+	case "events/list", "events/poll", "events/subscribe", "events/unsubscribe":
+		if e.Events == nil {
+			return nil, &Error{Code: CodeMethodNotFound, Message: "Method not found"}
+		}
+		return e.serveEvents(r, req, modern)
 	case "tools/list", "tools/call", "resources/list", "resources/templates/list", "resources/read":
 	default:
 		return nil, &Error{Code: CodeMethodNotFound, Message: "Method not found"}

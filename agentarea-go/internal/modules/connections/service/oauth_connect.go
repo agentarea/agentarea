@@ -519,8 +519,23 @@ func (s *Service) catalogTarget(ctx context.Context, c authn.Caller, id uuid.UUI
 				name + " using the redirect URI below, then enter its client ID and client secret."
 		},
 		ensure: func(context.Context) error { return nil },
-		create: func(context.Context) (string, uuid.UUID, error) {
-			return "", uuid.Nil, &domain.Unavailable{Msg: "Connecting a catalog API is not available yet"}
+		create: func(ctx context.Context) (string, uuid.UUID, error) {
+			in := ConnectionCreate{Name: item.Name, Description: item.Description, AllowedAuthOrigins: allowed, Status: "pending"}
+			if domain.Truthy(item.Spec["base_url"]) {
+				in.BaseURL = oaPyStr(item.Spec["base_url"])
+			}
+			if u, ok := item.Spec["spec_url"].(string); ok {
+				in.SpecURL = &u
+			}
+			if content, ok := item.Spec["spec_content"].(map[string]any); ok {
+				in.SpecContent = content
+			}
+			v, err := s.CreateConnection(ctx, c, in, &item.ID)
+			if err != nil {
+				return "", uuid.Nil, err
+			}
+			connID, err := uuid.Parse(v.Connection.ID)
+			return kindOpenAPIConnection, connID, err
 		},
 		authName: func(id uuid.UUID) string { return co.provider + "-" + id.String()[:8] },
 	}, nil

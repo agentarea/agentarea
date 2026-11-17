@@ -50,6 +50,7 @@ func (r A2ARuns) Start(ctx context.Context, in agentsapi.A2AStart) (string, erro
 		TaskID: id, AgentID: in.AgentID, Description: in.Description, Parameters: map[string]any{}, UserID: c.UserID,
 		RequiresHumanApproval: in.RequiresHumanApproval, Metadata: in.Metadata,
 		Provenance: api.TaskProvenance{OriginType: "a2a", OriginID: in.Source, SourceIdentity: in.Source},
+		Credential: c.Credential,
 	}
 	if err := r.s.start(ctx, c.Workspace, sp); err != nil {
 		switch {

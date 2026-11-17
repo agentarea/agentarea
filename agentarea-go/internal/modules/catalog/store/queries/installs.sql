@@ -10,8 +10,10 @@ WHERE ri.registry_type = 'agents' AND ri.registry_active
 ORDER BY ri.recommendation_rank NULLS LAST, ri.name;
 
 -- name: CatalogItemOfType :one
-SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, ri.registry_id, ri.registry_trust, ri.registry_workspace_id
+SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, ri.registry_id, ri.registry_trust, ri.registry_workspace_id,
+       rii.installed_version
 FROM registry_items ri
+LEFT JOIN registry_item_installs rii ON rii.registry_item_id = ri.id AND rii.workspace_id = @workspace_id::text
 WHERE ri.registry_type = @registry_type AND ri.registry_active
   AND (ri.registry_workspace_id IS NULL OR ri.registry_workspace_id = @workspace_id::text)
   AND ri.id = @id;
@@ -32,6 +34,14 @@ ON CONFLICT (registry_item_id, workspace_id) DO UPDATE SET
     installed_entity_id = EXCLUDED.installed_entity_id,
     installed_version = EXCLUDED.installed_version,
     updated_at = CURRENT_TIMESTAMP;
+
+-- name: SkillItemVersions :many
+SELECT ri.id, ri.version, rii.installed_version
+FROM registry_items ri
+LEFT JOIN registry_item_installs rii ON rii.registry_item_id = ri.id AND rii.workspace_id = @workspace_id::text
+WHERE ri.registry_type = 'skills' AND ri.registry_active
+  AND (ri.registry_workspace_id IS NULL OR ri.registry_workspace_id = @workspace_id::text)
+  AND ri.id = ANY(@ids::uuid[]);
 
 -- name: SkillProvenance :many
 SELECT ri.id, ri.registry_id, ri.registry_trust

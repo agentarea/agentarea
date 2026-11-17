@@ -11,6 +11,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/httpx"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/mcpserve"
+	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/mcpserver"
 )
 
 // Edge is what the routes need from the serve edge.
@@ -33,6 +34,8 @@ type Ports struct {
 	OpenAPI bool
 	// MCPToolsets are the platform toolsets /mcp and /mcp/w/{workspace} serve.
 	MCPToolsets []mcpserve.Toolset
+	// Events is the MCP Events extension those mounts and a client's serve; nil serves none.
+	Events *mcpserver.Events
 }
 
 // Mount registers the ported routes. The admin groups are the auth configs and

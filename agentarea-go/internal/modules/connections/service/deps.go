@@ -175,6 +175,9 @@ type WorkspaceRule = governanceapi.WorkspaceRule
 // and the workspace+user effective policy).
 type ToolPolicies = governanceapi.ToolPolicies
 
+// EgressExitBinding is governance's require_bindable (governance/api).
+type EgressExitBinding = governanceapi.EgressExitBinding
+
 // AgentApprovals is governance's read of agents' enabled approval rule
 // targets (approval_targets_for_agents), for /consumers' confirm_tools.
 type AgentApprovals = governanceapi.ApprovalTargets

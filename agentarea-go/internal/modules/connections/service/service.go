@@ -56,6 +56,9 @@ type Deps struct {
 	HeldCalls runsapi.HeldCalls
 	// ClientCalls prices, caps and meters calls outside a run; nil runs them unmetered.
 	ClientCalls runsapi.ClientToolCalls
+	// EgressExits is governance's binding check; nil where the edition has
+	// no egress exits, so no instance binds one and no server requires one.
+	EgressExits EgressExitBinding
 	Config      Config
 	// Admin refuses a caller in ctx who is not an admin of its workspace.
 	Admin func(ctx context.Context) error

@@ -273,8 +273,14 @@ func mapSkillError(err error) (*httpx.Error, bool) {
 		missing *service.SkillNotFoundError
 		member  *service.SkillMemberNotFoundError
 		file    *service.SkillFileNotFoundError
+		edited  *service.SkillCustomizedError
+		notFrom *service.SkillNotFromCatalogError
 	)
 	switch {
+	case errors.As(err, &edited):
+		return httpx.NewError(http.StatusConflict, "skill_customized", edited.Msg), true
+	case errors.As(err, &notFrom):
+		return httpx.NewError(http.StatusConflict, "skill_not_from_catalog", notFrom.Msg), true
 	case errors.As(err, &files):
 		return httpx.HTTPError(http.StatusNotFound, files.Msg), true
 	case errors.As(err, &file):

@@ -33,6 +33,9 @@ type Deps struct {
 	// Tasks: nil leaves the task-policy-snapshot route unmounted.
 	Tasks service.TaskMetadata
 	Sink  service.AuditSink
+	// EgressExits is set where the edition enforces egress exits (its Store
+	// is governance's own); nil answers every /egress-exits route 404.
+	EgressExits *service.EgressExitPorts
 	// DefaultPoliciesPath replaces the packaged baseline when set.
 	DefaultPoliciesPath string
 	Now                 func() time.Time
@@ -51,9 +54,15 @@ func New(d Deps) *Module {
 	if d.Log == nil {
 		d.Log = slog.Default()
 	}
+	var egress *service.EgressExitPorts
+	if d.EgressExits != nil {
+		p := *d.EgressExits
+		p.Store = store.EgressExits{}
+		egress = &p
+	}
 	return &Module{d: d, svc: service.New(service.Deps{
 		DB: d.DB, Policies: store.Policies{}, Audit: store.Audit{},
-		Secrets: d.Secrets, Owners: d.Owners, Tasks: d.Tasks, Sink: d.Sink,
+		Secrets: d.Secrets, Owners: d.Owners, Tasks: d.Tasks, Sink: d.Sink, EgressExits: egress,
 		DefaultPoliciesPath: d.DefaultPoliciesPath, Now: d.Now, Log: d.Log.With("module", "governance"),
 	})}
 }
@@ -92,11 +101,14 @@ func (m *Module) Serve() serve.Module {
 		Errors: handlers.MapError,
 		Mount: func(rt serve.Routes) error {
 			handlers.Mount(rt.Mux.Chi(), rt.Errors, m.d.Workspace, m.d.Admin, handlers.New(m.svc, m.d.Admin),
-				handlers.Routes{Secrets: m.svc.SecretsMounted(), Snapshots: m.d.Tasks != nil})
+				handlers.Routes{Secrets: m.svc.SecretsMounted(), Snapshots: m.d.Tasks != nil, EgressExits: m.svc.EgressExitsEnforced()})
 			return nil
 		},
 	}
 }
+
+// EgressExitPorts is what egress exits need where the edition enforces them.
+type EgressExitPorts = service.EgressExitPorts
 
 // OwnerRef is the entity a managed secret names.
 type OwnerRef = service.OwnerRef
@@ -122,3 +134,12 @@ func OwnersFrom[K ~struct{ Type, ID string }](resolve func(context.Context, db.S
 
 // EgressExits is the operator's writes of platform egress exits.
 func (m *Module) EgressExits() api.EgressExitDeclarations { return m.svc }
+
+// EgressExitBinding is what connections asks before an instance binds an
+// exit; nil where the edition does not enforce egress exits.
+func (m *Module) EgressExitBinding() api.EgressExitBinding {
+	if !m.svc.EgressExitsEnforced() {
+		return nil
+	}
+	return m.svc
+}

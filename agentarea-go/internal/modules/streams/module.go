@@ -64,6 +64,8 @@ type Deps struct {
 	RateLimiter httpx.RateLimiter
 	// Out is the outbound HTTP clients (api_lookup verification).
 	Out netguard.Clients
+	// Guard is the outbound address policy an MCP Events subscriber's http callback must pass.
+	Guard func() *netguard.Guard
 	// MCPEventSources reads MCP server instances for MCP Events sources (connections' store).
 	MCPEventSources service.MCPEventSources
 	// ModelKinds, Models and AgentModels decide LLM conditions and extract LLM parameters.

@@ -175,7 +175,7 @@ func (p PlatformRuns) Start(ctx context.Context, c authn.Caller, in api.RunStart
 	sp := runSpec{
 		TaskID: uuid.NewString(), AgentID: in.AgentID, Description: in.Description, Parameters: params,
 		UserID: c.UserID, RequiresHumanApproval: in.RequiresHumanApproval, Metadata: meta,
-		Provenance: provenanceOf(c), ScheduledAt: scheduled,
+		Provenance: provenanceOf(c), ScheduledAt: scheduled, Credential: c.Credential,
 	}
 	if err := p.s.start(ctx, c.Workspace, sp); err != nil {
 		return api.RunStarted{}, err

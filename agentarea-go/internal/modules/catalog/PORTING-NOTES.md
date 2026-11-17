@@ -195,9 +195,10 @@ value from that workspace's backend as the platform principal) and `PlatformSecr
 (platform_secret_id by id or name; the registry recorded as consumer `registry`,
 field `credentials`). Sync, retire and workspace sync are mounted.
 Mirror: agents `CatalogMirror()` (store_catalog_item per item; a GitHub-pointer item of a
-registry with credentials fails loudly, only public repositories are read; a rate limit stops
-the rest of the sync's GitHub reads). `Installs()` serves agents' presets, installs and run
-provenance; `Folder` reads a skill folder at its pin over the commit archive.
+registry with credentials is read as its token; a rate limit stops the rest of the sync's
+GitHub reads). `Installs()` serves agents' presets, installs, updates and run provenance;
+`Folder` reads a skill folder at its pin over the commit archive, or with a token over the
+REST API and raw files checked against their blob SHAs.
 `Connections` is connections' `CatalogConnections` and `Pricing` is
 app/catalog_pricing.go (price_catalog_items: billing's quote on the platform's key,
 the vendor cost otherwise, and the hosted instance's hour from the MCP runtime's

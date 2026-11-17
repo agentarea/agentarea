@@ -22,7 +22,8 @@ type SurfaceDeps struct {
 	// Service's Executor is left nil: Durable supplies it when a route first needs it.
 	Service service.SurfaceDeps
 	Durable ExecutorSource
-	// Audit is governance's writer; nil leaves the approval decision unmounted.
+	// Audit is governance's writer; nil leaves the approval decision unmounted
+	// and refuses task creation.
 	Audit governanceapi.AuditWriter
 	// Workspace admits the caller into /v1/workspaces/{workspace}.
 	Workspace func(http.Handler) http.Handler
@@ -50,6 +51,7 @@ func NewSurface(d SurfaceDeps) *Surface {
 			d.Service.Resumer = l
 		}
 	}
+	d.Service.Audit = d.Audit
 	return &Surface{d: d, s: service.NewSurface(d.Service)}
 }
 

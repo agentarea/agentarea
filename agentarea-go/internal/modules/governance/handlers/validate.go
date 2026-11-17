@@ -25,6 +25,7 @@ type input struct {
 	preview
 	auditList
 	secretBody
+	egressBody
 }
 
 type inputKey struct{}

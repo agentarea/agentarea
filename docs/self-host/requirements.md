@@ -120,8 +120,7 @@ Only needed if you build images yourself rather than pulling published ones.
 
 | Toolchain | Version | Where |
 |---|---|---|
-| Python | 3.12 or later, with `uv` | `agentarea-platform/` |
-| Go | 1.25.0 | `agentarea-mcp-manager/` |
+| Go | 1.27.0 (`agentarea-go/go.mod`) | `agentarea-go/` |
 | Node.js with npm | version not pinned in `agentarea-webapp/package.json` | `agentarea-webapp/` |
 
 ## Errors

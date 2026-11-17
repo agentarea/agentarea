@@ -70,19 +70,25 @@ func NewEndpoint(out netguard.Clients, now func() time.Time, log *slog.Logger) *
 // Post sends body signed by Standard Webhooks; a fresh timestamp and signature each time. The
 // error is a secret that cannot sign, which no retry fixes.
 func (e *Endpoint) Post(ctx context.Context, url, secret, subscription, messageID string, body any) (Outcome, error) {
+	out, _, err := e.send(ctx, url, secret, subscription, messageID, body)
+	return out, err
+}
+
+// send is Post that also returns a 2xx answer's body.
+func (e *Endpoint) send(ctx context.Context, url, secret, subscription, messageID string, body any) (Outcome, []byte, error) {
 	raw, err := EncodeBody(body)
 	if err != nil {
-		return Outcome{}, err
+		return Outcome{}, nil, err
 	}
 	ts := e.now().Unix()
 	sig, err := Sign(secret, messageID, ts, raw)
 	if err != nil {
-		return Outcome{}, err
+		return Outcome{}, nil, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(raw))
 	if err != nil {
 		e.log.WarnContext(ctx, "callback of subscription is not a URL", "subscription", subscription, "error", err)
-		return Outcome{Error: "connection_refused"}, nil
+		return Outcome{Error: "connection_refused"}, nil, nil
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("webhook-id", messageID)
@@ -93,20 +99,20 @@ func (e *Endpoint) Post(ctx context.Context, url, secret, subscription, messageI
 	if err != nil {
 		if errors.Is(err, netguard.ErrUnsafe) {
 			e.log.WarnContext(ctx, "callback of subscription points where the policy refuses", "subscription", subscription)
-			return Outcome{Error: "connection_refused"}, nil
+			return Outcome{Error: "connection_refused"}, nil, nil
 		}
 		e.log.WarnContext(ctx, "POST to the callback of subscription failed", "subscription", subscription, "error", err)
-		return Outcome{Error: category(err)}, nil
+		return Outcome{Error: category(err)}, nil, nil
 	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxAnswer))
+	answer, _ := io.ReadAll(io.LimitReader(resp.Body, maxAnswer))
 	_ = resp.Body.Close()
 	switch {
 	case resp.StatusCode >= 200 && resp.StatusCode < 300:
-		return Outcome{}, nil
+		return Outcome{}, answer, nil
 	case resp.StatusCode < 500:
-		return Outcome{Error: "http_4xx", Final: resp.StatusCode == http.StatusGone || resp.StatusCode == http.StatusRequestEntityTooLarge}, nil
+		return Outcome{Error: "http_4xx", Final: resp.StatusCode == http.StatusGone || resp.StatusCode == http.StatusRequestEntityTooLarge}, nil, nil
 	default:
-		return Outcome{Error: "http_5xx"}, nil
+		return Outcome{Error: "http_5xx"}, nil, nil
 	}
 }
 

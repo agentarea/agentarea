@@ -29,6 +29,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/sandbox"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/delivery"
+	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/partitions"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/polling"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/quota"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/replies"
@@ -78,6 +79,7 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 	agentsCfg := agents.LoadConfig(l)
 	insightsCfg := insights.LoadConfig(l)
 	runSettings := runsservice.LoadRunSettings(l)
+	eventRetention := partitions.LoadConfig(l).Retention
 	webhookURL, _ := l.OptionalEnv("AGENTAREA_TELEGRAM_WEBHOOK_URL")
 	callsTools := p.serve || p.worker
 	var health *processHealth
@@ -134,7 +136,8 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 		return fmt.Errorf("temporal: %w", err)
 	}
 	defer dur.Close()
-	extDeps := ext.Deps{Logger: log, Config: config.New(b.lookup), DB: profile.DB}
+	extDeps := ext.Deps{Logger: log, Config: config.New(b.lookup), DB: profile.DB,
+		Secrets: workspaceSecrets{db: profile.DB, secrets: profile.Secrets}}
 	exts, err := b.resolveExtensions(ctx, extDeps, spend)
 	if err != nil {
 		return err
@@ -147,7 +150,7 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 
 	consumer := name
 	settings := streamsservice.DefaultSettings()
-	settings.Partitions = pcfg.Events.Partitions
+	settings.Partitions, settings.Retention = pcfg.Events.Partitions, eventRetention
 	busOpts := kevents.BusOptions{Retention: kevents.BusRetention, Consumer: consumer}
 	if p.events {
 		busOpts.Consumer, busOpts.MaxDelivery = "events-"+pollCfg.WorkerID, settings.MaxAttempts

@@ -1,6 +1,9 @@
 package agents
 
 import (
+	"context"
+
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/agents/api"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/agents/service"
 )
@@ -29,9 +32,16 @@ func (m *Module) UseExport(w service.ExportWorkspaces, mcps service.ExportMCPs, 
 func (m *Module) UseToolsMCP(t service.ToolsMCP) { m.d.ToolsMCP = t }
 
 // WorkspaceConfig is what the workspace_config toolset calls; nil without a full graph.
+// It reads the export ports at call time, after UseExport.
 func (m *Module) WorkspaceConfig() api.WorkspaceConfig {
 	if m.svc == nil {
 		return nil
 	}
-	return m.misc()
+	return lateWorkspaceConfig{m: m}
+}
+
+type lateWorkspaceConfig struct{ m *Module }
+
+func (l lateWorkspaceConfig) Export(ctx context.Context, c authn.Caller) (string, error) {
+	return l.m.misc().Export(ctx, c)
 }

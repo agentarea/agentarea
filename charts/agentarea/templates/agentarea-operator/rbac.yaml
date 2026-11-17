@@ -1,0 +1,85 @@
+{{- if .Values.operator.enabled }}
+{{- if .Values.operator.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "agentarea.operatorServiceAccountName" . }}
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+  {{- with .Values.operator.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- include "agentarea.imagePullSecrets" . | nindent 0 }}
+automountServiceAccountToken: true
+---
+{{- end }}
+# The declared resources are watched in every namespace (internal/modules/catalog/operator
+# controller.go); only their status is written.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "agentarea.fullname" . }}-operator
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+rules:
+  - apiGroups: ["agentarea.io"]
+    resources: ["llmproviderconfigs", "platformconnections", "platformegressexits"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["agentarea.io"]
+    resources: ["llmproviderconfigs/status", "platformconnections/status", "platformegressexits/status"]
+    verbs: ["patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "agentarea.fullname" . }}-operator
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "agentarea.operatorServiceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: {{ include "agentarea.fullname" . }}-operator
+  apiGroup: rbac.authorization.k8s.io
+---
+# apiKeySecretRef and tokenSecretRef resolve in the resource's own namespace and are
+# read one at a time by name, never listed or watched. Secrets are therefore granted
+# per namespace, never cluster-wide: the release namespace plus
+# operator.secretNamespaces, the namespaces resources are declared in.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "agentarea.fullname" . }}-operator-secrets-reader
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+{{- range $ns := uniq (prepend .Values.operator.secretNamespaces $.Release.Namespace) }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "agentarea.fullname" $ }}-operator-secrets-reader
+  namespace: {{ $ns }}
+  labels:
+    {{- include "agentarea.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: operator
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "agentarea.operatorServiceAccountName" $ }}
+    namespace: {{ $.Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: {{ include "agentarea.fullname" $ }}-operator-secrets-reader
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
+{{- end }}

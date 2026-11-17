@@ -181,8 +181,8 @@ func closes(toks []pyTok, i int) int {
 	return -1
 }
 
-// pyJSON is json.dumps of a str (ensure_ascii).
-func pyJSON(s string) string {
+// PyJSONString is json.dumps of a str (ensure_ascii).
+func PyJSONString(s string) string {
 	var b strings.Builder
 	b.WriteByte('"')
 	for _, r := range s {
@@ -222,7 +222,7 @@ func secretAssignment(name, value string) bool {
 	if value == "" {
 		return false
 	}
-	written := pyJSON(name) + ": " + pyJSON(value)
+	written := PyJSONString(name) + ": " + PyJSONString(value)
 	return MaskInlineSecrets(written) != written
 }
 

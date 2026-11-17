@@ -28,7 +28,10 @@ type Lookup struct {
 	Store LookupStore
 }
 
-var _ api.Lookup = (*Lookup)(nil)
+var (
+	_ api.Lookup     = (*Lookup)(nil)
+	_ api.Attachable = (*Lookup)(nil)
+)
 
 // parse keeps the ids that are UUIDs.
 func parse(ids []string) []uuid.UUID {

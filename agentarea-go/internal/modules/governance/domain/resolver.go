@@ -32,6 +32,12 @@ func Resolve(layers []*api.Policy, sourceIDs []string) (api.Policy, error) {
 	return current, nil
 }
 
+// LowerLimits is a layer with the lower of a's and b's token and execution
+// limits, so it tightens both.
+func LowerLimits(a, b api.Policy) api.Policy {
+	return api.Policy{Tokens: mergeTokens(a.Tokens, b.Tokens), Execution: mergeExecution(a.Execution, b.Execution)}
+}
+
 func validateTightens(h, l api.Policy) error {
 	if h.Budget != nil && l.Budget != nil {
 		switch {

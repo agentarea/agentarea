@@ -89,13 +89,30 @@ func (x Installs) MarkInstalled(ctx context.Context, s db.Session, itemID, entit
 	return store.Installs{}.MarkInstalled(ctx, s, item, entity, version)
 }
 
-func (x Installs) SkillProvenance(ctx context.Context, ws scope.Workspace, itemIDs []string) (out map[string]api.ItemSource, err error) {
+func itemUUIDs(itemIDs []string) []uuid.UUID {
 	ids := make([]uuid.UUID, 0, len(itemIDs))
 	for _, id := range itemIDs {
 		if u, err := uuid.Parse(id); err == nil {
 			ids = append(ids, u)
 		}
 	}
+	return ids
+}
+
+func (x Installs) SkillVersions(ctx context.Context, ws scope.Workspace, itemIDs []string) (out map[string]api.ItemVersions, err error) {
+	ids := itemUUIDs(itemIDs)
+	if len(ids) == 0 {
+		return map[string]api.ItemVersions{}, nil
+	}
+	err = x.read(ctx, ws, func(s db.Session) error {
+		out, err = store.Installs{}.SkillVersions(ctx, s, ids)
+		return err
+	})
+	return out, err
+}
+
+func (x Installs) SkillProvenance(ctx context.Context, ws scope.Workspace, itemIDs []string) (out map[string]api.ItemSource, err error) {
+	ids := itemUUIDs(itemIDs)
 	if len(ids) == 0 {
 		return map[string]api.ItemSource{}, nil
 	}
@@ -109,9 +126,15 @@ func (x Installs) SkillProvenance(ctx context.Context, ws scope.Workspace, itemI
 // ErrNoOutbound is a GitHub read in a process given no outbound clients.
 var ErrNoOutbound = errors.New("catalog: reading GitHub needs the outbound clients, which this process was not given")
 
-// Folder is GitHubSkillImporter._download_folder_from_archive.
-func (x Installs) Folder(ctx context.Context, repo, folder string, ref, treeSHA *string) (api.GitHubFolder, error) {
-	f, err := x.folder(ctx, repo, folder, ref, treeSHA)
+// Folder is GitHubSkillImporter.download_folder: the commit archive without a token, the REST API with one.
+func (x Installs) Folder(ctx context.Context, token, repo, folder string, ref, treeSHA *string) (api.GitHubFolder, error) {
+	var f api.GitHubFolder
+	var err error
+	if token == "" {
+		f, err = x.folder(ctx, repo, folder, ref, treeSHA)
+	} else {
+		f, err = x.tokenFolder(ctx, token, repo, folder, ref, treeSHA)
+	}
 	var gh *GitHubError
 	if errors.As(err, &gh) {
 		return f, &api.FolderError{Msg: gh.Msg, NotFound: gh.Status == 404, RateLimited: gh.RateLimit}

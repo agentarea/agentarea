@@ -8,6 +8,7 @@ import (
 
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/blob"
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/scope"
 	catalogapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/catalog/api"
 )
@@ -24,8 +25,8 @@ type SkillCatalog interface {
 	// UpdateAll is update_all_from_catalog.
 	UpdateAll(ctx context.Context, c authn.Caller) ([]SkillUpdateResult, error)
 	// Pin is rollback's re-pin of an install to the item version a catalog
-	// package had, after the install policy allowed it.
-	Pin(ctx context.Context, c authn.Caller, skillID uuid.UUID, registryItemID string, catalogVersion *string) error
+	// package had, after the install policy allowed it, in the rollback's transaction s.
+	Pin(ctx context.Context, s db.Session, c authn.Caller, skillID uuid.UUID, registryItemID string, catalogVersion *string) error
 	// RepinAll and RefreshStubs are the CLI jobs repin-catalog-installs and refresh-stub-installs.
 	RepinAll(ctx context.Context, dryRun bool) ([]SkillJobResult, error)
 	RefreshStubs(ctx context.Context, dryRun bool) ([]SkillJobResult, error)
@@ -53,7 +54,7 @@ type SkillPorts struct {
 	GitHub http.RoundTripper
 	// Items are the catalog's skill items; nil answers 501 for installing one and refuses runs of installed ones.
 	Items CatalogItems
-	// Catalog is nil until updates are ported: update and catalog rollback answer 501.
+	// Catalog moves installs between catalog versions; nil answers 501 for update and catalog rollback.
 	Catalog SkillCatalog
 	// InstallPolicy is nil until governance serves it: GitHub import answers 501.
 	InstallPolicy SkillInstallPolicy
@@ -68,11 +69,13 @@ type SkillUpdateResult struct {
 	Skill   *SkillView
 }
 
-// SkillJobResult is one skill a catalog job handled, with its workspace.
+// SkillJobResult is one skill a catalog job handled, with its workspace;
+// Error is the reason or detail, SourceURL what a refresh read.
 type SkillJobResult struct {
 	WorkspaceID string
 	SkillID     string
 	Name        string
 	Status      string
 	Error       *string
+	SourceURL   *string
 }

@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
 
@@ -12,10 +11,15 @@ import (
 type mirrorFakeItems struct {
 	CatalogItems
 	folders int
+	tokens  []string
 }
 
-func (f *mirrorFakeItems) Folder(context.Context, string, string, *string, *string) (catalogapi.GitHubFolder, error) {
+func (f *mirrorFakeItems) Folder(_ context.Context, token, _, _ string, _, _ *string) (catalogapi.GitHubFolder, error) {
 	f.folders++
+	f.tokens = append(f.tokens, token)
+	if token != "" {
+		return catalogapi.GitHubFolder{Commit: "c1", TreeSHA: "t1", Files: map[string][]byte{"SKILL.md": []byte("---\nname: p\ndescription: d\n---\nprivate")}}, nil
+	}
 	return catalogapi.GitHubFolder{}, &catalogapi.FolderError{Msg: "GitHub throttled", RateLimited: true}
 }
 
@@ -49,8 +53,17 @@ func TestCatalogMirrorStoresPackagesAndStopsOnTheRateLimit(t *testing.T) {
 	if items.folders != 1 {
 		t.Fatalf("GitHub asked %d times after its rate limit", items.folders)
 	}
-	private, _ := CatalogMirror{K: k}.Open(ctx, "reg", &ws, "token")
-	if _, err := private(ctx, gh); !errors.Is(err, ErrPrivateMirror) {
+	private, err := CatalogMirror{K: k}.Open(ctx, "reg", &ws, "token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, err = private(ctx, gh)
+	if err != nil {
 		t.Fatalf("private mirror: %v", err)
+	}
+	s3, _ = pkg["s3_path"].(string)
+	if items.tokens[len(items.tokens)-1] != "token" || pkg["tree_sha"] != "t1" || pkg["source_url"] != "https://github.com/o/r/tree/c1/s" ||
+		string(b.objs[s3+"SKILL.md"]) != "---\nname: p\ndescription: d\n---\nprivate" {
+		t.Fatalf("private package %v (tokens %v)", pkg, items.tokens)
 	}
 }

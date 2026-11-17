@@ -47,8 +47,8 @@ func (s *Service) CreateDelegationTask(ctx context.Context, p Principal, in Dele
 	if in.RunBudget == nil {
 		return DelegationOutput{}, nonRetryable("ValueError", "delegation request is missing its allocated run budget", nil)
 	}
-	if s.d.Agents == nil || s.d.Policies == nil {
-		return DelegationOutput{}, errors.New("delegation needs the agent definitions and the policy resolver")
+	if s.d.Agents == nil || s.d.Policies == nil || s.d.Audit == nil {
+		return DelegationOutput{}, errors.New("delegation needs the agent definitions, the policy resolver and the audit writer")
 	}
 	failed := func(err error) (DelegationOutput, error) {
 		return DelegationOutput{Status: "failed", Error: err.Error()}, nil
@@ -86,13 +86,16 @@ func (s *Service) CreateDelegationTask(ctx context.Context, p Principal, in Dele
 		if def.ClientID != "" {
 			meta[runnerClientKey] = def.ClientID
 		}
-		return s.store.CreateTask(ctx, tx, store.NewTask{
+		if err := s.store.CreateTask(ctx, tx, store.NewTask{
 			ID: taskID, AgentID: in.TargetAgentID, Description: "Delegated task to " + in.TargetAgentName,
 			Parameters: map[string]any{"source": "agent_delegation", "parent_agent_id": p.AgentID, "parent_task_id": in.ParentTaskID},
 			Status:     "submitted", ExecutionID: in.ExecutionID, Metadata: jsonValue(meta), CreatedBy: p.UserID,
 			OriginType: "agent", OriginID: in.ParentTaskID, CausationID: in.ParentTaskID, ParentTaskID: in.ParentTaskID,
 			SourceIdentity: parent.SourceIdentity,
-		}, s.now())
+		}, s.now()); err != nil {
+			return err
+		}
+		return s.d.Audit.RecordOnce(ctx, tx, taskCreated(taskID, p.UserID, nil))
 	})
 	if err != nil {
 		return DelegationOutput{}, taskNotFound(err)

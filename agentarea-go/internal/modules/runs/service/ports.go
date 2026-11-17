@@ -29,6 +29,30 @@ func (s *Service) agent(ctx context.Context, p Principal, agentID string) (agent
 	return d, agentSpec(d), nil
 }
 
+// runAgent is the run's own agent: the workspace's, else the catalog agent
+// with that id, run from its definition once the install policy allowed it.
+func (s *Service) runAgent(ctx context.Context, p Principal, agentID string) (agentsapi.Definition, api.AgentSpec, error) {
+	d, spec, err := s.agent(ctx, p, agentID)
+	if !errors.Is(err, ErrNotFound) || s.d.CatalogAgents == nil {
+		return d, spec, err
+	}
+	ws, err := workspace(p)
+	if err != nil {
+		return agentsapi.Definition{}, api.AgentSpec{}, err
+	}
+	d, err = s.d.CatalogAgents.CatalogDefinition(ctx, ws, p.UserID, agentID)
+	var refused *agentsapi.AgentRefusedError
+	switch {
+	case errors.Is(err, agentsapi.ErrNotFound):
+		return agentsapi.Definition{}, api.AgentSpec{}, fmt.Errorf("%w: %w", ErrNotFound, err)
+	case errors.As(err, &refused):
+		return agentsapi.Definition{}, api.AgentSpec{}, nonRetryable("CatalogInstallRefusedError", refused.Msg, err)
+	case err != nil:
+		return agentsapi.Definition{}, api.AgentSpec{}, err
+	}
+	return d, agentSpec(d), nil
+}
+
 func agentSpec(d agentsapi.Definition) api.AgentSpec {
 	spec := api.AgentSpec{
 		ID: d.ID, Name: d.Name, Description: d.Description, Instruction: d.Instruction, AgentType: d.AgentType,

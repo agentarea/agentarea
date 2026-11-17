@@ -14,6 +14,9 @@ import (
 type Routes struct {
 	Secrets   bool
 	Snapshots bool
+	// EgressExits: the edition enforces egress exits; otherwise every
+	// egress exit route answers 404.
+	EgressExits bool
 }
 
 // Mount registers the governance routes on r behind workspace, the edge's
@@ -46,12 +49,16 @@ func Mount(r chi.Router, errs *httpx.Errors, workspace func(http.Handler) http.H
 	route(request{admin: true, query: auditQuery}).Get(ws+"/audit-logs/", w.ListAuditLogsV1AuditLogsGet)
 
 	e := ws + "/egress-exits"
-	gate := base.With(egressGate(errs))
-	gate.Get(e+"/", w.ListEgressExitsV1EgressExitsGet)
-	gate.Post(e+"/", w.CreateEgressExitV1EgressExitsPost)
-	gate.Get(e+"/{exit_id}", w.GetEgressExitV1EgressExitsExitIdGet)
-	gate.Patch(e+"/{exit_id}", w.UpdateEgressExitV1EgressExitsExitIdPatch)
-	gate.Delete(e+"/{exit_id}", w.DeleteEgressExitV1EgressExitsExitIdDelete)
+	gate := base.With(egressGate(errs, on.EgressExits))
+	egress := func(rq request) chi.Router { return gate.With(rq.middleware(errs, admin)) }
+	exit := []string{"exit_id"}
+	egress(request{}).Get(e+"/", w.ListEgressExitsV1EgressExitsGet)
+	egress(request{body: egressCreateBody}).Post(e+"/", w.CreateEgressExitV1EgressExitsPost)
+	egress(request{pathUUIDs: exit}).Get(e+"/{exit_id}", w.GetEgressExitV1EgressExitsExitIdGet)
+	gate.With(egressRequires(s, errs, "edit"), request{pathUUIDs: exit, body: egressUpdateBody}.middleware(errs, admin)).
+		Patch(e+"/{exit_id}", w.UpdateEgressExitV1EgressExitsExitIdPatch)
+	gate.With(egressRequires(s, errs, "delete"), request{pathUUIDs: exit}.middleware(errs, admin)).
+		Delete(e+"/{exit_id}", w.DeleteEgressExitV1EgressExitsExitIdDelete)
 
 	if !on.Secrets {
 		return

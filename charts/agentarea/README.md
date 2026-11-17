@@ -17,6 +17,20 @@ helm install agentarea agentarea/agentarea \
 - Helm 3.8+
 - PV provisioner for PostgreSQL/RustFS persistence (if enabled)
 
+## Required values
+
+`mcpManager.packageImages.repository` has no default: name a registry repository
+the cluster can push to and pull from (with `mcpManager.packageImages.registrySecret`
+when it needs credentials). MCP servers started from npm/PyPI packages run as images
+built into it, and the backend, worker and mcp-manager refuse to start without it.
+
+```yaml
+mcpManager:
+  packageImages:
+    repository: registry.example.com/agentarea/mcp-packages
+    registrySecret: mcp-packages-registry
+```
+
 ## Installing with external services
 
 If you have existing PostgreSQL, Redis or S3-compatible storage, disable bundled dependencies and set endpoints:
@@ -57,7 +71,8 @@ The following table lists configurable parameters of the chart and their default
 | fullnameOverride | string | `""` |  |
 | telemetry.enabled | bool | `false` | Install tracing and metrics in every first-party process (AGENTAREA_OTEL_ENABLED). Off, nothing is emitted and nothing is required. |
 | telemetry.otlpEndpoint | string | `""` | OTLP/HTTP base URL of the collector, without a /v1/... path, e.g. http://otel-gateway.monitoring:4318. Required when telemetry.enabled. |
-| global.edition | string | `"community"` |  |
+| global.edition | string | `"oss"` | Edition the platform reports (AGENTAREA_EDITION): oss or enterprise. |
+| global.spendCurrency | string | `"USD"` | Currency spend caps count and tool costs are declared in (ISO 4217, AGENTAREA_SPEND_CURRENCY). Enterprise: billing's ledger currency. |
 | global.version | string | `"0.0.3"` |  |
 | global.cluster.type | string | `"kubernetes"` |  |
 | global.cluster.name | string | `"agentarea"` |  |
@@ -155,9 +170,6 @@ The following table lists configurable parameters of the chart and their default
 | global.workloads.resources.sidecarContainer.memory.limit | string | `"256Mi"` |  |
 | global.serviceMesh.enabled | bool | `false` |  |
 | global.serviceMesh.type | string | `"istio"` |  |
-| global.monitoring.health.enabled | bool | `true` |  |
-| global.monitoring.health.port | int | `8001` |  |
-| global.monitoring.health.path | string | `"/health"` |  |
 | global.analytics.enabled | bool | `true` | Send AgentArea anonymous usage statistics from the backend and worker: a daily count of agents, runs and connectors, never names, prompts, output or secrets. Not OpenTelemetry. false sends nothing. Field list: https://docs.agentarea.ai/self-host/analytics |
 | global.analytics.signupHookSecret | string | `""` | Existing Secret whose key `signup-hook-key` the backend reads as AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY: the key an Ory Kratos after-registration hook presents to /internal/analytics/signups to record each sign-up's channel. Empty, that endpoint answers 404. |
 | global.analytics.ownDomains | list | `[]` | Domains of this installation's own sites, read by the backend as AGENTAREA_ANALYTICS_OWN_DOMAINS: a sign-up referred from one of them or a subdomain counts as no channel rather than a referral. Empty: none. |
@@ -317,7 +329,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.serverless.startupTimeout | string | `"5m"` |  |
 | mcpManager.mcpBase.image.repository | string | `"agentarea/agentarea-mcp-base"` |  |
 | mcpManager.mcpBase.image.tag | string | `""` |  |
-| mcpManager.packageImages.repository | string | `""` | Registry repository where immutable images built from npm/PyPI packages are stored. Leave empty to use the local Docker daemon with the Docker backend; Kubernetes and data-plane backends require a repository. |
+| mcpManager.packageImages.repository | required | `""` | Registry repository where immutable images built from npm/PyPI packages are stored, e.g. `registry.example.com/agentarea/mcp-packages`. The chart runs the Kubernetes or data-plane backend, which pull these images from a registry: with it empty the backend, worker and mcp-manager refuse to start. Only the Docker backend (compose) keeps them in the local daemon. |
 | mcpManager.packageImages.registrySecret | string | `""` | Existing dockerconfigjson Secret used to authenticate package-image registry lookups and pushes. The Secret is mounted read-only in the manager. |
 | mcpManager.packageImages.importTimeout | string | `"15m"` | Maximum time allowed for one package-image import. |
 | mcpManager.dataPlane.allowInsecure | bool | `false` |  |
@@ -523,6 +535,18 @@ The following table lists configurable parameters of the chart and their default
 | registryReconcile.registries[6].name | string | `"system-source-types"` |  |
 | registryReconcile.registries[6].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/source-types.json"` |  |
 | registryReconcile.registries[6].recommendation_priority | int | `10` |  |
+| operator.enabled | bool | `false` |  |
+| operator.serviceAccount.create | bool | `true` |  |
+| operator.serviceAccount.name | string | `""` |  |
+| operator.serviceAccount.annotations | object | `{}` |  |
+| operator.secretNamespaces | list | `[]` | Namespaces besides the release namespace whose Secrets the operator may read (a resource's apiKeySecretRef/tokenSecretRef resolve in its own namespace). |
+| operator.resources | object | `{}` |  |
+| operator.podAnnotations | object | `{}` |  |
+| operator.podLabels | object | `{}` |  |
+| operator.nodeSelector | object | `{}` |  |
+| operator.tolerations | list | `[]` |  |
+| operator.affinity | object | `{}` |  |
+| operator.extraEnv | list | `[]` |  |
 | openfga.enabled | bool | `true` |  |
 | openfga.replicaCount | int | `1` |  |
 | openfga.image.repository | string | `"openfga/openfga"` |  |

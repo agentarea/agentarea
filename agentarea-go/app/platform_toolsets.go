@@ -32,6 +32,7 @@ func (m *moduleSet) useLateToolsets() {
 	t := m.toolsets
 	t.Runs, t.Inbox = m.runsSurface.PlatformRuns(), m.runsSurface.PlatformInbox()
 	t.Triggers, t.Streams, t.StreamEvents = m.streams.PlatformTriggers(), m.streams.PlatformStreams(), m.streams.PlatformStreamEvents()
+	t.MCPEvents = m.streams.MCPEvents()
 	t.Network = m.insights.PlatformNetwork()
 }
 

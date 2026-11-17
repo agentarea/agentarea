@@ -3,8 +3,9 @@
 # and the same token, in the agentarea chart.
 
 image:
-  # -- mcp-manager image. The data plane is the same binary in data-plane mode.
-  repository: agentarea/agentarea-mcp-manager
+  # -- Platform image. The data plane is its `agentarea mcp` role in data-plane
+  # mode (AGENTAREA_MCP_MODE=dataplane), the same build as the control plane's.
+  repository: agentarea/agentarea-platform
   # -- Defaults to the chart's appVersion. Keep equal to the control plane's tag.
   tag: ""
   # -- Pull policy for the data plane image.
@@ -84,8 +85,6 @@ workloads:
     limits:
       cpu: "1"
       memory: 512Mi
-  # -- How many instances may exist at once.
-  maxInstances: 8
   podSecurity:
     # -- Pod Security level enforced on the namespace. baseline rejects host
     # namespaces, hostPath, privileged and added capabilities.
@@ -138,7 +137,7 @@ sandboxes:
   enabled: false
   server:
     image:
-      # -- OpenSandbox server image. The mcp-manager adapter is tested against release-1.2.0.
+      # -- OpenSandbox server image. The platform's adapter is tested against release-1.2.0.
       repository: opensandbox/server
       # -- Tag, optionally with a digest.
       tag: "release-1.2.0@sha256:25bebdcf1cf7724eb923faecbdbbf82d4038c6ab35c736151574726d14006f30"
@@ -251,14 +250,6 @@ opensandbox-controller:
     snapshot:
       # -- Only used for snapshots, which AgentArea does not take.
       imageCommitterImage: "opensandbox/image-committer:release-1.2.0@sha256:5320733579d1cb56322b345927b2c48a8b73f4a6ab32e22d203cc0bcf33ff0f9"
-
-# -- Required by the Kubernetes backend at start although a data plane runs no
-# agent sandboxes: the task lease is read unconditionally.
-sandboxPolicy:
-  taskLeaseTTL: 10m
-  taskIdleTTL: 15m
-  providerProvisioningTimeout: 5m
-  providerSessionTTL: 24h
 
 # -- Extra environment for the data plane container.
 extraEnv: []

@@ -1,9 +1,9 @@
 # agentarea-dataplane
 
-AgentArea data plane for an execution cluster: the mcp-manager data-plane API for MCP servers, optionally an OpenSandbox server for agent sandboxes, and the namespaces, admission and network policy the untrusted workloads of both are confined to.
+AgentArea data plane for an execution cluster: the platform's data-plane API for MCP servers, optionally an OpenSandbox server for agent sandboxes, and the namespaces, admission and network policy the untrusted workloads of both are confined to.
 
 The AgentArea control plane runs MCP servers through a *data plane*: the
-mcp-manager binary in data-plane mode, serving an authenticated HTTP API that
+platform image's `agentarea mcp` role in data-plane mode, serving an authenticated HTTP API that
 creates, proxies and deletes MCP server workloads. This chart installs one on an
 **execution cluster** -- a cluster whose job is to run untrusted MCP servers,
 separate from the one the control plane lives on -- together with everything
@@ -102,7 +102,7 @@ sandboxes:
 ```
 
 Then, in the `agentarea` chart, point `sandboxRuntime.opensandbox` at
-`http://<address>:<port>` with the same key. mcp-manager must name the storage
+`http://<address>:<port>` with the same key. The sandbox adapter must name the storage
 limit `ephemeral-storage`: releases that still send `disk` have every sandbox pod
 rejected by the API server.
 
@@ -110,7 +110,7 @@ rejected by the API server.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| image.repository | string | `"agentarea/agentarea-mcp-manager"` | mcp-manager image. The data plane is the same binary in data-plane mode. |
+| image.repository | string | `"agentarea/agentarea-platform"` | Platform image. The data plane is its `agentarea mcp` role in data-plane mode (AGENTAREA_MCP_MODE=dataplane), the same build as the control plane's. |
 | image.tag | string | `""` | Defaults to the chart's appVersion. Keep equal to the control plane's tag. |
 | image.pullPolicy | string | `"IfNotPresent"` | Pull policy for the data plane image. |
 | imagePullSecrets | list | `[]` | Pull secrets for the data plane's own image. MCP server images are pulled by the nodes of this cluster; give them registry credentials there. |
@@ -133,7 +133,6 @@ rejected by the API server.
 | workloads.isolationTier | string | `"untrusted"` | Default isolation tier for instances whose spec names none. |
 | workloads.readOnlyRootFilesystem | bool | `false` | Read-only root for MCP servers. Off by default, as on the Docker data plane: real servers write under their image (Telethon keeps its session in /app). The sandboxing runtime keeps such writes inside the sandbox. |
 | workloads.resources | object | `{"limits":{"cpu":"1","memory":"512Mi"},"requests":{"cpu":"100m","memory":"128Mi"}}` | Per-instance defaults. A spec may ask for less, never more than limits. |
-| workloads.maxInstances | int | `8` | How many instances may exist at once. |
 | workloads.podSecurity.enforce | string | `"baseline"` | Pod Security level enforced on the namespace. baseline rejects host namespaces, hostPath, privileged and added capabilities. |
 | workloads.podSecurity.warn | string | `"restricted"` | Pod Security level that only warns. |
 | workloads.admission.requireRuntimeClass | bool | `true` | Refuse any pod in the namespace that does not use runtimeClassName, through a ValidatingAdmissionPolicy, so no MCP server can reach the host kernel even through a data-plane bug. Needs Kubernetes 1.30+. |
@@ -144,7 +143,7 @@ rejected by the API server.
 | workloads.networkPolicy.extraEgress | list | `[]` | Additional egress rules, as NetworkPolicy egress entries, for every MCP server, those labelled agentarea.io/egress included (an in-cluster dependency such as a storage gateway). For a host that REDIRECTs some traffic to a local proxy, allow the redirect target here. |
 | workloads.networkPolicy.egressProxy | object | `{}` | Proxy that MCP servers labelled agentarea.io/egress may reach; those servers get DNS, this proxy and extraEgress only. Shape: {namespaceSelector: {matchLabels: ...}, podSelector: {matchLabels: ...}, port: 3128} |
 | sandboxes.enabled | bool | `false` | Run the sandbox server and confine the sandboxes it creates. |
-| sandboxes.server.image.repository | string | `"opensandbox/server"` | OpenSandbox server image. The mcp-manager adapter is tested against release-1.2.0. |
+| sandboxes.server.image.repository | string | `"opensandbox/server"` | OpenSandbox server image. The platform's adapter is tested against release-1.2.0. |
 | sandboxes.server.image.tag | string | `"release-1.2.0@sha256:25bebdcf1cf7724eb923faecbdbbf82d4038c6ab35c736151574726d14006f30"` | Tag, optionally with a digest. |
 | sandboxes.server.image.pullPolicy | string | `"IfNotPresent"` | Pull policy for the server image. |
 | sandboxes.server.port | int | `8081` | Port the sandbox API listens on. |
@@ -180,7 +179,6 @@ rejected by the API server.
 | opensandbox-controller.controller.image.repository | string | `"opensandbox/controller"` | Controller image, from Docker Hub rather than the upstream default registry. |
 | opensandbox-controller.controller.image.tag | string | `"release-1.2.0@sha256:7701db7eacda4c3533a961e0451f6ce067535d8ce46f15765a04dcf0ffa6e2c6"` | Tag, optionally with a digest. |
 | opensandbox-controller.controller.snapshot.imageCommitterImage | string | `"opensandbox/image-committer:release-1.2.0@sha256:5320733579d1cb56322b345927b2c48a8b73f4a6ab32e22d203cc0bcf33ff0f9"` | Only used for snapshots, which AgentArea does not take. |
-| sandboxPolicy | object | `{"providerProvisioningTimeout":"5m","providerSessionTTL":"24h","taskIdleTTL":"15m","taskLeaseTTL":"10m"}` | Required by the Kubernetes backend at start although a data plane runs no agent sandboxes: the task lease is read unconditionally. |
 | extraEnv | list | `[]` | Extra environment for the data plane container. |
 | resources | object | `{"limits":{"cpu":"1","memory":"512Mi"},"requests":{"cpu":"50m","memory":"64Mi"}}` | Resources of the data plane itself. |
 | nodeSelector | object | `{}` | Scheduling for the data plane pod. MCP servers are placed by their RuntimeClass. |

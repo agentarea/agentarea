@@ -276,8 +276,9 @@ type CodeBinding struct {
 	VideoModelID    string   `json:"video_model_id"`
 }
 
-// RemoteAgentBinding is a delegate reached over A2A.
+// RemoteAgentBinding is a delegate reached over A2A; AgentName is its label.
 type RemoteAgentBinding struct {
+	AgentName      string `json:"agent_name"`
 	A2AURL         string `json:"a2a_url"`
 	AuthSecretName string `json:"auth_secret_name"`
 }

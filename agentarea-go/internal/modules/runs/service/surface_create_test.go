@@ -172,7 +172,7 @@ func createSurface(t *testing.T) (*Surface, Principal, *taskPolicies, *fakeLaunc
 	defs := fakeDefinitions{p.AgentID: {ID: p.AgentID, Name: "Bot", ModelID: uuid.NewString()}}
 	s := NewSurface(SurfaceDeps{
 		DB: d, Executor: x, Log: quiet(), Now: fixedNow, Currency: func() string { return "EUR" },
-		Policies: pol, Launcher: l, Resumer: l,
+		Policies: pol, Launcher: l, Resumer: l, Audit: &fakeAudit{},
 		Definitions: defs, Agents: definedAgents{defs: defs},
 		Permissions: func(context.Context, authn.Caller, string, string, string) error { return nil },
 	})
@@ -209,6 +209,58 @@ func TestCreateStoresTheSnapshotAndLaunches(t *testing.T) {
 	}
 	if got.Task.Provenance.OriginType == nil || *got.Task.Provenance.OriginType != "user" {
 		t.Fatalf("provenance %+v", got.Task.Provenance)
+	}
+}
+
+func TestCreateAuditsTheTask(t *testing.T) {
+	s, p, _, _, _, ctx := createSurface(t)
+	c, _ := authn.CallerFrom(ctx)
+	c.Credential = &authn.Credential{Kind: authn.KindAPIKey, KeyID: "k1", Surface: authn.SurfaceAPI}
+	got, err := s.Create(authn.WithCaller(context.Background(), c), CreateRequest{AgentID: p.AgentID, Description: "go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := s.d.Audit.(*fakeAudit).lines
+	if len(lines) != 1 {
+		t.Fatalf("audit %+v", lines)
+	}
+	for _, l := range lines {
+		if l.Action != "task.create" || l.ResourceType != "task" || l.ResourceID != got.Task.ID ||
+			l.ActorType != "user" || l.ActorID != p.UserID {
+			t.Fatalf("audit %+v", l)
+		}
+		if l.Metadata["credential"] != "api_key" || l.Metadata["surface"] != "api" || l.Metadata["api_key_id"] != "k1" {
+			t.Fatalf("metadata %v", l.Metadata)
+		}
+	}
+}
+
+func TestSubmitAuditsTheTaskForItsOwner(t *testing.T) {
+	s, p, _, _, _, ctx := createSurface(t)
+	ws, _ := scope.NewWorkspace(p.WorkspaceID, "")
+	out, err := s.Submit(ctx, ws, api.TaskRequest{AgentID: p.AgentID, Description: "hi", UserID: p.UserID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := s.d.Audit.(*fakeAudit).lines
+	if len(lines) != 1 {
+		t.Fatalf("audit %+v", lines)
+	}
+	for _, l := range lines {
+		if l.Action != "task.create" || l.ResourceID != out.TaskID || l.ActorID != p.UserID || len(l.Metadata) != 0 {
+			t.Fatalf("audit %+v", l)
+		}
+	}
+}
+
+func TestRefusedCreateIsNotAudited(t *testing.T) {
+	s, p, pol, _, _, ctx := createSurface(t)
+	pol.refuse = true
+	if _, err := s.Create(ctx, CreateRequest{AgentID: p.AgentID, Description: "go"}); err == nil {
+		t.Fatal("policy refusal accepted")
+	}
+	if n := len(s.d.Audit.(*fakeAudit).lines); n != 0 {
+		t.Fatalf("audit lines %d", n)
 	}
 }
 

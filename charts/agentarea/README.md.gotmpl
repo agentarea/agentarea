@@ -17,6 +17,20 @@ helm install agentarea agentarea/agentarea \
 - Helm 3.8+
 - PV provisioner for PostgreSQL/RustFS persistence (if enabled)
 
+## Required values
+
+`mcpManager.packageImages.repository` has no default: name a registry repository
+the cluster can push to and pull from (with `mcpManager.packageImages.registrySecret`
+when it needs credentials). MCP servers started from npm/PyPI packages run as images
+built into it, and the backend, worker and mcp-manager refuse to start without it.
+
+```yaml
+mcpManager:
+  packageImages:
+    repository: registry.example.com/agentarea/mcp-packages
+    registrySecret: mcp-packages-registry
+```
+
 ## Installing with external services
 
 If you have existing PostgreSQL, Redis or S3-compatible storage, disable bundled dependencies and set endpoints:

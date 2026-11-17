@@ -386,6 +386,18 @@ namespaced Role today.
 {{- end }}
 
 {{/*
+Create the name of the operator service account, the only one bound to the
+operator ClusterRole and its per-namespace Secrets reader.
+*/}}
+{{- define "agentarea.operatorServiceAccountName" -}}
+{{- if .Values.operator.serviceAccount.create }}
+{{- default (printf "%s-operator" (include "agentarea.fullname" .)) .Values.operator.serviceAccount.name | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- default "default" .Values.operator.serviceAccount.name }}
+{{- end }}
+{{- end }}
+
+{{/*
 Which backend the manager drives.
 
 "dataplane" hands MCP containers to a remote host running the same binary in

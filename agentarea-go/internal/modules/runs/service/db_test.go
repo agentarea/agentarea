@@ -170,7 +170,8 @@ func TestCreateDelegationTaskStoresTheChildUnderItsParent(t *testing.T) {
 	d := openDB(t)
 	p, parent := seed(t, d)
 	child := uuid.NewString()
-	s := New(Deps{DB: d, Pricing: eurPricing{}, Policies: fakePolicies{}, Log: quiet(), Agents: fakeAgents{
+	audit := &fakeAudit{}
+	s := New(Deps{DB: d, Pricing: eurPricing{}, Policies: fakePolicies{}, Log: quiet(), Audit: audit, Agents: fakeAgents{
 		child: {Name: "helper", ModelID: "m1"},
 	}})
 	out, err := s.CreateDelegationTask(context.Background(), p, DelegationInput{ParentTaskID: parent, TargetAgentID: child, TargetAgentName: "helper", RunBudget: dec("1")})
@@ -179,6 +180,14 @@ func TestCreateDelegationTaskStoresTheChildUnderItsParent(t *testing.T) {
 	}
 	if n := count(t, d, p, `SELECT count(*) FROM tasks WHERE id = $1 AND parent_task_id = $2 AND origin_type = 'agent' AND status = 'submitted'`, out.TaskID, parent); n != 1 {
 		t.Fatal("the child task is not stored under its parent")
+	}
+	if len(audit.lines) != 1 {
+		t.Fatalf("audit %+v", audit.lines)
+	}
+	for _, l := range audit.lines {
+		if l.Action != "task.create" || l.ResourceType != "task" || l.ResourceID != out.TaskID || l.ActorType != "user" || l.ActorID != p.UserID {
+			t.Fatalf("audit %+v", l)
+		}
 	}
 	missing, err := s.CreateDelegationTask(context.Background(), p, DelegationInput{ParentTaskID: parent, TargetAgentID: uuid.NewString(), RunBudget: dec("1")})
 	if err != nil || missing.Status != "failed" {

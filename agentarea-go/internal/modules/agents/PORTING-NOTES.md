@@ -43,15 +43,17 @@ A port that no other module provides yet is declared in `service/deps*.go` and l
   - The delegate secret binding (admin-only).
 - connections:
   - `ToolsMCP`: `/agents/tools?include=mcp`.
-  - `ClientConnections`: OpenAPI links and the platform-managed check.
-- catalog: `SkillCatalog` (now only the update half): catalog projections in the skill list; update, update-all and rollback to a catalog package; the repin and refresh-stub jobs.
-  Install is wired (below).
+  - `ClientConnections`: wired late through `Later.ClientConnections` (connections `Attachable()`).
+- catalog: catalog projections in the skill list. Install, update, update-all, rollback to a catalog package and the
+  repin and refresh-stub jobs are wired (`CatalogSkills` over `CatalogItems`), and so is a run of an uninstalled catalog
+  agent from its definition (`CatalogRun`, runs' `CatalogAgents`).
 - streams: `TaskDefTriggers`: task-definition delete, and a put that changes the agent.
 - identity:
   - `ClientRunnerKeys`: wired late through `Later.ClientRunnerKeys` (identity `RunnerKeys()`).
 - A2A: a message with a `taskId` (a follow-up into an existing task) answers unsupported, and a `contextId` alone always starts a new task:
   Python's `_continue` queues the message into the live task (`queue_follow_up`), which runs does not expose. Inline `configuration.taskPushNotificationConfig` is registered, as in Python.
-- Runner presence (`Presence`, Redis): nil means offline.
+- Runner presence (`Presence`): runs' `NewRunnerPresence` over the Redis the runner sockets mark; without Redis no runner
+  connects, and every client reads offline.
 - Agent host: `POST /` and the card are mounted on the main mux, not behind `httpx.ByHost`. On a non-agent host they answer 404/405.
   Other paths on an agent host reach the API routes.
 - A2A params are checked by top-level name and type only; SendMessage also checks the message fields Python marks required. The agent-cards check covers name, description and skills.

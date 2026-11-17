@@ -8,9 +8,11 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authz"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/scope"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/secrets"
+	connectionsapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/api"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/governance/domain"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/governance/store"
 )
@@ -54,6 +56,28 @@ type AuditSink interface {
 	Emit(ctx context.Context, event map[string]any) error
 }
 
+// EgressExitStore is the egress_exits repository (store.EgressExits).
+type EgressExitStore interface {
+	List(ctx context.Context, s db.Session) ([]domain.EgressExit, error)
+	Get(ctx context.Context, s db.Session, id uuid.UUID) (domain.EgressExit, bool, error)
+	Create(ctx context.Context, s db.Session, e domain.EgressExit, now time.Time) (domain.EgressExit, error)
+	Update(ctx context.Context, s db.Session, id uuid.UUID, changes store.EgressExitChanges, now time.Time) (domain.EgressExit, bool, error)
+	Delete(ctx context.Context, s db.Session, id uuid.UUID) (bool, error)
+}
+
+// EgressBindings is connections' read and retirement of the instances bound
+// to an exit (connections/api).
+type EgressBindings = connectionsapi.EgressBindings
+
+// EgressExitPorts is what the egress exit use cases need where the edition
+// enforces them. Upstream is the outbound address policy's URL check.
+type EgressExitPorts struct {
+	Store     EgressExitStore
+	Graph     authz.Graph
+	Instances EgressBindings
+	Upstream  func(ctx context.Context, rawURL string) error
+}
+
 // Deps are the service's ports.
 type Deps struct {
 	DB       db.Database
@@ -68,6 +92,9 @@ type Deps struct {
 	Tasks TaskMetadata
 	// Sink is nil when no edition registers one.
 	Sink AuditSink
+	// EgressExits is nil where no edition enforces egress exits: every
+	// egress exit use case answers api.ErrEgressExitsUnsupported.
+	EgressExits *EgressExitPorts
 	// DefaultPoliciesPath replaces the packaged baseline when set
 	// (GOVERNANCE_DEFAULT_POLICIES_PATH).
 	DefaultPoliciesPath string

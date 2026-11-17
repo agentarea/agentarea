@@ -65,7 +65,7 @@ func (k *Skills) fork(ctx context.Context, c authn.Caller, item catalogapi.Catal
 			return domain.Skill{}, fmt.Errorf("catalog skill %s: spec is not an object: %w", item.ID, err)
 		}
 	}
-	pkg, err := k.catalogPackage(ctx, spec, item.RegistryWorkspaceID)
+	pkg, err := k.catalogPackage(ctx, spec, item.RegistryWorkspaceID, "")
 	if err != nil {
 		return domain.Skill{}, err
 	}
@@ -142,8 +142,8 @@ func specOr(spec map[string]any, key, fallback string) string {
 }
 
 // catalogPackage is store_catalog_item: a mirrored package as it is, a GitHub
-// pointer fetched at its pin, an inline body as SKILL.md, a legacy package copied.
-func (k *Skills) catalogPackage(ctx context.Context, spec map[string]any, registryWS *string) (catalogPackage, error) {
+// pointer fetched at its pin (as token, when set), an inline body as SKILL.md, a legacy package copied.
+func (k *Skills) catalogPackage(ctx context.Context, spec map[string]any, registryWS *string, token string) (catalogPackage, error) {
 	area := domain.SkillCatalogArea(registryWS)
 	source, _ := spec["source"].(map[string]any)
 	if mirrored, ok := spec["package"].(map[string]any); ok {
@@ -163,7 +163,7 @@ func (k *Skills) catalogPackage(ctx context.Context, spec map[string]any, regist
 		return p, nil
 	}
 	if source != nil && source["type"] == "github" {
-		return k.githubPackage(ctx, source, area)
+		return k.githubPackage(ctx, source, area, token)
 	}
 	if content := specString(spec, "content", true); content != nil {
 		s3, err := k.storeChecked(ctx, area, domain.SkillFiles{{Path: domain.SkillManifest, Data: []byte(*content)}})
@@ -186,7 +186,7 @@ func (k *Skills) catalogPackage(ctx context.Context, spec map[string]any, regist
 }
 
 // githubPackage is _store_github_source without its process caches.
-func (k *Skills) githubPackage(ctx context.Context, source map[string]any, area string) (catalogPackage, error) {
+func (k *Skills) githubPackage(ctx context.Context, source map[string]any, area, token string) (catalogPackage, error) {
 	repo, ok := source["repo"].(string)
 	if !ok || repo == "" {
 		return catalogPackage{}, &domain.SkillValueError{Msg: "Catalog skill's GitHub source names no repo"}
@@ -195,7 +195,7 @@ func (k *Skills) githubPackage(ctx context.Context, source map[string]any, area 
 	if p, ok := source["path"].(string); ok {
 		path = strings.Trim(p, "/")
 	}
-	folder, err := k.items.Folder(ctx, repo, path, specString(source, "ref", false), specString(source, "tree_sha", true))
+	folder, err := k.items.Folder(ctx, token, repo, path, specString(source, "ref", false), specString(source, "tree_sha", true))
 	var fe *catalogapi.FolderError
 	if errors.As(err, &fe) {
 		kind := domain.SkillGitHubOther

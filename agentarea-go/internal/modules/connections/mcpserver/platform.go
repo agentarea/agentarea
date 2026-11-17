@@ -37,6 +37,7 @@ type Platform struct {
 	info     Info
 	auth     Auth
 	toolsets []mcpserve.Toolset
+	events   *Events
 	log      *slog.Logger
 }
 
@@ -73,7 +74,7 @@ func (p *Platform) Toolsets() []string {
 // Handler serves mount: MountSpan, or MountPinned with the workspace in the
 // chi route parameter "workspace".
 func (p *Platform) Handler(mount string) http.Handler {
-	endpoint := &Endpoint{Info: p.info, Log: p.log, Backend: p.backend}
+	endpoint := &Endpoint{Info: p.info, Log: p.log, Backend: p.backend, Events: p.eventsHandler()}
 	prefix := strings.Trim(strings.TrimSuffix(mount, "/{workspace}"), "/")
 	authed := p.auth.Wrap(endpoint, func(r *http.Request) Mount {
 		if !p.pinned(mount) {

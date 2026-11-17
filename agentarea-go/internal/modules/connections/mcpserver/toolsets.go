@@ -52,6 +52,16 @@ type Providers struct {
 	Files sandboxapi.Files
 	// Slugs names a workspace entered by id alone (a run's), for the URLs tools return.
 	Slugs identityapi.WorkspaceSlugs
+	// MCPEvents serves the streams as the MCP Events extension of the platform mounts.
+	MCPEvents streamsapi.MCPEvents
+}
+
+// EventsServer is the events extension over MCPEvents, nil when streams or members are not served.
+func (p Providers) EventsServer() *Events {
+	if p.MCPEvents == nil || p.Members == nil {
+		return nil
+	}
+	return &Events{Server: p.MCPEvents, Members: p.Members}
 }
 
 // toolsetSpec is one platform toolset: its @toolset metadata, whether its

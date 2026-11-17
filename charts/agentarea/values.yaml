@@ -25,7 +25,11 @@ telemetry:
 # Global configuration shared across all components
 global:
   # Edition and deployment info
-  edition: "community"
+  # -- Edition the platform reports (AGENTAREA_EDITION): oss or enterprise.
+  edition: "oss"
+  # -- Currency spend caps count and tool costs are declared in (ISO 4217,
+  # AGENTAREA_SPEND_CURRENCY). Enterprise: billing's ledger currency.
+  spendCurrency: "USD"
   version: "0.0.3"
   
   # Cluster configuration
@@ -740,9 +744,11 @@ mcpManager:
       repository: agentarea/agentarea-mcp-base
       tag: ""  # Defaults to the chart appVersion
   packageImages:
-    # -- Registry repository where immutable images built from npm/PyPI packages
-    # are stored. Leave empty to use the local Docker daemon with the Docker
-    # backend; Kubernetes and data-plane backends require a repository.
+    # -- (required) Registry repository where immutable images built from npm/PyPI
+    # packages are stored, e.g. `registry.example.com/agentarea/mcp-packages`. The
+    # chart runs the Kubernetes or data-plane backend, which pull these images from
+    # a registry: with it empty the backend, worker and mcp-manager refuse to
+    # start. Only the Docker backend (compose) keeps them in the local daemon.
     repository: ""
     # -- Existing dockerconfigjson Secret used to authenticate package-image
     # registry lookups and pushes. The Secret is mounted read-only in the manager.
@@ -1320,6 +1326,27 @@ registryReconcile:
     - name: system-source-types
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/source-types.json
       recommendation_priority: 10
+
+# Operator (`agentarea operator`): reconciles the LLMProviderConfig,
+# PlatformConnection and PlatformEgressExit resources (CRDs in crds/) declared
+# in any namespace into the platform's providers, connections and egress exits.
+# Off by default: an install without GitOps-declared providers does not need it.
+operator:
+  enabled: false
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+  # -- Namespaces besides the release namespace whose Secrets the operator may read
+  # (a resource's apiKeySecretRef/tokenSecretRef resolve in its own namespace).
+  secretNamespaces: []
+  resources: {}
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
 
 # OpenFGA ReBAC permission server: the authorization graph backend.
 openfga:

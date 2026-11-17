@@ -168,9 +168,12 @@ type Settings struct {
 	MaxAttempts    int
 	BatchMaxEvents int
 	WebhookRate    int
+	// Retention is AGENTAREA_EVENT_RETENTION: how far back the events read model reaches.
+	Retention time.Duration
 }
 
 // DefaultSettings are Python's defaults.
 func DefaultSettings() Settings {
-	return Settings{Partitions: 16, WriteQuota: 600, ForwardDepth: 8, MaxAttempts: 10, BatchMaxEvents: 100, WebhookRate: 100}
+	return Settings{Partitions: 16, WriteQuota: 600, ForwardDepth: 8, MaxAttempts: 10, BatchMaxEvents: 100, WebhookRate: 100,
+		Retention: 7 * 24 * time.Hour}
 }

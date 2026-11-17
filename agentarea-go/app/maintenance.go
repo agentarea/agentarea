@@ -243,6 +243,9 @@ func reportSkillJob(results []agentsservice.SkillJobResult, none string) string 
 	counts := map[string]int{}
 	for _, r := range results {
 		line := fmt.Sprintf("%s  %s/%s  %s", r.Status, r.WorkspaceID, r.SkillID, r.Name)
+		if r.SourceURL != nil && *r.SourceURL != "" {
+			line += "  " + *r.SourceURL
+		}
 		if r.Error != nil && *r.Error != "" {
 			line += ": " + *r.Error
 		}

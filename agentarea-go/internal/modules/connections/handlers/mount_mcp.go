@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/mcpserve"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/mcpserver"
+	streamsapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/api"
 )
 
 // mountMCP routes the platform MCP server (/mcp spanning the caller's
@@ -26,8 +28,10 @@ func mountMCP(g group) {
 
 	span := mcpserver.NewPlatform(true, info, auth, log)
 	span.Register(g.ports.MCPToolsets...)
+	span.UseEvents(g.ports.Events)
 	pinned := mcpserver.NewPlatform(false, info, auth, log)
 	pinned.Register(g.ports.MCPToolsets...)
+	pinned.UseEvents(g.ports.Events)
 
 	mcpHandle(g.r, mcpserve.MountPinned, pinned.Handler(mcpserve.MountPinned))
 	if svc.ClientEndpointReady() {
@@ -59,6 +63,18 @@ func mcpClientEndpoint(g group, platform *mcpserver.Platform) func(prefix string
 		}
 		return svc.ClientEndpoint(r.Context(), p, chi.URLParam(r, "client_id"), g.e.Gate.EnterWorkspace, platform)
 	}}
+	if ev := g.ports.Events; ev != nil {
+		endpoint.Events = &mcpserver.EventsHandler{Server: ev.Server, Scope: func(r *http.Request) (streamsapi.EventsScope, error) {
+			p, ok := authn.PrincipalFrom(r.Context())
+			if !ok {
+				return nil, authn.ErrNoPrincipal
+			}
+			clientID := chi.URLParam(r, "client_id")
+			return mcpserver.ClientEventsScope(func(ctx context.Context) (authn.Caller, bool, error) {
+				return svc.ClientCaller(ctx, p, clientID, g.e.Gate.EnterWorkspace)
+			}), nil
+		}}
+	}
 	auth := mcpserver.Auth{Gate: g.e.Gate, APIURL: svc.APIURL(), AdmitTurn: true, Log: svc.Log()}
 	return func(prefix string) http.Handler {
 		resource := strings.Trim(prefix, "/")

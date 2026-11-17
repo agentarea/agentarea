@@ -1,7 +1,7 @@
 // Package replies is the delivery group on tasks.events (ADR-0043 §7): each task event goes to
 // where its task replies — the chat or mailbox it came from (its delivery address) and the
-// caller's task webhook — through the sender the target names (http, telegram_live, smtp,
-// task_webhook). A target is marked delivered only after its send succeeded; the message is
+// caller's task webhook and A2A push configs — through the sender the target names (http,
+// telegram_live, smtp, task_webhook, a2a_webhook). A target is marked delivered only after its send succeeded; the message is
 // acknowledged once every target is delivered or dead-lettered.
 package replies
 
@@ -56,8 +56,9 @@ func IsFatal(err error) bool {
 	return errors.As(err, &f)
 }
 
-// Targets is delivery_targets: the task's delivery address and its task webhook. A delivery
-// address without type or sender is logged by the caller and left out.
+// Targets is delivery_targets: the task's delivery address, its task webhook and its A2A push
+// configs. A delivery address without type or sender, or a push config without id or url, is
+// logged by the caller and left out.
 func Targets(task runsapi.OutcomeTask) ([]Target, []string) {
 	var out []Target
 	var malformed []string
@@ -84,7 +85,8 @@ func Targets(task runsapi.OutcomeTask) ([]Target, []string) {
 			})
 		}
 	}
-	return out, malformed
+	push, bad := pushTargets(task.Parameters)
+	return append(out, push...), append(malformed, bad...)
 }
 
 // CanonicalType strips the workflow. prefix an older publisher put on the wire.

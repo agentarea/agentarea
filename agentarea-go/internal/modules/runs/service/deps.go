@@ -270,6 +270,8 @@ type Deps struct {
 	Skills      SkillPackages
 	Runner      RunnerSocket
 	Models      modelsapi.Caller
+	// CatalogAgents runs a catalog agent the workspace has not installed from its definition.
+	CatalogAgents agentsapi.CatalogRuns
 	// Describer and Decider serve the model calls made outside a run (OneShotModels).
 	Describer modelsapi.Describer
 	Decider   modelsapi.Decider

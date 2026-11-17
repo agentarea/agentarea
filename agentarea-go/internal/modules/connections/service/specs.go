@@ -124,17 +124,10 @@ func refusalOrErr(refusal string, err error) error {
 	return nil
 }
 
-// serverEgressRefusal is _server_egress_refusal in an edition without exits.
-func serverEgressRefusal(sp catalogapi.MCPSpec) error {
-	spec := sp.JSONSpec
-	if !domain.EgressRequired(spec) {
-		return nil
-	}
-	t, _ := domain.ServerTransportSpec(spec, sp.RemoteURL, sp.Cmd, sp.DockerImageURL)["type"].(string)
-	if !domain.IsContainer(t) {
-		return domain.Refused(domain.EgressSpecKey + " applies to docker and command servers only")
-	}
-	return domain.Refused(domain.EgressExitsUnsupported)
+// serverEgressRefusal is _server_egress_refusal.
+func (s *Service) serverEgressRefusal(sp catalogapi.MCPSpec) error {
+	t, _ := domain.ServerTransportSpec(sp.JSONSpec, sp.RemoteURL, sp.Cmd, sp.DockerImageURL)["type"].(string)
+	return s.egressRequirementRefusal(sp.JSONSpec, t)
 }
 
 // CreateSpec is create_mcp_server, then the route's owner grant.
@@ -149,7 +142,7 @@ func (s *Service) CreateSpec(ctx context.Context, c authn.Caller, n catalogapi.M
 	if domain.CarriesSecretRef(n.JSONSpec) {
 		return catalogapi.MCPSpec{}, domain.Refused(specReferenceRefusal)
 	}
-	if err := serverEgressRefusal(catalogapi.MCPSpec{JSONSpec: n.JSONSpec, RemoteURL: n.RemoteURL, Cmd: n.Cmd,
+	if err := s.serverEgressRefusal(catalogapi.MCPSpec{JSONSpec: n.JSONSpec, RemoteURL: n.RemoteURL, Cmd: n.Cmd,
 		DockerImageURL: n.DockerImageURL}); err != nil {
 		return catalogapi.MCPSpec{}, err
 	}
@@ -158,7 +151,7 @@ func (s *Service) CreateSpec(ctx context.Context, c authn.Caller, n catalogapi.M
 		if sp, err = specs.Create(ctx, tx, c.UserID, n); err != nil {
 			return err
 		}
-		return s.auditSpec(ctx, tx, c, "mcp_server.create", sp.ID)
+		return s.auditWrite(ctx, tx, c, "mcp_server.create", "mcp_server", sp.ID)
 	})
 	if err != nil {
 		return catalogapi.MCPSpec{}, err
@@ -197,7 +190,7 @@ func (s *Service) UpdateSpec(ctx context.Context, c authn.Caller, ident string, 
 		}
 	}
 	if touched {
-		if err := serverEgressRefusal(next); err != nil {
+		if err := s.serverEgressRefusal(next); err != nil {
 			return catalogapi.MCPSpec{}, err
 		}
 	}
@@ -216,7 +209,7 @@ func (s *Service) UpdateSpec(ctx context.Context, c authn.Caller, ident string, 
 		if !ok {
 			return ErrSpecNotFound()
 		}
-		return s.auditSpec(ctx, tx, c, "mcp_server.update", id)
+		return s.auditWrite(ctx, tx, c, "mcp_server.update", "mcp_server", id)
 	})
 	return out, err
 }
@@ -364,7 +357,7 @@ func (s *Service) DeleteSpec(ctx context.Context, c authn.Caller, ident string) 
 		if !ok {
 			return ErrSpecNotFound()
 		}
-		return s.auditSpec(ctx, tx, c, "mcp_server.delete", id)
+		return s.auditWrite(ctx, tx, c, "mcp_server.delete", "mcp_server", id)
 	})
 }
 
@@ -391,13 +384,26 @@ func (s *Service) DeploySpec(ctx context.Context, c authn.Caller, ident string) 
 	return out, err
 }
 
-// auditSpec is @audited on the spec writes, in their transaction.
-func (s *Service) auditSpec(ctx context.Context, tx db.Session, c authn.Caller, action, id string) error {
+// auditWrite is @audited on the spec and instance writes, in their
+// transaction, with the caller's credential as AuditService._build adds it.
+func (s *Service) auditWrite(ctx context.Context, tx db.Session, c authn.Caller, action, resourceType, id string) error {
 	if s.d.Audit == nil {
 		return errors.New("connections: " + action + " cannot be audited: no audit writer")
 	}
+	meta := map[string]any{}
+	if cr := c.Credential; cr != nil {
+		meta["credential"] = string(cr.Kind)
+		meta["surface"] = string(cr.Surface)
+		if cr.KeyID != "" {
+			key := "api_key_id"
+			if cr.Kind == authn.KindTurn {
+				key = "turn_id"
+			}
+			meta[key] = cr.KeyID
+		}
+	}
 	return s.d.Audit.RecordOnce(ctx, tx, governanceapi.AuditRecord{
-		EventID: s.d.NewID().String(), Action: action, ResourceType: "mcp_server", ResourceID: id,
-		ActorType: "user", ActorID: c.UserID,
+		EventID: s.d.NewID().String(), Action: action, ResourceType: resourceType, ResourceID: id,
+		ActorType: "user", ActorID: c.UserID, Metadata: meta,
 	})
 }

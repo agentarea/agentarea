@@ -97,7 +97,7 @@ func (s *Service) RunTools(ctx context.Context, req api.RunToolsRequest) (api.Ru
 		case "openapi":
 			err = s.openAPITools(ctx, ws, req.Agent, r, c)
 		case "agent":
-			// Local delegates are runs'; a remote A2A delegate is not offered yet (PORTING-NOTES).
+			// Delegates, local and remote, are offered by runs.
 		default:
 			s.d.Log.WarnContext(ctx, "unknown tool type", "type", c.Type, "name", c.Name)
 		}

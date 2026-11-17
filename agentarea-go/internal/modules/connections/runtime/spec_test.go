@@ -136,12 +136,51 @@ func TestSpecHookSeesTheEgressExitTheSpecNames(t *testing.T) {
 		t.Fatalf("hook saw %q", seen)
 	}
 	for _, bad := range []any{42, []any{"client-x"}} {
-		if _, err := build(t, d, map[string]any{"type": "command", "command": "x", "egress_exit": bad}); err == nil || !strings.Contains(err.Error(), "egress_exit") {
+		if _, err := build(t, d, map[string]any{"type": "command", "command": "x", "egress_exit": bad}); err == nil || !strings.Contains(err.Error(), "json_spec.egress_exit must be an egress exit id") {
 			t.Fatalf("egress_exit %#v: %v", bad, err)
 		}
 	}
 	if raw, _ := json.Marshal(workload.Spec{EgressExit: "client-x"}); strings.Contains(string(raw), "client-x") {
 		t.Fatal("the exit reached the wire spec")
+	}
+}
+
+// The egress hook leaves through the default exit when the merged spec
+// requires one; a malformed requirement stops the start before the hook, as
+// the mcp-manager overlay refused it (go/internal/egress egressRequired).
+func TestSpecHookSeesWhetherTheSpecRequiresAnExit(t *testing.T) {
+	d := testDeps(&fakeBackend{}, time.Second)
+	var seen []bool
+	d.SpecHook = func(_ context.Context, _, _ string, s *workload.Spec) error {
+		seen = append(seen, s.EgressRequired)
+		return nil
+	}
+	for _, egress := range []any{map[string]any{"required": true}, map[string]any{"required": false}, nil} {
+		if _, err := build(t, d, map[string]any{"type": "command", "command": "x", "egress": egress}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := build(t, d, map[string]any{"type": "command", "command": "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(seen, []bool{true, false, false, false}) {
+		t.Fatalf("hook saw %v", seen)
+	}
+	for name, bad := range map[string]any{
+		"a string": "yes", "a bool": true, "a list": []any{true},
+		"required not a bool": map[string]any{"required": "true"}, "required missing": map[string]any{},
+		"unknown key": map[string]any{"required": true, "region": "se"},
+	} {
+		_, err := build(t, d, map[string]any{"type": "command", "command": "x", "egress": bad})
+		if err == nil || !strings.Contains(err.Error(), "json_spec.egress") {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	if len(seen) != 4 {
+		t.Fatal("the hook ran for a malformed requirement")
+	}
+	if raw, _ := json.Marshal(workload.Spec{EgressRequired: true}); strings.Contains(string(raw), "egress") {
+		t.Fatal("the requirement reached the wire spec")
 	}
 }
 

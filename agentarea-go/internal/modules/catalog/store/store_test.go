@@ -131,10 +131,20 @@ func TestRegistryVisibilityAndCopiedFields(t *testing.T) {
 func TestBrowseFacetsAndSearch(t *testing.T) {
 	ctx := context.Background()
 	pool := openPool(t)
-	s := session(t, pool)
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
+	id := uuid.NewString()
+	ws, err := scope.NewWorkspace(id, "ws-"+id[:8])
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := db.NewTxSession(ws, tx)
 	now := time.Now()
 	st := Registries{}
-	if _, err := pool.Exec(ctx, `DELETE FROM registries WHERE registry_type = 'mcp_servers'`); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM registries WHERE registry_type = 'mcp_servers'`); err != nil {
 		t.Fatal(err)
 	}
 	r, err := st.Create(ctx, s, domain.NewRegistry{

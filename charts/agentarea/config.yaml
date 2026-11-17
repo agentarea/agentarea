@@ -182,7 +182,12 @@ groups:
       AGENTAREA_APP_URL: '{{ include "agentarea.frontendUrl" . }}'
       AGENTAREA_ANALYTICS_ENABLED: '{{ .Values.global.analytics.enabled }}'
 
+  # Every platform role reads these; an enterprise process refuses to start
+  # when the spend currency differs from billing's ledger currency.
   application:
+    configVars:
+      AGENTAREA_EDITION: '{{ .Values.global.edition }}'
+      AGENTAREA_SPEND_CURRENCY: '{{ .Values.global.spendCurrency }}'
     secrets:
       - name: AGENTAREA_SECRET_ENCRYPTION_KEY
         secretName: '{{ .Values.global.secrets.application }}'

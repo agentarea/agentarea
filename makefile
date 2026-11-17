@@ -26,20 +26,17 @@ help: ## Display this help message
 check: check-backend check-frontend check-jwks-perms ## Every non-DB check across all stacks
 	@echo "$(GREEN)All checks passed$(NC)"
 
-check-backend: ## Platform + openapi drift, MCP manager, event service, operator
-	$(MAKE) -C agentarea-platform check
+check-backend: ## Go platform (incl. the runner images' binaries), openapi drift
+	$(MAKE) -C agentarea-go check
 	$(MAKE) -C agentarea-platform openapi-drift
-	$(MAKE) -C agentarea-mcp-manager check
-	$(MAKE) -C agentarea-event-service check
-	$(MAKE) -C agentarea-operator check
 
 check-frontend: ## Webapp (lint, types, tests, client drift, build) + CLI
 	pnpm -C agentarea-webapp run check
 	pnpm -C agentarea-webapp run check:integration
 	pnpm -C agentarea-cli run check
 
-check-db: ## Migrations roundtrip + schema-backed suites (needs AGENTAREA_DB_*; see db-test-up)
-	$(MAKE) -C agentarea-platform check-db
+check-db: ## Migrations + schema-backed suites (needs AGENTAREA_DB_TEST_URL; see db-test-up)
+	$(MAKE) -C agentarea-go check-db
 
 check-jwks-perms: ## Kratos JWKS stays container-readable, config/auth host-private (#481)
 	@bash scripts/check-jwks-perms.sh
@@ -57,7 +54,7 @@ db-test-up: ## Start a throwaway Postgres (tmpfs) for check-db and print its env
 		sleep 1; \
 	done; \
 	docker exec $(DB_TEST_CONTAINER) pg_isready -U postgres -d agentarea_test >/dev/null || { echo "Postgres did not become ready" >&2; exit 1; }
-	@echo "export AGENTAREA_DB_HOST=localhost AGENTAREA_DB_PORT=$(DB_TEST_PORT) AGENTAREA_DB_USER=postgres AGENTAREA_DB_PASSWORD=postgres AGENTAREA_DB_NAME=agentarea_test"
+	@echo "export AGENTAREA_DB_TEST_URL=postgres://postgres:postgres@localhost:$(DB_TEST_PORT)/agentarea_test?sslmode=disable"
 
 db-test-down: ## Remove the check-db Postgres
 	docker rm -f $(DB_TEST_CONTAINER)
@@ -90,16 +87,16 @@ agentarea-platform-format: ## Format platform Python code
 agentarea-platform-sync: ## Sync platform dependencies
 	cd agentarea-platform && uv sync --all-packages
 
-##@ Development - Go MCP Manager
+##@ Development - Go platform
 
-build-go: ## Build Go MCP manager
-	$(MAKE) -C agentarea-mcp-manager build
+build-go: ## Build the Go platform binary
+	$(MAKE) -C agentarea-go build
 
-lint-go: ## Lint Go code
-	$(MAKE) -C agentarea-mcp-manager lint
+lint-go: ## Lint the Go platform
+	$(MAKE) -C agentarea-go lint
 
-test-go: ## Run Go tests
-	$(MAKE) -C agentarea-mcp-manager test
+test-go: ## Run the Go platform tests
+	$(MAKE) -C agentarea-go test
 
 ##@ Docker - Development Environment
 

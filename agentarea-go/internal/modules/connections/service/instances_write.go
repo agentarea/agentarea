@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -17,6 +18,7 @@ import (
 	catalogapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/catalog/api"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/domain"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/store"
+	governanceapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/governance/api"
 )
 
 // InstanceCreate is MCPServerInstanceCreate, validated. An empty
@@ -127,7 +129,7 @@ func (s *Service) checkSpec(ctx context.Context, c authn.Caller, spec catalogapi
 	if in.ContextSecret != nil && *in.ContextSecret != "" && t != domain.TransportURL {
 		return createPlan{}, domain.Refused("context_secret applies to URL instances only")
 	}
-	if err := egressExitRefusal(submitted, t); err != nil {
+	if err := s.egressExitRefusal(ctx, c, submitted, t); err != nil {
 		return createPlan{}, err
 	}
 	own := map[string]any{}
@@ -137,11 +139,8 @@ func (s *Service) checkSpec(ctx context.Context, c authn.Caller, spec catalogapi
 		}
 	}
 	merged := domain.MergeTransportSpec(transportSpec, own, t)
-	if domain.EgressRequired(merged) {
-		if !domain.IsContainer(t) {
-			return createPlan{}, domain.Refused(domain.EgressSpecKey + " applies to docker and command servers only")
-		}
-		return createPlan{}, domain.Refused(domain.EgressExitsUnsupported)
+	if err := s.egressRequirementRefusal(merged, t); err != nil {
+		return createPlan{}, err
 	}
 	if t == domain.TransportDocker && domain.ImageServesStdio(merged) {
 		return createPlan{}, domain.Refused(fmt.Sprintf("Image '%v' speaks stdio; an image runs only when it serves MCP "+
@@ -168,15 +167,40 @@ func (s *Service) checkSpec(ctx context.Context, c authn.Caller, spec catalogapi
 	return createPlan{spec: spec, transport: t, stored: stored, secrets: secrets, refs: refs}, nil
 }
 
-// egressExitRefusal is _assert_may_bind_egress_exit in an edition without exits.
-func egressExitRefusal(spec map[string]any, transport string) error {
+// egressExitRefusal is _assert_may_bind_egress_exit: an instance leaves
+// through an exit of its workspace, or the platform's.
+func (s *Service) egressExitRefusal(ctx context.Context, c authn.Caller, spec map[string]any, transport string) error {
 	if spec[domain.EgressExitSpecKey] == nil {
 		return nil
 	}
 	if !domain.IsContainer(transport) {
 		return domain.Refused(domain.EgressExitSpecKey + " applies to docker and command instances only")
 	}
-	return domain.Refused(domain.EgressExitsUnsupported)
+	if s.d.EgressExits == nil {
+		return domain.Refused(domain.EgressExitsUnsupported)
+	}
+	exitID, _ := spec[domain.EgressExitSpecKey].(string)
+	err := s.d.EgressExits.RequireBindable(ctx, c, exitID)
+	var nf *governanceapi.EgressExitNotFoundError
+	if errors.As(err, &nf) {
+		return domain.Refused(nf.Error())
+	}
+	return err
+}
+
+// egressRequirementRefusal is _egress_requirement_refusal: a workload that
+// must leave through an exit runs only where one is sealed for it.
+func (s *Service) egressRequirementRefusal(spec map[string]any, transport string) error {
+	if !domain.EgressRequired(spec) {
+		return nil
+	}
+	if !domain.IsContainer(transport) {
+		return domain.Refused(domain.EgressSpecKey + " applies to docker and command servers only")
+	}
+	if s.d.EgressExits == nil {
+		return domain.Refused(domain.EgressExitsUnsupported)
+	}
+	return nil
 }
 
 func contains(list []string, s string) bool {
@@ -281,6 +305,9 @@ func (s *Service) createInstance(ctx context.Context, c authn.Caller, in Instanc
 				return err
 			}
 		}
+		if err := s.auditWrite(ctx, tx, c, "mcp_instance.create", "mcp_instance", inst.ID); err != nil {
+			return err
+		}
 		return events.Publish(ctx, tx, c.UserID, events.NewEnvelope(EventInstanceCreated, map[string]any{
 			"instance_id": inst.ID, "server_spec_id": spec.ID, "name": inst.Name, "json_spec": plan.stored,
 		}))
@@ -367,7 +394,7 @@ func (s *Service) planSpecUpdate(ctx context.Context, c authn.Caller, inst domai
 		return specUpdate{}, false, domain.Refused(e)
 	}
 	if !reflect.DeepEqual(spec[domain.EgressExitSpecKey], inst.JSONSpec[domain.EgressExitSpecKey]) {
-		if err := egressExitRefusal(spec, inst.Transport); err != nil {
+		if err := s.egressExitRefusal(ctx, c, spec, inst.Transport); err != nil {
 			return specUpdate{}, false, err
 		}
 	}
@@ -492,6 +519,9 @@ func (s *Service) UpdateInstance(ctx context.Context, c authn.Caller, id uuid.UU
 		} else if !ok {
 			return ErrInstanceNotFound()
 		}
+		if err := s.auditWrite(ctx, tx, c, "mcp_instance.update", "mcp_instance", cur.ID); err != nil {
+			return err
+		}
 		return events.Publish(ctx, tx, c.UserID, events.NewEnvelope(EventInstanceUpdated, map[string]any{
 			"instance_id": cur.ID, "server_spec_id": cur.ServerSpecID, "name": patch.Name, "status": cur.Verification.Status,
 		}))
@@ -556,6 +586,9 @@ func (s *Service) DeleteInstance(ctx context.Context, c authn.Caller, id uuid.UU
 			return err
 		} else if !ok {
 			return ErrInstanceNotFound()
+		}
+		if err := s.auditWrite(ctx, tx, c, "mcp_instance.delete", "mcp_instance", cur.ID); err != nil {
+			return err
 		}
 		return events.Publish(ctx, tx, c.UserID, events.NewEnvelope(EventInstanceDeleted, map[string]any{"instance_id": cur.ID}))
 	})

@@ -72,4 +72,6 @@ func StreamsLiveChannel(workspaceID string) string { return StreamsLive + "." + 
 func DomainEventsTopic(eventType string) string { return DomainEvents + "." + eventType }
 
 // ExternalRetryTopic is where a webhook delivery waits for its attempt-th retry.
-func ExternalRetryTopic(attempt int) string { return ExternalEvents + ".retry." + strconv.Itoa(attempt) }
+func ExternalRetryTopic(attempt int) string {
+	return ExternalEvents + ".retry." + strconv.Itoa(attempt)
+}

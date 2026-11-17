@@ -135,9 +135,9 @@ func WithToolBilling(f Factory[ToolBilling]) Option {
 	return func(s *Set) { single(s, "tool_billing", &s.ToolBilling, f) }
 }
 
-// WithEgressExits replaces entry point "egress_exits" (presence enables the
-// egress exits API; absence answers 404 and no instance may bind an exit) and
-// the EgressEnforcer swap of ports/egress_enforcer.py.
+// WithEgressExits replaces entry point "egress_exits": present, the core
+// serves the egress exits API and lets an instance bind an exit or its server
+// require one; absent, the API answers 404 and both are refused.
 func WithEgressExits(f Factory[EgressExits]) Option {
 	return func(s *Set) { single(s, "egress_exits", &s.EgressExits, f) }
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authz"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/scope"
+	ksecrets "github.com/agentarea/agentarea/agentarea-go/internal/kernel/secrets"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/agents/domain"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/agents/store"
 	govapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/governance/api"
@@ -61,6 +62,16 @@ type Presence interface {
 	Online(ctx context.Context, clientIDs []string) (map[string]bool, error)
 }
 
+// WalletCredentials deletes the secret holding an agent's wallet keys (wallet module).
+type WalletCredentials interface {
+	DeleteCredentials(ctx context.Context, s db.Session, userID, agentID string) error
+}
+
+// DelegateSecrets finds a workspace secret by name (find_secret); false when there is none.
+type DelegateSecrets interface {
+	SecretNamed(ctx context.Context, ws scope.Workspace, name string) (ksecrets.Secret, bool, error)
+}
+
 // UnwiredError is a feature whose owner module is not ported yet.
 type UnwiredError struct{ Feature string }
 
@@ -76,6 +87,10 @@ type Deps struct {
 	Presence    Presence
 	CodeTools   CodeTools
 	Triggers    AgentTriggers
+	// Wallets deletes a deleted agent's wallet keys; nil leaves them.
+	Wallets WalletCredentials
+	// Secrets finds the secret a remote delegate is bound to; nil answers 501 for binding one.
+	Secrets DelegateSecrets
 	// A2AAgentURL is AGENTAREA_A2A_AGENT_URL with its {agent_id} placeholder; empty leaves a2a_url null.
 	A2AAgentURL string
 	// Audit writes audit rows in the request's transaction; nil leaves them unwritten.

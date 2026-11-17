@@ -56,7 +56,7 @@ func (s *Service) ResolveRunConfig(ctx context.Context, p Principal, in ResolveI
 		return api.RunConfig{}, errors.New("the run settings (outage wait, skills window share) are not configured")
 	}
 	defs := s.d.Definitions
-	def, agent, err := s.agent(ctx, p, p.AgentID)
+	def, agent, err := s.runAgent(ctx, p, p.AgentID)
 	if err != nil {
 		return api.RunConfig{}, definitionFailure("AgentNotFoundError", "Agent "+p.AgentID+" not found", err)
 	}
@@ -101,7 +101,7 @@ func (s *Service) ResolveRunConfig(ctx context.Context, p Principal, in ResolveI
 	if err := reservedNames(cfg.Tools); err != nil {
 		return api.RunConfig{}, err
 	}
-	if cfg.Delegates, err = s.delegates(ctx, p, agent); err != nil {
+	if err := s.addDelegates(ctx, p, &cfg); err != nil {
 		return api.RunConfig{}, err
 	}
 	manifest, err := s.d.Runtime.Manifest(ctx)
@@ -181,22 +181,90 @@ func reservedNames(tools []api.ToolDefinition) error {
 	return nil
 }
 
-// delegates are the local agents the run may delegate to, by tool name.
-func (s *Service) delegates(ctx context.Context, p Principal, agent api.AgentSpec) (map[string]api.Delegate, error) {
-	out := map[string]api.Delegate{}
-	for _, t := range agent.Tools {
-		if t.Type != "agent" || t.Settings.DelegateAgentID == "" || t.Settings.A2AURL != "" {
+// addDelegates offers the model a tool per delegate (AgentToolBuilder,
+// resolve_agent_tools_activity): a local one the agent it was saved with, unless archived
+// or gone; a remote one reached at its a2a_url.
+func (s *Service) addDelegates(ctx context.Context, p Principal, cfg *api.RunConfig) error {
+	cfg.Delegates = map[string]api.Delegate{}
+	for _, t := range cfg.Agent.Tools {
+		if t.Type != "agent" {
 			continue
 		}
-		_, d, err := s.agent(ctx, p, t.Settings.DelegateAgentID)
+		if t.Settings.A2AURL != "" {
+			if err := addRemoteDelegate(cfg, t); err != nil {
+				return err
+			}
+			continue
+		}
+		if t.Settings.DelegateAgentID == "" {
+			continue
+		}
+		def, d, err := s.agent(ctx, p, t.Settings.DelegateAgentID)
 		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrRefused) {
 			s.d.Log.WarnContext(ctx, "delegate agent is not available", "agent_id", t.Settings.DelegateAgentID, "error", err)
 			continue
 		}
 		if err != nil {
-			return nil, err
+			return err
 		}
-		out[domain.DelegateToolName(t.Name)] = api.Delegate{AgentID: t.Settings.DelegateAgentID, AgentName: t.Name, Description: d.Description}
+		if def.Archived {
+			s.d.Log.WarnContext(ctx, "delegate agent is archived", "agent_id", t.Settings.DelegateAgentID, "delegate", t.Name)
+			continue
+		}
+		name := domain.DelegateToolName(t.Name)
+		if _, taken := cfg.Bindings[name]; taken {
+			return nonRetryable("ToolResolutionError", fmt.Sprintf("delegate %q and another tool of the agent are both offered to the model as %q; rename one", t.Name, name), nil)
+		}
+		desc := firstOf(t.Settings.DescriptionOverride, d.Description, "Agent: "+t.Name)
+		cfg.Delegates[name] = api.Delegate{AgentID: t.Settings.DelegateAgentID, AgentName: t.Name, Description: desc}
+		tool := delegateTool(name, t.Name, desc)
+		cfg.Tools = append(cfg.Tools, tool)
+		cfg.ToolProviders = append(cfg.ToolProviders, api.ToolProvider{Name: t.Name, ProviderType: "agent", Description: "Agent: " + t.Name, Tools: []api.ToolDefinition{tool}})
 	}
-	return out, nil
+	return nil
+}
+
+// addRemoteDelegate is the A2A binding of a delegate (A2AAgentTool): its tool runs on the
+// remote_agent caller.
+func addRemoteDelegate(cfg *api.RunConfig, t api.ToolConfig) error {
+	name := domain.DelegateToolName(t.Name)
+	if _, taken := cfg.Bindings[name]; taken {
+		return nonRetryable("ToolResolutionError", fmt.Sprintf("delegate %q and another tool of the agent are both offered to the model as %q; rename one", t.Name, name), nil)
+	}
+	tool := delegateTool(name, t.Name, firstOf(t.Settings.DescriptionOverride, "Remote agent: "+t.Name))
+	if cfg.Bindings == nil {
+		cfg.Bindings = map[string]api.ToolBinding{}
+	}
+	cfg.Bindings[name] = api.ToolBinding{Source: "remote_agent", PolicyNames: []string{"a2a:" + t.Settings.A2AURL},
+		RemoteAgent: &api.RemoteAgentBinding{AgentName: t.Name, A2AURL: t.Settings.A2AURL, AuthSecretName: t.Settings.AuthSecretName}}
+	cfg.Tools = append(cfg.Tools, tool)
+	cfg.ToolProviders = append(cfg.ToolProviders, api.ToolProvider{Name: t.Name, ProviderType: "agent", Description: "Agent: " + t.Name, Tools: []api.ToolDefinition{tool}})
+	return nil
+}
+
+// delegateTool is AgentDelegationTool's function definition.
+func delegateTool(name, agentName, desc string) api.ToolDefinition {
+	return api.ToolDefinition{
+		Name:        name,
+		Description: fmt.Sprintf("Delegate a task to the '%s' agent. %s", agentName, desc),
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"message": map[string]any{
+					"type":        "string",
+					"description": fmt.Sprintf("The task or question to send to the '%s' agent. Be specific and provide all necessary context.", agentName),
+				},
+			},
+			"required": []any{"message"},
+		},
+	}
+}
+
+func firstOf(xs ...string) string {
+	for _, x := range xs {
+		if x != "" {
+			return x
+		}
+	}
+	return ""
 }

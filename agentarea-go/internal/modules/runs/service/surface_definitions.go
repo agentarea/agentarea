@@ -33,7 +33,7 @@ func (s *Surface) StartDefinition(ctx context.Context, c authn.Caller, in api.De
 	prov.TaskDefinitionID = in.DefinitionID
 	spec := runSpec{
 		TaskID: taskID, AgentID: in.AgentID, Description: in.Description, Parameters: params,
-		UserID: c.UserID, Metadata: map[string]any{"created_via": in.CreatedVia}, Provenance: prov,
+		UserID: c.UserID, Metadata: map[string]any{"created_via": in.CreatedVia}, Provenance: prov, Credential: c.Credential,
 	}
 	if err := s.start(ctx, c.Workspace, spec); err != nil {
 		var r *Refusal

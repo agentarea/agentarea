@@ -17,7 +17,7 @@ and `AuditReader.ResourceEvents` (`AuditRepository.resource_events_page`, for
 
 ## Not ported or not wired
 
-- Egress exits: the five `/egress-exits` routes answer 404 "egress exits need the enterprise edition", as the open-core build does. The extension-backed CRUD (`api/v1/egress_exits.py`) is not here.
+- Egress exits (`api/v1/egress_exits.py`, `egress_exit_service.py`): the five `/egress-exits` routes answer 404 "egress exits need the enterprise edition" unless the `egress_exits` entry point is built (`Deps.EgressExits`). Errors render as problem+json; the `requires` 422 carries no `input`. The upstream check uses the process's netguard policy; audit rows are written in the request's transaction.
 - `GET /governance/task-policy-snapshots/{task_id}` is mounted only when `Deps.Tasks` is set. It reads `tasks.metadata`, which runs owns, and runs has not provided that port yet.
 - Default policies: `Module.ProvisionDefaults` implements `provision_default_policies`, but identity's `OnWorkspaceCreated` is not wired to it in `app`. Until it is, new workspaces get no baseline. `GOVERNANCE_DEFAULT_POLICIES_PATH` (read with `os.getenv` in `application/defaults.py:25`, absent from the chart and the naming guard) is `Deps.DefaultPoliciesPath`, and nothing reads the env var yet.
 - Audit sink: `Deps.Sink` (the enterprise `audit_sink` forward) is not passed by `app`, because extensions are built after the modules.

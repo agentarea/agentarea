@@ -59,6 +59,9 @@ type Deps struct {
 	Config *Loader
 	// DB is the one database of the core (AGENTAREA_DB_*), shared with it.
 	DB Database
+	// Secrets resolves workspace secrets (AGENTAREA_SECRET_*); nil in a
+	// process without the database.
+	Secrets WorkspaceSecrets
 	// Errors renders a handler's error as the core renders its own
 	// (problem+json). Set for route factories only.
 	Errors *Errors
@@ -204,11 +207,16 @@ type EntitlementGuard interface {
 	Execute(ctx context.Context, ic InterceptorContext) (InterceptorResult, error)
 }
 
-// EgressExits enables egress exits and enforces an MCP instance's egress
-// allowlist at its network boundary (ports/egress_enforcer.py). An empty
-// allowedHosts is default-deny. Apply is idempotent.
-type EgressExits interface {
-	Apply(ctx context.Context, mcpInstanceID string, allowedHosts []string) error
+// EgressExits is what entry point "egress_exits" (egress_exits_enforced)
+// builds: the edition seals the exit an MCP instance binds into its workload
+// (WorkloadHooks.MCPWorkload) and its egress exit proxy routes it. Being
+// built is what opens the egress exits API and the binding of exits.
+type EgressExits struct{}
+
+// WorkspaceSecrets resolves a workspace's secret by its stored name, at the
+// moment of use.
+type WorkspaceSecrets interface {
+	WorkspaceSecret(ctx context.Context, workspaceID, name string) (string, error)
 }
 
 // AuditSink receives every recorded audit event as the audit_events row's
@@ -254,12 +262,15 @@ type WorkloadHooks struct {
 	Artifacts ArtifactObserver
 }
 
-// MCPWorkload is the part of an MCP workload a hook may change, and the
-// egress exit its instance's json_spec names ("" for none), which it may not.
+// MCPWorkload is the part of an MCP workload a hook may change, and what
+// its instance's merged json_spec says of egress, which it may not: the exit
+// it names ("" for none) and whether its server requires one
+// (json_spec.egress.required).
 type MCPWorkload struct {
-	Environment map[string]string
-	Labels      map[string]string
-	EgressExit  string
+	Environment    map[string]string
+	Labels         map[string]string
+	EgressExit     string
+	EgressRequired bool
 }
 
 // MCPLifecycleChange is the lifecycle row a transition left. Transition is

@@ -71,9 +71,21 @@ type Definition struct {
 	Skills             []Skill
 }
 
-// Definitions is what runs reads to resolve a run's agent. A tenant agent
-// only: the catalog projection (run from definition) is not served here.
+// Definitions is what runs reads to resolve a run's agent: a tenant agent only.
 type Definitions interface {
 	// Definition returns ErrNotFound when the workspace has no such agent.
 	Definition(ctx context.Context, ws scope.Workspace, agentID string) (Definition, error)
+}
+
+// AgentRefusedError: the install policy keeps the run from a catalog agent.
+type AgentRefusedError struct{ Msg string }
+
+func (e *AgentRefusedError) Error() string { return e.Msg }
+
+// CatalogRuns is a catalog agent the workspace has not installed, run from
+// its definition (get_with_catalog with to_run).
+type CatalogRuns interface {
+	// CatalogDefinition projects the catalog agent item agentID once the install
+	// policy allowed it for userID; ErrNotFound when no such item, *AgentRefusedError when refused.
+	CatalogDefinition(ctx context.Context, ws scope.Workspace, userID, agentID string) (Definition, error)
 }

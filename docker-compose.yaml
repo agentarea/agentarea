@@ -1,78 +1,119 @@
 version: "3.8"
+
+# The platform is one image, agentarea/agentarea-platform, run once per role:
+# `agentarea serve` (app), `worker`, `events`, `mcp` (agentarea-mcp-manager),
+# `migrate`, `reconcile` and `init-buckets`.
+x-platform: &platform
+  image: agentarea/agentarea-platform:${VERSION:-latest}
+  pull_policy: always
+
+# Every role reads the same configuration and refuses to start on a missing
+# required value, so they share one block.
+x-platform-env: &platform-env
+  AGENTAREA_ENV: production
+  AGENTAREA_LOG_LEVEL: ${AGENTAREA_LOG_LEVEL:-info}
+  AGENTAREA_DB_HOST: db
+  AGENTAREA_DB_PORT: "5432"
+  AGENTAREA_DB_USER: ${AGENTAREA_DB_USER}
+  AGENTAREA_DB_PASSWORD: ${AGENTAREA_DB_PASSWORD}
+  AGENTAREA_DB_NAME: ${AGENTAREA_DB_NAME}
+  AGENTAREA_DB_SSLMODE: disable
+  AGENTAREA_REDIS_URL: redis://valkey:6379
+  AGENTAREA_EVENT_NAMESPACE: agentarea
+  AGENTAREA_S3_ENDPOINT: http://rustfs:9000
+  AGENTAREA_S3_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
+  AGENTAREA_S3_SECRET_KEY: ${RUSTFS_SECRET_KEY}
+  AGENTAREA_S3_REGION: ${RUSTFS_REGION:-us-east-1}
+  AGENTAREA_S3_BUCKET: ${DOCUMENTS_BUCKET}
+  AGENTAREA_S3_ARTIFACTS_BUCKET: ${ARTIFACTS_BUCKET:-artifacts}
+  AGENTAREA_SECRET_BACKEND: ${AGENTAREA_SECRET_BACKEND:-database}
+  AGENTAREA_SECRET_ENCRYPTION_KEY: ${AGENTAREA_SECRET_ENCRYPTION_KEY}
+  AGENTAREA_AUTH_JWKS_B64: ${AGENTAREA_AUTH_JWKS_B64}
+  AGENTAREA_AUTH_ISSUER: ${AGENTAREA_AUTH_ISSUER:-http://localhost:4433}
+  AGENTAREA_AUTH_AUDIENCE: ${AGENTAREA_AUTH_AUDIENCE:-agentarea-api}
+  AGENTAREA_AUTH_KRATOS_ADMIN_URL: ${AGENTAREA_AUTH_KRATOS_ADMIN_URL:-http://kratos:4434}
+  # Access control: the authorization graph lives in OpenFGA. Bootstrap
+  # finds or creates the store and applies the bundled model on start, so
+  # a fresh install needs no ids up front.
+  AGENTAREA_AUTHZ_BACKEND: ${AGENTAREA_AUTHZ_BACKEND:-openfga}
+  AGENTAREA_AUTHZ_FGA_URL: ${AGENTAREA_AUTHZ_FGA_URL:-http://openfga:8080}
+  AGENTAREA_AUTHZ_FGA_STORE_ID: ${AGENTAREA_AUTHZ_FGA_STORE_ID:-}
+  AGENTAREA_AUTHZ_FGA_MODEL_ID: ${AGENTAREA_AUTHZ_FGA_MODEL_ID:-}
+  AGENTAREA_AUTHZ_FGA_BOOTSTRAP: ${AGENTAREA_AUTHZ_FGA_BOOTSTRAP:-true}
+  AGENTAREA_AUTHZ_FGA_APPLY_MODEL: ${AGENTAREA_AUTHZ_FGA_APPLY_MODEL:-true}
+  AGENTAREA_AUTHZ_FGA_STORE_NAME: ${AGENTAREA_AUTHZ_FGA_STORE_NAME:-agentarea}
+  AGENTAREA_AUTHZ_FGA_API_TOKEN: ${OPENFGA_AUTHN_PRESHARED_KEY:?OPENFGA_AUTHN_PRESHARED_KEY is required; run scripts/gen-dev-secrets.sh}
+  # The public base of webhook URLs and OAuth metadata.
+  AGENTAREA_API_URL: ${AGENTAREA_API_URL:-http://localhost:8000}
+  AGENTAREA_APP_URL: ${AGENTAREA_APP_URL:-http://localhost:3000}
+  TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:-temporal:7233}
+  TEMPORAL_NAMESPACE: default
+  AGENTAREA_TEMPORAL_QUEUE: agent-tasks
+  AGENTAREA_MCP_MANAGER_URL: http://agentarea-mcp-manager:80
+  AGENTAREA_MCP_GATEWAY_SECRET: ${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
+  AGENTAREA_MCP_OAUTH_APPS: ${AGENTAREA_MCP_OAUTH_APPS:-[]}
+  # MCP workloads run on this host's Docker daemon, on the segregated MCP
+  # network rather than the default one that carries the database and Redis.
+  # The api, worker and manager all drive them, so all three mount the socket.
+  AGENTAREA_MCP_BACKEND: docker
+  AGENTAREA_MCP_NETWORK: agentarea_mcp-network
+  # MCP servers run third-party npm/PyPI packages and images. The default
+  # tier, untrusted, pins the gVisor runtime (runsc), which a plain Docker
+  # host does not have, so every MCP container would fail to create. Here
+  # they run at standard, on the host kernel.
+  AGENTAREA_MCP_ISOLATION: standard
+  # `command` connections (npx/uvx) run on this image.
+  AGENTAREA_MCP_BASE_IMAGE: agentarea/agentarea-mcp-base:${VERSION:-latest}
+  # Empty keeps package images in the local Docker daemon.
+  AGENTAREA_MCP_PACKAGE_REPO: ${AGENTAREA_MCP_PACKAGE_REPO:-}
+  # Demand gateway: MCP workloads start on the first call and are reclaimed
+  # after AGENTAREA_MCP_IDLE_TIMEOUT (0 keeps them running once started).
+  AGENTAREA_MCP_LEASE_TTL: "90s"
+  AGENTAREA_MCP_STARTUP_TIMEOUT: "5m"
+  AGENTAREA_MCP_IDLE_TIMEOUT: "10m"
+  AGENTAREA_MCP_SWEEP_INTERVAL: "60s"
+  AGENTAREA_SANDBOX_FILE_SECRET: ${AGENTAREA_SANDBOX_FILE_SECRET:?AGENTAREA_SANDBOX_FILE_SECRET is required; run scripts/gen-dev-secrets.sh}
+  AGENTAREA_SANDBOX_CONTROL_SECRET: ${AGENTAREA_SANDBOX_CONTROL_SECRET:?AGENTAREA_SANDBOX_CONTROL_SECRET is required; run scripts/gen-dev-secrets.sh}
+  AGENTAREA_SANDBOX_CLEANUP_SECRET: ${AGENTAREA_SANDBOX_CLEANUP_SECRET:?AGENTAREA_SANDBOX_CLEANUP_SECRET is required; run scripts/gen-dev-secrets.sh}
+  # Model servers on the host (Ollama, a local OpenAI-compatible router):
+  # localhost in a stored endpoint is called as this name.
+  AGENTAREA_LOCAL_HOST: host.docker.internal
+  # PEM file of CA certificates trusted on outbound TLS on top of the public
+  # roots; a path inside the container, mounted by an override file.
+  AGENTAREA_HTTP_EXTRA_CA_CERTS: ${AGENTAREA_HTTP_EXTRA_CA_CERTS:-}
+  # Transactional mail (workspace invitations). Same server Kratos' courier
+  # uses, so one SMTP setup covers both senders.
+  SMTP_HOST: ${SMTP_HOST}
+  SMTP_PORT: ${SMTP_PORT}
+  SMTP_USERNAME: ${SMTP_USERNAME}
+  SMTP_PASSWORD: ${SMTP_PASSWORD}
+  SMTP_PROTOCOL: ${SMTP_PROTOCOL:-smtp}
+  SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL}
+  SMTP_FROM_NAME: ${SMTP_FROM_NAME:-AgentArea}
+  SMTP_SKIP_SSL_VERIFY: ${SMTP_SKIP_SSL_VERIFY:-true}
+  SMTP_DISABLE_STARTTLS: ${SMTP_DISABLE_STARTTLS:-true}
+  # Currency spend caps count and tool costs are declared in (ISO 4217).
+  AGENTAREA_SPEND_CURRENCY: ${AGENTAREA_SPEND_CURRENCY:-USD}
+  # Anonymous usage analytics to AgentArea; false sends nothing.
+  AGENTAREA_ANALYTICS_ENABLED: ${AGENTAREA_ANALYTICS_ENABLED:-true}
+
 services:
   app:
-    image: agentarea/agentarea-api:${VERSION:-latest}
+    <<: *platform
     container_name: agentarea-backend
+    command: ["serve"]
+    # Root for the mounted docker socket.
+    user: "0"
     ports:
       - "8000:8000"
     restart: always
-    pull_policy: always
     environment:
-      # S3 settings
-      - AGENTAREA_S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
-      - AGENTAREA_S3_SECRET_KEY=${RUSTFS_SECRET_KEY}
-      - AGENTAREA_S3_REGION=${RUSTFS_REGION:-us-east-1}
-      - AGENTAREA_S3_BUCKET=${DOCUMENTS_BUCKET}
-      - AGENTAREA_S3_ARTIFACTS_BUCKET=${ARTIFACTS_BUCKET:-artifacts}
-      - AGENTAREA_S3_ENDPOINT=http://rustfs:9000
-      # Database settings
-      - AGENTAREA_DB_HOST=db
-      - AGENTAREA_DB_PORT=5432
-      - AGENTAREA_DB_USER=${AGENTAREA_DB_USER}
-      - AGENTAREA_DB_PASSWORD=${AGENTAREA_DB_PASSWORD}
-      - AGENTAREA_DB_NAME=${AGENTAREA_DB_NAME}
-      - AGENTAREA_DB_TENANT_SCOPE=${AGENTAREA_DB_TENANT_SCOPE:?AGENTAREA_DB_TENANT_SCOPE is required (log|enforce)}
-      # MCP settings
-      - AGENTAREA_MCP_MANAGER_URL=http://agentarea-mcp-manager:80/api/mcp
-      - AGENTAREA_REDIS_URL=redis://valkey:6379
-      - AGENTAREA_EVENT_NAMESPACE=agentarea
-      - AGENTAREA_MCP_TIMEOUT=30
-      - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
-      - AGENTAREA_MCP_OAUTH_APPS=${AGENTAREA_MCP_OAUTH_APPS:-[]}
-      # Server settings
-      - PORT=${PORT:-8000}
-      # The public base of webhook URLs; the event service registers the same one.
-      - AGENTAREA_API_URL=${AGENTAREA_API_URL:-http://localhost:8000}
-      - AGENTAREA_LOG_LEVEL=${AGENTAREA_LOG_LEVEL:-info}
-      - AGENTAREA_API_WORKERS=${AGENTAREA_API_WORKERS:-1}
-      - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-temporal:7233}
-      - TEMPORAL_NAMESPACE=default
-      - AGENTAREA_TEMPORAL_QUEUE=agent-tasks
-      - AGENTAREA_SECRET_ENCRYPTION_KEY=${AGENTAREA_SECRET_ENCRYPTION_KEY}
-      - AGENTAREA_AUTH_JWKS_B64=${AGENTAREA_AUTH_JWKS_B64}
-      - AGENTAREA_AUTH_ISSUER=${AGENTAREA_AUTH_ISSUER:-http://localhost:4433}
-      - AGENTAREA_AUTH_AUDIENCE=${AGENTAREA_AUTH_AUDIENCE:-agentarea-api}
-      - AGENTAREA_AUTH_KRATOS_ADMIN_URL=${AGENTAREA_AUTH_KRATOS_ADMIN_URL:-http://kratos:4434}
-      # Transactional mail (workspace invitations). Same server Kratos' courier
-      # uses, so one SMTP setup covers both senders.
-      - SMTP_HOST=${SMTP_HOST}
-      - SMTP_PORT=${SMTP_PORT}
-      - SMTP_USERNAME=${SMTP_USERNAME}
-      - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - SMTP_PROTOCOL=${SMTP_PROTOCOL:-smtp}
-      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
-      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-AgentArea}
-      - SMTP_SKIP_SSL_VERIFY=${SMTP_SKIP_SSL_VERIFY:-true}
-      - SMTP_DISABLE_STARTTLS=${SMTP_DISABLE_STARTTLS:-true}
-      - AGENTAREA_APP_URL=${AGENTAREA_APP_URL:-http://localhost:3000}
-      # PEM file of CA certificates trusted on outbound TLS on top of the public
-      # roots; a path inside the container, mounted by an override file.
-      - AGENTAREA_HTTP_EXTRA_CA_CERTS=${AGENTAREA_HTTP_EXTRA_CA_CERTS:-}
-      # Currency spend caps count and tool costs are declared in (ISO 4217).
-      - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
-      # Anonymous usage analytics to AgentArea; false sends nothing.
-      - AGENTAREA_ANALYTICS_ENABLED=${AGENTAREA_ANALYTICS_ENABLED:-true}
-      # Access control: the authorization graph lives in OpenFGA. Bootstrap
-      # finds or creates the store and applies the bundled model on start, so
-      # a fresh install needs no ids up front.
-      - AGENTAREA_AUTHZ_BACKEND=${AGENTAREA_AUTHZ_BACKEND:-openfga}
-      - AGENTAREA_AUTHZ_FGA_URL=${AGENTAREA_AUTHZ_FGA_URL:-http://openfga:8080}
-      - AGENTAREA_AUTHZ_FGA_STORE_ID=${AGENTAREA_AUTHZ_FGA_STORE_ID:-}
-      - AGENTAREA_AUTHZ_FGA_MODEL_ID=${AGENTAREA_AUTHZ_FGA_MODEL_ID:-}
-      - AGENTAREA_AUTHZ_FGA_BOOTSTRAP=${AGENTAREA_AUTHZ_FGA_BOOTSTRAP:-true}
-      - AGENTAREA_AUTHZ_FGA_APPLY_MODEL=${AGENTAREA_AUTHZ_FGA_APPLY_MODEL:-true}
-      - AGENTAREA_AUTHZ_FGA_STORE_NAME=${AGENTAREA_AUTHZ_FGA_STORE_NAME:-agentarea}
-      - AGENTAREA_AUTHZ_FGA_API_TOKEN=${OPENFGA_AUTHN_PRESHARED_KEY:?OPENFGA_AUTHN_PRESHARED_KEY is required; run scripts/gen-dev-secrets.sh}
+      <<: *platform-env
+      PORT: "8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy
@@ -88,82 +129,47 @@ services:
         condition: service_completed_successfully
       openfga:
         condition: service_healthy
-      # mcp-manager:
-      #   condition: service_healthy
-    # Probed with Python rather than curl, which the API image does not ship.
     # app_catalog waits on this, so without it compose refuses to start.
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)",
-        ]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/readyz"]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 30s
-    # Not on mcp-network: it still reaches agentarea-mcp-manager over default
-    # (manager is dual-homed), but the sandbox/MCP containers on mcp-network
-    # must not be able to dial the core API directly.
+    # On mcp-network: the api calls the MCP workloads it runs directly.
+    # On auth-network: it resolves member ids through the Kratos admin API.
     networks:
       - default
       - temporal-network
+      - auth-network
+      - mcp-network
 
   app_migrations:
-    image: agentarea/agentarea-api:${VERSION:-latest}
-    pull_policy: always
+    <<: *platform
     environment:
-      - AGENTAREA_S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
-      - AGENTAREA_S3_SECRET_KEY=${RUSTFS_SECRET_KEY}
-      - AGENTAREA_S3_REGION=${RUSTFS_REGION:-us-east-1}
-      - AGENTAREA_S3_BUCKET=${DOCUMENTS_BUCKET}
-      - AGENTAREA_S3_ARTIFACTS_BUCKET=${ARTIFACTS_BUCKET:-artifacts}
-      - AGENTAREA_S3_ENDPOINT=http://rustfs:9000
-      - AGENTAREA_DB_USER=${AGENTAREA_DB_USER}
-      - AGENTAREA_DB_PASSWORD=${AGENTAREA_DB_PASSWORD}
-      - AGENTAREA_DB_NAME=${AGENTAREA_DB_NAME}
-      - AGENTAREA_DB_HOST=db
-      - AGENTAREA_DB_PORT=5432
-      - AGENTAREA_DB_TENANT_SCOPE=${AGENTAREA_DB_TENANT_SCOPE:?AGENTAREA_DB_TENANT_SCOPE is required (log|enforce)}
+      <<: *platform-env
     depends_on:
       db:
         condition: service_healthy
       postgres_init:
         condition: service_completed_successfully
-    command: ["agentarea-api", "migrate"]
-    working_dir: /app/apps/api
+      openfga:
+        condition: service_healthy
+    command: ["migrate"]
 
   # Populates the built-in catalog (model providers, models, MCP servers) once the API answers. Idempotent, so it
   # re-runs harmlessly on every `up` and picks up catalog additions; run it on
   # demand with `docker compose run --rm app_catalog`. Registry data lives in
   # the database, not on disk, which is why a load step exists at all.
   app_catalog:
-    image: agentarea/agentarea-api:${VERSION:-latest}
-    pull_policy: always
+    <<: *platform
     environment:
-      - AGENTAREA_DB_USER=${AGENTAREA_DB_USER}
-      - AGENTAREA_DB_PASSWORD=${AGENTAREA_DB_PASSWORD}
-      - AGENTAREA_DB_NAME=${AGENTAREA_DB_NAME}
-      - AGENTAREA_DB_HOST=db
-      - AGENTAREA_DB_PORT=5432
-      - AGENTAREA_DB_TENANT_SCOPE=${AGENTAREA_DB_TENANT_SCOPE:?AGENTAREA_DB_TENANT_SCOPE is required (log|enforce)}
-      # Materializing a catalog skill records its owner in the graph; the app
-      # has applied the model by the time it is healthy.
-      - AGENTAREA_AUTHZ_BACKEND=${AGENTAREA_AUTHZ_BACKEND:-openfga}
-      - AGENTAREA_AUTHZ_FGA_URL=${AGENTAREA_AUTHZ_FGA_URL:-http://openfga:8080}
-      - AGENTAREA_AUTHZ_FGA_STORE_ID=${AGENTAREA_AUTHZ_FGA_STORE_ID:-}
-      - AGENTAREA_AUTHZ_FGA_MODEL_ID=${AGENTAREA_AUTHZ_FGA_MODEL_ID:-}
-      - AGENTAREA_AUTHZ_FGA_BOOTSTRAP=${AGENTAREA_AUTHZ_FGA_BOOTSTRAP:-true}
-      - AGENTAREA_AUTHZ_FGA_STORE_NAME=${AGENTAREA_AUTHZ_FGA_STORE_NAME:-agentarea}
-      - AGENTAREA_AUTHZ_FGA_API_TOKEN=${OPENFGA_AUTHN_PRESHARED_KEY:?OPENFGA_AUTHN_PRESHARED_KEY is required; run scripts/gen-dev-secrets.sh}
+      <<: *platform-env
     depends_on:
       app:
         condition: service_healthy
     command:
       [
-        "agentarea-api",
         "reconcile",
         "--source",
         "${CATALOG_PROVIDERS_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json}",
@@ -172,7 +178,6 @@ services:
         "--source",
         "${CATALOG_MCP_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json}",
       ]
-    working_dir: /app/apps/api
     restart: "no"
 
   # Create the main app database and auxiliary databases — idempotent.
@@ -293,46 +298,33 @@ services:
     command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "768mb", "--maxmemory-policy", "noeviction"]
 
   agentarea-mcp-manager:
-    image: agentarea/agentarea-mcp-manager:${VERSION:-latest}
+    <<: *platform
     container_name: agentarea-mcp-manager
+    command: ["mcp"]
+    user: "0"
     restart: unless-stopped
     ports:
       - "127.0.0.1:7999:80" # Internal proxy (unified entry point)
     volumes:
-      # Manager drives MCP containers through the host Docker socket (docker CLI
-      # ships in the image). No podman, no privileged mode.
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - mcp-network
       - default
+    depends_on:
+      db:
+        condition: service_healthy
+      app_migrations:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     environment:
-      AGENTAREA_LOG_LEVEL: INFO
+      <<: *platform-env
       # The rest of the stack addresses the manager as
       # http://agentarea-mcp-manager:80, and the published port maps to 80.
-      # The binary otherwise listens on 8000, which leaves both dead.
       PORT: "80"
-      # Spawned MCP workloads join the segregated MCP network rather than the
-      # project default, which also carries the database and Redis.
-      AGENTAREA_MCP_NETWORK: agentarea_mcp-network
-      AGENTAREA_REDIS_URL: redis://valkey:6379
-      AGENTAREA_EVENT_NAMESPACE: agentarea
-      AGENTAREA_API_URL: http://app:8000
-      # Demand gateway: MCP workloads start on the first call and are reclaimed
-      # after AGENTAREA_MCP_IDLE_TIMEOUT (0 keeps them running once started). All four are
-      # required — the gateway refuses to configure itself without them.
-      AGENTAREA_MCP_LEASE_TTL: "90s"
-      AGENTAREA_MCP_STARTUP_TIMEOUT: "5m"
-      AGENTAREA_MCP_IDLE_TIMEOUT: "10m"
-      AGENTAREA_MCP_SWEEP_INTERVAL: "60s"
-      # MCP servers run third-party npm/PyPI packages and images. The manager's
-      # default tier, untrusted, pins the gVisor runtime (runsc), which a plain
-      # Docker host does not have, so every MCP container would fail to create.
-      # Here they run at standard, on the host kernel.
-      AGENTAREA_MCP_ISOLATION: "standard"
-      # `command` connections (npx/uvx) run on this image.
-      AGENTAREA_MCP_BASE_IMAGE: agentarea/agentarea-mcp-base:${VERSION:-latest}
-      # Empty keeps package images in the local Docker daemon.
-      AGENTAREA_MCP_PACKAGE_REPO: ${AGENTAREA_MCP_PACKAGE_REPO:-}
       # Run the sandbox execution consumer in-process (no standalone runner in
       # compose) and route code-execution to the sandbox-executor container.
       AGENTAREA_SANDBOX_EMBEDDED_RUNNER: "true"
@@ -343,10 +335,6 @@ services:
       # runtime class; the manager refuses the shared path without this flag.
       AGENTAREA_SANDBOX_ALLOW_WEAK_ISOLATION: "true"
       AGENTAREA_SANDBOX_ACTIVATION_SECRET: ${AGENTAREA_SANDBOX_ACTIVATION_SECRET:?AGENTAREA_SANDBOX_ACTIVATION_SECRET is required; run scripts/gen-dev-secrets.sh}
-      AGENTAREA_SANDBOX_CLEANUP_SECRET: ${AGENTAREA_SANDBOX_CLEANUP_SECRET:?AGENTAREA_SANDBOX_CLEANUP_SECRET is required; run scripts/gen-dev-secrets.sh}
-      AGENTAREA_SANDBOX_FILE_SECRET: ${AGENTAREA_SANDBOX_FILE_SECRET:?AGENTAREA_SANDBOX_FILE_SECRET is required; run scripts/gen-dev-secrets.sh}
-      AGENTAREA_SANDBOX_CONTROL_SECRET: ${AGENTAREA_SANDBOX_CONTROL_SECRET:?AGENTAREA_SANDBOX_CONTROL_SECRET is required; run scripts/gen-dev-secrets.sh}
-      AGENTAREA_MCP_GATEWAY_SECRET: ${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
       # Lifecycle and admission policy. The manager refuses to start when any
       # value is absent or malformed rather than inventing retention behavior,
       # so these belong here in the deployment config — the binary holds no
@@ -369,21 +357,7 @@ services:
       AGENTAREA_SANDBOX_MAX_FILE_SIZE: "268435456"
       AGENTAREA_SANDBOX_MAX_TOTAL_SIZE: "2147483648"
       AGENTAREA_SANDBOX_S3_URL_TTL: "1h"
-      AGENTAREA_SANDBOX_S3_BUCKET: ${ARTIFACTS_BUCKET:-artifacts}
-      AGENTAREA_SANDBOX_S3_ENDPOINT: http://rustfs:9000
-      AGENTAREA_SANDBOX_S3_REGION: ${RUSTFS_REGION:-us-east-1}
       AGENTAREA_SANDBOX_S3_PATH_STYLE: "true"
-      AGENTAREA_S3_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
-      AGENTAREA_S3_SECRET_KEY: ${RUSTFS_SECRET_KEY}
-      # Secret manager configuration
-      AGENTAREA_SECRET_BACKEND: ${AGENTAREA_SECRET_BACKEND:-database}
-      # Database secret manager settings
-      AGENTAREA_DB_HOST: db
-      AGENTAREA_DB_PORT: 5432
-      AGENTAREA_DB_USER: ${AGENTAREA_DB_USER}
-      AGENTAREA_DB_PASSWORD: ${AGENTAREA_DB_PASSWORD}
-      AGENTAREA_DB_NAME: ${AGENTAREA_DB_NAME}
-      AGENTAREA_SECRET_ENCRYPTION_KEY: ${AGENTAREA_SECRET_ENCRYPTION_KEY}
 
   # Sandbox executor — isolated jail that actually runs agent code (data plane).
   # mcp-manager (control plane) delegates executions here so untrusted code
@@ -497,11 +471,11 @@ services:
           temporal operator namespace create -n "$$TEMPORAL_NAMESPACE" --retention 24h || sleep 5
         done
 
-  # AgentArea Worker Service
   agentarea-worker:
-    pull_policy: always
-    image: agentarea/agentarea-worker:${VERSION:-latest}
+    <<: *platform
     container_name: agentarea-worker
+    command: ["worker"]
+    user: "0"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -511,79 +485,22 @@ services:
         condition: service_started
       temporal-namespace:
         condition: service_completed_successfully
+      app_migrations:
+        condition: service_completed_successfully
       bucket-init:
         condition: service_completed_successfully
       openfga:
         condition: service_healthy
     environment:
-      # Database
-      - AGENTAREA_DB_HOST=db
-      - AGENTAREA_DB_PORT=5432
-      - AGENTAREA_DB_USER=${AGENTAREA_DB_USER}
-      - AGENTAREA_DB_PASSWORD=${AGENTAREA_DB_PASSWORD}
-      - AGENTAREA_DB_NAME=${AGENTAREA_DB_NAME}
-      - AGENTAREA_DB_TENANT_SCOPE=${AGENTAREA_DB_TENANT_SCOPE:?AGENTAREA_DB_TENANT_SCOPE is required (log|enforce)}
-      - LLM_DOCKER_HOST=host.docker.internal
-      - AGENTAREA_S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
-      - AGENTAREA_S3_SECRET_KEY=${RUSTFS_SECRET_KEY}
-      - AGENTAREA_S3_REGION=${RUSTFS_REGION:-us-east-1}
-      - AGENTAREA_S3_ENDPOINT=http://rustfs:9000
-      - AGENTAREA_S3_BUCKET=${DOCUMENTS_BUCKET}
-      - AGENTAREA_S3_ARTIFACTS_BUCKET=${ARTIFACTS_BUCKET:-artifacts}
-
-      # Redis
-      - AGENTAREA_REDIS_URL=redis://valkey:6379
-      - AGENTAREA_EVENT_NAMESPACE=agentarea
-      # Links the worker sends out (the Telegram account-link reply)
-      - AGENTAREA_APP_URL=${AGENTAREA_APP_URL:-http://localhost:3000}
-      # PEM file of CA certificates trusted on outbound TLS on top of the public
-      # roots; a path inside the container, mounted by an override file.
-      - AGENTAREA_HTTP_EXTRA_CA_CERTS=${AGENTAREA_HTTP_EXTRA_CA_CERTS:-}
-      # Currency spend caps count and tool costs are declared in (ISO 4217).
-      - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
-      # Anonymous usage analytics to AgentArea; false sends nothing.
-      - AGENTAREA_ANALYTICS_ENABLED=${AGENTAREA_ANALYTICS_ENABLED:-true}
-
-      # Temporal
-      - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-temporal:7233}
-      - TEMPORAL_NAMESPACE=default
-      - AGENTAREA_TEMPORAL_QUEUE=agent-tasks
-      - AGENTAREA_TEMPORAL_MAX_ACTIVITIES=10
-      - AGENTAREA_TEMPORAL_MAX_WORKFLOWS=5
-
-      # Task execution
-      - AGENTAREA_SECRET_ENCRYPTION_KEY=${AGENTAREA_SECRET_ENCRYPTION_KEY}
-      - AGENTAREA_MCP_MANAGER_URL=http://agentarea-mcp-manager:80
-      - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
-      - AGENTAREA_MCP_OAUTH_APPS=${AGENTAREA_MCP_OAUTH_APPS:-[]}
-      - AGENTAREA_SANDBOX_CLEANUP_SECRET=${AGENTAREA_SANDBOX_CLEANUP_SECRET:?AGENTAREA_SANDBOX_CLEANUP_SECRET is required; run scripts/gen-dev-secrets.sh}
-      - AGENTAREA_SANDBOX_CONTROL_SECRET=${AGENTAREA_SANDBOX_CONTROL_SECRET:?AGENTAREA_SANDBOX_CONTROL_SECRET is required; run scripts/gen-dev-secrets.sh}
-
-      # Access control: the authorization graph lives in OpenFGA. Bootstrap
-      # finds or creates the store and applies the bundled model on start, so
-      # a fresh install needs no ids up front.
-      - AGENTAREA_AUTHZ_BACKEND=${AGENTAREA_AUTHZ_BACKEND:-openfga}
-      - AGENTAREA_AUTHZ_FGA_URL=${AGENTAREA_AUTHZ_FGA_URL:-http://openfga:8080}
-      - AGENTAREA_AUTHZ_FGA_STORE_ID=${AGENTAREA_AUTHZ_FGA_STORE_ID:-}
-      - AGENTAREA_AUTHZ_FGA_MODEL_ID=${AGENTAREA_AUTHZ_FGA_MODEL_ID:-}
-      - AGENTAREA_AUTHZ_FGA_BOOTSTRAP=${AGENTAREA_AUTHZ_FGA_BOOTSTRAP:-true}
-      - AGENTAREA_AUTHZ_FGA_APPLY_MODEL=${AGENTAREA_AUTHZ_FGA_APPLY_MODEL:-true}
-      - AGENTAREA_AUTHZ_FGA_STORE_NAME=${AGENTAREA_AUTHZ_FGA_STORE_NAME:-agentarea}
-      - AGENTAREA_AUTHZ_FGA_API_TOKEN=${OPENFGA_AUTHN_PRESHARED_KEY:?OPENFGA_AUTHN_PRESHARED_KEY is required; run scripts/gen-dev-secrets.sh}
-
-      # Development
-      # - AGENTAREA_DEBUG=true
-      - AGENTAREA_ENV=production
+      <<: *platform-env
+      AGENTAREA_TEMPORAL_MAX_ACTIVITIES: "10"
+      AGENTAREA_TEMPORAL_MAX_WORKFLOWS: "5"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     # /readyz is 200 once the worker reached its dependencies and every Temporal
-    # worker is polling. Probed with Python: the worker image ships no curl.
+    # worker is polling.
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8081/readyz', timeout=5)",
-        ]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/readyz"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -591,58 +508,44 @@ services:
     networks:
       - temporal-network
       - default
+      - mcp-network
     restart: unless-stopped
 
   # Creates the storage buckets and their browser CORS allowlist: browsers PUT
   # presigned uploads straight to rustfs. The Helm bucket-init hook does the
   # same in Kubernetes.
   bucket-init:
-    image: agentarea/agentarea-api:${VERSION:-latest}
+    <<: *platform
     container_name: agentarea-bucket-init
+    command: ["init-buckets"]
     depends_on:
       rustfs:
         condition: service_healthy
     environment:
-      - AGENTAREA_S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
-      - AGENTAREA_S3_SECRET_KEY=${RUSTFS_SECRET_KEY}
-      - AGENTAREA_S3_REGION=${RUSTFS_REGION:-us-east-1}
-      - AGENTAREA_S3_ENDPOINT=http://rustfs:9000
-      - AGENTAREA_S3_BUCKETS=${DOCUMENTS_BUCKET:-documents},${ARTIFACTS_BUCKET:-artifacts}
-      - AGENTAREA_S3_CORS_ORIGINS=${AGENTAREA_S3_CORS_ORIGINS:-http://localhost:3000}
-    entrypoint: ["python", "-m", "agentarea_common.artifacts.bucket_init"]
+      <<: *platform-env
+      AGENTAREA_S3_BUCKETS: ${DOCUMENTS_BUCKET:-documents},${ARTIFACTS_BUCKET:-artifacts}
+      AGENTAREA_S3_CORS_ORIGINS: ${AGENTAREA_S3_CORS_ORIGINS:-http://localhost:3000}
     networks:
       - default
 
-  # AgentArea Event Service
   agentarea-events:
-    image: agentarea/agentarea-events:${VERSION:-latest}
+    <<: *platform
     container_name: agentarea-events
-    pull_policy: always
+    command: ["events"]
     depends_on:
       db:
         condition: service_healthy
       valkey:
         condition: service_started
+      app_migrations:
+        condition: service_completed_successfully
     environment:
-      - AGENTAREA_DB_HOST=db
-      - AGENTAREA_DB_PORT=5432
-      - AGENTAREA_DB_USER=${AGENTAREA_DB_USER}
-      - AGENTAREA_DB_PASSWORD=${AGENTAREA_DB_PASSWORD}
-      - AGENTAREA_DB_NAME=${AGENTAREA_DB_NAME}
-      - AGENTAREA_DB_SSLMODE=disable
-      - AGENTAREA_REDIS_URL=redis://valkey:6379
-      - AGENTAREA_EVENT_NAMESPACE=agentarea
-      - AGENTAREA_EVENT_POLL_INTERVAL=30s
-      - AGENTAREA_EVENT_MAX_POLLERS=10
-      # The public base of /webhooks/{webhook_id}, as the app advertises it.
-      - AGENTAREA_API_URL=${AGENTAREA_API_URL:-http://localhost:8000}
-      # Source credentials are read from the database secret store.
-      - AGENTAREA_SECRET_ENCRYPTION_KEY=${AGENTAREA_SECRET_ENCRYPTION_KEY}
-      # MCP Events sources are polled and subscribed through the manager's gateway.
-      - AGENTAREA_MCP_MANAGER_URL=http://agentarea-mcp-manager:80
-      - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
+      <<: *platform-env
+      AGENTAREA_EVENT_POLL_INTERVAL: 30s
+      AGENTAREA_EVENT_MAX_POLLERS: "10"
     networks:
       - default
+      - temporal-network
     restart: unless-stopped
 
   # Ory Kratos Migration

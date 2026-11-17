@@ -14,11 +14,9 @@ type CatalogMirror struct{ K *Skills }
 
 var _ catalogapi.ContentMirror = CatalogMirror{}
 
-// ErrPrivateMirror is a GitHub-pointer item of a registry read with credentials.
-var ErrPrivateMirror = errors.New("mirroring a GitHub-pointer skill of a registry with credentials is not ported: only public repositories are read")
-
-// Open is one sync's mirror. Once GitHub answers that the rate limit is spent
-// it is not asked again in this sync; those items fail, the next sync retries them.
+// Open is one sync's mirror; GitHub is read as token when the registry has
+// credentials. Once GitHub answers that the rate limit is spent it is not
+// asked again in this sync; those items fail, the next sync retries them.
 func (m CatalogMirror) Open(_ context.Context, _ string, workspaceID *string, token string) (catalogapi.ItemMirror, error) {
 	if m.K.items == nil {
 		return nil, m.K.unwiredCatalog()
@@ -31,10 +29,7 @@ func (m CatalogMirror) Open(_ context.Context, _ string, workspaceID *string, to
 		if limited != nil {
 			return nil, limited
 		}
-		if src, ok := spec["source"].(map[string]any); ok && src["type"] == "github" && token != "" {
-			return nil, ErrPrivateMirror
-		}
-		p, err := m.K.catalogPackage(ctx, spec, workspaceID)
+		p, err := m.K.catalogPackage(ctx, spec, workspaceID, token)
 		var gh *domain.SkillGitHubError
 		if errors.As(err, &gh) && gh.Kind == domain.SkillGitHubRateLimited {
 			limited = err

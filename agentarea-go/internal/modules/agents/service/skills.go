@@ -95,6 +95,9 @@ func view(sk domain.Skill) SkillView { return SkillView{Skill: sk} }
 
 func (k *Skills) unwiredCatalog() error { return &UnwiredError{Feature: "the skill catalog"} }
 
+// UseCatalog sets what moves installs between catalog versions.
+func (k *Skills) UseCatalog(c SkillCatalog) { k.catalog = c }
+
 func (k *Skills) get(ctx context.Context, sess db.Session, id uuid.UUID) (domain.Skill, bool, error) {
 	return skills().Get(ctx, sess, id)
 }
@@ -487,7 +490,7 @@ func (k *Skills) Rollback(ctx context.Context, c authn.Caller, id, versionID uui
 			if k.catalog == nil {
 				return k.unwiredCatalog()
 			}
-			if err := k.catalog.Pin(ctx, c, id, *sk.RegistryItemID, v.CatalogVersion); err != nil {
+			if err := k.catalog.Pin(ctx, sess, c, id, *sk.RegistryItemID, v.CatalogVersion); err != nil {
 				return err
 			}
 		}

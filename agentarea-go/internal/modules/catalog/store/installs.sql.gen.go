@@ -113,16 +113,18 @@ func (q *Queries) CatalogAgentPresets(ctx context.Context, workspaceID string) (
 }
 
 const catalogItemOfType = `-- name: CatalogItemOfType :one
-SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, ri.registry_id, ri.registry_trust, ri.registry_workspace_id
+SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, ri.registry_id, ri.registry_trust, ri.registry_workspace_id,
+       rii.installed_version
 FROM registry_items ri
-WHERE ri.registry_type = $1 AND ri.registry_active
-  AND (ri.registry_workspace_id IS NULL OR ri.registry_workspace_id = $2::text)
+LEFT JOIN registry_item_installs rii ON rii.registry_item_id = ri.id AND rii.workspace_id = $1::text
+WHERE ri.registry_type = $2 AND ri.registry_active
+  AND (ri.registry_workspace_id IS NULL OR ri.registry_workspace_id = $1::text)
   AND ri.id = $3
 `
 
 type CatalogItemOfTypeParams struct {
-	RegistryType string
 	WorkspaceID  string
+	RegistryType string
 	ID           uuid.UUID
 }
 
@@ -135,10 +137,11 @@ type CatalogItemOfTypeRow struct {
 	RegistryID          uuid.UUID
 	RegistryTrust       string
 	RegistryWorkspaceID pgtype.Text
+	InstalledVersion    pgtype.Text
 }
 
 func (q *Queries) CatalogItemOfType(ctx context.Context, arg CatalogItemOfTypeParams) (CatalogItemOfTypeRow, error) {
-	row := q.db.QueryRow(ctx, catalogItemOfType, arg.RegistryType, arg.WorkspaceID, arg.ID)
+	row := q.db.QueryRow(ctx, catalogItemOfType, arg.WorkspaceID, arg.RegistryType, arg.ID)
 	var i CatalogItemOfTypeRow
 	err := row.Scan(
 		&i.ID,
@@ -149,6 +152,7 @@ func (q *Queries) CatalogItemOfType(ctx context.Context, arg CatalogItemOfTypePa
 		&i.RegistryID,
 		&i.RegistryTrust,
 		&i.RegistryWorkspaceID,
+		&i.InstalledVersion,
 	)
 	return i, err
 }
@@ -222,6 +226,46 @@ func (q *Queries) MarkItemInstalled(ctx context.Context, arg MarkItemInstalledPa
 		arg.InstalledVersion,
 	)
 	return err
+}
+
+const skillItemVersions = `-- name: SkillItemVersions :many
+SELECT ri.id, ri.version, rii.installed_version
+FROM registry_items ri
+LEFT JOIN registry_item_installs rii ON rii.registry_item_id = ri.id AND rii.workspace_id = $1::text
+WHERE ri.registry_type = 'skills' AND ri.registry_active
+  AND (ri.registry_workspace_id IS NULL OR ri.registry_workspace_id = $1::text)
+  AND ri.id = ANY($2::uuid[])
+`
+
+type SkillItemVersionsParams struct {
+	WorkspaceID string
+	Ids         []uuid.UUID
+}
+
+type SkillItemVersionsRow struct {
+	ID               uuid.UUID
+	Version          pgtype.Text
+	InstalledVersion pgtype.Text
+}
+
+func (q *Queries) SkillItemVersions(ctx context.Context, arg SkillItemVersionsParams) ([]SkillItemVersionsRow, error) {
+	rows, err := q.db.Query(ctx, skillItemVersions, arg.WorkspaceID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SkillItemVersionsRow
+	for rows.Next() {
+		var i SkillItemVersionsRow
+		if err := rows.Scan(&i.ID, &i.Version, &i.InstalledVersion); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const skillProvenance = `-- name: SkillProvenance :many

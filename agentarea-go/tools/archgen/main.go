@@ -127,7 +127,7 @@ func lists() []list {
 		list{
 			name: "exec-supervisor", mode: "strict",
 			files: []string{"**/cmd/exec-supervisor/**", "**/internal/modules/sandbox/supervisor/**"},
-			allow: []string{"$gostd", p("internal/modules/sandbox/supervisor")},
+			allow: []string{"$gostd", "golang.org/x/sys/unix", p("internal/modules/sandbox/supervisor")},
 		},
 		list{
 			name:  "ext-surface",

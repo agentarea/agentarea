@@ -213,7 +213,8 @@ func (b *Build) runMCPControl(ctx context.Context, l *config.Loader, common conf
 	if err != nil {
 		return fmt.Errorf("outbound: %w", err)
 	}
-	exts, err := b.resolveExtensions(ctx, ext.Deps{Logger: log, Config: config.New(b.lookup), DB: pools}, spend)
+	exts, err := b.resolveExtensions(ctx, ext.Deps{Logger: log, Config: config.New(b.lookup), DB: pools,
+		Secrets: workspaceSecrets{db: pools, secrets: sf}}, spend)
 	if err != nil {
 		return err
 	}
@@ -378,7 +379,7 @@ func applyWorkloadHooks(rd *runtime.Deps, hooks []ext.WorkloadHooks) {
 	}
 	if len(specHooks) > 0 {
 		rd.SpecHook = func(ctx context.Context, instanceID, workspaceID string, spec *workload.Spec) error {
-			w := ext.MCPWorkload{Environment: spec.Environment, Labels: spec.Labels, EgressExit: spec.EgressExit}
+			w := ext.MCPWorkload{Environment: spec.Environment, Labels: spec.Labels, EgressExit: spec.EgressExit, EgressRequired: spec.EgressRequired}
 			for _, f := range specHooks {
 				if err := f(ctx, instanceID, workspaceID, &w); err != nil {
 					return err

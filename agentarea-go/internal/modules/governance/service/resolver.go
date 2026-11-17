@@ -117,25 +117,33 @@ func (sv *Service) CurrentBudget(ctx context.Context, p api.RunPrincipal) (*api.
 }
 
 // Delegation is create_task_with_policy's policy half for a delegated task:
-// its own layers with {budget: {run_budget_usd}} as task policy, complete,
-// and no looser than the parent's effective policy (whose agent cap bounds
-// only the parent's agent). p.UserID is who started the parent run.
+// the target agent's own layers with {budget: {run_budget_usd}} and the
+// lower of its own and the parent's token and execution limits as task
+// policy, complete, and no looser than the parent's effective policy (whose
+// agent cap bounds only the parent's agent). p.UserID is who started the parent run.
 func (sv *Service) Delegation(ctx context.Context, p api.RunPrincipal, req api.DelegationRequest) (api.Policy, api.Snapshot, error) {
 	run := req.RunBudget
 	if run.Sign() <= 0 {
 		return api.Policy{}, api.Snapshot{}, errors.New("run_budget_usd: Input should be greater than 0")
 	}
-	taskPolicy := api.Policy{Budget: &api.Budget{RunBudgetUSD: &run}}
-	var effective, ceilings api.Policy
+	if req.TargetAgentID == "" {
+		return api.Policy{}, api.Snapshot{}, errors.New("delegation names no target agent")
+	}
+	var taskPolicy, effective, ceilings api.Policy
 	err := sv.read(ctx, p.Workspace, func(s db.Session) error {
+		if err := req.UpperBound.RequireRuntimeContract(); err != nil {
+			return err
+		}
 		var err error
-		if effective, err = sv.resolve(ctx, s, p.AgentID, p.UserID, &taskPolicy); err != nil {
+		if ceilings, err = sv.resolve(ctx, s, req.TargetAgentID, p.UserID, nil); err != nil {
+			return err
+		}
+		taskPolicy = domain.LowerLimits(ceilings, req.UpperBound)
+		taskPolicy.Budget = &api.Budget{RunBudgetUSD: &run}
+		if effective, err = sv.resolve(ctx, s, req.TargetAgentID, p.UserID, &taskPolicy); err != nil {
 			return err
 		}
 		if err := effective.RequireRuntimeContract(); err != nil {
-			return err
-		}
-		if err := req.UpperBound.RequireRuntimeContract(); err != nil {
 			return err
 		}
 		upper := req.UpperBound.Document()
@@ -145,10 +153,7 @@ func (sv *Service) Delegation(ctx context.Context, p api.RunPrincipal, req api.D
 			upper.Budget = &b
 		}
 		mine := effective.Document()
-		if _, err := domain.Resolve([]*api.Policy{&upper, &mine}, nil); err != nil {
-			return err
-		}
-		ceilings, err = sv.resolve(ctx, s, p.AgentID, p.UserID, nil)
+		_, err = domain.Resolve([]*api.Policy{&upper, &mine}, nil)
 		return err
 	})
 	if err != nil {

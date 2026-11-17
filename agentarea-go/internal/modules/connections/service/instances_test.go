@@ -208,6 +208,7 @@ type instFixture struct {
 	graph   *recGraph
 	runtime *recRuntime
 	secrets *memSecrets
+	audit   *fakeAudit
 	c       authn.Caller
 }
 
@@ -249,12 +250,12 @@ func newInstFixture(t *testing.T) *instFixture {
 		t.Fatal(err)
 	}
 	f := &instFixture{pools: pools, pool: rawSQL{pools}, specs: &memSpecs{specs: map[string]catalogapi.MCPSpec{}}, graph: &recGraph{},
-		runtime: &recRuntime{}, secrets: &memSecrets{values: map[string]string{}},
+		runtime: &recRuntime{}, secrets: &memSecrets{values: map[string]string{}}, audit: &fakeAudit{},
 		c: authn.Caller{Principal: authn.Principal{UserID: "owner"}, Workspace: ws}}
 	catalog := &memCatalog{}
 	f.svc = New(Deps{DB: pools, Auth: store.Auth{}, Instances: store.Instances{}, Secrets: f.secrets,
 		Catalog: func(scope.Workspace, ksecrets.Actor) ksecrets.Catalog { return catalog },
-		Graph:   f.graph, Specs: f.specs, Runtime: f.runtime, Out: guardOut{&netguard.Guard{Policy: policy}}})
+		Graph:   f.graph, Specs: f.specs, Runtime: f.runtime, Out: guardOut{&netguard.Guard{Policy: policy}}, Audit: f.audit})
 	return f
 }
 
@@ -440,6 +441,59 @@ func TestCreateWithSpecMakesBothAndGrantsTheSpec(t *testing.T) {
 	}
 	if !granted[authz.ObjectRef(authz.TypeResource, v.Instance.ServerSpecID)] {
 		t.Fatal("the spec created with the instance was not granted")
+	}
+}
+
+func TestInstanceWritesAreAudited(t *testing.T) {
+	f := newInstFixture(t)
+	ctx := context.Background()
+	f.c.Credential = &authn.Credential{Kind: authn.KindAPIKey, KeyID: "k1", Surface: authn.SurfaceAPI}
+	specID := f.spec(t, catalogapi.MCPSpec{Name: "fs", Cmd: []any{"npx", "fs"}})
+	v, err := f.svc.CreateInstance(ctx, f.c, InstanceCreate{Name: "fs", ServerSpecID: specID, JSONSpec: map[string]any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := uuid.MustParse(v.Instance.ID)
+	name := "renamed"
+	if _, err := f.svc.UpdateInstance(ctx, f.c, id, InstancePatchIn{Name: &name}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.DeleteInstance(ctx, f.c, id); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"mcp_instance.create", "mcp_instance.update", "mcp_instance.delete"}
+	if len(f.audit.rows) != len(want) {
+		t.Fatalf("audit rows = %+v", f.audit.rows)
+	}
+	for i, r := range f.audit.rows {
+		if r.Action != want[i] || r.ResourceType != "mcp_instance" || r.ResourceID != v.Instance.ID ||
+			r.ActorType != "user" || r.ActorID != "owner" || r.EventID == "" {
+			t.Fatalf("row %d = %+v", i, r)
+		}
+		if r.Metadata["credential"] != "api_key" || r.Metadata["surface"] != "api" || r.Metadata["api_key_id"] != "k1" {
+			t.Fatalf("row %d metadata = %v", i, r.Metadata)
+		}
+	}
+}
+
+func TestCreateWithSpecAuditsTheInstanceOnce(t *testing.T) {
+	f := newInstFixture(t)
+	url := "https://mcp.example.com/mcp"
+	v, err := f.svc.CreateInstanceWithSpec(context.Background(), f.c, catalogapi.MCPSpecNew{Name: "remote", RemoteURL: &url},
+		InstanceCreate{Name: "remote", JSONSpec: map[string]any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.audit.rows) != 1 || f.audit.rows[0].Action != "mcp_instance.create" || f.audit.rows[0].ResourceID != v.Instance.ID {
+		t.Fatalf("audit rows = %+v", f.audit.rows)
+	}
+}
+
+func TestRefusedInstanceWriteIsNotAudited(t *testing.T) {
+	f := newInstFixture(t)
+	_, err := f.svc.CreateInstance(context.Background(), f.c, InstanceCreate{Name: "x", ServerSpecID: uuid.NewString(), JSONSpec: map[string]any{}})
+	if err == nil || len(f.audit.rows) != 0 {
+		t.Fatalf("err = %v rows = %+v", err, f.audit.rows)
 	}
 }
 

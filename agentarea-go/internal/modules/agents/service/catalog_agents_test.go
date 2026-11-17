@@ -301,7 +301,7 @@ func TestCreateRollsBackTriggersAfterTheClientLeft(t *testing.T) {
 
 func TestCatalogPackageRefusesAMirrorThatLeavesItsArea(t *testing.T) {
 	for _, s3 := range []string{"skills/catalog/../ws2/packages/abc", `skills/catalog/x\..\abc`} {
-		_, err := (&Skills{}).catalogPackage(context.Background(), map[string]any{"package": map[string]any{"s3_path": s3}}, nil)
+		_, err := (&Skills{}).catalogPackage(context.Background(), map[string]any{"package": map[string]any{"s3_path": s3}}, nil, "")
 		var v *domain.SkillValueError
 		if !errors.As(err, &v) {
 			t.Fatalf("%s: %v", s3, err)

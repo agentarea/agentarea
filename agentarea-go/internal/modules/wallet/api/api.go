@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/money"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/scope"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/secrets"
@@ -215,6 +216,14 @@ func (Credentials) LogValue() slog.Value { return slog.StringValue(redacted) }
 
 // MarshalJSON hides the keys.
 func (Credentials) MarshalJSON() ([]byte, error) { return json.Marshal(redacted) }
+
+// AgentCredentials is what agents calls as it deletes an agent: the agent's
+// wallet row goes with it, the secret holding its keys does not.
+type AgentCredentials interface {
+	// DeleteCredentials deletes the agent's wallet credentials secret in the
+	// session's transaction; an agent that has none changes nothing.
+	DeleteCredentials(ctx context.Context, s db.Session, userID, agentID string) error
+}
 
 // Wallets is what runs and insights call. Every method acts in ws.
 //

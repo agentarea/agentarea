@@ -22,6 +22,13 @@ func TestReportSkillJobCountsStatusesInFirstSeenOrder(t *testing.T) {
 	if got := reportSkillJob(nil, "No stub installs"); got != "No stub installs\n" {
 		t.Fatalf("%q", got)
 	}
+	url, kept := "https://github.com/o/r/tree/c1/s", "description taken from its SKILL.md"
+	got = reportSkillJob([]agentsservice.SkillJobResult{
+		{WorkspaceID: "w1", SkillID: "s1", Name: "a", Status: "refreshed", SourceURL: &url, Error: &kept},
+	}, "No stub installs")
+	if want := "refreshed  w1/s1  a  https://github.com/o/r/tree/c1/s: description taken from its SKILL.md\n1 refreshed\n"; got != want {
+		t.Fatalf("%q", got)
+	}
 }
 
 func TestSkillsRefusesUnknownJobsAndFlags(t *testing.T) {

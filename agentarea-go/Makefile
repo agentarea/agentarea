@@ -14,6 +14,11 @@ vet:
 test:
 	go test -race ./...
 
+# The schema-backed suites skip without a disposable Postgres; here they must run.
+check-db:
+	@test -n "$$AGENTAREA_DB_TEST_URL" || { echo "check-db needs AGENTAREA_DB_TEST_URL (a disposable Postgres; make db-test-up from the repo root)"; exit 1; }
+	go test -race -count=1 ./...
+
 lint-version:
 	@$(GOLANGCI_LINT) version | grep -q "version $(GOLANGCI_LINT_VERSION) " || \
 		{ echo "golangci-lint $(GOLANGCI_LINT_VERSION) required, found: $$($(GOLANGCI_LINT) version)"; exit 1; }
@@ -49,4 +54,4 @@ openapi-fresh:
 archgen:
 	go run ./tools/archgen > .golangci.yml
 
-.PHONY: generate openapi-fresh check build vet test lint-version lint archlint-fresh archlint-proof tableowner connections-deps archgen
+.PHONY: generate openapi-fresh check check-db build vet test lint-version lint archlint-fresh archlint-proof tableowner connections-deps archgen

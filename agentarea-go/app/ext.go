@@ -13,19 +13,41 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/httpx"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/money"
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/scope"
+	"github.com/agentarea/agentarea/agentarea-go/internal/profiles/cluster/secrets"
 	"github.com/agentarea/agentarea/agentarea-go/internal/serve"
 )
 
+// workspaceSecrets is ext.WorkspaceSecrets over the core's secret backend,
+// read in the secret's own workspace.
+type workspaceSecrets struct {
+	db      db.Database
+	secrets *secrets.Factory
+}
+
+func (w workspaceSecrets) WorkspaceSecret(ctx context.Context, workspaceID, name string) (string, error) {
+	ws, err := scope.NewWorkspace(workspaceID, "")
+	if err != nil {
+		return "", err
+	}
+	sess, release, err := w.db.Read(ctx, ws)
+	if err != nil {
+		return "", err
+	}
+	defer release()
+	return w.secrets.Manager(sess, "").Get(ctx, name)
+}
+
 // extensions is what the build's single-valued and hook options built for
 // one role. A point nobody registered is nil, except CustomerPricing, which
-// is USD at provider cost.
+// is USD at provider cost; EgressExits says whether egress_exits was built.
 type extensions struct {
 	EntitlementGuard ext.EntitlementGuard
 	CustomerPricing  ext.CustomerPricing
 	AccountBalance   ext.AccountBalanceSource
 	WorkspaceUsage   ext.WorkspaceUsageSource
 	ToolBilling      ext.ToolBilling
-	EgressExits      ext.EgressExits
+	EgressExits      bool
 	AuditSink        ext.AuditSink
 	WorkloadHooks    []ext.WorkloadHooks
 
@@ -92,8 +114,11 @@ func (b *Build) resolveExtensions(ctx context.Context, deps ext.Deps, spend mone
 	if e.ToolBilling != nil && e.ToolBilling.Currency() != spend {
 		return nil, &money.SpendCurrencyMismatchError{Ledger: e.ToolBilling.Currency(), Configured: spend}
 	}
-	if e.EgressExits, err = build(ctx, e, deps, "egress_exits", s.EgressExits); err != nil {
-		return nil, err
+	if s.EgressExits != nil {
+		if _, err = build(ctx, e, deps, "egress_exits", s.EgressExits); err != nil {
+			return nil, err
+		}
+		e.EgressExits = true
 	}
 	if e.AuditSink, err = build(ctx, e, deps, "audit_sink", s.AuditSink); err != nil {
 		return nil, err

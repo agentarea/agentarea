@@ -51,6 +51,9 @@ func New(d Deps) *Module {
 // Wallets is what runs and insights call about wallets and payments.
 func (m *Module) Wallets() api.Wallets { return m.svc }
 
+// AgentCredentials is what agents calls as it deletes an agent.
+func (m *Module) AgentCredentials() api.AgentCredentials { return m.svc }
+
 // Name is the module's name in the role table.
 func (*Module) Name() string { return "wallet" }
 

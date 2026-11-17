@@ -10,6 +10,7 @@ import (
 
 	gen "github.com/agentarea/agentarea/agentarea-go/api/openapi/governance"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authn"
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authz"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/httpx"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/httpx/wirejson"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/secrets"
@@ -42,7 +43,7 @@ func caller(ctx context.Context) (authn.Caller, error) {
 }
 
 // EgressDetail is EgressExitsNotSupportedError's message.
-const EgressDetail = "egress exits need the enterprise edition"
+const EgressDetail = api.EgressExitsUnsupported
 
 // MapError renders the module's errors as Python raises them.
 func MapError(err error) (*httpx.Error, bool) {
@@ -53,8 +54,24 @@ func MapError(err error) (*httpx.Error, bool) {
 		dup      *secrets.DuplicateNameError
 		inUse    *secrets.InUseError
 		hidden   *service.HiddenSecretError
+		exitNF   *api.EgressExitNotFoundError
+		exitBad  *service.EgressExitInvalidError
+		exitDeny *service.EgressExitForbiddenError
+		exitUsed *service.EgressExitInUseError
 	)
 	switch {
+	case errors.Is(err, api.ErrEgressExitsUnsupported):
+		return httpx.HTTPError(http.StatusNotFound, EgressDetail), true
+	case errors.As(err, &exitNF):
+		return httpx.HTTPError(http.StatusNotFound, exitNF.Error()), true
+	case errors.As(err, &exitBad):
+		return httpx.HTTPError(http.StatusBadRequest, exitBad.Error()), true
+	case errors.As(err, &exitDeny):
+		return httpx.HTTPError(http.StatusForbidden, exitDeny.Error()), true
+	case errors.As(err, &exitUsed):
+		return httpx.HTTPError(http.StatusConflict, exitUsed.Error()), true
+	case errors.Is(err, authz.ErrDenied):
+		return httpx.HTTPError(http.StatusForbidden, "Permission denied"), true
 	case errors.Is(err, service.ErrRuleNotFound), errors.Is(err, service.ErrSnapshotNotFound):
 		return httpx.HTTPError(http.StatusNotFound, err.Error()), true
 	case errors.Is(err, domain.ErrNotEnforceable), errors.Is(err, api.ErrPolicyRefused):

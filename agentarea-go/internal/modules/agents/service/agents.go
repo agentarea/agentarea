@@ -1,6 +1,7 @@
 package service
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -477,9 +478,38 @@ func (s *Service) validateDelegates(ctx context.Context, ws scope.Workspace, too
 		}
 		tools[i].Settings = &st
 	}
+	var added []binding
 	for b := range credentialBindings(tools) {
 		if !credentialBindings(previous)[b] {
-			return &UnwiredError{Feature: "sending a workspace secret to a remote delegate"}
+			added = append(added, b)
+		}
+	}
+	if len(added) == 0 {
+		return nil
+	}
+	// Binding a secret to a URL sends that secret there: as admin-only as reusing a secret for a provider key.
+	if err := s.RequireAdmin(ctx); errors.Is(err, authz.ErrNotWorkspaceAdmin) {
+		return &PermissionError{Msg: "Only a workspace admin may send a workspace secret to a remote delegate."}
+	} else if err != nil {
+		return err
+	}
+	if s.d.Secrets == nil {
+		return &UnwiredError{Feature: "sending a workspace secret to a remote delegate"}
+	}
+	slices.SortFunc(added, func(a, b binding) int {
+		return cmp.Or(strings.Compare(a.name, b.name), strings.Compare(a.url, b.url), strings.Compare(a.secret, b.secret))
+	})
+	for _, b := range added {
+		secret, ok, err := s.d.Secrets.SecretNamed(ctx, ws, b.secret)
+		switch {
+		case err != nil:
+			return err
+		case !ok:
+			return &domain.InvalidError{Code: domain.CodeInvalidDelegate, Detail: fmt.Sprintf(
+				"Delegate '%s': no secret named '%s' in this workspace.", b.name, b.secret)}
+		case secret.OwnerType != nil:
+			return &domain.InvalidError{Code: domain.CodeInvalidDelegate, Detail: fmt.Sprintf(
+				"Delegate '%s': secret '%s' is managed by %s and cannot be sent to a remote agent.", b.name, b.secret, *secret.OwnerType)}
 		}
 	}
 	return nil

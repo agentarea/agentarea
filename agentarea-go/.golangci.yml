@@ -574,6 +574,7 @@ linters:
             - "**/internal/modules/sandbox/supervisor/**"
           allow:
             - "$gostd"
+            - "golang.org/x/sys/unix"
             - "github.com/agentarea/agentarea/agentarea-go/internal/modules/sandbox/supervisor"
         ext-surface:
           files:

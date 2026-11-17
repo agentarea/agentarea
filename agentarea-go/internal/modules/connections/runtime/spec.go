@@ -72,6 +72,20 @@ func contextEnabled(spec map[string]any) (bool, error) {
 	return true, nil
 }
 
+// egressRequired reads json_spec.egress: only {"required": <bool>} is one.
+func egressRequired(spec map[string]any) (bool, error) {
+	raw, ok := spec["egress"]
+	if !ok || raw == nil {
+		return false, nil
+	}
+	v, ok := raw.(map[string]any)
+	required, isBool := v["required"].(bool)
+	if !ok || len(v) != 1 || !isBool {
+		return false, errors.New(`json_spec.egress must be {"required": true|false}`)
+	}
+	return required, nil
+}
+
 // resolveSecrets reads the instance's environment references and env_vars
 // from its own workspace, at the moment of use.
 func (r *Runtime) resolveSecrets(ctx context.Context, workspaceID, instanceID string, refs map[string]any, names []string) (map[string]string, error) {
@@ -162,9 +176,12 @@ func (r *Runtime) buildSpec(ctx context.Context, inst *instance) (workload.Spec,
 		if raw, ok := js["egress_exit"]; ok && raw != nil {
 			exit, isName := raw.(string)
 			if !isName {
-				return workload.Spec{}, errors.New("json_spec.egress_exit must be an exit name")
+				return workload.Spec{}, errors.New("json_spec.egress_exit must be an egress exit id")
 			}
 			spec.EgressExit = exit
+		}
+		if spec.EgressRequired, err = egressRequired(js); err != nil {
+			return workload.Spec{}, err
 		}
 		if err := r.d.SpecHook(ctx, inst.ID, inst.WorkspaceID, &spec); err != nil {
 			r.d.Log.Error("instance spec hook refused the instance", "instance_id", inst.ID, "error", err)

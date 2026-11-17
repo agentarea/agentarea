@@ -98,7 +98,7 @@ type Verified struct {
 // Artifacts is ArtifactService over the artifacts bucket. Events are
 // recorded only for calls given an actor.
 type Artifacts struct {
-	Blob   blob.Store
+	Blob       blob.Store
 	Record     func(ctx context.Context, workspaceID, path, action string, actor *api.Actor)
 	RecordMove func(ctx context.Context, workspaceID, source, destination string, actor *api.Actor)
 	Now        func() time.Time

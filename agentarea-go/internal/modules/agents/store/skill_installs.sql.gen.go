@@ -100,3 +100,153 @@ func (q *Queries) SkillInsertFromCatalog(ctx context.Context, arg SkillInsertFro
 	)
 	return err
 }
+
+const skillSetSource = `-- name: SkillSetSource :exec
+UPDATE skills SET source_url = $1::varchar, source_type = $2,
+    registry_item_id = $3::uuid,
+    description = COALESCE($4::text, description), updated_at = $5
+WHERE workspace_id = $6 AND id = $7
+`
+
+type SkillSetSourceParams struct {
+	SourceUrl      pgtype.Text
+	SourceType     string
+	RegistryItemID uuid.NullUUID
+	Description    pgtype.Text
+	Now            pgtype.Timestamp
+	WorkspaceID    string
+	ID             uuid.UUID
+}
+
+func (q *Queries) SkillSetSource(ctx context.Context, arg SkillSetSourceParams) error {
+	_, err := q.db.Exec(ctx, skillSetSource,
+		arg.SourceUrl,
+		arg.SourceType,
+		arg.RegistryItemID,
+		arg.Description,
+		arg.Now,
+		arg.WorkspaceID,
+		arg.ID,
+	)
+	return err
+}
+
+const skillsFromCatalog = `-- name: SkillsFromCatalog :many
+SELECT id, name, slug, description, source_type, source_url, network_scope, workspace_id, created_by,
+       created_at, updated_at, registry_item_id, s3_path, content
+FROM skills WHERE workspace_id = $1 AND registry_item_id IS NOT NULL
+ORDER BY name, id
+`
+
+type SkillsFromCatalogRow struct {
+	ID             uuid.UUID
+	Name           string
+	Slug           string
+	Description    pgtype.Text
+	SourceType     string
+	SourceUrl      pgtype.Text
+	NetworkScope   string
+	WorkspaceID    string
+	CreatedBy      string
+	CreatedAt      pgtype.Timestamp
+	UpdatedAt      pgtype.Timestamp
+	RegistryItemID uuid.NullUUID
+	S3Path         pgtype.Text
+	Content        pgtype.Text
+}
+
+func (q *Queries) SkillsFromCatalog(ctx context.Context, workspaceID string) ([]SkillsFromCatalogRow, error) {
+	rows, err := q.db.Query(ctx, skillsFromCatalog, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SkillsFromCatalogRow
+	for rows.Next() {
+		var i SkillsFromCatalogRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.SourceType,
+			&i.SourceUrl,
+			&i.NetworkScope,
+			&i.WorkspaceID,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.RegistryItemID,
+			&i.S3Path,
+			&i.Content,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const skillsInstalledFromCatalog = `-- name: SkillsInstalledFromCatalog :many
+SELECT id, workspace_id FROM skills
+WHERE registry_item_id IS NOT NULL AND workspace_id <> $1
+ORDER BY workspace_id, id
+`
+
+type SkillsInstalledFromCatalogRow struct {
+	ID          uuid.UUID
+	WorkspaceID string
+}
+
+func (q *Queries) SkillsInstalledFromCatalog(ctx context.Context, platformWorkspaceID string) ([]SkillsInstalledFromCatalogRow, error) {
+	rows, err := q.db.Query(ctx, skillsInstalledFromCatalog, platformWorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SkillsInstalledFromCatalogRow
+	for rows.Next() {
+		var i SkillsInstalledFromCatalogRow
+		if err := rows.Scan(&i.ID, &i.WorkspaceID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const skillsOutsidePlatform = `-- name: SkillsOutsidePlatform :many
+SELECT id, workspace_id FROM skills WHERE workspace_id <> $1
+ORDER BY workspace_id, id
+`
+
+type SkillsOutsidePlatformRow struct {
+	ID          uuid.UUID
+	WorkspaceID string
+}
+
+func (q *Queries) SkillsOutsidePlatform(ctx context.Context, platformWorkspaceID string) ([]SkillsOutsidePlatformRow, error) {
+	rows, err := q.db.Query(ctx, skillsOutsidePlatform, platformWorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SkillsOutsidePlatformRow
+	for rows.Next() {
+		var i SkillsOutsidePlatformRow
+		if err := rows.Scan(&i.ID, &i.WorkspaceID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

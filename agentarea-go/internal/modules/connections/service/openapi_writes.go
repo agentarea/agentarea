@@ -58,6 +58,10 @@ type ConnectionCreate struct {
 	Headers      []HeaderIn
 	Query        []QueryIn
 	URLVariables []VarIn
+	// AllowedAuthOrigins bind a catalog sign-in's credential to the item's origins.
+	AllowedAuthOrigins []string
+	// Status is the row's; empty is active.
+	Status string
 }
 
 // ConnectionPatch is OpenAPIConnectionUpdate: a *Set flag marks a field the
@@ -370,6 +374,10 @@ func (s *Service) CreateConnection(ctx context.Context, c authn.Caller, in Conne
 	if err != nil {
 		return ConnectionView{}, err
 	}
+	status := in.Status
+	if status == "" {
+		status = "active"
+	}
 	id := s.d.NewID()
 	var conn domain.Connection
 	var written []string
@@ -378,8 +386,8 @@ func (s *Service) CreateConnection(ctx context.Context, c authn.Caller, in Conne
 		conn, err = s.d.OpenAPIWrites.Insert(ctx, sess, store.ConnectionNew{
 			ID: id, CreatedBy: c.UserID, Name: in.Name, Description: in.Description, SpecURL: in.SpecURL,
 			SpecContent: rawSpec, BaseURL: in.BaseURL, AuthConfigID: in.AuthConfigID, RegistryItemID: registryItemID,
-			CustomHeaders: headers, CustomQuery: query, URLVariables: vars, AvailableTools: toolsJSON(tools),
-			Status: "active", Now: s.d.Now(),
+			AllowedAuthOrigins: in.AllowedAuthOrigins, CustomHeaders: headers, CustomQuery: query, URLVariables: vars,
+			AvailableTools: toolsJSON(tools), Status: status, Now: s.d.Now(),
 		})
 		if err != nil {
 			return err

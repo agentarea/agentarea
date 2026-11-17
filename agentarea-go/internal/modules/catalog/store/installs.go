@@ -60,7 +60,9 @@ func (Installs) Item(ctx context.Context, s db.Session, registryType, id string)
 	if err != nil {
 		return api.CatalogItem{}, false, err
 	}
-	return installItem(r.ID, r.Name, r.Description, r.Version, r.Spec, r.RegistryID, r.RegistryTrust, r.RegistryWorkspaceID), true, nil
+	it := installItem(r.ID, r.Name, r.Description, r.Version, r.Spec, r.RegistryID, r.RegistryTrust, r.RegistryWorkspaceID)
+	it.InstalledVersion = fromText(r.InstalledVersion)
+	return it, true, nil
 }
 
 // SkillByKey is CatalogSkillByKey with key's LIKE wildcards escaped.
@@ -84,6 +86,19 @@ func (Installs) MarkInstalled(ctx context.Context, s db.Session, itemID, entityI
 	}
 	return New(s.Q()).MarkItemInstalled(ctx, MarkItemInstalledParams{ID: uuid.New(), RegistryItemID: itemID,
 		WorkspaceID: s.Workspace().ID(), InstalledEntityID: entityID, InstalledVersion: v})
+}
+
+// SkillVersions is versions_for.
+func (Installs) SkillVersions(ctx context.Context, s db.Session, ids []uuid.UUID) (map[string]api.ItemVersions, error) {
+	rows, err := New(s.Q()).SkillItemVersions(ctx, SkillItemVersionsParams{WorkspaceID: s.Workspace().ID(), Ids: ids})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]api.ItemVersions, len(rows))
+	for _, r := range rows {
+		out[r.ID.String()] = api.ItemVersions{Current: fromText(r.Version), Installed: fromText(r.InstalledVersion)}
+	}
+	return out, nil
 }
 
 // SkillProvenance is provenance_for.

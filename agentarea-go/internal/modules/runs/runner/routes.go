@@ -75,6 +75,28 @@ func (p RedisPresence) Mark(ctx context.Context, clientID string) error {
 	return p.RDB.Set(ctx, "runners:online:"+clientID, "1", leaseSeconds*time.Second).Err()
 }
 
+// Online is runner_presence.online: the clients whose presence key is set.
+func (p RedisPresence) Online(ctx context.Context, clientIDs []string) (map[string]bool, error) {
+	out := map[string]bool{}
+	if len(clientIDs) == 0 {
+		return out, nil
+	}
+	keys := make([]string, len(clientIDs))
+	for i, id := range clientIDs {
+		keys[i] = "runners:online:" + id
+	}
+	values, err := p.RDB.MGet(ctx, keys...).Result()
+	if err != nil {
+		return nil, err
+	}
+	for i, v := range values {
+		if s, ok := v.(string); ok && s != "" {
+			out[clientIDs[i]] = true
+		}
+	}
+	return out, nil
+}
+
 type handlers struct {
 	d    *Deps
 	errs *httpx.Errors

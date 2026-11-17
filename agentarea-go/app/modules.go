@@ -132,6 +132,7 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 	}
 	m.agents = agents.New(func() agents.Deps {
 		ad := agents.Deps{DB: d.DB, Graph: d.Graph, Config: d.Agents, Workspace: e.Workspace, Principal: e.Principal, Admin: e.Admin, Log: d.Log}
+		ad.Secrets = delegateSecrets{d: d}
 		ad.ClientAPIURL, ad.A2AAPIURL = d.APIURL, d.APIURL
 		ad.A2APrincipal = func(ctx context.Context, token string) (*authn.Principal, error) {
 			return e.gate.Optional(ctx, token, false)
@@ -139,6 +140,7 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 		ad.TaskDefTriggers = lateTriggers{m: m}
 		ad.TaskDefRunner = lateTaskDefRunner{m: m}
 		ad.Triggers, ad.CodeTools = lateAgentTriggers{m: m}, agentsservice.CodeCatalogue{}
+		ad.Wallets = lateWalletCredentials{m: m}
 		if artifacts != nil {
 			ad.Blob = artifacts
 		}
@@ -147,6 +149,7 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 		}
 		if d.Redis != nil {
 			ad.A2ARateLimiter = clusterhttpx.NewRateLimiter(d.Redis)
+			ad.Presence = runs.NewRunnerPresence(d.Redis)
 		}
 		return ad
 	}())
@@ -172,6 +175,16 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 		}}
 	if d.Extensions != nil && d.Extensions.AuditSink != nil {
 		gd.Sink = d.Extensions.AuditSink
+	}
+	if d.Extensions != nil && d.Extensions.EgressExits {
+		gd.EgressExits = &governance.EgressExitPorts{Graph: d.Graph, Instances: m.connections.EgressBindings(),
+			Upstream: func(ctx context.Context, rawURL string) error {
+				if d.Outbound == nil {
+					return errors.New("egress exits need the outbound address policy")
+				}
+				_, err := d.Outbound.Guard().CheckURL(ctx, rawURL)
+				return err
+			}}
 	}
 	gd.Tasks = lateTaskMetadata{m: m}
 	m.governance = governance.New(gd)
@@ -203,13 +216,13 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 		Pricing: func() money.CustomerPricing { return d.Extensions.CustomerPricing }, LocalHost: models.LocalHost(d.Lookup),
 		APIURL: d.APIURL, Principal: e.Principal, Workspace: e.Workspace})
 	m.catalog.UseModels(m.models.SpecUse())
-	m.agents.Use(agents.Later{Audit: m.governance.Audit(), ClientMCPNames: m.connections.Lookup(),
+	m.agents.Use(agents.Later{Audit: m.governance.Audit(), ClientMCPNames: m.connections.Lookup(), ClientConnections: m.connections.Attachable(),
 		Models: m.models.ModelKinds(), Connections: newAgentLoans(m.connections.Loans()),
 		ClientRunnerKeys: clientRunnerKeys{k: m.identity.RunnerKeys()},
 		Approvals:        m.governance.AgentApprovals(), Catalog: m.catalog.Installs(), InstallPolicy: m.governance.InstallPolicy()})
 	m.connections.Use(connections.Later{Specs: m.catalog.MCPSpecs(), APIItems: m.catalog.APIItems(), Policies: m.governance.ToolPolicies(),
 		Approvals: m.governance.ApprovalTargets(), Audit: m.governance.Audit(),
-		Toolsets: m.platformToolsets()})
+		Toolsets: m.platformToolsets(), EgressExits: m.governance.EgressExitBinding()})
 	m.insights = insights.New(insights.Deps{DB: d.DB, Workspace: e.Workspace, Principal: e.Principal, Admin: e.Admin, Config: d.Insights, Log: d.Log,
 		Balance: func() money.BalanceSource {
 			if d.Extensions == nil {
@@ -278,6 +291,9 @@ func streamsDeps(e *edge, d coreDeps, m *moduleSet) streams.Deps {
 		Links: m.identity.MessengerLinks(), Owners: m.identity.WorkspaceOwners(), AppURL: d.AppURL,
 		MCPEventSources: mcpEventSources{s: m.connections.MCPEventSources()},
 		ModelKinds:      m.models.ModelKinds(), Models: lateOneShotModels{m: m}, AgentModels: agentModels{d: m.agents.Definitions()}}
+	if d.Outbound != nil {
+		sd.Guard = d.Outbound.Guard
+	}
 	streamsRunsPorts(&sd, m.runsSurface, m.agents)
 	if d.Durable != nil {
 		sd.Schedules, sd.Executor, sd.TriggerQueue = d.Durable.Scheduler(), d.Durable.Executor(), d.Durable.Config.Queues.Trigger
@@ -305,13 +321,14 @@ func runsDeps(d coreDeps, m *moduleSet, store kblob.Store) runs.Deps {
 	svc := runsservice.Deps{
 		DB: d.DB, Blob: store, Audit: m.governance.Audit(), Caps: m.governance.Budgets(), Policies: m.governance.RunPolicies(),
 		ToolCosts: m.connections.ToolCosts(),
-		Agents:    m.agents.Definitions(), Resolver: m.models.Resolver(), Models: m.models.Caller(),
+		Agents:    m.agents.Definitions(), CatalogAgents: m.agents.CatalogRuns(), Resolver: m.models.Resolver(), Models: m.models.Caller(),
 		Describer: m.models.Describer(), Decider: m.models.Decider(), Media: m.models.Media(), VideoJobs: m.models.VideoJobs(),
 		Runtime: m.sandbox.Runtime(), Workspace: m.sandbox.TaskWorkspace(),
 		Tools: map[string]runsservice.ToolCaller{
-			"mcp":     mcpCaller{t: m.connections.MCPTools()},
-			"openapi": openAPICaller{t: m.connections.OpenAPITools()},
-			"code":    platformCaller{t: m.connections.PlatformTools()},
+			"mcp":          mcpCaller{t: m.connections.MCPTools()},
+			"openapi":      openAPICaller{t: m.connections.OpenAPITools()},
+			"code":         platformCaller{t: m.connections.PlatformTools()},
+			"remote_agent": remoteAgentCaller{t: m.connections.RemoteAgents()},
 		},
 		Settings: d.RunSettings, Telemetry: d.Telemetry, Log: d.Log,
 		Definitions: newRunDefinitions(runTools{t: m.connections.RunTools()}, runSkillsPort{s: m.agents.RunSkills()},

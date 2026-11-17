@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -618,6 +619,55 @@ func TestConnectRoundTrip(t *testing.T) {
 	creds := f.stored(t, authID)
 	if creds["access_token"] != "at" || creds["refresh_token"] != "rt" || creds["client_secret"] != "csec" {
 		t.Fatalf("stored %v", creds)
+	}
+}
+
+func TestAuthorizeCatalogItemCreatesAPendingConnection(t *testing.T) {
+	p := newOAuthProvider(t)
+	f := newOAuthFixture(t, p, Config{})
+	conns := &writesStore{rows: map[uuid.UUID]domain.Connection{}}
+	graph := &writesGraph{personal: map[string]bool{}, owners: map[string]bool{}, allowed: map[string]bool{}}
+	f.svc.d.OpenAPIWrites, f.svc.d.Graph, f.svc.d.Out = conns, graph, newWritesOut(t, true)
+	item := uuid.New()
+	desc := "Acme API"
+	f.items[item] = CatalogAPIItem{ID: item, Name: "Acme", Description: &desc, Spec: map[string]any{
+		"base_url":     p.srv.URL + "/api",
+		"spec_content": map[string]any{"openapi": "3.0.0", "info": map[string]any{"title": "A", "version": "1"}, "paths": map[string]any{}},
+		"oauth": map[string]any{"provider_key": "acme", "authorization_url": p.srv.URL + "/authorize",
+			"token_url": p.srv.URL + "/token", "scopes": []any{"read"}},
+	}}
+	cid, sec := "cid", "csec"
+	loc, connID, err := f.svc.OAuthAuthorize(context.Background(), f.caller, AuthorizeRequest{
+		Target: OAuthTarget{CatalogItemID: &item}, Mode: "custom", Custom: CustomOAuthApp{ClientID: &cid, ClientSecret: &sec},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, ok := conns.rows[connID]
+	if !ok {
+		t.Fatalf("no connection %s in %v", connID, conns.rows)
+	}
+	if conn.Name != "Acme" || conn.Description == nil || *conn.Description != desc || conn.BaseURL != p.srv.URL+"/api" ||
+		conn.Status != "pending" || conn.SpecContent == nil || !reflect.DeepEqual(conn.AllowedAuthOrigins, []string{p.srv.URL}) {
+		t.Fatalf("connection %+v", conn)
+	}
+	if !graph.owners[connID.String()] || !graph.personal[connID.String()] {
+		t.Fatal("the connection was not granted to its creator")
+	}
+	var minted *domain.AuthConfig
+	for _, a := range f.auth.rows {
+		if a.OpenAPIConnID != nil && *a.OpenAPIConnID == connID.String() {
+			minted = &a
+		}
+	}
+	if minted == nil || minted.Name != "acme-"+connID.String()[:8] {
+		t.Fatalf("auth config %+v", f.auth.rows)
+	}
+	u, _ := url.Parse(loc)
+	raw := f.kv.m["oauth_state:"+u.Query().Get("state")]
+	var st oauthState
+	if err := json.Unmarshal([]byte(raw), &st); err != nil || st.TargetKind != kindOpenAPIConnection || st.ConnectionID != connID.String() {
+		t.Fatalf("state %s %v", raw, err)
 	}
 }
 

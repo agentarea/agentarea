@@ -13,6 +13,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/events"
 	agentsapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/agents/api"
 	identityapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/identity/api"
+	"github.com/agentarea/agentarea/agentarea-go/internal/modules/runs/api"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/runs/handlers"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/runs/runner"
 	"github.com/agentarea/agentarea/agentarea-go/internal/serve"
@@ -35,6 +36,9 @@ type RunnerDeps struct {
 	Live   authn.LiveTurns
 	Log    *slog.Logger
 }
+
+// NewRunnerPresence is which clients' runners are connected, read from the keys their sockets keep in rdb.
+func NewRunnerPresence(rdb redis.Cmdable) api.RunnerPresence { return runner.RedisPresence{RDB: rdb} }
 
 // RunnerSurface is GET /v1/runner/whoami, PUT /v1/runner/tasks/{id}/files/*
 // and the runner socket /v1/runner/connect.

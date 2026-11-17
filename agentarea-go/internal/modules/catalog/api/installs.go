@@ -19,7 +19,12 @@ type CatalogItem struct {
 	RegistryID          string
 	RegistryTrust       string
 	RegistryWorkspaceID *string
+	// InstalledVersion is the version the workspace installed, read by AgentItem and SkillItem.
+	InstalledVersion *string
 }
+
+// ItemVersions are an item's current version and the one the workspace installed.
+type ItemVersions struct{ Current, Installed *string }
 
 // ItemSource is an item's registry and trust, as the install policy decides on it.
 type ItemSource struct{ RegistryID, Trust string }
@@ -47,12 +52,15 @@ type Installs interface {
 	SkillByKey(ctx context.Context, ws scope.Workspace, key string) (CatalogItem, bool, error)
 	// MarkInstalled records the workspace's copy of an item, in the install's transaction s.
 	MarkInstalled(ctx context.Context, s db.Session, itemID, entityID string, version *string) error
+	// SkillVersions is versions_for: by item id, of the active items among itemIDs.
+	SkillVersions(ctx context.Context, ws scope.Workspace, itemIDs []string) (map[string]ItemVersions, error)
 	// SkillProvenance is provenance_for: the source of each item id that still has an
 	// item, a retired registry's included.
 	SkillProvenance(ctx context.Context, ws scope.Workspace, itemIDs []string) (map[string]ItemSource, error)
-	// Folder is download_folder over the commit archive: folder of repo at
-	// ref (the default branch when nil), which must be tree treeSHA when set.
-	Folder(ctx context.Context, repo, folder string, ref, treeSHA *string) (GitHubFolder, error)
+	// Folder is download_folder: folder of repo at ref (the default branch
+	// when nil), which must be tree treeSHA when set. Without a token it reads
+	// the commit archive, with one the REST API and raw files as that token.
+	Folder(ctx context.Context, token, repo, folder string, ref, treeSHA *string) (GitHubFolder, error)
 }
 
 // FolderError is a GitHub read of a skill folder that failed.

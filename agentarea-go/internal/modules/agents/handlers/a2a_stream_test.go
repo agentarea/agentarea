@@ -21,7 +21,9 @@ type streamTasks struct {
 	err    error
 }
 
-func (s streamTasks) Handle(context.Context, service.A2ACall) (domain.A2AJSON, error) { return nil, nil }
+func (s streamTasks) Handle(context.Context, service.A2ACall) (domain.A2AJSON, error) {
+	return nil, nil
+}
 
 func (s streamTasks) Stream(_ context.Context, _ service.A2ACall, emit func(domain.A2AJSON) error) error {
 	for _, e := range s.events {

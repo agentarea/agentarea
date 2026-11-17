@@ -369,3 +369,58 @@ func (Skills) ByRegistryItem(ctx context.Context, s db.Session, item uuid.UUID) 
 	return skillRow(r.ID, r.Name, r.Slug, r.Description, r.SourceType, r.SourceUrl, r.NetworkScope, r.WorkspaceID, r.CreatedBy,
 		r.CreatedAt, r.UpdatedAt, r.RegistryItemID, r.S3Path), true, nil
 }
+
+// FromCatalog is list_from_catalog: the workspace's skills installed from a catalog item, with their row bodies.
+func (Skills) FromCatalog(ctx context.Context, s db.Session) ([]domain.Skill, error) {
+	rows, err := New(s.Q()).SkillsFromCatalog(ctx, s.Workspace().ID())
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.Skill, len(rows))
+	for i, r := range rows {
+		out[i] = skillRow(r.ID, r.Name, r.Slug, r.Description, r.SourceType, r.SourceUrl, r.NetworkScope, r.WorkspaceID, r.CreatedBy,
+			r.CreatedAt, r.UpdatedAt, r.RegistryItemID, r.S3Path)
+		out[i].Content = fromText(r.Content)
+	}
+	return out, nil
+}
+
+// SkillSource is where a skill came from; a nil Description keeps the one it has.
+type SkillSource struct {
+	SourceURL      *string
+	SourceType     string
+	RegistryItemID uuid.NullUUID
+	Description    *string
+}
+
+// SetSource writes the skill's source columns.
+func (Skills) SetSource(ctx context.Context, s db.Session, id uuid.UUID, src SkillSource, now time.Time) error {
+	return New(s.Q()).SkillSetSource(ctx, SkillSetSourceParams{SourceUrl: text(src.SourceURL), SourceType: src.SourceType,
+		RegistryItemID: src.RegistryItemID, Description: text(src.Description), Now: naive(now), WorkspaceID: s.Workspace().ID(), ID: id})
+}
+
+// CatalogInstalls is list_catalog_installs: every skill outside the platform workspace installed from a catalog item.
+func (Skills) CatalogInstalls(ctx context.Context, q db.Querier, platformWorkspace string) ([]SkillRef, error) {
+	rows, err := New(q).SkillsInstalledFromCatalog(ctx, platformWorkspace)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SkillRef, len(rows))
+	for i, r := range rows {
+		out[i] = SkillRef(r)
+	}
+	return out, nil
+}
+
+// OutsidePlatform is list_workspace_skills: every skill outside the platform workspace.
+func (Skills) OutsidePlatform(ctx context.Context, q db.Querier, platformWorkspace string) ([]SkillRef, error) {
+	rows, err := New(q).SkillsOutsidePlatform(ctx, platformWorkspace)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SkillRef, len(rows))
+	for i, r := range rows {
+		out[i] = SkillRef(r)
+	}
+	return out, nil
+}

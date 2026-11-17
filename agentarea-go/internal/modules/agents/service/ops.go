@@ -529,11 +529,17 @@ func (s *Service) Restore(ctx context.Context, c authn.Caller, identifier string
 }
 
 // unmake is delete_agent rolling back a create whose triggers failed: the row,
-// and what the create wrote beside it (loans, approval rules, graph tuples).
+// and what the create wrote beside it (loans, approval rules, graph tuples),
+// and the agent's wallet keys.
 func (s *Service) unmake(ctx context.Context, c authn.Caller, id string, tools []domain.Tool) error {
 	err := s.write(ctx, c.Workspace, func(sess db.Session) error {
 		if _, err := s.store.Delete(ctx, sess, uuid.MustParse(id)); err != nil {
 			return err
+		}
+		if s.d.Wallets != nil {
+			if err := s.d.Wallets.DeleteCredentials(ctx, sess, c.UserID, id); err != nil {
+				return err
+			}
 		}
 		if err := s.syncLoans(ctx, id, nil, tools); err != nil {
 			return err

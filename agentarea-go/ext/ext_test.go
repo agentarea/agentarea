@@ -77,7 +77,7 @@ func TestEveryPointRegisters(t *testing.T) {
 		WithAccountBalance(func(context.Context, Deps) (AccountBalanceSource, error) { return nil, nil }),
 		WithWorkspaceUsage(func(context.Context, Deps) (WorkspaceUsageSource, error) { return nil, nil }),
 		WithToolBilling(func(context.Context, Deps) (ToolBilling, error) { return nil, nil }),
-		WithEgressExits(func(context.Context, Deps) (EgressExits, error) { return nil, nil }),
+		WithEgressExits(func(context.Context, Deps) (EgressExits, error) { return EgressExits{}, nil }),
 		WithAuditSink(func(context.Context, Deps) (AuditSink, error) { return nil, nil }),
 		WithWorkloadHooks(func(context.Context, Deps) (WorkloadHooks, error) { return WorkloadHooks{}, nil }),
 		WithCommand(Command{Name: "rollup", Run: run}),

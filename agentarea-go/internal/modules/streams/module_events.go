@@ -13,7 +13,9 @@ import (
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/events"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/lifecycle"
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/netguard"
+	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/api"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/delivery"
+	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/handlers"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/polling"
 	"github.com/agentarea/agentarea/agentarea-go/internal/modules/streams/service"
 )
@@ -131,4 +133,18 @@ func (m *Module) Delivery(p DeliveryDeps) ([]lifecycle.Component, error) {
 		return nil, err
 	}
 	return x.Components(), nil
+}
+
+// MCPEvents is the streams served as the MCP Events extension; nil without the outbound clients
+// and address policy webhook subscribers are checked against.
+func (m *Module) MCPEvents() api.MCPEvents {
+	if m.d.Out == nil || m.d.Guard == nil {
+		return nil
+	}
+	now := m.d.Now
+	if now == nil {
+		now = time.Now
+	}
+	callbacks := delivery.Callback{Endpoint: delivery.NewEndpoint(m.d.Out, now, m.log().With("component", "mcp events")), Guard: m.d.Guard()}
+	return handlers.NewMCPEvents(m.svc, callbacks, now)
 }

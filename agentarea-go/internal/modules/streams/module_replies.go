@@ -30,7 +30,7 @@ type ReplyDeps struct {
 }
 
 // Replies is the delivery group on tasks.events: every task event to where its task replies
-// (its delivery address, its task webhook), and the autoclaimer of what a send left pending.
+// (its delivery address, its task webhook, its A2A push configs), and the autoclaimer of what a send left pending.
 func (m *Module) Replies(p ReplyDeps) ([]lifecycle.Component, error) {
 	switch {
 	case m.d.Broker == nil, m.d.TaskOutcomes == nil, m.d.Secrets == nil, m.d.Out == nil, m.d.SourceTypes == nil:
@@ -44,6 +44,10 @@ func (m *Module) Replies(p ReplyDeps) ([]lifecycle.Component, error) {
 		Transport:     m.d.Out.Transport(netguard.Member),
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
+	public := &http.Client{
+		Transport:     m.d.Out.Transport(netguard.Public),
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 	x, err := replies.New(replies.Deps{
 		Broker: m.d.Broker, Dedup: p.Dedup, Tasks: m.d.TaskOutcomes, Consumer: p.Consumer, Config: p.Config,
 		Replies: func(ctx context.Context, slug string) (*domain.Reply, bool, error) {
@@ -55,6 +59,7 @@ func (m *Module) Replies(p ReplyDeps) ([]lifecycle.Component, error) {
 			"telegram_live": replies.TelegramLive{Credentials: creds, Redis: p.Redis, Client: vendor},
 			"smtp":          replies.Email{Credentials: creds, Dialer: m.d.Out.Dialer()},
 			"task_webhook":  replies.TaskWebhook{Secret: m.taskSecret, Client: member, Now: m.d.Now},
+			"a2a_webhook":   replies.A2APush{Secret: m.taskSecret, Client: public},
 		},
 		Now: m.d.Now, Log: m.log().With("component", "task reply delivery"),
 	})

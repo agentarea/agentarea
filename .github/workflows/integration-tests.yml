@@ -55,6 +55,7 @@ jobs:
           base: ${{ github.event_name == 'pull_request' && github.base_ref || 'main' }}
           filters: |
             stack:
+              - 'agentarea-go/**'
               - 'agentarea-platform/**'
               - 'docker-compose.yaml'
               - 'docker-compose.ci.yaml'
@@ -295,31 +296,19 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
-      - name: Build API image from PR source
+      # One image runs the API, the worker and the migrations (`agentarea <role>`).
+      - name: Build platform image from PR source
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
-          context: ./agentarea-platform
-          file: ./agentarea-platform/apps/api/Dockerfile
+          context: ./agentarea-go
+          file: ./agentarea-go/Dockerfile
           # Tag exactly what compose expects so `pull_policy: never` (set in the
           # CI overlay) resolves to this freshly built image.
-          tags: agentarea/agentarea-api:latest
+          tags: agentarea/agentarea-platform:latest
           load: true
           push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build worker image from PR source
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
-        with:
-          context: ./agentarea-platform
-          file: ./agentarea-platform/apps/worker/Dockerfile
-          tags: agentarea/agentarea-worker:latest
-          load: true
-          push: false
-          # Own scope: the API build above writes mode=max to the default one,
-          # and two images sharing it evict each other's layers.
-          cache-from: type=gha,scope=worker
-          cache-to: type=gha,mode=max,scope=worker
+          cache-from: type=gha,scope=platform
+          cache-to: type=gha,mode=max,scope=platform
 
       - name: Start stack (db, kratos, temporal, openfga, api, worker)
         run: |

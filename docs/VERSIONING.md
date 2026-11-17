@@ -43,7 +43,7 @@ Chart.yaml version (0.0.1) — independent chart version
 
 ### What gets pushed when
 
-| Event | Workflow | Tags pushed for each of 8 components |
+| Event | Workflow | Tags pushed for each component |
 |---|---|---|
 | Merge to `main` | `ci.yml` → `docker-build-push.yml` | `<version>-<sha>` (e.g. `0.0.8-a8eaf7b`) — immutable |
 | Git tag push `vX.Y.Z` | `release-publish.yaml` | `<version>`, `<maj.min>`, `<maj>`, `latest` — all pointing to the **same digest** as `<version>-<sha>` (retag, no rebuild) |
@@ -66,9 +66,11 @@ Chart.yaml version (0.0.1) — independent chart version
 
 ### Components
 
-Eight Docker images are published:
+Five Docker images are released:
 
-`api`, `worker`, `frontend`, `operator`, `mcp-manager`, `mcp-runner`, `mcp-runner-locked`, `events`
+`platform`, `frontend`, `mcp-runner`, `mcp-runner-locked`, `mcp-base`
+
+`platform` is the one backend image (`agentarea-go/Dockerfile`): API, worker, event service, MCP manager, sandbox runner, operator and the migration job are its roles (`agentarea serve`, `agentarea worker`, `agentarea events`, `agentarea mcp`, `agentarea sandbox`, `agentarea operator`, `agentarea migrate`). It replaces the `api`, `worker`, `events`, `mcp-manager` and `operator` images, which are no longer built.
 
 ### Registry
 
@@ -116,7 +118,7 @@ The script performs these checks before creating the tag:
 4. `VERSION` contains a valid semver; tag `v<version>` doesn't already exist locally or on origin.
 5. `scripts/verify-version-sync.sh` passes (all version files agree).
 6. `ci.yml` is green on HEAD (via `gh` CLI).
-7. All 8 `agentarea-<component>:<version>-<sha>` images exist on Docker Hub.
+7. The `platform`, `frontend`, `mcp-runner` and `mcp-runner-locked` `agentarea-<component>:<version>-<sha>` images exist on Docker Hub.
 8. Shows a summary with commit list since the previous tag.
 9. Asks `y/N` confirmation.
 10. Creates an annotated tag `v<version>` and pushes it to origin.

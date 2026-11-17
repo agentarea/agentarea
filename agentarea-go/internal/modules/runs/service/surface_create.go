@@ -193,6 +193,7 @@ func (s *Surface) Create(ctx context.Context, req CreateRequest) (Created, error
 		TaskID: taskID, AgentID: req.AgentID, Description: req.Description, Parameters: params,
 		UserID: c.UserID, RequiresHumanApproval: req.RequiresHumanApproval, TaskPolicy: req.TaskPolicy,
 		ExecutionTurns: req.ExecutionTurns, Metadata: meta, Provenance: provenanceOf(c), ScheduledAt: req.ScheduledAt,
+		Credential: c.Credential,
 	}
 	if err := s.start(ctx, c.Workspace, spec); err != nil {
 		if errors.As(err, &r) {
@@ -334,6 +335,8 @@ type runSpec struct {
 	Metadata                     map[string]any
 	Provenance                   api.TaskProvenance
 	ScheduledAt                  *time.Time
+	// Credential is what the caller authenticated with, carried into the audit row.
+	Credential *authn.Credential
 }
 
 // start is create_and_execute_task_with_workflow: the policy resolved and
@@ -342,6 +345,9 @@ type runSpec struct {
 func (s *Surface) start(ctx context.Context, ws scope.Workspace, sp runSpec) error {
 	if sp.UserID == "" {
 		return errors.New("user_id is required to create a task; refusing to persist an unowned task")
+	}
+	if s.d.Audit == nil {
+		return errors.New("task.create cannot be audited: no audit writer")
 	}
 	maxIterations := sp.Parameters["max_iterations"]
 	effective, snap, err := s.d.Policies.Task(ctx, governanceapi.RunPrincipal{Workspace: ws, UserID: sourceUserID(sp.Provenance), AgentID: sp.AgentID},
@@ -392,12 +398,34 @@ func (s *Surface) start(ctx context.Context, ws scope.Workspace, sp runSpec) err
 		if err := store.InsertSurfaceTask(ctx, tx, row, s.d.Now()); err != nil {
 			return err
 		}
+		if err := s.d.Audit.RecordOnce(ctx, tx, taskCreated(sp.TaskID, sp.UserID, sp.Credential)); err != nil {
+			return err
+		}
 		stored, err = store.Runs{}.TaskToLaunch(ctx, tx, sp.TaskID)
 		return err
 	}); err != nil {
 		return err
 	}
 	return s.launch(ctx, ws, stored)
+}
+
+// taskCreated is @audited("task.create") on create_task_with_policy: the
+// task is the resource, its owner the actor, the credential as AuditService._build adds it.
+func taskCreated(taskID, userID string, cr *authn.Credential) governanceapi.AuditRecord {
+	meta := map[string]any{}
+	if cr != nil {
+		meta["credential"] = string(cr.Kind)
+		meta["surface"] = string(cr.Surface)
+		if cr.KeyID != "" {
+			key := "api_key_id"
+			if cr.Kind == authn.KindTurn {
+				key = "turn_id"
+			}
+			meta[key] = cr.KeyID
+		}
+	}
+	return governanceapi.AuditRecord{EventID: uuid.NewString(), Action: "task.create", ResourceType: "task",
+		ResourceID: taskID, ActorType: "user", ActorID: userID, Metadata: meta}
 }
 
 // launch is TemporalTaskManager.submit_task on a stored task.

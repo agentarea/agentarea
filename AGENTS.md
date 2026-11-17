@@ -43,11 +43,11 @@ Checks: one entrypoint per stack, the same command CI runs.
 ```bash
 # From the repo root
 make check          # Every non-DB check (check-backend + check-frontend)
-make check-db       # Migrations + schema-backed suites; needs POSTGRES_* (make db-test-up / db-test-down)
+make check-db       # Migrations + schema-backed suites; needs AGENTAREA_DB_TEST_URL (make db-test-up / db-test-down)
 
 # Per stack
 make -C agentarea-platform check        # ruff + format + pyright, pytest, one alembic head
-make -C agentarea-mcp-manager check     # go build + test + golangci-lint (same for agentarea-event-service)
+make -C agentarea-go check              # go build + vet + test + golangci-lint + architecture checks
 make -C agentarea-operator check        # pytest
 pnpm -C agentarea-webapp run check      # eslint + tsc + vitest (check:integration = client drift + build)
 pnpm -C agentarea-cli run check         # prettier + tsc + ava

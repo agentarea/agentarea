@@ -70,6 +70,7 @@ Python paths are relative to `agentarea-platform/`. Dossier: `.omc/research/go-m
   hold (`signed_headers`, core goose `00003_payment_signed_headers.sql`, written by `Sign` before the payment
   is sent) is returned at any age, so its payment is sent again and never signed twice. `Complete` of an expired hold
   still settles and counts (it was paid); the row stays `pending` otherwise (no sweeper).
-- Agent deletion still orphans `wallet_creds_<agent>` (agents' delete path).
+- Deleting an agent deletes `wallet_creds_<agent>` in the same transaction (`api.AgentCredentials`, agents'
+  `unmake`); Python left it behind, only the agent's wallet row went (FK cascade).
 - `app/serve.go` mounts the routes; app passes `Wallets()` to connections (`UseWallets`) for the pay path.
 - Suite `test/suite/wallet` compiles (`go vet -tags suite`) but was not run against a stack.

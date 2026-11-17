@@ -22,7 +22,10 @@ type Service struct {
 	d Deps
 }
 
-var _ api.Wallets = (*Service)(nil)
+var (
+	_ api.Wallets          = (*Service)(nil)
+	_ api.AgentCredentials = (*Service)(nil)
+)
 
 // New builds the service.
 func New(d Deps) *Service {
@@ -303,6 +306,15 @@ func (s *Service) Delete(ctx context.Context, ws scope.Workspace, userID string,
 		s.d.Log.InfoContext(ctx, "Deleted wallet", "wallet_id", w.ID, "agent_id", agentID.String())
 		return nil
 	})
+}
+
+// DeleteCredentials implements api.AgentCredentials.
+func (s *Service) DeleteCredentials(ctx context.Context, sess db.Session, userID, agentID string) error {
+	if _, err := s.d.Secrets.Manager(sess, userID).Delete(ctx, string(api.CredentialsRef(agentID))); err != nil {
+		s.d.Log.ErrorContext(ctx, "Failed to delete wallet credentials secret", "agent_id", agentID, "error", err)
+		return err
+	}
+	return nil
 }
 
 // spent is the agent's settled spend of the wallet's current budget period:

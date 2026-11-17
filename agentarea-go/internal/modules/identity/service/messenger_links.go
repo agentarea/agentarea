@@ -103,4 +103,3 @@ func MaskEmail(email string) string {
 	}
 	return first + "***@" + domainPart
 }
-

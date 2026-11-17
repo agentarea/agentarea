@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/authn"
+	"github.com/agentarea/agentarea/agentarea-go/internal/kernel/db"
 	agentsdomain "github.com/agentarea/agentarea/agentarea-go/internal/modules/agents/domain"
 	agentsservice "github.com/agentarea/agentarea/agentarea-go/internal/modules/agents/service"
 	connectionsapi "github.com/agentarea/agentarea/agentarea-go/internal/modules/connections/api"
@@ -75,4 +76,11 @@ func (r clientRunnerKeys) Get(ctx context.Context, c authn.Caller, keyID string)
 
 func (r clientRunnerKeys) Revoke(ctx context.Context, c authn.Caller, keyID string) error {
 	return r.k.Revoke(ctx, c, keyID)
+}
+
+// lateWalletCredentials is wallet's, built after agents.
+type lateWalletCredentials struct{ m *moduleSet }
+
+func (l lateWalletCredentials) DeleteCredentials(ctx context.Context, s db.Session, userID, agentID string) error {
+	return l.m.wallet.AgentCredentials().DeleteCredentials(ctx, s, userID, agentID)
 }

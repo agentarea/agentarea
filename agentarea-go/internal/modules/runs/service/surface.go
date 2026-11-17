@@ -63,6 +63,8 @@ type SurfaceDeps struct {
 	Models     modelsapi.Resolver
 	// AuditReader reads the approval decisions (governance); nil leaves them unmounted.
 	AuditReader governanceapi.AuditReader
+	// Audit writes the task.create row with each task stored.
+	Audit governanceapi.AuditWriter
 	// ToolHints reads an MCP tool's safety hint (connections); nil answers every hint null.
 	ToolHints ToolHints
 	// Counter counts runs a spend cap refused for usage analytics; nil counts nothing.

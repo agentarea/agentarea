@@ -16,8 +16,8 @@ import (
 type SkillDeps struct {
 	// SkillNet carries the GitHub import out through the Vendor destination; nil answers 501 for it.
 	SkillNet netguard.Clients
-	// SkillCatalog is the catalog half of skills (install, update, repin); nil lists tenant
-	// rows only and answers 501 for install of a catalog item, update and update-all.
+	// SkillCatalog moves installs between catalog versions (update, rollback, repin);
+	// nil is service.CatalogSkills over CatalogItems.
 	SkillCatalog service.SkillCatalog
 	// SkillInstallPolicy is the catalog install policy over GitHub imports; nil answers 501 for them.
 	SkillInstallPolicy service.SkillInstallPolicy
@@ -35,7 +35,11 @@ func (m *Module) skills() *service.Skills {
 	if m.d.SkillNet != nil {
 		p.GitHub = m.d.SkillNet.Transport(netguard.Vendor)
 	}
-	return service.NewSkills(m.svc, p)
+	k := service.NewSkills(m.svc, p)
+	if p.Catalog == nil && p.Items != nil {
+		k.UseCatalog(service.CatalogSkills{K: k})
+	}
+	return k
 }
 
 // SkillsToolset is what the platform MCP skills toolset calls; nil without a full graph.

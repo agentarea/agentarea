@@ -24,10 +24,10 @@ const (
 	replyTTL   = time.Minute
 	maxBackoff = 60 * time.Second
 
-	// maxSendTimeout is the longest a sender waits on one call (smtp, signed webhook); a message has at most
-	// maxTargets targets (the delivery address and the task webhook).
+	// maxSendTimeout is the longest a sender waits on one call (smtp, webhooks); maxTargets is what a
+	// message usually goes to (the delivery address, the task webhook, one A2A push config).
 	maxSendTimeout = 30 * time.Second
-	maxTargets     = 2
+	maxTargets     = 3
 	sendingPrefix  = "sending:"
 )
 
@@ -81,7 +81,7 @@ type Deps struct {
 	Tasks runsapi.TaskOutcomes
 	// Replies is the catalog entries' reply blocks, read at send time.
 	Replies Replies
-	// Senders by the name a target gives (http, telegram_live, smtp, task_webhook).
+	// Senders by the name a target gives (http, telegram_live, smtp, task_webhook, a2a_webhook).
 	Senders map[string]Sender
 	// Consumer names this replica in the delivery group.
 	Consumer string
