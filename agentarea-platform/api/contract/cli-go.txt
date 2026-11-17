@@ -16,3 +16,4 @@ status = agentarea-api status, agentarea-worker status
 validate = agentarea-api validate, agentarea-worker validate
 skills = agentarea-api skills move-bodies-to-packages, agentarea-api skills move-own-copies-to-packages, agentarea-api skills delete-moved-own-copies, agentarea-api skills repin-catalog-installs, agentarea-api skills refresh-stub-installs
 operator = - the process of agentarea-operator (kopf run handler.py)
+declare = - the operator's reconcile, once, from manifests instead of a cluster
