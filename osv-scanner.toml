@@ -12,7 +12,7 @@
 [[IgnoredVulns]]
 id = "GO-2026-5932"
 ignoreUntil = 2026-12-24
-reason = "golang.org/x/crypto/openpgp is flagged unmaintained and unsafe-by-design with no version fix. Indirect dependency of agentarea-mcp-manager (pulled in transitively; openpgp is not imported directly). Re-check at review for an upstream fix or for whatever pulls it in dropping the dependency."
+reason = "golang.org/x/crypto/openpgp is flagged unmaintained and unsafe-by-design with no version fix. Indirect dependency of agentarea-platform (pulled in transitively; openpgp is not imported directly). Re-check at review for an upstream fix or for whatever pulls it in dropping the dependency."
 
 [[IgnoredVulns]]
 id = "GHSA-gcqx-w48m-w2h4"

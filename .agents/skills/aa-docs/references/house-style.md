@@ -96,8 +96,9 @@ New terms go in `reference/glossary` at the moment they are first used.
 
 ## Accuracy rules
 
-- **Ground every claim in code.** Open the file. `libs/governance/` for policy,
-  `internal/sandbox*/` for the sandbox, the OpenAPI spec for endpoints.
+- **Ground every claim in code.** Open the file. `internal/modules/governance/`
+  for policy, `internal/modules/sandbox/` for the sandbox, the OpenAPI spec for
+  endpoints.
 - **Never document intent.** If the code does not do it yet, it does not go in
   `docs/`. It goes in the roadmap.
 - **Do not hand-write anything a generator can produce** — endpoint tables,

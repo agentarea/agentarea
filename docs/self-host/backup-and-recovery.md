@@ -167,7 +167,7 @@ Confirm the schema is at a known revision:
 
 ```bash
 kubectl exec -n agentarea-restore deploy/agentarea-backend -- \
-  sh -c 'cd /app/apps/api && alembic current'
+  agentarea check-migrations
 ```
 
 Confirm the encryption key matches the restored ciphertext — this is the check

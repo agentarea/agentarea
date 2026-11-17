@@ -30,8 +30,8 @@ same filters CI uses:
 
 | Changed path | Filter | Jobs that wake up |
 |---|---|---|
-| `agentarea-go/**` | `go` | `go-check`, `go-db`, `docker-platform` (main) |
-| `agentarea-go/Dockerfile.runner`, `sandbox-runtime/**`, the runner binaries | `mcp_runner` | `docker-agentarea-mcp-runner`, `docker-agentarea-mcp-runner-locked` (main) |
+| `agentarea-platform/**` | `go` | `go-check`, `go-db`, `docker-platform` (main) |
+| `agentarea-platform/Dockerfile.runner`, `sandbox-runtime/**`, the runner binaries | `mcp_runner` | `docker-agentarea-mcp-runner`, `docker-agentarea-mcp-runner-locked` (main) |
 | `agentarea-webapp/**` | `webapp` | `webapp-lint`, `webapp-build` |
 | `agentarea-cli/**` | `cli` | `cli-test` |
 
@@ -44,11 +44,11 @@ Run the command CI runs, not an approximation of it. Each of these is copied
 from the job of the same name in `.github/workflows/ci.yml`.
 
 **`go-check`** — from the repo root. The golangci-lint version is pinned in
-`agentarea-go/Makefile` (`GOLANGCI_LINT_VERSION`) and in the job; a locally
+`agentarea-platform/Makefile` (`GOLANGCI_LINT_VERSION`) and in the job; a locally
 installed one of another version does not prove the pinned one is clean.
 
 ```sh
-make -C agentarea-go check
+make -C agentarea-platform check
 ```
 
 **`go-db`** — the schema-backed suites, which skip without a disposable
@@ -57,7 +57,7 @@ Postgres. If the diff touches `internal/schema/migrations/` or a repository:
 ```sh
 make db-test-up
 export AGENTAREA_DB_TEST_URL=postgres://postgres:postgres@localhost:55432/agentarea_test?sslmode=disable
-make -C agentarea-go check-db
+make -C agentarea-platform check-db
 make db-test-down
 ```
 
@@ -106,25 +106,22 @@ connected provider — needs that data created first.
 cd agentarea-cli && pnpm install --frozen-lockfile && pnpm run test
 ```
 
-Schema drift, Helm chart README, Helm lint, and env-template drift live in
-separate workflows (`schema-check.yml`, `validate-helm.yml`) and are covered by
-`make preflight`. If the diff touches API routes or `charts/`, run those.
+Helm chart README, Helm lint, and env-template drift live in a separate
+workflow (`validate-helm.yml`) and are covered by `make preflight`. If the diff
+touches `charts/`, run those. A diff that changes the API surface also owes the
+live-stack fuzz (`api-fuzz` in `integration-tests.yml`): against a running stack,
+`make -C agentarea-platform test-api-fuzz` with `AGENTAREA_API_URL`,
+`AGENTAREA_AUTH_KRATOS_URL` and `AGENTAREA_AUTH_KRATOS_ADMIN_URL` set.
 
 ## Where `make preflight` falls short
 
 `scripts/preflight.sh` predates several CI jobs and its comments have drifted
 from `ci.yml`. Treat these as uncovered:
 
-- **`pyright` is skipped**, and the script's comment claims it is "declared in
-  pyproject but NOT enforced by CI". That is wrong: `platform-lint` runs
-  `uv run pyright` with no `continue-on-error`.
-- **Python tests are a subset.** preflight runs `pytest tests/unit
-  tests/functional`; CI runs `make test`.
-- **`migrations-gate`, `cli-test`, `events-lint-test`, `version-check`, and
-  `platform-build` are not run at all.** `agentarea-event-service` and
-  `agentarea-cli` are invisible to preflight.
+- **`version-check`, `env-naming`, `jwks-perms-check`, `cli-test`, `mcp-base-test`
+  and the image builds are not run at all.** `agentarea-cli` is invisible to preflight.
 
-preflight does cover things CI splits into other workflows — schema drift,
+preflight does cover things CI splits into other workflows —
 helm-docs, helm lint, env templates — so it is worth running, just not worth
 believing on its own.
 

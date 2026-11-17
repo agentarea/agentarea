@@ -120,7 +120,7 @@ Only needed if you build images yourself rather than pulling published ones.
 
 | Toolchain | Version | Where |
 |---|---|---|
-| Go | 1.27.0 (`agentarea-go/go.mod`) | `agentarea-go/` |
+| Go | 1.27.0 (`agentarea-platform/go.mod`) | `agentarea-platform/` |
 | Node.js with npm | version not pinned in `agentarea-webapp/package.json` | `agentarea-webapp/` |
 
 ## Errors

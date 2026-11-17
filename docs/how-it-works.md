@@ -37,9 +37,9 @@ costs something.
 
 | Process | Language | Responsible for |
 |---|---|---|
-| API (`apps/api`) | Python, FastAPI | Authentication, authorization, CRUD, policy resolution, event streaming to clients |
-| Worker (`apps/worker`) | Python, Temporal SDK | Running agent workflows: the reason-act loop, model calls, tool calls |
-| MCP manager | Go | Sandbox sessions, MCP server instances, container lifecycle on Kubernetes or Docker |
+| API (`agentarea serve`) | Go | Authentication, authorization, CRUD, policy resolution, event streaming to clients |
+| Worker (`agentarea worker`) | Go, Temporal SDK | Running agent workflows: the reason-act loop, model calls, tool calls |
+| MCP manager (`agentarea mcp`, `agentarea sandbox`) | Go | Sandbox sessions, MCP server instances, container lifecycle on Kubernetes or Docker |
 | Dashboard | Next.js | The web interface |
 
 Backed by PostgreSQL (state), Valkey (streams and cache), object storage

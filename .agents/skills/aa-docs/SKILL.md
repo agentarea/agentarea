@@ -53,8 +53,8 @@ Pick the operation that matches the request: `place`, `write`, `audit`, or
    are not optional.
 3. Read `references/house-style.md` before writing prose.
 4. Ground every claim in the code. Do not describe intended behaviour: open the
-   relevant file under `agentarea-platform/libs/`, `agentarea-mcp-manager/internal/`,
-   or `agentarea-webapp/src/` and confirm. Cite config keys and endpoint paths
+   relevant file under `agentarea-platform/internal/` or `agentarea-webapp/src/`
+   and confirm. Cite config keys and endpoint paths
    exactly as they appear in source.
 5. Add the page to `docs.json` in the correct group.
 6. Run `cd docs && ./validate-docs.sh`.
@@ -93,11 +93,11 @@ Do not guess at subsystem behaviour. Authoritative sources in this repo:
 
 | Area | Where the truth lives |
 |---|---|
-| Sandbox control/data plane | `agentarea-mcp-manager/internal/sandbox{control,placement,runner}/` |
-| MCP lifecycle, warm pool | `agentarea-mcp-manager/internal/{container,warmpool,mcpidle}/` |
-| Governance, policy engine | `agentarea-platform/libs/governance/` (domain/, engines/, interceptors/) |
-| Task execution | `agentarea-platform/libs/execution/`, `libs/tasks/task_service.py` |
-| Events | `libs/common/.../events/`, plus the event-architecture ADR |
+| Sandbox control/data plane | `agentarea-platform/internal/modules/sandbox/` (plane/, backends/, supervisor/) |
+| MCP lifecycle, warm pool | `agentarea-platform/internal/modules/connections/runtime/`, `agentarea-platform/internal/modules/sandbox/backends/warmpool/` |
+| Governance, policy engine | `agentarea-platform/internal/modules/governance/` |
+| Task execution | `agentarea-platform/internal/modules/runs/` (workflows/, service/) |
+| Events | `agentarea-platform/internal/kernel/events/`, `agentarea-platform/internal/modules/streams/`, plus the event-architecture ADR |
 | API surface | the OpenAPI spec — regenerate, never hand-write endpoint tables |
 | Decisions and rationale | `agentarea-wiki/wiki/decisions/` — read them, never publish them |
 

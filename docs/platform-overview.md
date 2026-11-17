@@ -84,23 +84,23 @@ graph TB
 
 ## Core Components
 
-### Backend (Python)
+### Backend (Go)
+
+One binary, `agentarea <role>`: `serve` (API), `worker` (Temporal), `events`,
+`mcp`, `sandbox`, `operator`, `migrate`.
 
 ```
 agentarea-platform/
-├── apps/
-│   ├── api/           # FastAPI server
-│   └── worker/        # Temporal worker
-└── libs/              # Domain libraries (uv workspace)
-    ├── common/        # Base classes, auth, events, DI
-    ├── agents/        # Agent domain
-    ├── tasks/         # Task orchestration
-    ├── llm/           # LLM providers and model catalog
-    ├── mcp/           # MCP protocol
-    ├── execution/     # Temporal workflows
-    ├── triggers/      # Event triggers
-    ├── context/       # Context management
-    └── secrets/       # Secret management
+├── app/               # roles and module wiring
+├── cmd/
+│   ├── agentarea/          # the platform binary
+│   ├── activation-service/ # runs inside warm pool pods
+│   └── exec-supervisor/    # sandbox command supervisor
+└── internal/
+    ├── kernel/        # ports: db, events, authz, durable, secrets, ...
+    ├── modules/       # agents, runs, models, connections, sandbox, streams, ...
+    ├── profiles/      # adapters (cluster)
+    └── schema/        # goose migrations
 ```
 
 ### Frontend (TypeScript)
@@ -117,19 +117,12 @@ agentarea-webapp/
     └── nextjs/
 ```
 
-### MCP Manager (Go)
+### MCP and sandbox hosts
 
-```
-agentarea-mcp-manager/
-├── cmd/
-│   ├── mcp-manager/       # Main API
-│   └── activation-service/ # Warm pool
-└── internal/
-    ├── api/               # HTTP handlers
-    ├── backends/          # K8s, Docker
-    ├── warmpool/          # Pool management
-    └── container/         # Lifecycle
-```
+The `mcp` and `sandbox` roles of the same binary:
+`agentarea-platform/internal/modules/connections/runtime/` (MCP workloads on
+Docker or Kubernetes) and `agentarea-platform/internal/modules/sandbox/`
+(control plane, placement, warm pool, runner).
 
 ---
 

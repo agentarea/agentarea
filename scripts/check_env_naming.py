@@ -157,6 +157,8 @@ GO_READ = re.compile(
     # env name: getenv/envOr/mustEnv/... and required*(Duration|PositiveIntEnv).
     r"(?:os\.Getenv|os\.LookupEnv|\b\w*[eE]nv\w*|\brequired\w*|\bstrictBool\w*)"
     r"\(\s*\"([A-Z][A-Z0-9_]*)\""
+    # requiredDuration(logger, "AGENTAREA_MCP_LEASE_TTL", ...) takes the name second.
+    r"|\brequired\w*\(\s*\w+\s*,\s*\"([A-Z][A-Z0-9_]*)\""
     # `const sandboxFileAuthSecretEnv = "AGENTAREA_SANDBOX_FILE_SECRET"` — the name  # pragma: allowlist secret
     # is declared here and read through the constant, so the call site alone
     # never shows it.

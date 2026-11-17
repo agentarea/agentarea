@@ -14,7 +14,7 @@ kubeVersion: ">=1.30.0-0"
 home: https://github.com/agentarea/agentarea
 icon: https://raw.githubusercontent.com/agentarea/agentarea/main/agentarea-webapp/public/Icon.png
 sources:
-  - https://github.com/agentarea/agentarea/tree/main/agentarea-go
+  - https://github.com/agentarea/agentarea/tree/main/agentarea-platform
 maintainers:
   - name: AgentArea
     url: https://github.com/agentarea

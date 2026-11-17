@@ -6,7 +6,7 @@
 # Verbs below are the ones the Go code actually calls, not the full CRUD
 # matrix: no list/watch on Services or Secrets (never listed), no update on
 # Services (never updated), no cluster-wide reach into other namespaces'
-# Secrets. The call sites are agentarea-go internal/modules/connections/runtime/kube
+# Secrets. The call sites are agentarea-platform internal/modules/connections/runtime/kube
 # and internal/modules/sandbox/backends/warmpool.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

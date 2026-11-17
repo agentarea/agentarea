@@ -31,6 +31,12 @@ mcpManager:
     registrySecret: mcp-packages-registry
 ```
 
+## Custom resources
+
+The chart installs the `LLMProviderConfig`, `PlatformConnection` and
+`PlatformEgressExit` CRDs (`crds/`); the `operator` role reconciles them.
+Example resources are in [`examples/`](examples/).
+
 ## Installing with external services
 
 If you have existing PostgreSQL, Redis or S3-compatible storage, disable bundled dependencies and set endpoints:

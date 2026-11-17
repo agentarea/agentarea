@@ -17,9 +17,8 @@ A local script, `scripts/release.sh`, validates pre-conditions and pushes the ta
 VERSION file (0.0.8) — single source of truth for application version
     ├─> Git tags              (v0.0.8)
     ├─> Docker images         (0.0.8-abc1234, 0.0.8, 0.0, 0, latest)
-    ├─> Python packages       (pyproject.toml version)
+    ├─> API fuzz project      (agentarea-platform/test/fuzz/pyproject.toml + uv.lock)
     ├─> Node packages         (package.json version)
-    ├─> Go constants          (mcp-manager, event-service main.go)
     └─> Helm appVersion       (charts/agentarea/Chart.yaml appVersion)
 
 Chart.yaml version (0.0.1) — independent chart version
@@ -31,7 +30,7 @@ Chart.yaml version (0.0.1) — independent chart version
 - **Location:** `VERSION` at repo root.
 - **Purpose:** Single source of truth for the application's version.
 - **Managed by:** `scripts/bump-version.py` via the `Prepare Release` workflow.
-- **Propagated to:** all `pyproject.toml`, `package.json`, `Chart.yaml` appVersion, `.bumpversion.yaml`, Go `const version` in `agentarea-mcp-manager` and `agentarea-event-service`.
+- **Propagated to:** `package.json`, `Chart.yaml` appVersion, `.bumpversion.yaml`, the info.version of the committed OpenAPI specs, and the fuzz project's `pyproject.toml` and `uv.lock` (`agentarea-platform/test/fuzz/`).
 
 ### Chart Version (Chart.yaml `version`)
 
@@ -70,7 +69,7 @@ Five Docker images are released:
 
 `platform`, `frontend`, `mcp-runner`, `mcp-runner-locked`, `mcp-base`
 
-`platform` is the one backend image (`agentarea-go/Dockerfile`): API, worker, event service, MCP manager, sandbox runner, operator and the migration job are its roles (`agentarea serve`, `agentarea worker`, `agentarea events`, `agentarea mcp`, `agentarea sandbox`, `agentarea operator`, `agentarea migrate`). It replaces the `api`, `worker`, `events`, `mcp-manager` and `operator` images, which are no longer built.
+`platform` is the one backend image (`agentarea-platform/Dockerfile`): API, worker, event service, MCP manager, sandbox runner, operator and the migration job are its roles (`agentarea serve`, `agentarea worker`, `agentarea events`, `agentarea mcp`, `agentarea sandbox`, `agentarea operator`, `agentarea migrate`). It replaces the `api`, `worker`, `events`, `mcp-manager` and `operator` images, which are no longer built.
 
 ### Registry
 
@@ -179,10 +178,9 @@ Manual CI check anyone can run:
 
 Verifies:
 - `.bumpversion.yaml` `current_version` matches VERSION
-- All `pyproject.toml` files match VERSION
+- All `pyproject.toml` files match VERSION, and the project version recorded in `agentarea-platform/test/fuzz/uv.lock`
 - `package.json` matches VERSION
 - `Chart.yaml` appVersion matches VERSION
-- Go `const version` matches VERSION (mcp-manager, event-service)
 - Chart `version` is **not** checked (intentionally independent)
 
 CI runs this on every push and PR via the `version-check` job in `ci.yml`.

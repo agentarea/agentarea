@@ -1,13 +1,13 @@
 version: "3.8"
 
-# The platform roles build from agentarea-go: `agentarea serve` (app),
+# The platform roles build from agentarea-platform: `agentarea serve` (app),
 # `worker`, `events`, `mcp` (mcp-manager), `migrate`, `reconcile` and
 # `init-buckets`. Rebuild after a change: `docker compose -f
 # docker-compose.dev.yaml up -d --build app agentarea-worker`.
 x-platform: &platform
   image: agentarea/agentarea-platform:dev
   build:
-    context: agentarea-go
+    context: agentarea-platform
     dockerfile: Dockerfile
 
 x-platform-env: &platform-env
@@ -420,7 +420,7 @@ services:
   sandbox-executor:
     image: agentarea/sandbox-executor:dev
     build:
-      context: agentarea-go
+      context: agentarea-platform
       dockerfile: Dockerfile.runner
       args:
         # Stamped into /etc/agentarea/runtime.json and served at

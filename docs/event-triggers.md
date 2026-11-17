@@ -122,17 +122,13 @@ sequenceDiagram
 ### Components
 
 ```
-agentarea-platform/libs/triggers/
-├── agentarea_triggers/
-│   ├── domain/
-│   │   └── models.py          # Trigger, TriggerExecution
-│   ├── application/
-│   │   └── trigger_service.py # Trigger management
-│   ├── infrastructure/
-│   │   ├── repository.py      # Data access
-│   │   └── di_container.py    # DI setup
-│   ├── webhook_manager.py     # Webhook handling
-│   └── temporal_schedule_manager.py
+agentarea-platform/internal/modules/streams/
+├── domain/                # sources, streams, triggers
+├── service/               # trigger management
+├── store/                 # data access
+├── handlers/webhooks.go   # webhook handling
+├── polling/               # source polling (events role)
+└── workflows/             # scheduled executions
 ```
 
 ---
@@ -217,7 +213,6 @@ class EventCondition(BaseModel):
 ### Endpoint Handler
 
 ```python
-# apps/api/agentarea_api/api/v1/triggers.py
 @router.post("/webhooks/{trigger_id}")
 async def handle_webhook(
     trigger_id: UUID,

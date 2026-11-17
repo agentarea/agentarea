@@ -34,9 +34,10 @@ and this repository. It may not assume anything else:
   from any tool: `../../../AGENTS.md`, not `@AGENTS.md`.
 
 **Ground every claim in a file.** A skill that says "run the linter" rots the
-first time the linter changes. A skill that says "CI's `platform-lint` job runs
-`uv run ruff check .`, `uv run ruff format --check .`, and `uv run pyright`
-(`.github/workflows/ci.yml`)" tells the reader where to check when it drifts.
+first time the linter changes. A skill that says "CI's `go-check` job runs
+`make -C agentarea-platform check`, which pins golangci-lint in
+`agentarea-platform/Makefile` (`.github/workflows/ci.yml`)" tells the reader
+where to check when it drifts.
 Cite the workflow, makefile, or source file that makes the statement true.
 
 **Skills are guidance, not checklists.** State what to verify and why it matters;

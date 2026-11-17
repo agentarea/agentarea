@@ -87,7 +87,7 @@ at any other Alembic revision is refused.
     From a clone, against a database you can reach directly:
 
     ```bash
-    cd agentarea-go
+    cd agentarea-platform
     go run ./cmd/agentarea migrate
     ```
   </Step>
@@ -108,7 +108,7 @@ at any other Alembic revision is refused.
 
   <Step title="Create a migration">
     Only when changing the schema in code. Add the next numbered file to
-    `agentarea-go/internal/schema/migrations/`, for example
+    `agentarea-platform/internal/schema/migrations/`, for example
     `00005_add_widget_table.sql`, with goose `-- +goose Up` and `-- +goose Down`
     sections. Files are embedded in the binary at build time.
   </Step>

@@ -58,7 +58,7 @@ jobs:
           # the retag found no X.Y.Z-<sha> source image (v0.0.16).
           filters: |
             go:
-              - 'agentarea-go/**'
+              - 'agentarea-platform/**'
               # openapi-fresh checks the generated handlers against this spec.
               - 'agentarea-webapp/src/api/openapi.json'
               - 'VERSION'
@@ -68,14 +68,14 @@ jobs:
             cli:
               - 'agentarea-cli/**'
             mcp_runner:
-              - 'agentarea-go/Dockerfile.runner'
-              - 'agentarea-go/sandbox-runtime/**'
-              - 'agentarea-go/cmd/activation-service/**'
-              - 'agentarea-go/cmd/exec-supervisor/**'
-              - 'agentarea-go/internal/modules/sandbox/backends/{activationauth,publishedsecrets,sandboxruntime,workspace}/**'
-              - 'agentarea-go/internal/modules/sandbox/supervisor/**'
-              - 'agentarea-go/go.mod'
-              - 'agentarea-go/go.sum'
+              - 'agentarea-platform/Dockerfile.runner'
+              - 'agentarea-platform/sandbox-runtime/**'
+              - 'agentarea-platform/cmd/activation-service/**'
+              - 'agentarea-platform/cmd/exec-supervisor/**'
+              - 'agentarea-platform/internal/modules/sandbox/backends/{activationauth,publishedsecrets,sandboxruntime,workspace}/**'
+              - 'agentarea-platform/internal/modules/sandbox/supervisor/**'
+              - 'agentarea-platform/go.mod'
+              - 'agentarea-platform/go.sum'
               - 'VERSION'
             mcp_base:
               - 'mcp-servers/mcp-base/**'
@@ -146,10 +146,10 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: agentarea-go/go.mod
-          cache-dependency-path: agentarea-go/go.sum
+          go-version-file: agentarea-platform/go.mod
+          cache-dependency-path: agentarea-platform/go.sum
 
-      # Must match GOLANGCI_LINT_VERSION in agentarea-go/Makefile.
+      # Must match GOLANGCI_LINT_VERSION in agentarea-platform/Makefile.
       - name: Install golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
@@ -157,7 +157,7 @@ jobs:
           install-only: true
 
       - name: Build, vet, test, lint, architecture checks
-        run: make -C agentarea-go check
+        run: make -C agentarea-platform check
 
   docker-platform:
     # Always build to validate, but only push on main when not skipped
@@ -173,8 +173,8 @@ jobs:
     uses: ./.github/workflows/docker-build-push.yml
     with:
       component: platform
-      context: agentarea-go
-      dockerfile: agentarea-go/Dockerfile
+      context: agentarea-platform
+      dockerfile: agentarea-platform/Dockerfile
       use-private-registry: false
       push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
     secrets:
@@ -225,8 +225,8 @@ jobs:
     with:
       component: mcp-runner
       image-name: agentarea/agentarea-mcp-runner
-      context: agentarea-go
-      dockerfile: agentarea-go/Dockerfile.runner
+      context: agentarea-platform
+      dockerfile: agentarea-platform/Dockerfile.runner
       build-args: |
         AGENTAREA_SANDBOX_MANAGED_ENV=mutable
       use-private-registry: false
@@ -254,8 +254,8 @@ jobs:
     with:
       component: mcp-runner-locked
       image-name: agentarea/agentarea-mcp-runner-locked
-      context: agentarea-go
-      dockerfile: agentarea-go/Dockerfile.runner
+      context: agentarea-platform
+      dockerfile: agentarea-platform/Dockerfile.runner
       build-args: |
         AGENTAREA_SANDBOX_MANAGED_ENV=immutable
       use-private-registry: false
@@ -540,11 +540,11 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: agentarea-go/go.mod
-          cache-dependency-path: agentarea-go/go.sum
+          go-version-file: agentarea-platform/go.mod
+          cache-dependency-path: agentarea-platform/go.sum
 
       - name: Migrations + schema-backed suites
-        run: make -C agentarea-go check-db
+        run: make -C agentarea-platform check-db
 
   # Tells agentarea-enterprise which images this run published. It pins them in its
   # oss-base.json and builds the enterprise overlay from exactly these tags.

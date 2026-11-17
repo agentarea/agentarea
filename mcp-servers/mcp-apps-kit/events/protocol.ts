@@ -5,8 +5,8 @@
  * itself is stateless.
  *
  * Wire shapes follow the platform's own events server
- * (agentarea-platform agentarea_api/mcp_events.py) and the client that polls
- * it (agentarea-event-service internal/mcpevents).
+ * (agentarea-platform internal/modules/streams/handlers/mcp_events.go) and the
+ * client that polls it (internal/modules/streams/polling/mcpevents.go).
  */
 import type { Database } from "bun:sqlite";
 import { headPosition, readEvents, type AppEvent, type EventData } from "./log.ts";

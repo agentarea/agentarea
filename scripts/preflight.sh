@@ -4,13 +4,12 @@
 # Stacks call the same entrypoints CI does (make check / pnpm run check*).
 # Mirrors:
 #   .github/workflows/ci.yml             (Go platform, webapp)
-#   .github/workflows/schema-check.yml   (backend -> openapi.json -> docs drift)
 #   .github/workflows/frontend-integration.yml (elements-react build + webapp build)
 #   .github/workflows/check-helm-docs.yml (Helm chart README)
 #   .github/workflows/validate-env-templates.yml (Helm env tpl drift)
 #
 # Each check is independent — failure prints how to fix and aborts.
-# Set SKIP=schema,webapp,helm-docs,... to skip groups.
+# Set SKIP=go,webapp,helm-docs,... to skip groups.
 
 set -euo pipefail
 
@@ -31,16 +30,9 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 # ── 1. Go platform (build + vet + tests + golangci-lint + architecture) ─────
 if ! should_skip go; then
-  step "Go check (make -C agentarea-go check)"
-  make -C agentarea-go check || fail "agentarea-go check failed"
+  step "Go check (make -C agentarea-platform check)"
+  make -C agentarea-platform check || fail "agentarea-platform check failed"
   ok "Go"
-fi
-
-# ── 3. Schema drift (FastAPI -> openapi.json -> docs copy) ──────────────────
-if ! should_skip schema; then
-  step "OpenAPI schema drift"
-  bash scripts/check-openapi-drift.sh || fail "OpenAPI schema drift"
-  ok "Schema drift"
 fi
 
 # ── 3b. Webapp (lint, types, tests, client drift, build) ────────────────────

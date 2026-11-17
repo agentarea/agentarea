@@ -1,5 +1,0 @@
-.omc
-deploy/suite/.state
-**/*_test.go
-test
-tools

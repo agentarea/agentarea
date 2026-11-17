@@ -1274,7 +1274,7 @@ jobs:
   dbMigration:
     enabled: true
 
-# Registry reconcile (replaces the standalone agentarea-operator).
+# Registry reconcile.
 # A post-migration Job runs `agentarea reconcile`, which ensures each
 # registry exists and syncs it via the platform RegistryService (the same code
 # path the API and CLI use). Idempotent: re-runs on every install/upgrade.

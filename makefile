@@ -1,8 +1,6 @@
 .PHONY: help check check-backend check-frontend check-db check-jwks-perms db-test-up db-test-down \
 	frontend-dev docs-dev \
-	agentarea-platform-api agentarea-platform-worker agentarea-platform-test \
-	agentarea-platform-lint agentarea-platform-format agentarea-platform-sync \
-	build-go lint-go test-go \
+	build-go lint-go test-go test-api-fuzz \
 	build ensure-env up up-dev down down-dev down-clean restart restart-dev logs \
 	k8s-build-images helm-gen preflight validate-icons \
 	clean docker-clean full-clean
@@ -26,9 +24,8 @@ help: ## Display this help message
 check: check-backend check-frontend check-jwks-perms ## Every non-DB check across all stacks
 	@echo "$(GREEN)All checks passed$(NC)"
 
-check-backend: ## Go platform (incl. the runner images' binaries), openapi drift
-	$(MAKE) -C agentarea-go check
-	$(MAKE) -C agentarea-platform openapi-drift
+check-backend: ## Go platform (incl. the runner images' binaries and the served spec)
+	$(MAKE) -C agentarea-platform check
 
 check-frontend: ## Webapp (lint, types, tests, client drift, build) + CLI
 	pnpm -C agentarea-webapp run check
@@ -36,7 +33,7 @@ check-frontend: ## Webapp (lint, types, tests, client drift, build) + CLI
 	pnpm -C agentarea-cli run check
 
 check-db: ## Migrations + schema-backed suites (needs AGENTAREA_DB_TEST_URL; see db-test-up)
-	$(MAKE) -C agentarea-go check-db
+	$(MAKE) -C agentarea-platform check-db
 
 check-jwks-perms: ## Kratos JWKS stays container-readable, config/auth host-private (#481)
 	@bash scripts/check-jwks-perms.sh
@@ -67,36 +64,19 @@ frontend-dev: ## Start frontend development server
 docs-dev: ## Start documentation development server
 	cd docs && npm run dev
 
-##@ Development - Platform (Python)
-
-agentarea-platform-api: ## Run the API application
-	cd agentarea-platform && uv run --package agentarea-api uvicorn agentarea_api.main:app --reload --host 0.0.0.0 --port 8000
-
-agentarea-platform-worker: ## Run the worker application
-	cd agentarea-platform && uv run --package agentarea-worker python -m agentarea_worker.main
-
-agentarea-platform-test: ## Run platform Python tests
-	$(MAKE) -C agentarea-platform test
-
-agentarea-platform-lint: ## Lint platform Python code
-	$(MAKE) -C agentarea-platform lint
-
-agentarea-platform-format: ## Format platform Python code
-	cd agentarea-platform && uv run ruff format && uv run ruff check --fix
-
-agentarea-platform-sync: ## Sync platform dependencies
-	cd agentarea-platform && uv sync --all-packages
-
 ##@ Development - Go platform
 
 build-go: ## Build the Go platform binary
-	$(MAKE) -C agentarea-go build
+	$(MAKE) -C agentarea-platform build
 
 lint-go: ## Lint the Go platform
-	$(MAKE) -C agentarea-go lint
+	$(MAKE) -C agentarea-platform lint
 
 test-go: ## Run the Go platform tests
-	$(MAKE) -C agentarea-go test
+	$(MAKE) -C agentarea-platform test
+
+test-api-fuzz: ## Schemathesis fuzz of a running stack (AGENTAREA_API_URL, AGENTAREA_AUTH_KRATOS_URL, AGENTAREA_AUTH_KRATOS_ADMIN_URL)
+	$(MAKE) -C agentarea-platform test-api-fuzz
 
 ##@ Docker - Development Environment
 
@@ -141,7 +121,7 @@ helm-gen: ## Generate per-group env tpl files from config.yaml
 
 ##@ Testing
 
-preflight: ## Run all CI checks locally before pushing (lint, tests, schema, helm). Use SKIP=python,go,schema,env-tpl,helm-docs,helm-lint to skip groups.
+preflight: ## Run all CI checks locally before pushing (Go, webapp, env templates, helm). Use SKIP=go,webapp,env-tpl,helm-docs,helm-lint to skip groups.
 	@bash scripts/preflight.sh
 
 ##@ Utilities
