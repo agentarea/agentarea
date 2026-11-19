@@ -4,9 +4,9 @@ import {type AuthToken} from '../types/index.js';
 /**
  * OAuth 2.1 authorization-code + PKCE against the Agentarea API.
  *
- * The API serves RFC 8414 metadata at `/.well-known/oauth-authorization-server`
- * and proxies Hydra's dynamic client registration, so the CLI registers itself
- * as a public loopback client and never needs a pre-provisioned key.
+ * The API serves Hydra's RFC 8414 metadata at `/.well-known/oauth-authorization-server`;
+ * its registration endpoint is the API's, so the CLI registers itself as a
+ * public loopback client and never needs a pre-provisioned key.
  */
 
 export interface AuthServerMetadata {

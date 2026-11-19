@@ -1074,11 +1074,11 @@ export const hydraJwksProxyWellKnownJwksJsonGet = <
 /**
  * Oauth Authorization Server Metadata
  *
- * RFC 8414: serve Hydra's OIDC config at the standard AS discovery path.
+ * RFC 8414: Hydra's authorization server metadata, unchanged.
  *
- * MCP clients (Cursor) look for /.well-known/oauth-authorization-server on the
- * resource's AS URL, which is this API, so we serve Hydra's document here with
- * the endpoints we proxy rewritten to point at us.
+ * Hydra is the issuer; clients that look for the document on this API get the
+ * same one Hydra serves. 502 when Hydra advertises a registration endpoint other
+ * than this API's /oauth2/register.
  */
 export const oauthAuthorizationServerMetadataWellKnownOauthAuthorizationServerGet =
   <ThrowOnError extends boolean = false>(

@@ -34,14 +34,14 @@ func mountOAuthAS(g group) {
 	}
 	h := g.errs.Handler
 	g.r.Method(http.MethodGet, "/.well-known/oauth-protected-resource", h(func(w http.ResponseWriter, r *http.Request) error {
-		return writeOAuthJSON(w, http.StatusOK, svc.ProtectedResource(r.Context(), "mcp"))
+		return writeProtectedResource(w, r, svc, "mcp")
 	}))
 	g.r.Method(http.MethodGet, "/.well-known/oauth-protected-resource/*", h(func(w http.ResponseWriter, r *http.Request) error {
 		path := chi.URLParam(r, "*")
 		if !service.IsProtectedResource(path) {
 			return httpx.HTTPError(http.StatusNotFound, "Unknown protected resource")
 		}
-		return writeOAuthJSON(w, http.StatusOK, svc.ProtectedResource(r.Context(), path))
+		return writeProtectedResource(w, r, svc, path)
 	}))
 	g.r.Method(http.MethodGet, "/.well-known/oauth-authorization-server", h(func(w http.ResponseWriter, r *http.Request) error {
 		doc, err := svc.AuthorizationServerMetadata(r.Context())
@@ -100,6 +100,14 @@ func mountOAuthAS(g group) {
 	for _, m := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
 		g.r.Method(m, "/oauth2/*", proxy)
 	}
+}
+
+func writeProtectedResource(w http.ResponseWriter, r *http.Request, svc *service.Service, path string) error {
+	doc, err := svc.ProtectedResource(r.Context(), path)
+	if err != nil {
+		return httpx.HTTPError(http.StatusBadGateway, "Authorization server unavailable").Wrap(err)
+	}
+	return writeOAuthJSON(w, http.StatusOK, doc)
 }
 
 func oauthProxyHydra(w http.ResponseWriter, r *http.Request, svc *service.Service, path string, timeout time.Duration) error {
