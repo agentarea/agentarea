@@ -78,6 +78,13 @@ func oauthHarness(t *testing.T, signedIn bool) (*httptest.Server, oauthKV, *[]st
 }
 
 func oauthHarnessLimited(t *testing.T, signedIn bool, rate httpx.RateLimiter) (*httptest.Server, oauthKV, *[]string) {
+	s, kv, hits, _ := oauthHarnessWithHydra(t, signedIn, rate, "https://api.example/oauth2/register")
+	return s, kv, hits
+}
+
+// oauthHarnessWithHydra also returns Hydra's URL; registration is the
+// registration endpoint its discovery advertises.
+func oauthHarnessWithHydra(t *testing.T, signedIn bool, rate httpx.RateLimiter, registration string) (*httptest.Server, oauthKV, *[]string, string) {
 	t.Helper()
 	var hydraHits []string
 	hydra := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +95,7 @@ func oauthHarnessLimited(t *testing.T, signedIn bool, rate httpx.RateLimiter) (*
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"issuer": base + "/", "authorization_endpoint": base + "/oauth2/auth",
 				"token_endpoint": base + "/oauth2/token", "jwks_uri": base + "/.well-known/jwks.json",
-				"scopes_supported": []string{"openid"},
+				"registration_endpoint": registration, "scopes_supported": []string{"openid"},
 			})
 		case "/admin/clients":
 			body, _ := io.ReadAll(r.Body)
@@ -141,7 +148,7 @@ func oauthHarnessLimited(t *testing.T, signedIn bool, rate httpx.RateLimiter) (*
 	Mount(r, errs, edge, New(svc).WithRateLimit(rate, slog.New(slog.DiscardHandler)), Ports{OpenAPI: true})
 	s := httptest.NewServer(r)
 	t.Cleanup(s.Close)
-	return s, kv, &hydraHits
+	return s, kv, &hydraHits, hydra.URL
 }
 
 func rawCall(t *testing.T, s *httptest.Server, method, path, body string) (*http.Response, string) {
@@ -221,11 +228,22 @@ func TestOAuthCallbackAndFinish(t *testing.T) {
 	}
 }
 
+// A Hydra that advertises its own registration endpoint is not described at all.
+func TestOAuthASRefusesForeignRegistration(t *testing.T) {
+	s, _, _, hydra := oauthHarnessWithHydra(t, true, &registerLimiter{limit: 1 << 20, taken: map[string]int{}}, "http://hydra.internal/oauth2/register")
+	for _, path := range []string{"/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp/w/acme", "/.well-known/oauth-authorization-server"} {
+		resp, body := rawCall(t, s, "GET", path, "")
+		if resp.StatusCode != http.StatusBadGateway || strings.Contains(body, hydra) {
+			t.Fatalf("%s: %d %s", path, resp.StatusCode, body)
+		}
+	}
+}
+
 func TestOAuthASShim(t *testing.T) {
-	s, _, hits := oauthHarness(t, true)
+	s, _, hits, hydra := oauthHarnessWithHydra(t, true, &registerLimiter{limit: 1 << 20, taken: map[string]int{}}, "https://api.example/oauth2/register")
 
 	resp, body := rawCall(t, s, "GET", "/.well-known/oauth-protected-resource", "")
-	if resp.StatusCode != 200 || body != `{"resource":"https://api.example/mcp","authorization_servers":["https://api.example"],"scopes_supported":["openid","offline_access"],"bearer_methods_supported":["header"]}` {
+	if resp.StatusCode != 200 || body != `{"resource":"https://api.example/mcp","authorization_servers":["`+hydra+`/"],"scopes_supported":["openid","offline_access"],"bearer_methods_supported":["header"]}` {
 		t.Fatalf("protected resource %d %s", resp.StatusCode, body)
 	}
 	if resp, _ := rawCall(t, s, "GET", "/.well-known/oauth-protected-resource/mcp/w/acme", ""); resp.StatusCode != 200 {
@@ -240,8 +258,8 @@ func TestOAuthASShim(t *testing.T) {
 	if err := json.Unmarshal([]byte(body), &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc["issuer"] != "https://api.example" || doc["token_endpoint"] != "https://api.example/oauth2/token" ||
-		doc["registration_endpoint"] != "https://api.example/oauth2/register" || doc["jwks_uri"] != "https://api.example/.well-known/jwks.json" {
+	if doc["issuer"] != hydra+"/" || doc["token_endpoint"] != hydra+"/oauth2/token" ||
+		doc["registration_endpoint"] != "https://api.example/oauth2/register" || doc["jwks_uri"] != hydra+"/.well-known/jwks.json" {
 		t.Fatalf("AS metadata %s", body)
 	}
 

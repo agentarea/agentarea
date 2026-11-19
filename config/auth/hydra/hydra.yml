@@ -75,6 +75,12 @@ oidc:
   dynamic_client_registration:
     enabled: false
 
+# Clients register through the API; Hydra must advertise it, or the API
+# refuses to describe this authorization server.
+webfinger:
+  oidc_discovery:
+    client_registration_url: http://localhost:8000/oauth2/register
+
 log:
   level: info
   format: text

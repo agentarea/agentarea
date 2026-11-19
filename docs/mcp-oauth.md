@@ -8,7 +8,7 @@ description: How AgentArea implements RFC 9728 OAuth 2.0 authorization for MCP s
 AgentArea exposes each MCP server instance as an OAuth 2.0 protected resource. MCP clients that implement [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728) (Protected Resource Metadata) — including Cursor and Claude Desktop — can discover authorization requirements automatically, register as dynamic clients, and obtain access tokens without any manual configuration.
 
 <Info>
-The AgentArea API acts as a single Authorization Server URL for all MCP clients. Hydra handles token issuance internally; clients only ever interact with the AgentArea API endpoints.
+Hydra is the authorization server: its issuer is the one MCP clients discover and the one every token carries. The AgentArea API serves the protected resource metadata and the only client registration endpoint, which Hydra advertises as its own.
 </Info>
 
 ## How It Works
@@ -18,7 +18,7 @@ The AgentArea API acts as a single Authorization Server URL for all MCP clients.
     Clients discover the authorization server automatically via `.well-known` metadata endpoints — no hardcoded URLs required.
   </Card>
   <Card title="Dynamic Client Registration" icon="id-card">
-    Clients register via RFC 7591 DCR. AgentArea proxies registration to Hydra and injects sane defaults automatically.
+    Clients register via RFC 7591 DCR on the AgentArea API, which shapes each registration before creating the client in Hydra.
   </Card>
   <Card title="Three Auth Types" icon="key">
     MCP instances support `api_key`, `bearer`, and `oauth2` authentication. Credentials are stored encrypted and injected at request time.
@@ -35,7 +35,7 @@ The AgentArea API acts as a single Authorization Server URL for all MCP clients.
 This is the exact sequence a client like Cursor or Claude Desktop follows when it encounters an AgentArea MCP endpoint for the first time.
 
 ```
-Client                          AgentArea API                    Hydra
+Client                          AgentArea API                    Hydra (issuer)
   │                                   │                            │
   │── GET /mcp/{id} ─────────────────>│                            │
   │<─ 401 WWW-Authenticate: Bearer ───│                            │
@@ -44,28 +44,19 @@ Client                          AgentArea API                    Hydra
   │── GET /.well-known/               │                            │
   │      oauth-protected-resource ───>│                            │
   │<─ { resource, authorization_      │                            │
-  │      servers: [AGENTAREA_API_URL] } ───│                            │
+  │      servers: [Hydra issuer] } ───│                            │
   │                                   │                            │
-  │── GET /.well-known/               │                            │
-  │      oauth-authorization-server ─>│── GET /.well-known/ ──────>│
-  │                                   │      openid-configuration  │
-  │                                   │<─ OIDC config ─────────────│
-  │<─ AS metadata (URLs rewritten     │                            │
-  │      to point to API) ────────────│                            │
+  │── GET /.well-known/oauth-authorization-server ────────────────>│
+  │<─ AS metadata (registration_endpoint = API /oauth2/register) ──│
   │                                   │                            │
-  │── POST /oauth2/register ─────────>│── POST /admin/             │
-  │   (RFC 7591 DCR)                  │      oauth2/clients ──────>│
-  │                                   │<─ client credentials ──────│
-  │<─ { client_id, client_secret } ───│                            │
+  │── POST /oauth2/register ─────────>│── POST /admin/clients ────>│
+  │   (RFC 7591 DCR)                  │<─ client ──────────────────│
+  │<─ { client_id, ... } ─────────────│                            │
   │                                   │                            │
-  │── GET /oauth2/auth ──────────────>│  (browser redirect         │
-  │   (browser redirect)              │   to Hydra directly)       │
-  │                                            │                   │
-  │<──────────────── authorization code ───────│                   │
-  │                                   │                            │
-  │── POST /oauth2/token ────────────>│── POST /oauth2/token ─────>│
-  │                                   │<─ { access_token, ... } ───│
-  │<─ { access_token, ... } ──────────│                            │
+  │── GET /oauth2/auth (browser) ─────────────────────────────────>│
+  │<─ authorization code ──────────────────────────────────────────│
+  │── POST /oauth2/token ─────────────────────────────────────────>│
+  │<─ { access_token, ... } ───────────────────────────────────────│
   │                                   │                            │
   │── GET /mcp/{id} ─────────────────>│                            │
   │   Authorization: Bearer <token>   │                            │
@@ -73,7 +64,7 @@ Client                          AgentArea API                    Hydra
 ```
 
 <Note>
-`GET /oauth2/auth` is a browser **redirect**, not a proxy. Hydra must set its own session cookies directly in the browser — proxying this endpoint would break the login flow.
+The API refuses to describe an authorization server it cannot stand behind: when Hydra's discovery names no issuer, or advertises a `registration_endpoint` other than the API's `/oauth2/register`, both `.well-known` documents answer `502`. Hydra advertises its own registration endpoint unless `webfinger.oidc_discovery.client_registration_url` is set, even with dynamic client registration disabled.
 </Note>
 
 ### Step-by-Step
@@ -98,39 +89,42 @@ Client                          AgentArea API                    Hydra
 
     ```json
     {
-      "resource": "https://api.agentarea.com",
-      "authorization_servers": ["https://api.agentarea.com"]
+      "resource": "https://api.agentarea.com/mcp",
+      "authorization_servers": ["https://oauth.agentarea.com"],
+      "scopes_supported": ["openid", "offline_access"],
+      "bearer_methods_supported": ["header"]
     }
     ```
   </Step>
 
   <Step title="Authorization Server Metadata">
-    The client fetches the AS metadata. AgentArea proxies this from Hydra's OIDC configuration and rewrites all endpoint URLs to point to the AgentArea API:
+    The client fetches the metadata from the authorization server it was given. Every endpoint is Hydra's except registration:
 
     ```http
-    GET /.well-known/oauth-authorization-server
+    GET https://oauth.agentarea.com/.well-known/oauth-authorization-server
     ```
 
     ```json
     {
-      "issuer": "https://api.agentarea.com",
-      "authorization_endpoint": "https://api.agentarea.com/oauth2/auth",
-      "token_endpoint": "https://api.agentarea.com/oauth2/token",
+      "issuer": "https://oauth.agentarea.com",
+      "authorization_endpoint": "https://oauth.agentarea.com/oauth2/auth",
+      "token_endpoint": "https://oauth.agentarea.com/oauth2/token",
       "registration_endpoint": "https://api.agentarea.com/oauth2/register",
-      "jwks_uri": "https://api.agentarea.com/.well-known/jwks.json",
+      "jwks_uri": "https://oauth.agentarea.com/.well-known/jwks.json",
       ...
     }
     ```
 
     <Tip>
-    The JWKS endpoint is also proxied so that token verification works against the AgentArea API URL rather than Hydra's internal address.
+    The API serves the same document unchanged at its own `/.well-known/oauth-authorization-server`, for clients that look for it there.
     </Tip>
   </Step>
 
   <Step title="Dynamic Client Registration (RFC 7591)">
-    The client registers itself. AgentArea proxies the request to the Hydra admin API and automatically injects:
-    - `skip_consent: true` — skips the OAuth consent screen for MCP clients
-    - Default audience values scoped to the MCP instance
+    The client registers itself on the API, which creates the client through Hydra's admin API after forcing:
+    - `skip_consent: false` — every client shows the consent screen
+    - `audience` — the API, the audience its tokens are verified against
+    - `grant_types` within `authorization_code` and `refresh_token`, scopes within those offered
 
     ```http
     POST /oauth2/register
@@ -154,16 +148,16 @@ Client                          AgentArea API                    Hydra
     ```
 
     <Warning>
-    Hydra v2 does not expose a public DCR endpoint. AgentArea's proxy is the only path for client registration — do not attempt to call Hydra's admin API directly from MCP clients.
+    Hydra's own dynamic client registration stays disabled. The API's `/oauth2/register` is the only path for client registration.
     </Warning>
   </Step>
 
   <Step title="Authorization Code Flow">
-    The client redirects the user's browser to `/oauth2/auth`. AgentArea forwards this as a browser redirect (302) to Hydra, which handles login and sets its session cookies. After authentication, Hydra redirects back with an authorization code.
+    The client sends the user's browser to Hydra's `authorization_endpoint`. Hydra hands login and consent to the webapp, which checks the Kratos session, then redirects back with an authorization code.
   </Step>
 
   <Step title="Token Exchange">
-    The client exchanges the authorization code for tokens. AgentArea proxies `POST /oauth2/token` to Hydra's public URL:
+    The client exchanges the authorization code at Hydra's `token_endpoint`:
 
     ```http
     POST /oauth2/token
@@ -429,27 +423,34 @@ With RFC 9728 discovery, MCP clients authenticate automatically -- you only need
 
 ---
 
-## Hydra Proxy Architecture
+## Authorization Server Layout
 
 ```
 MCP Client
     │
-    ▼
-AgentArea API  (:8000)
-    ├── /.well-known/oauth-protected-resource    (generated locally)
-    ├── /.well-known/oauth-authorization-server  ──proxy──> Hydra /.well-known/openid-configuration
-    │                                                       (URLs rewritten to API base)
-    ├── /.well-known/jwks.json                   ──proxy──> Hydra public /jwks.json
-    ├── POST /oauth2/register                    ──proxy──> Hydra admin /admin/clients
-    │                                                       (injects skip_consent, audience)
-    ├── GET  /oauth2/auth                        ──302──>   Hydra public /oauth2/auth
-    │                                                       (browser redirect, not proxy)
-    └── POST /oauth2/token                       ──proxy──> Hydra public /oauth2/token
+    ├──> AgentArea API
+    │      ├── /.well-known/oauth-protected-resource[/{path}]   generated; names Hydra's issuer
+    │      ├── /.well-known/oauth-authorization-server          Hydra's document, unchanged
+    │      └── POST /oauth2/register                            shaped, then Hydra admin /admin/clients
+    │
+    └──> Hydra (issuer)
+           ├── /.well-known/oauth-authorization-server          registration_endpoint = API /oauth2/register
+           ├── /oauth2/auth                                      login and consent via the webapp
+           ├── /oauth2/token
+           └── /.well-known/jwks.json                           the API verifies tokens against it
 ```
 
-**Why not proxy `/oauth2/auth`?**
+The API also still answers `GET /oauth2/auth` (a redirect to Hydra), `/oauth2/*` and `/.well-known/jwks.json` (forwarded to Hydra) for clients that discovered the earlier metadata, which named the API as every endpoint. Nothing advertises them now.
 
-Hydra sets session cookies during the login flow. Proxying this endpoint would cause the cookies to be scoped to the AgentArea API domain but sent to Hydra's domain, breaking the session. The browser must talk to Hydra directly for this step.
+Serving Hydra's document at the API's own `/.well-known/oauth-authorization-server` departs from RFC 8414, which expects `issuer` to match the URL the document was fetched from. Clients that start from the protected resource metadata (RFC 9728) never read it; it remains for clients that look for it on the API.
+
+Hydra must advertise the API's registration endpoint:
+
+```yaml
+webfinger:
+  oidc_discovery:
+    client_registration_url: https://api.agentarea.com/oauth2/register
+```
 
 ---
 
@@ -459,7 +460,7 @@ Hydra sets session cookies during the login flow. Proxying this endpoint would c
 |---|---|
 | Credential storage | All secrets encrypted via `BaseSecretManager`; never stored in plaintext |
 | Token expiry | OAuth2 tokens auto-refreshed 30s before expiry; stale tokens never used |
-| Consent bypass | `skip_consent: true` injected only for MCP client registrations |
+| Consent bypass | `skip_consent` forced to `false` on every registration |
 | Access scope | OAuth links enforce workspace or public access control per-link |
 | Session TTL | OAuth link sessions expire after 24 hours; no indefinite sessions |
-| DCR exposure | Hydra admin DCR endpoint not exposed publicly; all registration proxied through API |
+| DCR exposure | Hydra's own DCR disabled; every registration goes through the API's `/oauth2/register` |

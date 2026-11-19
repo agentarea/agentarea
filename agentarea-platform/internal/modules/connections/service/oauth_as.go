@@ -41,10 +41,6 @@ var (
 	safeOAuth2Path = regexp.MustCompile(`^[A-Za-z0-9._~/-]+$`)
 )
 
-func proxiedEndpoint() []string {
-	return []string{"authorization_endpoint", "token_endpoint", "revocation_endpoint", "jwks_uri"}
-}
-
 func dcrFields() []string {
 	return []string{
 		"client_name", "client_uri", "logo_uri", "policy_uri", "tos_uri", "contacts", "redirect_uris",
@@ -133,25 +129,33 @@ func (s *Service) cachedHydraDiscovery(ctx context.Context) (wirejson.Object, er
 	}
 }
 
-// hydraDiscovery is _hydra_discovery: nil when unreachable.
-func (s *Service) hydraDiscovery(ctx context.Context) wirejson.Object {
+// authorizationServer is Hydra's discovery document once it can serve as the
+// authorization server: it names an issuer, and its registration endpoint is
+// this API's, the only one that registers clients (Hydra's
+// webfinger.oidc_discovery.client_registration_url). Hydra advertises its own
+// otherwise, even with dynamic registration disabled.
+func (s *Service) authorizationServer(ctx context.Context) (wirejson.Object, string, error) {
 	doc, err := s.cachedHydraDiscovery(ctx)
 	if err != nil {
-		s.d.Log.InfoContext(ctx, "Hydra discovery unavailable", "error", err)
-		return nil
+		return nil, "", err
 	}
-	return doc
+	issuer, _ := oaGetStr(doc, "issuer")
+	if issuer == "" {
+		return nil, "", errors.New("hydra discovery names no issuer")
+	}
+	want := s.apiBase() + "/oauth2/register"
+	if reg, _ := oaGetStr(doc, "registration_endpoint"); reg != want {
+		return nil, "", fmt.Errorf("hydra advertises registration_endpoint %q, want %q: set Hydra's webfinger.oidc_discovery.client_registration_url", reg, want)
+	}
+	return doc, issuer, nil
 }
 
-// ProtectedResource is RFC 9728 metadata for the resource path: Hydra is the
-// authorization server when it advertises registration, else this API.
-func (s *Service) ProtectedResource(ctx context.Context, resourcePath string) wirejson.Object {
-	doc := s.hydraDiscovery(ctx)
-	asURL := s.apiBase()
-	issuer, _ := oaGetStr(doc, "issuer")
-	issuer = strings.TrimRight(issuer, "/")
-	if reg, ok := doc.Get("registration_endpoint"); issuer != "" && ok && oaTruthyJSON(reg) {
-		asURL = issuer
+// ProtectedResource is RFC 9728 metadata for the resource path; its
+// authorization server is Hydra's issuer, the one its tokens carry.
+func (s *Service) ProtectedResource(ctx context.Context, resourcePath string) (wirejson.Object, error) {
+	_, issuer, err := s.authorizationServer(ctx)
+	if err != nil {
+		return nil, err
 	}
 	scopes := make([]any, len(s.d.Config.OAuthScopes))
 	for i, sc := range s.d.Config.OAuthScopes {
@@ -159,10 +163,10 @@ func (s *Service) ProtectedResource(ctx context.Context, resourcePath string) wi
 	}
 	return wirejson.Object{
 		{Key: "resource", Value: s.apiBase() + "/" + resourcePath},
-		{Key: "authorization_servers", Value: []any{asURL}},
+		{Key: "authorization_servers", Value: []any{issuer}},
 		{Key: "scopes_supported", Value: scopes},
 		{Key: "bearer_methods_supported", Value: []any{"header"}},
-	}
+	}, nil
 }
 
 func oaGetStr(o wirejson.Object, key string) (string, bool) {
@@ -174,54 +178,14 @@ func oaGetStr(o wirejson.Object, key string) (string, bool) {
 	return str, ok
 }
 
-func oaTruthyJSON(v any) bool {
-	switch t := v.(type) {
-	case nil:
-		return false
-	case string:
-		return t != ""
-	case bool:
-		return t
-	case []any:
-		return len(t) > 0
-	case wirejson.Object:
-		return len(t) > 0
-	}
-	return true
-}
-
-// AuthorizationServerMetadata is Hydra's document with the endpoints this API
-// proxies rewritten to it, issuer this API, registration our DCR proxy.
+// AuthorizationServerMetadata is Hydra's document unchanged, for clients that
+// look for it on this API.
 func (s *Service) AuthorizationServerMetadata(ctx context.Context) (wirejson.Object, error) {
-	doc, err := s.cachedHydraDiscovery(ctx)
+	doc, _, err := s.authorizationServer(ctx)
 	if err != nil {
 		return nil, err
 	}
-	hydra := s.hydraURL()
-	issuer, ok := oaGetStr(doc, "issuer")
-	if !ok {
-		issuer = hydra
-	}
-	issuer = strings.TrimRight(issuer, "/")
-	rewrite := func(raw string) string {
-		for _, prefix := range []string{issuer, hydra} {
-			if prefix != "" && strings.HasPrefix(raw, prefix) {
-				return s.apiBase() + raw[len(prefix):]
-			}
-		}
-		return raw
-	}
-	out := slices.Clone(doc)
-	for _, f := range proxiedEndpoint() {
-		if v, ok := out.Get(f); ok {
-			if str, isStr := v.(string); isStr && str != "" {
-				out.Set(f, rewrite(str))
-			}
-		}
-	}
-	out.Set("issuer", s.apiBase())
-	out.Set("registration_endpoint", s.apiBase()+"/oauth2/register")
-	return out, nil
+	return slices.Clone(doc), nil
 }
 
 // HydraAuthorizeURL is where the browser goes for /oauth2/auth.
