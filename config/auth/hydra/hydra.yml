@@ -98,5 +98,7 @@ strategies:
 
 oauth2:
   expose_internal_errors: true
+  pkce:
+    enforced_for_public_clients: true
   allowed_top_level_claims:
     - workspace_id
