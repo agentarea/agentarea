@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -31,6 +32,15 @@ type Error struct {
 func (e *Error) Error() string { return e.Detail }
 
 func (e *Error) Unwrap() error { return e.cause }
+
+// Format prints the public detail; %+v adds the error it wraps, for logs.
+func (e *Error) Format(f fmt.State, verb rune) {
+	if verb == 'v' && f.Flag('+') && e.cause != nil {
+		_, _ = fmt.Fprintf(f, "%s: %+v", e.Detail, e.cause)
+		return
+	}
+	_, _ = io.WriteString(f, e.Detail)
+}
 
 // Problem is the body e renders.
 func (e *Error) Problem() Problem {
