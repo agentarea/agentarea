@@ -34,7 +34,7 @@ func delegateService(admin error) *Service {
 	return New(Deps{
 		Admin: func(context.Context) error { return admin },
 		Secrets: namedSecrets{
-			"aadocs-key":  {Name: "aadocs-key"},
+			"docs-team-key":  {Name: "docs-team-key"},
 			"oauth-token": {Name: "oauth-token", OwnerType: &managed},
 		},
 	})
@@ -46,23 +46,23 @@ func TestBindingASecretToARemoteDelegate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := delegateService(nil).validateDelegates(ctx, ws, []domain.Tool{remoteDelegate("aadocs-key")}, nil); err != nil {
+	if err := delegateService(nil).validateDelegates(ctx, ws, []domain.Tool{remoteDelegate("docs-team-key")}, nil); err != nil {
 		t.Fatalf("an admin binds a workspace secret: %v", err)
 	}
 	if err := delegateService(authz.ErrNotWorkspaceAdmin).validateDelegates(ctx, ws, []domain.Tool{remoteDelegate("")}, nil); err != nil {
 		t.Fatalf("a member adds a remote delegate without a secret: %v", err)
 	}
 	var perm *PermissionError
-	err = delegateService(authz.ErrNotWorkspaceAdmin).validateDelegates(ctx, ws, []domain.Tool{remoteDelegate("aadocs-key")}, nil)
+	err = delegateService(authz.ErrNotWorkspaceAdmin).validateDelegates(ctx, ws, []domain.Tool{remoteDelegate("docs-team-key")}, nil)
 	if !errors.As(err, &perm) || perm.Msg != "Only a workspace admin may send a workspace secret to a remote delegate." {
 		t.Fatalf("a member binds a secret: %v", err)
 	}
-	previous := []domain.Tool{remoteDelegate("aadocs-key")}
-	if err := delegateService(authz.ErrNotWorkspaceAdmin).validateDelegates(ctx, ws, []domain.Tool{remoteDelegate("aadocs-key")}, previous); err != nil {
+	previous := []domain.Tool{remoteDelegate("docs-team-key")}
+	if err := delegateService(authz.ErrNotWorkspaceAdmin).validateDelegates(ctx, ws, []domain.Tool{remoteDelegate("docs-team-key")}, previous); err != nil {
 		t.Fatalf("a member keeps a bound secret: %v", err)
 	}
 	down := errors.New("graph down")
-	if err := delegateService(down).validateDelegates(ctx, ws, []domain.Tool{remoteDelegate("aadocs-key")}, nil); !errors.Is(err, down) {
+	if err := delegateService(down).validateDelegates(ctx, ws, []domain.Tool{remoteDelegate("docs-team-key")}, nil); !errors.Is(err, down) {
 		t.Fatalf("an unanswered admin check = %v", err)
 	}
 	var invalid *domain.InvalidError

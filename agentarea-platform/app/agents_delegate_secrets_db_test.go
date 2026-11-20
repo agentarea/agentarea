@@ -25,7 +25,7 @@ func TestDelegateSecretsFindAWorkspaceSecretByName(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := d.Write(ctx, ws, func(ctx context.Context, s db.Session) error {
-		for _, name := range []string{"aadocs-key", "oauth-token"} {
+		for _, name := range []string{"docs-team-key", "oauth-token"} {
 			if err := f.Manager(s, "u1").Set(ctx, name, "tok"); err != nil {
 				return err
 			}
@@ -36,7 +36,7 @@ func TestDelegateSecretsFindAWorkspaceSecretByName(t *testing.T) {
 		t.Fatal(err)
 	}
 	found := delegateSecrets{d: coreDeps{DB: d, Graph: &wiringGraph{objects: map[string]bool{}}, Secrets: f}}
-	if s, ok, err := found.SecretNamed(ctx, ws, "aadocs-key"); err != nil || !ok || s.OwnerType != nil {
+	if s, ok, err := found.SecretNamed(ctx, ws, "docs-team-key"); err != nil || !ok || s.OwnerType != nil {
 		t.Fatalf("a user's secret = %+v %v %v", s, ok, err)
 	}
 	if s, ok, err := found.SecretNamed(ctx, ws, "oauth-token"); err != nil || !ok || s.OwnerType == nil || *s.OwnerType != "mcp_instance" {

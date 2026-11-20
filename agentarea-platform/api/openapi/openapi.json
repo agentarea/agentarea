@@ -2773,7 +2773,7 @@
                 "type": "null"
               }
             ],
-            "description": "Id of a catalog MCP server, e.g. 'ru.yookassa/mcp' or 'io.github.owner/server/command'. Set this or json_spec.",
+            "description": "Id of a catalog MCP server, e.g. 'io.github.owner/server' or 'io.github.owner/server/command'. Set this or json_spec.",
             "title": "Catalog"
           },
           "context_secret": {

@@ -14,8 +14,8 @@ last_updated: 2026-11-01
 Do this when the MCP server lives somewhere AgentArea cannot reach: a
 Kubernetes cluster, an office network, a VPC with no inbound rules. A small
 client, [frpc](https://github.com/fatedier/frp), runs next to the server and
-dials **out** to `relay.agentarea.ru` on port 443. The server then answers at
-`https://<subdomain>.relay.agentarea.ru`, and AgentArea calls it like any
+dials **out** to `relay.example.com` on port 443. The server then answers at
+`https://<subdomain>.relay.example.com`, and AgentArea calls it like any
 [remote server](/guides/mcp/connect-a-remote-server). Nothing is opened in your
 network.
 
@@ -32,7 +32,7 @@ request reaches your server. Per-workspace tokens are planned.
 
 - The relay token. Ask the AgentArea team for it; it is not self-service yet.
 - A host or pod next to the MCP server that can open outbound HTTPS to
-  `relay.agentarea.ru:443`, with Docker or Kubernetes.
+  `relay.example.com:443`, with Docker or Kubernetes.
 - The server's MCP endpoint as seen from that host, for example
   `http://grafana-mcp:8000/mcp`, and the credential the server itself expects.
   Run the server with its own authentication: the relay forwards whatever
@@ -55,7 +55,7 @@ request reaches your server. Per-workspace tokens are planned.
     sits in the file.
 
     ```toml
-    serverAddr = "relay.agentarea.ru"
+    serverAddr = "relay.example.com"
     serverPort = 443
     loginFailExit = false
     auth.token = "{{ .Envs.FRP_AUTH_TOKEN }}"
@@ -111,7 +111,7 @@ request reaches your server. Per-workspace tokens are planned.
         "server": {
           "name": "Grafana (private)",
           "description": "Grafana MCP through the relay.",
-          "remote_url": "https://acme-grafana.relay.agentarea.ru/mcp",
+          "remote_url": "https://acme-grafana.relay.example.com/mcp",
           "version": "1.0.0",
           "env_schema": [
             {"name": "Authorization", "description": "Tunnel Basic auth", "isSecret": true}
@@ -121,7 +121,7 @@ request reaches your server. Per-workspace tokens are planned.
           "name": "Grafana (private)",
           "json_spec": {
             "type": "url",
-            "endpoint_url": "https://acme-grafana.relay.agentarea.ru/mcp",
+            "endpoint_url": "https://acme-grafana.relay.example.com/mcp",
             "headers": {"Authorization": "'"$BASIC"'"}
           }
         }
@@ -143,7 +143,7 @@ docker logs frpc 2>&1 | grep -E "login to server success|start proxy success"
 The tunnel refuses a request without the password and answers one with it:
 
 ```bash
-URL=https://acme-grafana.relay.agentarea.ru/mcp
+URL=https://acme-grafana.relay.example.com/mcp
 curl -s -o /dev/null -w "%{http_code}\n" -X POST "$URL"          # 401
 curl -s -X POST "$URL" -u "agentarea:$TUNNEL_PASSWORD" \
   -H "Content-Type: application/json" \
@@ -159,7 +159,7 @@ the relay, the tunnel and your server. In AgentArea, the instance's
 
 <AccordionGroup>
   <Accordion title="`connect to server error: EOF` in the frpc log">
-    TLS to `relay.agentarea.ru:443` did not complete. Check that the host can
+    TLS to `relay.example.com:443` did not complete. Check that the host can
     open outbound HTTPS, and that `transport.protocol` is `wss`: plain `tcp` on
     port 443 fails this way.
   </Accordion>

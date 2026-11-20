@@ -20,7 +20,7 @@ Name it after **whoever reads it**.
   postgres *image*, `AWS_*` for the AWS SDK, `NEXT_PUBLIC_*`, `PORT` / `HOST`.
 - **Our code reads it and passes the value on**: ours, `AGENTAREA_`-prefixed.
 - Not a standard: libpq `PG*` (drivers apply them silently) and `AWS_*` for our
-  S3 storage (that is RustFS/Timeweb, while the AWS SDK picks `AWS_*` up by itself
+  S3 storage (that is RustFS or another S3-compatible store, while the AWS SDK picks `AWS_*` up by itself
   in the same process). Both stay `AGENTAREA_DB_*` / `AGENTAREA_S3_*`.
 
 ## 2. How to name ours

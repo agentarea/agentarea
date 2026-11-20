@@ -41,7 +41,7 @@ const (
 	// which checks it atomically with the write.
 	NativeConditionalWrites ConditionalWrites = "native"
 	// EmulatedConditionalWrites checks it here, under a per-object lock, for a
-	// store that refuses or ignores conditional writes (Timeweb S3). Safe only
+	// store that refuses or ignores conditional writes (an S3-compatible store without conditional writes). Safe only
 	// with a single writer process.
 	EmulatedConditionalWrites ConditionalWrites = "emulated"
 )

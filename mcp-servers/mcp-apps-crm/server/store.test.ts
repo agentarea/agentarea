@@ -22,7 +22,7 @@ function emptyDb(): Database {
 }
 
 const setup = {
-  account: "Constractio",
+  account: "Acme",
   baseCurrency: "RUB" as const,
   usdRate: 92,
   owners: [{ name: "Artem Astapenko", email: "artem@constract.io" }, { name: "Sales Agent", kind: "agent" as const }],
@@ -34,7 +34,7 @@ describe("setup", () => {
     expect(CrmStore.loadIfSetUp(db)).toBeNull();
     CrmStore.setup(db, setup);
     const store = CrmStore.loadIfSetUp(db)!;
-    expect(store.data.account).toEqual({ name: "Constractio", baseCurrency: "RUB" });
+    expect(store.data.account).toEqual({ name: "Acme", baseCurrency: "RUB" });
     expect(store.data.fxRates).toEqual({ RUB: 1, USD: 92 });
     expect(store.data.owners.map((o) => [o.id, o.kind])).toEqual([["own_01", "human"], ["own_02", "agent"]]);
   });

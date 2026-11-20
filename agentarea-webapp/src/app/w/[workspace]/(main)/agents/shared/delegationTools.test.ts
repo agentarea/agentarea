@@ -21,10 +21,10 @@ const research: AgentToolConfig = {
 
 const docs: AgentToolConfig = {
   type: "agent",
-  name: "aadocs-writer",
+  name: "docs-team-writer",
   settings: {
     a2a_url: "https://x.a2a.agentarea.ai",
-    auth_secret_name: "aadocs-key",
+    auth_secret_name: "docs-team-key",
   },
 };
 
@@ -119,13 +119,13 @@ describe("remoteDelegateProblem", () => {
   });
 
   it("rejects a name another delegate already uses", () => {
-    expect(remoteDelegateProblem({ name: "aadocs-writer", url }, tools)).toBe(
+    expect(remoteDelegateProblem({ name: "docs-team-writer", url }, tools)).toBe(
       "nameTaken"
     );
   });
 
   it("rejects a name that becomes another delegate's tool name", () => {
-    expect(remoteDelegateProblem({ name: "aadocs writer", url }, tools)).toBe(
+    expect(remoteDelegateProblem({ name: "docs-team writer", url }, tools)).toBe(
       "nameTaken"
     );
   });

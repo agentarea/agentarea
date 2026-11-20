@@ -24,7 +24,7 @@ describe("hand-rolled fetches in server actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getAuthToken.mockResolvedValue("test-token");
-    getRequestWorkspaceSlug.mockResolvedValue("aadocs");
+    getRequestWorkspaceSlug.mockResolvedValue("docs-team");
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation(
@@ -68,7 +68,7 @@ describe("hand-rolled fetches in server actions", () => {
       expect(headers.get("Authorization")).toBe("Bearer test-token");
       expect(headers.has("x-agentarea-workspace")).toBe(false);
       expect(new URL(String(url)).pathname).toMatch(
-        /^\/v1\/workspaces\/aadocs\//
+        /^\/v1\/workspaces\/docs-team\//
       );
     }
   );
