@@ -18,13 +18,13 @@ workspace. The two workspaces may belong to different people. The same steps
 reach any A2A v1.0 agent, not only one on AgentArea.
 
 The example below lets `personal-assistant` in the `personal` workspace hand
-documentation work to `docs-writer` in the `aadocs` workspace.
+documentation work to `docs-writer` in the `docs-team` workspace.
 
 ## Prerequisites
 
 <Info>
-- Someone who is a member of `aadocs` issues the key. It acts as them, so a
-  delegated task in `aadocs` is started by them.
+- Someone who is a member of `docs-team` issues the key. It acts as them, so a
+  delegated task in `docs-team` is started by them.
 - You administer the calling workspace. Pointing a secret at an address sends
   the secret there, so only an admin may add or change that binding.
 </Info>
@@ -33,31 +33,31 @@ documentation work to `docs-writer` in the `aadocs` workspace.
 
 <Steps titleSize="h3">
   <Step title="Issue a key for the target agent">
-    In `aadocs`, open `docs-writer` → **Settings** → **A2A access**. Copy the
+    In `docs-team`, open `docs-writer` → **Settings** → **A2A access**. Copy the
     agent's **Address**, then select **Issue key**, name it after the caller,
     for example `personal`, and copy the key; it is shown once. Or:
 
     ```bash
-    curl -X POST https://$API_HOST/v1/workspaces/aadocs/api-keys/ \
+    curl -X POST https://$API_HOST/v1/workspaces/docs-team/api-keys/ \
       -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/json" \
       -d '{"name": "personal", "agent_id": "<docs-writer-id>"}'
     ```
 
     The key reaches `docs-writer` over A2A and nothing else: no other agent, no
-    data in `aadocs`, no REST route. Revoke it in the same section to cut the
+    data in `docs-team`, no REST route. Revoke it in the same section to cut the
     caller off.
   </Step>
 
   <Step title="Store the key as a secret in the calling workspace">
-    In `personal`, open **Secrets** and create a secret named `aadocs-key` with
+    In `personal`, open **Secrets** and create a secret named `docs-team-key` with
     the key as its value, or:
 
     ```bash
     curl -X POST https://$API_HOST/v1/workspaces/personal/secrets \
       -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/json" \
-      -d "{\"name\": \"aadocs-key\", \"value\": \"$AADOCS_KEY\", \"description\": \"Delegation to aadocs\"}"
+      -d "{\"name\": \"docs-team-key\", \"value\": \"$DOCS_TEAM_KEY\", \"description\": \"Delegation to docs-team\"}"
     ```
 
     The agent keeps only the secret's name. The value is read when the agent
@@ -72,7 +72,7 @@ documentation work to `docs-writer` in the `aadocs` workspace.
     |---|---|
     | Agent address | The address copied in the first step. Reading the card fills in the name and description. |
     | Name | `docs-writer` — the model sees the tool `delegate_to_docs_writer` |
-    | Token | `aadocs-key` |
+    | Token | `docs-team-key` |
     | When to delegate | What this agent should hand over, and when |
 
     Select **Add external agent**, then **Save changes**. Through the API, the
@@ -85,7 +85,7 @@ documentation work to `docs-writer` in the `aadocs` workspace.
       "name": "docs-writer",
       "settings": {
         "a2a_url": "https://78c3874a-e9b9-42dd-ad07-574086ca7034.a2a.example.com",
-        "auth_secret_name": "aadocs-key", // pragma: allowlist secret
+        "auth_secret_name": "docs-team-key", // pragma: allowlist secret
         "description_override": "Hand over any request to write documentation."
       }
     }
@@ -98,7 +98,7 @@ documentation work to `docs-writer` in the `aadocs` workspace.
 Start a task on `personal-assistant` that needs the delegate, for example "Write
 a one-sentence doc for add(a, b) and delegate it to docs-writer". The task's
 activity shows a `delegate_to_docs_writer` call, and a new task for
-`docs-writer` appears in the `aadocs` workspace, started by whoever issued the
+`docs-writer` appears in the `docs-team` workspace, started by whoever issued the
 key.
 
 ## Troubleshooting

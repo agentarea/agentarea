@@ -157,7 +157,7 @@ func newHarness(t *testing.T) *harness {
 	return newHarnessOver(t, newFakeStore(), NativeConditionalWrites)
 }
 
-// noConditionalStore behaves as Timeweb S3 does: every If-Match is a failed
+// noConditionalStore behaves as an S3-compatible store without conditional writes does: every If-Match is a failed
 // precondition, whatever the ETag, and If-None-Match is ignored.
 type noConditionalStore struct{ *fakeStore }
 

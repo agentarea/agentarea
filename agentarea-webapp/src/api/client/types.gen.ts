@@ -1538,7 +1538,7 @@ export type BundleMcp = {
   /**
    * Catalog
    *
-   * Id of a catalog MCP server, e.g. 'ru.yookassa/mcp' or 'io.github.owner/server/command'. Set this or json_spec.
+   * Id of a catalog MCP server, e.g. 'io.github.owner/server' or 'io.github.owner/server/command'. Set this or json_spec.
    */
   catalog?: string | null;
   /**

@@ -109,8 +109,8 @@ into `${setup.<key>}`.
 
     ```yaml
     # mcp/kassa.yaml
-    name: YooKassa
-    catalog: ru.yookassa/mcp
+    name: Payments
+    catalog: io.github.owner/server
     bindings:
       Authorization: "${secret.kassa-token}"
     ```

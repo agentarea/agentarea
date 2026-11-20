@@ -869,7 +869,7 @@ type BundleMcp struct {
 	// Bindings Maps an env var / header name the server needs to a ${setup.x} reference, e.g. {'GITHUB_TOKEN': '${setup.github_token}'}.
 	Bindings *map[string]string `json:"bindings,omitempty"`
 
-	// Catalog Id of a catalog MCP server, e.g. 'ru.yookassa/mcp' or 'io.github.owner/server/command'. Set this or json_spec.
+	// Catalog Id of a catalog MCP server, e.g. 'io.github.owner/server' or 'io.github.owner/server/command'. Set this or json_spec.
 	Catalog *string `json:"catalog"`
 
 	// ContextSecret URL MCPs only. A ${setup.x} reference to a secret setup field whose value becomes the instance's context_secret: the key AgentArea signs each tool call's context with. Write-only, like a header secret.

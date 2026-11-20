@@ -181,8 +181,8 @@ global:
     secretKeyKey: "secret-access-key"
     # Who enforces If-Match / If-None-Match on MCP app storage writes: "native"
     # (the store: AWS S3, MinIO, RustFS) or "emulated" (mcp-manager, under a
-    # per-object lock) for a store without conditional writes, such as Timeweb
-    # S3. Emulated is safe only with a single mcp-manager replica.
+    # per-object lock) for an S3-compatible store without conditional writes.
+    # Emulated is safe only with a single mcp-manager replica.
     conditionalWrites: "native"
     # Client-reachable endpoint used to sign presigned URLs for browser-direct
     # uploads/downloads. Leave empty to fall back to the internal endpoint

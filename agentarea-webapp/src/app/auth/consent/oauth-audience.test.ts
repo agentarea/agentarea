@@ -5,16 +5,16 @@ describe("grantedAccessTokenAudience", () => {
   it("grants the audience requested by the authorization client", () => {
     expect(
       grantedAccessTokenAudience(
-        ["https://api.agentarea.ru/client-mcp/client-id"],
-        ["https://api.agentarea.ru"]
+        ["https://api.agentarea.ai/client-mcp/client-id"],
+        ["https://api.agentarea.ai"]
       )
-    ).toEqual(["https://api.agentarea.ru/client-mcp/client-id"]);
+    ).toEqual(["https://api.agentarea.ai/client-mcp/client-id"]);
   });
 
   it("falls back to the registered audience when Hydra ignores the resource parameter", () => {
     expect(
-      grantedAccessTokenAudience([], ["https://api.agentarea.ru"])
-    ).toEqual(["https://api.agentarea.ru"]);
+      grantedAccessTokenAudience([], ["https://api.agentarea.ai"])
+    ).toEqual(["https://api.agentarea.ai"]);
   });
 
   it("does not invent an audience when neither source provides one", () => {

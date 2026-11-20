@@ -6,7 +6,7 @@
  * never hands it a bearer token minted for somewhere else.
  */
 
-export const DEFAULT_API_URL = 'http://localhost:8000';
+export const DEFAULT_API_URL = 'https://api.agentarea.ai';
 
 export function normalizeApiUrl(url: string): string {
 	return url.trim().replace(/\/+$/, '');

@@ -4,7 +4,7 @@ import { apiProxyUrl, isRelativeApiLink } from "./api-proxy-url";
 describe("apiProxyUrl", () => {
   it("proxies an absolute link built from API_BASE_URL", () => {
     expect(
-      apiProxyUrl("https://api.agentarea.ru/v1/workspaces/acme/files/a%20b.txt")
+      apiProxyUrl("https://api.agentarea.ai/v1/workspaces/acme/files/a%20b.txt")
     ).toBe("/api/proxy/v1/workspaces/acme/files/a%20b.txt");
   });
 

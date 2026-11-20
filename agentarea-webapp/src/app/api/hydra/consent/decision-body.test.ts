@@ -4,7 +4,7 @@ import { consentDecisionBody } from "./decision-body";
 const consentRequest = {
   subject: "user-a",
   requested_scope: ["openid", "offline_access"],
-  requested_access_token_audience: ["https://api.agentarea.ru"],
+  requested_access_token_audience: ["https://api.agentarea.ai"],
   client: { audience: ["https://other.example"] },
 };
 
@@ -12,7 +12,7 @@ describe("consentDecisionBody", () => {
   it("grants exactly what the client requested", () => {
     expect(consentDecisionBody("accept", consentRequest)).toEqual({
       grant_scope: ["openid", "offline_access"],
-      grant_access_token_audience: ["https://api.agentarea.ru"],
+      grant_access_token_audience: ["https://api.agentarea.ai"],
     });
   });
 
