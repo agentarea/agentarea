@@ -3,14 +3,18 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/blob"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/domain"
+	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 )
 
 // StoreOutput keeps a large tool output for read_tool_output (context.py store_context_output).
@@ -21,16 +25,48 @@ func (s *Service) StoreOutput(ctx context.Context, p Principal, taskID, outputID
 	return s.putText(ctx, domain.OutputKey(p.WorkspaceID, taskID, outputID), content, "application/json")
 }
 
-// ReadOutput reads a stored output through grep, head or tail.
+// ReadOutput reads a stored output, or one of the task's input files by its
+// inputs/attachments/<name> path, through grep, head or tail.
 func (s *Service) ReadOutput(ctx context.Context, p Principal, taskID, outputID, grep string, head, tail *int) (string, error) {
 	if _, err := workspace(p); err != nil {
 		return "", err
 	}
-	content, err := s.getText(ctx, domain.OutputKey(p.WorkspaceID, taskID, outputID))
+	var content string
+	var err error
+	switch {
+	case domain.IsTaskInputPath(outputID):
+		content, err = s.readTaskInput(ctx, p, taskID, outputID)
+	case domain.IsOutputID(outputID):
+		content, err = s.getText(ctx, domain.OutputKey(p.WorkspaceID, taskID, outputID))
+		if errors.Is(err, blob.ErrNotFound) {
+			err = fmt.Errorf("no stored output %q; pass the id an [Output stored as ...] line names, or a task input file path %s<name>", outputID, domain.TaskInputPrefix)
+		}
+	default:
+		err = fmt.Errorf("%q is neither a stored output id nor a task input file path %s<name>", outputID, domain.TaskInputPrefix)
+	}
 	if err != nil {
 		return "", err
 	}
 	return domain.FilterOutput(content, grep, head, tail), nil
+}
+
+// readTaskInput reads a text input file of the task from its task workspace;
+// it needs no sandbox.
+func (s *Service) readTaskInput(ctx context.Context, p Principal, taskID, path string) (string, error) {
+	if s.d.Workspace == nil {
+		return "", errors.New("task input files cannot be read: this deployment has no task workspace")
+	}
+	data, ct, err := s.d.Workspace.Get(ctx, p.WorkspaceID, taskID, path)
+	if errors.Is(err, sandboxapi.ErrFileNotFound) {
+		return "", fmt.Errorf("no task input file %q", path)
+	}
+	if err != nil {
+		return "", err
+	}
+	if !utf8.Valid(data) {
+		return "", fmt.Errorf("task input file %q is not text (%s)", path, ct)
+	}
+	return string(data), nil
 }
 
 type historyMessage struct {
