@@ -40,6 +40,24 @@ func ImageKey(workspaceID, taskID, imageID string) string {
 	return fmt.Sprintf("tasks/%s/%s/images/%s", workspaceID, taskID, imageID)
 }
 
+// TaskInputPrefix is where a run's input files sit in its task workspace.
+const TaskInputPrefix = "inputs/attachments/"
+
+func pathSegment(s string) bool {
+	return s != "" && s != "." && s != ".." && !strings.ContainsAny(s, "/\\") &&
+		!strings.ContainsFunc(s, func(r rune) bool { return r < 0x20 || r == 0x7f })
+}
+
+// IsTaskInputPath accepts exactly inputs/attachments/<one segment>, the path
+// a run is told its input files have.
+func IsTaskInputPath(name string) bool {
+	rest, ok := strings.CutPrefix(name, TaskInputPrefix)
+	return ok && pathSegment(rest)
+}
+
+// IsOutputID accepts an output id that names one object under the task's outputs.
+func IsOutputID(id string) bool { return pathSegment(id) }
+
 func runeLen(s string) int { return len([]rune(s)) }
 
 func runeHead(s string, n int) string {

@@ -107,13 +107,14 @@ func RecallHistoryTool() api.ToolDefinition {
 func ReadToolOutputTool() api.ToolDefinition {
 	return api.ToolDefinition{
 		Name: ToolReadToolOutput,
-		Description: "Read a previously stored tool output. Use when you see " +
-			"'[Output stored as ...]' in a tool result and need the full content. " +
+		Description: "Read a previously stored tool output, or a task input file. Use when you see " +
+			"'[Output stored as ...]' in a tool result and need the full content, or when the task " +
+			"names an input file at inputs/attachments/<name>; no sandbox is needed. " +
 			"Supports grep filtering and head/tail slicing.",
 		Parameters: obj{
 			"type": "object",
 			"properties": obj{
-				"output_id": obj{"type": "string", "description": "The output ID from the stored result reference"},
+				"output_id": obj{"type": "string", "description": "The output ID from the stored result reference, or a task input file path inputs/attachments/<name>"},
 				"grep":      obj{"type": "string", "description": "Filter lines matching this regex pattern"},
 				"head":      obj{"type": "integer", "description": "Return only first N lines"},
 				"tail":      obj{"type": "integer", "description": "Return only last N lines"},
