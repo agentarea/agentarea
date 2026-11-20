@@ -29,7 +29,8 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/sandboxruntime/e2bproto/processconnect"
 )
 
-const e2bEnvdPort = 49999
+// envd, the in-sandbox daemon the process and filesystem calls go to.
+const e2bEnvdPort = 49983
 
 const maxIsolationAttestationBytes = 64 * 1024
 
@@ -1017,10 +1018,16 @@ func (p *E2BProvider) envdURL(sandboxID, domain string) (string, error) {
 		}
 		return strings.TrimRight(parsed.String(), "/"), nil
 	}
-	if domain == "" {
-		return "", fmt.Errorf("%s did not return a sandbox domain; configure AGENTAREA_SANDBOX_E2B_SANDBOX_URL", p.Name())
-	}
 	apiURL, _ := url.Parse(p.cfg.APIURL)
+	if domain == "" {
+		// E2B returns no domain for a sandbox on the deployment's own domain,
+		// the one its API is served from as api.<domain>.
+		own, ok := strings.CutPrefix(apiURL.Hostname(), "api.")
+		if !ok || own == "" {
+			return "", fmt.Errorf("%s did not return a sandbox domain; configure AGENTAREA_SANDBOX_E2B_SANDBOX_URL", p.Name())
+		}
+		domain = own
+	}
 	scheme := "https"
 	if apiURL.Scheme == "http" {
 		scheme = "http"
