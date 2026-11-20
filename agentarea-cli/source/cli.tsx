@@ -41,7 +41,8 @@ const cli = meow(
 	Options
 	  --token         Bearer token (or use AGENTAREA_TOKEN env var)
 	  --api-url       API server URL (default: AGENTAREA_API_URL, else the saved
-	                  config, else http://localhost:8000). A stored sign-in is
+	                  config, else https://api.agentarea.ai; for a local stack use
+	                  --api-url http://localhost:8000). A stored sign-in is
 	                  only sent to the host it was issued for
 	  --workspace     Workspace slug for this command (overrides the one saved
 	                  with 'workspace use')

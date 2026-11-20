@@ -56,7 +56,8 @@ $ agentarea logout
 ```
 
 Every command resolves the API the same way: `--api-url`, else
-`AGENTAREA_API_URL`, else the saved config, else `http://localhost:8000`. Each
+`AGENTAREA_API_URL`, else the saved config, else `https://api.agentarea.ai`. For a local stack pass
+`--api-url http://localhost:8000` or set `AGENTAREA_API_URL`. Each
 API origin (scheme, host, port) keeps its own sign-in, so signing in to one host
 leaves the others signed in, and a token is only ever sent to the origin it was
 issued for. A command against a host with no sign-in asks you to run

@@ -23,7 +23,7 @@ const docs: AgentToolConfig = {
   type: "agent",
   name: "aadocs-writer",
   settings: {
-    a2a_url: "https://x.a2a.agentarea.ru",
+    a2a_url: "https://x.a2a.agentarea.ai",
     auth_secret_name: "aadocs-key",
   },
 };
@@ -106,7 +106,7 @@ describe("patchDelegate", () => {
 });
 
 describe("remoteDelegateProblem", () => {
-  const url = "https://agentarea.ru/v1/agents/y/a2a/rpc";
+  const url = "https://agentarea.ai/v1/agents/y/a2a/rpc";
 
   it("accepts a named agent with an http(s) URL", () => {
     expect(remoteDelegateProblem({ name: "support", url }, tools)).toBeNull();
@@ -130,7 +130,7 @@ describe("remoteDelegateProblem", () => {
     );
   });
 
-  it.each(["", "ftp://host/rpc", "agentarea.ru/rpc", "https://"])(
+  it.each(["", "ftp://host/rpc", "agentarea.ai/rpc", "https://"])(
     "rejects the URL %j",
     (bad) => {
       expect(remoteDelegateProblem({ name: "support", url: bad }, tools)).toBe(

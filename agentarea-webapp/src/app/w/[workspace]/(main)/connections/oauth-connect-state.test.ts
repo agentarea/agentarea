@@ -16,7 +16,7 @@ import {
 
 const INSTANCE_ID = "76216436-01e9-4ebc-a8d5-9023ed773cce";
 const ITEM_ID = "0b5a3e0e-7d0a-4a43-9c64-0d1f6f3e9b11";
-const REDIRECT_URI = "https://api.agentarea.ru/v1/oauth/callback";
+const REDIRECT_URI = "https://api.agentarea.ai/v1/oauth/callback";
 
 function preflight(over: Partial<OAuthPreflight> = {}): OAuthPreflight {
   return {
@@ -225,12 +225,12 @@ describe("buildAuthorizeRequest", () => {
       buildAuthorizeRequest({
         target: { instance_id: INSTANCE_ID },
         state: { kind: "ready", connected: false },
-        returnTo: "https://app.agentarea.ru",
+        returnTo: "https://app.agentarea.ai",
       })
     ).toEqual({
       instance_id: INSTANCE_ID,
       credential_mode: "auto",
-      return_to: "https://app.agentarea.ru",
+      return_to: "https://app.agentarea.ai",
     });
   });
 
@@ -414,12 +414,12 @@ describe("catalog APIs", () => {
           connected: false,
           credentialSource: "platform",
         },
-        returnTo: "https://app.agentarea.ru",
+        returnTo: "https://app.agentarea.ai",
       })
     ).toEqual({
       catalog_item_id: ITEM_ID,
       credential_mode: "auto",
-      return_to: "https://app.agentarea.ru",
+      return_to: "https://app.agentarea.ai",
     });
   });
 

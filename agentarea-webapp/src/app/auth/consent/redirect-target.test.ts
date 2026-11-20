@@ -14,9 +14,9 @@ describe("redirectTarget", () => {
   it("shows the whole host of a look-alike domain", () => {
     expect(
       redirectTarget({
-        request_url: authorize("https://app.agentarea.ru.evil.example/cb"),
+        request_url: authorize("https://app.agentarea.ai.evil.example/cb"),
       })
-    ).toEqual({ host: "app.agentarea.ru.evil.example", loopback: false });
+    ).toEqual({ host: "app.agentarea.ai.evil.example", loopback: false });
   });
 
   it("marks a loopback callback with its port", () => {
