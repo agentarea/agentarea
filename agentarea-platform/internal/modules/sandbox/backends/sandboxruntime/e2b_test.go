@@ -638,3 +638,30 @@ func TestE2BResolveProvisioningUsesFilteredPaginatedInventory(t *testing.T) {
 		t.Fatalf("ResolveProvisioning() = %+v, %v", sessions, err)
 	}
 }
+
+func TestE2BCloudSandboxHostComesFromTheAPIDomain(t *testing.T) {
+	cfg := testE2BConfig("e2b", "https://api.e2b.app")
+	cfg.SandboxURL = ""
+	cfg.AllowInsecure = false
+	p, err := NewE2BProvider(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// E2B Cloud leaves domain empty on create for its default domain.
+	if got, err := p.envdURL("sbx-1", ""); err != nil || got != "https://49983-sbx-1.e2b.app" {
+		t.Errorf("no domain: %q %v", got, err)
+	}
+	if got, err := p.envdURL("sbx-1", "eu.e2b.dev"); err != nil || got != "https://49983-sbx-1.eu.e2b.dev" {
+		t.Errorf("returned domain: %q %v", got, err)
+	}
+
+	self := testE2BConfig("e2b", "https://e2b.internal:3000")
+	self.SandboxURL = ""
+	p, err = NewE2BProvider(self)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := p.envdURL("sbx-1", ""); err == nil {
+		t.Errorf("an API host outside api.<domain> named a sandbox host %q", got)
+	}
+}
