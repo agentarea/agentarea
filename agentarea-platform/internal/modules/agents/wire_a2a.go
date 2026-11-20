@@ -14,7 +14,7 @@ import (
 type A2ADeps struct {
 	// A2AAPIURL is AGENTAREA_API_URL, the host the cards and documents point at.
 	A2AAPIURL string
-	// A2APrincipal is the optional-auth resolver: authn.Gate.Optional(ctx, token, false).
+	// A2APrincipal is the optional-auth resolver: authn.Gate.Optional(ctx, token, authn.SurfaceAPI, false).
 	// Nil leaves the authenticated A2A routes answering 501.
 	A2APrincipal func(ctx context.Context, token string) (*authn.Principal, error)
 	// A2ARateLimiter holds the 300 a minute A2A RPC buckets; nil leaves them unlimited.

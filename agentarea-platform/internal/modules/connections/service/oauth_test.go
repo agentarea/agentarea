@@ -721,10 +721,23 @@ func TestRegistrationShaping(t *testing.T) {
 	if g := reg["grant_types"].([]any); len(g) != 1 || g[0] != "refresh_token" {
 		t.Fatalf("grant_types %v", g)
 	}
-	if reg["scope"] != "offline offline_access openid" || reg["skip_consent"] != false {
+	if reg["scope"] != "mcp offline offline_access openid" || reg["skip_consent"] != false {
 		t.Fatalf("registration %v", reg)
 	}
-	for _, body := range []string{`null`, `{"redirect_uris":["ftp://x"]}`, `{"redirect_uris":["https://x"],"grant_types":["implicit"]}`, `{"redirect_uris":["https://x"],"scope":"admin"}`} {
+	for body, want := range map[string]string{
+		`{"redirect_uris":["https://x"],"scope":"api mcp openid"}`: "mcp openid",
+		`{"redirect_uris":["https://x"],"scope":"mcp"}`:            "mcp",
+	} {
+		reg, err := f.svc.Registration([]byte(body))
+		if err != nil || reg["scope"] != want {
+			t.Fatalf("%s: %v %v", body, reg["scope"], err)
+		}
+	}
+	apiConfigured := newOAuthFixture(t, nil, Config{OAuthScopes: []string{"openid", "api"}})
+	if reg, err := apiConfigured.svc.Registration([]byte(`{"redirect_uris":["https://x"],"scope":"api openid"}`)); err != nil || reg["scope"] != "openid" {
+		t.Fatalf("api offered to a registered client: %v %v", reg["scope"], err)
+	}
+	for _, body := range []string{`null`, `{"redirect_uris":["ftp://x"]}`, `{"redirect_uris":["https://x"],"grant_types":["implicit"]}`, `{"redirect_uris":["https://x"],"scope":"admin"}`, `{"redirect_uris":["https://x"],"scope":"api"}`} {
 		var refusal *DCRRefusal
 		if _, err := f.svc.Registration([]byte(body)); !errors.As(err, &refusal) {
 			t.Fatalf("%s: err = %v", body, err)

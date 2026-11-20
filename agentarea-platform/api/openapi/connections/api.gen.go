@@ -137,6 +137,42 @@ func (e OAuthAuthorizeRequestCredentialMode) Valid() bool {
 	}
 }
 
+// Defines values for OAuthConsentDecisionAction.
+const (
+	Accept OAuthConsentDecisionAction = "accept"
+	Reject OAuthConsentDecisionAction = "reject"
+)
+
+// Valid indicates whether the value is a known member of the OAuthConsentDecisionAction enum.
+func (e OAuthConsentDecisionAction) Valid() bool {
+	switch e {
+	case Accept:
+		return true
+	case Reject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OAuthConsentResponseAccess.
+const (
+	Api OAuthConsentResponseAccess = "api"
+	Mcp OAuthConsentResponseAccess = "mcp"
+)
+
+// Valid indicates whether the value is a known member of the OAuthConsentResponseAccess enum.
+func (e OAuthConsentResponseAccess) Valid() bool {
+	switch e {
+	case Api:
+		return true
+	case Mcp:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OAuthPreflightResponseCredentialSource.
 const (
 	OAuthPreflightResponseCredentialSourceCustom   OAuthPreflightResponseCredentialSource = "custom"
@@ -525,6 +561,46 @@ type OAuthAuthorizeResponse struct {
 	ConnectionId openapi_types.UUID `json:"connection_id"`
 }
 
+// OAuthConsentClient defines model for OAuthConsentClient.
+type OAuthConsentClient struct {
+	ClientId     string   `json:"client_id"`
+	ClientName   string   `json:"client_name"`
+	ClientUri    string   `json:"client_uri"`
+	LogoUri      string   `json:"logo_uri"`
+	RedirectUris []string `json:"redirect_uris"`
+}
+
+// OAuthConsentDecision defines model for OAuthConsentDecision.
+type OAuthConsentDecision struct {
+	Action    OAuthConsentDecisionAction `json:"action"`
+	Challenge string                     `json:"challenge"`
+
+	// Workspace Slug or id of the workspace an `mcp` grant is bound to; required to accept one.
+	Workspace *string `json:"workspace"`
+}
+
+// OAuthConsentDecisionAction defines model for OAuthConsentDecision.Action.
+type OAuthConsentDecisionAction string
+
+// OAuthConsentRedirect defines model for OAuthConsentRedirect.
+type OAuthConsentRedirect struct {
+	RedirectTo string `json:"redirect_to"`
+}
+
+// OAuthConsentResponse A consent request of this API's authorization server: the client, and what accepting grants it. `api` reaches the whole account and is granted only to first-party clients; `mcp` reaches MCP in one workspace the user picks.
+type OAuthConsentResponse struct {
+	Access     OAuthConsentResponseAccess `json:"access"`
+	Client     OAuthConsentClient         `json:"client"`
+	FirstParty bool                       `json:"first_party"`
+
+	// RedirectUri Where accepting sends the authorization code; empty when the request names none and the client registered several.
+	RedirectUri string   `json:"redirect_uri"`
+	Scopes      []string `json:"scopes"`
+}
+
+// OAuthConsentResponseAccess defines model for OAuthConsentResponse.Access.
+type OAuthConsentResponseAccess string
+
 // OAuthFinishRequest defines model for OAuthFinishRequest.
 type OAuthFinishRequest struct {
 	Token string `json:"token"`
@@ -762,6 +838,11 @@ type OauthCallbackV1OauthCallbackGetParams struct {
 	ErrorDescription *string `form:"error_description,omitempty" json:"error_description,omitempty"`
 }
 
+// OauthConsentV1OauthConsentGetParams defines parameters for OauthConsentV1OauthConsentGet.
+type OauthConsentV1OauthConsentGetParams struct {
+	Challenge string `form:"challenge" json:"challenge"`
+}
+
 // CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostJSONBody defines parameters for CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPost.
 type CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostJSONBody map[string]interface{}
 
@@ -793,6 +874,9 @@ type ListConnectionsV1OpenapiConnectionsGetParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset *int    `form:"offset,omitempty" json:"offset,omitempty"`
 }
+
+// OauthConsentDecideV1OauthConsentPostJSONRequestBody defines body for OauthConsentDecideV1OauthConsentPost for application/json ContentType.
+type OauthConsentDecideV1OauthConsentPostJSONRequestBody = OAuthConsentDecision
 
 // OauthFinishV1OauthFinishPostJSONRequestBody defines body for OauthFinishV1OauthFinishPost for application/json ContentType.
 type OauthFinishV1OauthFinishPostJSONRequestBody = OAuthFinishRequest
@@ -1019,6 +1103,12 @@ type ServerInterface interface {
 	// OauthCallbackV1OauthCallbackGet Oauth Callback
 	// (GET /v1/oauth/callback)
 	OauthCallbackV1OauthCallbackGet(w http.ResponseWriter, r *http.Request, params OauthCallbackV1OauthCallbackGetParams)
+	// OauthConsentV1OauthConsentGet Oauth Consent
+	// (GET /v1/oauth/consent)
+	OauthConsentV1OauthConsentGet(w http.ResponseWriter, r *http.Request, params OauthConsentV1OauthConsentGetParams)
+	// OauthConsentDecideV1OauthConsentPost Oauth Consent Decide
+	// (POST /v1/oauth/consent)
+	OauthConsentDecideV1OauthConsentPost(w http.ResponseWriter, r *http.Request)
 	// OauthFinishV1OauthFinishPost Oauth Finish
 	// (POST /v1/oauth/finish)
 	OauthFinishV1OauthFinishPost(w http.ResponseWriter, r *http.Request)
@@ -1244,6 +1334,18 @@ func (_ Unimplemented) ProxyInstanceV1McpInstanceIdMcpPost(w http.ResponseWriter
 // OauthCallbackV1OauthCallbackGet Oauth Callback
 // (GET /v1/oauth/callback)
 func (_ Unimplemented) OauthCallbackV1OauthCallbackGet(w http.ResponseWriter, r *http.Request, params OauthCallbackV1OauthCallbackGetParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// OauthConsentV1OauthConsentGet Oauth Consent
+// (GET /v1/oauth/consent)
+func (_ Unimplemented) OauthConsentV1OauthConsentGet(w http.ResponseWriter, r *http.Request, params OauthConsentV1OauthConsentGetParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// OauthConsentDecideV1OauthConsentPost Oauth Consent Decide
+// (POST /v1/oauth/consent)
+func (_ Unimplemented) OauthConsentDecideV1OauthConsentPost(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1887,6 +1989,53 @@ func (siw *ServerInterfaceWrapper) OauthCallbackV1OauthCallbackGet(w http.Respon
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.OauthCallbackV1OauthCallbackGet(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// OauthConsentV1OauthConsentGet operation middleware
+func (siw *ServerInterfaceWrapper) OauthConsentV1OauthConsentGet(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params OauthConsentV1OauthConsentGetParams
+
+	// ------------- Required query parameter "challenge" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "challenge", r.URL.Query(), &params.Challenge, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "challenge"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "challenge", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OauthConsentV1OauthConsentGet(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// OauthConsentDecideV1OauthConsentPost operation middleware
+func (siw *ServerInterfaceWrapper) OauthConsentDecideV1OauthConsentPost(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OauthConsentDecideV1OauthConsentPost(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3540,6 +3689,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/v1/oauth/callback", wrapper.OauthCallbackV1OauthCallbackGet)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/oauth/consent", wrapper.OauthConsentV1OauthConsentGet)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/oauth/consent", wrapper.OauthConsentDecideV1OauthConsentPost)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/oauth/finish", wrapper.OauthFinishV1OauthFinishPost)
 	})
 	r.Group(func(r chi.Router) {
@@ -4129,6 +4284,78 @@ func (response OauthCallbackV1OauthCallbackGet200JSONResponse) VisitOauthCallbac
 type OauthCallbackV1OauthCallbackGet422JSONResponse HTTPValidationError
 
 func (response OauthCallbackV1OauthCallbackGet422JSONResponse) VisitOauthCallbackV1OauthCallbackGetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OauthConsentV1OauthConsentGetRequestObject struct {
+	Params OauthConsentV1OauthConsentGetParams
+}
+
+type OauthConsentV1OauthConsentGetResponseObject interface {
+	VisitOauthConsentV1OauthConsentGetResponse(w http.ResponseWriter) error
+}
+
+type OauthConsentV1OauthConsentGet200JSONResponse OAuthConsentResponse
+
+func (response OauthConsentV1OauthConsentGet200JSONResponse) VisitOauthConsentV1OauthConsentGetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OauthConsentV1OauthConsentGet422JSONResponse HTTPValidationError
+
+func (response OauthConsentV1OauthConsentGet422JSONResponse) VisitOauthConsentV1OauthConsentGetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OauthConsentDecideV1OauthConsentPostRequestObject struct {
+	Body *OauthConsentDecideV1OauthConsentPostJSONRequestBody
+}
+
+type OauthConsentDecideV1OauthConsentPostResponseObject interface {
+	VisitOauthConsentDecideV1OauthConsentPostResponse(w http.ResponseWriter) error
+}
+
+type OauthConsentDecideV1OauthConsentPost200JSONResponse OAuthConsentRedirect
+
+func (response OauthConsentDecideV1OauthConsentPost200JSONResponse) VisitOauthConsentDecideV1OauthConsentPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OauthConsentDecideV1OauthConsentPost422JSONResponse HTTPValidationError
+
+func (response OauthConsentDecideV1OauthConsentPost422JSONResponse) VisitOauthConsentDecideV1OauthConsentPostResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -5807,6 +6034,12 @@ type StrictServerInterface interface {
 	// OauthCallbackV1OauthCallbackGet Oauth Callback
 	// (GET /v1/oauth/callback)
 	OauthCallbackV1OauthCallbackGet(ctx context.Context, request OauthCallbackV1OauthCallbackGetRequestObject) (OauthCallbackV1OauthCallbackGetResponseObject, error)
+	// OauthConsentV1OauthConsentGet Oauth Consent
+	// (GET /v1/oauth/consent)
+	OauthConsentV1OauthConsentGet(ctx context.Context, request OauthConsentV1OauthConsentGetRequestObject) (OauthConsentV1OauthConsentGetResponseObject, error)
+	// OauthConsentDecideV1OauthConsentPost Oauth Consent Decide
+	// (POST /v1/oauth/consent)
+	OauthConsentDecideV1OauthConsentPost(ctx context.Context, request OauthConsentDecideV1OauthConsentPostRequestObject) (OauthConsentDecideV1OauthConsentPostResponseObject, error)
 	// OauthFinishV1OauthFinishPost Oauth Finish
 	// (POST /v1/oauth/finish)
 	OauthFinishV1OauthFinishPost(ctx context.Context, request OauthFinishV1OauthFinishPostRequestObject) (OauthFinishV1OauthFinishPostResponseObject, error)
@@ -6353,6 +6586,63 @@ func (sh *strictHandler) OauthCallbackV1OauthCallbackGet(w http.ResponseWriter, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(OauthCallbackV1OauthCallbackGetResponseObject); ok {
 		if err := validResponse.VisitOauthCallbackV1OauthCallbackGetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// OauthConsentV1OauthConsentGet operation middleware
+func (sh *strictHandler) OauthConsentV1OauthConsentGet(w http.ResponseWriter, r *http.Request, params OauthConsentV1OauthConsentGetParams) {
+	var request OauthConsentV1OauthConsentGetRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.OauthConsentV1OauthConsentGet(ctx, request.(OauthConsentV1OauthConsentGetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "OauthConsentV1OauthConsentGet")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(OauthConsentV1OauthConsentGetResponseObject); ok {
+		if err := validResponse.VisitOauthConsentV1OauthConsentGetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// OauthConsentDecideV1OauthConsentPost operation middleware
+func (sh *strictHandler) OauthConsentDecideV1OauthConsentPost(w http.ResponseWriter, r *http.Request) {
+	var request OauthConsentDecideV1OauthConsentPostRequestObject
+
+	var body OauthConsentDecideV1OauthConsentPostJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.OauthConsentDecideV1OauthConsentPost(ctx, request.(OauthConsentDecideV1OauthConsentPostRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "OauthConsentDecideV1OauthConsentPost")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(OauthConsentDecideV1OauthConsentPostResponseObject); ok {
+		if err := validResponse.VisitOauthConsentDecideV1OauthConsentPostResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

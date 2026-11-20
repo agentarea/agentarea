@@ -138,7 +138,7 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 		ad.Secrets = delegateSecrets{d: d}
 		ad.ClientAPIURL, ad.A2AAPIURL = d.APIURL, d.APIURL
 		ad.A2APrincipal = func(ctx context.Context, token string) (*authn.Principal, error) {
-			return e.gate.Optional(ctx, token, false)
+			return e.gate.Optional(ctx, token, authn.SurfaceAPI, false)
 		}
 		ad.TaskDefTriggers = lateTriggers{m: m}
 		ad.TaskDefRunner = lateTaskDefRunner{m: m}

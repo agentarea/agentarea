@@ -110,7 +110,7 @@ func (a Auth) challenge(resource string) string {
 // valid token whose pinned workspace is out of reach.
 func (a Auth) authenticate(r *http.Request, token, pinned string) (c *authn.Caller, p *authn.Principal, refusedWorkspace bool) {
 	ctx := r.Context()
-	p, err := a.Gate.Optional(ctx, token, a.AdmitTurn)
+	p, err := a.Gate.Optional(ctx, token, authn.SurfaceMCP, a.AdmitTurn)
 	if err != nil {
 		a.log().Warn("MCP auth: token validation error", "error", err)
 		return nil, nil, false

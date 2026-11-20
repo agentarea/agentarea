@@ -53,23 +53,51 @@ const (
 	SurfaceMCP Surface = "mcp"
 )
 
+// OAuth scopes a user grants a client (ADR-0058).
+const (
+	// OAuthScopeMCP reaches MCP only, in the one workspace the token names.
+	OAuthScopeMCP = "mcp"
+	// OAuthScopeAPI reaches the whole account; first-party clients only.
+	OAuthScopeAPI = "api"
+)
+
+// FirstPartyClientIDs are the OAuth clients the platform registers itself;
+// only a token issued to one of them may carry OAuthScopeAPI (ADR-0058).
+func FirstPartyClientIDs() []string { return []string{"agentarea-cli", "agentarea-desktop"} }
+
 // Credential is how a request authenticated, and on which surface. KeyID is
-// the API key's id for api_key and the turn's id for turn.
+// the API key's id for api_key and the turn's id for turn. Granted is the
+// OAuth scopes an oauth token carries.
 type Credential struct {
 	Kind    CredentialKind
 	KeyID   string
 	Surface Surface
+	Granted []string
 }
 
 // Scopes granted per kind; a kind without an entry is granted nothing.
 func (c Credential) Scopes() []Scope {
 	switch c.Kind {
-	case KindSession, KindOAuth:
+	case KindSession:
 		return []Scope{ScopeCredentials, ScopeWorkspaces}
+	case KindOAuth:
+		if slices.Contains(c.Granted, OAuthScopeAPI) {
+			return []Scope{ScopeCredentials, ScopeWorkspaces}
+		}
+		return nil
 	case KindAPIKey, KindTurn:
 		return nil
 	}
 	return nil
+}
+
+// Reaches reports whether the credential may be used on surface s: an oauth
+// token needs api, or mcp on the MCP surface.
+func (c Credential) Reaches(s Surface) bool {
+	if c.Kind != KindOAuth {
+		return true
+	}
+	return slices.Contains(c.Granted, OAuthScopeAPI) || (s == SurfaceMCP && slices.Contains(c.Granted, OAuthScopeMCP))
 }
 
 // Grants reports whether the credential grants s.
@@ -210,6 +238,7 @@ const (
 	DetailTurnTokenRefused   = "This token reaches only its client's tools and task files"
 	DetailNotAMember         = "User is not a member of the requested workspace"
 	DetailMalformedWorkspace = "Malformed workspace reference in the path"
+	DetailInsufficientScope  = "This OAuth token was not granted access to this API"
 )
 
 // Challenge is the WWW-Authenticate value of every 401 (RFC 9728), with the
@@ -341,7 +370,7 @@ type Gate interface {
 	// Optional is the principal of token on an optional-auth edge (A2A, the
 	// MCP mounts), nil when there is none or it is refused
 	// (resolve_principal_from_token); only admitTurn lets a turn's token in.
-	Optional(ctx context.Context, token string, admitTurn bool) (*Principal, error)
+	Optional(ctx context.Context, token string, on Surface, admitTurn bool) (*Principal, error)
 	// RunnerKey is the principal of a client's runner key, nil for any other
 	// token (authenticate_runner_key).
 	RunnerKey(ctx context.Context, token string) (*Principal, error)
