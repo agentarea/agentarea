@@ -42,6 +42,7 @@ import type {
   ModelKind,
   ModelSpecCreate,
   ModelSpecUpdate,
+  OAuthConsentDecision,
   OpenApiConnectionCreate,
   OpenApiConnectionUpdate,
   PaginatedResponseSkillResponse,
@@ -1586,6 +1587,24 @@ export const deleteStreamSource = async (
       path: { stream_id: streamId, source_id: sourceId },
     });
   return { error };
+};
+
+// Consent for this API's authorization server: the signed-in user reads and
+// decides a client's request; the API picks the grant.
+export const getOAuthConsent = async (challenge: string) => {
+  const { data, error } = await sdk.oauthConsentV1OauthConsentGet({
+    client: serverClient,
+    query: { challenge },
+  });
+  return { data, error };
+};
+
+export const decideOAuthConsent = async (body: OAuthConsentDecision) => {
+  const { data, error } = await sdk.oauthConsentDecideV1OauthConsentPost({
+    client: serverClient,
+    body,
+  });
+  return { data, error };
 };
 
 // Listing workspaces deliberately lives outside this client — see

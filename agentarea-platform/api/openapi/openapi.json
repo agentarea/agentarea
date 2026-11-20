@@ -20463,6 +20463,131 @@
         ],
         "title": "SyncResponse",
         "type": "object"
+      },
+      "OAuthConsentClient": {
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "client_name": {
+            "title": "Client Name",
+            "type": "string"
+          },
+          "client_uri": {
+            "title": "Client Uri",
+            "type": "string"
+          },
+          "logo_uri": {
+            "title": "Logo Uri",
+            "type": "string"
+          },
+          "redirect_uris": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Redirect Uris",
+            "type": "array"
+          }
+        },
+        "required": [
+          "client_id",
+          "client_name",
+          "client_uri",
+          "logo_uri",
+          "redirect_uris"
+        ],
+        "title": "OAuthConsentClient",
+        "type": "object"
+      },
+      "OAuthConsentResponse": {
+        "description": "A consent request of this API's authorization server: the client, and what accepting grants it. `api` reaches the whole account and is granted only to first-party clients; `mcp` reaches MCP in one workspace the user picks.",
+        "properties": {
+          "client": {
+            "$ref": "#/components/schemas/OAuthConsentClient"
+          },
+          "redirect_uri": {
+            "description": "Where accepting sends the authorization code; empty when the request names none and the client registered several.",
+            "title": "Redirect Uri",
+            "type": "string"
+          },
+          "first_party": {
+            "title": "First Party",
+            "type": "boolean"
+          },
+          "access": {
+            "enum": [
+              "mcp",
+              "api"
+            ],
+            "title": "Access",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "client",
+          "redirect_uri",
+          "first_party",
+          "access",
+          "scopes"
+        ],
+        "title": "OAuthConsentResponse",
+        "type": "object"
+      },
+      "OAuthConsentDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "challenge": {
+            "title": "Challenge",
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "accept",
+              "reject"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "workspace": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Slug or id of the workspace an `mcp` grant is bound to; required to accept one.",
+            "title": "Workspace"
+          }
+        },
+        "required": [
+          "challenge",
+          "action"
+        ],
+        "title": "OAuthConsentDecision",
+        "type": "object"
+      },
+      "OAuthConsentRedirect": {
+        "properties": {
+          "redirect_to": {
+            "title": "Redirect To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "redirect_to"
+        ],
+        "title": "OAuthConsentRedirect",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -44021,6 +44146,103 @@
         "tags": [
           "webhooks",
           "webhooks"
+        ]
+      }
+    },
+    "/v1/oauth/consent": {
+      "get": {
+        "description": "The consent request a signed-in user is asked to decide. Accepts a browser session only.",
+        "operationId": "oauth_consent_v1_oauth_consent_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "challenge",
+            "required": true,
+            "schema": {
+              "title": "Challenge",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthConsentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Oauth Consent",
+        "tags": [
+          "v1",
+          "protected",
+          "oauth-consent"
+        ]
+      },
+      "post": {
+        "description": "Accept or reject a consent request. Accepts a browser session only; returns where the browser goes next.",
+        "operationId": "oauth_consent_decide_v1_oauth_consent_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthConsentDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthConsentRedirect"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Oauth Consent Decide",
+        "tags": [
+          "v1",
+          "protected",
+          "oauth-consent"
         ]
       }
     }

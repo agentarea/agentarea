@@ -1,7 +1,4 @@
 import http from 'node:http';
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {
 	buildAuthorizeUrl,
@@ -10,8 +7,8 @@ import {
 	discoverAuthServer,
 	exchangeCode,
 	parseCallback,
+	CLI_CLIENT_ID,
 	refreshAccessToken,
-	registerClient,
 } from '../services/oauth.js';
 import {tokenStorage} from '../utils/storage.js';
 import {normalizeApiUrl} from '../utils/apiUrl.js';
@@ -20,49 +17,16 @@ import {type AuthToken} from '../types/index.js';
 
 /**
  * `agentarea login` — browser authorization-code + PKCE against the API's own
- * OAuth surface. The CLI registers itself as a public loopback client (RFC 7591)
- * so nothing has to be provisioned by hand, and the resulting Hydra token is
- * accepted by every edge: REST and /mcp.
+ * OAuth surface, as the first-party `agentarea-cli` client. Its Hydra token is
+ * granted `api`, so every edge accepts it: REST and /mcp.
  */
 
 const CALLBACK_PORTS = [51789, 51790, 51791];
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
-const CLIENT_NAME = 'AgentArea CLI';
 
 const SUCCESS_PAGE = `<!doctype html><meta charset="utf-8"><title>AgentArea</title>
 <body style="font-family:system-ui;padding:3rem">
 <h2>Signed in to AgentArea</h2><p>You can close this tab and return to the terminal.</p>`;
-
-function clientCachePath(): string {
-	return path.join(os.homedir(), '.agentarea', 'oauth-clients.json');
-}
-
-async function readClientCache(): Promise<Record<string, string>> {
-	try {
-		return JSON.parse(await fs.readFile(clientCachePath(), 'utf8')) as Record<
-			string,
-			string
-		>;
-	} catch (error: unknown) {
-		if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-			return {};
-		}
-
-		throw error;
-	}
-}
-
-async function cacheClientId(key: string, clientId: string): Promise<void> {
-	const cache = await readClientCache();
-	cache[key] = clientId;
-	await fs.mkdir(path.dirname(clientCachePath()), {
-		recursive: true,
-		mode: 0o700,
-	});
-	await fs.writeFile(clientCachePath(), `${JSON.stringify(cache, null, 2)}\n`, {
-		mode: 0o600,
-	});
-}
 
 function openBrowser(url: string): void {
 	const [bin, ...args] =
@@ -160,21 +124,7 @@ export async function runLogin(options: {apiUrl: string}): Promise<boolean> {
 	const redirectUri = `http://127.0.0.1:${callback.port}/callback`;
 
 	try {
-		const cacheKey = `${apiUrl}|${redirectUri}`;
-		const cache = await readClientCache();
-		let clientId = cache[cacheKey];
-
-		if (clientId) {
-			logger.debug(`Reusing registered OAuth client ${clientId}`);
-		} else {
-			clientId = await registerClient({
-				metadata,
-				redirectUri,
-				clientName: CLIENT_NAME,
-			});
-			await cacheClientId(cacheKey, clientId);
-		}
-
+		const clientId = CLI_CLIENT_ID;
 		const {verifier, challenge} = createPkcePair();
 		const state = createState();
 		const authorizeUrl = buildAuthorizeUrl({
@@ -256,6 +206,13 @@ export async function loadAccessToken(apiUrl: string): Promise<string | null> {
 	}
 
 	if (!tokenStorage.isTokenExpired(stored)) {
+		return stored.accessToken;
+	}
+
+	if (stored.clientId && stored.clientId !== CLI_CLIENT_ID) {
+		logger.warn(
+			'Stored token was issued to an older CLI client and no longer grants access; run `agentarea login`',
+		);
 		return stored.accessToken;
 	}
 

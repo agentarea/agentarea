@@ -1370,5 +1370,13 @@
  {
   "operation_id": "handle_webhook_webhooks__webhook_id__post",
   "router_file": "webhooks"
+ },
+ {
+  "operation_id": "oauth_consent_v1_oauth_consent_get",
+  "router_file": "mcp_oauth_as"
+ },
+ {
+  "operation_id": "oauth_consent_decide_v1_oauth_consent_post",
+  "router_file": "mcp_oauth_as"
  }
 ]

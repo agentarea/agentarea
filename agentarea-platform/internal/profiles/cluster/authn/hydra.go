@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +27,11 @@ const (
 )
 
 const detailHydraIssuer = "Token was not issued by this API's authorization server"
+
+const (
+	detailHydraNoGrant     = "OAuth token grants no access to this API; sign in again"
+	detailHydraNoWorkspace = "OAuth token names no workspace"
+)
 
 // hydra verifies Hydra-issued OAuth JWTs against Hydra's JWKS
 // (dependencies.py _try_hydra_token, PyJWKClient), and, unlike Python, their
@@ -262,10 +268,41 @@ func (h *hydra) try(ctx context.Context, token string, now time.Time) (*port.Pri
 		h.log.Warn("Hydra token refused: not issued by Hydra's issuer", "iss", payload["iss"], "issuer", issuer)
 		return nil, h.refusal(detailHydraIssuer)
 	}
-	return &port.Principal{
+	granted := grantedScopes(payload["scp"])
+	p := &port.Principal{
 		UserID:     subject,
-		Credential: &port.Credential{Kind: port.KindOAuth, Surface: port.SurfaceAPI},
-	}, nil
+		Credential: &port.Credential{Kind: port.KindOAuth, Surface: port.SurfaceAPI, Granted: granted},
+	}
+	switch {
+	case slices.Contains(granted, port.OAuthScopeAPI):
+		if cid, _ := payload["client_id"].(string); !slices.Contains(port.FirstPartyClientIDs(), cid) {
+			h.log.Warn("Hydra token refused: api granted to a client that is not first-party", "client_id", payload["client_id"])
+			return nil, h.refusal(detailHydraNoGrant)
+		}
+	case slices.Contains(granted, port.OAuthScopeMCP):
+		ws, _ := payload["workspace_id"].(string)
+		if ws == "" {
+			h.log.Warn("Hydra token refused: mcp names no workspace", "client_id", payload["client_id"])
+			return nil, h.refusal(detailHydraNoWorkspace)
+		}
+		p.BoundWorkspaceID = ws
+	default:
+		h.log.Info("Hydra token refused: grants neither mcp nor api", "client_id", payload["client_id"], "scp", payload["scp"])
+		return nil, h.refusal(detailHydraNoGrant)
+	}
+	return p, nil
+}
+
+// grantedScopes is Hydra's scp claim: a list of strings, anything else none.
+func grantedScopes(raw any) []string {
+	list, _ := raw.([]any)
+	out := make([]string, 0, len(list))
+	for _, v := range list {
+		if s, ok := v.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func hydraRefusalDetail(je *jwtError) string {

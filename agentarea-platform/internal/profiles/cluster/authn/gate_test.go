@@ -184,7 +184,7 @@ func wantRefusal(t *testing.T, err error, status int, detail string) {
 	if status == http.StatusUnauthorized && r.WWWAuthenticate != challenge {
 		t.Fatalf("401 without the RFC 9728 challenge: %q", r.WWWAuthenticate)
 	}
-	if status != http.StatusUnauthorized && r.WWWAuthenticate != "" {
+	if status != http.StatusUnauthorized && r.WWWAuthenticate != "" && detail != port.DetailInsufficientScope {
 		t.Fatalf("%d carries a challenge", status)
 	}
 }
@@ -399,7 +399,7 @@ func TestAgentKeyReachesOnlyItsAgentOverA2A(t *testing.T) {
 	if c.Workspace.ID() != "ws-own" || !slices.Equal(c.AccessibleWorkspaces, []string{"ws-own"}) || len(c.AdminWorkspaces) != 0 || c.AdminWorkspaces == nil {
 		t.Fatalf("%+v", c)
 	}
-	opt, err := w.gate.Optional(ctx, w.key(t, APIKey{WorkspaceID: "ws-own", CreatedBy: "u1", IsActive: true, AgentID: "agent-1"}), false)
+	opt, err := w.gate.Optional(ctx, w.key(t, APIKey{WorkspaceID: "ws-own", CreatedBy: "u1", IsActive: true, AgentID: "agent-1"}), port.SurfaceAPI, false)
 	if err != nil || opt == nil || len(opt.AccessibleWorkspaces) != 0 || opt.AccessibleWorkspaces == nil {
 		t.Fatalf("A2A edge: %+v %v", opt, err)
 	}
@@ -415,7 +415,7 @@ func TestRunnerKeyReachesOnlyItsClientsRunnerRoutes(t *testing.T) {
 	}
 	_, err = w.gate.Principal(ctx, p)
 	wantRefusal(t, err, 403, port.DetailRunnerKeyRefused)
-	if opt, err := w.gate.Optional(ctx, token, true); opt != nil || err != nil {
+	if opt, err := w.gate.Optional(ctx, token, port.SurfaceAPI, true); opt != nil || err != nil {
 		t.Fatal("an optional edge admitted a runner key")
 	}
 	_, err = w.gate.Caller(ctx, p, port.Route{WorkspaceRef: "own", HasWorkspaceRef: true})
@@ -527,10 +527,10 @@ func TestTurnTokenReachesOnlyItsTasksMarkedRoutes(t *testing.T) {
 	}
 	_, err = w.gate.Principal(ctx, p)
 	wantRefusal(t, err, 403, port.DetailTurnTokenRefused)
-	if opt, err := w.gate.Optional(ctx, token, false); opt != nil || err != nil {
+	if opt, err := w.gate.Optional(ctx, token, port.SurfaceAPI, false); opt != nil || err != nil {
 		t.Fatal("an edge that does not admit turns admitted one")
 	}
-	opt, err := w.gate.Optional(ctx, token, true)
+	opt, err := w.gate.Optional(ctx, token, port.SurfaceAPI, true)
 	if err != nil || opt == nil || !slices.Equal(opt.AccessibleWorkspaces, []string{"ws-own"}) || len(opt.AdminWorkspaces) != 0 {
 		t.Fatalf("client MCP edge: %+v %v", opt, err)
 	}
@@ -687,11 +687,11 @@ func TestOptionalReadsRefusalsAsNobody(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
 	for _, tok := range []string{"", "garbage", "aat_unknown"} {
-		if p, err := w.gate.Optional(ctx, tok, true); p != nil || err != nil {
+		if p, err := w.gate.Optional(ctx, tok, port.SurfaceAPI, true); p != nil || err != nil {
 			t.Fatalf("%q: %v %v", tok, p, err)
 		}
 	}
-	p, err := w.gate.Optional(ctx, w.session(t, "u1"), false)
+	p, err := w.gate.Optional(ctx, w.session(t, "u1"), port.SurfaceAPI, false)
 	if err != nil || p == nil || len(p.AccessibleWorkspaces) != 2 {
 		t.Fatalf("%v %v", p, err)
 	}
@@ -719,7 +719,7 @@ func TestHydraTokens(t *testing.T) {
 	}, Deps{Store: w.store, Graph: w.graph, Now: w.nowFunc})
 	claims := func(sub string) map[string]any {
 		now := w.nowFunc().Unix()
-		return map[string]any{"sub": sub, "aud": "mcp", "iss": srv.URL, "iat": now, "exp": now + 600, "client_id": "cli", "workspace_id": "ws-foreign"}
+		return map[string]any{"sub": sub, "aud": "mcp", "iss": srv.URL, "iat": now, "exp": now + 600, "client_id": "agentarea-cli", "workspace_id": "ws-foreign", "scp": []any{"offline_access", port.OAuthScopeAPI}}
 	}
 
 	p, err := gate.Verify(ctx, signRS256(t, k1, "h1", claims("u1")))
@@ -728,7 +728,7 @@ func TestHydraTokens(t *testing.T) {
 		t.Fatalf("%+v %v", p, err)
 	}
 	if _, err := gate.Caller(ctx, p, port.Route{WorkspaceRef: "foreign", HasWorkspaceRef: true}); err == nil {
-		t.Fatal("a workspace claim in an OAuth token selected a workspace")
+		t.Fatal("a workspace claim in an api token selected a workspace")
 	}
 
 	mu.Lock()
@@ -767,7 +767,7 @@ func TestHydraUnreachableLeavesKratosVerdictAndKratosFailureIs500(t *testing.T) 
 	gate := newTestGate(t, Config{Issuer: testIssuer, Audience: testAudience, HydraAudience: "mcp"}, Deps{Store: w.store, Graph: w.graph})
 	_, err := gate.Verify(ctx, w.session(t, "u1"))
 	wantRefusal(t, err, 500, port.DetailAuthInternal)
-	if p, err := gate.Optional(ctx, w.session(t, "u1"), false); p != nil || err != nil {
+	if p, err := gate.Optional(ctx, w.session(t, "u1"), port.SurfaceAPI, false); p != nil || err != nil {
 		t.Fatal("the optional edge did not read Python's 500 HTTPException as nobody")
 	}
 }
@@ -807,7 +807,80 @@ func hydraGate(t *testing.T, w *world, srv *httptest.Server) *Gate {
 
 func hydraClaims(w *world, srv *httptest.Server) map[string]any {
 	now := w.nowFunc().Unix()
-	return map[string]any{"sub": "u1", "aud": "mcp", "iss": srv.URL, "iat": now, "exp": now + 600, "client_id": "cli"}
+	return map[string]any{"sub": "u1", "aud": "mcp", "iss": srv.URL, "iat": now, "exp": now + 600, "client_id": "agentarea-cli", "scp": []any{port.OAuthScopeAPI}}
+}
+
+// An OAuth token reaches what the user granted (ADR-0058): api the whole
+// account, mcp only MCP in the workspace it names, anything else nothing.
+func TestHydraTokenReachesWhatWasGranted(t *testing.T) {
+	ctx := context.Background()
+	k1, _ := rsa.GenerateKey(rand.Reader, 2048)
+	srv, _ := jwksServer(t, func() []byte { return rsaJWKS(map[string]*rsa.PrivateKey{"h1": k1}) })
+	w := newWorld(t)
+	gate := hydraGate(t, w, srv)
+	token := func(edit func(map[string]any)) string {
+		c := hydraClaims(w, srv)
+		edit(c)
+		return signRS256(t, k1, "h1", c)
+	}
+	bearer := func(tok string) *http.Request {
+		r := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+		r.Header.Set("Authorization", "Bearer "+tok)
+		return r
+	}
+
+	mcp := token(func(c map[string]any) {
+		c["scp"] = []any{"offline_access", port.OAuthScopeMCP}
+		c["workspace_id"] = "ws-own"
+	})
+	p, err := gate.Verify(ctx, mcp)
+	if err != nil || p.BoundWorkspaceID != "ws-own" || p.Credential.Grants(port.ScopeCredentials) || p.Credential.Grants(port.ScopeWorkspaces) {
+		t.Fatalf("mcp token: %+v %v", p, err)
+	}
+	_, err = gate.Authenticate(ctx, bearer(mcp))
+	wantRefusal(t, err, 403, port.DetailInsufficientScope)
+	refusal, _ := asRefusal(err)
+	if !strings.Contains(refusal.WWWAuthenticate, `error="insufficient_scope", scope="api"`) || !strings.Contains(refusal.WWWAuthenticate, "resource_metadata=") {
+		t.Fatalf("challenge %q", refusal.WWWAuthenticate)
+	}
+	if opt, err := gate.Optional(ctx, mcp, port.SurfaceAPI, false); opt != nil || err != nil {
+		t.Fatalf("an mcp token passed the optional edge of the API: %+v %v", opt, err)
+	}
+	opt, err := gate.Optional(ctx, mcp, port.SurfaceMCP, false)
+	if err != nil || opt == nil || opt.BoundWorkspaceID != "ws-own" {
+		t.Fatalf("an mcp token was refused on MCP: %+v %v", opt, err)
+	}
+	if _, err := gate.EnterWorkspace(ctx, *opt, "own"); err != nil {
+		t.Fatalf("the granted workspace: %v", err)
+	}
+	if _, err := gate.EnterWorkspace(ctx, *opt, "joined"); err == nil {
+		t.Fatal("an mcp token entered a workspace it was not granted")
+	}
+
+	foreign := token(func(c map[string]any) { c["scp"] = []any{port.OAuthScopeMCP}; c["workspace_id"] = "ws-foreign" })
+	opt, err = gate.Optional(ctx, foreign, port.SurfaceMCP, false)
+	if err != nil || opt == nil || len(opt.AccessibleWorkspaces) != 0 {
+		t.Fatalf("a grant for a workspace the user does not reach: %+v %v", opt, err)
+	}
+
+	_, err = gate.Verify(ctx, token(func(c map[string]any) { c["scp"] = []any{port.OAuthScopeMCP} }))
+	wantRefusal(t, err, 401, detailHydraNoWorkspace)
+
+	for _, scp := range []any{nil, []any{}, []any{"openid", "offline_access"}, "api", []any{42}} {
+		_, err = gate.Verify(ctx, token(func(c map[string]any) { c["scp"] = scp }))
+		wantRefusal(t, err, 401, detailHydraNoGrant)
+	}
+
+	for _, cid := range []any{"dcr-1", nil, "https://client.example/meta.json"} {
+		_, err = gate.Verify(ctx, token(func(c map[string]any) { c["scp"] = []any{port.OAuthScopeAPI}; c["client_id"] = cid }))
+		wantRefusal(t, err, 401, detailHydraNoGrant)
+	}
+
+	api := token(func(c map[string]any) { c["scp"] = []any{port.OAuthScopeAPI}; c["workspace_id"] = "ws-own" })
+	p, err = gate.Authenticate(ctx, bearer(api))
+	if err != nil || p.BoundWorkspaceID != "" || !p.Credential.Grants(port.ScopeCredentials) {
+		t.Fatalf("api token: %+v %v", p, err)
+	}
 }
 
 // A token whose header does not parse names no key: Hydra's JWKS is not asked.
