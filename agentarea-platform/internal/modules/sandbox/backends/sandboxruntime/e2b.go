@@ -77,6 +77,29 @@ type e2bFilesystemEntry struct {
 	Mode uint32 `json:"mode"`
 }
 
+// UnmarshalJSON reads envd's protobuf JSON, which writes int64 as a string.
+func (e *e2bFilesystemEntry) UnmarshalJSON(data []byte) error {
+	type plain e2bFilesystemEntry
+	var raw struct {
+		plain
+		Size json.Number `json:"size"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*e = e2bFilesystemEntry(raw.plain)
+	if raw.Size == "" {
+		e.Size = 0
+		return nil
+	}
+	size, err := raw.Size.Int64()
+	if err != nil {
+		return fmt.Errorf("filesystem entry size: %w", err)
+	}
+	e.Size = size
+	return nil
+}
+
 type e2bStatResponse struct {
 	Entry e2bFilesystemEntry `json:"entry"`
 }
@@ -794,8 +817,23 @@ func (p *E2BProvider) cleanupE2BStaging(session *Session, tempPath string, opera
 	return errors.Join(operationErr, cleanupErr)
 }
 
+// errE2BAlreadyExists is envd refusing to create a path that exists.
+var errE2BAlreadyExists = errors.New("already exists")
+
 func (p *E2BProvider) makeDirectory(ctx context.Context, session *Session, directory string) error {
-	return p.filesystemJSON(ctx, session, "MakeDir", map[string]string{"path": directory}, nil)
+	err := p.filesystemJSON(ctx, session, "MakeDir", map[string]string{"path": directory}, nil)
+	if !errors.Is(err, errE2BAlreadyExists) {
+		return err
+	}
+	// A template may ship the directory (its workdir); a directory there is what was asked for.
+	entry, statErr := p.statFile(ctx, session, directory)
+	if statErr != nil {
+		return errors.Join(err, statErr)
+	}
+	if entry.Type != "FILE_TYPE_DIRECTORY" {
+		return err
+	}
+	return nil
 }
 
 func (p *E2BProvider) moveFile(ctx context.Context, session *Session, source, destination string) error {
@@ -1043,6 +1081,9 @@ func mapE2BResponse(resp *http.Response, operation string) error {
 	message := strings.TrimSpace(string(body))
 	if resp.StatusCode == http.StatusNotFound {
 		return fmt.Errorf("%w: %s returned 404: %s", ErrSessionNotFound, operation, message)
+	}
+	if resp.StatusCode == http.StatusConflict {
+		return fmt.Errorf("%s returned 409: %s: %w", operation, message, errE2BAlreadyExists)
 	}
 	return fmt.Errorf("%s returned %d: %s", operation, resp.StatusCode, message)
 }

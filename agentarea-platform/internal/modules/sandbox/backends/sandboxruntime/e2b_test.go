@@ -665,3 +665,60 @@ func TestE2BCloudSandboxHostComesFromTheAPIDomain(t *testing.T) {
 		t.Errorf("an API host outside api.<domain> named a sandbox host %q", got)
 	}
 }
+
+func TestE2BWorkspaceThatAlreadyExistsIsReused(t *testing.T) {
+	for _, tc := range []struct {
+		name, existing string
+		ok             bool
+	}{
+		{"directory", "FILE_TYPE_DIRECTORY", true},
+		{"file", "FILE_TYPE_FILE", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/filesystem.Filesystem/MakeDir", func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusConflict)
+				_, _ = w.Write([]byte(`{"code":"already_exists","message":"directory already exists: /workspace"}`))
+			})
+			mux.HandleFunc("/filesystem.Filesystem/Stat", func(w http.ResponseWriter, _ *http.Request) {
+				_ = json.NewEncoder(w).Encode(e2bStatResponse{Entry: e2bFilesystemEntry{
+					Name: "workspace", Type: tc.existing, Path: WorkspaceRoot, Mode: 0o755,
+				}})
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+			p, err := NewE2BProvider(testE2BConfig("e2b", server.URL))
+			if err != nil {
+				t.Fatal(err)
+			}
+			session := &Session{ID: "sbx-1", Data: map[string]string{"envd_url": server.URL}}
+			err = p.makeDirectory(context.Background(), session, WorkspaceRoot)
+			if tc.ok && err != nil {
+				t.Errorf("existing directory: %v", err)
+			}
+			if !tc.ok && err == nil {
+				t.Error("a file at the workspace path was accepted as the workspace")
+			}
+		})
+	}
+}
+
+func TestE2BFilesystemEntryReadsEnvdProtobufJSON(t *testing.T) {
+	// envd writes int64 as a JSON string, as protobuf JSON does.
+	for _, body := range []string{
+		`{"entry":{"name":"a","type":"FILE_TYPE_FILE","path":"/workspace/a","size":"42","mode":420}}`,
+		`{"entry":{"name":"a","type":"FILE_TYPE_FILE","path":"/workspace/a","size":42,"mode":420}}`,
+	} {
+		var got e2bStatResponse
+		if err := json.Unmarshal([]byte(body), &got); err != nil || got.Entry.Size != 42 || got.Entry.Mode != 420 || got.Entry.Path != "/workspace/a" {
+			t.Errorf("%s: %+v %v", body, got.Entry, err)
+		}
+	}
+	var none e2bStatResponse
+	if err := json.Unmarshal([]byte(`{"entry":{"name":"d","type":"FILE_TYPE_DIRECTORY","path":"/workspace"}}`), &none); err != nil || none.Entry.Size != 0 {
+		t.Errorf("no size: %+v %v", none.Entry, err)
+	}
+	if err := json.Unmarshal([]byte(`{"entry":{"size":"4x"}}`), &none); err == nil {
+		t.Error("a malformed size was accepted")
+	}
+}
