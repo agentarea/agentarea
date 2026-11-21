@@ -730,6 +730,12 @@ import type {
   OauthCallbackV1OauthCallbackGetData,
   OauthCallbackV1OauthCallbackGetErrors,
   OauthCallbackV1OauthCallbackGetResponses,
+  OauthConsentDecideV1OauthConsentPostData,
+  OauthConsentDecideV1OauthConsentPostErrors,
+  OauthConsentDecideV1OauthConsentPostResponses,
+  OauthConsentV1OauthConsentGetData,
+  OauthConsentV1OauthConsentGetErrors,
+  OauthConsentV1OauthConsentGetResponses,
   OauthFinishV1OauthFinishPostData,
   OauthFinishV1OauthFinishPostErrors,
   OauthFinishV1OauthFinishPostResponses,
@@ -12517,4 +12523,68 @@ export const handleWebhookWebhooksWebhookIdPost = <
     ],
     url: "/webhooks/{webhook_id}",
     ...options,
+  });
+
+/**
+ * Oauth Consent
+ *
+ * The consent request a signed-in user is asked to decide. Accepts a browser session only.
+ */
+export const oauthConsentV1OauthConsentGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<OauthConsentV1OauthConsentGetData, ThrowOnError>
+): RequestResult<
+  OauthConsentV1OauthConsentGetResponses,
+  OauthConsentV1OauthConsentGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    OauthConsentV1OauthConsentGetResponses,
+    OauthConsentV1OauthConsentGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/oauth/consent",
+    ...options,
+  });
+
+/**
+ * Oauth Consent Decide
+ *
+ * Accept or reject a consent request. Accepts a browser session only; returns where the browser goes next.
+ */
+export const oauthConsentDecideV1OauthConsentPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<OauthConsentDecideV1OauthConsentPostData, ThrowOnError>
+): RequestResult<
+  OauthConsentDecideV1OauthConsentPostResponses,
+  OauthConsentDecideV1OauthConsentPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    OauthConsentDecideV1OauthConsentPostResponses,
+    OauthConsentDecideV1OauthConsentPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/oauth/consent",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });

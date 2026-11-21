@@ -4990,6 +4990,46 @@ export const zAgentareaApiApiV1RegistriesSyncResponse = z.object({
   updates_flagged: z.int(),
 });
 
+/**
+ * OAuthConsentClient
+ */
+export const zOAuthConsentClient = z.object({
+  client_id: z.string(),
+  client_name: z.string(),
+  client_uri: z.string(),
+  logo_uri: z.string(),
+  redirect_uris: z.array(z.string()),
+});
+
+/**
+ * OAuthConsentResponse
+ *
+ * A consent request of this API's authorization server: the client, and what accepting grants it. `api` reaches the whole account and is granted only to first-party clients; `mcp` reaches MCP in one workspace the user picks.
+ */
+export const zOAuthConsentResponse = z.object({
+  client: zOAuthConsentClient,
+  redirect_uri: z.string(),
+  first_party: z.boolean(),
+  access: z.enum(["mcp", "api"]),
+  scopes: z.array(z.string()),
+});
+
+/**
+ * OAuthConsentDecision
+ */
+export const zOAuthConsentDecision = z.object({
+  challenge: z.string(),
+  action: z.enum(["accept", "reject"]),
+  workspaces: z.array(z.string()).nullish(),
+});
+
+/**
+ * OAuthConsentRedirect
+ */
+export const zOAuthConsentRedirect = z.object({
+  redirect_to: z.string(),
+});
+
 export const zOauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetPath =
   z.object({
     resource_path: z.string(),
@@ -8371,3 +8411,20 @@ export const zWebhookHealthCheckWebhooksHealthGetResponse = z.record(
 export const zHandleWebhookWebhooksWebhookIdPostPath = z.object({
   webhook_id: z.string(),
 });
+
+export const zOauthConsentV1OauthConsentGetQuery = z.object({
+  challenge: z.string(),
+});
+
+/**
+ * Successful Response
+ */
+export const zOauthConsentV1OauthConsentGetResponse = zOAuthConsentResponse;
+
+export const zOauthConsentDecideV1OauthConsentPostBody = zOAuthConsentDecision;
+
+/**
+ * Successful Response
+ */
+export const zOauthConsentDecideV1OauthConsentPostResponse =
+  zOAuthConsentRedirect;

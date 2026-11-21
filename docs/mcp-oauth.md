@@ -124,7 +124,7 @@ The API refuses to describe an authorization server it cannot stand behind: when
     The client registers itself on the API, which creates the client through Hydra's admin API after forcing:
     - `skip_consent: false` — every client shows the consent screen
     - `audience` — the API, the audience its tokens are verified against
-    - `grant_types` within `authorization_code` and `refresh_token`, scopes within those offered
+    - `grant_types` within `authorization_code` and `refresh_token`, scopes within those offered: the configured protocol scopes and `mcp`, never `api`
 
     ```http
     POST /oauth2/register
@@ -153,7 +153,7 @@ The API refuses to describe an authorization server it cannot stand behind: when
   </Step>
 
   <Step title="Authorization Code Flow">
-    The client sends the user's browser to Hydra's `authorization_endpoint`. Hydra hands login and consent to the webapp, which checks the Kratos session, then redirects back with an authorization code.
+    The client sends the user's browser to Hydra's `authorization_endpoint`. Hydra hands login and consent to the webapp. The consent screen reads the request from the API (`GET /v1/oauth/consent`) and sends the user's decision back to it (`POST /v1/oauth/consent`). The API decides what is granted, then Hydra redirects back with an authorization code. Both consent routes accept a signed-in browser session only.
   </Step>
 
   <Step title="Token Exchange">
@@ -423,6 +423,29 @@ With RFC 9728 discovery, MCP clients authenticate automatically -- you only need
 
 ---
 
+## What a Token Can Do
+
+A token carries what the user granted on the consent screen, and the API enforces it on every request.
+
+| Scope | Granted to | Reaches |
+|---|---|---|
+| `mcp` | Any client registered through `/oauth2/register` or Hydra's admin API | MCP only (`/mcp`, `/mcp/w/{workspace}`, `/mcp/clients/{id}`), in the workspaces the user ticked on the consent screen |
+| `api` | The first-party clients `agentarea-cli` and `agentarea-desktop` | The REST API and MCP, in every workspace the user reaches, including creating API keys and workspaces |
+
+The grant depends on which client asks, not on the scopes it requests: a third-party client that requests `api` is granted `mcp`. The protocol scopes it requested (`openid`, `offline_access`, `offline`) are granted alongside. The ticked workspaces go into the access token as the `workspace_ids` claim; at least one is required. To change them, the user connects the client again.
+
+- An `mcp` token on the REST API gets `403` with `WWW-Authenticate: Bearer ..., error="insufficient_scope", scope="api"`.
+- An `mcp` token on a workspace it was not granted gets `403`.
+- A token that carries neither `mcp` nor `api` gets `401`, so the client signs in again.
+
+When the consent grants a scope the client's registration does not allow, the API adds it to the client in Hydra first: Hydra refuses a refresh that asks for a scope the client is not allowed.
+
+The `migrate` role registers the first-party clients in Hydra on every run when `AGENTAREA_AUTH_HYDRA_AUDIENCE` is set. They are public clients with loopback redirects, which Hydra matches on any port.
+
+The protected resource metadata advertises the protocol scopes only. Clients registered before `mcp` existed are not allowed to request it, and Hydra would refuse them at the authorization endpoint before the consent could widen their registration.
+
+---
+
 ## Authorization Server Layout
 
 ```
@@ -460,7 +483,8 @@ webfinger:
 |---|---|
 | Credential storage | All secrets encrypted via `BaseSecretManager`; never stored in plaintext |
 | Token expiry | OAuth2 tokens auto-refreshed 30s before expiry; stale tokens never used |
-| Consent bypass | `skip_consent` forced to `false` on every registration |
+| Consent bypass | `skip_consent` forced to `false` on every registration; the API decides consent for a signed-in browser session, never for an OAuth token or API key |
+| Client impersonation | A client names itself at registration; whatever it is called, it is granted `mcp` in one workspace, never the account |
 | Access scope | OAuth links enforce workspace or public access control per-link |
 | Session TTL | OAuth link sessions expire after 24 hours; no indefinite sessions |
 | DCR exposure | Hydra's own DCR disabled; every registration goes through the API's `/oauth2/register` |

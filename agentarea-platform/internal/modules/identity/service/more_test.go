@@ -440,7 +440,7 @@ func TestListWorkspacesWithoutAnEmailStillLists(t *testing.T) {
 	shared := uuid.NewString()
 	st.workspaces[shared] = domain.Workspace{ID: shared, OwnerUserID: "x"}
 	members(g, shared, user)
-	got, err := svc.ListWorkspaces(context.Background(), authn.Principal{UserID: user, Credential: &authn.Credential{Kind: authn.KindOAuth}, AdminWorkspaces: []string{}})
+	got, err := svc.ListWorkspaces(context.Background(), authn.Principal{UserID: user, Credential: &authn.Credential{Kind: authn.KindOAuth, Granted: []string{authn.OAuthScopeAPI}}, AdminWorkspaces: []string{}})
 	if err != nil || len(got) != 1 {
 		t.Fatalf("got %+v %v", got, err)
 	}
