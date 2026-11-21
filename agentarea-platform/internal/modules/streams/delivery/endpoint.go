@@ -87,7 +87,7 @@ func (e *Endpoint) send(ctx context.Context, url, secret, subscription, messageI
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(raw))
 	if err != nil {
-		e.log.WarnContext(ctx, "callback of subscription is not a URL", "subscription", subscription, "error", err)
+		e.log.WarnContext(ctx, "callback of subscription is not a URL", "subscription", subscription, "error", netguard.SafeURLError(err))
 		return Outcome{Error: "connection_refused"}, nil, nil
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -101,7 +101,7 @@ func (e *Endpoint) send(ctx context.Context, url, secret, subscription, messageI
 			e.log.WarnContext(ctx, "callback of subscription points where the policy refuses", "subscription", subscription)
 			return Outcome{Error: "connection_refused"}, nil, nil
 		}
-		e.log.WarnContext(ctx, "POST to the callback of subscription failed", "subscription", subscription, "error", err)
+		e.log.WarnContext(ctx, "POST to the callback of subscription failed", "subscription", subscription, "error", netguard.SafeURLError(err))
 		return Outcome{Error: category(err)}, nil, nil
 	}
 	answer, _ := io.ReadAll(io.LimitReader(resp.Body, maxAnswer))

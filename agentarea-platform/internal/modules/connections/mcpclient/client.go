@@ -19,6 +19,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/netguard"
 )
 
 // Protocol versions this client speaks.
@@ -213,7 +215,7 @@ func Connect(ctx context.Context, o Options) (*Client, error) {
 		lastErr = ctx.Err()
 	}
 	if lastErr == nil {
-		lastErr = fmt.Errorf("no usable MCP transport for %s", o.URL)
+		lastErr = fmt.Errorf("no usable MCP transport for %s", netguard.SafeURL(o.URL))
 	}
 	return nil, lastErr
 }
