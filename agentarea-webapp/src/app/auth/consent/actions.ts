@@ -11,11 +11,13 @@ export async function decideConsent(
   _previous: ConsentState,
   form: FormData
 ): Promise<ConsentState> {
-  const workspace = form.get("workspace");
+  const workspaces = form
+    .getAll("workspaces")
+    .filter((slug): slug is string => typeof slug === "string" && slug !== "");
   const parsed = zOAuthConsentDecision.safeParse({
     challenge: form.get("challenge"),
     action: form.get("action"),
-    workspace: typeof workspace === "string" && workspace ? workspace : null,
+    workspaces: workspaces.length > 0 ? workspaces : null,
   });
   if (!parsed.success) {
     return { error: "acceptFailed" };

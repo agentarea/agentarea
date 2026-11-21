@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"slices"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx"
@@ -50,7 +51,7 @@ func mountOAuthConsent(g group) {
 		if err != nil {
 			return err
 		}
-		challenge, action, workspace, err := consentDecision(rq)
+		challenge, action, workspaces, err := consentDecision(rq)
 		if err != nil {
 			return err
 		}
@@ -59,9 +60,9 @@ func mountOAuthConsent(g group) {
 		if action == "reject" {
 			to, err = svc.RejectConsent(ctx, p.UserID, challenge)
 		} else {
-			workspaceID := ""
-			if workspace != "" {
-				c, err := gate.EnterWorkspace(ctx, p, workspace)
+			ids := []string{}
+			for _, ref := range workspaces {
+				c, err := gate.EnterWorkspace(ctx, p, ref)
 				if err != nil {
 					var unreachable *scope.UnreachableError
 					if errors.As(err, &unreachable) {
@@ -69,9 +70,11 @@ func mountOAuthConsent(g group) {
 					}
 					return err
 				}
-				workspaceID = c.Workspace.ID()
+				if id := c.Workspace.ID(); !slices.Contains(ids, id) {
+					ids = append(ids, id)
+				}
 			}
-			to, err = svc.AcceptConsent(ctx, p.UserID, challenge, workspaceID)
+			to, err = svc.AcceptConsent(ctx, p.UserID, challenge, ids)
 		}
 		if err != nil {
 			return consentHTTPError(err)
@@ -93,16 +96,16 @@ func consentPrincipal(r *http.Request) (authn.Principal, error) {
 	return p, nil
 }
 
-func consentDecision(r *http.Request) (challenge, action, workspace string, err error) {
+func consentDecision(r *http.Request) (challenge, action string, workspaces []string, err error) {
 	var fes []httpx.FieldError
 	v, err := readBody(r)
 	if err != nil {
-		return "", "", "", err
+		return "", "", nil, err
 	}
 	if o, ok := model(v, &fes); ok {
 		for _, m := range o {
 			switch m.Key {
-			case "challenge", "action", "workspace":
+			case "challenge", "action", "workspaces":
 			default:
 				fes = append(fes, httpx.ExtraForbidden("body", m.Key))
 			}
@@ -114,14 +117,25 @@ func consentDecision(r *http.Request) (challenge, action, workspace string, err 
 			}
 			action = a
 		}
-		if ws, ok := optStr(o, "workspace", &fes); ok && ws != nil {
-			workspace = *ws
+		if raw, ok := o.Get("workspaces"); ok && raw != nil {
+			list, ok := raw.([]any)
+			if !ok {
+				fes = append(fes, httpx.ListType("body", "workspaces"))
+			}
+			for i, item := range list {
+				ref, ok := item.(string)
+				if !ok {
+					fes = append(fes, httpx.StringType("body", "workspaces", i))
+					continue
+				}
+				workspaces = append(workspaces, ref)
+			}
 		}
 	}
 	if err := httpx.Validation(fes...); err != nil {
-		return "", "", "", err
+		return "", "", nil, err
 	}
-	return challenge, action, workspace, nil
+	return challenge, action, workspaces, nil
 }
 
 func consentHTTPError(err error) error {
@@ -131,7 +145,7 @@ func consentHTTPError(err error) error {
 	case errors.Is(err, service.ErrConsentNotYours):
 		return httpx.Forbidden("Consent request does not belong to this session")
 	case errors.Is(err, service.ErrConsentNeedsWorkspace):
-		return httpx.Validation(httpx.Missing("body", "workspace"))
+		return httpx.Validation(httpx.Missing("body", "workspaces"))
 	}
 	return httpx.HTTPError(http.StatusBadGateway, "Authorization server unavailable").Wrap(err)
 }

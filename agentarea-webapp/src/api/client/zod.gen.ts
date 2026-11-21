@@ -5020,7 +5020,7 @@ export const zOAuthConsentResponse = z.object({
 export const zOAuthConsentDecision = z.object({
   challenge: z.string(),
   action: z.enum(["accept", "reject"]),
-  workspace: z.string().nullish(),
+  workspaces: z.array(z.string()).nullish(),
 });
 
 /**

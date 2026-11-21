@@ -429,13 +429,13 @@ A token carries what the user granted on the consent screen, and the API enforce
 
 | Scope | Granted to | Reaches |
 |---|---|---|
-| `mcp` | Any client registered through `/oauth2/register` or Hydra's admin API | MCP only (`/mcp`, `/mcp/w/{workspace}`, `/mcp/clients/{id}`), in the one workspace the user picked on the consent screen |
+| `mcp` | Any client registered through `/oauth2/register` or Hydra's admin API | MCP only (`/mcp`, `/mcp/w/{workspace}`, `/mcp/clients/{id}`), in the workspaces the user ticked on the consent screen |
 | `api` | The first-party clients `agentarea-cli` and `agentarea-desktop` | The REST API and MCP, in every workspace the user reaches, including creating API keys and workspaces |
 
-The grant depends on which client asks, not on the scopes it requests: a third-party client that requests `api` is granted `mcp`. The protocol scopes it requested (`openid`, `offline_access`, `offline`) are granted alongside. The picked workspace goes into the access token as the `workspace_id` claim.
+The grant depends on which client asks, not on the scopes it requests: a third-party client that requests `api` is granted `mcp`. The protocol scopes it requested (`openid`, `offline_access`, `offline`) are granted alongside. The ticked workspaces go into the access token as the `workspace_ids` claim; at least one is required. To change them, the user connects the client again.
 
 - An `mcp` token on the REST API gets `403` with `WWW-Authenticate: Bearer ..., error="insufficient_scope", scope="api"`.
-- An `mcp` token on a workspace other than its own gets `403`.
+- An `mcp` token on a workspace it was not granted gets `403`.
 - A token that carries neither `mcp` nor `api` gets `401`, so the client signs in again.
 
 When the consent grants a scope the client's registration does not allow, the API adds it to the client in Hydra first: Hydra refuses a refresh that asks for a scope the client is not allowed.

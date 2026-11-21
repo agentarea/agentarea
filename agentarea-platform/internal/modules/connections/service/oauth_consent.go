@@ -61,7 +61,7 @@ func ConsentGrant(clientID string, requested []string) (access string, scopes []
 var (
 	ErrConsentNotFound       = errors.New("consent request not found or expired")
 	ErrConsentNotYours       = errors.New("consent request belongs to another user")
-	ErrConsentNeedsWorkspace = errors.New("this client is granted one workspace; pick it")
+	ErrConsentNeedsWorkspace = errors.New("this client is granted the workspaces picked; pick at least one")
 )
 
 // ConsentClient is the client a consent is asked for, as Hydra holds it.
@@ -119,11 +119,11 @@ func (r consentRequest) redirectURI() string {
 	return ""
 }
 
-// AcceptConsent grants the consent challenge names; workspaceID is the
-// workspace an mcp grant is bound to, already admitted for userID. The
+// AcceptConsent grants the consent challenge names; workspaceIDs are the
+// workspaces an mcp grant is bound to, already admitted for userID. The
 // client's allowed scopes are widened first: Hydra issues a scope the client
 // is not allowed, then refuses the client's refresh. Returns Hydra's redirect.
-func (s *Service) AcceptConsent(ctx context.Context, userID, challenge, workspaceID string) (string, error) {
+func (s *Service) AcceptConsent(ctx context.Context, userID, challenge string, workspaceIDs []string) (string, error) {
 	req, err := s.consentRequest(ctx, userID, challenge)
 	if err != nil {
 		return "", err
@@ -135,10 +135,10 @@ func (s *Service) AcceptConsent(ctx context.Context, userID, challenge, workspac
 		"remember":                    false,
 	}
 	if access == authn.OAuthScopeMCP {
-		if workspaceID == "" {
+		if len(workspaceIDs) == 0 {
 			return "", ErrConsentNeedsWorkspace
 		}
-		body["session"] = map[string]any{"access_token": map[string]any{"workspace_id": workspaceID}}
+		body["session"] = map[string]any{"access_token": map[string]any{"workspace_ids": workspaceIDs}}
 	}
 	if err := s.allowClientScopes(ctx, req.Client, scopes); err != nil {
 		return "", err
