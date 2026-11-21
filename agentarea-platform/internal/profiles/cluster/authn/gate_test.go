@@ -14,6 +14,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -719,7 +720,7 @@ func TestHydraTokens(t *testing.T) {
 	}, Deps{Store: w.store, Graph: w.graph, Now: w.nowFunc})
 	claims := func(sub string) map[string]any {
 		now := w.nowFunc().Unix()
-		return map[string]any{"sub": sub, "aud": "mcp", "iss": srv.URL, "iat": now, "exp": now + 600, "client_id": "agentarea-cli", "workspace_id": "ws-foreign", "scp": []any{"offline_access", port.OAuthScopeAPI}}
+		return map[string]any{"sub": sub, "aud": "mcp", "iss": srv.URL, "iat": now, "exp": now + 600, "client_id": "agentarea-cli", "workspace_ids": []any{"ws-foreign"}, "scp": []any{"offline_access", port.OAuthScopeAPI}}
 	}
 
 	p, err := gate.Verify(ctx, signRS256(t, k1, "h1", claims("u1")))
@@ -811,7 +812,7 @@ func hydraClaims(w *world, srv *httptest.Server) map[string]any {
 }
 
 // An OAuth token reaches what the user granted (ADR-0058): api the whole
-// account, mcp only MCP in the workspace it names, anything else nothing.
+// account, mcp only MCP in the workspaces it names, anything else nothing.
 func TestHydraTokenReachesWhatWasGranted(t *testing.T) {
 	ctx := context.Background()
 	k1, _ := rsa.GenerateKey(rand.Reader, 2048)
@@ -831,10 +832,10 @@ func TestHydraTokenReachesWhatWasGranted(t *testing.T) {
 
 	mcp := token(func(c map[string]any) {
 		c["scp"] = []any{"offline_access", port.OAuthScopeMCP}
-		c["workspace_id"] = "ws-own"
+		c["workspace_ids"] = []any{"ws-own"}
 	})
 	p, err := gate.Verify(ctx, mcp)
-	if err != nil || p.BoundWorkspaceID != "ws-own" || p.Credential.Grants(port.ScopeCredentials) || p.Credential.Grants(port.ScopeWorkspaces) {
+	if err != nil || p.BoundWorkspaceID != "" || !reflect.DeepEqual(p.GrantedWorkspaceIDs, []string{"ws-own"}) || p.Credential.Grants(port.ScopeCredentials) || p.Credential.Grants(port.ScopeWorkspaces) {
 		t.Fatalf("mcp token: %+v %v", p, err)
 	}
 	_, err = gate.Authenticate(ctx, bearer(mcp))
@@ -847,7 +848,7 @@ func TestHydraTokenReachesWhatWasGranted(t *testing.T) {
 		t.Fatalf("an mcp token passed the optional edge of the API: %+v %v", opt, err)
 	}
 	opt, err := gate.Optional(ctx, mcp, port.SurfaceMCP, false)
-	if err != nil || opt == nil || opt.BoundWorkspaceID != "ws-own" {
+	if err != nil || opt == nil || !reflect.DeepEqual(opt.AccessibleWorkspaces, []string{"ws-own"}) || len(opt.AdminWorkspaces) != 1 {
 		t.Fatalf("an mcp token was refused on MCP: %+v %v", opt, err)
 	}
 	if _, err := gate.EnterWorkspace(ctx, *opt, "own"); err != nil {
@@ -857,14 +858,30 @@ func TestHydraTokenReachesWhatWasGranted(t *testing.T) {
 		t.Fatal("an mcp token entered a workspace it was not granted")
 	}
 
-	foreign := token(func(c map[string]any) { c["scp"] = []any{port.OAuthScopeMCP}; c["workspace_id"] = "ws-foreign" })
+	both := token(func(c map[string]any) {
+		c["scp"] = []any{port.OAuthScopeMCP}
+		c["workspace_ids"] = []any{"ws-own", "ws-joined"}
+	})
+	opt, err = gate.Optional(ctx, both, port.SurfaceMCP, false)
+	if err != nil || opt == nil || len(opt.AccessibleWorkspaces) != 2 {
+		t.Fatalf("a grant for two workspaces: %+v %v", opt, err)
+	}
+	for _, ref := range []string{"own", "joined"} {
+		if _, err := gate.EnterWorkspace(ctx, *opt, ref); err != nil {
+			t.Fatalf("granted workspace %s: %v", ref, err)
+		}
+	}
+
+	foreign := token(func(c map[string]any) { c["scp"] = []any{port.OAuthScopeMCP}; c["workspace_ids"] = []any{"ws-foreign"} })
 	opt, err = gate.Optional(ctx, foreign, port.SurfaceMCP, false)
 	if err != nil || opt == nil || len(opt.AccessibleWorkspaces) != 0 {
 		t.Fatalf("a grant for a workspace the user does not reach: %+v %v", opt, err)
 	}
 
-	_, err = gate.Verify(ctx, token(func(c map[string]any) { c["scp"] = []any{port.OAuthScopeMCP} }))
-	wantRefusal(t, err, 401, detailHydraNoWorkspace)
+	for _, ws := range []any{nil, []any{}, "ws-own", []any{7}} {
+		_, err = gate.Verify(ctx, token(func(c map[string]any) { c["scp"] = []any{port.OAuthScopeMCP}; c["workspace_ids"] = ws }))
+		wantRefusal(t, err, 401, detailHydraNoWorkspace)
+	}
 
 	for _, scp := range []any{nil, []any{}, []any{"openid", "offline_access"}, "api", []any{42}} {
 		_, err = gate.Verify(ctx, token(func(c map[string]any) { c["scp"] = scp }))
@@ -876,9 +893,9 @@ func TestHydraTokenReachesWhatWasGranted(t *testing.T) {
 		wantRefusal(t, err, 401, detailHydraNoGrant)
 	}
 
-	api := token(func(c map[string]any) { c["scp"] = []any{port.OAuthScopeAPI}; c["workspace_id"] = "ws-own" })
+	api := token(func(c map[string]any) { c["scp"] = []any{port.OAuthScopeAPI}; c["workspace_ids"] = []any{"ws-own"} })
 	p, err = gate.Authenticate(ctx, bearer(api))
-	if err != nil || p.BoundWorkspaceID != "" || !p.Credential.Grants(port.ScopeCredentials) {
+	if err != nil || p.GrantedWorkspaceIDs != nil || !p.Credential.Grants(port.ScopeCredentials) {
 		t.Fatalf("api token: %+v %v", p, err)
 	}
 }

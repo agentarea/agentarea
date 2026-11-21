@@ -99,10 +99,10 @@ func TestAcceptConsentBindsAThirdPartyToOneWorkspace(t *testing.T) {
 	if view, _ := svc.Consent(ctx, "u1", "ch-1"); view.RedirectURI != "https://evil.example/cb" {
 		t.Fatalf("the requested redirect_uri was not read: %q", view.RedirectURI)
 	}
-	if _, err := svc.AcceptConsent(ctx, "u1", "ch-1", ""); !errors.Is(err, ErrConsentNeedsWorkspace) {
+	if _, err := svc.AcceptConsent(ctx, "u1", "ch-1", nil); !errors.Is(err, ErrConsentNeedsWorkspace) {
 		t.Fatalf("accepted without a workspace: %v", err)
 	}
-	to, err := svc.AcceptConsent(ctx, "u1", "ch-1", "ws-1")
+	to, err := svc.AcceptConsent(ctx, "u1", "ch-1", []string{"ws-1", "ws-2"})
 	if err != nil || !strings.Contains(to, "consent_verifier") {
 		t.Fatalf("%q %v", to, err)
 	}
@@ -114,7 +114,7 @@ func TestAcceptConsentBindsAThirdPartyToOneWorkspace(t *testing.T) {
 	accept := h.bodies["PUT /admin/oauth2/auth/requests/consent/accept"].(map[string]any)
 	if !reflect.DeepEqual(accept["grant_scope"], []any{"mcp", "openid", "offline_access"}) ||
 		!reflect.DeepEqual(accept["grant_access_token_audience"], []any{"https://api.example"}) ||
-		!reflect.DeepEqual(accept["session"], map[string]any{"access_token": map[string]any{"workspace_id": "ws-1"}}) ||
+		!reflect.DeepEqual(accept["session"], map[string]any{"access_token": map[string]any{"workspace_ids": []any{"ws-1", "ws-2"}}}) ||
 		accept["remember"] != false {
 		t.Fatalf("accept body %v", accept)
 	}
@@ -123,7 +123,7 @@ func TestAcceptConsentBindsAThirdPartyToOneWorkspace(t *testing.T) {
 func TestAcceptConsentGivesAFirstPartyTheAccount(t *testing.T) {
 	ctx := context.Background()
 	svc, h := consentFixture(t, "agentarea-cli", "api offline_access openid", []any{"openid", "offline_access"})
-	if _, err := svc.AcceptConsent(ctx, "u1", "ch-1", "ws-ignored"); err != nil {
+	if _, err := svc.AcceptConsent(ctx, "u1", "ch-1", []string{"ws-ignored"}); err != nil {
 		t.Fatal(err)
 	}
 	accept := h.bodies["PUT /admin/oauth2/auth/requests/consent/accept"].(map[string]any)
@@ -143,7 +143,7 @@ func TestConsentBelongsToItsSubject(t *testing.T) {
 	if _, err := svc.Consent(ctx, "u2", "ch-1"); !errors.Is(err, ErrConsentNotYours) {
 		t.Fatalf("another user read the consent: %v", err)
 	}
-	if _, err := svc.AcceptConsent(ctx, "u2", "ch-1", "ws-1"); !errors.Is(err, ErrConsentNotYours) {
+	if _, err := svc.AcceptConsent(ctx, "u2", "ch-1", []string{"ws-1"}); !errors.Is(err, ErrConsentNotYours) {
 		t.Fatalf("another user accepted: %v", err)
 	}
 	if _, err := svc.RejectConsent(ctx, "", "ch-1"); !errors.Is(err, ErrConsentNotYours) {
@@ -158,7 +158,7 @@ func TestConsentBelongsToItsSubject(t *testing.T) {
 		t.Fatalf("unknown challenge: %v", err)
 	}
 	h.gone = true
-	if _, err := svc.AcceptConsent(ctx, "u1", "ch-1", "ws-1"); !errors.Is(err, ErrConsentNotFound) {
+	if _, err := svc.AcceptConsent(ctx, "u1", "ch-1", []string{"ws-1"}); !errors.Is(err, ErrConsentNotFound) {
 		t.Fatalf("used challenge: %v", err)
 	}
 }

@@ -11834,11 +11834,11 @@ export type OAuthConsentDecision = {
      */
     action: 'accept' | 'reject';
     /**
-     * Workspace
+     * Workspaces
      *
-     * Slug or id of the workspace an `mcp` grant is bound to; required to accept one.
+     * Slugs or ids of the workspaces an `mcp` grant reaches; at least one to accept one.
      */
-    workspace?: string | null;
+    workspaces?: Array<string> | null;
 };
 /**
  * OAuthConsentRedirect

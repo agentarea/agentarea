@@ -134,6 +134,9 @@ type Principal struct {
 	ClientID string
 	// BoundWorkspaceID: an API key acts only in the workspace it was issued for.
 	BoundWorkspaceID string
+	// GrantedWorkspaceIDs: an OAuth mcp token acts only in the workspaces its
+	// consent named; nil when the credential is not narrowed this way.
+	GrantedWorkspaceIDs []string
 	// BoundAgentID: an agent's key reaches that one agent over A2A and no workspace.
 	BoundAgentID string
 	// BoundClientID: a runner's key reaches only its client's runner routes.

@@ -1,15 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { decideConsent, type ConsentState } from "./actions";
 
 export function ConsentForm({
@@ -28,33 +22,58 @@ export function ConsentForm({
     decideConsent,
     null
   );
-  const picksWorkspace = access === "mcp";
-  const noWorkspace = picksWorkspace && workspaces.length === 0;
+  const [picked, setPicked] = useState<string[]>(
+    workspaces.length > 0 ? [workspaces[0].slug] : []
+  );
+  const picksWorkspaces = access === "mcp";
+  const nonePicked = picksWorkspaces && picked.length === 0;
 
   return (
     <form action={formAction} className="flex flex-col gap-2">
       <input type="hidden" name="challenge" value={challenge} />
-      {picksWorkspace && (
-        <div className="mb-3">
-          <p className="text-foreground mb-2 text-xs font-medium uppercase tracking-wider">
+      {picksWorkspaces && (
+        <div className="border-border/60 bg-muted/30 mb-3 rounded-lg border p-4">
+          <p className="text-foreground mb-3 text-xs font-medium uppercase tracking-wider">
             {t("workspaceHeading")}
           </p>
-          {noWorkspace ? (
-            <p className="text-muted-foreground text-sm">{t("workspaceNone")}</p>
+          {workspaces.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              {t("workspaceNone")}
+            </p>
           ) : (
-            <Select name="workspace" defaultValue={workspaces[0].slug}>
-              <SelectTrigger className="h-11 w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {workspaces.map((workspace) => (
-                  <SelectItem key={workspace.slug} value={workspace.slug}>
-                    {workspace.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ul className="space-y-2.5">
+              {workspaces.map((workspace) => {
+                const id = `consent-workspace-${workspace.slug}`;
+                return (
+                  <li
+                    key={workspace.slug}
+                    className="flex items-center gap-2.5"
+                  >
+                    <Checkbox
+                      id={id}
+                      checked={picked.includes(workspace.slug)}
+                      onCheckedChange={(on) =>
+                        setPicked((current) =>
+                          on === true
+                            ? [...current, workspace.slug]
+                            : current.filter((slug) => slug !== workspace.slug)
+                        )
+                      }
+                    />
+                    <label htmlFor={id} className="text-foreground text-sm">
+                      {workspace.name}
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
           )}
+          {picked.map((slug) => (
+            <input key={slug} type="hidden" name="workspaces" value={slug} />
+          ))}
+          <p className="text-muted-foreground mt-3 text-xs leading-relaxed">
+            {t("workspaceHint")}
+          </p>
         </div>
       )}
       {state?.error && (
@@ -66,7 +85,7 @@ export function ConsentForm({
         type="submit"
         name="action"
         value="accept"
-        disabled={pending || !canAllow || noWorkspace}
+        disabled={pending || !canAllow || nonePicked}
         className="h-11 w-full rounded-md bg-[#2252b3] text-sm font-medium text-white shadow-sm hover:bg-[#1a3f8a]"
       >
         {t("allow")}

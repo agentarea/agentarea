@@ -3394,7 +3394,7 @@
     "description": "{clientName} is requesting access to your AgentArea account. Only approve apps you recognize and trust.",
     "permissionsHeading": "It will be able to:",
     "fullAccess": "Act as you in all your workspaces: run agents, read and change your data, create API keys",
-    "mcpAccess": "Use the tools of the workspace you pick below over MCP, as you. Nothing outside that workspace, and no API keys.",
+    "mcpAccess": "Use the tools of the workspaces you tick below over MCP, as you. Nothing outside them, and no API keys.",
     "scope": {
       "openid": "Verify your identity",
       "offline_access": "Stay connected on your behalf when you're offline"
@@ -3413,9 +3413,10 @@
       "acceptFailed": "Authorization didn't go through. Please try again.",
       "rejectFailed": "We couldn't cancel the request. Please try again."
     },
-    "workspaceHeading": "Workspace",
+    "workspaceHeading": "Workspaces it can reach",
     "workspaceNone": "You have no workspace to give it access to.",
-    "firstPartyWarning": "Allow only if you just started signing in from the AgentArea CLI or AgentArea Desktop yourself. Any app on this computer can open this page under their name."
+    "firstPartyWarning": "Allow only if you just started signing in from the AgentArea CLI or AgentArea Desktop yourself. Any app on this computer can open this page under their name.",
+    "workspaceHint": "It works only in the workspaces you tick. To change them, connect again."
   },
   "DashboardPage": {
     "title": "Dashboard",

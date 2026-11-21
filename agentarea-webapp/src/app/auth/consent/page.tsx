@@ -1,5 +1,5 @@
-import Image from "next/image";
 import { getTranslations } from "next-intl/server";
+import Image from "next/image";
 import { Check, TriangleAlert } from "lucide-react";
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { Card } from "@/components/ui/card";
@@ -30,7 +30,9 @@ export default async function ConsentPage({
   }
 
   const clientName =
-    consent.client.client_name || consent.client.client_id || t("defaultClient");
+    consent.client.client_name ||
+    consent.client.client_id ||
+    t("defaultClient");
   const target = redirectTarget(consent.redirect_uri);
   const workspaces = consent.access === "mcp" ? await getWorkspaces() : [];
   const scopes = consent.scopes.filter((scope) =>

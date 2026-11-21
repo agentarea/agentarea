@@ -21581,17 +21581,20 @@
             "title": "Action",
             "type": "string"
           },
-          "workspace": {
+          "workspaces": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Slug or id of the workspace an `mcp` grant is bound to; required to accept one.",
-            "title": "Workspace"
+            "title": "Workspaces",
+            "description": "Slugs or ids of the workspaces an `mcp` grant reaches; at least one to accept one."
           }
         },
         "required": [

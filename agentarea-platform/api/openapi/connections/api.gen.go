@@ -575,8 +575,8 @@ type OAuthConsentDecision struct {
 	Action    OAuthConsentDecisionAction `json:"action"`
 	Challenge string                     `json:"challenge"`
 
-	// Workspace Slug or id of the workspace an `mcp` grant is bound to; required to accept one.
-	Workspace *string `json:"workspace"`
+	// Workspaces Slugs or ids of the workspaces an `mcp` grant reaches; at least one to accept one.
+	Workspaces *[]string `json:"workspaces"`
 }
 
 // OAuthConsentDecisionAction defines model for OAuthConsentDecision.Action.

@@ -445,11 +445,15 @@ func (g *Gate) resolveAccess(ctx context.Context, p *port.Principal, slug, id st
 			accessible = append(accessible, w.ID)
 		}
 	}
+	bound := p.GrantedWorkspaceIDs
 	if p.BoundWorkspaceID != "" {
+		bound = []string{p.BoundWorkspaceID}
+	}
+	if bound != nil {
 		keep := func(ids []string) []string {
 			out := []string{}
 			for _, w := range ids {
-				if w == p.BoundWorkspaceID {
+				if slices.Contains(bound, w) {
 					out = append(out, w)
 				}
 			}

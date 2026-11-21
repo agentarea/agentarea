@@ -280,12 +280,12 @@ func (h *hydra) try(ctx context.Context, token string, now time.Time) (*port.Pri
 			return nil, h.refusal(detailHydraNoGrant)
 		}
 	case slices.Contains(granted, port.OAuthScopeMCP):
-		ws, _ := payload["workspace_id"].(string)
-		if ws == "" {
+		ws := grantedScopes(payload["workspace_ids"])
+		if len(ws) == 0 {
 			h.log.Warn("Hydra token refused: mcp names no workspace", "client_id", payload["client_id"])
 			return nil, h.refusal(detailHydraNoWorkspace)
 		}
-		p.BoundWorkspaceID = ws
+		p.GrantedWorkspaceIDs = ws
 	default:
 		h.log.Info("Hydra token refused: grants neither mcp nor api", "client_id", payload["client_id"], "scp", payload["scp"])
 		return nil, h.refusal(detailHydraNoGrant)
@@ -293,7 +293,8 @@ func (h *hydra) try(ctx context.Context, token string, now time.Time) (*port.Pri
 	return p, nil
 }
 
-// grantedScopes is Hydra's scp claim: a list of strings, anything else none.
+// grantedScopes reads a claim that is a list of strings (scp, workspace_ids);
+// anything else is none.
 func grantedScopes(raw any) []string {
 	list, _ := raw.([]any)
 	out := make([]string, 0, len(list))

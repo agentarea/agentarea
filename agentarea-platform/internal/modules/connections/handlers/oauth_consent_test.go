@@ -110,7 +110,7 @@ func TestConsentRoutes(t *testing.T) {
 		if status, body := consentCall(t, s, http.MethodGet, "/v1/oauth/consent?challenge=ch", "", "u1", kind); status != 403 || !strings.Contains(body, detailConsentNeedsSession) {
 			t.Fatalf("%s read a consent: %d %s", kind, status, body)
 		}
-		if status, _ := consentCall(t, s, http.MethodPost, "/v1/oauth/consent", `{"challenge":"ch","action":"accept","workspace":"acme"}`, "u1", kind); status != 403 {
+		if status, _ := consentCall(t, s, http.MethodPost, "/v1/oauth/consent", `{"challenge":"ch","action":"accept","workspaces":["acme"]}`, "u1", kind); status != 403 {
 			t.Fatalf("%s accepted a consent: %d", kind, status)
 		}
 	}
@@ -119,10 +119,13 @@ func TestConsentRoutes(t *testing.T) {
 	}
 
 	for body, want := range map[string]int{
-		`{"challenge":"ch","action":"accept"}`:                          422,
-		`{"challenge":"ch","action":"grant","workspace":"acme"}`:        422,
-		`{"challenge":"ch","action":"accept","workspace":"acme","x":1}`: 422,
-		`{"challenge":"ch","action":"accept","workspace":"foreign"}`:    403,
+		`{"challenge":"ch","action":"accept"}`:                                 422,
+		`{"challenge":"ch","action":"accept","workspaces":[]}`:                 422,
+		`{"challenge":"ch","action":"accept","workspaces":"acme"}`:             422,
+		`{"challenge":"ch","action":"accept","workspaces":[1]}`:                422,
+		`{"challenge":"ch","action":"grant","workspaces":["acme"]}`:            422,
+		`{"challenge":"ch","action":"accept","workspaces":["acme"],"x":1}`:     422,
+		`{"challenge":"ch","action":"accept","workspaces":["acme","foreign"]}`: 403,
 	} {
 		if status, got := consentCall(t, s, http.MethodPost, "/v1/oauth/consent", body, "u1", authn.KindSession); status != want {
 			t.Fatalf("%s: %d %s", body, status, got)
@@ -132,13 +135,13 @@ func TestConsentRoutes(t *testing.T) {
 		t.Fatalf("a refused decision reached Hydra: %v", *accepted)
 	}
 
-	status, body = consentCall(t, s, http.MethodPost, "/v1/oauth/consent", `{"challenge":"ch","action":"accept","workspace":"acme"}`, "u1", authn.KindSession)
+	status, body = consentCall(t, s, http.MethodPost, "/v1/oauth/consent", `{"challenge":"ch","action":"accept","workspaces":["acme","`+acme.ID()+`"]}`, "u1", authn.KindSession)
 	if status != 200 || body != `{"redirect_to":"https://hydra.example/next"}` {
 		t.Fatalf("%d %s", status, body)
 	}
 	session, _ := (*accepted)["session"].(map[string]any)
 	token, _ := session["access_token"].(map[string]any)
-	if token["workspace_id"] != acme.ID() {
-		t.Fatalf("the workspace claim is %v, want the id of acme", token["workspace_id"])
+	if ids, _ := token["workspace_ids"].([]any); len(ids) != 1 || ids[0] != acme.ID() {
+		t.Fatalf("the workspace claim is %v, want the id of acme once", token["workspace_ids"])
 	}
 }
