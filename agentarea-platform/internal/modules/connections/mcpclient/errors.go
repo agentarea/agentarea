@@ -168,7 +168,7 @@ type HTTPError struct {
 }
 
 func (e *HTTPError) Error() string {
-	return fmt.Sprintf("Server error '%d' for url '%s'", e.Status, e.URL)
+	return fmt.Sprintf("Server error '%d' for url '%s'", e.Status, netguard.SafeURL(e.URL))
 }
 
 // IsTransient reports a failure to reach the server at all: a refused or

@@ -191,7 +191,7 @@ func (s *Service) tokenRequest(ctx context.Context, a domain.AuthConfig, form ur
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, netguard.SafeURLError(err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
@@ -200,7 +200,7 @@ func (s *Service) tokenRequest(ctx context.Context, a domain.AuthConfig, form ur
 	}
 	resp, err := s.httpClient(netguard.Member, tokenTimeout, false).Do(req)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, netguard.SafeURLError(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxOAuthBody))

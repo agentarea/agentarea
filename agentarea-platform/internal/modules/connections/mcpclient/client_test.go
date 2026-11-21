@@ -407,3 +407,24 @@ func TestSplitContentKeepsSupportedImages(t *testing.T) {
 		t.Fatalf("text %q images %+v", text, imgs)
 	}
 }
+
+func TestErrorsLeaveOutTheURLQuery(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	dead := srv.URL
+	srv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := Connect(ctx, Options{URL: dead + "/mcp?api_key=s3cret", Transport: "streamable-http",
+		RoundTripper: http.DefaultTransport})
+	if err == nil || strings.Contains(err.Error(), "s3cret") {
+		t.Fatalf("Connect to a dead server = %v, want an error without the query", err)
+	}
+	if !IsTransient(err) {
+		t.Fatalf("IsTransient(%v) = false, want the dial failure kept", err)
+	}
+	he := &HTTPError{URL: "https://u:p@mcp.example/sse?token=s3cret#frag", Status: 500}
+	if got := he.Error(); strings.Contains(got, "s3cret") || strings.Contains(got, "u:p") ||
+		!strings.Contains(got, "https://mcp.example/sse") {
+		t.Fatalf("HTTPError.Error() = %q", got)
+	}
+}

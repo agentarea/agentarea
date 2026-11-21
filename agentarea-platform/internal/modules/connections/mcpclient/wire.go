@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/netguard"
 )
 
 // outbound is a JSON-RPC message the client sends.
@@ -85,7 +87,7 @@ func (x exchange) do(ctx context.Context, method, rawURL string, body []byte, h 
 	req, err := http.NewRequestWithContext(ctx, method, rawURL, rd)
 	if err != nil {
 		cancel()
-		return nil, err
+		return nil, netguard.SafeURLError(err)
 	}
 	for _, hs := range []http.Header{x.headers, h} {
 		for k, vs := range hs {
@@ -100,7 +102,7 @@ func (x exchange) do(ctx context.Context, method, rawURL string, body []byte, h 
 		if w.fired() {
 			return nil, fmt.Errorf("%w: no response within %s", context.DeadlineExceeded, x.idle)
 		}
-		return nil, err
+		return nil, netguard.SafeURLError(err)
 	}
 	resp.Body = &watchedBody{rc: resp.Body, w: w, cancel: cancel}
 	return resp, nil

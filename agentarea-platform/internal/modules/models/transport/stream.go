@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/money"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/netguard"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/domain"
 )
@@ -200,6 +201,7 @@ func (m Model) send(ctx context.Context, url string, payload any) (*idleBody, in
 		timer.Stop()
 		overall.Stop()
 		cancel(nil)
+		err = netguard.SafeURLError(err)
 		return nil, 0, &PyError{Type: "UnsupportedProtocol", Msg: err.Error(), Cause: err}
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -214,6 +216,7 @@ func (m Model) send(ctx context.Context, url string, payload any) (*idleBody, in
 	client := &http.Client{Transport: m.Transport, CheckRedirect: NoRedirects}
 	resp, err := client.Do(req)
 	if err != nil {
+		err = netguard.SafeURLError(err)
 		timer.Stop()
 		overall.Stop()
 		cause := context.Cause(cctx)
