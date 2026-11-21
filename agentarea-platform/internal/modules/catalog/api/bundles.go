@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authn"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx/wirejson"
 )
 
 // BundleRefusal is a write a bundle deploy asked for that its owner refused
@@ -189,7 +190,7 @@ type BundleRule struct {
 	SubjectID   string
 	Target      string
 	Effect      string
-	Params      any
+	Params      wirejson.Object
 	Condition   *string
 }
 

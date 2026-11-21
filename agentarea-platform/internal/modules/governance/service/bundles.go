@@ -64,8 +64,8 @@ func (b BundleRules) MatchingRule(ctx context.Context, c authn.Caller, r catalog
 	if err != nil {
 		return "", false, err
 	}
-	params := r.Params
-	if params == nil {
+	var params any = r.Params
+	if r.Params == nil {
 		params = map[string]any{}
 	}
 	for _, x := range rules {
