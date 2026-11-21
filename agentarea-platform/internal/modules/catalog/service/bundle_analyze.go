@@ -410,7 +410,7 @@ func policyAsRule(p BundlePolicy, subjectID string) catalogapi.BundleRule {
 		subject = "workspace"
 	}
 	return catalogapi.BundleRule{Enabled: p.Enabled, Priority: p.Priority, SubjectType: subject, SubjectID: subjectID,
-		Target: p.Target, Effect: p.Effect, Params: plainJSON(nonNilObject(p.Params)), Condition: p.Condition}
+		Target: p.Target, Effect: p.Effect, Params: nonNilObject(p.Params), Condition: p.Condition}
 }
 
 // plainJSON is v with every object as map[string]any.
