@@ -24,7 +24,7 @@ const docs: AgentToolConfig = {
   name: "docs-team-writer",
   settings: {
     a2a_url: "https://x.a2a.agentarea.ai",
-    auth_secret_name: "docs-team-key",
+    auth_secret_name: "docs-team-key", // pragma: allowlist secret
   },
 };
 

@@ -414,7 +414,7 @@ func TestErrorsLeaveOutTheURLQuery(t *testing.T) {
 	srv.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err := Connect(ctx, Options{URL: dead + "/mcp?api_key=s3cret", Transport: "streamable-http",
+	_, err := Connect(ctx, Options{URL: dead + "/mcp?api_key=s3cret", Transport: "streamable-http", // pragma: allowlist secret
 		RoundTripper: http.DefaultTransport})
 	if err == nil || strings.Contains(err.Error(), "s3cret") {
 		t.Fatalf("Connect to a dead server = %v, want an error without the query", err)
