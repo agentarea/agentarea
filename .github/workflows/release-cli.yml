@@ -4,11 +4,12 @@ name: Release CLI
 #
 # Versioned INDEPENDENTLY from the platform (VERSION / docker images / helm).
 # A release is a version bump of agentarea-cli/package.json merged to main:
-# when that version is not on npm yet, it is published and tagged cli-vX.Y.Z.
-# A push that leaves the version alone publishes nothing.
+# when that version is not on npm yet, it is STAGED on npm. A maintainer then
+# approves it with 2FA (npmjs.com, or `npm stage approve <stage-id>`); only
+# then is it published. A push that leaves the version alone stages nothing.
 #
-# Publishes through npm Trusted Publishing (OIDC): the package trusts this
-# workflow on npmjs.com, no npm token is stored in the repository.
+# Authenticates through npm Trusted Publishing (OIDC), which for this package
+# may only stage, not publish directly. No npm token is stored in the repo.
 
 on:
   push:
@@ -18,8 +19,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # the cli-vX.Y.Z tag
-  id-token: write # npm provenance
+  contents: read
+  id-token: write # npm trusted publishing + provenance
 
 concurrency:
   group: release-cli
@@ -77,15 +78,18 @@ jobs:
         if: steps.version.outputs.release == 'true'
         run: pnpm run build
 
-      - name: Publish to npm
+      - name: Stage on npm
         if: steps.version.outputs.release == 'true'
         run: |
-          npm install -g npm@^11.5.1
-          npm publish --provenance --access public
-
-      - name: Tag the release
-        if: steps.version.outputs.release == 'true'
-        run: |
-          TAG="cli-v${{ steps.version.outputs.version }}"
-          git tag "$TAG" "$GITHUB_SHA"
-          git push origin "$TAG"
+          set -o pipefail
+          npm install -g npm@^12
+          npm stage publish --provenance --access public . | tee stage.log
+          {
+            echo "### @agentarea/cli@${{ steps.version.outputs.version }} staged"
+            echo
+            echo 'Approve it on npmjs.com or with `npm stage approve <stage-id>`:'
+            echo
+            echo '```'
+            cat stage.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
