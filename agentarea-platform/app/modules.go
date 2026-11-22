@@ -50,20 +50,22 @@ import (
 
 // coreDeps are the kernel adapters and settings the core modules are built over.
 type coreDeps struct {
-	DB         db.Database
-	Graph      authz.Graph
-	APIURL     string
-	AppURL     string
-	Log        *slog.Logger
-	Lookup     config.Lookup
-	Broker     *events.Broker
-	Redis      *redis.Client
-	Blob       *blob.Client
-	Secrets    *secrets.Factory
-	Durable    *durable.Durable
-	Extensions *extensions
-	Sandbox    sandbox.Config
-	Outbound   *netguard.Outbound
+	DB     db.Database
+	Graph  authz.Graph
+	APIURL string
+	AppURL string
+	Log    *slog.Logger
+	Lookup config.Lookup
+	// Connections is connections' loaded config.
+	Connections connections.Config
+	Broker      *events.Broker
+	Redis       *redis.Client
+	Blob        *blob.Client
+	Secrets     *secrets.Factory
+	Durable     *durable.Durable
+	Extensions  *extensions
+	Sandbox     sandbox.Config
+	Outbound    *netguard.Outbound
 	// Directory resolves Kratos identities (member removal, invitations).
 	Directory identityservice.Directory
 	// Counter is the process's analytics counter handle; it counts once insights' sender started.
@@ -160,7 +162,7 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 			},
 			Workspace: e.Workspace, Admin: e.Admin, Gate: e.gate, Authenticate: e.Principal,
 			Agents: m.agents.AgentTools(), ClientBundles: m.agents.ClientBundles(), KV: connections.RedisKV(d.Redis),
-			Lookup: d.Lookup, APIURL: d.APIURL, AppURL: d.AppURL, Log: d.Log, Counter: d.Counter}
+			Config: d.Connections, APIURL: d.APIURL, AppURL: d.AppURL, Log: d.Log, Counter: d.Counter}
 		if d.Outbound != nil {
 			cd.Out = d.Outbound
 		}
@@ -206,10 +208,13 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 	}
 	m.identity = identity.New(id)
 	e.admins = authz.NewAdmins(authz.WorkspaceScoped{}, m.identity.Owned(), d.Log)
-	m.sandbox = sandbox.New(sandbox.Deps{
-		DB: d.DB, Blob: artifacts, Harness: harness, Projects: func() sandbox.Projects { return m.projects.Lookup() },
-		Config: d.Sandbox, APIURL: d.APIURL, Workspace: e.Workspace, Log: d.Log,
-	})
+	m.sandbox = sandbox.New(func() sandbox.Deps {
+		sd := sandbox.Deps{
+			DB: d.DB, Blob: artifacts, Harness: harness, Projects: func() sandbox.Projects { return m.projects.Lookup() },
+			Config: d.Sandbox, APIURL: d.APIURL, Workspace: e.Workspace, Log: d.Log, Out: d.Outbound,
+		}
+		return sd
+	}())
 	m.projects = projects.New(projects.Deps{
 		DB: d.DB, Agents: m.agents.Lookup(), Connections: m.connections.Lookup(),
 		Files: m.sandbox.Files(), APIURL: d.APIURL, Workspace: e.Workspace,

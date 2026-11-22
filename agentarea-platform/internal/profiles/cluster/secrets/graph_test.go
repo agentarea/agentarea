@@ -13,6 +13,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"go.opentelemetry.io/otel/metric/noop"
+
 	kauthz "github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authz"
 	clusterauthz "github.com/agentarea/agentarea/agentarea-platform/internal/profiles/cluster/authz"
 )
@@ -108,7 +110,7 @@ func TestGraphGovernsSecretUse(t *testing.T) {
 	c, _, err := clusterauthz.Open(ctx, kauthz.Config{
 		Backend: "openfga", URL: url, Timeout: 10 * time.Second, Bootstrap: true, ApplyModel: true,
 		StoreName: "aa-go-secrets-" + strconv.FormatInt(time.Now().UnixNano(), 36),
-	}, clusterauthz.Options{Log: quietLogger()})
+	}, clusterauthz.Options{Log: quietLogger(), Meter: noop.NewMeterProvider().Meter("test")})
 	if err != nil {
 		t.Fatal(err)
 	}

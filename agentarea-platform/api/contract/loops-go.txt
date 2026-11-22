@@ -32,3 +32,5 @@ broker health metrics = api:BrokerHealthMetrics
 analytics sender = worker:AnalyticsSender, api:AnalyticsSender
 installation pulse = worker:InstallationPulse
 operator = - the kopf handlers of agentarea-operator (LLMProviderConfig, PlatformConnection, PlatformEgressExit), not a Python loop
+task events hub = - the request-scoped tasks-live hub's shared tail and live connection, stopped with the serve process
+live event notices hub = - the request-scoped streams-live hub's shared live connection, stopped with the serve process

@@ -5,20 +5,14 @@ import (
 	"testing"
 )
 
-func clearEnvs(t *testing.T) {
-	t.Helper()
-	for _, name := range Envs() {
-		t.Setenv(name, "")
-	}
+func env(vars map[string]string) func(string) string {
+	return func(name string) string { return vars[name] }
 }
 
 func TestRejectRefusesAValueFromTheRepository(t *testing.T) {
 	for _, name := range Envs() {
 		t.Run(name, func(t *testing.T) {
-			clearEnvs(t)
-			t.Setenv(name, "dev-sandbox-cleanup-hmac-secret-change-in-prod-00") // pragma: allowlist secret
-
-			err := Reject()
+			err := Reject(env(map[string]string{name: "dev-sandbox-cleanup-hmac-secret-change-in-prod-00"})) // pragma: allowlist secret
 
 			if err == nil {
 				t.Fatalf("Reject() accepted a published %s", name)
@@ -31,19 +25,13 @@ func TestRejectRefusesAValueFromTheRepository(t *testing.T) {
 }
 
 func TestRejectRefusesTheOldComposeDefaults(t *testing.T) {
-	clearEnvs(t)
-	t.Setenv("AGENTAREA_MCP_GATEWAY_SECRET", "agentarea-dev-mcp-gateway-secret-change-me") // pragma: allowlist secret
-
-	if err := Reject(); err == nil {
+	if err := Reject(env(map[string]string{"AGENTAREA_MCP_GATEWAY_SECRET": "agentarea-dev-mcp-gateway-secret-change-me"})); err == nil { // pragma: allowlist secret
 		t.Fatal("Reject() accepted the old docker-compose.dev.yaml default")
 	}
 }
 
 func TestRejectAcceptsGeneratedAndUnsetValues(t *testing.T) {
-	clearEnvs(t)
-	t.Setenv("AGENTAREA_SANDBOX_FILE_SECRET", "q7Xk0m3v9Zr2Lp8sWc4Nh6Ty1Bd5Fg0J") // pragma: allowlist secret
-
-	if err := Reject(); err != nil {
+	if err := Reject(env(map[string]string{"AGENTAREA_SANDBOX_FILE_SECRET": "q7Xk0m3v9Zr2Lp8sWc4Nh6Ty1Bd5Fg0J"})); err != nil { // pragma: allowlist secret
 		t.Fatalf("Reject() = %v, want nil", err)
 	}
 }

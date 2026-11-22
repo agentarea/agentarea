@@ -11,11 +11,10 @@ import (
 	"time"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/activationauth"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/warmpool"
 )
 
 func TestDockerBackendForceRetirementDeletesExactTaskWorkspace(t *testing.T) {
-	allowSharedExecutor(t)
-	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
 	requests := make(chan string, 3)
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		workspaceID := request.URL.Query().Get("workspace_id")
@@ -32,10 +31,10 @@ func TestDockerBackendForceRetirementDeletesExactTaskWorkspace(t *testing.T) {
 			http.Error(response, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		if err := activationauth.VerifyFromEnv(token, activationauth.ScopeCleanup, activationauth.Identity{
+		if err := activationauth.Verify(token, testActivationSecret, activationauth.ScopeCleanup, activationauth.Identity{
 			WorkspaceID: workspaceID, TaskID: taskID, Generation: 0, FencingToken: 1,
 		}, activationauth.BodySHA256(nil), time.Now()); err != nil {
-			t.Errorf("VerifyFromEnv() error = %v", err)
+			t.Errorf("Verify() error = %v", err)
 			http.Error(response, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -44,7 +43,7 @@ func TestDockerBackendForceRetirementDeletesExactTaskWorkspace(t *testing.T) {
 	}))
 	defer server.Close()
 
-	backend := NewDocker(server.URL, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	backend := sharedExecutor(server.URL)
 	if err := backend.RetireSandboxTask(context.Background(), "workspace-1", "task-1", time.Hour); err != nil {
 		t.Fatal(err)
 	}
@@ -84,8 +83,6 @@ func TestDockerBackendForceRetirementDeletesExactTaskWorkspace(t *testing.T) {
 }
 
 func TestDockerBackendDoesNotRetireWorkspaceDuringActiveTransfer(t *testing.T) {
-	allowSharedExecutor(t)
-	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
 	deleteCalled := make(chan struct{}, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodDelete {
@@ -96,7 +93,7 @@ func TestDockerBackendDoesNotRetireWorkspaceDuringActiveTransfer(t *testing.T) {
 		response.WriteHeader(http.StatusNoContent)
 	}))
 	defer server.Close()
-	backend := NewDocker(server.URL, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	backend := sharedExecutor(server.URL)
 
 	finish, err := backend.beginTaskOperation("workspace-1", "task-1")
 	if err != nil {
@@ -121,18 +118,18 @@ func TestDockerBackendDoesNotRetireWorkspaceDuringActiveTransfer(t *testing.T) {
 	}
 }
 
-// allowSharedExecutor opts a test into the development-only shared sandbox
-// executor. Sandbox paths refuse to run without it.
-func allowSharedExecutor(t *testing.T) {
-	t.Helper()
-	t.Setenv("AGENTAREA_SANDBOX_ALLOW_WEAK_ISOLATION", "true")
+var testActivationSecret = []byte(strings.Repeat("s", 32))
+
+// sharedExecutor is the development-only shared sandbox executor at url, opted
+// into weak isolation. Sandbox paths refuse to run without the opt-in.
+func sharedExecutor(url string) *Docker {
+	return NewDocker(url, true, warmpool.Executor{Transport: http.DefaultTransport, Secret: testActivationSecret}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
 // The weak-isolation refusal belongs to sandbox execution, which is the thing
 // that would run under it.
 func TestSandboxExecutionRefusedWithoutExplicitDevelopmentOptIn(t *testing.T) {
-	t.Setenv("AGENTAREA_SANDBOX_ALLOW_WEAK_ISOLATION", "")
-	backend := NewDocker("http://executor.invalid", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	backend := NewDocker("http://executor.invalid", false, warmpool.Executor{Transport: http.DefaultTransport, Secret: testActivationSecret}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	if _, err := backend.RuntimeManifest(context.Background()); err == nil || !strings.Contains(err.Error(), "development-only") {
 		t.Fatalf("RuntimeManifest() error = %v, want explicit weak-isolation rejection", err)
@@ -145,13 +142,11 @@ func TestSandboxExecutionRefusedWithoutExplicitDevelopmentOptIn(t *testing.T) {
 // A retired task directory is gone, so the next demand must hydrate the inputs again
 // rather than trust the revision recorded for the deleted directory.
 func TestDockerBackendRetirementForgetsTheHydratedRevision(t *testing.T) {
-	allowSharedExecutor(t)
-	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
 		response.WriteHeader(http.StatusNoContent)
 	}))
 	defer server.Close()
-	backend := NewDocker(server.URL, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	backend := sharedExecutor(server.URL)
 	retired, kept := dockerTaskKey("workspace-1", "task-1"), dockerTaskKey("workspace-1", "task-10")
 	backend.hydrated[retired] = "revision-a"
 	backend.hydrated[kept] = "revision-b"

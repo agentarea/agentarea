@@ -11,7 +11,6 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/analytics"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authz"
-	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/config"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/lifecycle"
@@ -19,6 +18,7 @@ import (
 	catalogapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/catalog/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/connections/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/connections/handlers"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/connections/mcpclient"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/connections/mcpserver"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/connections/service"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/connections/store"
@@ -57,9 +57,6 @@ type Deps struct {
 	Out    service.Outbound
 	KV     service.KV
 	Config Config
-	// Lookup, when set, reads Config from the environment (os.LookupEnv);
-	// a bad value fails Serve.
-	Lookup func(string) (string, bool)
 	// Gate resolves bearer tokens and workspace entry for the MCP surfaces;
 	// Authenticate is get_principal on a route that names no workspace.
 	Gate         authn.Gate
@@ -85,10 +82,12 @@ type Deps struct {
 // Module is connections, constructed once per process; a role picks which of its
 // parts run.
 type Module struct {
-	d       Deps
-	svc     *service.Service
-	lookup  *service.Lookup
-	loadErr error
+	d      Deps
+	svc    *service.Service
+	lookup *service.Lookup
+	// stamps and verdicts outlive the Service that Use rebuilds.
+	stamps   *service.Stamps
+	verdicts *mcpclient.Verdicts
 	// toolsets is Later.Toolsets, read when serving and calling.
 	toolsets    *Toolsets
 	wallets     walletapi.Wallets
@@ -99,12 +98,8 @@ type Module struct {
 
 // New constructs the module.
 func New(d Deps) *Module {
-	m := &Module{d: d, lookup: &service.Lookup{DB: d.DB, Store: store.Lookup{}}}
-	if d.Lookup != nil {
-		l := config.New(d.Lookup)
-		m.d.Config = LoadConfig(l)
-		m.loadErr = l.Err()
-	}
+	m := &Module{d: d, lookup: &service.Lookup{DB: d.DB, Store: store.Lookup{}},
+		stamps: service.NewStamps(), verdicts: service.NewVerdicts()}
 	m.build()
 	return m
 }
@@ -180,7 +175,7 @@ func (m *Module) build() {
 		DB: d.DB, Auth: store.Auth{}, Links: store.Links{}, Connections: store.OpenAPI{}, OpenAPIWrites: store.OpenAPI{},
 		Instances: store.Instances{}, Secrets: d.Secrets, Catalog: d.Catalog, Graph: d.Graph,
 		Specs: d.Specs, Runtime: d.Runtime, Agents: d.Agents, Policies: d.Policies, Approvals: d.Approvals, Out: d.Out, KV: d.KV,
-		Config: d.Config, Admin: d.Admin, APIURL: d.APIURL, AppURL: d.AppURL, Log: d.Log, Now: d.Now,
+		Config: d.Config, Stamps: m.stamps, Verdicts: m.verdicts, Admin: d.Admin, APIURL: d.APIURL, AppURL: d.AppURL, Log: d.Log, Now: d.Now,
 		ClientBundles: d.ClientBundles, Audit: d.Audit, Counter: d.Counter,
 		Wallets:      m.wallets,
 		HeldCalls:    m.heldCalls,
@@ -217,9 +212,6 @@ func (m *Module) Serve() serve.Module {
 		Name:   m.Name(),
 		Errors: handlers.MapError,
 		Mount: func(rt serve.Routes) error {
-			if m.loadErr != nil {
-				return m.loadErr
-			}
 			if m.d.Workspace == nil || m.d.Admin == nil {
 				return nil
 			}

@@ -15,6 +15,7 @@ import (
 // in the namespace, leased for taskLeaseTTL and fenced against retirement.
 type Kubernetes struct {
 	clientset    kubernetes.Interface
+	executor     warmpool.Executor
 	namespace    string
 	logger       *slog.Logger
 	taskLeaseTTL time.Duration
@@ -24,12 +25,15 @@ type Kubernetes struct {
 }
 
 // NewKubernetes is the warm-pool sandbox in namespace.
-func NewKubernetes(clientset kubernetes.Interface, namespace string, taskLeaseTTL time.Duration, logger *slog.Logger) (*Kubernetes, error) {
+func NewKubernetes(clientset kubernetes.Interface, namespace string, taskLeaseTTL time.Duration, executor warmpool.Executor, logger *slog.Logger) (*Kubernetes, error) {
 	if taskLeaseTTL <= 0 {
 		return nil, fmt.Errorf("sandbox task lease TTL must be positive")
 	}
+	if clientset == nil || executor.Transport == nil {
+		return nil, fmt.Errorf("the warm-pool sandbox needs a Kubernetes client and an executor transport")
+	}
 	return &Kubernetes{
-		clientset: clientset, namespace: namespace, logger: logger, taskLeaseTTL: taskLeaseTTL,
+		clientset: clientset, executor: executor, namespace: namespace, logger: logger, taskLeaseTTL: taskLeaseTTL,
 		taskOperations: sandboxruntime.NewTaskOperationGate("kubernetes"),
 	}, nil
 }

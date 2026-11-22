@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -11,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/agentarea/agentarea/agentarea-platform/ext"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/lifecycle"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/artifactstore"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/sandboxruntime"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/warmpool"
@@ -19,16 +21,32 @@ import (
 
 // resolveWorkloadHooks builds only the workload hooks, for a process that holds
 // no database and runs nothing the other extension points serve.
-func (b *Build) resolveWorkloadHooks(ctx context.Context, deps ext.Deps) (_ *extensions, err error) {
+func (b *Build) resolveWorkloadHooks(ctx context.Context, deps ext.Deps) (*extensions, error) {
 	e := &extensions{}
+	if err := b.buildWorkloadHooks(ctx, e, deps); err != nil {
+		return nil, errors.Join(err, e.Close())
+	}
+	return e, nil
+}
+
+func (b *Build) buildWorkloadHooks(ctx context.Context, e *extensions, deps ext.Deps) error {
 	for _, f := range b.ext.WorkloadHooks {
 		h, err := build(ctx, e, deps, "workload hooks", f)
 		if err != nil {
-			return nil, errors.Join(err, e.Close())
+			return err
 		}
 		e.WorkloadHooks = append(e.WorkloadHooks, h)
 	}
-	return e, nil
+	return nil
+}
+
+// runWorkloadHooks adds every overlay's background loop to g.
+func runWorkloadHooks(g *lifecycle.Group, hooks []ext.WorkloadHooks, log *slog.Logger) {
+	for i, h := range hooks {
+		if h.Run != nil {
+			g.Add(&runComponent{name: fmt.Sprintf("workload hooks %d", i+1), run: h.Run, close: h.Close, log: log})
+		}
+	}
 }
 
 // attachWorkloads hands every overlay what the process runs, once, before it serves.

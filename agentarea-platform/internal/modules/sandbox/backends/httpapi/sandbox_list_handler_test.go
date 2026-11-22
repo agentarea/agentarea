@@ -42,7 +42,6 @@ func (r *inventorySandboxRuntime) ListSandboxes(_ context.Context, workspaceID s
 }
 
 func TestSandboxInventoryRequiresInspectionSecret(t *testing.T) {
-	t.Setenv(sandboxInspectionAuthSecretEnv, "")
 	recorder := httptest.NewRecorder()
 	context := &reqctx{Writer: recorder}
 	context.Request = httptest.NewRequest(http.MethodGet, "/sandbox/sessions?workspace_id=workspace-1", nil)
@@ -56,14 +55,13 @@ func TestSandboxInventoryRequiresInspectionSecret(t *testing.T) {
 }
 
 func TestSandboxInventoryScopesProviderQuery(t *testing.T) {
-	t.Setenv(sandboxInspectionAuthSecretEnv, "inspection-secret")
 	runtime := &inventorySandboxRuntime{}
 	recorder := httptest.NewRecorder()
 	context := &reqctx{Writer: recorder}
 	context.Request = httptest.NewRequest(http.MethodGet, "/sandbox/sessions?workspace_id=workspace-1", nil)
 	context.Request.Header.Set("Authorization", "Bearer inspection-secret")
 
-	(&Handler{logger: slog.Default(), sandboxRuntime: runtime}).listSandboxes(context)
+	(&Handler{secrets: Secrets{Inspect: "inspection-secret"}, logger: slog.Default(), sandboxRuntime: runtime}).listSandboxes(context)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())

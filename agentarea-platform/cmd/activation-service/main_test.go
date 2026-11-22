@@ -74,15 +74,22 @@ func TestWorkspaceEntryLimitCountsFilesDirectoriesAndSymlinks(t *testing.T) {
 	}
 }
 
-func TestMain(m *testing.M) {
-	logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	servicePolicy = activationPolicy{
-		MaxExecutionTimeoutSeconds: 30,
-		WorkspaceLimits: sandboxruntime.WorkspaceLimits{
-			MaxFiles: 10_000, MaxFileBytes: 256 * 1024 * 1024, MaxBytes: 2 * 1024 * 1024 * 1024,
+func newTestServer(t *testing.T) *server {
+	t.Helper()
+	s := newServer(config{
+		workspaceRoot:    t.TempDir(),
+		activationSecret: []byte(strings.Repeat("s", 32)),
+		processEnv:       os.Environ(),
+		policy: activationPolicy{
+			MaxExecutionTimeoutSeconds: 30,
+			WorkspaceLimits: sandboxruntime.WorkspaceLimits{
+				MaxFiles: 10_000, MaxFileBytes: 256 * 1024 * 1024, MaxBytes: 2 * 1024 * 1024 * 1024,
+			},
 		},
-	}
-	os.Exit(m.Run())
+	}, slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+	s.runSandboxCommand = runTestSandboxCommand
+	s.invalidateExecutor = func() {}
+	return s
 }
 
 func decodeExecResp(t *testing.T, w *httptest.ResponseRecorder) ExecuteResponse {
@@ -97,32 +104,26 @@ func decodeExecResp(t *testing.T, w *httptest.ResponseRecorder) ExecuteResponse 
 	return resp
 }
 
-func postExecute(t *testing.T, req ExecuteRequest, commandContent string) ExecuteResponse {
+func postExecute(t *testing.T, s *server, req ExecuteRequest, commandContent string) ExecuteResponse {
 	t.Helper()
-	return decodeExecResp(t, postExecuteRequest(t, req, commandContent))
+	return decodeExecResp(t, postExecuteRequest(t, s, req, commandContent))
 }
 
-func postExecuteRequest(t *testing.T, req ExecuteRequest, commandContent string) *httptest.ResponseRecorder {
-	return postExecuteRequestWithHooks(t, req, commandContent, runTestSandboxCommand, func() {})
+func postExecuteRequest(t *testing.T, s *server, req ExecuteRequest, commandContent string) *httptest.ResponseRecorder {
+	return postExecuteRequestWithHooks(t, s, req, commandContent, runTestSandboxCommand, func() {})
 }
 
 func postExecuteRequestWithHooks(
 	t *testing.T,
+	s *server,
 	req ExecuteRequest,
 	commandContent string,
 	runner supervisedCommandRunner,
 	invalidator func(),
 ) *httptest.ResponseRecorder {
 	t.Helper()
-	originalRunner := runSandboxCommand
-	originalInvalidator := executorInvalidator
-	runSandboxCommand = runner
-	executorInvalidator = invalidator
-	t.Cleanup(func() {
-		runSandboxCommand = originalRunner
-		executorInvalidator = originalInvalidator
-	})
-	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
+	s.runSandboxCommand = runner
+	s.invalidateExecutor = invalidator
 	if req.TimeoutSeconds == 0 {
 		req.TimeoutSeconds = 5
 	}
@@ -141,7 +142,7 @@ func postExecuteRequestWithHooks(
 	if err := os.WriteFile(runtimePath, []byte(runtimeJSON), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("AGENTAREA_SANDBOX_MANIFEST_PATH", runtimePath)
+	s.manifestPath = runtimePath
 	if req.TaskID == "" {
 		req.TaskID = req.WorkflowID
 	}
@@ -159,7 +160,7 @@ func postExecuteRequestWithHooks(
 		t.Fatalf("marshal: %v", err)
 	}
 	r := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
-	token, err := activationauth.SignFromEnv(activationauth.ScopeExecute, activationauth.Identity{
+	token, err := activationauth.SignDefault(s.activationSecret, activationauth.ScopeExecute, activationauth.Identity{
 		WorkspaceID: req.WorkspaceID, TaskID: req.TaskID,
 		Generation: 0, FencingToken: 1,
 	}, activationauth.BodySHA256(body), time.Now())
@@ -168,17 +169,16 @@ func postExecuteRequestWithHooks(
 	}
 	r.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
-	executeHandler(w, r)
+	s.executeHandler(w, r)
 	return w
 }
 
 func TestExecuteHandlerRejectsTimeoutAboveSharedPolicyBeforeExecution(t *testing.T) {
-	originalPolicy := servicePolicy
-	servicePolicy.MaxExecutionTimeoutSeconds = 17
-	t.Cleanup(func() { servicePolicy = originalPolicy })
+	s := newTestServer(t)
+	s.policy.MaxExecutionTimeoutSeconds = 17
 
 	var executed bool
-	response := postExecuteRequestWithHooks(t, ExecuteRequest{
+	response := postExecuteRequestWithHooks(t, s, ExecuteRequest{
 		WorkspaceID: "workspace-timeout", TaskID: "task-timeout",
 		TimeoutSeconds: 18,
 	}, "true", func(context.Context, supervisedCommandRequest) (execsupervisor.Status, error) {
@@ -225,13 +225,7 @@ func runTestSandboxCommand(ctx context.Context, request supervisedCommandRequest
 }
 
 func TestExecuteHandlerDiscardsWorkspaceThatCrossesLiveQuota(t *testing.T) {
-	originalRoot := workspaceRoot
-	originalPolicy := servicePolicy
-	workspaceRoot = t.TempDir()
-	t.Cleanup(func() {
-		workspaceRoot = originalRoot
-		servicePolicy = originalPolicy
-	})
+	s := newTestServer(t)
 
 	tests := []struct {
 		name    string
@@ -253,16 +247,16 @@ func TestExecuteHandlerDiscardsWorkspaceThatCrossesLiveQuota(t *testing.T) {
 	}
 	for index, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			servicePolicy.WorkspaceLimits = test.limits
+			s.policy.WorkspaceLimits = test.limits
 			taskID := fmt.Sprintf("quota-task-%d", index)
 			workspaceID := fmt.Sprintf("quota-workspace-%d", index)
-			response := postExecuteRequest(t, ExecuteRequest{
+			response := postExecuteRequest(t, s, ExecuteRequest{
 				WorkspaceID: workspaceID, TaskID: taskID,
 			}, test.command)
 			if response.Code != http.StatusInsufficientStorage || !strings.Contains(response.Body.String(), "workspace quota exceeded") {
 				t.Fatalf("response = %d %s", response.Code, response.Body.String())
 			}
-			workspaceDir, err := executionWorkspacePath(workspaceID, taskID)
+			workspaceDir, err := s.executionWorkspacePath(workspaceID, taskID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -274,17 +268,11 @@ func TestExecuteHandlerDiscardsWorkspaceThatCrossesLiveQuota(t *testing.T) {
 }
 
 func TestExecuteHandlerPublishesUnsafeIncarnationBeforeInvalidation(t *testing.T) {
-	originalRoot := workspaceRoot
-	originalPolicy := servicePolicy
-	workspaceRoot = t.TempDir()
-	servicePolicy.WorkspaceLimits = sandboxruntime.WorkspaceLimits{MaxFiles: 100, MaxFileBytes: 1, MaxBytes: 100}
-	t.Cleanup(func() {
-		workspaceRoot = originalRoot
-		servicePolicy = originalPolicy
-	})
+	s := newTestServer(t)
+	s.policy.WorkspaceLimits = sandboxruntime.WorkspaceLimits{MaxFiles: 100, MaxFileBytes: 1, MaxBytes: 100}
 
 	invalidated := false
-	response := postExecuteRequestWithHooks(t, ExecuteRequest{
+	response := postExecuteRequestWithHooks(t, s, ExecuteRequest{
 		WorkspaceID: "workspace-unsafe", TaskID: "task-unsafe",
 	}, "printf 12 > oversized.bin", runTestSandboxCommand, func() { invalidated = true })
 
@@ -300,10 +288,7 @@ func TestExecuteHandlerPublishesUnsafeIncarnationBeforeInvalidation(t *testing.T
 }
 
 func TestExecuteHandlerRejectsDifferentExecutorIncarnationBeforeWorkspaceAccess(t *testing.T) {
-	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
-	originalRoot := workspaceRoot
-	workspaceRoot = t.TempDir()
-	t.Cleanup(func() { workspaceRoot = originalRoot })
+	s := newTestServer(t)
 	req := ExecuteRequest{
 		ExecutorIncarnation: "00000000-0000-4000-8000-000000000001",
 		CommandBody:         "true",
@@ -315,7 +300,7 @@ func TestExecuteHandlerRejectsDifferentExecutorIncarnationBeforeWorkspaceAccess(
 		t.Fatal(err)
 	}
 	request := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
-	token, err := activationauth.SignFromEnv(activationauth.ScopeExecute, activationauth.Identity{
+	token, err := activationauth.SignDefault(s.activationSecret, activationauth.ScopeExecute, activationauth.Identity{
 		WorkspaceID: req.WorkspaceID, TaskID: req.TaskID, Generation: 0, FencingToken: 1,
 	}, activationauth.BodySHA256(body), time.Now())
 	if err != nil {
@@ -323,23 +308,23 @@ func TestExecuteHandlerRejectsDifferentExecutorIncarnationBeforeWorkspaceAccess(
 	}
 	request.Header.Set("Authorization", "Bearer "+token)
 	response := httptest.NewRecorder()
-	executeHandler(response, request)
+	s.executeHandler(response, request)
 	if response.Code != http.StatusPreconditionFailed || !strings.Contains(response.Body.String(), "executor_incarnation_changed") {
 		t.Fatalf("response = %d %s, want executor incarnation precondition", response.Code, response.Body.String())
 	}
-	if _, err := os.Stat(filepath.Join(workspaceRoot, req.WorkspaceID, req.TaskID)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(s.workspaceRoot, req.WorkspaceID, req.TaskID)); !os.IsNotExist(err) {
 		t.Fatalf("replacement executor touched workspace before rejecting request: %v", err)
 	}
 }
 
 func TestExecuteHandlerSessionWorkspacePersistsAcrossCalls(t *testing.T) {
-	workspaceRoot = t.TempDir()
-	resp1 := postExecute(t, ExecuteRequest{TaskID: "task-session"}, "echo persisted > marker.txt && pwd")
+	s := newTestServer(t)
+	resp1 := postExecute(t, s, ExecuteRequest{TaskID: "task-session"}, "echo persisted > marker.txt && pwd")
 	if resp1.ExitCode != 0 {
 		t.Fatalf("call 1 exit %d, stderr=%q", resp1.ExitCode, resp1.Stderr)
 	}
 
-	resp2 := postExecute(t, ExecuteRequest{TaskID: "task-session"}, "cat marker.txt 2>&1; true")
+	resp2 := postExecute(t, s, ExecuteRequest{TaskID: "task-session"}, "cat marker.txt 2>&1; true")
 	// Session semantics: files a previous call wrote survive for the task; only
 	// manifest inputs are re-synced (by per-file replace), the workspace is not wiped.
 	if !strings.Contains(resp2.Stdout, "persisted") {
@@ -348,20 +333,21 @@ func TestExecuteHandlerSessionWorkspacePersistsAcrossCalls(t *testing.T) {
 }
 
 func TestExecuteHandlerDifferentTasksAreIsolated(t *testing.T) {
-	workspaceRoot = t.TempDir()
+	s := newTestServer(t)
 
-	resp1 := postExecute(t, ExecuteRequest{TaskID: "task-A"}, "echo from-A > marker.txt")
+	resp1 := postExecute(t, s, ExecuteRequest{TaskID: "task-A"}, "echo from-A > marker.txt")
 	if resp1.ExitCode != 0 {
 		t.Fatalf("workflow-A write failed: %s", resp1.Stderr)
 	}
 
-	resp2 := postExecute(t, ExecuteRequest{TaskID: "task-B"}, "cat marker.txt 2>&1; true")
+	resp2 := postExecute(t, s, ExecuteRequest{TaskID: "task-B"}, "cat marker.txt 2>&1; true")
 	if strings.Contains(resp2.Stdout, "from-A") {
 		t.Fatalf("workflow-B saw workflow-A's file: %q", resp2.Stdout)
 	}
 }
 
 func TestExecuteHandlerRejectsBadTaskID(t *testing.T) {
+	s := newTestServer(t)
 	cases := []string{
 		"../escape",
 		"a/b",
@@ -376,7 +362,7 @@ func TestExecuteHandlerRejectsBadTaskID(t *testing.T) {
 			})
 			r := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
 			w := httptest.NewRecorder()
-			executeHandler(w, r)
+			s.executeHandler(w, r)
 			if w.Code != http.StatusBadRequest {
 				t.Fatalf("expected 400 for task_id=%q, got %d body=%s", id, w.Code, w.Body.String())
 			}
@@ -385,9 +371,9 @@ func TestExecuteHandlerRejectsBadTaskID(t *testing.T) {
 }
 
 func TestExecuteHandlerExecutesHydratedCommandPath(t *testing.T) {
-	workspaceRoot = t.TempDir()
+	s := newTestServer(t)
 
-	resp := postExecute(t, ExecuteRequest{TaskID: "test-command-path"}, "echo $((2 + 2))")
+	resp := postExecute(t, s, ExecuteRequest{TaskID: "test-command-path"}, "echo $((2 + 2))")
 	if resp.ExitCode != 0 {
 		t.Fatalf("exit %d, stderr=%q", resp.ExitCode, resp.Stderr)
 	}
@@ -397,8 +383,8 @@ func TestExecuteHandlerExecutesHydratedCommandPath(t *testing.T) {
 }
 
 func TestExecuteHandlerBoundsEachOutputStreamAndReportsTruncation(t *testing.T) {
-	workspaceRoot = t.TempDir()
-	resp := postExecute(t, ExecuteRequest{TaskID: "test-output-bounds", StdoutMaxBytes: 4, StderrMaxBytes: 3}, "printf abcdef; printf vwxyz >&2")
+	s := newTestServer(t)
+	resp := postExecute(t, s, ExecuteRequest{TaskID: "test-output-bounds", StdoutMaxBytes: 4, StderrMaxBytes: 3}, "printf abcdef; printf vwxyz >&2")
 	if resp.Stdout != "abcd" || !resp.StdoutTruncated {
 		t.Fatalf("stdout = %q, truncated = %v", resp.Stdout, resp.StdoutTruncated)
 	}
@@ -408,14 +394,14 @@ func TestExecuteHandlerBoundsEachOutputStreamAndReportsTruncation(t *testing.T) 
 }
 
 func TestExecuteHandlerRejectsMissingBearerBeforeExecution(t *testing.T) {
-	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
+	s := newTestServer(t)
 	body, _ := json.Marshal(ExecuteRequest{
 		CommandBody: "echo ok", WorkspaceID: "workspace-test", TaskID: "task-test",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
 	response := httptest.NewRecorder()
 
-	executeHandler(response, req)
+	s.executeHandler(response, req)
 
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthorized response = %d %s", response.Code, response.Body.String())
@@ -423,7 +409,7 @@ func TestExecuteHandlerRejectsMissingBearerBeforeExecution(t *testing.T) {
 }
 
 func TestExecuteHandlerRejectsBearerReplayedWithAlteredBody(t *testing.T) {
-	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
+	s := newTestServer(t)
 	original := ExecuteRequest{
 		CommandBody: "echo original", WorkspaceID: "workspace-test", TaskID: "task-test",
 	}
@@ -431,7 +417,7 @@ func TestExecuteHandlerRejectsBearerReplayedWithAlteredBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, err := activationauth.SignFromEnv(activationauth.ScopeExecute, activationauth.Identity{
+	token, err := activationauth.SignDefault(s.activationSecret, activationauth.ScopeExecute, activationauth.Identity{
 		WorkspaceID: "workspace-test", TaskID: "task-test", Generation: 0, FencingToken: 1,
 	}, activationauth.BodySHA256(originalBody), time.Now())
 	if err != nil {
@@ -447,7 +433,7 @@ func TestExecuteHandlerRejectsBearerReplayedWithAlteredBody(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	response := httptest.NewRecorder()
 
-	executeHandler(response, req)
+	s.executeHandler(response, req)
 
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("altered-body response = %d %s", response.Code, response.Body.String())
@@ -475,7 +461,8 @@ func TestSandboxExecutionEnvironmentDerivesTaskWorkspaceValues(t *testing.T) {
 	t.Setenv("AGENTAREA_WORKSPACE_ROOT", "caller-root-canary")
 	t.Setenv("AGENTAREA_INPUT_DIR", "caller-input-canary")
 
-	joined := strings.Join(sandboxExecutionEnvironment("workspace-1", "task-1", "/workspace/tasks/task-1"), "\n")
+	s := &server{config: config{processEnv: os.Environ()}}
+	joined := strings.Join(s.sandboxExecutionEnvironment("workspace-1", "task-1", "/workspace/tasks/task-1"), "\n")
 	for _, expected := range []string{
 		"AGENTAREA_WORKSPACE_ID=workspace-1",
 		"AGENTAREA_TASK_ID=task-1",
@@ -494,18 +481,16 @@ func TestSandboxExecutionEnvironmentDerivesTaskWorkspaceValues(t *testing.T) {
 }
 
 func TestResolveExecutionWorkspaceMakesRootTraversableAndTaskPrivate(t *testing.T) {
-	originalRoot := workspaceRoot
-	workspaceRoot = t.TempDir()
-	t.Cleanup(func() { workspaceRoot = originalRoot })
+	s := newTestServer(t)
 
-	dir, err := resolveExecutionWorkspace("workspace-permissions", "task-permissions")
+	dir, err := s.resolveExecutionWorkspace("workspace-permissions", "task-permissions")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, parent := range []string{
-		filepath.Join(workspaceRoot, "workspaces"),
-		filepath.Join(workspaceRoot, "workspaces", "workspace-permissions"),
-		filepath.Join(workspaceRoot, "workspaces", "workspace-permissions", "tasks"),
+		filepath.Join(s.workspaceRoot, "workspaces"),
+		filepath.Join(s.workspaceRoot, "workspaces", "workspace-permissions"),
+		filepath.Join(s.workspaceRoot, "workspaces", "workspace-permissions", "tasks"),
 	} {
 		info, err := os.Stat(parent)
 		if err != nil {
@@ -586,7 +571,8 @@ func TestSandboxProcessEnvironmentRemovesStorageCredentials(t *testing.T) {
 	t.Setenv(activationauth.SecretEnv, "canary-activation-auth-secret")
 	t.Setenv("WORKSPACE_NON_SECRET_CANARY", "preserved")
 
-	joined := strings.Join(sandboxProcessEnvironment(), "\n")
+	s := &server{config: config{processEnv: os.Environ()}}
+	joined := strings.Join(s.sandboxProcessEnvironment(), "\n")
 	for _, forbidden := range []string{"canary-access-key", "canary-secret-key", "canary-session-token", "canary-credential-endpoint", "canary-rustfs-secret", "canary-workspace-token", "canary-platform-access-key", "canary-platform-secret-key", "canary-activation-auth-secret"} {
 		if strings.Contains(joined, forbidden) {
 			t.Fatalf("sandbox environment contains storage credential %q", forbidden)
@@ -598,6 +584,7 @@ func TestSandboxProcessEnvironmentRemovesStorageCredentials(t *testing.T) {
 }
 
 func TestRuntimeManifestHandlerServesValidatedManifest(t *testing.T) {
+	s := newTestServer(t)
 	path := filepath.Join(t.TempDir(), "runtime.json")
 	payload := `{
   "schema_version": 2,
@@ -613,11 +600,11 @@ func TestRuntimeManifestHandlerServesValidatedManifest(t *testing.T) {
 	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("AGENTAREA_SANDBOX_MANIFEST_PATH", path)
+	s.manifestPath = path
 
 	req := httptest.NewRequest(http.MethodGet, "/runtime/manifest", nil)
 	response := httptest.NewRecorder()
-	runtimeManifestHandler(response, req)
+	s.runtimeManifestHandler(response, req)
 	if response.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", response.Code, response.Body.String())
 	}
@@ -631,15 +618,16 @@ func TestRuntimeManifestHandlerServesValidatedManifest(t *testing.T) {
 }
 
 func TestRuntimeManifestHandlerFailsClosedForInvalidManifest(t *testing.T) {
+	s := newTestServer(t)
 	path := filepath.Join(t.TempDir(), "runtime.json")
 	if err := os.WriteFile(path, []byte(`{"schema_version":1}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("AGENTAREA_SANDBOX_MANIFEST_PATH", path)
+	s.manifestPath = path
 
 	req := httptest.NewRequest(http.MethodGet, "/runtime/manifest", nil)
 	response := httptest.NewRecorder()
-	runtimeManifestHandler(response, req)
+	s.runtimeManifestHandler(response, req)
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d: %s", response.Code, response.Body.String())
 	}
@@ -649,14 +637,16 @@ func TestObjectStoreEndpointHost(t *testing.T) {
 	t.Run("fails hard when unset", func(t *testing.T) {
 		t.Setenv("AGENTAREA_SANDBOX_S3_ENDPOINT", "")
 		t.Setenv("AGENTAREA_S3_ENDPOINT", "")
-		if _, err := objectStoreEndpointHost(); err == nil {
+		s := &server{config: config{objectStoreEndpoint: loadObjectStoreEndpoint()}}
+		if _, err := s.objectStoreEndpointHost(); err == nil {
 			t.Fatal("expected an error when no object store endpoint is configured")
 		}
 	})
 	t.Run("primary variable wins and trailing slash is trimmed", func(t *testing.T) {
 		t.Setenv("AGENTAREA_SANDBOX_S3_ENDPOINT", "http://rustfs:9000/")
 		t.Setenv("AGENTAREA_S3_ENDPOINT", "https://s3.amazonaws.com")
-		host, err := objectStoreEndpointHost()
+		s := &server{config: config{objectStoreEndpoint: loadObjectStoreEndpoint()}}
+		host, err := s.objectStoreEndpointHost()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -667,7 +657,8 @@ func TestObjectStoreEndpointHost(t *testing.T) {
 	t.Run("falls back to AGENTAREA_S3_ENDPOINT", func(t *testing.T) {
 		t.Setenv("AGENTAREA_SANDBOX_S3_ENDPOINT", "")
 		t.Setenv("AGENTAREA_S3_ENDPOINT", "https://s3.amazonaws.com")
-		host, err := objectStoreEndpointHost()
+		s := &server{config: config{objectStoreEndpoint: loadObjectStoreEndpoint()}}
+		host, err := s.objectStoreEndpointHost()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

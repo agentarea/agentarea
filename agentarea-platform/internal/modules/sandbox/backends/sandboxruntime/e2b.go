@@ -121,9 +121,13 @@ type e2bListedSandbox struct {
 	Metadata   map[string]string `json:"metadata"`
 }
 
-func NewE2BProvider(cfg E2BConfig) (*E2BProvider, error) {
+// NewE2BProvider reaches the lifecycle API and every sandbox's envd over transport.
+func NewE2BProvider(cfg E2BConfig, transport http.RoundTripper) (*E2BProvider, error) {
 	if cfg.ProviderName != "e2b" && cfg.ProviderName != "cube" {
 		return nil, fmt.Errorf("E2B-compatible provider name must be e2b or cube")
+	}
+	if transport == nil {
+		return nil, fmt.Errorf("%s needs an outbound transport", cfg.ProviderName)
 	}
 	parsed, err := url.Parse(cfg.APIURL)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
@@ -158,12 +162,14 @@ func NewE2BProvider(cfg E2BConfig) (*E2BProvider, error) {
 	return &E2BProvider{
 		cfg: cfg,
 		lifecycleClient: &http.Client{
-			Timeout: cfg.RequestTimeout,
+			Transport: transport,
+			Timeout:   cfg.RequestTimeout,
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 				return fmt.Errorf("unexpected redirect from E2B-compatible endpoint")
 			},
 		},
 		envdClient: &http.Client{
+			Transport: transport,
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 				return fmt.Errorf("unexpected redirect from E2B-compatible sandbox")
 			},

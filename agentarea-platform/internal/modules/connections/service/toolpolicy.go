@@ -65,9 +65,9 @@ func defaultVerdict(rules []WorkspaceRule, target string) string {
 
 // ToolPolicyOf is tool_policy: the default the rule on ruleTarget sets beside
 // the PDP's verdict for pdpTarget, restricting names only narrowing it.
-func ToolPolicyOf(name, ruleTarget, pdpTarget string, restricting []string, rules []WorkspaceRule, p governanceapi.Policy) ToolPolicy {
+func ToolPolicyOf(name, ruleTarget, pdpTarget string, restricting []string, rules []WorkspaceRule, pdp *governanceapi.ToolRules) ToolPolicy {
 	def := defaultVerdict(rules, ruleTarget)
-	d := governanceapi.DecideToolPolicy(&p, pdpTarget, governanceapi.ToolNames{Restricting: restricting, NameAllows: true})
+	d := pdp.Decide(pdpTarget, governanceapi.ToolNames{Restricting: restricting, NameAllows: true})
 	eff := "allow"
 	switch d.Action {
 	case governanceapi.ToolAllow:

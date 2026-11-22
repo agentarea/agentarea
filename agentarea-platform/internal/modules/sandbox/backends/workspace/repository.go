@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"os"
 	"path"
 	"sort"
 	"strconv"
@@ -20,11 +19,11 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
+
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/config"
 )
 
 var (
@@ -45,7 +44,8 @@ type RepositoryConfig struct {
 	ForcePathStyle bool
 	// AccessKey and SecretKey are AGENTAREA_S3_ACCESS_KEY / _SECRET_KEY, the
 	// object store's own credentials. The store is usually not AWS, so the AWS
-	// SDK's AWS_* chain is used only when both are unset (an IAM role).
+	// SDK's AWS_* chain is used only when both are unset (an IAM role); app
+	// builds the client from them.
 	AccessKey string
 	SecretKey string
 }
@@ -89,90 +89,43 @@ type hydrationRevisionRecord struct {
 	RevisionSHA256 string `json:"revision_sha256"`
 }
 
-func LoadConfigFromEnv() (RepositoryConfig, error) {
-	maxFiles, err := requiredPositiveInt("AGENTAREA_SANDBOX_MAX_FILES")
-	if err != nil {
-		return RepositoryConfig{}, err
-	}
-	maxFileBytes, err := requiredPositiveInt64("AGENTAREA_SANDBOX_MAX_FILE_SIZE")
-	if err != nil {
-		return RepositoryConfig{}, err
-	}
-	maxBytes, err := requiredPositiveInt64("AGENTAREA_SANDBOX_MAX_TOTAL_SIZE")
-	if err != nil {
-		return RepositoryConfig{}, err
-	}
-	ttl, err := time.ParseDuration(os.Getenv("AGENTAREA_SANDBOX_S3_URL_TTL"))
-	if err != nil || ttl <= 0 {
-		return RepositoryConfig{}, fmt.Errorf("AGENTAREA_SANDBOX_S3_URL_TTL must be a positive duration")
-	}
-	forcePathStyle, err := strconv.ParseBool(os.Getenv("AGENTAREA_SANDBOX_S3_PATH_STYLE"))
-	if err != nil {
-		return RepositoryConfig{}, fmt.Errorf("AGENTAREA_SANDBOX_S3_PATH_STYLE must be true or false")
-	}
+// LoadConfig reads the workspace store and its quotas; l reports what is
+// missing or malformed. The S3 endpoint, region and credentials are the
+// object store app builds the client for.
+func LoadConfig(l *config.Loader) RepositoryConfig {
 	cfg := RepositoryConfig{
-		Bucket:         firstEnv("AGENTAREA_SANDBOX_S3_BUCKET", "AGENTAREA_S3_ARTIFACTS_BUCKET"),
-		Prefix:         strings.Trim(os.Getenv("AGENTAREA_SANDBOX_S3_PREFIX"), "/"),
-		Region:         firstEnvOr("us-east-1", "AGENTAREA_SANDBOX_S3_REGION", "AGENTAREA_S3_REGION"),
-		Endpoint:       strings.TrimRight(firstEnv("AGENTAREA_SANDBOX_S3_ENDPOINT", "AGENTAREA_S3_ENDPOINT"), "/"),
-		SignedURLTTL:   ttl,
-		MaxFiles:       maxFiles,
-		MaxFileBytes:   maxFileBytes,
-		MaxBytes:       maxBytes,
-		ForcePathStyle: forcePathStyle,
-		AccessKey:      os.Getenv("AGENTAREA_S3_ACCESS_KEY"),
-		SecretKey:      os.Getenv("AGENTAREA_S3_SECRET_KEY"),
+		Bucket:       l.StringEnv("AGENTAREA_SANDBOX_S3_BUCKET", l.StringEnv("AGENTAREA_S3_ARTIFACTS_BUCKET", "")),
+		Prefix:       strings.Trim(l.StringEnv("AGENTAREA_SANDBOX_S3_PREFIX", ""), "/"),
+		Region:       l.StringEnv("AGENTAREA_SANDBOX_S3_REGION", l.StringEnv("AGENTAREA_S3_REGION", "us-east-1")),
+		Endpoint:     strings.TrimRight(l.StringEnv("AGENTAREA_SANDBOX_S3_ENDPOINT", l.StringEnv("AGENTAREA_S3_ENDPOINT", "")), "/"),
+		MaxFiles:     int(requiredPositiveInt(l, "AGENTAREA_SANDBOX_MAX_FILES", strconv.IntSize)),
+		MaxFileBytes: requiredPositiveInt(l, "AGENTAREA_SANDBOX_MAX_FILE_SIZE", 64),
+		MaxBytes:     requiredPositiveInt(l, "AGENTAREA_SANDBOX_MAX_TOTAL_SIZE", 64),
+		AccessKey:    l.StringEnv("AGENTAREA_S3_ACCESS_KEY", ""),
+		SecretKey:    l.StringEnv("AGENTAREA_S3_SECRET_KEY", ""),
 	}
-	if cfg.Bucket == "" {
-		return RepositoryConfig{}, fmt.Errorf("workspace S3 bucket is required; set AGENTAREA_SANDBOX_S3_BUCKET or AGENTAREA_S3_ARTIFACTS_BUCKET")
+	ttl, err := time.ParseDuration(l.StringEnv("AGENTAREA_SANDBOX_S3_URL_TTL", ""))
+	if err != nil || ttl <= 0 {
+		l.Fail("AGENTAREA_SANDBOX_S3_URL_TTL", errors.New("must be a positive duration"))
 	}
-	return cfg, nil
-}
-
-func NewRepositoryFromConfig(ctx context.Context, cfg RepositoryConfig) (*Repository, error) {
-	awsCfg, err := S3Config(ctx, cfg.Region, cfg.AccessKey, cfg.SecretKey)
+	cfg.SignedURLTTL = ttl
+	forcePathStyle, err := strconv.ParseBool(l.StringEnv("AGENTAREA_SANDBOX_S3_PATH_STYLE", ""))
 	if err != nil {
-		return nil, fmt.Errorf("load workspace S3 configuration: %w", err)
+		l.Fail("AGENTAREA_SANDBOX_S3_PATH_STYLE", errors.New("must be true or false"))
 	}
-	client := s3.NewFromConfig(awsCfg, func(options *s3.Options) {
-		options.UsePathStyle = cfg.ForcePathStyle
-		if cfg.Endpoint != "" {
-			options.BaseEndpoint = aws.String(cfg.Endpoint)
-		}
-	})
-	return NewRepository(cfg, client, s3.NewPresignClient(client))
+	cfg.ForcePathStyle = forcePathStyle
+	if cfg.Bucket == "" {
+		l.Fail("AGENTAREA_SANDBOX_S3_BUCKET", errors.New("workspace S3 bucket is required; set AGENTAREA_SANDBOX_S3_BUCKET or AGENTAREA_S3_ARTIFACTS_BUCKET"))
+	}
+	return cfg
 }
 
-// S3Config builds the AWS SDK configuration for the platform's object store:
-// static credentials when the platform names them, the SDK's own chain when it
-// names neither.
-func S3Config(ctx context.Context, region, accessKey, secretKey string) (aws.Config, error) {
-	options := []func(*awsconfig.LoadOptions) error{awsconfig.WithRegion(region)}
-	if accessKey != "" || secretKey != "" {
-		if accessKey == "" || secretKey == "" {
-			return aws.Config{}, fmt.Errorf("set both AGENTAREA_S3_ACCESS_KEY and AGENTAREA_S3_SECRET_KEY, or neither")
-		}
-		options = append(options, awsconfig.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider(accessKey, secretKey, ""),
-		))
-	}
-	return awsconfig.LoadDefaultConfig(ctx, options...)
-}
-
-func requiredPositiveInt(name string) (int, error) {
-	value, err := strconv.Atoi(os.Getenv(name))
+func requiredPositiveInt(l *config.Loader, name string, bits int) int64 {
+	value, err := strconv.ParseInt(l.StringEnv(name, ""), 10, bits)
 	if err != nil || value <= 0 {
-		return 0, fmt.Errorf("%s must be a positive integer", name)
+		l.Fail(name, errors.New("must be a positive integer"))
 	}
-	return value, nil
-}
-
-func requiredPositiveInt64(name string) (int64, error) {
-	value, err := strconv.ParseInt(os.Getenv(name), 10, 64)
-	if err != nil || value <= 0 {
-		return 0, fmt.Errorf("%s must be a positive integer", name)
-	}
-	return value, nil
+	return value
 }
 
 func NewRepository(cfg RepositoryConfig, client s3Client, presigner s3Presigner) (*Repository, error) {
@@ -1094,20 +1047,4 @@ func optionalString(value string) *string {
 		return nil
 	}
 	return aws.String(value)
-}
-
-func firstEnv(names ...string) string {
-	for _, name := range names {
-		if value := os.Getenv(name); value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
-func firstEnvOr(fallback string, names ...string) string {
-	if value := firstEnv(names...); value != "" {
-		return value
-	}
-	return fallback
 }

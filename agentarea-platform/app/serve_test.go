@@ -8,11 +8,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/go-chi/chi/v5"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/agentarea/agentarea/agentarea-platform/api/contract"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authz"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/config"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/connections"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/serve"
 )
 
@@ -20,7 +23,7 @@ import (
 func mounted(t *testing.T) map[string]bool {
 	t.Helper()
 	l := config.FromMap(nil)
-	a, err := serve.Assemble(serve.LoadConfig(l), serve.Options{}, slog.New(slog.DiscardHandler), append(buildModules(newEdge(nil, authz.Admins{}), coreDeps{Lookup: mapLookup(nil)}).http(), slashRedirect())...)
+	a, err := serve.Assemble(serve.LoadConfig(l), serve.Options{}, slog.New(slog.DiscardHandler), append(buildModules(newEdge(nil, authz.Admins{}), coreDeps{Outbound: testOutbound(t), Redis: redis.NewClient(&redis.Options{Addr: miniredis.RunT(t).Addr()}), Lookup: mapLookup(nil), Connections: connections.LoadConfig(config.New(mapLookup(nil)))}).http(), slashRedirect())...)
 	if err != nil || l.Err() != nil {
 		t.Fatal(err, l.Err())
 	}

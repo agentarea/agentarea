@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"go.opentelemetry.io/otel"
+
 	"github.com/agentarea/agentarea/agentarea-platform/api/openapi"
 	"github.com/agentarea/agentarea/agentarea-platform/ext"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/analytics"
@@ -20,9 +22,10 @@ import (
 	kevents "github.com/agentarea/agentarea/agentarea-platform/internal/kernel/events"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/lifecycle"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/money"
-	knetguard "github.com/agentarea/agentarea/agentarea-platform/internal/kernel/netguard"
+	kobs "github.com/agentarea/agentarea/agentarea-platform/internal/kernel/obs"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/agents"
 	catalogapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/catalog/api"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/connections"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/identity"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/insights"
 	runsservice "github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/service"
@@ -37,7 +40,6 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/profiles/cluster"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/profiles/cluster/durable"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/profiles/cluster/events"
-	"github.com/agentarea/agentarea/agentarea-platform/internal/profiles/cluster/netguard"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/serve"
 )
 
@@ -71,14 +73,14 @@ func (b *Build) runAll(ctx context.Context) error {
 // refuses to start, naming them.
 func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) {
 	l := config.New(b.lookup)
-	common := config.LoadCommon(l)
 	cfg := serve.LoadConfig(l)
 	pcfg := cluster.LoadConfig(l)
 	sandboxCfg := sandbox.LoadConfig(l)
 	spend := money.LoadSpendCurrency(l)
-	outCfg := knetguard.LoadConfig(l)
+	durCfg := durable.LoadConfig(l)
 	identityCfg := identity.LoadConfig(l)
 	agentsCfg := agents.LoadConfig(l)
+	connectionsCfg := connections.LoadConfig(l)
 	insightsCfg := insights.LoadConfig(l)
 	runSettings := runsservice.LoadRunSettings(l)
 	eventRetention := partitions.LoadConfig(l).Retention
@@ -106,25 +108,18 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 			l.Fail("AGENTAREA_MCP_GATEWAY_SECRET", errors.New("is required: the pollers call MCP Events through the MCP manager"))
 		}
 	}
-	if err := l.Err(); err != nil {
-		return fmt.Errorf("configuration: %w", err)
+	rb, err := b.bootstrap(ctx, l, name)
+	if err != nil {
+		return err
 	}
-	pcfg.OTel, pcfg.Service, pcfg.Version, pcfg.Environment = common.OTelEnabled, "agentarea-"+name, buildVersion(), common.Env
-	pcfg.Getenv = func(n string) string { v, _ := b.lookup(n); return v }
-	log := newLogger(b.stderr, common).With("component", name)
+	defer func() { err = errors.Join(err, rb.close()) }()
+	common, log, outbound := rb.common, rb.log, rb.outbound
+	pcfg.Meter, pcfg.Outbound = otel.Meter(kobs.MeterScope), outbound
 	profile, err := cluster.Open(ctx, pcfg, log)
 	if err != nil {
 		return err
 	}
 	defer func() { err = errors.Join(err, profile.Close()) }()
-	trust, err := netguard.LoadTrust(outCfg.ExtraCACerts)
-	if err != nil {
-		return fmt.Errorf("outbound trust: %w", err)
-	}
-	outbound, err := netguard.New(outCfg, trust, log, netguard.Options{})
-	if err != nil {
-		return fmt.Errorf("outbound: %w", err)
-	}
 	directory, err := identity.NewDirectory(identityCfg, log)
 	if err != nil {
 		return fmt.Errorf("identity directory: %w", err)
@@ -133,13 +128,13 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 	if err != nil {
 		return fmt.Errorf("transactional mail: %w", err)
 	}
-	dur, err := durable.OpenLazy(config.New(b.lookup), log)
+	dur, err := durable.OpenLazy(durCfg, log)
 	if err != nil {
 		return fmt.Errorf("temporal: %w", err)
 	}
 	defer dur.Close()
-	extDeps := ext.Deps{Logger: log, Config: config.New(b.lookup), DB: profile.DB,
-		Secrets: workspaceSecrets{db: profile.DB, secrets: profile.Secrets}}
+	extDeps := rb.ext
+	extDeps.DB, extDeps.Secrets = profile.DB, workspaceSecrets{db: profile.DB, secrets: profile.Secrets} // pragma: allowlist secret
 	exts, err := b.resolveExtensions(ctx, extDeps, spend)
 	if err != nil {
 		return err
@@ -176,13 +171,13 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 	}
 
 	d := coreDeps{
-		DB: profile.DB, Graph: profile.Graph, APIURL: cfg.Edge.APIURL, AppURL: cfg.AppURL, Log: log, Lookup: b.lookup,
+		DB: profile.DB, Graph: profile.Graph, APIURL: cfg.Edge.APIURL, AppURL: cfg.AppURL, Log: log, Lookup: b.lookup, Connections: connectionsCfg,
 		Broker: profile.Broker, Redis: profile.Redis, Blob: profile.Blob, Secrets: profile.Secrets,
 		Durable: dur, Extensions: exts, Directory: directory, Mailer: mailer, Counter: &analytics.Handle{}, Sandbox: sandboxCfg, Outbound: outbound, Agents: agentsCfg, Insights: insightsCfg,
 		LiveTurns: profile.LiveTurns, TurnTokens: profile.TurnTokens, RunSettings: runSettings, Telemetry: telemetry,
 		Streams: streamsPlumbing{Bus: bus, Dedup: streamDedup, Notices: senderNotices, Quota: writeQuota, Settings: settings, WebhookURL: webhookURL, Consume: p.events},
 	}
-	g := lifecycle.NewGroup(lifecycle.Options{StartupTimeout: common.StartupTimeout, ShutdownTimeout: common.ShutdownTimeout})
+	g := rb.group()
 	if health != nil {
 		g.Add(health.listener(healthAddr, log))
 	}
@@ -235,6 +230,7 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 		if err != nil {
 			return err
 		}
+		g.Add(m.runsSurface.StreamHub(), m.streams.LiveNotices())
 		g.Add(srv)
 		if common.OTelEnabled {
 			g.Add(brokerHealth(profile, pcfg.Events.Partitions, log))
@@ -260,11 +256,7 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 	}
 	if p.serve && p.worker && p.events {
 		g.Add(&runComponent{name: "mcp-reaper", run: d.MCPRuntime.Run, log: log})
-		for i, h := range exts.WorkloadHooks {
-			if h.Run != nil {
-				g.Add(&runComponent{name: fmt.Sprintf("workload hooks %d", i+1), run: h.Run, close: h.Close, log: log})
-			}
-		}
+		runWorkloadHooks(g, exts.WorkloadHooks, log)
 	}
 	if health != nil {
 		g.Add(health.ready())
@@ -323,6 +315,7 @@ func addEvents(g *lifecycle.Group, profile *cluster.Profile, pcfg cluster.Config
 	}
 	pollers, err := m.streams.Pollers(streams.PollerDeps{
 		Config: pollCfg, Redis: profile.Redis, Instances: m.connections.Lookup(), GatewaySecret: pcfg.Authn.GatewaySecret,
+		Meter: otel.Meter(kobs.MeterScope), Tracer: otel.Tracer(kobs.MeterScope),
 	})
 	if err != nil {
 		return err

@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 
+	"go.opentelemetry.io/otel/metric"
+
 	kauthz "github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authz"
 )
 
@@ -21,6 +23,8 @@ type Options struct {
 	// an internal destination: no SSRF policy applies.
 	Transport http.RoundTripper
 	Log       *slog.Logger
+	// Meter carries the authorization duration histogram; it is required.
+	Meter metric.Meter
 }
 
 // Open bootstraps the store and model when configured, then returns the
@@ -43,7 +47,7 @@ func Open(ctx context.Context, cfg kauthz.Config, opt Options) (*Client, kauthz.
 	if err != nil {
 		return nil, cfg, err
 	}
-	c, err := NewClient(settled.URL, settled.StoreID, settled.ModelID, settled.APIToken, settled.Timeout, opt.Transport)
+	c, err := NewClient(settled.URL, settled.StoreID, settled.ModelID, settled.APIToken, settled.Timeout, opt.Transport, opt.Meter)
 	if err != nil {
 		return nil, cfg, err
 	}

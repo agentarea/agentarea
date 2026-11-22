@@ -155,8 +155,6 @@ func TestSandboxCleanupRouteUsesWorkspaceScopedTaskIdentity(t *testing.T) {
 }
 
 func TestSandboxCleanupRequiresDedicatedBearerBeforeRuntimeAccess(t *testing.T) {
-	t.Setenv(sandboxCleanupAuthSecretEnv, "cleanup-secret-for-tests")
-	t.Setenv("AGENTAREA_MCP_FEATURE_WARM_POOL", "false")
 
 	for _, test := range []struct {
 		name          string
@@ -177,7 +175,7 @@ func TestSandboxCleanupRequiresDedicatedBearerBeforeRuntimeAccess(t *testing.T) 
 				context.Request.Header.Set("Authorization", test.authorization)
 			}
 
-			handler := &Handler{logger: slog.Default(), sandboxRuntime: &controlRuntimeStub{}}
+			handler := &Handler{secrets: Secrets{Cleanup: "cleanup-secret-for-tests"}, logger: slog.Default(), sandboxRuntime: &controlRuntimeStub{}}
 			handler.deleteSandboxTask(context)
 
 			if recorder.Code != test.wantStatus {
@@ -188,7 +186,6 @@ func TestSandboxCleanupRequiresDedicatedBearerBeforeRuntimeAccess(t *testing.T) 
 }
 
 func TestSandboxCleanupFailsClosedWithoutConfiguredSecret(t *testing.T) {
-	t.Setenv(sandboxCleanupAuthSecretEnv, "")
 	recorder := httptest.NewRecorder()
 	context := &reqctx{Writer: recorder}
 	context.Request = httptest.NewRequest(http.MethodDelete, "/sandbox/task/task-123?workspace_id=workspace-1", nil)
@@ -204,9 +201,6 @@ func TestSandboxCleanupFailsClosedWithoutConfiguredSecret(t *testing.T) {
 }
 
 func TestExternalSandboxCleanupRunsEvenWhenWarmPoolFeatureIsDisabled(t *testing.T) {
-	t.Setenv(sandboxCleanupAuthSecretEnv, "cleanup-secret-for-tests")
-	t.Setenv("AGENTAREA_MCP_FEATURE_WARM_POOL", "false")
-	t.Setenv("AGENTAREA_SANDBOX_IDLE_TTL", "42s")
 	runtime := &retiringSandboxRuntime{}
 	recorder := httptest.NewRecorder()
 	context := &reqctx{Writer: recorder}
@@ -214,7 +208,7 @@ func TestExternalSandboxCleanupRunsEvenWhenWarmPoolFeatureIsDisabled(t *testing.
 	context.Request.SetPathValue("id", "task-123")
 	context.Request.Header.Set("Authorization", "Bearer cleanup-secret-for-tests")
 
-	handler := &Handler{logger: slog.Default(), sandboxRuntime: runtime, sandboxPolicy: SandboxPolicy{TaskIdleTTL: 42 * time.Second}}
+	handler := &Handler{secrets: Secrets{Cleanup: "cleanup-secret-for-tests"}, logger: slog.Default(), sandboxRuntime: runtime, sandboxPolicy: SandboxPolicy{TaskIdleTTL: 42 * time.Second}}
 	handler.deleteSandboxTask(context)
 
 	if recorder.Code != http.StatusNoContent {
@@ -226,9 +220,8 @@ func TestExternalSandboxCleanupRunsEvenWhenWarmPoolFeatureIsDisabled(t *testing.
 }
 
 func TestSandboxFileRouteUsesExternalRuntimeWithoutBackend(t *testing.T) {
-	t.Setenv(sandboxFileAuthSecretEnv, "file-secret-for-tests")
 	runtime := &retiringSandboxRuntime{}
-	handler := &Handler{logger: slog.Default(), sandboxRuntime: runtime}
+	handler := &Handler{secrets: Secrets{File: "file-secret-for-tests"}, logger: slog.Default(), sandboxRuntime: runtime}
 	recorder := httptest.NewRecorder()
 	context := &reqctx{Writer: recorder}
 	context.Request = httptest.NewRequest(http.MethodPut, "/sandbox/files", strings.NewReader(`{
@@ -251,9 +244,8 @@ func TestSandboxFileRouteUsesExternalRuntimeWithoutBackend(t *testing.T) {
 }
 
 func TestSandboxFileReadDelegatesCompleteOnDemandUseCase(t *testing.T) {
-	t.Setenv(sandboxFileAuthSecretEnv, "file-secret-for-tests")
 	runtime := &retiringSandboxRuntime{}
-	handler := &Handler{logger: slog.Default(), sandboxRuntime: runtime}
+	handler := &Handler{secrets: Secrets{File: "file-secret-for-tests"}, logger: slog.Default(), sandboxRuntime: runtime}
 	recorder := httptest.NewRecorder()
 	requestContext := &reqctx{Writer: recorder}
 	requestContext.Request = httptest.NewRequest(
@@ -275,11 +267,10 @@ func TestSandboxFileReadDelegatesCompleteOnDemandUseCase(t *testing.T) {
 }
 
 func TestSandboxFileContentRouteStreamsBeyondInlineLimit(t *testing.T) {
-	t.Setenv(sandboxFileAuthSecretEnv, "file-secret-for-tests")
 	content := bytes.Repeat([]byte("q"), 16*1024*1024+1)
 	digest := sha256.Sum256(content)
 	runtime := &retiringSandboxRuntime{}
-	handler := &Handler{logger: slog.Default(), sandboxRuntime: runtime, sandboxPolicy: SandboxPolicy{MaxFileBytes: int64(len(content))}}
+	handler := &Handler{secrets: Secrets{File: "file-secret-for-tests"}, logger: slog.Default(), sandboxRuntime: runtime, sandboxPolicy: SandboxPolicy{MaxFileBytes: int64(len(content))}}
 	recorder := httptest.NewRecorder()
 	context := &reqctx{Writer: recorder}
 	requestURL := "/sandbox/file-content?workspace_id=workspace-1&task_id=task-1&path=large.bin&mode=600&size=" + strconv.Itoa(len(content)) + "&sha256=" + hex.EncodeToString(digest[:])
@@ -297,9 +288,8 @@ func TestSandboxFileContentRouteStreamsBeyondInlineLimit(t *testing.T) {
 }
 
 func TestSandboxFileRouteRejectsMissingBearerBeforeBackendAccess(t *testing.T) {
-	t.Setenv(sandboxFileAuthSecretEnv, "file-secret-for-tests")
 	runtime := &retiringSandboxRuntime{}
-	handler := &Handler{logger: slog.Default(), sandboxRuntime: runtime}
+	handler := &Handler{secrets: Secrets{File: "file-secret-for-tests"}, logger: slog.Default(), sandboxRuntime: runtime}
 	recorder := httptest.NewRecorder()
 	context := &reqctx{Writer: recorder}
 	context.Request = httptest.NewRequest(http.MethodPut, "/sandbox/files", strings.NewReader(`{
@@ -321,8 +311,7 @@ func TestSandboxFileRouteRejectsMissingBearerBeforeBackendAccess(t *testing.T) {
 }
 
 func TestSandboxArtifactRoutesRequireFileBearer(t *testing.T) {
-	t.Setenv(sandboxFileAuthSecretEnv, "file-secret-for-tests")
-	handler := &Handler{logger: slog.Default()}
+	handler := &Handler{secrets: Secrets{File: "file-secret-for-tests"}, logger: slog.Default()}
 
 	for _, test := range []struct {
 		name          string
@@ -349,10 +338,9 @@ func TestSandboxArtifactRoutesRequireFileBearer(t *testing.T) {
 }
 
 func TestSandboxArtifactPublicationUsesWorkspaceReadUseCase(t *testing.T) {
-	t.Setenv(sandboxFileAuthSecretEnv, "file-secret-for-tests")
 	runtime := &retiringSandboxRuntime{streamBody: []byte("published artifact")}
 	store := &recordingArtifactStore{}
-	handler := &Handler{logger: slog.Default(), sandboxRuntime: runtime, sandboxArtifacts: store}
+	handler := &Handler{secrets: Secrets{File: "file-secret-for-tests"}, logger: slog.Default(), sandboxRuntime: runtime, sandboxArtifacts: store}
 	recorder := httptest.NewRecorder()
 	requestContext := &reqctx{Writer: recorder}
 	requestContext.Request = httptest.NewRequest(
@@ -378,7 +366,6 @@ func TestSandboxArtifactPublicationUsesWorkspaceReadUseCase(t *testing.T) {
 }
 
 func TestSandboxArtifactDownloadVerifiesBeforeCommittingResponse(t *testing.T) {
-	t.Setenv(sandboxFileAuthSecretEnv, "file-secret-for-tests")
 	corrupt := []byte("corrupt artifact")
 	store := &recordingArtifactStore{
 		artifact: artifactstore.Artifact{
@@ -390,7 +377,7 @@ func TestSandboxArtifactDownloadVerifiesBeforeCommittingResponse(t *testing.T) {
 			err:    errors.New("artifact checksum verification failed"),
 		},
 	}
-	handler := &Handler{logger: slog.Default(), sandboxArtifacts: store}
+	handler := &Handler{secrets: Secrets{File: "file-secret-for-tests"}, logger: slog.Default(), sandboxArtifacts: store}
 	recorder := httptest.NewRecorder()
 	requestContext := &reqctx{Writer: recorder}
 	requestContext.Request = httptest.NewRequest(

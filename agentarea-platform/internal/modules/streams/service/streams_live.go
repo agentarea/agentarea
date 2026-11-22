@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -40,28 +42,69 @@ type LiveFrame struct {
 	Item FeedItem
 }
 
-// noticeHub is EventNoticesHub: one pub/sub connection shared by the open pages.
+var errHubClosed = fmt.Errorf("%w: the hub has shut down", ErrLiveUnavailable)
+
+// noticeHub is EventNoticesHub: one pub/sub connection shared by the open pages. Its loop starts
+// on the first subscribe and ends when Run's context does.
 type noticeHub struct {
 	broker events.Broker
 	log    interface {
 		Error(msg string, args ...any)
 		Warn(msg string, args ...any)
 	}
+	ctx    context.Context
+	cancel context.CancelFunc
+	loop   sync.WaitGroup
 	mu     sync.Mutex
+	closed bool
 	live   events.LiveChannels
 	queues map[string]map[chan Notice]bool
+}
+
+func newNoticeHub(b events.Broker, log *slog.Logger) *noticeHub {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &noticeHub{broker: b, log: log, ctx: ctx, cancel: cancel, queues: map[string]map[chan Notice]bool{}}
+}
+
+// Run holds the hub open until ctx ends, then stops its loop, closes every page's queue and the
+// live connection; later subscribes fail.
+func (h *noticeHub) Run(ctx context.Context) error {
+	<-ctx.Done()
+	h.mu.Lock()
+	h.closed = true
+	h.cancel()
+	for _, qs := range h.queues {
+		for q := range qs {
+			close(q)
+		}
+	}
+	h.queues = map[string]map[chan Notice]bool{}
+	live := h.live
+	h.mu.Unlock()
+	h.loop.Wait()
+	if live == nil {
+		return nil
+	}
+	return live.Close()
 }
 
 func (h *noticeHub) subscribe(ctx context.Context, ws string) (chan Notice, func(), error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.closed {
+		return nil, nil, errHubClosed
+	}
 	if h.live == nil {
-		live, err := h.broker.OpenLive(context.WithoutCancel(ctx))
+		live, err := h.broker.OpenLive(h.ctx)
 		if err != nil {
 			return nil, nil, err
 		}
 		h.live = live
-		go h.run(live)
+		h.loop.Add(1)
+		go func() {
+			defer h.loop.Done()
+			h.run(h.ctx, live)
+		}()
 	}
 	q := make(chan Notice, LiveQueueLimit)
 	first := h.queues[ws] == nil
@@ -92,14 +135,18 @@ func (h *noticeHub) subscribe(ctx context.Context, ws string) (chan Notice, func
 	}, nil
 }
 
-func (h *noticeHub) run(live events.LiveChannels) {
-	ctx := context.Background()
+func (h *noticeHub) run(ctx context.Context, live events.LiveChannels) {
 	prefix := events.StreamsLive + "."
-	for {
+	for ctx.Err() == nil {
 		channel, fields, ok, err := live.Next(ctx, time.Second)
+		if ctx.Err() != nil {
+			return
+		}
 		if err != nil {
 			h.log.Error("Live event notices failed; retrying", "error", err.Error())
-			time.Sleep(time.Second)
+			if !retryWait(ctx, time.Second) {
+				return
+			}
 			continue
 		}
 		if !ok {
@@ -111,6 +158,18 @@ func (h *noticeHub) run(live events.LiveChannels) {
 			continue
 		}
 		h.dispatch(strings.TrimPrefix(channel, prefix), n)
+	}
+}
+
+// retryWait waits d before a retry; false when ctx ended first.
+func retryWait(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
 	}
 }
 
@@ -140,6 +199,16 @@ func (h *noticeHub) dispatch(ws string, n Notice) {
 			close(q)
 		}
 	}
+}
+
+// RunLiveNotices holds the live event notices hub open until ctx ends; without the broker wired
+// there is no hub and it only waits.
+func (s *Service) RunLiveNotices(ctx context.Context) error {
+	if s.hub == nil {
+		<-ctx.Done()
+		return nil
+	}
+	return s.hub.Run(ctx)
 }
 
 // LiveFeed is stream_workspace_events: frames for the notices on the streams the caller reads

@@ -69,7 +69,7 @@ func newSettleFixture(t *testing.T) *settleFixture {
 		specs: &settleSpecs{memSpecs: memSpecs{specs: map[string]catalogapi.MCPSpec{}}, catalog: map[string]map[string]any{}},
 		items: settleItems{}, secrets: &memSecrets{values: map[string]string{}},
 		auth: &memAuth{rows: map[uuid.UUID]domain.AuthConfig{}}, out: &settleOut{}}
-	f.svc = New(Deps{DB: memDB{}, Instances: f.insts, OpenAPIWrites: f.conns, Specs: f.specs, CatalogItems: f.items,
+	f.svc = New(Deps{Stamps: NewStamps(), Verdicts: NewVerdicts(), DB: memDB{}, Instances: f.insts, OpenAPIWrites: f.conns, Specs: f.specs, CatalogItems: f.items,
 		Secrets: f.secrets, Auth: f.auth, Out: f.out})
 	return f
 }

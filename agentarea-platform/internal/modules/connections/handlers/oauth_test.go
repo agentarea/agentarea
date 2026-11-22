@@ -136,7 +136,7 @@ func oauthHarnessWithHydra(t *testing.T, signedIn bool, rate httpx.RateLimiter, 
 			})
 		},
 	}
-	svc := service.New(service.Deps{
+	svc := service.New(service.Deps{Stamps: service.NewStamps(), Verdicts: service.NewVerdicts(),
 		DB: memDB{}, Auth: w, Links: worldLinks{w}, Connections: worldConns{w}, Instances: worldInstances{w: w},
 		Secrets: worldSecrets{w}, Catalog: func(scope.Workspace, ksecrets.Actor) ksecrets.Catalog { return worldCatalog{} },
 		Graph: worldGraph{w}, Out: oauthOut{}, KV: kv, OAuthStore: oauthStore{},

@@ -177,8 +177,9 @@ func (s *Service) JudgeProxyRequest(ctx context.Context, c authn.Caller, instanc
 	if err != nil {
 		return err
 	}
+	pdp := governanceapi.CompileToolRules(&policy)
 	for _, tool := range judged {
-		d := governanceapi.DecideToolPolicy(&policy, toolname.MCPToolTarget(instanceID, tool), governanceapi.ToolNames{Restricting: []string{tool}, NameAllows: true})
+		d := pdp.Decide(toolname.MCPToolTarget(instanceID, tool), governanceapi.ToolNames{Restricting: []string{tool}, NameAllows: true})
 		if !d.Allowed() {
 			return &ProxyRefusal{Status: http.StatusForbidden, Detail: "Tool call denied: " + tool + ": " + d.Reason}
 		}

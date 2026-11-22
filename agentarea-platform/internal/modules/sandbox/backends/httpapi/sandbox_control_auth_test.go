@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	redis "github.com/redis/go-redis/v9"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/sandboxcontrol"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/sandboxcontrolauth"
@@ -21,25 +22,24 @@ import (
 
 func TestSandboxControlRoutesRequireWorkspaceScopedAuthorization(t *testing.T) {
 	secret := strings.Repeat("c", 48)
-	t.Setenv(sandboxcontrolauth.SecretEnv, secret)
 	server := miniredis.RunT(t)
 	policy := sandboxcontrol.ExecutionPolicy{
 		DefaultTimeoutSeconds: 120, MaxTimeoutSeconds: 1800,
 		QueueTimeout: 5 * time.Minute, CompletionGrace: 2 * time.Minute,
 	}
 	store, err := sandboxcontrol.NewRedisStore(
-		"redis://"+server.Addr(), "api-auth", time.Hour, policy,
+		redis.NewClient(&redis.Options{Addr: server.Addr()}), "api-auth", time.Hour, policy,
 		sandboxcontrol.WithEventStreams("auth.requests", "auth.events", "test"),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.RedisClient().Close() }()
 	service, err := sandboxcontrol.NewService(store, policy)
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := &Handler{sandboxControl: service, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	handler := &Handler{secrets: Secrets{Control: secret}, sandboxControl: service, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	router := http.NewServeMux()
 	router.HandleFunc("POST /sandbox/executions", serve(handler.createSandboxExecution))
 	router.HandleFunc("GET /sandbox/executions/{id}", serve(handler.getSandboxExecution))

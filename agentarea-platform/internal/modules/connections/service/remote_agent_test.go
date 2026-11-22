@@ -90,7 +90,7 @@ func task(state string, extra map[string]any) map[string]any {
 }
 
 func remoteService(secrets map[string]string) *Service {
-	return New(Deps{DB: memDB{}, Secrets: &memSecrets{values: secrets}, Out: remoteOut{}})
+	return New(Deps{Stamps: NewStamps(), Verdicts: NewVerdicts(), DB: memDB{}, Secrets: &memSecrets{values: secrets}, Out: remoteOut{}})
 }
 
 func remoteCall(url, secret string) api.RemoteAgentCall {

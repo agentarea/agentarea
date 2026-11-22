@@ -9,9 +9,10 @@ import (
 )
 
 func TestErrorBodyStaysJSONWhenTheMessageCarriesAQuote(t *testing.T) {
+	s := newTestServer(t)
 	r := httptest.NewRequest(http.MethodPost, "/workspace/writeback", strings.NewReader(`{"bo\"gus": 1}`))
 	w := httptest.NewRecorder()
-	workspaceWritebackHandler(w, r)
+	s.workspaceWritebackHandler(w, r)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 	}

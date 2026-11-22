@@ -255,7 +255,7 @@ func newInstFixture(t *testing.T) *instFixture {
 		runtime: &recRuntime{}, secrets: &memSecrets{values: map[string]string{}}, audit: &fakeAudit{},
 		c: authn.Caller{Principal: authn.Principal{UserID: "owner"}, Workspace: ws}}
 	catalog := &memCatalog{}
-	f.svc = New(Deps{DB: pools, Auth: store.Auth{}, Instances: store.Instances{}, Secrets: f.secrets,
+	f.svc = New(Deps{Stamps: NewStamps(), Verdicts: NewVerdicts(), DB: pools, Auth: store.Auth{}, Instances: store.Instances{}, Secrets: f.secrets,
 		Catalog: func(scope.Workspace, ksecrets.Actor) ksecrets.Catalog { return catalog },
 		Graph:   f.graph, Specs: f.specs, Runtime: f.runtime, Out: guardOut{&netguard.Guard{Policy: policy}}, Audit: f.audit})
 	return f

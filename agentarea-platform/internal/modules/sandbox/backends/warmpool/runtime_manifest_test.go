@@ -30,7 +30,7 @@ func TestGetRuntimeManifestValidatesDataPlaneResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	manifest, err := GetRuntimeManifest(context.Background(), server.URL, time.Second)
+	manifest, err := testExecutor().GetRuntimeManifest(context.Background(), server.URL, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -46,11 +46,11 @@ func firstRequestMessage(t *testing.T, runner *Runner, stream string) redis.XMes
 
 func TestRunnerExecutesSessionCommandAndStoresOutputRefs(t *testing.T) {
 	server := miniredis.RunT(t)
-	store, err := sandboxcontrol.NewRedisStore("redis://"+server.Addr(), "runner-session", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("session.requests", "session.events", "test"))
+	store, err := sandboxcontrol.NewRedisStore(redis.NewClient(&redis.Options{Addr: server.Addr()}), "runner-session", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("session.requests", "session.events", "test"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.RedisClient().Close() }()
 
 	repository := &recordingWorkspaceRepository{storedOutputs: map[string][]byte{}}
 	executor := &recordingSandboxExecutor{result: &warmpool.ExecuteResponse{Stdout: "STDOUT-BODY", Stderr: "STDERR-BODY", ExitCode: 0}}
@@ -87,11 +87,11 @@ func TestRunnerExecutesSessionCommandAndStoresOutputRefs(t *testing.T) {
 
 func TestRunnerNeverWritesOutputBodiesToRedis(t *testing.T) {
 	server := miniredis.RunT(t)
-	store, err := sandboxcontrol.NewRedisStore("redis://"+server.Addr(), "runner-canary", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("canary.requests", "canary.events", "test"))
+	store, err := sandboxcontrol.NewRedisStore(redis.NewClient(&redis.Options{Addr: server.Addr()}), "runner-canary", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("canary.requests", "canary.events", "test"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.RedisClient().Close() }()
 
 	repository := &recordingWorkspaceRepository{storedOutputs: map[string][]byte{}}
 	executor := &recordingSandboxExecutor{result: &warmpool.ExecuteResponse{Stdout: "STDOUT-BODY-CANARY", Stderr: "STDERR-BODY-CANARY", ExitCode: 0}}
@@ -114,11 +114,11 @@ func TestRunnerNeverWritesOutputBodiesToRedis(t *testing.T) {
 
 func TestRunnerMarksExecutionFailedWhenExecutorErrors(t *testing.T) {
 	server := miniredis.RunT(t)
-	store, err := sandboxcontrol.NewRedisStore("redis://"+server.Addr(), "runner-failed", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("failed.requests", "failed.events", "test"))
+	store, err := sandboxcontrol.NewRedisStore(redis.NewClient(&redis.Options{Addr: server.Addr()}), "runner-failed", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("failed.requests", "failed.events", "test"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.RedisClient().Close() }()
 
 	repository := &recordingWorkspaceRepository{}
 	executor := &recordingSandboxExecutor{executeErr: errStub("executor failed")}
@@ -144,11 +144,11 @@ func TestRunnerMarksExecutionFailedWhenExecutorErrors(t *testing.T) {
 
 func TestRunnerCompletesWithoutOffloadWhenNoWorkspaceRepository(t *testing.T) {
 	server := miniredis.RunT(t)
-	store, err := sandboxcontrol.NewRedisStore("redis://"+server.Addr(), "runner-nobucket", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("nobucket.requests", "nobucket.events", "test"))
+	store, err := sandboxcontrol.NewRedisStore(redis.NewClient(&redis.Options{Addr: server.Addr()}), "runner-nobucket", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("nobucket.requests", "nobucket.events", "test"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.RedisClient().Close() }()
 
 	executor := &recordingSandboxExecutor{result: &warmpool.ExecuteResponse{Stdout: "unpersisted", Stderr: "also-unpersisted", ExitCode: 0}}
 	runner := New(Config{RequestStream: "nobucket.requests", EventStream: "nobucket.events", Group: "nobucket-group"}, store, executor, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -177,11 +177,11 @@ func TestRunnerCompletesWithoutOffloadWhenNoWorkspaceRepository(t *testing.T) {
 
 func TestRunnerReclaimsPendingMessageAndExecutesClaimedWork(t *testing.T) {
 	server := miniredis.RunT(t)
-	store, err := sandboxcontrol.NewRedisStore("redis://"+server.Addr(), "runner-reclaim", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("reclaim.requests", "reclaim.events", "test"))
+	store, err := sandboxcontrol.NewRedisStore(redis.NewClient(&redis.Options{Addr: server.Addr()}), "runner-reclaim", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("reclaim.requests", "reclaim.events", "test"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.RedisClient().Close() }()
 
 	repository := &recordingWorkspaceRepository{storedOutputs: map[string][]byte{}}
 	executor := &recordingSandboxExecutor{}
@@ -230,11 +230,11 @@ func TestRunnerReclaimsPendingMessageAndExecutesClaimedWork(t *testing.T) {
 
 func TestRunnerRefusesToRerunUncertainRunningExecution(t *testing.T) {
 	server := miniredis.RunT(t)
-	store, err := sandboxcontrol.NewRedisStore("redis://"+server.Addr(), "runner-uncertain", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("uncertain.requests", "uncertain.events", "test"))
+	store, err := sandboxcontrol.NewRedisStore(redis.NewClient(&redis.Options{Addr: server.Addr()}), "runner-uncertain", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("uncertain.requests", "uncertain.events", "test"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.RedisClient().Close() }()
 
 	repository := &recordingWorkspaceRepository{}
 	executor := &recordingSandboxExecutor{}

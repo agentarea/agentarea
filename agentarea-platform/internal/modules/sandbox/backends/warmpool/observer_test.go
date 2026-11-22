@@ -52,7 +52,7 @@ func TestObserverLeaseSnapshotsFollowPodIncarnation(t *testing.T) {
 	pod.UID = types.UID("first")
 	pod.Annotations[annotationTaskAssignedAt] = time.Now().UTC().Format(time.RFC3339)
 	clientset := fake.NewSimpleClientset(pod)
-	client := NewClient(clientset, "test", time.Hour)
+	client := NewClient(clientset, "test", time.Hour, testExecutor())
 	observer := &podObserverStub{}
 	client.SetLifecycleObserver(observer)
 	ctx := context.Background()
@@ -90,7 +90,7 @@ func TestObserverFailedPodDeleteIsNotReportedAccepted(t *testing.T) {
 	clientset.PrependReactor("delete", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
 		return true, nil, errors.New("API unavailable")
 	})
-	client := NewClient(clientset, "test", time.Hour)
+	client := NewClient(clientset, "test", time.Hour, testExecutor())
 	observer := &podObserverStub{}
 	client.SetLifecycleObserver(observer)
 	if err := client.RetirePodForTask(context.Background(), "workspace-1", "task-1", 0); err == nil {
@@ -113,7 +113,7 @@ func TestObserverFailureBeforePodDeleteStillDeletesOnceAndIsNotNormalized(t *tes
 		deletes++
 		return false, nil, nil
 	})
-	client := NewClient(clientset, "test", time.Hour)
+	client := NewClient(clientset, "test", time.Hour, testExecutor())
 	observer := &podObserverStub{beforeErr: errors.New("ledger unavailable")}
 	client.SetLifecycleObserver(observer)
 	err := client.DeleteExactPod(context.Background(), pod)

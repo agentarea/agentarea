@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	redis "github.com/redis/go-redis/v9"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/sandboxcontrol"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/sandboxplacement"
@@ -44,11 +45,11 @@ func regionExecution(t *testing.T, runner *Runner, taskID, region string) *sandb
 // matches the task's runtime selector — the control plane owns "which sandbox".
 func TestRunnerRoutesExecutionToMatchingRegion(t *testing.T) {
 	server := miniredis.RunT(t)
-	store, err := sandboxcontrol.NewRedisStore("redis://"+server.Addr(), "runner-place-ok", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("place-ok.requests", "place-ok.events", "test"))
+	store, err := sandboxcontrol.NewRedisStore(redis.NewClient(&redis.Options{Addr: server.Addr()}), "runner-place-ok", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("place-ok.requests", "place-ok.events", "test"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.RedisClient().Close() }()
 
 	euExec := &recordingSandboxExecutor{result: &warmpool.ExecuteResponse{ExitCode: 0}}
 	usExec := &recordingSandboxExecutor{result: &warmpool.ExecuteResponse{ExitCode: 0}}
@@ -86,11 +87,11 @@ func TestRunnerRoutesExecutionToMatchingRegion(t *testing.T) {
 // another region. This is the residency invariant enforced at the control plane.
 func TestRunnerFailsExecutionWhenNoRegionTarget(t *testing.T) {
 	server := miniredis.RunT(t)
-	store, err := sandboxcontrol.NewRedisStore("redis://"+server.Addr(), "runner-place-fail", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("place-fail.requests", "place-fail.events", "test"))
+	store, err := sandboxcontrol.NewRedisStore(redis.NewClient(&redis.Options{Addr: server.Addr()}), "runner-place-fail", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("place-fail.requests", "place-fail.events", "test"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.RedisClient().Close() }()
 
 	euExec := &recordingSandboxExecutor{result: &warmpool.ExecuteResponse{ExitCode: 0}}
 	placer, err := sandboxplacement.NewRegistry(

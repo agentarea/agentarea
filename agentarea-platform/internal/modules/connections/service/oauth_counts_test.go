@@ -43,7 +43,7 @@ func wantCounts(t *testing.T, c *oaCounts, want ...string) {
 }
 
 func TestOAuthProviderNamesOnlyPublicIssuersOfAPlatformApp(t *testing.T) {
-	s := New(Deps{Config: Config{OAuthApps: []OAuthApp{
+	s := New(Deps{Stamps: NewStamps(), Verdicts: NewVerdicts(), Config: Config{OAuthApps: []OAuthApp{
 		{Issuer: "https://github.com"}, {Issuer: "https://idp.internal.example"},
 	}}})
 	for issuer, want := range map[string]string{

@@ -13,6 +13,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authz"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/connections/mcpclient"
 	runsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/api"
 	walletapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/wallet/api"
 )
@@ -60,6 +61,10 @@ type Deps struct {
 	// no egress exits, so no instance binds one and no server requires one.
 	EgressExits EgressExitBinding
 	Config      Config
+	// Stamps is the queue of last-dispatch stamps and Verdicts the MCP era
+	// verdict cache; the module owns both and hands them to every Service it builds.
+	Stamps   *Stamps
+	Verdicts *mcpclient.Verdicts
 	// Admin refuses a caller in ctx who is not an admin of its workspace.
 	Admin func(ctx context.Context) error
 	// APIURL and AppURL are the public bases of the API and the webapp.
@@ -83,6 +88,9 @@ type Service struct {
 
 // New builds the service.
 func New(d Deps) *Service {
+	if d.Stamps == nil || d.Verdicts == nil {
+		panic("connections: Deps.Stamps and Deps.Verdicts are required")
+	}
 	if d.Log == nil {
 		d.Log = slog.New(slog.DiscardHandler)
 	}

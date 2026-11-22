@@ -28,14 +28,6 @@ func NewS3Provider(repository hydrationRepository) (*S3Provider, error) {
 	return &S3Provider{repository: repository}, nil
 }
 
-func NewS3ProviderFromConfig(ctx context.Context, cfg workspace.RepositoryConfig) (*S3Provider, error) {
-	repository, err := workspace.NewRepositoryFromConfig(ctx, cfg)
-	if err != nil {
-		return nil, err
-	}
-	return NewS3Provider(repository)
-}
-
 func (p *S3Provider) Ensure(ctx context.Context, workspaceID, taskID string) (*Mount, error) {
 	hydration, err := p.repository.PrepareCurrentHydration(ctx, workspaceID, taskID, inputPrefix)
 	if err != nil {

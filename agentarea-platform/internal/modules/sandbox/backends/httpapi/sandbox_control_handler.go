@@ -3,7 +3,6 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -18,22 +17,6 @@ const (
 	sandboxTaskHeader                  = "X-Agentarea-Task-ID"
 	maxSandboxExecutionCreateBodyBytes = int64(warmpool.MaxCommandBodyBytes + 64*1024)
 )
-
-// newSandboxControlService builds the execution-record service from the
-// configuration the composition root already resolved. It reads no process
-// environment of its own, so retention and admission policy cannot drift.
-func newSandboxControlService(cfg sandboxcontrol.Config) (*sandboxcontrol.Service, error) {
-	store, err := sandboxcontrol.NewRedisStoreFromConfig(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("sandbox control store: %w", err)
-	}
-	service, err := sandboxcontrol.NewService(store, cfg.ExecutionPolicy())
-	if err != nil {
-		_ = store.Close()
-		return nil, fmt.Errorf("sandbox control service: %w", err)
-	}
-	return service, nil
-}
 
 func (h *Handler) createSandboxExecution(c *reqctx) {
 	if h.sandboxControl == nil {
@@ -51,7 +34,7 @@ func (h *Handler) createSandboxExecution(c *reqctx) {
 		c.JSON(http.StatusBadRequest, jsonObject{"error": "invalid_request", "message": err.Error()})
 		return
 	}
-	if !requireSandboxControlAuthorization(c, sandboxcontrolauth.ScopeCreate, sandboxcontrolauth.Identity{
+	if !h.requireSandboxControlAuthorization(c, sandboxcontrolauth.ScopeCreate, sandboxcontrolauth.Identity{
 		WorkspaceID: req.WorkspaceID,
 		TaskID:      req.TaskID,
 	}, sandboxcontrolauth.BodySHA256(body)) {
@@ -71,7 +54,7 @@ func (h *Handler) getSandboxExecution(c *reqctx) {
 		return
 	}
 	identity := sandboxExecutionIdentity(c)
-	if !requireSandboxControlAuthorization(c, sandboxcontrolauth.ScopeRead, identity, sandboxcontrolauth.BodySHA256(nil)) {
+	if !h.requireSandboxControlAuthorization(c, sandboxcontrolauth.ScopeRead, identity, sandboxcontrolauth.BodySHA256(nil)) {
 		return
 	}
 	record, err := h.sandboxControl.GetExecution(c.Request.Context(), c.Param("id"))
@@ -92,7 +75,7 @@ func (h *Handler) cancelSandboxExecution(c *reqctx) {
 		return
 	}
 	identity := sandboxExecutionIdentity(c)
-	if !requireSandboxControlAuthorization(c, sandboxcontrolauth.ScopeCancel, identity, sandboxcontrolauth.BodySHA256(nil)) {
+	if !h.requireSandboxControlAuthorization(c, sandboxcontrolauth.ScopeCancel, identity, sandboxcontrolauth.BodySHA256(nil)) {
 		return
 	}
 	record, err := h.sandboxControl.GetExecution(c.Request.Context(), c.Param("id"))
@@ -120,10 +103,10 @@ func sandboxExecutionIdentity(c *reqctx) sandboxcontrolauth.Identity {
 	}
 }
 
-func requireSandboxControlAuthorization(c *reqctx, scope string, identity sandboxcontrolauth.Identity, bodySHA256 string) bool {
+func (h *Handler) requireSandboxControlAuthorization(c *reqctx, scope string, identity sandboxcontrolauth.Identity, bodySHA256 string) bool {
 	token, err := sandboxcontrolauth.BearerToken(c.GetHeader("Authorization"))
 	if err == nil {
-		err = sandboxcontrolauth.VerifyFromEnv(token, scope, identity, bodySHA256, time.Now().UTC())
+		err = sandboxcontrolauth.Verify(token, []byte(h.secrets.Control), scope, identity, bodySHA256, time.Now().UTC())
 	}
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, jsonObject{"error": "unauthorized", "message": "valid workspace-scoped sandbox control authorization is required"})

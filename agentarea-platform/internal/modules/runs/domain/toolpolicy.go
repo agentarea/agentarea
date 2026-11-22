@@ -191,9 +191,11 @@ func AnyNameMatches(names, patterns []string) bool {
 }
 
 // Fnmatch is Python's fnmatch.fnmatch on POSIX: *, ?, [seq] and [!seq], case
-// sensitive, with * matching any character including a slash.
+// sensitive, with * matching any character including a slash. A pattern that
+// does not compile matches nothing.
 func Fnmatch(name, pattern string) bool {
-	return regexp.MustCompile(fnmatchRegexp(pattern)).MatchString(name)
+	re, err := regexp.Compile(fnmatchRegexp(pattern))
+	return err == nil && re.MatchString(name)
 }
 
 func fnmatchRegexp(pat string) string {

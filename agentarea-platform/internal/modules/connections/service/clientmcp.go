@@ -76,7 +76,7 @@ func (s *Service) ClientEndpoint(ctx context.Context, p authn.Principal, clientI
 	}
 	b := &clientBackend{
 		s: s, c: c, clientID: clientID, clientName: bundle.Name, actorType: actorType(p, clientID),
-		policy: policy, platform: platform, skills: bundle.Skills, platformNames: map[string]bool{},
+		policy: policy, pdp: governanceapi.CompileToolRules(&policy), platform: platform, skills: bundle.Skills, platformNames: map[string]bool{},
 		openapiByName: map[string]int{},
 	}
 	if err := s.loadClientConnections(ctx, b, bundle); err != nil {
@@ -223,6 +223,7 @@ type clientBackend struct {
 	clientID, clientName string
 	actorType            string
 	policy               governanceapi.Policy
+	pdp                  *governanceapi.ToolRules
 	platform             ClientPlatform
 	platformTools        []mcpserver.Tool
 	platformNames        map[string]bool
@@ -487,7 +488,7 @@ func (b *clientBackend) names(name string) governanceapi.ToolNames {
 }
 
 func (b *clientBackend) decide(name string) governanceapi.ToolDecision {
-	return governanceapi.DecideToolPolicy(&b.policy, name, b.names(name))
+	return b.pdp.Decide(name, b.names(name))
 }
 
 func textResult(text string, isError bool) mcpserve.Result {

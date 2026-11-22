@@ -23,13 +23,13 @@ func TestToolPolicyOfDefaultBesideEffective(t *testing.T) {
 		{"rm", "deny", "allow", false},
 		{"wipe", "allow", "deny", true},
 	} {
-		got := ToolPolicyOf(c.tool, "tool:gh__"+c.tool, "gh__"+c.tool, nil, rules, p)
+		got := ToolPolicyOf(c.tool, "tool:gh__"+c.tool, "gh__"+c.tool, nil, rules, governanceapi.CompileToolRules(&p))
 		if got.Default != c.def || got.Effective != c.eff || (got.Reason != nil) != c.reason {
 			t.Errorf("%s: %+v", c.tool, got)
 		}
 	}
 	held := governanceapi.Policy{Approval: &governanceapi.Approval{EscalationRules: []string{"gh__*"}}}
-	if got := ToolPolicyOf("push", "tool:gh__push", "gh__push", nil, nil, held); got.Effective != "approval" || got.Reason == nil {
+	if got := ToolPolicyOf("push", "tool:gh__push", "gh__push", nil, nil, governanceapi.CompileToolRules(&held)); got.Effective != "approval" || got.Reason == nil {
 		t.Fatalf("held %+v", got)
 	}
 }

@@ -111,7 +111,7 @@ func oaHarness(t *testing.T) (*httptest.Server, *oaStore, *world) {
 		},
 		Admin: func(context.Context) error { return nil },
 	}
-	svc := service.New(service.Deps{
+	svc := service.New(service.Deps{Stamps: service.NewStamps(), Verdicts: service.NewVerdicts(),
 		DB: memDB{}, Auth: w, Links: worldLinks{w}, Connections: st, OpenAPIWrites: st, Instances: worldInstances{w: w},
 		Secrets: worldSecrets{w}, Catalog: func(scope.Workspace, ksecrets.Actor) ksecrets.Catalog { return worldCatalog{} },
 		Graph: oaGraph{personal: map[string]bool{}}, Out: oaOut{&netguard.Guard{Policy: policy}},

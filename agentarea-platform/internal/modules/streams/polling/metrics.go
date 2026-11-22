@@ -34,8 +34,7 @@ type pollMetrics struct {
 	published metric.Int64Counter
 }
 
-func newPollMetrics(m *Manager) pollMetrics {
-	meter := otel.Meter(kobs.MeterScope)
+func newPollMetrics(m *Manager, meter metric.Meter) pollMetrics {
 	var metrics pollMetrics
 	var err error
 	if metrics.polls, err = meter.Int64Counter(kobs.EventPolls,

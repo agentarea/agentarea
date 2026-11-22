@@ -1,10 +1,14 @@
 package sandboxcontrol
 
 import (
+	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"time"
+
+	redis "github.com/redis/go-redis/v9"
+
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/config"
 )
 
 // Config is the resolved sandbox execution-record configuration. Every process
@@ -12,7 +16,6 @@ import (
 // injects it, so the API, the embedded runner and the standalone runner cannot
 // drift onto different retention windows.
 type Config struct {
-	RedisURL                       string
 	RedisPrefix                    string
 	ExecutionRecordTTL             time.Duration
 	DefaultExecutionTimeoutSeconds int
@@ -32,62 +35,53 @@ func (c Config) ExecutionPolicy() ExecutionPolicy {
 	}
 }
 
-// LoadConfigFromEnv resolves execution-record configuration. The retention
-// window has no default: an assumed TTL silently decides how long execution
-// history survives, so a missing or malformed value is a startup error.
-func LoadConfigFromEnv(redisURL string) (Config, error) {
-	value := os.Getenv("AGENTAREA_SANDBOX_RECORD_TTL")
-	if value == "" {
-		return Config{}, fmt.Errorf("AGENTAREA_SANDBOX_RECORD_TTL is required")
+// LoadConfig reads the execution-record configuration; l reports what is
+// malformed. The retention window has no default: an assumed TTL silently
+// decides how long execution history survives, so a missing or malformed value
+// is a startup error.
+func LoadConfig(l *config.Loader) Config {
+	c := Config{
+		RedisPrefix:   l.StringEnv("AGENTAREA_SANDBOX_REDIS_PREFIX", ""),
+		RequestStream: l.StringEnv("AGENTAREA_SANDBOX_REQUEST_STREAM", ""),
+		EventStream:   l.StringEnv("AGENTAREA_SANDBOX_EVENT_STREAM", ""),
 	}
-	ttl, err := time.ParseDuration(value)
-	if err != nil {
-		return Config{}, fmt.Errorf("AGENTAREA_SANDBOX_RECORD_TTL must be a duration: %w", err)
+	if value, ok := l.OptionalEnv("AGENTAREA_SANDBOX_RECORD_TTL"); !ok {
+		l.Fail("AGENTAREA_SANDBOX_RECORD_TTL", config.ErrMissing)
+	} else if ttl, err := time.ParseDuration(value); err != nil {
+		l.Fail("AGENTAREA_SANDBOX_RECORD_TTL", fmt.Errorf("must be a duration: %w", err))
+	} else if ttl <= 0 {
+		l.Fail("AGENTAREA_SANDBOX_RECORD_TTL", fmt.Errorf("must be positive, got %q", value))
+	} else {
+		c.ExecutionRecordTTL = ttl
 	}
-	if ttl <= 0 {
-		return Config{}, fmt.Errorf("AGENTAREA_SANDBOX_RECORD_TTL must be positive, got %q", value)
+	maxTimeout, err := strconv.Atoi(l.StringEnv("AGENTAREA_SANDBOX_MAX_EXEC_SECONDS", ""))
+	if err != nil || maxTimeout <= 0 {
+		l.Fail("AGENTAREA_SANDBOX_MAX_EXEC_SECONDS", errors.New("must be a positive integer"))
 	}
-	if redisURL == "" {
-		return Config{}, fmt.Errorf("sandbox control plane requires a Redis URL")
+	c.MaxExecutionTimeoutSeconds = maxTimeout
+	defaultTimeout, err := strconv.Atoi(l.StringEnv("AGENTAREA_SANDBOX_EXEC_SECONDS", ""))
+	if err != nil || defaultTimeout <= 0 || defaultTimeout > maxTimeout {
+		l.Fail("AGENTAREA_SANDBOX_EXEC_SECONDS", errors.New("must be a positive integer no greater than AGENTAREA_SANDBOX_MAX_EXEC_SECONDS"))
 	}
-	maxTimeoutRaw := os.Getenv("AGENTAREA_SANDBOX_MAX_EXEC_SECONDS")
-	maxTimeout, err := strconv.Atoi(maxTimeoutRaw)
-	if maxTimeoutRaw == "" || err != nil || maxTimeout <= 0 {
-		return Config{}, fmt.Errorf("AGENTAREA_SANDBOX_MAX_EXEC_SECONDS must be a positive integer")
-	}
-	defaultTimeoutRaw := os.Getenv("AGENTAREA_SANDBOX_EXEC_SECONDS")
-	defaultTimeout, err := strconv.Atoi(defaultTimeoutRaw)
-	if defaultTimeoutRaw == "" || err != nil || defaultTimeout <= 0 || defaultTimeout > maxTimeout {
-		return Config{}, fmt.Errorf("AGENTAREA_SANDBOX_EXEC_SECONDS must be a positive integer no greater than AGENTAREA_SANDBOX_MAX_EXEC_SECONDS")
-	}
-	queueTimeoutRaw := os.Getenv("AGENTAREA_SANDBOX_QUEUE_TIMEOUT")
-	queueTimeout, err := time.ParseDuration(queueTimeoutRaw)
-	if queueTimeoutRaw == "" || err != nil || queueTimeout <= 0 {
-		return Config{}, fmt.Errorf("AGENTAREA_SANDBOX_QUEUE_TIMEOUT must be a positive duration")
-	}
-	completionGraceRaw := os.Getenv("AGENTAREA_SANDBOX_COMPLETION_GRACE")
-	completionGrace, err := time.ParseDuration(completionGraceRaw)
-	if completionGraceRaw == "" || err != nil || completionGrace <= 0 {
-		return Config{}, fmt.Errorf("AGENTAREA_SANDBOX_COMPLETION_GRACE must be a positive duration")
-	}
-	return Config{
-		RedisURL:                       redisURL,
-		RedisPrefix:                    os.Getenv("AGENTAREA_SANDBOX_REDIS_PREFIX"),
-		ExecutionRecordTTL:             ttl,
-		DefaultExecutionTimeoutSeconds: defaultTimeout,
-		MaxExecutionTimeoutSeconds:     maxTimeout,
-		QueueTimeout:                   queueTimeout,
-		CompletionGrace:                completionGrace,
-		RequestStream:                  os.Getenv("AGENTAREA_SANDBOX_REQUEST_STREAM"),
-		EventStream:                    os.Getenv("AGENTAREA_SANDBOX_EVENT_STREAM"),
-	}, nil
+	c.DefaultExecutionTimeoutSeconds = defaultTimeout
+	c.QueueTimeout = positiveDuration(l, "AGENTAREA_SANDBOX_QUEUE_TIMEOUT")
+	c.CompletionGrace = positiveDuration(l, "AGENTAREA_SANDBOX_COMPLETION_GRACE")
+	return c
 }
 
-// NewRedisStoreFromConfig builds the execution-record store from an already
-// resolved configuration.
-func NewRedisStoreFromConfig(cfg Config) (*RedisStore, error) {
+func positiveDuration(l *config.Loader, name string) time.Duration {
+	d, err := time.ParseDuration(l.StringEnv(name, ""))
+	if err != nil || d <= 0 {
+		l.Fail(name, errors.New("must be a positive duration"))
+	}
+	return d
+}
+
+// NewRedisStoreFromConfig builds the execution-record store over client from
+// an already resolved configuration.
+func NewRedisStoreFromConfig(client *redis.Client, cfg Config) (*RedisStore, error) {
 	return NewRedisStore(
-		cfg.RedisURL,
+		client,
 		cfg.RedisPrefix,
 		cfg.ExecutionRecordTTL,
 		cfg.ExecutionPolicy(),
