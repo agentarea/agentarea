@@ -1,19 +1,11 @@
 package app
 
-// part is one module a role runs, and what of it.
-type part struct {
-	module string
-	runs   string
-}
-
 // role is one subcommand: one deployed process (api, worker, event-service,
 // mcp-manager, sandbox-runner, operator, ...). Every role talks to one database.
 type role struct {
 	name           string
 	summary        string
 	serviceAccount string
-	parts          []part
-	includes       []string
 	// lands says when the role is implemented; until then it exits with
 	// ErrNotImplemented.
 	lands string
@@ -24,41 +16,20 @@ type role struct {
 func roles() []role {
 	return []role{
 		{name: "serve", summary: "HTTP API",
-			serviceAccount: "agentarea-serve",
-			parts: []part{
-				{"identity", "http"}, {"projects", "http"}, {"agents", "http"},
-				{"catalog", "http"}, {"wallet", "http"}, {"insights", "http"},
-				{"runs", "http, sse, ws"}, {"models", "http"}, {"connections", "http"},
-				{"streams", "http"}, {"governance", "http"},
-			}},
+			serviceAccount: "agentarea-serve"},
 		{name: "worker", summary: "durable workflows and activities",
-			serviceAccount: "agentarea-worker",
-			parts: []part{
-				{"runs", "workflows, activities"}, {"models", "activities"},
-				{"connections", "activities"}, {"sandbox", "activities"},
-				{"streams", "workflows"}, {"governance", "decision point"},
-			}},
+			serviceAccount: "agentarea-worker"},
 		{name: "events", summary: "bus consumers, pollers, the outbox relay",
-			serviceAccount: "agentarea-events",
-			parts: []part{
-				{"streams", "router, events view, subscription changes, pollers, external delivery, task replies, platform stream, trigger outcomes"},
-				{"identity", "membership removal (outbox relay)"},
-			}},
+			serviceAccount: "agentarea-events"},
 		{name: "mcp", summary: "MCP gateway and MCP workload lifecycle; the sandbox control API",
-			serviceAccount: "agentarea-mcp",
-			parts: []part{{"connections", "gateway, lifecycle"}, {"governance", "decision point"},
-				{"sandbox", "control API, warm-pool task GC, embedded runner"}}},
+			serviceAccount: "agentarea-mcp"},
 		{name: "sandbox", summary: "sandbox execution consumer (sandbox-runner)",
-			serviceAccount: "agentarea-sandbox",
-			parts:          []part{{"sandbox", "runner"}}},
+			serviceAccount: "agentarea-sandbox"},
 		{name: "operator", summary: "declared providers, platform connections and egress exits (CRDs)",
-			serviceAccount: "agentarea-operator",
-			parts:          []part{{"catalog", "reconcile"}}},
-		{name: "runner", summary: "CLI-harness runner", lands: "phase 6: runner",
-			parts: []part{{"runs", "runner"}}},
-		{name: "all", summary: "every role in one process, one listener",
-			serviceAccount: "agentarea-all",
-			includes:       []string{"serve", "operator", "worker", "events", "mcp", "sandbox"}},
+			serviceAccount: "agentarea-operator"},
+		{name: "runner", summary: "CLI-harness runner", lands: "phase 6: runner"},
+		{name: "all", summary: "serve, worker, events and the MCP runtime in one process, one listener",
+			serviceAccount: "agentarea-all"},
 		{name: "migrate", summary: "apply the core migration set, then extension sets",
 			serviceAccount: "agentarea-migrate"},
 		{name: "openapi", summary: "print the spec the binary serves",

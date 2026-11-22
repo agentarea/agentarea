@@ -45,7 +45,7 @@ func New(d Deps) *Service {
 	}
 	s := &Service{d: d, perms: authz.NewPermissions(d.Graph, d.Log), log: d.Log}
 	if d.Broker != nil {
-		s.hub = &noticeHub{broker: d.Broker, log: d.Log, queues: map[string]map[chan Notice]bool{}}
+		s.hub = newNoticeHub(d.Broker, d.Log)
 	}
 	return s
 }

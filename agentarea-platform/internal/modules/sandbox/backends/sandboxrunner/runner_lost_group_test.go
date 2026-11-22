@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	redis "github.com/redis/go-redis/v9"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/sandboxcontrol"
 )
@@ -18,11 +19,11 @@ import (
 // instead of failing every read with NOGROUP until the process restarts.
 func TestRunnerKeepsConsumingAfterRedisLosesItsGroup(t *testing.T) {
 	server := miniredis.RunT(t)
-	store, err := sandboxcontrol.NewRedisStore("redis://"+server.Addr(), "runner-lost", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("lost.requests", "lost.events", "test"))
+	store, err := sandboxcontrol.NewRedisStore(redis.NewClient(&redis.Options{Addr: server.Addr()}), "runner-lost", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("lost.requests", "lost.events", "test"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.RedisClient().Close() }()
 	runner := New(Config{RequestStream: "lost.requests", EventStream: "lost.events", Block: 20 * time.Millisecond}, store, &recordingSandboxExecutor{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)

@@ -5,16 +5,13 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
-	"log/slog"
 	"math"
 	"net"
 	"net/http"
@@ -24,76 +21,17 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/activationauth"
-	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/publishedsecrets"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/sandboxruntime"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/workspace"
 	execsupervisor "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/supervisor"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/supervisor/runtimeinfo"
-	"github.com/google/uuid"
 )
-
-//nolint:gochecknoglobals // one activation service per process; its state is the process's
-var (
-	status     = "waiting"
-	mcpProcess *os.Process
-	logger     *slog.Logger
-
-	// lastRequestTime tracks the wall-clock time of the most recent /execute
-	// or /activate call. The idle-timeout watchdog reads this to decide when
-	// to self-exit, which lets K8s reclaim the pod if mcp-manager never
-	// issues an explicit DELETE (worker crash, network partition, etc.). Active
-	// requests are tracked separately so a long-running command is never killed
-	// just because it has been quiet for longer than the idle TTL.
-	lastRequestMu  sync.Mutex
-	lastRequest    = time.Now()
-	activeRequests int
-	servicePolicy  activationPolicy
-	// serviceIncarnation changes on every executor process start. The manager
-	// uses it to invalidate hydration records backed by this process's ephemeral
-	// filesystem instead of assuming a restarted executor still has the files.
-	serviceIncarnation = uuid.NewString()
-)
-
-// Mutating operations for one task workspace are serialized. This makes the
-// live file-count check authoritative even when shell and file requests arrive
-// concurrently; fixed stripes avoid an unbounded lock registry.
-//
-//nolint:gochecknoglobals // the stripes serialize every handler in this process
-var workspaceMutationStripes [256]sync.Mutex
-
-func lockWorkspaceMutation(workspaceID, taskID string) func() {
-	digest := sha256.Sum256([]byte(workspaceID + "\x00" + taskID))
-	lock := &workspaceMutationStripes[int(digest[0])]
-	lock.Lock()
-	return lock.Unlock
-}
-
-type activationPolicy struct {
-	MaxExecutionTimeoutSeconds int
-	IdleTimeout                time.Duration
-	WorkspaceLimits            sandboxruntime.WorkspaceLimits
-}
 
 const maxActivationRequestBytes = 64 * 1024 * 1024
-
-// workspaceRoot is the parent directory for hydrated task workspaces.
-// In K8s pods this is mounted as an emptyDir so it dies with the pod;
-// in compose it's a plain directory inside the container with the same
-// effect (container removed → directory gone). Overridable via
-// AGENTAREA_SANDBOX_ROOT for tests and local dev outside containers.
-//
-//nolint:gochecknoglobals // read once at start; tests point it at a temp dir
-var workspaceRoot = func() string {
-	if v := os.Getenv("AGENTAREA_SANDBOX_ROOT"); v != "" {
-		return v
-	}
-	return "/workspace"
-}()
 
 // ActivateRequest represents the activation request.
 // The executable is always taken from the image's own ENTRYPOINT (verified by
@@ -126,90 +64,17 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
-func main() {
-	logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	logger.Info("Activation service starting", "status", status)
-	if err := publishedsecrets.Reject(); err != nil {
-		logger.Error("Refusing to start", "error", err)
-		os.Exit(1)
-	}
-	policy, err := loadActivationPolicy()
-	if err != nil {
-		logger.Error("Activation service policy is invalid", "error", err)
-		os.Exit(1)
-	}
-	servicePolicy = policy
-
-	http.HandleFunc("/health", healthHandler)
-	http.HandleFunc("/activate", activateHandler)
-	http.HandleFunc("/execute", executeHandler)
-	http.HandleFunc("/files", filesHandler)
-	http.HandleFunc("/files/content", fileContentHandler)
-	http.HandleFunc("/workspace/task", workspaceTaskHandler)
-	http.HandleFunc("/workspace/writeback", workspaceWritebackHandler)
-	http.HandleFunc("/runtime/manifest", runtimeManifestHandler)
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	startIdleWatchdog(policy.IdleTimeout)
-
-	// Security: Configure server with timeouts to prevent Slowloris attacks
-	server := &http.Server{
-		Addr:              ":" + port,
-		Handler:           nil,
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       10 * time.Minute,
-		WriteTimeout:      time.Duration(policy.MaxExecutionTimeoutSeconds)*time.Second + execsupervisor.TransportGrace,
-		IdleTimeout:       120 * time.Second,
-	}
-
-	logger.Info("Listening", "port", port)
-	if err := server.ListenAndServe(); err != nil {
-		logger.Error("Server failed", "error", err)
-		os.Exit(1)
-	}
-}
-
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	response := map[string]string{
-		"status":      status,
-		"incarnation": serviceIncarnation,
-	}
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		logger.Error("Failed to encode response", "error", err)
-	}
-}
-
-func requireExecutorIncarnation(w http.ResponseWriter, expected string) bool {
-	if expected == "" {
-		return true
-	}
-	if _, err := uuid.Parse(expected); err != nil {
-		http.Error(w, `{"error": "executor_incarnation is invalid"}`, http.StatusBadRequest)
-		return false
-	}
-	if expected != serviceIncarnation {
-		http.Error(w, `{"error": "executor_incarnation_changed"}`, http.StatusPreconditionFailed)
-		return false
-	}
-	return true
-}
-
-func activateHandler(w http.ResponseWriter, r *http.Request) {
+func (s *server) activateHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
 		return
 	}
-	beginRequest()
-	defer endRequest()
+	s.beginRequest()
+	defer s.endRequest()
 
 	start := time.Now()
 
-	if status != "waiting" {
+	if s.currentStatus() != "waiting" {
 		http.Error(w, `{"error": "pod already assigned"}`, http.StatusConflict)
 		return
 	}
@@ -221,11 +86,11 @@ func activateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	var req ActivateRequest
 	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&req); err != nil {
-		logger.Error("Failed to decode request", "error", err)
+		s.logger.Error("Failed to decode request", "error", err)
 		jsonError(w, fmt.Sprintf("invalid request: %v", err), http.StatusBadRequest)
 		return
 	}
-	logger.Info("Request decoded", "image", req.MCPImage, "port", req.Port, "command", req.Command)
+	s.logger.Info("Request decoded", "image", req.MCPImage, "port", req.Port, "command", req.Command)
 
 	// Validate required fields
 	if req.MCPImage == "" {
@@ -243,18 +108,18 @@ func activateHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Security: Validate image name
 	if err := ValidateImageName(req.MCPImage); err != nil {
-		logger.Error("Image validation failed", "error", err, "image", req.MCPImage)
+		s.logger.Error("Image validation failed", "error", err, "image", req.MCPImage)
 		jsonError(w, fmt.Sprintf("invalid image name: %s", err.Error()), http.StatusBadRequest)
 		return
 	}
 
 	// Security: Validate image hash
 	if err := ValidateHash(req.MCPImageHash); err != nil {
-		logger.Error("Hash validation failed", "error", err)
+		s.logger.Error("Hash validation failed", "error", err)
 		jsonError(w, fmt.Sprintf("invalid image hash: %s", err.Error()), http.StatusBadRequest)
 		return
 	}
-	if !authorizeActivationRequest(w, r, activationauth.ScopeActivate, activationauth.Identity{
+	if !s.authorizeActivationRequest(w, r, activationauth.ScopeActivate, activationauth.Identity{
 		WorkspaceID: "mcp-control", TaskID: req.MCPImageHash, Generation: 0, FencingToken: 1,
 	}, activationauth.BodySHA256(body)) {
 		return
@@ -263,32 +128,35 @@ func activateHandler(w http.ResponseWriter, r *http.Request) {
 	// Validate command override arguments (shell metacharacter check).
 	if len(req.Command) > 0 {
 		if err := ValidateCommandArgs(req.Command); err != nil {
-			logger.Error("Command validation failed", "error", err)
+			s.logger.Error("Command validation failed", "error", err)
 			jsonError(w, fmt.Sprintf("invalid command: %s", err.Error()), http.StatusBadRequest)
 			return
 		}
 	}
 
-	logger.Info("Activation requested",
+	s.logger.Info("Activation requested",
 		"image", req.MCPImage,
 		"hash", req.MCPImageHash,
 		"port", req.Port,
 	)
 
-	status = "activating"
+	if !s.claimActivation() {
+		http.Error(w, `{"error": "pod already assigned"}`, http.StatusConflict)
+		return
+	}
 
-	if err := activate(req); err != nil {
-		status = "waiting"
-		logger.Error("Activation failed", "error", err)
+	if err := s.activate(req); err != nil {
+		s.setStatus("waiting")
+		s.logger.Error("Activation failed", "error", err)
 		jsonError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	status = "ready"
+	s.setStatus("ready")
 	elapsed := time.Since(start).Milliseconds()
 
-	logger.Info("Activation complete",
-		"status", status,
+	s.logger.Info("Activation complete",
+		"status", "ready",
 		"elapsed_ms", elapsed,
 	)
 
@@ -300,15 +168,15 @@ func activateHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		logger.Error("Failed to encode response", "error", err)
+		s.logger.Error("Failed to encode response", "error", err)
 	}
 }
 
-func activate(req ActivateRequest) error {
+func (s *server) activate(req ActivateRequest) error {
 	extractDir := "/app/mcp-overlay"
 
 	// Step 1: Download/extract MCP image
-	if err := prepareMCP(req.MCPImage, req.MCPImageHash, extractDir); err != nil {
+	if err := s.prepareMCP(req.MCPImage, req.MCPImageHash, extractDir); err != nil {
 		return fmt.Errorf("failed to prepare MCP: %w", err)
 	}
 
@@ -326,16 +194,16 @@ func activate(req ActivateRequest) error {
 		return err
 	}
 
-	logger.Info("Resolved command",
+	s.logger.Info("Resolved command",
 		"entrypoint", entrypoint,
 		"command", command,
 	)
 
 	// Step 3: Build environment
-	env := buildEnvironment(imageConfig, req.Env, req.Port, req.MCPImageHash)
+	env := s.buildEnvironment(imageConfig, req.Env, req.Port, req.MCPImageHash)
 
 	// Step 4: Start MCP process
-	if err := startContainer(extractDir, imageConfig.WorkingDir, entrypoint, command, env); err != nil {
+	if err := s.startContainer(extractDir, imageConfig.WorkingDir, entrypoint, command, env); err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 
@@ -355,9 +223,9 @@ func activate(req ActivateRequest) error {
 	}
 
 	if err := waitForReady(30*time.Second, healthPort, healthPath); err != nil {
-		if mcpProcess != nil {
-			if killErr := mcpProcess.Kill(); killErr != nil {
-				logger.Error("Failed to kill process", "error", killErr)
+		if s.mcpProcess != nil {
+			if killErr := s.mcpProcess.Kill(); killErr != nil {
+				s.logger.Error("Failed to kill process", "error", killErr)
 			}
 		}
 		return fmt.Errorf("container failed to become ready: %w", err)
@@ -366,7 +234,7 @@ func activate(req ActivateRequest) error {
 	return nil
 }
 
-func prepareMCP(image, hash, extractDir string) error {
+func (s *server) prepareMCP(image, hash, extractDir string) error {
 	cacheDir := "/var/cache/mcp-images"
 
 	// Ensure directories exist
@@ -391,7 +259,7 @@ func prepareMCP(image, hash, extractDir string) error {
 
 	// Check if already cached
 	if _, err := os.Stat(imagePath); os.IsNotExist(err) {
-		logger.Info("Downloading MCP image", "image", image)
+		s.logger.Info("Downloading MCP image", "image", image)
 
 		// Security: Use safe command building
 		cmd, err := BuildSkopeoCommand(image, imagePath)
@@ -405,11 +273,11 @@ func prepareMCP(image, hash, extractDir string) error {
 			return fmt.Errorf("skopeo failed: %w", err)
 		}
 	} else {
-		logger.Info("Using cached MCP image", "path", imagePath)
+		s.logger.Info("Using cached MCP image", "path", imagePath)
 	}
 
 	// Extract image
-	logger.Info("Extracting MCP image")
+	s.logger.Info("Extracting MCP image")
 	if err := extractImage(imagePath, extractDir); err != nil {
 		return fmt.Errorf("failed to extract: %w", err)
 	}
@@ -550,7 +418,7 @@ func installRuntimeNetworkConfig(rootDir string) error {
 	return nil
 }
 
-func buildEnvironment(imageConfig *ImageConfig, userEnv map[string]string, port int, imageHash string) []string {
+func (s *server) buildEnvironment(imageConfig *ImageConfig, userEnv map[string]string, port int, imageHash string) []string {
 	env := make(map[string]string)
 
 	// Start with image environment
@@ -567,7 +435,7 @@ func buildEnvironment(imageConfig *ImageConfig, userEnv map[string]string, port 
 		if isValidEnvVarName(k) {
 			env[k] = v
 		} else {
-			logger.Warn("Skipping invalid environment variable name", "name", k)
+			s.logger.Warn("Skipping invalid environment variable name", "name", k)
 		}
 	}
 
@@ -604,7 +472,7 @@ func isValidEnvVarName(name string) bool {
 	return true
 }
 
-func startContainer(rootDir, workingDir string, entrypoint, command []string, env []string) error {
+func (s *server) startContainer(rootDir, workingDir string, entrypoint, command []string, env []string) error {
 	// Combine entrypoint and command
 	args := append(entrypoint, command...)
 	if len(args) == 0 {
@@ -616,7 +484,7 @@ func startContainer(rootDir, workingDir string, entrypoint, command []string, en
 		return fmt.Errorf("failed to prepare working directory: %w", err)
 	}
 
-	logger.Info("Starting container",
+	s.logger.Info("Starting container",
 		"executable", args[0],
 		"args", args[1:],
 		"working_dir", containerWorkDir,
@@ -650,8 +518,8 @@ func startContainer(rootDir, workingDir string, entrypoint, command []string, en
 		return fmt.Errorf("refusing to execute image without chroot isolation: %w", err)
 	}
 
-	mcpProcess = cmd.Process
-	logger.Info("Container process started", "pid", mcpProcess.Pid)
+	s.mcpProcess = cmd.Process
+	s.logger.Info("Container process started", "pid", s.mcpProcess.Pid)
 
 	return nil
 }
@@ -759,14 +627,14 @@ func jsonError(w http.ResponseWriter, msg string, status int) {
 	http.Error(w, string(body), status)
 }
 
-func executeHandler(w http.ResponseWriter, r *http.Request) {
+func (s *server) executeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
 		return
 	}
 
-	beginRequest()
-	defer endRequest()
+	s.beginRequest()
+	defer s.endRequest()
 
 	body, err := readActivationRequestBody(r)
 	if err != nil {
@@ -783,21 +651,21 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if !authorizeActivationRequest(w, r, activationauth.ScopeExecute, activationauth.Identity{
+	if !s.authorizeActivationRequest(w, r, activationauth.ScopeExecute, activationauth.Identity{
 		WorkspaceID: req.WorkspaceID, TaskID: req.TaskID,
 		Generation: 0, FencingToken: 1,
 	}, activationauth.BodySHA256(body)) {
 		return
 	}
-	if !requireExecutorIncarnation(w, req.ExecutorIncarnation) {
+	if !s.requireExecutorIncarnation(w, req.ExecutorIncarnation) {
 		return
 	}
-	runtimeManifest, err := runtimeinfo.Load(runtimeinfo.PathFromEnv())
+	runtimeManifest, err := runtimeinfo.Load(runtimeinfo.Path(s.manifestPath))
 	if err != nil {
 		http.Error(w, `{"error": "runtime manifest unavailable"}`, http.StatusServiceUnavailable)
 		return
 	}
-	unlockWorkspace := lockWorkspaceMutation(req.WorkspaceID, req.TaskID)
+	unlockWorkspace := s.lockWorkspaceMutation(req.WorkspaceID, req.TaskID)
 	defer unlockWorkspace()
 
 	stdoutLimit, stderrLimit, err := executeOutputLimits(req)
@@ -806,7 +674,7 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	maxTimeout := servicePolicy.MaxExecutionTimeoutSeconds
+	maxTimeout := s.policy.MaxExecutionTimeoutSeconds
 	if req.TimeoutSeconds <= 0 || req.TimeoutSeconds > maxTimeout {
 		http.Error(
 			w,
@@ -817,7 +685,7 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	timeout := req.TimeoutSeconds
 
-	workspaceDir, err := resolveExecutionWorkspace(req.WorkspaceID, req.TaskID)
+	workspaceDir, err := s.resolveExecutionWorkspace(req.WorkspaceID, req.TaskID)
 	if err != nil {
 		jsonError(w, err.Error(), http.StatusBadRequest)
 		return
@@ -825,7 +693,7 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 	// Resolve the non-root identity to run the untrusted command as. When the
 	// service runs as root this MUST succeed; running untrusted code as root
 	// would expose PID1's environment (incl. the activation secret) via /proc.
-	credential, err := sandboxCommandCredential()
+	credential, err := s.sandboxCommandCredential()
 	if err != nil {
 		jsonError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -866,21 +734,21 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 	stdout := newBoundedBuffer(stdoutLimit)
 	stderr := newBoundedBuffer(stderrLimit)
 	start := time.Now()
-	status, executionErr := runSandboxCommand(r.Context(), supervisedCommandRequest{
+	status, executionErr := s.runSandboxCommand(r.Context(), supervisedCommandRequest{
 		Attestation: runtimeManifest.ExecutionSupervisor, CommandPath: commandFile.Name(),
-		WorkspaceDir: workspaceDir, Environment: sandboxExecutionEnvironment(req.WorkspaceID, req.TaskID, workspaceDir),
-		TimeoutSeconds: timeout, MaxFileBytes: servicePolicy.WorkspaceLimits.MaxFileBytes,
+		WorkspaceDir: workspaceDir, Environment: s.sandboxExecutionEnvironment(req.WorkspaceID, req.TaskID, workspaceDir),
+		TimeoutSeconds: timeout, MaxFileBytes: s.policy.WorkspaceLimits.MaxFileBytes,
 		Stdout: stdout, Stderr: stderr,
 	})
 	if executionErr != nil {
-		rejectUnsafeExecutor(w, workspaceDir, executionErr)
+		s.rejectUnsafeExecutor(w, workspaceDir, executionErr)
 		return
 	}
 	postExecutionCtx, cancelPostExecution := context.WithTimeout(context.WithoutCancel(r.Context()), execsupervisor.PostExecutionBudget)
 	defer cancelPostExecution()
-	workspaceAuditErr := enforceWorkspaceLimitsContext(postExecutionCtx, workspaceDir, servicePolicy.WorkspaceLimits)
+	workspaceAuditErr := enforceWorkspaceLimitsContext(postExecutionCtx, workspaceDir, s.policy.WorkspaceLimits)
 	if workspaceAuditErr != nil {
-		rejectUnsafeWorkspace(w, workspaceDir, workspaceAuditErr)
+		s.rejectUnsafeWorkspace(w, workspaceDir, workspaceAuditErr)
 		return
 	}
 	if status.TimedOut {
@@ -891,12 +759,12 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	changes, changesErr := collectWorkspaceChangesContext(postExecutionCtx, workspaceDir, req.WorkspaceHydration)
 	if changesErr != nil {
-		rejectUnsafeWorkspace(w, workspaceDir, fmt.Errorf("describe workspace changes: %w", changesErr))
+		s.rejectUnsafeWorkspace(w, workspaceDir, fmt.Errorf("describe workspace changes: %w", changesErr))
 		return
 	}
 	artifacts, artifactErr := collectArtifactsContext(postExecutionCtx, workspaceDir, req.ArtifactPaths)
 	if artifactErr != nil {
-		rejectUnsafeWorkspace(w, workspaceDir, fmt.Errorf("inspect requested artifacts: %w", artifactErr))
+		s.rejectUnsafeWorkspace(w, workspaceDir, fmt.Errorf("inspect requested artifacts: %w", artifactErr))
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -907,20 +775,20 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 		Artifacts: artifacts, WorkspaceChanges: changes,
 	})
 
-	logger.Info("Script executed",
+	s.logger.Info("Script executed",
 		"task_id", req.TaskID,
 		"stdout_bytes", stdout.Len(),
 		"elapsed_ms", time.Since(start).Milliseconds(),
 	)
 }
 
-func rejectUnsafeExecutor(w http.ResponseWriter, workspaceDir string, executionErr error) {
+func (s *server) rejectUnsafeExecutor(w http.ResponseWriter, workspaceDir string, executionErr error) {
 	cleanupErr := os.RemoveAll(workspaceDir)
-	logger.Error("execution quiescence could not be proven", "workspace", workspaceDir, "error", executionErr, "cleanup_error", cleanupErr)
+	s.logger.Error("execution quiescence could not be proven", "workspace", workspaceDir, "error", executionErr, "cleanup_error", cleanupErr)
 	w.Header().Set("X-Agentarea-Executor-Unsafe", "true")
 	w.Header().Set("Connection", "close")
 	http.Error(w, `{"error": "execution quiescence unavailable; sandbox executor invalidated"}`, http.StatusServiceUnavailable)
-	executorInvalidator()
+	s.invalidateExecutor()
 }
 
 func decodeExecuteRequest(body io.Reader) (*ExecuteRequest, error) {
@@ -1126,8 +994,8 @@ func collectWorkspaceChangesContext(ctx context.Context, workspaceDir string, hy
 	return changes, nil
 }
 
-func sandboxProcessEnvironment() []string {
-	env := os.Environ()
+func (s *server) sandboxProcessEnvironment() []string {
+	env := s.processEnv
 	filtered := make([]string, 0, len(env))
 	for _, item := range env {
 		name, _, found := strings.Cut(item, "=")
@@ -1148,9 +1016,9 @@ func isSandboxIdentityEnv(name string) bool {
 	}
 }
 
-func sandboxExecutionEnvironment(workspaceID, taskID, workspaceDir string) []string {
+func (s *server) sandboxExecutionEnvironment(workspaceID, taskID, workspaceDir string) []string {
 	return append(
-		sandboxProcessEnvironment(),
+		s.sandboxProcessEnvironment(),
 		"AGENTAREA_WORKSPACE_ID="+workspaceID,
 		"AGENTAREA_TASK_ID="+taskID,
 		"AGENTAREA_WORKSPACE_ROOT="+workspaceDir,
@@ -1334,695 +1202,12 @@ func shouldSkipAutoArtifactFile(rel string) bool {
 	return strings.HasPrefix(base, ".")
 }
 
-// maxFileContentBytes bounds the inline JSON/base64 endpoint.
-// The raw /files/content endpoint is governed by the control-plane workspace
-// quota and streams directly to disk.
-const maxFileContentBytes = 16 * 1024 * 1024
-
-// FilesPutRequest writes a single file into the per-task workspace on the same
-// filesystem bash executes against, so the agent's file tool and its shell see
-// one workspace.
-type FilesPutRequest struct {
-	WorkspaceID         string `json:"workspace_id"`
-	TaskID              string `json:"task_id"`
-	ExecutorIncarnation string `json:"executor_incarnation,omitempty"`
-	Path                string `json:"path"`
-	ContentBase64       string `json:"content_base64"`
-}
-
-// FilesPutResponse acknowledges a written file.
-type FilesPutResponse struct {
-	Path string `json:"path"`
-	Size int64  `json:"size"`
-}
-
-// FilesGetResponse returns a single file's contents.
-type FilesGetResponse struct {
-	ContentBase64 string `json:"content_base64"`
-	Size          int64  `json:"size"`
-}
-
-// FilesListResponse lists the regular files under a prefix.
-type FilesListResponse struct {
-	Paths []string `json:"paths"`
-}
-
-// filesHandler serves the sandbox file API. Writes and reads target the same
-// per-task workspace directory the /execute command runs in, giving the agent's
-// file tool and its bash a shared filesystem.
-func filesHandler(w http.ResponseWriter, r *http.Request) {
-	beginRequest()
-	defer endRequest()
-	switch r.Method {
-	case http.MethodPut:
-		filesPutHandler(w, r)
-	case http.MethodGet:
-		filesGetHandler(w, r)
-	default:
-		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
-	}
-}
-
-// fileContentHandler is the constant-memory transfer path used for task input
-// hydration, artifact publication, and larger file-tool operations. The inline
-// /files JSON/base64 endpoint remains bounded for compatibility with old
-// clients; durable/live file movement must use this raw stream instead.
-func fileContentHandler(w http.ResponseWriter, r *http.Request) {
-	beginRequest()
-	defer endRequest()
-	switch r.Method {
-	case http.MethodPut:
-		fileContentPutHandler(w, r)
-	case http.MethodGet:
-		fileContentGetHandler(w, r)
-	default:
-		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
-	}
-}
-
-// fileUpload is the validated form of a streamed workspace write. Parsing it
-// away from the handler keeps every rejection in one place, so no field reaches
-// the filesystem on a path that skipped a check.
-type fileUpload struct {
-	workspaceID         string
-	taskID              string
-	executorIncarnation string
-	clean               string
-	expectedSHA256      string
-	expectedSize        int64
-	mode                uint32
-}
-
-func parseFileUpload(r *http.Request) (fileUpload, int, error) {
-	query := r.URL.Query()
-	upload := fileUpload{
-		workspaceID:         query.Get("workspace_id"),
-		taskID:              query.Get("task_id"),
-		executorIncarnation: query.Get("executor_incarnation"),
-		expectedSHA256:      query.Get("sha256"),
-	}
-	pathParam := query.Get("path")
-	expectedSize, sizeErr := strconv.ParseInt(query.Get("size"), 10, 64)
-	modeValue, modeErr := strconv.ParseUint(query.Get("mode"), 8, 32)
-	if err := workspace.ValidateIdentifier("workspace_id", upload.workspaceID); err != nil {
-		return upload, http.StatusBadRequest, fmt.Errorf("invalid workspace_id")
-	}
-	if err := workspace.ValidateIdentifier("task_id", upload.taskID); err != nil {
-		return upload, http.StatusBadRequest, fmt.Errorf("invalid task_id")
-	}
-	clean, pathErr := cleanSandboxRelativePath(pathParam)
-	digest, digestErr := hex.DecodeString(upload.expectedSHA256)
-	if pathErr != nil || strings.ContainsRune(pathParam, 0) || sizeErr != nil || expectedSize < 0 || modeErr != nil || modeValue == 0 || modeValue&^uint64(0o777) != 0 || digestErr != nil || len(digest) != sha256.Size || upload.expectedSHA256 != strings.ToLower(upload.expectedSHA256) {
-		return upload, http.StatusBadRequest, fmt.Errorf("path, size, mode, and lowercase sha256 are required")
-	}
-	if expectedSize > servicePolicy.WorkspaceLimits.MaxFileBytes {
-		return upload, http.StatusRequestEntityTooLarge, fmt.Errorf("file exceeds workspace per-file limit")
-	}
-	if r.ContentLength != expectedSize {
-		return upload, http.StatusBadRequest, fmt.Errorf("Content-Length does not match declared size")
-	}
-	upload.clean = clean
-	upload.expectedSize = expectedSize
-	upload.mode = uint32(modeValue)
-	return upload, http.StatusOK, nil
-}
-
-func fileContentPutHandler(w http.ResponseWriter, r *http.Request) {
-	upload, status, err := parseFileUpload(r)
-	if err != nil {
-		jsonError(w, err.Error(), status)
-		return
-	}
-	workspaceID := upload.workspaceID
-	taskID := upload.taskID
-	executorIncarnation := upload.executorIncarnation
-	clean := upload.clean
-	expectedSHA256 := upload.expectedSHA256
-	expectedSize := upload.expectedSize
-	modeValue := upload.mode
-	if !authorizeActivationRequest(w, r, activationauth.ScopeFiles, activationauth.Identity{
-		WorkspaceID: workspaceID, TaskID: taskID, Generation: 0, FencingToken: 1,
-	}, activationauth.BoundTransferSHA256(http.MethodPut, clean, expectedSize, modeValue, expectedSHA256, executorIncarnation)) {
-		return
-	}
-	if !requireExecutorIncarnation(w, executorIncarnation) {
-		return
-	}
-	unlockWorkspace := lockWorkspaceMutation(workspaceID, taskID)
-	defer unlockWorkspace()
-
-	credential, err := sandboxCommandCredential()
-	if err != nil {
-		jsonError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	workspaceDir, err := resolveExecutionWorkspace(workspaceID, taskID)
-	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := prepareTaskWorkspace(workspaceDir, credential); err != nil {
-		http.Error(w, `{"error": "failed to prepare non-root task workspace"}`, http.StatusInternalServerError)
-		return
-	}
-	root, err := os.OpenRoot(workspaceDir)
-	if err != nil {
-		http.Error(w, `{"error": "task workspace is unavailable"}`, http.StatusInternalServerError)
-		return
-	}
-	defer func() { _ = root.Close() }()
-	if err := ensureWorkspaceFileSlot(root, workspaceDir, clean); err != nil {
-		http.Error(w, `{"error": "workspace file limit exceeded"}`, http.StatusInsufficientStorage)
-		return
-	}
-	dir := filepath.Dir(clean)
-	if dir != "." {
-		if err := mkdirAllOwned(root, dir, ownBySandbox(credential)); err != nil {
-			http.Error(w, `{"error": "failed to create parent directory"}`, http.StatusInternalServerError)
-			return
-		}
-	}
-	tempName, err := streamedUploadTempName(dir, filepath.Base(clean))
-	if err != nil {
-		http.Error(w, `{"error": "failed to create upload identity"}`, http.StatusInternalServerError)
-		return
-	}
-	temp, err := root.OpenFile(tempName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		http.Error(w, `{"error": "failed to create temporary upload"}`, http.StatusInternalServerError)
-		return
-	}
-	removeTemp := true
-	defer func() {
-		_ = temp.Close()
-		if removeTemp {
-			_ = root.Remove(tempName)
-		}
-	}()
-	hasher := sha256.New()
-	written, copyErr := io.Copy(io.MultiWriter(temp, hasher), io.LimitReader(r.Body, expectedSize+1))
-	if copyErr != nil || written != expectedSize || hex.EncodeToString(hasher.Sum(nil)) != expectedSHA256 {
-		http.Error(w, `{"error": "streamed file size or checksum mismatch"}`, http.StatusBadRequest)
-		return
-	}
-	if err := temp.Sync(); err != nil {
-		http.Error(w, `{"error": "failed to sync streamed file"}`, http.StatusInternalServerError)
-		return
-	}
-	if err := prepareOwnedFile(temp, credential, fs.FileMode(modeValue)); err != nil {
-		http.Error(w, `{"error": "failed to prepare streamed file ownership"}`, http.StatusInternalServerError)
-		return
-	}
-	if err := temp.Close(); err != nil {
-		http.Error(w, `{"error": "failed to close streamed file"}`, http.StatusInternalServerError)
-		return
-	}
-	if err := root.Rename(tempName, clean); err != nil {
-		http.Error(w, `{"error": "failed to commit streamed file"}`, http.StatusInternalServerError)
-		return
-	}
-	removeTemp = false
-	if err := enforceWorkspaceLimits(workspaceDir, servicePolicy.WorkspaceLimits); err != nil {
-		rejectUnsafeWorkspace(w, workspaceDir, err)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(FilesPutResponse{Path: clean, Size: written})
-}
-
-func fileContentGetHandler(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	workspaceID := query.Get("workspace_id")
-	taskID := query.Get("task_id")
-	executorIncarnation := query.Get("executor_incarnation")
-	pathParam := query.Get("path")
-	if err := workspace.ValidateIdentifier("workspace_id", workspaceID); err != nil {
-		http.Error(w, `{"error": "invalid workspace_id"}`, http.StatusBadRequest)
-		return
-	}
-	if err := workspace.ValidateIdentifier("task_id", taskID); err != nil {
-		http.Error(w, `{"error": "invalid task_id"}`, http.StatusBadRequest)
-		return
-	}
-	clean, err := cleanSandboxRelativePath(pathParam)
-	if err != nil || strings.ContainsRune(pathParam, 0) {
-		http.Error(w, `{"error": "path must be relative and canonical"}`, http.StatusBadRequest)
-		return
-	}
-	if !authorizeActivationRequest(w, r, activationauth.ScopeFiles, activationauth.Identity{
-		WorkspaceID: workspaceID, TaskID: taskID, Generation: 0, FencingToken: 1,
-	}, activationauth.BoundTransferSHA256(http.MethodGet, clean, -1, 0, activationauth.BodySHA256(nil), executorIncarnation)) {
-		return
-	}
-	if !requireExecutorIncarnation(w, executorIncarnation) {
-		return
-	}
-	workspaceDir, err := existingExecutionWorkspace(workspaceID, taskID)
-	if errors.Is(err, os.ErrNotExist) {
-		http.Error(w, `{"error": "task workspace expired"}`, http.StatusGone)
-		return
-	}
-	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	root, err := os.OpenRoot(workspaceDir)
-	if err != nil {
-		http.Error(w, `{"error": "task workspace is unavailable"}`, http.StatusInternalServerError)
-		return
-	}
-	defer func() { _ = root.Close() }()
-	info, err := root.Stat(clean)
-	if err != nil {
-		http.Error(w, `{"error": "file not found"}`, http.StatusNotFound)
-		return
-	}
-	if info.IsDir() {
-		http.Error(w, `{"error": "path is a directory"}`, http.StatusBadRequest)
-		return
-	}
-	file, err := root.Open(clean)
-	if err != nil {
-		http.Error(w, `{"error": "file not found"}`, http.StatusNotFound)
-		return
-	}
-	defer func() { _ = file.Close() }()
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
-	w.Header().Set("X-AgentArea-File-Mode", fmt.Sprintf("%03o", info.Mode().Perm()))
-	if _, err := io.Copy(w, file); err != nil {
-		logger.Error("stream sandbox file", "workspace_id", workspaceID, "task_id", taskID, "path", clean, "error", err)
-	}
-}
-
-func streamedUploadTempName(dir, base string) (string, error) {
-	random := make([]byte, 16)
-	if _, err := rand.Read(random); err != nil {
-		return "", err
-	}
-	name := "." + base + ".agentarea-upload-" + hex.EncodeToString(random)
-	if dir == "." {
-		return name, nil
-	}
-	return filepath.Join(dir, name), nil
-}
-
-// workspaceTaskHandler removes one exact live task directory. Durable inputs
-// and explicitly published artifacts remain in object storage; this endpoint
-// owns only the executor's ephemeral working copy.
-func workspaceTaskHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
-		return
-	}
-	beginRequest()
-	defer endRequest()
-
-	workspaceID := r.URL.Query().Get("workspace_id")
-	taskID := r.URL.Query().Get("task_id")
-	if err := workspace.ValidateIdentifier("workspace_id", workspaceID); err != nil {
-		http.Error(w, `{"error": "invalid workspace_id"}`, http.StatusBadRequest)
-		return
-	}
-	if err := workspace.ValidateIdentifier("task_id", taskID); err != nil {
-		http.Error(w, `{"error": "invalid task_id"}`, http.StatusBadRequest)
-		return
-	}
-	if !authorizeActivationRequest(w, r, activationauth.ScopeCleanup, activationauth.Identity{
-		WorkspaceID: workspaceID, TaskID: taskID, Generation: 0, FencingToken: 1,
-	}, activationauth.BodySHA256(nil)) {
-		return
-	}
-	unlockWorkspace := lockWorkspaceMutation(workspaceID, taskID)
-	defer unlockWorkspace()
-
-	dir, err := executionWorkspacePath(workspaceID, taskID)
-	if err != nil {
-		http.Error(w, `{"error": "invalid task workspace"}`, http.StatusBadRequest)
-		return
-	}
-	if err := os.RemoveAll(dir); err != nil {
-		http.Error(w, `{"error": "failed to delete task workspace"}`, http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func filesPutHandler(w http.ResponseWriter, r *http.Request) {
-	body, err := readActivationRequestBody(r)
-	if err != nil {
-		jsonError(w, fmt.Sprintf("invalid request: %v", err), http.StatusBadRequest)
-		return
-	}
-	var req FilesPutRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, fmt.Sprintf("invalid request: %v", err), http.StatusBadRequest)
-		return
-	}
-	if req.WorkspaceID == "" || req.TaskID == "" {
-		http.Error(w, `{"error": "workspace_id and task_id are required"}`, http.StatusBadRequest)
-		return
-	}
-	if !authorizeActivationRequest(w, r, activationauth.ScopeFiles, activationauth.Identity{
-		WorkspaceID: req.WorkspaceID, TaskID: req.TaskID, Generation: 0, FencingToken: 1,
-	}, activationauth.BodySHA256(body)) {
-		return
-	}
-	if !requireExecutorIncarnation(w, req.ExecutorIncarnation) {
-		return
-	}
-	unlockWorkspace := lockWorkspaceMutation(req.WorkspaceID, req.TaskID)
-	defer unlockWorkspace()
-	clean, err := cleanSandboxRelativePath(req.Path)
-	if err != nil || strings.ContainsRune(req.Path, 0) {
-		http.Error(w, `{"error": "path must be relative and must not contain '..' or NUL"}`, http.StatusBadRequest)
-		return
-	}
-	content, err := base64.StdEncoding.DecodeString(req.ContentBase64)
-	if err != nil {
-		http.Error(w, `{"error": "content_base64 is not valid base64"}`, http.StatusBadRequest)
-		return
-	}
-	if len(content) > maxFileContentBytes {
-		http.Error(w, `{"error": "file content is too large"}`, http.StatusRequestEntityTooLarge)
-		return
-	}
-	if int64(len(content)) > servicePolicy.WorkspaceLimits.MaxFileBytes {
-		http.Error(w, `{"error": "file exceeds workspace per-file limit"}`, http.StatusRequestEntityTooLarge)
-		return
-	}
-	// Resolve the non-root identity before writing. When the service runs as
-	// root the file MUST end up owned by the sandbox uid, otherwise the bash
-	// command (which runs as that uid) could not read or overwrite it.
-	credential, err := sandboxCommandCredential()
-	if err != nil {
-		jsonError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	workspaceDir, err := resolveExecutionWorkspace(req.WorkspaceID, req.TaskID)
-	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := prepareTaskWorkspace(workspaceDir, credential); err != nil {
-		http.Error(w, `{"error": "failed to prepare non-root task workspace"}`, http.StatusInternalServerError)
-		return
-	}
-	root, err := os.OpenRoot(workspaceDir)
-	if err != nil {
-		http.Error(w, `{"error": "task workspace is unavailable"}`, http.StatusInternalServerError)
-		return
-	}
-	defer func() { _ = root.Close() }()
-	if err := ensureWorkspaceFileSlot(root, workspaceDir, clean); err != nil {
-		http.Error(w, `{"error": "workspace file limit exceeded"}`, http.StatusInsufficientStorage)
-		return
-	}
-	if dir := filepath.Dir(clean); dir != "." {
-		if err := mkdirAllOwned(root, dir, ownBySandbox(credential)); err != nil {
-			http.Error(w, `{"error": "failed to create parent directory"}`, http.StatusInternalServerError)
-			return
-		}
-	}
-	if err := root.WriteFile(clean, content, 0o600); err != nil {
-		http.Error(w, `{"error": "failed to write file"}`, http.StatusInternalServerError)
-		return
-	}
-	written, err := root.OpenFile(clean, os.O_RDONLY, 0)
-	if err != nil {
-		http.Error(w, `{"error": "failed to reopen written file"}`, http.StatusInternalServerError)
-		return
-	}
-	if err := prepareOwnedFile(written, credential, 0o600); err != nil {
-		_ = written.Close()
-		http.Error(w, `{"error": "failed to prepare written file ownership"}`, http.StatusInternalServerError)
-		return
-	}
-	_ = written.Close()
-	if err := enforceWorkspaceLimits(workspaceDir, servicePolicy.WorkspaceLimits); err != nil {
-		rejectUnsafeWorkspace(w, workspaceDir, err)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(FilesPutResponse{Path: clean, Size: int64(len(content))})
-}
-
-func filesGetHandler(w http.ResponseWriter, r *http.Request) {
-	body, err := readActivationRequestBody(r)
-	if err != nil {
-		jsonError(w, fmt.Sprintf("invalid request: %v", err), http.StatusBadRequest)
-		return
-	}
-	query := r.URL.Query()
-	workspaceID := query.Get("workspace_id")
-	taskID := query.Get("task_id")
-	executorIncarnation := query.Get("executor_incarnation")
-	if workspaceID == "" || taskID == "" {
-		http.Error(w, `{"error": "workspace_id and task_id are required"}`, http.StatusBadRequest)
-		return
-	}
-	operationPath := ""
-	if query.Has("list") {
-		prefix := query.Get("list")
-		if prefix != "" {
-			cleanPrefix, cleanErr := cleanSandboxRelativePath(prefix)
-			if cleanErr != nil || cleanPrefix != prefix {
-				http.Error(w, `{"error": "list prefix must be relative and canonical"}`, http.StatusBadRequest)
-				return
-			}
-		}
-		operationPath = "list:" + prefix
-	} else {
-		pathParam := query.Get("path")
-		clean, cleanErr := cleanSandboxRelativePath(pathParam)
-		if cleanErr != nil || strings.ContainsRune(pathParam, 0) {
-			http.Error(w, `{"error": "path must be relative and must not contain '..' or NUL"}`, http.StatusBadRequest)
-			return
-		}
-		operationPath = "file:" + clean
-	}
-	if !authorizeActivationRequest(w, r, activationauth.ScopeFiles, activationauth.Identity{
-		WorkspaceID: workspaceID, TaskID: taskID, Generation: 0, FencingToken: 1,
-	}, activationauth.BoundTransferSHA256(http.MethodGet, operationPath, -1, 0, activationauth.BodySHA256(body), executorIncarnation)) {
-		return
-	}
-	if !requireExecutorIncarnation(w, executorIncarnation) {
-		return
-	}
-	workspaceDir, err := existingExecutionWorkspace(workspaceID, taskID)
-	if errors.Is(err, os.ErrNotExist) {
-		http.Error(w, `{"error": "task workspace expired"}`, http.StatusGone)
-		return
-	}
-	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	root, err := os.OpenRoot(workspaceDir)
-	if err != nil {
-		http.Error(w, `{"error": "task workspace is unavailable"}`, http.StatusInternalServerError)
-		return
-	}
-	defer func() { _ = root.Close() }()
-
-	if query.Has("list") {
-		paths, err := listWorkspaceFiles(root, query.Get("list"))
-		if err != nil {
-			jsonError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(FilesListResponse{Paths: paths})
-		return
-	}
-
-	pathParam := query.Get("path")
-	clean, _ := cleanSandboxRelativePath(pathParam)
-	info, err := root.Stat(clean)
-	if err != nil {
-		http.Error(w, `{"error": "file not found"}`, http.StatusNotFound)
-		return
-	}
-	if info.IsDir() {
-		http.Error(w, `{"error": "path is a directory"}`, http.StatusBadRequest)
-		return
-	}
-	if info.Size() > maxFileContentBytes {
-		http.Error(w, `{"error": "file content is too large"}`, http.StatusRequestEntityTooLarge)
-		return
-	}
-	data, err := root.ReadFile(clean)
-	if err != nil {
-		http.Error(w, `{"error": "file not found"}`, http.StatusNotFound)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(FilesGetResponse{
-		ContentBase64: base64.StdEncoding.EncodeToString(data),
-		Size:          int64(len(data)),
-	})
-}
-
-// listWorkspaceFiles returns the relative paths of regular files under prefix.
-// It walks through os.Root so symlinks can never escape the task workspace.
-func listWorkspaceFiles(root *os.Root, prefix string) ([]string, error) {
-	clean := ""
-	if prefix != "" {
-		var err error
-		clean, err = cleanSandboxRelativePath(prefix)
-		if err != nil || strings.ContainsRune(prefix, 0) {
-			return nil, fmt.Errorf("prefix must be relative and must not contain '..' or NUL")
-		}
-		clean = filepath.ToSlash(clean)
-	}
-	paths := make([]string, 0)
-	err := fs.WalkDir(root.FS(), ".", func(name string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry.IsDir() || entry.Type()&fs.ModeSymlink != 0 {
-			return nil
-		}
-		if clean != "" && name != clean && !strings.HasPrefix(name, clean+"/") {
-			return nil
-		}
-		paths = append(paths, name)
-		if len(paths) > servicePolicy.WorkspaceLimits.MaxFiles {
-			return fmt.Errorf("workspace file limit exceeded")
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	sort.Strings(paths)
-	return paths, nil
-}
-
-func workspaceWritebackHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
-		return
-	}
-	beginRequest()
-	defer endRequest()
-	body, err := readActivationRequestBody(r)
-	if err != nil {
-		jsonError(w, fmt.Sprintf("invalid writeback request: %v", err), http.StatusBadRequest)
-		return
-	}
-	var req workspace.WritebackRequest
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
-		jsonError(w, fmt.Sprintf("invalid writeback request: %v", err), http.StatusBadRequest)
-		return
-	}
-	if err := workspace.ValidateIdentifier("workspace_id", req.WorkspaceID); err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := workspace.ValidateIdentifier("task_id", req.TaskID); err != nil || req.BaseGeneration < 0 || req.FencingToken <= 0 {
-		http.Error(w, `{"error": "invalid task/generation/fencing identity"}`, http.StatusBadRequest)
-		return
-	}
-	if !authorizeActivationRequest(w, r, activationauth.ScopeWriteback, activationauth.Identity{
-		WorkspaceID: req.WorkspaceID, TaskID: req.TaskID,
-		Generation: req.BaseGeneration, FencingToken: req.FencingToken,
-	}, activationauth.BodySHA256(body)) {
-		return
-	}
-	workspaceDir, err := resolveExecutionWorkspace(req.WorkspaceID, req.TaskID)
-	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	root, err := os.OpenRoot(workspaceDir)
-	if err != nil {
-		http.Error(w, `{"error": "task workspace is unavailable"}`, http.StatusConflict)
-		return
-	}
-	defer func() { _ = root.Close() }()
-	allowedHost, endpointErr := objectStoreEndpointHost()
-	if endpointErr != nil {
-		http.Error(w, `{"error": "object store endpoint is not configured"}`, http.StatusInternalServerError)
-		return
-	}
-	client := &http.Client{
-		Timeout: 10 * time.Minute,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return fmt.Errorf("workspace transfer redirects are forbidden")
-		},
-	}
-	response := workspace.WritebackResponse{Receipts: make([]workspace.UploadReceipt, 0, len(req.Uploads))}
-	for _, upload := range req.Uploads {
-		clean, pathErr := workspace.NormalizeRelativePath(upload.RelativePath)
-		if pathErr != nil {
-			http.Error(w, `{"error": "invalid output path"}`, http.StatusBadRequest)
-			return
-		}
-		if upload.Deleted {
-			response.Receipts = append(response.Receipts, workspace.UploadReceipt{RelativePath: clean, Deleted: true})
-			continue
-		}
-		parsed, parseErr := url.Parse(upload.URL)
-		if parseErr != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-			http.Error(w, `{"error": "invalid signed output URL"}`, http.StatusBadRequest)
-			return
-		}
-		if parsed.Host != allowedHost {
-			http.Error(w, `{"error": "signed output URL host is not the configured object store"}`, http.StatusForbidden)
-			return
-		}
-		file, openErr := root.Open(clean)
-		if openErr != nil {
-			jsonError(w, fmt.Sprintf("output %s is missing", clean), http.StatusConflict)
-			return
-		}
-		info, statErr := file.Stat()
-		if statErr != nil || !info.Mode().IsRegular() || info.Size() != upload.Size {
-			_ = file.Close()
-			jsonError(w, fmt.Sprintf("output %s size/type changed", clean), http.StatusConflict)
-			return
-		}
-		hasher := sha256.New()
-		if _, hashErr := io.Copy(hasher, file); hashErr != nil || hex.EncodeToString(hasher.Sum(nil)) != upload.SHA256 {
-			_ = file.Close()
-			jsonError(w, fmt.Sprintf("output %s checksum changed", clean), http.StatusConflict)
-			return
-		}
-		_, _ = file.Seek(0, io.SeekStart)
-		putRequest, requestErr := http.NewRequestWithContext(r.Context(), http.MethodPut, parsed.String(), file)
-		if requestErr != nil {
-			_ = file.Close()
-			http.Error(w, `{"error": "failed to create output upload"}`, http.StatusInternalServerError)
-			return
-		}
-		putRequest.ContentLength = upload.Size
-		applyTransferHeaders(putRequest, upload.Headers)
-		putResponse, uploadErr := client.Do(putRequest)
-		_ = file.Close()
-		if uploadErr != nil {
-			jsonError(w, fmt.Sprintf("output %s upload failed", clean), http.StatusBadGateway)
-			return
-		}
-		_ = putResponse.Body.Close()
-		if putResponse.StatusCode < 200 || putResponse.StatusCode >= 300 {
-			jsonError(w, fmt.Sprintf("output %s upload returned status %d", clean, putResponse.StatusCode), http.StatusBadGateway)
-			return
-		}
-		response.Receipts = append(response.Receipts, workspace.UploadReceipt{RelativePath: clean, ObjectURI: upload.ObjectURI})
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(response)
-}
-
-func runtimeManifestHandler(w http.ResponseWriter, r *http.Request) {
+func (s *server) runtimeManifestHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
 		return
 	}
-	manifest, err := runtimeinfo.Load(runtimeinfo.PathFromEnv())
+	manifest, err := runtimeinfo.Load(runtimeinfo.Path(s.manifestPath))
 	if err != nil {
 		http.Error(w, `{"error": "runtime manifest unavailable"}`, http.StatusServiceUnavailable)
 		return
@@ -2037,8 +1222,8 @@ func runtimeManifestHandler(w http.ResponseWriter, r *http.Request) {
 // valid non-root uid/gid; it returns an error rather than falling back to root,
 // because a root command could read PID1's environment (incl. the activation
 // HMAC secret) and forge tokens for any workspace/task.
-func sandboxCommandCredential() (*syscall.Credential, error) {
-	return resolveCommandCredential(os.Geteuid(), os.Getenv("AGENTAREA_SANDBOX_UID"), os.Getenv("AGENTAREA_SANDBOX_GID"))
+func (s *server) sandboxCommandCredential() (*syscall.Credential, error) {
+	return resolveCommandCredential(os.Geteuid(), s.sandboxUID, s.sandboxGID)
 }
 
 // resolveCommandCredential is the pure core of sandboxCommandCredential, split
@@ -2171,11 +1356,8 @@ func checkedIntFromUint32(value uint32) (int, error) {
 // (AGENTAREA_SANDBOX_S3_ENDPOINT, falling back to AGENTAREA_S3_ENDPOINT) and fails
 // hard when unset so a misconfigured runner cannot relay control-plane URLs to
 // an attacker-chosen host.
-func objectStoreEndpointHost() (string, error) {
-	endpoint := os.Getenv("AGENTAREA_SANDBOX_S3_ENDPOINT")
-	if endpoint == "" {
-		endpoint = os.Getenv("AGENTAREA_S3_ENDPOINT")
-	}
+func (s *server) objectStoreEndpointHost() (string, error) {
+	endpoint := s.objectStoreEndpoint
 	if endpoint == "" {
 		return "", fmt.Errorf("object store endpoint is not configured: set AGENTAREA_SANDBOX_S3_ENDPOINT or AGENTAREA_S3_ENDPOINT")
 	}
@@ -2193,106 +1375,6 @@ func applyTransferHeaders(req *http.Request, headers map[string]string) {
 		}
 		req.Header.Set(key, value)
 	}
-}
-
-// beginRequest/endRequest record activity for the idle watchdog.
-func beginRequest() {
-	lastRequestMu.Lock()
-	lastRequest = time.Now()
-	activeRequests++
-	lastRequestMu.Unlock()
-}
-
-func endRequest() {
-	lastRequestMu.Lock()
-	if activeRequests > 0 {
-		activeRequests--
-	}
-	lastRequest = time.Now()
-	lastRequestMu.Unlock()
-}
-
-func loadActivationPolicy() (activationPolicy, error) {
-	maxExecution, err := requiredPositiveIntEnv("AGENTAREA_SANDBOX_MAX_EXEC_SECONDS")
-	if err != nil {
-		return activationPolicy{}, err
-	}
-	maxFiles, err := requiredPositiveIntEnv("AGENTAREA_SANDBOX_MAX_FILES")
-	if err != nil {
-		return activationPolicy{}, err
-	}
-	maxFileBytes, err := requiredPositiveInt64Env("AGENTAREA_SANDBOX_MAX_FILE_SIZE")
-	if err != nil {
-		return activationPolicy{}, err
-	}
-	maxBytes, err := requiredPositiveInt64Env("AGENTAREA_SANDBOX_MAX_TOTAL_SIZE")
-	if err != nil {
-		return activationPolicy{}, err
-	}
-	workspaceLimits := sandboxruntime.WorkspaceLimits{
-		MaxFiles: maxFiles, MaxFileBytes: maxFileBytes, MaxBytes: maxBytes,
-	}
-	if err := workspaceLimits.Validate(); err != nil {
-		return activationPolicy{}, fmt.Errorf("sandbox workspace limits are invalid: %w", err)
-	}
-	idleRaw := os.Getenv("AGENTAREA_SANDBOX_IDLE_SHUTDOWN")
-	if idleRaw == "" {
-		return activationPolicy{}, fmt.Errorf("AGENTAREA_SANDBOX_IDLE_SHUTDOWN is required; use 0s to disable")
-	}
-	idleTimeout, err := time.ParseDuration(idleRaw)
-	if err != nil || idleTimeout < 0 {
-		return activationPolicy{}, fmt.Errorf("AGENTAREA_SANDBOX_IDLE_SHUTDOWN must be a non-negative duration (e.g. 15m, 0s)")
-	}
-	return activationPolicy{
-		MaxExecutionTimeoutSeconds: maxExecution,
-		IdleTimeout:                idleTimeout,
-		WorkspaceLimits:            workspaceLimits,
-	}, nil
-}
-
-func requiredPositiveIntEnv(name string) (int, error) {
-	raw := os.Getenv(name)
-	value, err := strconv.Atoi(raw)
-	if raw == "" || err != nil || value <= 0 {
-		return 0, fmt.Errorf("%s must be a positive integer", name)
-	}
-	return value, nil
-}
-
-func requiredPositiveInt64Env(name string) (int64, error) {
-	raw := os.Getenv(name)
-	value, err := strconv.ParseInt(raw, 10, 64)
-	if raw == "" || err != nil || value <= 0 {
-		return 0, fmt.Errorf("%s must be a positive integer", name)
-	}
-	return value, nil
-}
-
-// startIdleWatchdog launches a goroutine that exits the process when no
-// /execute or /activate request has arrived for AGENTAREA_SANDBOX_IDLE_SHUTDOWN. This
-// bounds the lifetime of an unused activation process. Task state is safe to
-// discard because the canonical workspace is stored in object storage.
-// Disabled when AGENTAREA_SANDBOX_IDLE_SHUTDOWN=0s.
-func startIdleWatchdog(timeout time.Duration) {
-	if timeout == 0 {
-		return
-	}
-	logger.Info("idle watchdog enabled", "timeout_seconds", int(timeout.Seconds()))
-
-	go func() {
-		check := time.NewTicker(30 * time.Second)
-		defer check.Stop()
-		for range check.C {
-			lastRequestMu.Lock()
-			idle := time.Since(lastRequest)
-			active := activeRequests
-			lastRequestMu.Unlock()
-			if active == 0 && idle >= timeout {
-				logger.Info("idle timeout reached, exiting", "idle_seconds", int(idle.Seconds()))
-				os.Exit(0)
-			}
-		}
-	}()
 }
 
 var errWorkspaceQuotaExceeded = errors.New("workspace quota exceeded")
@@ -2383,12 +1465,12 @@ func copyWithContext(ctx context.Context, destination io.Writer, source io.Reade
 // live workspace is over policy (or cannot be audited), keeping it would let a
 // later request continue from untrusted state. Durable inputs remain in object
 // storage and are rehydrated into a fresh sandbox on the next demand.
-func rejectUnsafeWorkspace(w http.ResponseWriter, workspaceDir string, auditErr error) {
+func (s *server) rejectUnsafeWorkspace(w http.ResponseWriter, workspaceDir string, auditErr error) {
 	w.Header().Set("X-Agentarea-Executor-Unsafe", "true")
 	w.Header().Set("Connection", "close")
-	defer executorInvalidator()
+	defer s.invalidateExecutor()
 	if err := os.RemoveAll(workspaceDir); err != nil {
-		logger.Error("discard unsafe workspace", "workspace", workspaceDir, "audit_error", auditErr, "cleanup_error", err)
+		s.logger.Error("discard unsafe workspace", "workspace", workspaceDir, "audit_error", auditErr, "cleanup_error", err)
 		http.Error(w, `{"error": "workspace audit failed and cleanup failed"}`, http.StatusInternalServerError)
 		return
 	}
@@ -2396,33 +1478,33 @@ func rejectUnsafeWorkspace(w http.ResponseWriter, workspaceDir string, auditErr 
 		http.Error(w, `{"error": "workspace quota exceeded; ephemeral workspace discarded"}`, http.StatusInsufficientStorage)
 		return
 	}
-	logger.Error("workspace audit failed", "workspace", workspaceDir, "error", auditErr)
+	s.logger.Error("workspace audit failed", "workspace", workspaceDir, "error", auditErr)
 	http.Error(w, `{"error": "workspace audit failed; ephemeral workspace discarded"}`, http.StatusInternalServerError)
 }
 
-func ensureWorkspaceFileSlot(root *os.Root, workspaceDir, target string) error {
+func (s *server) ensureWorkspaceFileSlot(root *os.Root, workspaceDir, target string) error {
 	if _, err := root.Stat(target); err == nil {
 		return nil
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	usage, err := measureWorkspaceUsage(workspaceDir, servicePolicy.WorkspaceLimits)
+	usage, err := measureWorkspaceUsage(workspaceDir, s.policy.WorkspaceLimits)
 	if err != nil {
 		return err
 	}
-	if usage.Entries >= servicePolicy.WorkspaceLimits.MaxFiles {
-		return fmt.Errorf("%w: sandbox workspace holds %d filesystem entries; policy allows %d", errWorkspaceQuotaExceeded, usage.Entries, servicePolicy.WorkspaceLimits.MaxFiles)
+	if usage.Entries >= s.policy.WorkspaceLimits.MaxFiles {
+		return fmt.Errorf("%w: sandbox workspace holds %d filesystem entries; policy allows %d", errWorkspaceQuotaExceeded, usage.Entries, s.policy.WorkspaceLimits.MaxFiles)
 	}
 	return nil
 }
 
-func resolveExecutionWorkspace(workspaceID, taskID string) (string, error) {
-	dir, err := executionWorkspacePath(workspaceID, taskID)
+func (s *server) resolveExecutionWorkspace(workspaceID, taskID string) (string, error) {
+	dir, err := s.executionWorkspacePath(workspaceID, taskID)
 	if err != nil {
 		return "", err
 	}
 	// Derive the parents from the path executionWorkspacePath already validated
-	// and confined to workspaceRoot, rather than re-joining the raw identifiers.
+	// and confined to s.workspaceRoot, rather than re-joining the raw identifiers.
 	// Rebuilding from the request would put an unchecked value back on a path
 	// that is about to be created and chmod'ed.
 	tasksRoot := filepath.Dir(dir)
@@ -2445,22 +1527,22 @@ func resolveExecutionWorkspace(workspaceID, taskID string) (string, error) {
 	return dir, nil
 }
 
-func executionWorkspacePath(workspaceID, taskID string) (string, error) {
+func (s *server) executionWorkspacePath(workspaceID, taskID string) (string, error) {
 	if err := workspace.ValidateIdentifier("workspace_id", workspaceID); err != nil {
 		return "", err
 	}
 	if err := workspace.ValidateIdentifier("task_id", taskID); err != nil {
 		return "", err
 	}
-	dir := filepath.Join(workspaceRoot, "workspaces", workspaceID, "tasks", taskID)
-	if err := ValidateFilePath(workspaceRoot, dir); err != nil {
+	dir := filepath.Join(s.workspaceRoot, "workspaces", workspaceID, "tasks", taskID)
+	if err := ValidateFilePath(s.workspaceRoot, dir); err != nil {
 		return "", err
 	}
 	return dir, nil
 }
 
-func existingExecutionWorkspace(workspaceID, taskID string) (string, error) {
-	dir, err := executionWorkspacePath(workspaceID, taskID)
+func (s *server) existingExecutionWorkspace(workspaceID, taskID string) (string, error) {
+	dir, err := s.executionWorkspacePath(workspaceID, taskID)
 	if err != nil {
 		return "", err
 	}
@@ -2483,18 +1565,6 @@ func readActivationRequestBody(r *http.Request) ([]byte, error) {
 		return nil, fmt.Errorf("request body exceeds %d bytes", maxActivationRequestBytes)
 	}
 	return body, nil
-}
-
-func authorizeActivationRequest(w http.ResponseWriter, r *http.Request, scope string, identity activationauth.Identity, bodySHA256 string) bool {
-	token, err := activationauth.BearerToken(r.Header.Get("Authorization"))
-	if err == nil {
-		err = activationauth.VerifyFromEnv(token, scope, identity, bodySHA256, time.Now())
-	}
-	if err != nil {
-		http.Error(w, `{"error": "unauthorized"}`, http.StatusUnauthorized)
-		return false
-	}
-	return true
 }
 
 func waitForReady(timeout time.Duration, port int, path string) error {

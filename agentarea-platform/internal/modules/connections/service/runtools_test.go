@@ -71,7 +71,7 @@ type rtFixture struct {
 func newRTFixture() *rtFixture {
 	f := &rtFixture{insts: rtInstances{rows: map[string]domain.Instance{}}, conns: &memConns{rows: map[uuid.UUID]domain.Connection{}},
 		graph: rtGraph{allowed: map[string]bool{}}, ws: uuid.NewString()}
-	f.svc = New(Deps{DB: memDB{}, Instances: f.insts, Connections: f.conns, Graph: f.graph})
+	f.svc = New(Deps{Stamps: NewStamps(), Verdicts: NewVerdicts(), DB: memDB{}, Instances: f.insts, Connections: f.conns, Graph: f.graph})
 	return f
 }
 

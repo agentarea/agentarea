@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -31,14 +32,21 @@ type Envelope struct {
 	Seq       *int64
 }
 
+var errHubClosed = errors.New("runs: the task events hub has shut down")
+
 // taskHub is TaskEventsHub: one tail of tasks.events and one live
-// connection for the process, fanned out to each task's subscribers.
+// connection for the process, fanned out to each task's subscribers. Its
+// loops start on the first subscribe and end when Run's context does.
 type taskHub struct {
 	broker events.Broker
 	log    *slog.Logger
+	ctx    context.Context
+	cancel context.CancelFunc
+	loops  sync.WaitGroup
 
 	mu      sync.Mutex
 	started bool
+	closed  bool
 	live    events.LiveChannels
 	queues  map[string]map[*subscription]bool
 }
@@ -47,6 +55,7 @@ type subscription struct {
 	mu     sync.Mutex
 	items  []Envelope
 	notify chan struct{}
+	ended  chan struct{}
 }
 
 func (s *subscription) put(e Envelope) {
@@ -59,7 +68,7 @@ func (s *subscription) put(e Envelope) {
 	}
 }
 
-// get waits for the next envelope; ok false when ctx ends.
+// get waits for the next envelope; ok false when ctx ends or the hub stops.
 func (s *subscription) get(ctx context.Context) (Envelope, bool) {
 	for {
 		s.mu.Lock()
@@ -73,23 +82,54 @@ func (s *subscription) get(ctx context.Context) (Envelope, bool) {
 		select {
 		case <-ctx.Done():
 			return Envelope{}, false
+		case <-s.ended:
+			return Envelope{}, false
 		case <-s.notify:
 		}
 	}
 }
 
 func newTaskHub(b events.Broker, log *slog.Logger) *taskHub {
-	return &taskHub{broker: b, log: log, queues: map[string]map[*subscription]bool{}}
+	ctx, cancel := context.WithCancel(context.Background())
+	return &taskHub{broker: b, log: log, ctx: ctx, cancel: cancel, queues: map[string]map[*subscription]bool{}}
 }
+
+// Run holds the hub open until ctx ends, then stops its loops, ends every
+// subscription and closes the live connection; later subscribes fail.
+func (h *taskHub) Run(ctx context.Context) error {
+	<-ctx.Done()
+	h.mu.Lock()
+	h.closed = true
+	h.cancel()
+	for _, qs := range h.queues {
+		for s := range qs {
+			close(s.ended)
+		}
+	}
+	h.queues = map[string]map[*subscription]bool{}
+	live := h.live
+	h.mu.Unlock()
+	h.loops.Wait()
+	if live == nil {
+		return nil
+	}
+	return live.Close()
+}
+
+// RunStreamHub holds the task events hub open until ctx ends.
+func (s *Surface) RunStreamHub(ctx context.Context) error { return s.hub.Run(ctx) }
 
 // subscribe registers a queue for taskID, starting the hub on first use.
 func (h *taskHub) subscribe(ctx context.Context, taskID string) (*subscription, func(), error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.closed {
+		return nil, nil, errHubClosed
+	}
 	if err := h.start(ctx); err != nil {
 		return nil, nil, err
 	}
-	sub := &subscription{notify: make(chan struct{}, 1)}
+	sub := &subscription{notify: make(chan struct{}, 1), ended: make(chan struct{})}
 	first := h.queues[taskID] == nil
 	if first {
 		h.queues[taskID] = map[*subscription]bool{}
@@ -104,6 +144,9 @@ func (h *taskHub) subscribe(ctx context.Context, taskID string) (*subscription, 
 	return sub, func() {
 		h.mu.Lock()
 		defer h.mu.Unlock()
+		if h.closed {
+			return
+		}
 		qs := h.queues[taskID]
 		delete(qs, sub)
 		if len(qs) == 0 {
@@ -123,23 +166,46 @@ func (h *taskHub) start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	live, err := h.broker.OpenLive(context.WithoutCancel(ctx))
+	live, err := h.broker.OpenLive(h.ctx)
 	if err != nil {
 		return err
 	}
 	h.live, h.started = live, true
-	go h.runTail(cursor)
-	go h.runLive(live)
+	h.loops.Add(2)
+	go func() {
+		defer h.loops.Done()
+		h.runTail(h.ctx, cursor)
+	}()
+	go func() {
+		defer h.loops.Done()
+		h.runLive(h.ctx, live)
+	}()
 	return nil
 }
 
-func (h *taskHub) runTail(cursor string) {
-	ctx := context.Background()
-	for {
+// retryWait waits d before a retry; false when ctx ended first.
+func retryWait(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
+}
+
+func (h *taskHub) runTail(ctx context.Context, cursor string) {
+	for ctx.Err() == nil {
 		next, msgs, err := h.broker.Tail(ctx, events.TaskEvents, cursor, hubTailBlock, 500)
+		if ctx.Err() != nil {
+			return
+		}
 		if err != nil {
 			h.log.Error("Tail of tasks.events failed; retrying", "error", err.Error())
-			time.Sleep(time.Second)
+			if !retryWait(ctx, time.Second) {
+				return
+			}
 			continue
 		}
 		cursor = next
@@ -154,13 +220,17 @@ func (h *taskHub) runTail(cursor string) {
 	}
 }
 
-func (h *taskHub) runLive(live events.LiveChannels) {
-	ctx := context.Background()
-	for {
+func (h *taskHub) runLive(ctx context.Context, live events.LiveChannels) {
+	for ctx.Err() == nil {
 		channel, fields, ok, err := live.Next(ctx, time.Second)
+		if ctx.Err() != nil {
+			return
+		}
 		if err != nil {
 			h.log.Error("Live task signals failed; retrying", "error", err.Error())
-			time.Sleep(time.Second)
+			if !retryWait(ctx, time.Second) {
+				return
+			}
 			continue
 		}
 		if !ok {

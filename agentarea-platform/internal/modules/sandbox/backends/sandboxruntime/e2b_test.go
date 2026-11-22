@@ -316,7 +316,7 @@ func TestE2BAndCubeUseTheSameCompatibleContract(t *testing.T) {
 			server := httptest.NewServer(mux)
 			defer server.Close()
 
-			provider, err := NewE2BProvider(testE2BConfig(providerName, server.URL))
+			provider, err := NewE2BProvider(testE2BConfig(providerName, server.URL), http.DefaultTransport)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -377,7 +377,7 @@ func TestE2BMultipartUploadDoesNotDeadlockOnEarlyRejection(t *testing.T) {
 	config := testE2BConfig("e2b", server.URL)
 	config.APIKey = "test"
 	config.AllowInternetAccess = false
-	provider, err := NewE2BProvider(config)
+	provider, err := NewE2BProvider(config, http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -399,7 +399,7 @@ func TestE2BArtifactInspectionFailureIsAResultNotAnExecutionFailure(t *testing.T
 	}))
 	defer server.Close()
 
-	provider, err := NewE2BProvider(testE2BConfig("e2b", server.URL))
+	provider, err := NewE2BProvider(testE2BConfig("e2b", server.URL), http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -419,12 +419,12 @@ func TestE2BArtifactInspectionFailureIsAResultNotAnExecutionFailure(t *testing.T
 func TestE2BProviderFailsClosedOnMissingCredentialsOrTemplate(t *testing.T) {
 	noKey := testE2BConfig("e2b", "https://api.e2b.app")
 	noKey.APIKey = ""
-	if _, err := NewE2BProvider(noKey); err == nil {
+	if _, err := NewE2BProvider(noKey, http.DefaultTransport); err == nil {
 		t.Fatal("missing API key unexpectedly accepted")
 	}
 	noTemplate := testE2BConfig("cube", "https://cube.example")
 	noTemplate.Template = ""
-	provider, err := NewE2BProvider(noTemplate)
+	provider, err := NewE2BProvider(noTemplate, http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -445,7 +445,7 @@ func TestE2BProviderRefusesUndeclaredOrWeakIsolation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			config := testE2BConfig("e2b", "https://api.e2b.app")
 			config.Isolation = isolation
-			_, err := NewE2BProvider(config)
+			_, err := NewE2BProvider(config, http.DefaultTransport)
 			if !errors.Is(err, ErrIsolationUnavailable) {
 				t.Fatalf("NewE2BProvider() error = %v, want isolation_unavailable", err)
 			}
@@ -453,7 +453,7 @@ func TestE2BProviderRefusesUndeclaredOrWeakIsolation(t *testing.T) {
 	}
 	noPath := testE2BConfig("e2b", "https://api.e2b.app")
 	noPath.AttestationPath = ""
-	if _, err := NewE2BProvider(noPath); err == nil {
+	if _, err := NewE2BProvider(noPath, http.DefaultTransport); err == nil {
 		t.Fatal("missing attestation path unexpectedly accepted")
 	}
 }
@@ -500,7 +500,7 @@ func TestE2BCreateRefusesSandboxThatCannotAttestIsolation(t *testing.T) {
 			server := httptest.NewServer(mux)
 			defer server.Close()
 
-			provider, err := NewE2BProvider(testE2BConfig("e2b", server.URL))
+			provider, err := NewE2BProvider(testE2BConfig("e2b", server.URL), http.DefaultTransport)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -539,7 +539,7 @@ func TestE2BAuditsLiveWorkspaceUsage(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	provider, err := NewE2BProvider(testE2BConfig("e2b", server.URL))
+	provider, err := NewE2BProvider(testE2BConfig("e2b", server.URL), http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -572,7 +572,7 @@ func TestE2BInventoryScopesToWorkspaceWithoutLeakingTokens(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewE2BProvider(testE2BConfig("e2b", server.URL))
+	provider, err := NewE2BProvider(testE2BConfig("e2b", server.URL), http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -626,7 +626,7 @@ func TestE2BResolveProvisioningUsesFilteredPaginatedInventory(t *testing.T) {
 		}]`))
 	}))
 	defer server.Close()
-	provider, err := NewE2BProvider(testE2BConfig("e2b", server.URL))
+	provider, err := NewE2BProvider(testE2BConfig("e2b", server.URL), http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -643,7 +643,7 @@ func TestE2BCloudSandboxHostComesFromTheAPIDomain(t *testing.T) {
 	cfg := testE2BConfig("e2b", "https://api.e2b.app")
 	cfg.SandboxURL = ""
 	cfg.AllowInsecure = false
-	p, err := NewE2BProvider(cfg)
+	p, err := NewE2BProvider(cfg, http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -657,7 +657,7 @@ func TestE2BCloudSandboxHostComesFromTheAPIDomain(t *testing.T) {
 
 	self := testE2BConfig("e2b", "https://e2b.internal:3000")
 	self.SandboxURL = ""
-	p, err = NewE2BProvider(self)
+	p, err = NewE2BProvider(self, http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -687,7 +687,7 @@ func TestE2BWorkspaceThatAlreadyExistsIsReused(t *testing.T) {
 			})
 			server := httptest.NewServer(mux)
 			defer server.Close()
-			p, err := NewE2BProvider(testE2BConfig("e2b", server.URL))
+			p, err := NewE2BProvider(testE2BConfig("e2b", server.URL), http.DefaultTransport)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -720,5 +720,35 @@ func TestE2BFilesystemEntryReadsEnvdProtobufJSON(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(`{"entry":{"size":"4x"}}`), &none); err == nil {
 		t.Error("a malformed size was accepted")
+	}
+}
+
+type recordingTransport struct{ paths []string }
+
+func (r *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.paths = append(r.paths, req.URL.Path)
+	return http.DefaultTransport.RoundTrip(req)
+}
+
+func TestE2BProviderSendsLifecycleAndEnvdThroughTheInjectedTransport(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+	transport := &recordingTransport{}
+	provider, err := NewE2BProvider(testE2BConfig("e2b", server.URL), transport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = provider.Delete(context.Background(), &Session{ID: "sbx-1"})
+	if download, err := provider.OpenFile(context.Background(), &Session{ID: "sbx-1", Data: map[string]string{"envd_url": server.URL}}, "/workspace/a.txt"); err == nil {
+		_ = download.Content.Close()
+	}
+	if strings.Join(transport.paths, " ") != "/sandboxes/sbx-1 /filesystem.Filesystem/Stat" {
+		t.Fatalf("requests through the injected transport = %v, want the lifecycle delete and the envd stat", transport.paths)
+	}
+}
+
+func TestE2BProviderRefusesAMissingTransport(t *testing.T) {
+	if _, err := NewE2BProvider(testE2BConfig("e2b", "https://api.e2b.app"), nil); err == nil {
+		t.Fatal("E2B provider without an outbound transport unexpectedly built")
 	}
 }

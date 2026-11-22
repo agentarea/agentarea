@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"sync"
 )
 
 // ToolAction is the verdict of the tool decision point.
@@ -39,49 +38,108 @@ type ToolNames struct {
 
 // DecideToolPolicy is decide_tool_policy, the one runtime decision point:
 // default allow; a denied match, an allowlist the tool falls outside of, or an
-// approval rule subtract. A nil policy allows.
+// approval rule subtract. A nil policy allows. A caller deciding many tools
+// under one policy compiles it once with CompileToolRules.
 func DecideToolPolicy(p *Policy, tool string, n ToolNames) ToolDecision {
+	return CompileToolRules(p).Decide(tool, n)
+}
+
+// ToolRules are a policy's tool patterns compiled once.
+type ToolRules struct {
+	denied, allowed, escalation []*regexp.Regexp
+	allowlist, approveAll       bool
+	approvers                   []string
+	byTool                      []ToolApprovers
+	byToolPatterns              []*regexp.Regexp
+}
+
+// CompileToolRules compiles p's tool patterns as p is now; a nil policy allows.
+func CompileToolRules(p *Policy) *ToolRules {
+	r := &ToolRules{}
+	if p == nil {
+		return r
+	}
+	if p.Tools != nil {
+		r.denied = compileAll(p.Tools.Denied)
+		r.allowed, r.allowlist = compileAll(p.Tools.Allowed), p.Tools.Allowed != nil
+	}
+	if a := p.Approval; a != nil {
+		r.approveAll = a.RequiresHumanApproval != nil && *a.RequiresHumanApproval
+		r.escalation = compileAll(a.EscalationRules)
+		r.approvers, r.byTool = a.Approvers, a.ApproversByTool
+		r.byToolPatterns = make([]*regexp.Regexp, len(a.ApproversByTool))
+		for i, e := range a.ApproversByTool {
+			r.byToolPatterns[i] = CompileFnmatch(e.Tool)
+		}
+	}
+	return r
+}
+
+// Decide is DecideToolPolicy under the compiled policy.
+func (r *ToolRules) Decide(tool string, n ToolNames) ToolDecision {
 	var names []string
 	if n.NameAllows {
 		names = append(names, tool)
 	}
 	names = append(names, n.Aliases...)
 	restricting := append(append([]string{tool}, n.Aliases...), n.Restricting...)
-	if p != nil && p.Tools != nil {
-		if AnyNameMatches(restricting, p.Tools.Denied) {
-			return ToolDecision{ToolDeny, fmt.Sprintf("tool '%s' is denied by policy", tool)}
-		}
-		if p.Tools.Allowed != nil && !AnyNameMatches(names, p.Tools.Allowed) {
-			return ToolDecision{ToolDeny, fmt.Sprintf("tool '%s' is not permitted by the policy allowlist", tool)}
-		}
+	if anyMatches(restricting, r.denied) {
+		return ToolDecision{ToolDeny, fmt.Sprintf("tool '%s' is denied by policy", tool)}
 	}
-	if p != nil && p.Approval != nil {
-		a := p.Approval
-		if (a.RequiresHumanApproval != nil && *a.RequiresHumanApproval) || AnyNameMatches(restricting, a.EscalationRules) {
-			return ToolDecision{ToolRequireApproval, fmt.Sprintf("tool '%s' requires approval", tool)}
-		}
+	if r.allowlist && !anyMatches(names, r.allowed) {
+		return ToolDecision{ToolDeny, fmt.Sprintf("tool '%s' is not permitted by the policy allowlist", tool)}
+	}
+	if r.approveAll || anyMatches(restricting, r.escalation) {
+		return ToolDecision{ToolRequireApproval, fmt.Sprintf("tool '%s' requires approval", tool)}
 	}
 	return ToolDecision{ToolAllow, "allowed by task policy"}
 }
 
-// ToolMatchesAny reports whether name matches any pattern (fnmatch).
-func ToolMatchesAny(name string, patterns []string) bool {
-	for _, p := range patterns {
-		if Fnmatch(name, p) {
-			return true
+// Approvers is ApproversForTool under the compiled policy.
+func (r *ToolRules) Approvers(tool string, aliases []string) []string {
+	names := append([]string{tool}, aliases...)
+	for _, n := range names {
+		for _, e := range r.byTool {
+			if e.Tool == n && len(e.Refs) > 0 {
+				return append([]string{}, e.Refs...)
+			}
+		}
+	}
+	for i, e := range r.byTool {
+		if len(e.Refs) > 0 && anyMatches(names, r.byToolPatterns[i:i+1]) {
+			return append([]string{}, e.Refs...)
+		}
+	}
+	return append([]string{}, r.approvers...)
+}
+
+func compileAll(patterns []string) []*regexp.Regexp {
+	out := make([]*regexp.Regexp, len(patterns))
+	for i, p := range patterns {
+		out[i] = CompileFnmatch(p)
+	}
+	return out
+}
+
+func anyMatches(names []string, res []*regexp.Regexp) bool {
+	for _, re := range res {
+		for _, n := range names {
+			if re.MatchString(n) {
+				return true
+			}
 		}
 	}
 	return false
 }
 
+// ToolMatchesAny reports whether name matches any pattern (fnmatch).
+func ToolMatchesAny(name string, patterns []string) bool {
+	return AnyNameMatches([]string{name}, patterns)
+}
+
 // AnyNameMatches reports whether any name matches any pattern.
 func AnyNameMatches(names, patterns []string) bool {
-	for _, n := range names {
-		if ToolMatchesAny(n, patterns) {
-			return true
-		}
-	}
-	return false
+	return anyMatches(names, compileAll(patterns))
 }
 
 // CallerCanApprove is caller_can_approve: empty approvers lets any member
@@ -108,45 +166,27 @@ func ApproversForTool(p *Policy, tool string, aliases []string) []string {
 	if p == nil || p.Approval == nil {
 		return []string{}
 	}
-	a := p.Approval
-	names := append([]string{tool}, aliases...)
-	for _, n := range names {
-		for _, e := range a.ApproversByTool {
-			if e.Tool == n && len(e.Refs) > 0 {
-				return append([]string{}, e.Refs...)
-			}
-		}
-	}
-	for _, e := range a.ApproversByTool {
-		if len(e.Refs) > 0 && AnyNameMatches(names, []string{e.Tool}) {
-			return append([]string{}, e.Refs...)
-		}
-	}
-	return append([]string{}, a.Approvers...)
+	return CompileToolRules(p).Approvers(tool, aliases)
 }
 
 // Fnmatch is Python's fnmatch.fnmatch on POSIX: *, ?, [seq] and [!seq],
-// case sensitive, * matching any character including / and :.
+// case sensitive, * matching any character including / and :. A caller
+// matching one pattern against many names compiles it once with CompileFnmatch.
 func Fnmatch(name, pattern string) bool {
-	return compiled(pattern).MatchString(name)
+	return CompileFnmatch(pattern).MatchString(name)
 }
-
-//nolint:gochecknoglobals // a cache of compiled patterns, like fnmatch's lru_cache
-var patterns sync.Map
 
 // neverMatches is fnmatch's (?!): RE2 has no lookahead.
 const neverMatches = `[^\x00-\x{10FFFF}]`
 
-func compiled(pattern string) *regexp.Regexp {
-	if re, ok := patterns.Load(pattern); ok {
-		return re.(*regexp.Regexp)
-	}
+// CompileFnmatch is pattern as the regexp Fnmatch matches with; a pattern that
+// does not compile matches nothing.
+func CompileFnmatch(pattern string) *regexp.Regexp {
 	re, err := regexp.Compile(fnmatchRegexp(pattern))
 	if err != nil {
 		slog.Warn("tool pattern does not compile; it matches nothing", "pattern", pattern, "error", err)
-		re = regexp.MustCompile(`^` + neverMatches + `$`)
+		return regexp.MustCompile(`^` + neverMatches + `$`)
 	}
-	patterns.Store(pattern, re)
 	return re
 }
 

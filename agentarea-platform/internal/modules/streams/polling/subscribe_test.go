@@ -7,6 +7,9 @@ import (
 	"testing"
 	"time"
 
+	metricnoop "go.opentelemetry.io/otel/metric/noop"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
+
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
 )
 
@@ -60,7 +63,7 @@ func newMCPManager(src *fakeSources, mcp *fakeMCP) *Manager {
 		}
 		return map[string]string{"signing_secret": mcpSecret}, nil
 	}
-	return NewManager(Deps{
+	m, err := NewManager(Deps{
 		Sources:     src,
 		Credentials: credentials,
 		Transports:  Transports{},
@@ -71,7 +74,13 @@ func newMCPManager(src *fakeSources, mcp *fakeMCP) *Manager {
 		WebhookURL:  webhookURL,
 		Interval:    30 * time.Second,
 		MaxPollers:  10,
+		Meter:       metricnoop.NewMeterProvider().Meter("test"),
+		Tracer:      tracenoop.NewTracerProvider().Tracer("test"),
 	})
+	if err != nil {
+		panic(err)
+	}
+	return m
 }
 
 func TestAnMCPWebhookSourceIsSubscribedWithItsURLAndIssuedSecret(t *testing.T) {

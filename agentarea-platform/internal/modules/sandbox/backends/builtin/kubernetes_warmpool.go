@@ -34,7 +34,7 @@ func (k *Kubernetes) SetTaskLifecycleObserver(observer warmpool.LifecycleObserve
 
 // GetWarmPoolClient returns a warm pool client for the current namespace.
 func (k *Kubernetes) GetWarmPoolClient() *warmpool.Client {
-	client := warmpool.NewClient(k.clientset, k.namespace, k.taskLeaseTTL)
+	client := warmpool.NewClient(k.clientset, k.namespace, k.taskLeaseTTL, k.executor)
 	client.SetLifecycleObserver(k.taskObserver)
 	return client
 }

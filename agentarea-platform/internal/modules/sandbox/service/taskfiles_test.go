@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/netguard"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/service/servicetest"
 )
@@ -409,5 +410,24 @@ func TestTaskFileErrorIs(t *testing.T) {
 	err := error(&api.TaskFileError{Status: 404, Detail: "Artifact not found"})
 	if !errors.Is(err, &api.TaskFileError{Status: 404, Detail: "Artifact not found"}) || errors.Is(err, api.ErrSandboxExpired) {
 		t.Fatal("Is mismatch")
+	}
+}
+
+func TestManagerCallsTakeTheInternalTransport(t *testing.T) {
+	var asked []netguard.Destination
+	newFixture(t, Deps{Out: directClients{asked: &asked}})
+	if len(asked) != 1 || asked[0] != netguard.Internal {
+		t.Fatalf("destinations asked for = %v, want only Internal", asked)
+	}
+}
+
+func TestManagerCallsFailWithoutOutboundClients(t *testing.T) {
+	m := newFakeManager(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	svc := New(Deps{Manager: Manager{URL: m.srv.URL, FileSecret: strings.Repeat("f", 32)}})
+	if _, err := svc.TaskFiles().Artifacts(context.Background(), wsID, taskID); err == nil {
+		t.Fatal("manager call without outbound clients unexpectedly succeeded")
+	}
+	if len(m.calls) != 0 {
+		t.Fatalf("manager reached without outbound clients: %v", m.calls)
 	}
 }

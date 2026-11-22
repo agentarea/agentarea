@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/durable"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/lifecycle"
 
 	governanceapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/governance/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/api"
@@ -57,6 +58,12 @@ func NewSurface(d SurfaceDeps) *Surface {
 
 // Tasks starts runs for other modules (route_or_submit_task).
 func (m *Surface) Tasks() api.Tasks { return m.s }
+
+// StreamHub is the task events hub the task streams read; a process that
+// serves them runs it.
+func (m *Surface) StreamHub() lifecycle.Component {
+	return lifecycle.Loop("task events hub", m.s.RunStreamHub)
+}
 
 // Serve is the module's HTTP surface.
 func (m *Surface) Serve() serve.Module {

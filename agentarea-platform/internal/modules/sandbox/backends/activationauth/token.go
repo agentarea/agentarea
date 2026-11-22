@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 )
@@ -62,14 +61,6 @@ type claims struct {
 	Nonce        string `json:"nonce"`
 }
 
-func SecretFromEnv() ([]byte, error) {
-	secret := []byte(os.Getenv(SecretEnv))
-	if len(secret) < 32 {
-		return nil, fmt.Errorf("%s must contain at least 32 bytes", SecretEnv)
-	}
-	return secret, nil
-}
-
 func BodySHA256(body []byte) string {
 	digest := sha256.Sum256(body)
 	return hex.EncodeToString(digest[:])
@@ -92,10 +83,10 @@ func BoundTransferSHA256(method, path string, size int64, mode uint32, contentSH
 	return BodySHA256([]byte(strings.ToUpper(method) + "\x00" + path + "\x00" + fmt.Sprintf("%d", size) + "\x00" + fmt.Sprintf("%o", mode) + "\x00" + contentSHA256 + "\x00" + executorIncarnation))
 }
 
-func SignFromEnv(scope string, identity Identity, bodySHA256 string, now time.Time) (string, error) {
-	secret, err := SecretFromEnv()
-	if err != nil {
-		return "", err
+// SignDefault signs with secret, the value of SecretEnv, for DefaultTTL.
+func SignDefault(secret []byte, scope string, identity Identity, bodySHA256 string, now time.Time) (string, error) {
+	if len(secret) < 32 {
+		return "", fmt.Errorf("%s must contain at least 32 bytes", SecretEnv)
 	}
 	return Sign(secret, scope, identity, bodySHA256, now, DefaultTTL)
 }
@@ -137,14 +128,6 @@ func Sign(secret []byte, scope string, identity Identity, bodySHA256 string, now
 	}
 	encoded := base64.RawURLEncoding.EncodeToString(payload)
 	return encoded + "." + sign(encoded, secret), nil
-}
-
-func VerifyFromEnv(token, scope string, identity Identity, bodySHA256 string, now time.Time) error {
-	secret, err := SecretFromEnv()
-	if err != nil {
-		return err
-	}
-	return Verify(token, secret, scope, identity, bodySHA256, now)
 }
 
 func Verify(token string, secret []byte, scope string, identity Identity, bodySHA256 string, now time.Time) error {

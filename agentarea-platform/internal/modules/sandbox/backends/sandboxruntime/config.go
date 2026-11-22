@@ -2,11 +2,11 @@ package sandboxruntime
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"os"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -14,12 +14,13 @@ import (
 	opensandbox "github.com/alibaba/OpenSandbox/sdks/sandbox/go"
 	redis "github.com/redis/go-redis/v9"
 
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/config"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/supervisor/runtimeinfo"
 )
 
-// NewFromEnv selects exactly one sandbox data plane for this deployment.
-// Python callers never send a provider name; changing providers is an
-// operator-side configuration change.
+// ControlPolicy is the provider-neutral lease and record policy. Python
+// callers never send a provider name; changing providers is an operator-side
+// configuration change.
 type ControlPolicy struct {
 	TaskLeaseTTL                time.Duration
 	TaskIdleTTL                 time.Duration
@@ -36,31 +37,56 @@ type WorkspaceLimits struct {
 	MaxBytes     int64
 }
 
-func LoadControlPolicyFromEnv() (ControlPolicy, error) {
-	leaseTTL, err := requiredDurationEnv("AGENTAREA_SANDBOX_LEASE_TTL")
-	if err != nil {
-		return ControlPolicy{}, err
+// Config is the runtime's environment: the control policy, the workspace data
+// plane and, for an external provider, how to reach it.
+type Config struct {
+	Policy      ControlPolicy
+	Workspace   WorkspaceProvider
+	RedisPrefix string
+	External    ExternalConfig
+}
+
+// ExternalConfig is read only when the provider is opensandbox, e2b or cube.
+// Lease, timeout, storage and internet fields of OpenSandbox and E2B are set
+// from the policy and the workspace limits when the runtime is built.
+type ExternalConfig struct {
+	Manifest      *runtimeinfo.Manifest
+	AllowInternet bool
+	OpenSandbox   OpenSandboxConfig
+	E2B           E2BConfig
+}
+
+// LoadConfig reads the runtime of provider (AGENTAREA_SANDBOX_PROVIDER,
+// lowercased); l reports what is missing or malformed.
+func LoadConfig(l *config.Loader, provider string) Config {
+	c := Config{
+		Policy:      LoadControlPolicy(l),
+		Workspace:   LoadWorkspaceProvider(l),
+		RedisPrefix: l.StringEnv("AGENTAREA_SANDBOX_REDIS_PREFIX", ""),
 	}
-	idleTTL, err := requiredNonNegativeDurationEnv("AGENTAREA_SANDBOX_IDLE_TTL")
-	if err != nil {
-		return ControlPolicy{}, err
+	switch provider {
+	case "opensandbox", "e2b", "cube":
+		c.External = loadExternalConfig(l, provider)
 	}
-	provisioningTimeout, err := requiredDurationEnv("AGENTAREA_SANDBOX_PROVISION_TIMEOUT")
-	if err != nil {
-		return ControlPolicy{}, err
-	}
-	sessionTTL, err := requiredDurationEnv("AGENTAREA_SANDBOX_SESSION_TTL")
-	if err != nil {
-		return ControlPolicy{}, err
-	}
+	return c
+}
+
+// LoadControlPolicy reads the lease and record policy; none has a default.
+func LoadControlPolicy(l *config.Loader) ControlPolicy {
+	leaseTTL, okLease := requiredDuration(l, "AGENTAREA_SANDBOX_LEASE_TTL", false)
+	idleTTL, okIdle := requiredDuration(l, "AGENTAREA_SANDBOX_IDLE_TTL", true)
+	provisioningTimeout, okProvision := requiredDuration(l, "AGENTAREA_SANDBOX_PROVISION_TIMEOUT", false)
+	sessionTTL, okSession := requiredDuration(l, "AGENTAREA_SANDBOX_SESSION_TTL", false)
 	policy := ControlPolicy{
 		TaskLeaseTTL: leaseTTL, TaskIdleTTL: idleTTL,
 		ProviderProvisioningTimeout: provisioningTimeout, SessionRecordTTL: sessionTTL,
 	}
-	if err := policy.validate(); err != nil {
-		return ControlPolicy{}, err
+	if okLease && okIdle && okProvision && okSession {
+		if err := policy.validate(); err != nil {
+			l.Fail("AGENTAREA_SANDBOX_SESSION_TTL", err)
+		}
 	}
-	return policy, nil
+	return policy
 }
 
 func (policy ControlPolicy) validate() error {
@@ -90,30 +116,83 @@ func (policy ControlPolicy) validate() error {
 	return nil
 }
 
-// LoadWorkspaceProviderFromEnv resolves the workspace data plane at composition
-// time. There is no default: running without a declared workspace provider
-// would silently drop task inputs and published artifacts.
-func LoadWorkspaceProviderFromEnv() (WorkspaceProvider, error) {
-	switch value := os.Getenv("AGENTAREA_SANDBOX_STORAGE"); value {
+// LoadWorkspaceProvider reads the workspace data plane. There is no default:
+// running without a declared workspace provider would silently drop task
+// inputs and published artifacts.
+func LoadWorkspaceProvider(l *config.Loader) WorkspaceProvider {
+	switch value := l.StringEnv("AGENTAREA_SANDBOX_STORAGE", ""); value {
 	case string(WorkspaceProviderS3):
-		return WorkspaceProviderS3, nil
+		return WorkspaceProviderS3
 	case "":
-		return "", fmt.Errorf("AGENTAREA_SANDBOX_STORAGE is required; supported value: s3")
+		l.Fail("AGENTAREA_SANDBOX_STORAGE", errors.New("is required; supported value: s3"))
 	default:
-		return "", fmt.Errorf("unsupported AGENTAREA_SANDBOX_STORAGE=%q; supported value: s3", value)
+		l.Fail("AGENTAREA_SANDBOX_STORAGE", fmt.Errorf("unsupported value %q; supported value: s3", value))
 	}
+	return ""
 }
 
-func NewFromEnv(_ context.Context, builtin ManagedRuntime, redisClient *redis.Client, defaultProvider string, policy ControlPolicy, workspaceLimits WorkspaceLimits) (ManagedRuntime, string, error) {
+func loadExternalConfig(l *config.Loader, provider string) ExternalConfig {
+	c := ExternalConfig{Manifest: loadExternalManifest(l), AllowInternet: requiredBool(l, "AGENTAREA_SANDBOX_ALLOW_INTERNET")}
+	switch provider {
+	case "opensandbox":
+		allowInsecure := strictBool(l, "AGENTAREA_SANDBOX_OSB_INSECURE", false)
+		allowWeakDev := strictBool(l, "AGENTAREA_SANDBOX_OSB_WEAK_ISOLATION", false)
+		apiKey := l.StringEnv("AGENTAREA_SANDBOX_OSB_API_KEY", "")
+		if apiKey == "" && !allowInsecure {
+			l.Fail("AGENTAREA_SANDBOX_OSB_API_KEY", errors.New("is required unless AGENTAREA_SANDBOX_OSB_INSECURE=true"))
+		}
+		useProxy := strictBool(l, "AGENTAREA_SANDBOX_OSB_SERVER_PROXY", true)
+		secureAccess := strictBool(l, "AGENTAREA_SANDBOX_OSB_SECURE_ACCESS", true)
+		retryConfig := opensandbox.DefaultRetryConfig()
+		c.OpenSandbox = OpenSandboxConfig{
+			Connection: opensandbox.ConnectionConfig{
+				Domain:         l.StringEnv("AGENTAREA_SANDBOX_OSB_URL", ""),
+				APIKey:         apiKey,
+				AuthHeader:     l.StringEnv("AGENTAREA_SANDBOX_OSB_AUTH_HEADER", "OPEN-SANDBOX-API-KEY"),
+				UseServerProxy: useProxy,
+				Retry:          &retryConfig,
+			},
+			Image:                 l.StringEnv("AGENTAREA_SANDBOX_OSB_IMAGE", ""),
+			Entrypoint:            stringSliceJSON(l, "AGENTAREA_SANDBOX_OSB_ENTRYPOINT"),
+			ResourceCPU:           l.StringEnv("AGENTAREA_SANDBOX_CPU", "500m"),
+			ResourceMemory:        l.StringEnv("AGENTAREA_SANDBOX_MEMORY", "512Mi"),
+			ResourceRequestCPU:    l.StringEnv("AGENTAREA_SANDBOX_CPU_REQUEST", ""),
+			ResourceRequestMemory: l.StringEnv("AGENTAREA_SANDBOX_MEMORY_REQUEST", ""),
+			StorageLimit:          l.StringEnv("AGENTAREA_SANDBOX_DISK_LIMIT", ""),
+			StorageRequest:        l.StringEnv("AGENTAREA_SANDBOX_DISK_REQUEST", ""),
+			Isolation:             l.StringEnv("AGENTAREA_SANDBOX_OSB_ISOLATION", ""),
+			RuntimeIdentity:       l.StringEnv("AGENTAREA_SANDBOX_OSB_IDENTITY", ""),
+			AllowWeakDev:          allowWeakDev,
+			AllowInsecure:         allowInsecure,
+			SecureAccess:          &secureAccess,
+			EgressMode:            l.StringEnv("AGENTAREA_SANDBOX_OSB_EGRESS", ""),
+		}
+	case "e2b", "cube":
+		prefix := "AGENTAREA_SANDBOX_" + strings.ToUpper(provider) + "_"
+		c.E2B = E2BConfig{
+			ProviderName:    provider,
+			APIURL:          l.StringEnv(prefix+"URL", ""),
+			APIKey:          l.StringEnv(prefix+"API_KEY", ""),
+			SandboxURL:      l.StringEnv(prefix+"SANDBOX_URL", ""),
+			Template:        l.StringEnv(prefix+"TEMPLATE", ""),
+			AllowInsecure:   strictBool(l, prefix+"INSECURE", false),
+			Isolation:       l.StringEnv(prefix+"ISOLATION", ""),
+			RuntimeIdentity: l.StringEnv(prefix+"IDENTITY", ""),
+			AttestationPath: l.StringEnv(prefix+"ATTESTATION", DefaultIsolationAttestationPath),
+		}
+	}
+	return c
+}
+
+// New selects exactly one sandbox data plane: builtin for a built-in
+// provider, else the external provider cfg configures, reached over transport.
+func New(builtin ManagedRuntime, redisClient *redis.Client, providerName string, cfg Config, workspaceLimits WorkspaceLimits, transport http.RoundTripper) (ManagedRuntime, string, error) {
+	policy := cfg.Policy
 	if err := policy.validate(); err != nil {
 		return nil, "", fmt.Errorf("sandbox control policy is invalid: %w", err)
 	}
 	if workspaceLimits.MaxFiles <= 0 || workspaceLimits.MaxFileBytes <= 0 || workspaceLimits.MaxBytes < workspaceLimits.MaxFileBytes {
 		return nil, "", fmt.Errorf("sandbox workspace limits are invalid")
-	}
-	providerName := strings.ToLower(strings.TrimSpace(os.Getenv("AGENTAREA_SANDBOX_PROVIDER")))
-	if providerName == "" {
-		providerName = defaultProvider
 	}
 	switch providerName {
 	case "kubernetes", "docker", "agentarea":
@@ -125,104 +204,48 @@ func NewFromEnv(_ context.Context, builtin ManagedRuntime, redisClient *redis.Cl
 	default:
 		return nil, "", fmt.Errorf("unsupported AGENTAREA_SANDBOX_PROVIDER=%q; expected kubernetes, docker, opensandbox, e2b, or cube", providerName)
 	}
+	if transport == nil {
+		return nil, "", fmt.Errorf("sandbox provider %s needs an outbound transport", providerName)
+	}
 
-	store, err := NewSessionStore(redisClient, os.Getenv("AGENTAREA_SANDBOX_REDIS_PREFIX"), policy.SessionRecordTTL)
+	store, err := NewSessionStore(redisClient, cfg.RedisPrefix, policy.SessionRecordTTL)
 	if err != nil {
 		return nil, "", err
 	}
-	manifest, err := loadExternalManifest()
-	if err != nil {
-		return nil, "", err
-	}
-	allowInternet, err := requiredBoolEnv("AGENTAREA_SANDBOX_ALLOW_INTERNET")
-	if err != nil {
-		return nil, "", err
+	external := cfg.External
+	if external.Manifest == nil {
+		return nil, "", fmt.Errorf("external sandbox provider requires AGENTAREA_SANDBOX_MANIFEST_PATH or AGENTAREA_SANDBOX_MANIFEST_JSON")
 	}
 
 	var provider ExternalProvider
 	switch providerName {
 	case "opensandbox":
-		allowInsecure, err := strictBoolEnv("AGENTAREA_SANDBOX_OSB_INSECURE", false)
+		osb := external.OpenSandbox
+		osb.Connection.RequestTimeout = policy.ProviderProvisioningTimeout
+		guarded, err := withNISTPeerMinimums(transport)
 		if err != nil {
 			return nil, "", err
 		}
-		allowWeakDev, err := strictBoolEnv("AGENTAREA_SANDBOX_OSB_WEAK_ISOLATION", false)
-		if err != nil {
-			return nil, "", err
-		}
-		apiKey := os.Getenv("AGENTAREA_SANDBOX_OSB_API_KEY")
-		if apiKey == "" && !allowInsecure {
-			return nil, "", fmt.Errorf("AGENTAREA_SANDBOX_OSB_API_KEY is required unless AGENTAREA_SANDBOX_OSB_INSECURE=true")
-		}
-		useProxy, err := strictBoolEnv("AGENTAREA_SANDBOX_OSB_SERVER_PROXY", true)
-		if err != nil {
-			return nil, "", err
-		}
-		secureAccess, err := strictBoolEnv("AGENTAREA_SANDBOX_OSB_SECURE_ACCESS", true)
-		if err != nil {
-			return nil, "", err
-		}
-		entrypoint, err := stringSliceJSONEnv("AGENTAREA_SANDBOX_OSB_ENTRYPOINT")
-		if err != nil {
-			return nil, "", err
-		}
-		retryConfig := opensandbox.DefaultRetryConfig()
-		provider, err = NewOpenSandboxProvider(OpenSandboxConfig{
-			Connection: opensandbox.ConnectionConfig{
-				Domain:         os.Getenv("AGENTAREA_SANDBOX_OSB_URL"),
-				APIKey:         apiKey,
-				AuthHeader:     getenv("AGENTAREA_SANDBOX_OSB_AUTH_HEADER", "OPEN-SANDBOX-API-KEY"),
-				UseServerProxy: useProxy,
-				RequestTimeout: policy.ProviderProvisioningTimeout,
-				Retry:          &retryConfig,
-			},
-			Image:                 os.Getenv("AGENTAREA_SANDBOX_OSB_IMAGE"),
-			Entrypoint:            entrypoint,
-			ResourceCPU:           getenv("AGENTAREA_SANDBOX_CPU", "500m"),
-			ResourceMemory:        getenv("AGENTAREA_SANDBOX_MEMORY", "512Mi"),
-			ResourceStorage:       strconv.FormatInt(workspaceLimits.MaxBytes, 10),
-			ResourceRequestCPU:    os.Getenv("AGENTAREA_SANDBOX_CPU_REQUEST"),
-			ResourceRequestMemory: os.Getenv("AGENTAREA_SANDBOX_MEMORY_REQUEST"),
-			StorageLimit:          os.Getenv("AGENTAREA_SANDBOX_DISK_LIMIT"),
-			StorageRequest:        os.Getenv("AGENTAREA_SANDBOX_DISK_REQUEST"),
-			LeaseTTL:              policy.TaskLeaseTTL,
-			Isolation:             os.Getenv("AGENTAREA_SANDBOX_OSB_ISOLATION"),
-			RuntimeIdentity:       os.Getenv("AGENTAREA_SANDBOX_OSB_IDENTITY"),
-			AllowWeakDev:          allowWeakDev,
-			AllowInsecure:         allowInsecure,
-			SecureAccess:          &secureAccess,
-			EgressMode:            os.Getenv("AGENTAREA_SANDBOX_OSB_EGRESS"),
-			AllowInternetAccess:   allowInternet,
-		})
+		osb.Connection.HTTPClient = &http.Client{Transport: guarded, Timeout: policy.ProviderProvisioningTimeout}
+		osb.ResourceStorage = strconv.FormatInt(workspaceLimits.MaxBytes, 10)
+		osb.LeaseTTL = policy.TaskLeaseTTL
+		osb.AllowInternetAccess = external.AllowInternet
+		provider, err = NewOpenSandboxProvider(osb)
 		if err != nil {
 			return nil, "", err
 		}
 	case "e2b", "cube":
-		prefix := "AGENTAREA_SANDBOX_" + strings.ToUpper(providerName) + "_"
-		allowInsecure, err := strictBoolEnv(prefix+"INSECURE", false)
-		if err != nil {
-			return nil, "", err
-		}
-		provider, err = NewE2BProvider(E2BConfig{
-			ProviderName:        providerName,
-			APIURL:              os.Getenv(prefix + "URL"),
-			APIKey:              os.Getenv(prefix + "API_KEY"),
-			SandboxURL:          os.Getenv(prefix + "SANDBOX_URL"),
-			Template:            os.Getenv(prefix + "TEMPLATE"),
-			LeaseTTL:            policy.TaskLeaseTTL,
-			RequestTimeout:      policy.ProviderProvisioningTimeout,
-			AllowInternetAccess: allowInternet,
-			AllowInsecure:       allowInsecure,
-			Isolation:           os.Getenv(prefix + "ISOLATION"),
-			RuntimeIdentity:     os.Getenv(prefix + "IDENTITY"),
-			AttestationPath:     getenv(prefix+"ATTESTATION", DefaultIsolationAttestationPath),
-		})
+		e2b := external.E2B
+		e2b.LeaseTTL = policy.TaskLeaseTTL
+		e2b.RequestTimeout = policy.ProviderProvisioningTimeout
+		e2b.AllowInternetAccess = external.AllowInternet
+		provider, err = NewE2BProvider(e2b, transport)
 		if err != nil {
 			return nil, "", err
 		}
 	}
 
-	manager, err := NewManager(provider, store, policy.TaskLeaseTTL, policy.TaskIdleTTL, manifest, workspaceLimits)
+	manager, err := NewManager(provider, store, policy.TaskLeaseTTL, policy.TaskIdleTTL, external.Manifest, workspaceLimits)
 	if err != nil {
 		return nil, "", err
 	}
@@ -232,26 +255,31 @@ func NewFromEnv(_ context.Context, builtin ManagedRuntime, redisClient *redis.Cl
 	return manager, providerName, nil
 }
 
-func loadExternalManifest() (*runtimeinfo.Manifest, error) {
-	manifestPath := os.Getenv("AGENTAREA_SANDBOX_MANIFEST_PATH")
-	manifestJSON := os.Getenv("AGENTAREA_SANDBOX_MANIFEST_JSON")
+func loadExternalManifest(l *config.Loader) *runtimeinfo.Manifest {
+	manifestPath := l.StringEnv("AGENTAREA_SANDBOX_MANIFEST_PATH", "")
+	manifestJSON := l.StringEnv("AGENTAREA_SANDBOX_MANIFEST_JSON", "")
 	if manifestPath != "" && manifestJSON != "" {
-		return nil, fmt.Errorf("AGENTAREA_SANDBOX_MANIFEST_PATH and AGENTAREA_SANDBOX_MANIFEST_JSON are mutually exclusive")
+		l.Fail("AGENTAREA_SANDBOX_MANIFEST_PATH", errors.New("and AGENTAREA_SANDBOX_MANIFEST_JSON are mutually exclusive"))
+		return nil
 	}
 	if manifestPath == "" && manifestJSON == "" {
-		return nil, fmt.Errorf("external sandbox provider requires AGENTAREA_SANDBOX_MANIFEST_PATH or AGENTAREA_SANDBOX_MANIFEST_JSON")
+		l.Fail("AGENTAREA_SANDBOX_MANIFEST_PATH", errors.New("or AGENTAREA_SANDBOX_MANIFEST_JSON is required by an external sandbox provider"))
+		return nil
 	}
 	var manifest *runtimeinfo.Manifest
 	var err error
+	name := "AGENTAREA_SANDBOX_MANIFEST_PATH"
 	if manifestPath != "" {
 		manifest, err = runtimeinfo.Load(manifestPath)
 	} else {
+		name = "AGENTAREA_SANDBOX_MANIFEST_JSON"
 		manifest, err = decodeManifestJSON(manifestJSON)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("sandbox runtime manifest: %w", err)
+		l.Fail(name, fmt.Errorf("sandbox runtime manifest: %w", err))
+		return nil
 	}
-	return manifest, nil
+	return manifest
 }
 
 func decodeManifestJSON(value string) (*runtimeinfo.Manifest, error) {
@@ -270,69 +298,56 @@ func decodeManifestJSON(value string) (*runtimeinfo.Manifest, error) {
 	return &manifest, nil
 }
 
-func requiredDurationEnv(name string) (time.Duration, error) {
-	value := os.Getenv(name)
-	if value == "" {
-		return 0, fmt.Errorf("%s is required", name)
+// requiredDuration is a Go duration that must be set and positive, or
+// non-negative when zero is allowed.
+func requiredDuration(l *config.Loader, name string, zero bool) (time.Duration, bool) {
+	value, ok := l.OptionalEnv(name)
+	if !ok {
+		l.Fail(name, config.ErrMissing)
+		return 0, false
 	}
 	duration, err := time.ParseDuration(value)
-	if err != nil || duration <= 0 {
-		return 0, fmt.Errorf("%s must be a positive duration", name)
+	switch {
+	case err != nil || duration < 0:
+	case duration > 0 || zero:
+		return duration, true
 	}
-	return duration, nil
+	if zero {
+		l.Fail(name, errors.New("must be a non-negative duration"))
+	} else {
+		l.Fail(name, errors.New("must be a positive duration"))
+	}
+	return 0, false
 }
 
-func requiredNonNegativeDurationEnv(name string) (time.Duration, error) {
-	value := os.Getenv(name)
-	if value == "" {
-		return 0, fmt.Errorf("%s is required", name)
-	}
-	duration, err := time.ParseDuration(value)
-	if err != nil || duration < 0 {
-		return 0, fmt.Errorf("%s must be a non-negative duration", name)
-	}
-	return duration, nil
-}
-
-func strictBoolEnv(name string, fallback bool) (bool, error) {
-	value := os.Getenv(name)
-	if value == "" {
-		return fallback, nil
+func strictBool(l *config.Loader, name string, fallback bool) bool {
+	value, ok := l.OptionalEnv(name)
+	if !ok {
+		return fallback
 	}
 	parsed, err := strconv.ParseBool(value)
 	if err != nil {
-		return false, fmt.Errorf("%s must be true or false", name)
+		l.Fail(name, errors.New("must be true or false"))
 	}
-	return parsed, nil
+	return parsed
 }
 
-func requiredBoolEnv(name string) (bool, error) {
-	value := os.Getenv(name)
-	if value == "" {
-		return false, fmt.Errorf("%s is required", name)
+func requiredBool(l *config.Loader, name string) bool {
+	if _, ok := l.OptionalEnv(name); !ok {
+		l.Fail(name, config.ErrMissing)
+		return false
 	}
-	parsed, err := strconv.ParseBool(value)
-	if err != nil {
-		return false, fmt.Errorf("%s must be true or false", name)
-	}
-	return parsed, nil
+	return strictBool(l, name, false)
 }
 
-func stringSliceJSONEnv(name string) ([]string, error) {
-	value := os.Getenv(name)
-	if value == "" {
-		return nil, nil
+func stringSliceJSON(l *config.Loader, name string) []string {
+	value, ok := l.OptionalEnv(name)
+	if !ok {
+		return nil
 	}
 	var result []string
 	if err := json.Unmarshal([]byte(value), &result); err != nil {
-		return nil, fmt.Errorf("%s must be a JSON string array: %w", name, err)
+		l.Fail(name, fmt.Errorf("must be a JSON string array: %w", err))
 	}
-	return result, nil
-}
-
-func getenv(name, fallback string) string {
-	if value := os.Getenv(name); value != "" {
-		return value
-	}
-	return fallback
+	return result
 }

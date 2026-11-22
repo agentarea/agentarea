@@ -241,7 +241,7 @@ func TestValidateConnectionRefusesUnsafeURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := New(Deps{Out: verifyOut{g: &netguard.Guard{Policy: policy}, rt: http.DefaultTransport}})
+	s := New(Deps{Stamps: NewStamps(), Verdicts: NewVerdicts(), Out: verifyOut{g: &netguard.Guard{Policy: policy}, rt: http.DefaultTransport}})
 	ws, _ := scope.NewWorkspace(uuid.NewString(), "")
 	got := s.ValidateConnection(context.Background(), ws, "http://127.0.0.1:9/mcp", nil, "")
 	if got.Valid || len(got.Errors) != 1 || got.Errors[0] != "URL is not allowed" {
@@ -259,7 +259,7 @@ func TestValidateConnectionListsTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := New(Deps{Out: verifyOut{g: &netguard.Guard{Policy: policy}, rt: http.DefaultTransport}})
+	s := New(Deps{Stamps: NewStamps(), Verdicts: NewVerdicts(), Out: verifyOut{g: &netguard.Guard{Policy: policy}, rt: http.DefaultTransport}})
 	ws, _ := scope.NewWorkspace(uuid.NewString(), "")
 	got := s.ValidateConnection(context.Background(), ws, srv.URL+"/mcp", map[string]string{"X-Key": "k"}, "")
 	if !got.Valid || len(got.Tools) != 1 || got.AuthMethods != nil {

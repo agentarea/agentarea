@@ -9,6 +9,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/blob"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/config"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/netguard"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/handlers"
@@ -60,8 +61,9 @@ type Deps struct {
 	APIURL string
 	// Workspace admits the caller into /v1/workspaces/{workspace}.
 	Workspace func(http.Handler) http.Handler
-	HTTP      *http.Client
-	Log       *slog.Logger
+	// Out reaches the sandbox manager.
+	Out netguard.Clients
+	Log *slog.Logger
 }
 
 // Module is sandbox, constructed once per process; a role picks which of its
@@ -71,11 +73,15 @@ type Module struct {
 	svc *service.Service
 }
 
-// New constructs the module.
+// New constructs the module; it panics without Deps.Out, which no role may
+// leave unset.
 func New(d Deps) *Module {
+	if d.Out == nil {
+		panic("sandbox: Deps.Out is required to reach the sandbox manager")
+	}
 	return &Module{d: d, svc: service.New(service.Deps{
 		DB: d.DB, Events: store.Events{}, Projects: lateProjects(d.Projects), Blob: d.Blob, Harness: d.Harness, Bucket: d.Config.Bucket,
-		Manager: d.Config.Manager, HTTP: d.HTTP, APIURL: d.APIURL, Log: d.Log,
+		Manager: d.Config.Manager, Out: d.Out, APIURL: d.APIURL, Log: d.Log,
 	})}
 }
 

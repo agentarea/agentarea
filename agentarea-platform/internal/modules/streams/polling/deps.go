@@ -7,6 +7,9 @@ import (
 	"log/slog"
 	"time"
 
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
 )
 
@@ -94,4 +97,7 @@ type Deps struct {
 	MaxPollers int
 	Now        func() time.Time
 	Log        *slog.Logger
+	// Meter and Tracer are the OTel instruments and spans of the manager; both are required.
+	Meter  metric.Meter
+	Tracer trace.Tracer
 }

@@ -25,8 +25,11 @@ type stamp struct {
 	value map[string]any
 }
 
-//nolint:gochecknoglobals // one queue per process, as Python's; it outlives a Service rebuilt by Use
-var stamps = make(chan stamp, stampQueueSize)
+// Stamps is the queue of last-dispatch stamps; the module owns one, so it outlives a Service rebuilt by Use.
+type Stamps struct{ q chan stamp }
+
+// NewStamps makes an empty queue.
+func NewStamps() *Stamps { return &Stamps{q: make(chan stamp, stampQueueSize)} }
 
 // stampDispatch queues the outcome of a call to id; errMsg marks it failed.
 // It never blocks: a full queue drops the stamp.
@@ -39,7 +42,7 @@ func (s *Service) stampDispatch(id string, errMsg *string) {
 	v := map[string]any{"schema_version": domain.VerificationSchema, "status": status,
 		"at": s.d.Now().UTC().Format("2006-01-02T15:04:05.999999-07:00"), "error": e}
 	select {
-	case stamps <- stamp{id: id, value: v}:
+	case s.d.Stamps.q <- stamp{id: id, value: v}:
 	default:
 		s.d.Log.Warn("dispatch stamp dropped: the queue is full", "instance_id", id)
 	}
@@ -71,7 +74,7 @@ func (s *Service) FlushDispatchStamps(ctx context.Context) int {
 loop:
 	for taken < stampBatch {
 		select {
-		case st := <-stamps:
+		case st := <-s.d.Stamps.q:
 			taken++
 			id, err := uuid.Parse(st.id)
 			if err != nil {

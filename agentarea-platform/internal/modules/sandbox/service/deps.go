@@ -8,6 +8,7 @@ import (
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/blob"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/netguard"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
 	projectsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/projects/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
@@ -46,8 +47,9 @@ type Deps struct {
 	// Bucket names Blob in the s3:// URIs task manifests carry.
 	Bucket  string
 	Manager Manager
-	// HTTP reaches the sandbox manager; nil is a client without a timeout.
-	HTTP *http.Client
+	// Out reaches the sandbox manager, an internal service; without it every
+	// manager call fails.
+	Out netguard.Clients
 	// APIURL is AGENTAREA_API_URL, the base of file download URLs.
 	APIURL string
 	// Now is the wall clock events are stamped with; nil is time.Now.
@@ -61,18 +63,16 @@ type Deps struct {
 
 // Service is the sandbox module's use cases.
 type Service struct {
-	d   Deps
-	art *Artifacts
-	ws  *Workspaces
+	d    Deps
+	http *http.Client
+	art  *Artifacts
+	ws   *Workspaces
 }
 
 // New builds the service.
 func New(d Deps) *Service {
 	if d.Now == nil {
 		d.Now = time.Now
-	}
-	if d.HTTP == nil {
-		d.HTTP = &http.Client{}
 	}
 	if d.PollInterval == 0 {
 		d.PollInterval = 2 * time.Second
@@ -84,6 +84,9 @@ func New(d Deps) *Service {
 		d.NewHex = randomHex
 	}
 	s := &Service{d: d}
+	if d.Out != nil {
+		s.http = &http.Client{Transport: d.Out.Transport(netguard.Internal)}
+	}
 	s.art = &Artifacts{Blob: d.Blob, Record: s.recordEvent, RecordMove: s.recordMove, Now: d.Now}
 	s.ws = &Workspaces{Blob: d.Blob, Bucket: d.Bucket, Record: s.recordEvent, Now: d.Now, NewHex: d.NewHex, Limits: DefaultLimits()}
 	return s

@@ -100,10 +100,11 @@ func (s *Service) ConnectionTools(ctx context.Context, c authn.Caller, connectio
 		return nil, err
 	}
 	conn := v.Connection
+	pdp := governanceapi.CompileToolRules(&policy)
 	out := []OperationTool{}
 	for _, op := range connectionOperations(conn) {
 		tool, names := OpenAPIToolNames(conn.ID, conn.Name, op.Operation)
-		if d := governanceapi.DecideToolPolicy(&policy, tool, names); d.Action != governanceapi.ToolDeny {
+		if d := pdp.Decide(tool, names); d.Action != governanceapi.ToolDeny {
 			out = append(out, op)
 		}
 	}

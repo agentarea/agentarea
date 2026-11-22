@@ -6,11 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"syscall"
 	"testing"
-
-	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/activationauth"
 )
 
 type ownRecorder struct {
@@ -144,19 +141,18 @@ func TestFileWritesHandNestedParentsToTheSandboxUser(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip("ownership is handed over only when the service runs as root")
 	}
-	workspaceRoot = t.TempDir()
-	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
-	t.Setenv("AGENTAREA_SANDBOX_UID", "10001")
-	t.Setenv("AGENTAREA_SANDBOX_GID", "10001")
+	s := newTestServer(t)
+	s.sandboxUID = "10001"
+	s.sandboxGID = "10001"
 
-	if w := putFile(t, "ws", "task-owned", "inputs/attachments/a.txt", []byte("a")); w.Code != http.StatusOK {
+	if w := putFile(t, s, "ws", "task-owned", "inputs/attachments/a.txt", []byte("a")); w.Code != http.StatusOK {
 		t.Fatalf("put returned %d: %s", w.Code, w.Body.String())
 	}
-	if w := putFileStream(t, "ws", "task-owned", "outputs/report/b.bin", []byte("b")); w.Code != http.StatusOK {
+	if w := putFileStream(t, s, "ws", "task-owned", "outputs/report/b.bin", []byte("b")); w.Code != http.StatusOK {
 		t.Fatalf("stream put returned %d: %s", w.Code, w.Body.String())
 	}
 
-	task := filepath.Join(workspaceRoot, "workspaces", "ws", "tasks", "task-owned")
+	task := filepath.Join(s.workspaceRoot, "workspaces", "ws", "tasks", "task-owned")
 	for _, rel := range []string{"inputs", "inputs/attachments", "outputs", "outputs/report"} {
 		info, err := os.Lstat(filepath.Join(task, rel))
 		if err != nil {

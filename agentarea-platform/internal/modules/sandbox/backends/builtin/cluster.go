@@ -9,10 +9,13 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// Cluster is the client of the cluster the warm pool runs in.
+type Cluster = kubernetes.Interface
+
 // Clientset reaches the cluster the warm pool runs in. A configured kubeconfig
 // wins and failing to load it is fatal; empty means this process's cluster,
 // else the ambient kubeconfig.
-func Clientset(kubeconfig string, log *slog.Logger) (kubernetes.Interface, error) {
+func Clientset(kubeconfig string, log *slog.Logger) (Cluster, error) {
 	cfg, err := clusterConfig(kubeconfig, log)
 	if err != nil {
 		return nil, err

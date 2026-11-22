@@ -83,9 +83,10 @@ func Load(path string) (*Manifest, error) {
 	return &manifest, nil
 }
 
-func PathFromEnv() string {
-	if path := os.Getenv("AGENTAREA_SANDBOX_MANIFEST_PATH"); path != "" {
-		return path
+// Path is configured (AGENTAREA_SANDBOX_MANIFEST_PATH), or DefaultManifestPath when empty.
+func Path(configured string) string {
+	if configured != "" {
+		return configured
 	}
 	return DefaultManifestPath
 }

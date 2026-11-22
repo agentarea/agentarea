@@ -9,6 +9,9 @@ import (
 	"testing"
 	"time"
 
+	metricnoop "go.opentelemetry.io/otel/metric/noop"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
+
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
 )
 
@@ -164,7 +167,7 @@ func (f *fixedTransport) Fetch(_ context.Context, fetch Fetch) (Result, error) {
 }
 
 func newManager(src *fakeSources, pub *fakePublisher, caller *fakeCaller, tr Transport) *Manager {
-	return NewManager(Deps{
+	m, err := NewManager(Deps{
 		Sources:     src,
 		Credentials: noCredentials,
 		Transports:  Transports{"fixed": tr},
@@ -174,7 +177,13 @@ func newManager(src *fakeSources, pub *fakePublisher, caller *fakeCaller, tr Tra
 		WebhookURL:  webhookURL,
 		Interval:    time.Hour,
 		MaxPollers:  10,
+		Meter:       metricnoop.NewMeterProvider().Meter("test"),
+		Tracer:      tracenoop.NewTracerProvider().Tracer("test"),
 	})
+	if err != nil {
+		panic(err)
+	}
+	return m
 }
 
 func pollSource() Source {

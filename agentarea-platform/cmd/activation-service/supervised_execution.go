@@ -27,14 +27,6 @@ type supervisedCommandRequest struct {
 
 type supervisedCommandRunner func(context.Context, supervisedCommandRequest) (execsupervisor.Status, error)
 
-//nolint:gochecknoglobals // seams the tests replace
-var (
-	runSandboxCommand   = runAttestedSandboxCommand
-	executorInvalidator = func() {
-		_ = syscall.Kill(os.Getpid(), syscall.SIGTERM)
-	}
-)
-
 func runAttestedSandboxCommand(ctx context.Context, request supervisedCommandRequest) (execsupervisor.Status, error) {
 	if request.TimeoutSeconds <= 0 || request.MaxFileBytes <= 0 || request.CommandPath == "" || request.WorkspaceDir == "" {
 		return execsupervisor.Status{}, fmt.Errorf("supervised command request is incomplete")

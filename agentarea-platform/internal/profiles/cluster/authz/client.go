@@ -17,7 +17,6 @@ import (
 	"strings"
 	"time"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
@@ -104,15 +103,18 @@ type Client struct {
 var _ kauthz.Graph = (*Client)(nil)
 
 // NewClient builds a Client for storeID; modelID may be empty (the store's
-// latest model answers). rt nil is http.DefaultTransport.
-func NewClient(baseURL, storeID, modelID, token string, timeout time.Duration, rt http.RoundTripper) (*Client, error) {
+// latest model answers). rt nil is http.DefaultTransport; meter is required.
+func NewClient(baseURL, storeID, modelID, token string, timeout time.Duration, rt http.RoundTripper, meter metric.Meter) (*Client, error) {
 	if strings.TrimSpace(storeID) == "" {
 		return nil, errors.New("OpenFGA store_id is required when OpenFGA is enabled")
 	}
 	if timeout <= 0 {
 		return nil, errors.New("OpenFGA timeout must be positive")
 	}
-	hist, err := otel.Meter("agentarea.authz").Float64Histogram(
+	if meter == nil {
+		return nil, errors.New("OpenFGA client needs a meter")
+	}
+	hist, err := meter.Float64Histogram(
 		"agentarea.authz.duration",
 		metric.WithUnit("s"),
 		metric.WithDescription("Time spent answering authorization questions, by operation."),

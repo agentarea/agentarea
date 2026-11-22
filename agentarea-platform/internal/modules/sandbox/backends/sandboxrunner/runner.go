@@ -13,6 +13,7 @@ import (
 
 	redis "github.com/redis/go-redis/v9"
 
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/config"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/sandboxcontrol"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/sandboxplacement"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/warmpool"
@@ -194,12 +195,12 @@ func (r *Runner) Run(ctx context.Context) error {
 				if groupErr := r.ensureConsumerGroup(ctx); groupErr != nil {
 					r.logger.Error("sandbox runner consumer group recreate failed",
 						slog.String("error", groupErr.Error()))
-					time.Sleep(time.Second)
+					pause(ctx, time.Second)
 				}
 				continue
 			}
 			r.logger.Error("sandbox runner read failed", slog.String("error", err.Error()))
-			time.Sleep(time.Second)
+			pause(ctx, time.Second)
 			continue
 		}
 
@@ -212,6 +213,16 @@ func (r *Runner) Run(ctx context.Context) error {
 				}
 			}
 		}
+	}
+}
+
+// pause waits d or until ctx ends, whichever comes first.
+func pause(ctx context.Context, d time.Duration) {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+	case <-t.C:
 	}
 }
 
@@ -561,17 +572,19 @@ func eventPayload(message redis.XMessage) (string, error) {
 	}
 }
 
-func ConfigFromEnv() Config {
+// LoadConfig reads the runner's stream consumer settings. A malformed
+// duration or count keeps its default, as it always has.
+func LoadConfig(l *config.Loader) Config {
 	return Config{
-		RequestStream:  getenv("AGENTAREA_SANDBOX_REQUEST_STREAM", sandboxcontrol.DefaultExecutionRequestStream),
-		EventStream:    getenv("AGENTAREA_SANDBOX_EVENT_STREAM", sandboxcontrol.DefaultExecutionEventStream),
-		Group:          getenv("AGENTAREA_SANDBOX_CONSUMER_GROUP", "agentarea-sandbox-runners"),
-		Consumer:       getenv("AGENTAREA_SANDBOX_CONSUMER_NAME", defaultConsumerName()),
-		Block:          durationEnv("AGENTAREA_SANDBOX_BLOCK_TIMEOUT", 5*time.Second),
-		BatchSize:      int64(intEnv("AGENTAREA_SANDBOX_BATCH_SIZE", 1)),
-		PendingIdle:    durationEnv("AGENTAREA_SANDBOX_PENDING_IDLE", 2*time.Minute),
-		ReclaimEvery:   durationEnv("AGENTAREA_SANDBOX_RECLAIM_INTERVAL", 15*time.Second),
-		HeartbeatEvery: durationEnv("AGENTAREA_SANDBOX_PENDING_HEARTBEAT", 30*time.Second),
+		RequestStream:  l.StringEnv("AGENTAREA_SANDBOX_REQUEST_STREAM", sandboxcontrol.DefaultExecutionRequestStream),
+		EventStream:    l.StringEnv("AGENTAREA_SANDBOX_EVENT_STREAM", sandboxcontrol.DefaultExecutionEventStream),
+		Group:          l.StringEnv("AGENTAREA_SANDBOX_CONSUMER_GROUP", "agentarea-sandbox-runners"),
+		Consumer:       l.StringEnv("AGENTAREA_SANDBOX_CONSUMER_NAME", defaultConsumerName()),
+		Block:          lenientDuration(l, "AGENTAREA_SANDBOX_BLOCK_TIMEOUT", 5*time.Second),
+		BatchSize:      int64(lenientCount(l, "AGENTAREA_SANDBOX_BATCH_SIZE", 1)),
+		PendingIdle:    lenientDuration(l, "AGENTAREA_SANDBOX_PENDING_IDLE", 2*time.Minute),
+		ReclaimEvery:   lenientDuration(l, "AGENTAREA_SANDBOX_RECLAIM_INTERVAL", 15*time.Second),
+		HeartbeatEvery: lenientDuration(l, "AGENTAREA_SANDBOX_PENDING_HEARTBEAT", 30*time.Second),
 	}
 }
 
@@ -583,16 +596,9 @@ func defaultConsumerName() string {
 	return hostname
 }
 
-func getenv(name, fallback string) string {
-	if value := os.Getenv(name); value != "" {
-		return value
-	}
-	return fallback
-}
-
-func durationEnv(name string, fallback time.Duration) time.Duration {
-	value := os.Getenv(name)
-	if value == "" {
+func lenientDuration(l *config.Loader, name string, fallback time.Duration) time.Duration {
+	value, ok := l.OptionalEnv(name)
+	if !ok {
 		return fallback
 	}
 	duration, err := time.ParseDuration(value)
@@ -602,9 +608,9 @@ func durationEnv(name string, fallback time.Duration) time.Duration {
 	return duration
 }
 
-func intEnv(name string, fallback int) int {
-	value := os.Getenv(name)
-	if value == "" {
+func lenientCount(l *config.Loader, name string, fallback int) int {
+	value, ok := l.OptionalEnv(name)
+	if !ok {
 		return fallback
 	}
 	parsed, err := strconv.Atoi(value)

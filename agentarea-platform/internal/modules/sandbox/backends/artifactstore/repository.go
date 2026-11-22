@@ -39,16 +39,11 @@ var ErrArtifactNotFound = errors.New("artifact_not_found")
 var ErrArtifactQuotaExceeded = errors.New("artifact_quota_exceeded")
 
 type Config struct {
-	Bucket         string
-	Prefix         string
-	Region         string
-	Endpoint       string
-	ForcePathStyle bool
-	MaxBytes       int64
-	MaxCount       int
-	MaxTotalBytes  int64
-	AccessKey      string
-	SecretKey      string
+	Bucket        string
+	Prefix        string
+	MaxBytes      int64
+	MaxCount      int
+	MaxTotalBytes int64
 }
 
 // ObjectStoreClient is the S3 surface the repository uses.
@@ -78,34 +73,12 @@ type Artifact struct {
 
 func ConfigFromWorkspace(workspaceConfig workspace.RepositoryConfig) Config {
 	return Config{
-		Bucket:         workspaceConfig.Bucket,
-		Prefix:         workspaceConfig.Prefix,
-		Region:         workspaceConfig.Region,
-		Endpoint:       workspaceConfig.Endpoint,
-		ForcePathStyle: workspaceConfig.ForcePathStyle,
-		MaxBytes:       workspaceConfig.MaxFileBytes,
-		MaxCount:       workspaceConfig.MaxFiles,
-		MaxTotalBytes:  workspaceConfig.MaxBytes,
-		AccessKey:      workspaceConfig.AccessKey,
-		SecretKey:      workspaceConfig.SecretKey,
+		Bucket:        workspaceConfig.Bucket,
+		Prefix:        workspaceConfig.Prefix,
+		MaxBytes:      workspaceConfig.MaxFileBytes,
+		MaxCount:      workspaceConfig.MaxFiles,
+		MaxTotalBytes: workspaceConfig.MaxBytes,
 	}
-}
-
-func NewFromConfig(ctx context.Context, cfg Config) (*Repository, error) {
-	if cfg.Bucket == "" {
-		return nil, fmt.Errorf("artifact S3 bucket is required")
-	}
-	awsCfg, err := workspace.S3Config(ctx, cfg.Region, cfg.AccessKey, cfg.SecretKey)
-	if err != nil {
-		return nil, fmt.Errorf("load artifact S3 configuration: %w", err)
-	}
-	client := s3.NewFromConfig(awsCfg, func(options *s3.Options) {
-		options.UsePathStyle = cfg.ForcePathStyle
-		if cfg.Endpoint != "" {
-			options.BaseEndpoint = aws.String(cfg.Endpoint)
-		}
-	})
-	return New(cfg, client)
 }
 
 func New(cfg Config, client ObjectStoreClient) (*Repository, error) {

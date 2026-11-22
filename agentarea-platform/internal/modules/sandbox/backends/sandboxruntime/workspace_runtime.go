@@ -60,22 +60,27 @@ type WorkspaceRuntime struct {
 	httpClient *http.Client
 }
 
-func NewWorkspaceRuntime(base ManagedRuntime, workspaces sandboxworkspace.Ensurer) (*WorkspaceRuntime, error) {
+// NewWorkspaceRuntime downloads task inputs from their presigned object-store
+// URLs over transport.
+func NewWorkspaceRuntime(base ManagedRuntime, workspaces sandboxworkspace.Ensurer, transport http.RoundTripper) (*WorkspaceRuntime, error) {
 	if base == nil {
 		return nil, fmt.Errorf("sandbox runtime is required")
 	}
 	if workspaces == nil {
 		return nil, fmt.Errorf("workspace provider is required")
 	}
+	if transport == nil {
+		return nil, fmt.Errorf("workspace input transport is required")
+	}
 	return &WorkspaceRuntime{
 		base:       base,
 		workspaces: workspaces,
-		httpClient: &http.Client{Timeout: 10 * time.Minute},
+		httpClient: &http.Client{Transport: transport, Timeout: 10 * time.Minute},
 	}, nil
 }
 
 // WorkspaceProvider names the workspace data plane. It is resolved once by the
-// composition root (see LoadWorkspaceProviderFromEnv) and passed in as an
+// composition root (see LoadWorkspaceProvider) and passed in as an
 // already-resolved dependency, so the decorator never reads process state.
 type WorkspaceProvider string
 
@@ -85,18 +90,21 @@ const WorkspaceProviderS3 WorkspaceProvider = "s3"
 // missing provider is a deployment error: silently running without inputs or
 // durability would weaken the task contract.
 func NewWorkspaceRuntimeForProvider(
-	ctx context.Context,
 	base ManagedRuntime,
 	provider WorkspaceProvider,
-	cfg workspace.RepositoryConfig,
+	repository *workspace.Repository,
+	transport http.RoundTripper,
 ) (ComposedRuntime, error) {
 	switch provider {
 	case WorkspaceProviderS3:
-		workspaces, err := sandboxworkspace.NewS3ProviderFromConfig(ctx, cfg)
+		if repository == nil {
+			return nil, fmt.Errorf("configure S3 workspace provider: workspace repository is required")
+		}
+		workspaces, err := sandboxworkspace.NewS3Provider(repository)
 		if err != nil {
 			return nil, fmt.Errorf("configure S3 workspace provider: %w", err)
 		}
-		wrapped, err := NewWorkspaceRuntime(base, workspaces)
+		wrapped, err := NewWorkspaceRuntime(base, workspaces, transport)
 		if err != nil {
 			return nil, err
 		}

@@ -25,17 +25,6 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/serve"
 )
 
-// DefaultTriggerQueue is the task queue cron schedules start their firings on when AGENTAREA_TRIGGER_QUEUE is unset.
-const DefaultTriggerQueue = "trigger-schedules"
-
-// TriggerQueue reads AGENTAREA_TRIGGER_QUEUE through lookup.
-func TriggerQueue(lookup func(string) (string, bool)) string {
-	if v, ok := lookup("AGENTAREA_TRIGGER_QUEUE"); ok && v != "" {
-		return v
-	}
-	return DefaultTriggerQueue
-}
-
 // Deps are what streams needs from other modules and the kernel, as interfaces
 // declared in its service/deps.go; app passes them in (rule 2).
 type Deps struct {
@@ -45,7 +34,7 @@ type Deps struct {
 	Agents service.Agents
 	// Schedules keeps the cron schedules; nil when Temporal is not wired.
 	Schedules durable.Scheduler
-	// TriggerQueue is AGENTAREA_TRIGGER_QUEUE (see TriggerQueue).
+	// TriggerQueue is AGENTAREA_TRIGGER_QUEUE.
 	TriggerQueue string
 	// SourceTypes is catalog's source types; nil leaves sources and the webhook sink unmounted.
 	SourceTypes service.SourceTypes
