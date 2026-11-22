@@ -56,6 +56,9 @@ func (m *Module) Caller() api.Caller { return m.svc }
 // Resolver resolves a run's model instance.
 func (m *Module) Resolver() api.Resolver { return m.svc }
 
+// Directory is what a bundle deploy reads of models.
+func (m *Module) Directory() api.Directory { return m.svc }
+
 // ModelKinds is what agents reads to validate a model_id.
 func (m *Module) ModelKinds() api.ModelKinds { return m.svc }
 

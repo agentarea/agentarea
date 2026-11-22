@@ -269,19 +269,26 @@ func objectWith(base wirejson.Object, spec wirejson.Object, after ...wirejson.Me
 	return out
 }
 
-// LoadBundleFolder is load_folder: one bundle from an agent folder; entries
-// outside the layout come back as WARN issues.
+// LoadBundleFolder is one bundle from a folder: agentarea.yaml and the files
+// it selects, or the deprecated one-agent layout of agent.yaml; files outside
+// the bundle come back as WARN issues.
 func LoadBundleFolder(files StrPairs) (Bundle, []PreviewIssue, error) {
 	for _, f := range files {
 		if err := CheckFolderPath(f.Key); err != nil {
 			return Bundle{}, nil, err
 		}
 	}
-	agentYAML, ok := files.Get("agent.yaml")
-	if !ok {
-		return Bundle{}, nil, &BundleParseError{"agent.yaml: missing; the folder root must hold agent.yaml"}
+	_, entry := files.Get(EntryFile)
+	agentYAML, legacy := files.Get("agent.yaml")
+	switch {
+	case entry && legacy:
+		return Bundle{}, nil, &BundleParseError{"agent.yaml and agentarea.yaml are both at the folder root; keep agentarea.yaml and move the agent into agents/"}
+	case entry:
+		return loadEntryFolder(files)
+	case !legacy:
+		return Bundle{}, nil, &BundleParseError{"agentarea.yaml: missing; the folder root must hold agentarea.yaml"}
 	}
-	var issues []PreviewIssue
+	issues := []PreviewIssue{{Severity: SeverityWarn, Message: "agent.yaml: this one-agent layout is deprecated; move to agentarea.yaml with agents/*.md (ADR-0060)"}}
 	warn := func(msg string) { issues = append(issues, PreviewIssue{Severity: SeverityWarn, Message: msg}) }
 	reserved := func(path string, data wirejson.Object, names ...string) {
 		for _, n := range names {
@@ -360,6 +367,9 @@ func LoadBundleFolder(files StrPairs) (Bundle, []PreviewIssue, error) {
 				wirejson.Member{Key: "key", Value: key}), bundlePolicyFrom)
 			if err != nil {
 				return Bundle{}, nil, err
+			}
+			if _, refused := policyRefusal(p); refused != "" {
+				return Bundle{}, nil, &BundleParseError{path + ": " + refused}
 			}
 			b.Policies = append(b.Policies, p)
 		default:

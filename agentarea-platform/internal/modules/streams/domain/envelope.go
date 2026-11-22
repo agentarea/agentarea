@@ -65,6 +65,57 @@ func optional(t Template, c TemplateContext) *string {
 	return nil
 }
 
+// MaxSummaryRunes is the longest summary an event shows.
+const MaxSummaryRunes = 512
+
+// summaryOf is the first template that renders to a non-blank line.
+func summaryOf(t Template, c TemplateContext) *string {
+	for _, tpl := range t {
+		if v, ok := Render(tpl, c); ok {
+			if s := oneLine(&v, MaxSummaryRunes); s != nil {
+				return s
+			}
+		}
+	}
+	return nil
+}
+
+// EventSummary is one line of what a recorded event says by its source's summary template or
+// else its entry's, read off the headers and body it keeps; nil when none renders or the body
+// is stored as a file.
+func EventSummary(e SourceTypeEntry, o EventOverrides, data map[string]any) *string {
+	headers := map[string]string{}
+	if h, ok := data["headers"].(map[string]any); ok {
+		for k, v := range h {
+			if text, ok := v.(string); ok {
+				headers[k] = text
+			}
+		}
+	}
+	return summaryOf(pick(o.Summary, e.Event.Summary), TemplateContext{Body: data["body"], Headers: headers})
+}
+
+// SummaryLine is s as one line of at most MaxSummaryRunes, nil when nothing is left.
+func SummaryLine(s string) *string {
+	return oneLine(&s, MaxSummaryRunes)
+}
+
+// oneLine is s with whitespace runs collapsed to one space, cut at max runes; nil when nothing is left.
+func oneLine(s *string, max int) *string {
+	if s == nil {
+		return nil
+	}
+	r := []rune(strings.Join(strings.Fields(*s), " "))
+	if len(r) > max {
+		r = r[:max]
+	}
+	if len(r) == 0 {
+		return nil
+	}
+	v := string(r)
+	return &v
+}
+
 // ReadEvent is kind, key, session, sender and time of one event by the entry's templates; a
 // source's own templates stand in for the entry's kind, key and session key.
 func ReadEvent(e SourceTypeEntry, o EventOverrides, sourceID string, headers map[string]string, body any) EventFields {

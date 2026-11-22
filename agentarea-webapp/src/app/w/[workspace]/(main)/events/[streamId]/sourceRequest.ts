@@ -10,7 +10,12 @@ import {
 export type SourceKind = NonNullable<SourceCreate["kind"]>;
 
 /** The event-template overrides a member may set on a source without a catalog entry of its own. */
-export const TEMPLATE_FIELDS = ["kind", "key", "session_key"] as const;
+export const TEMPLATE_FIELDS = [
+  "kind",
+  "key",
+  "session_key",
+  "summary",
+] as const;
 export type TemplateField = (typeof TEMPLATE_FIELDS)[number];
 
 /** What the add-source form holds: a picked secret id per credential, text per setting and template. */
@@ -33,8 +38,8 @@ export function sourceKinds(type: SourceType): SourceKind[] {
 }
 
 /**
- * Whether the member names the event's kind, key and session on the source:
- * only for the entry that stands for a provider the catalog does not know.
+ * Whether the member names the event's kind, key, session and summary on the
+ * source: only for the entry that stands for a provider the catalog does not know.
  */
 export function takesEventTemplates(type: SourceType): boolean {
   return type.slug === GENERIC_WEBHOOK;

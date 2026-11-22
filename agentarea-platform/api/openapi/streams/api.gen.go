@@ -319,6 +319,7 @@ type FeedEventResponse struct {
 	SourceId      *openapi_types.UUID `json:"source_id"`
 	SourceType    *string             `json:"source_type"`
 	StreamId      openapi_types.UUID  `json:"stream_id"`
+	Summary       *string             `json:"summary"`
 	V             *int                `json:"v,omitempty"`
 }
 
@@ -676,6 +677,7 @@ type StreamEventDetailResponse struct {
 	SourceId   *openapi_types.UUID `json:"source_id"`
 	SourceType *string             `json:"source_type"`
 	StreamId   openapi_types.UUID  `json:"stream_id"`
+	Summary    *string             `json:"summary"`
 	V          *int                `json:"v,omitempty"`
 }
 
@@ -719,6 +721,7 @@ type StreamEventResponse struct {
 	SourceId   *openapi_types.UUID `json:"source_id"`
 	SourceType *string             `json:"source_type"`
 	StreamId   openapi_types.UUID  `json:"stream_id"`
+	Summary    *string             `json:"summary"`
 	V          *int                `json:"v,omitempty"`
 }
 

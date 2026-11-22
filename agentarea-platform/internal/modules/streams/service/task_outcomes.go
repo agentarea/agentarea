@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -134,12 +135,13 @@ func (s *Service) ProjectTaskEvent(ctx context.Context, e events.IntegrationEven
 	if err != nil {
 		return err
 	}
-	subject, causation, sourceType := task.ID, e.ID, domain.PlatformSourceType
+	subject, causation, sourceType, agent := task.ID, e.ID, domain.PlatformSourceType, task.AgentID
+	body := PlatformEventData(e.Type, status, task.ID, task.AgentID, e.Data)
 	ev := domain.Event{
 		Kind: e.Type, Source: domain.PlatformSourceType, Subject: &subject, OccurredAt: e.Time,
 		CausationID: &causation, StreamID: stream.ID, WorkspaceID: ws.ID(), CreatedBy: task.Owner,
 		EventKey: PlatformEventKey(e.Type, e.ID, e.Data), Depth: task.Depth + 1, SourceID: &source.ID, SourceType: &sourceType,
-		Data: map[string]any{"body": PlatformEventData(e.Type, status, task.ID, task.AgentID, e.Data)},
+		Sender: &agent, Data: map[string]any{"body": body},
 	}
 	if task.CorrelationID != "" {
 		corr := task.CorrelationID
@@ -227,6 +229,33 @@ func PlatformEventData(kind, status, taskID, agentID string, data map[string]any
 		out["cost"] = cost
 	}
 	return out
+}
+
+// PlatformEventSummary is what a platform event's body says in one line: the result, the error,
+// the tool an approval is for with its reason, or the question; nil when it says none.
+func PlatformEventSummary(body map[string]any) *string {
+	text := func(k string) string {
+		v, _ := body[k].(string)
+		return v
+	}
+	var line string
+	switch text("kind") {
+	case TaskCompleted:
+		line = text("result")
+	case TaskFailed, TaskCancelled:
+		line = text("error")
+		if strings.TrimSpace(line) == "" {
+			line = text("failure_reason")
+		}
+	case ApprovalRequested:
+		line = text("tool_name")
+		if reason := text("reason"); reason != "" {
+			line = strings.TrimPrefix(line+": "+reason, ": ")
+		}
+	case InputRequest:
+		line = text("question")
+	}
+	return domain.SummaryLine(line)
 }
 
 // PlatformEventKey is platform_event_key: the task event's id; a request the run records twice

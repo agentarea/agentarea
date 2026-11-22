@@ -39,3 +39,7 @@ SELECT id, name FROM streams WHERE workspace_id = @workspace_id AND id = ANY(@id
 
 -- name: DeleteStream :execrows
 DELETE FROM streams WHERE workspace_id = @workspace_id AND id = @id;
+
+-- name: SetStreamDescription :execrows
+UPDATE streams SET description = @description, updated_at = @now
+WHERE workspace_id = @workspace_id AND id = @id;

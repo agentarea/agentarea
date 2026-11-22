@@ -53,19 +53,17 @@ func (q *Queries) CatalogMCPItemByExternalID(ctx context.Context, arg CatalogMCP
 	return i, err
 }
 
-const getInstalledBundleByName = `-- name: GetInstalledBundleByName :one
-SELECT id, created_at, updated_at, workspace_id, created_by, name, display_name, description, schema_version, status, canonical, install_result FROM installed_bundles WHERE workspace_id = $1 AND name = $2
-ORDER BY created_at, id
-LIMIT 1
+const getInstalledBundle = `-- name: GetInstalledBundle :one
+SELECT id, created_at, updated_at, workspace_id, created_by, name, display_name, description, schema_version, status, canonical, install_result, updated_by, source FROM installed_bundles WHERE workspace_id = $1 AND id = $2
 `
 
-type GetInstalledBundleByNameParams struct {
+type GetInstalledBundleParams struct {
 	WorkspaceID string
-	Name        string
+	ID          uuid.UUID
 }
 
-func (q *Queries) GetInstalledBundleByName(ctx context.Context, arg GetInstalledBundleByNameParams) (InstalledBundle, error) {
-	row := q.db.QueryRow(ctx, getInstalledBundleByName, arg.WorkspaceID, arg.Name)
+func (q *Queries) GetInstalledBundle(ctx context.Context, arg GetInstalledBundleParams) (InstalledBundle, error) {
+	row := q.db.QueryRow(ctx, getInstalledBundle, arg.WorkspaceID, arg.ID)
 	var i InstalledBundle
 	err := row.Scan(
 		&i.ID,
@@ -80,15 +78,17 @@ func (q *Queries) GetInstalledBundleByName(ctx context.Context, arg GetInstalled
 		&i.Status,
 		&i.Canonical,
 		&i.InstallResult,
+		&i.UpdatedBy,
+		&i.Source,
 	)
 	return i, err
 }
 
 const insertInstalledBundle = `-- name: InsertInstalledBundle :one
-INSERT INTO installed_bundles (id, created_at, updated_at, workspace_id, created_by, name, display_name, description,
-    schema_version, status, canonical, install_result)
-VALUES ($1, $2, $2, $3, $4, $5, $6, $7,
-    $8, $9, $10::jsonb, $11::jsonb)
+INSERT INTO installed_bundles (id, created_at, updated_at, workspace_id, created_by, updated_by, name, display_name, description,
+    schema_version, status, canonical, install_result, source)
+VALUES ($1, $2, $2, $3, $4, $4, $5, $6, $7,
+    $8, $9, $10::jsonb, $11::jsonb, $12::jsonb)
 RETURNING id
 `
 
@@ -104,6 +104,7 @@ type InsertInstalledBundleParams struct {
 	Status        string
 	Canonical     []byte
 	InstallResult []byte
+	Source        []byte
 }
 
 func (q *Queries) InsertInstalledBundle(ctx context.Context, arg InsertInstalledBundleParams) (uuid.UUID, error) {
@@ -119,20 +120,100 @@ func (q *Queries) InsertInstalledBundle(ctx context.Context, arg InsertInstalled
 		arg.Status,
 		arg.Canonical,
 		arg.InstallResult,
+		arg.Source,
 	)
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
 }
 
-const updateInstalledBundle = `-- name: UpdateInstalledBundle :exec
-UPDATE installed_bundles SET display_name = $1, description = $2,
-    schema_version = $3, status = $4, canonical = $5::jsonb,
-    install_result = $6::jsonb, updated_at = $7
-WHERE id = $8 AND workspace_id = $9
+const listInstalledBundleResults = `-- name: ListInstalledBundleResults :many
+SELECT id, name, install_result FROM installed_bundles WHERE workspace_id = $1
+ORDER BY created_at, id
+`
+
+type ListInstalledBundleResultsRow struct {
+	ID            uuid.UUID
+	Name          string
+	InstallResult []byte
+}
+
+func (q *Queries) ListInstalledBundleResults(ctx context.Context, workspaceID string) ([]ListInstalledBundleResultsRow, error) {
+	rows, err := q.db.Query(ctx, listInstalledBundleResults, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListInstalledBundleResultsRow
+	for rows.Next() {
+		var i ListInstalledBundleResultsRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.InstallResult); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInstalledBundlesByName = `-- name: ListInstalledBundlesByName :many
+SELECT id, created_at, updated_at, workspace_id, created_by, name, display_name, description, schema_version, status, canonical, install_result, updated_by, source FROM installed_bundles WHERE workspace_id = $1 AND name = $2
+ORDER BY created_at, id
+`
+
+type ListInstalledBundlesByNameParams struct {
+	WorkspaceID string
+	Name        string
+}
+
+func (q *Queries) ListInstalledBundlesByName(ctx context.Context, arg ListInstalledBundlesByNameParams) ([]InstalledBundle, error) {
+	rows, err := q.db.Query(ctx, listInstalledBundlesByName, arg.WorkspaceID, arg.Name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []InstalledBundle
+	for rows.Next() {
+		var i InstalledBundle
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.WorkspaceID,
+			&i.CreatedBy,
+			&i.Name,
+			&i.DisplayName,
+			&i.Description,
+			&i.SchemaVersion,
+			&i.Status,
+			&i.Canonical,
+			&i.InstallResult,
+			&i.UpdatedBy,
+			&i.Source,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateInstalledBundle = `-- name: UpdateInstalledBundle :execrows
+UPDATE installed_bundles SET name = $1, display_name = $2, description = $3,
+    schema_version = $4, status = $5, canonical = $6::jsonb,
+    install_result = $7::jsonb, updated_at = $8, updated_by = $9,
+    source = COALESCE($10::jsonb, source)
+WHERE id = $11 AND workspace_id = $12
+  AND ($13::timestamp IS NULL OR updated_at = $13)
 `
 
 type UpdateInstalledBundleParams struct {
+	Name          string
 	DisplayName   pgtype.Text
 	Description   pgtype.Text
 	SchemaVersion string
@@ -140,12 +221,16 @@ type UpdateInstalledBundleParams struct {
 	Canonical     []byte
 	InstallResult []byte
 	Now           pgtype.Timestamp
+	UpdatedBy     pgtype.Text
+	Source        []byte
 	ID            uuid.UUID
 	WorkspaceID   string
+	SeenUpdatedAt pgtype.Timestamp
 }
 
-func (q *Queries) UpdateInstalledBundle(ctx context.Context, arg UpdateInstalledBundleParams) error {
-	_, err := q.db.Exec(ctx, updateInstalledBundle,
+func (q *Queries) UpdateInstalledBundle(ctx context.Context, arg UpdateInstalledBundleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateInstalledBundle,
+		arg.Name,
 		arg.DisplayName,
 		arg.Description,
 		arg.SchemaVersion,
@@ -153,8 +238,14 @@ func (q *Queries) UpdateInstalledBundle(ctx context.Context, arg UpdateInstalled
 		arg.Canonical,
 		arg.InstallResult,
 		arg.Now,
+		arg.UpdatedBy,
+		arg.Source,
 		arg.ID,
 		arg.WorkspaceID,
+		arg.SeenUpdatedAt,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

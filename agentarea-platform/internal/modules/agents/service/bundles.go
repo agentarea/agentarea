@@ -36,10 +36,21 @@ func bundleRefusal(err error) error {
 	return err
 }
 
+func bundleTool(t catalogapi.BundleTool) domain.Tool {
+	out := domain.Tool{Type: t.Type, Name: t.Name}
+	switch {
+	case t.AgentID != nil:
+		out.Settings = &domain.Settings{AgentID: t.AgentID}
+	case t.ConnectionID != nil:
+		out.Settings = &domain.Settings{OpenAPIConnectionID: t.ConnectionID}
+	}
+	return out
+}
+
 func bundleTools(tools []catalogapi.BundleTool) []domain.Tool {
 	out := make([]domain.Tool, len(tools))
 	for i, t := range tools {
-		out[i] = domain.Tool{Type: t.Type, Name: t.Name}
+		out[i] = bundleTool(t)
 	}
 	return out
 }
@@ -118,6 +129,77 @@ func (b BundleAgents) CreateAgent(ctx context.Context, c authn.Caller, in catalo
 	return v.Agent.ID, nil
 }
 
+// bundleToolsAfter are the agent's tools once a redeploy applies in: the
+// managed ones replaced by what the folder declares, the ones added in the
+// workspace kept. A delegate is matched by the agent it reaches, then by name,
+// and keeps the settings set on it; only its name and agent id follow the folder.
+func bundleToolsAfter(current []domain.Tool, in catalogapi.BundleAgentUpdate) []domain.Tool {
+	type ref struct{ typ, name string }
+	managed, wanted := map[ref]bool{}, map[ref]bool{}
+	managedAgents := map[string]bool{}
+	byAgent, byName := map[string]catalogapi.BundleTool{}, map[string]catalogapi.BundleTool{}
+	for _, t := range append(append([]catalogapi.BundleTool{}, in.ManagedTools...), in.Tools...) {
+		managed[ref{t.Type, t.Name}] = true
+		if t.Type == domain.ToolAgent && t.AgentID != nil {
+			managedAgents[*t.AgentID] = true
+		}
+	}
+	for _, t := range in.Tools {
+		wanted[ref{t.Type, t.Name}] = true
+		if t.Type == domain.ToolAgent {
+			byName[t.Name] = t
+			if t.AgentID != nil {
+				byAgent[*t.AgentID] = t
+			}
+		}
+	}
+	var tools []domain.Tool
+	present := map[ref]bool{}
+	for _, t := range current {
+		r := ref{t.Type, t.Name}
+		if t.Type != domain.ToolAgent {
+			if wanted[r] || !managed[r] {
+				tools = append(tools, t)
+				present[r] = true
+			}
+			continue
+		}
+		agentID := ""
+		if t.Settings != nil && t.Settings.AgentID != nil {
+			agentID = *t.Settings.AgentID
+		}
+		isManaged := managed[r] || managedAgents[agentID]
+		d, ok := byAgent[agentID]
+		if !ok && isManaged {
+			d, ok = byName[t.Name]
+		}
+		if ok && !present[ref{d.Type, d.Name}] {
+			st := domain.Settings{}
+			if t.Settings != nil {
+				st = *t.Settings
+			}
+			st.AgentID = d.AgentID
+			tools = append(tools, domain.Tool{Type: t.Type, Name: d.Name, Settings: &st})
+			present[ref{d.Type, d.Name}] = true
+			continue
+		}
+		if !isManaged {
+			tools = append(tools, t)
+			present[r] = true
+		}
+	}
+	for _, t := range in.Tools {
+		if r := (ref{t.Type, t.Name}); !present[r] {
+			tools = append(tools, bundleTool(t))
+			present[r] = true
+		}
+	}
+	if tools == nil {
+		tools = []domain.Tool{}
+	}
+	return tools
+}
+
 // UpdateAgent applies the folder to the agent: the tools and skills it
 // manages replaced, the ones added in the workspace kept, approvals as they were.
 func (b BundleAgents) UpdateAgent(ctx context.Context, c authn.Caller, id string, in catalogapi.BundleAgentUpdate) error {
@@ -137,34 +219,7 @@ func (b BundleAgents) UpdateAgent(ctx context.Context, c authn.Caller, id string
 	if err != nil {
 		return err
 	}
-	type ref struct{ typ, name string }
-	managed := map[ref]bool{}
-	for _, t := range in.ManagedTools {
-		managed[ref{t.Type, t.Name}] = true
-	}
-	wanted := map[ref]bool{}
-	for _, t := range in.Tools {
-		managed[ref{t.Type, t.Name}] = true
-		wanted[ref{t.Type, t.Name}] = true
-	}
-	var tools []domain.Tool
-	present := map[ref]bool{}
-	for _, t := range views[0].Tools {
-		r := ref{t.Type, t.Name}
-		if wanted[r] || !managed[r] {
-			tools = append(tools, t)
-			present[r] = true
-		}
-	}
-	for _, t := range in.Tools {
-		if r := (ref{t.Type, t.Name}); !present[r] {
-			tools = append(tools, domain.Tool{Type: t.Type, Name: t.Name})
-			present[r] = true
-		}
-	}
-	if tools == nil {
-		tools = []domain.Tool{}
-	}
+	tools := bundleToolsAfter(views[0].Tools, in)
 	managedSkills := map[string]bool{}
 	for _, id := range append(append([]string{}, in.ManagedSkillIDs...), in.SkillIDs...) {
 		managedSkills[id] = true

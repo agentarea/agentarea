@@ -27,6 +27,8 @@ var (
 	setupKeyRe         = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*$`)
 	entityKeyRe        = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*$`)
 	effortShapeRe      = regexp.MustCompile(`^[a-z][a-z_-]{0,15}$`)
+	currencyRe         = regexp.MustCompile(`^[A-Z]{3}$`)
+	approverRefRe      = regexp.MustCompile(`^(user:[^\s:#]+|[^\s@]+@[^\s@]+\.[^\s@]+)$`)
 )
 
 // Setup field types (SetupFieldType).
@@ -79,6 +81,34 @@ type BundleMCP struct {
 	JSONSpec      *wirejson.Object
 	Bindings      StrPairs
 	ContextSecret *string
+	RenamedFrom   *string
+}
+
+// BundleOpenAPI is an OpenAPI connection the bundle creates: its spec at
+// SpecURL or inline in Spec, and its headers, query parameters and URL
+// variables, whose secret values are ${secret.<name>} or ${setup.<key>}.
+type BundleOpenAPI struct {
+	Key, Name, Description, BaseURL string
+	SpecURL                         *string
+	Spec                            *wirejson.Object
+	Headers, Query, Variables       StrPairs
+	RenamedFrom                     *string
+}
+
+// BundleTask is a saved task the bundle creates: a run of Agent asked Prompt.
+type BundleTask struct {
+	Key, Name, Agent, Prompt string
+	Parameters               wirejson.Object
+	RenamedFrom              *string
+}
+
+// BundleProject is a project grouping the bundle's agents, MCP servers and
+// skills, each by key.
+type BundleProject struct {
+	Key, Name, Description string
+	Instructions           *string
+	Agents, MCPs, Skills   []string
+	RenamedFrom            *string
 }
 
 // BundleSkill is a skill the bundle creates.
@@ -87,6 +117,7 @@ type BundleSkill struct {
 	Content               *string
 	Files                 *StrPairs
 	SourceURL             *string
+	RenamedFrom           *string
 }
 
 // BundleAgent is an agent the bundle creates.
@@ -94,15 +125,58 @@ type BundleAgent struct {
 	Key, Name, Description, Instruction string
 	Model                               *string
 	MCPs, Skills, Toolsets              []string
-	ReasoningEffort                     *string
-	ReasoningMaxTokens                  *int64
-	Client                              *string
+	// Delegates are the keys of the bundle's agents this one may hand work to.
+	Delegates []string
+	// OpenAPI are the keys of the bundle's OpenAPI connections the agent calls.
+	OpenAPI            []string
+	ReasoningEffort    *string
+	ReasoningMaxTokens *int64
+	Client             *string
+	// RenamedFrom is the key an earlier install knew this object by.
+	RenamedFrom *string
 }
 
-// BundleAutomation is a scheduled run of one of the bundle's agents.
+// BundleAutomation is a run of one of the bundle's agents: on a cron
+// schedule, or on the events of a stream when On is set.
 type BundleAutomation struct {
 	Key, Type, Cron, Timezone, Agent, Prompt string
-	Enabled                                  bool
+	On                                       *BundleTriggerOn
+	// Task is the saved task it runs instead of asking Agent Prompt: a task
+	// key of the bundle or the name of a workspace's saved task.
+	Task        *string
+	Parameters  wirejson.Object
+	Enabled     bool
+	RenamedFrom *string
+}
+
+// BundleTriggerOn is the stream an automation runs on: a stream key of the
+// bundle or the name of a workspace stream, and the events it takes.
+type BundleTriggerOn struct {
+	Stream string
+	Filter wirejson.Object
+}
+
+// BundleStreamSource is a source feeding a bundle stream; its credentials are
+// ${secret.<name>} or ${setup.<key>} references, never values.
+type BundleStreamSource struct {
+	Type, Kind          string
+	Config, Credentials StrPairs
+}
+
+// BundleStreamWriter is a processor of a bundle stream (Code set) or a
+// forward; Outputs are stream keys of the bundle or names of workspace streams.
+type BundleStreamWriter struct {
+	Code    *string
+	Outputs []string
+	Filter  wirejson.Object
+}
+
+// BundleStream is a stream the bundle creates, with its sources and writers.
+type BundleStream struct {
+	Key, Name, Description string
+	Sources                []BundleStreamSource
+	Processors, Forwards   []BundleStreamWriter
+	RenamedFrom            *string
 }
 
 // BundlePolicy is a governance rule the bundle installs.
@@ -113,6 +187,13 @@ type BundlePolicy struct {
 	Priority                     int64
 	Enabled                      bool
 	Message                      *string
+	// BillingCurrency is the currency Params' amounts are in; the plan blocks
+	// when the workspace bills in another.
+	BillingCurrency *string
+	// Approvers of an approval policy, as written: emails or user:<id>; the
+	// deploy resolves them to members of the workspace it writes into.
+	Approvers   []string
+	RenamedFrom *string
 }
 
 // BundleChannel is an inbound channel bound to one of the bundle's agents.
@@ -121,6 +202,7 @@ type BundleChannel struct {
 	Bindings               StrPairs
 	Prompt                 string
 	Enabled                bool
+	RenamedFrom            *string
 }
 
 // BundleMetadata is marketplace presentation metadata.
@@ -144,6 +226,10 @@ type Bundle struct {
 	Channels      []BundleChannel
 	Automations   []BundleAutomation
 	Policies      []BundlePolicy
+	Streams       []BundleStream
+	OpenAPI       []BundleOpenAPI
+	Tasks         []BundleTask
+	Projects      []BundleProject
 }
 
 // SetupField is the field declared under key.
@@ -549,6 +635,29 @@ func (c *checker) entityKey(f fields, label string) string {
 	return s
 }
 
+// renamedFrom is the renamed_from field: the key an earlier install knew the object by.
+func (c *checker) renamedFrom(f fields) *string {
+	v, ok := f.get("renamed_from")
+	if !ok || v == nil {
+		return nil
+	}
+	s, ok := c.str(v, 1, 0, f.at("renamed_from"))
+	if !ok {
+		return nil
+	}
+	if !entityKeyRe.MatchString(s) {
+		c.valueError(fmt.Sprintf("renamed_from '%s' must be a key: [a-zA-Z][a-zA-Z0-9_-]*", s), f.at("renamed_from"))
+	}
+	return &s
+}
+
+func withRenamedFrom(o wirejson.Object, from *string) wirejson.Object {
+	if from != nil {
+		o = append(o, wirejson.Member{Key: "renamed_from", Value: *from})
+	}
+	return o
+}
+
 func (c *checker) requiredStr(f fields, key string, minLen, maxLen int) string {
 	v, ok := f.get(key)
 	if !ok {
@@ -587,7 +696,8 @@ func bundleMCPFrom(c *checker, v any, loc []any) (BundleMCP, bool) {
 			out.ContextSecret = &stripped
 		}
 	}
-	c.extra(o, []string{"key", "name", "catalog", "json_spec", "bindings", "context_secret"}, loc)
+	out.RenamedFrom = c.renamedFrom(f)
+	c.extra(o, []string{"key", "name", "catalog", "json_spec", "bindings", "context_secret", "renamed_from"}, loc)
 	if c.count() > before {
 		return out, false
 	}
@@ -620,7 +730,8 @@ func bundleSkillFrom(c *checker, v any, loc []any) (BundleSkill, bool) {
 	if v, ok := f.get("source_url"); ok {
 		out.SourceURL, _ = c.optStr(v, 0, f.at("source_url"))
 	}
-	c.extra(o, []string{"key", "name", "source_type", "content", "files", "source_url"}, loc)
+	out.RenamedFrom = c.renamedFrom(f)
+	c.extra(o, []string{"key", "name", "source_type", "content", "files", "source_url", "renamed_from"}, loc)
 	if c.count() > before {
 		return out, false
 	}
@@ -680,7 +791,11 @@ func bundleAgentFrom(c *checker, v any, loc []any) (BundleAgent, bool) {
 	f := fields{o, loc}
 	before := c.count()
 	out := BundleAgent{Key: c.entityKey(f, "agent"), Name: c.requiredStr(f, "name", 1, BundleMaxNameLength),
-		MCPs: []string{}, Skills: []string{}, Toolsets: []string{}}
+		MCPs: []string{}, Skills: []string{}, Toolsets: []string{}, Delegates: []string{}, OpenAPI: []string{}}
+	if out.Key == "workspace" {
+		c.valueError("agent key 'workspace' is reserved: a policy subject 'workspace' would mean the whole workspace; name the agent something else",
+			f.at("key"))
+	}
 	if v, ok := f.get("description"); ok {
 		out.Description, _ = c.str(v, 0, 1000, f.at("description"))
 	}
@@ -693,7 +808,7 @@ func bundleAgentFrom(c *checker, v any, loc []any) (BundleAgent, bool) {
 	for _, l := range []struct {
 		key string
 		dst *[]string
-	}{{"mcps", &out.MCPs}, {"skills", &out.Skills}, {"toolsets", &out.Toolsets}} {
+	}{{"mcps", &out.MCPs}, {"skills", &out.Skills}, {"toolsets", &out.Toolsets}, {"delegates", &out.Delegates}, {"openapi", &out.OpenAPI}} {
 		if v, ok := f.get(l.key); ok {
 			if got, ok := c.strList(v, f.at(l.key)); ok {
 				*l.dst = got
@@ -718,8 +833,9 @@ func bundleAgentFrom(c *checker, v any, loc []any) (BundleAgent, bool) {
 			}
 		}
 	}
-	c.extra(o, []string{"key", "name", "description", "instruction", "model", "mcps", "skills", "toolsets",
-		"reasoning_effort", "reasoning_max_tokens", "client"}, loc)
+	out.RenamedFrom = c.renamedFrom(f)
+	c.extra(o, []string{"key", "name", "description", "instruction", "model", "mcps", "skills", "toolsets", "delegates", "openapi",
+		"reasoning_effort", "reasoning_max_tokens", "client", "renamed_from"}, loc)
 	if c.count() > before {
 		return out, false
 	}
@@ -741,16 +857,248 @@ func bundleAutomationFrom(c *checker, v any, loc []any) (BundleAutomation, bool)
 	if v, ok := f.get("type"); ok {
 		out.Type, _ = c.literal(v, "literal_error", []string{"cron"}, f.at("type"))
 	}
-	out.Cron = c.requiredStr(f, "cron", 1, 0)
+	_, hasCron := f.get("cron")
+	if hasCron {
+		out.Cron = c.requiredStr(f, "cron", 1, 0)
+	}
 	if v, ok := f.get("timezone"); ok {
 		out.Timezone, _ = c.str(v, 0, 0, f.at("timezone"))
 	}
-	out.Agent = c.requiredStr(f, "agent", 1, 0)
-	out.Prompt = c.requiredStr(f, "prompt", 1, 0)
+	if v, ok := f.get("on"); ok && v != nil {
+		out.On = c.triggerOn(v, f.at("on"))
+	}
+	if v, ok := f.get("task"); ok && v != nil {
+		if s, ok := c.str(v, 1, 0, f.at("task")); ok {
+			out.Task = &s
+		}
+	}
+	if v, ok := f.get("parameters"); ok && v != nil {
+		out.Parameters, _ = c.anyDict(v, f.at("parameters"))
+	}
+	if out.Task == nil {
+		out.Agent = c.requiredStr(f, "agent", 1, 0)
+		out.Prompt = c.requiredStr(f, "prompt", 1, 0)
+	} else {
+		for _, k := range []struct {
+			key string
+			dst *string
+		}{{"agent", &out.Agent}, {"prompt", &out.Prompt}} {
+			if v, ok := f.get(k.key); ok && v != nil {
+				*k.dst, _ = c.str(v, 0, 0, f.at(k.key))
+			}
+		}
+	}
 	if v, ok := f.get("enabled"); ok {
 		out.Enabled, _ = c.boolean(v, f.at("enabled"))
 	}
-	c.extra(o, []string{"key", "type", "cron", "timezone", "agent", "prompt", "enabled"}, loc)
+	out.RenamedFrom = c.renamedFrom(f)
+	c.extra(o, []string{"key", "type", "cron", "timezone", "on", "agent", "prompt", "task", "parameters", "enabled", "renamed_from"}, loc)
+	if c.count() > before {
+		return out, false
+	}
+	if out.Task != nil && pyStrip(out.Prompt) != "" {
+		c.valueError(fmt.Sprintf("automation '%s' runs task '%s' or is asked prompt, not both", out.Key, *out.Task), loc)
+		return out, false
+	}
+	if out.Task == nil && len(out.Parameters) > 0 {
+		c.valueError(fmt.Sprintf("automation '%s': parameters go to a saved task; set task", out.Key), loc)
+		return out, false
+	}
+	if hasCron == (out.On != nil) {
+		c.valueError(fmt.Sprintf("automation '%s' needs exactly one of 'cron' or 'on'", out.Key), loc)
+		return out, false
+	}
+	return out, true
+}
+
+func (c *checker) triggerOn(v any, loc []any) *BundleTriggerOn {
+	o, ok := c.model(v, "BundleTriggerOn", loc)
+	if !ok {
+		return nil
+	}
+	f := fields{o, loc}
+	out := &BundleTriggerOn{Stream: c.requiredStr(f, "stream", 1, 0), Filter: wirejson.Object{}}
+	if v, ok := f.get("filter"); ok && v != nil {
+		out.Filter, _ = c.anyDict(v, f.at("filter"))
+	}
+	c.extra(o, []string{"stream", "filter"}, loc)
+	return out
+}
+
+func (c *checker) streamWriter(v any, loc []any, processor bool) BundleStreamWriter {
+	out := BundleStreamWriter{Outputs: []string{}, Filter: wirejson.Object{}}
+	class, known := "BundleStreamForward", []string{"outputs", "filter"}
+	if processor {
+		class, known = "BundleStreamProcessor", []string{"code", "outputs", "filter"}
+	}
+	o, ok := c.model(v, class, loc)
+	if !ok {
+		return out
+	}
+	f := fields{o, loc}
+	if processor {
+		code := c.requiredStr(f, "code", 1, 0)
+		out.Code = &code
+	}
+	if v, ok := f.get("outputs"); !ok {
+		c.missing(f.at("outputs"))
+	} else if l, ok := c.strList(v, f.at("outputs")); ok {
+		out.Outputs = l
+	}
+	if v, ok := f.get("filter"); ok && v != nil {
+		out.Filter, _ = c.anyDict(v, f.at("filter"))
+	}
+	c.extra(o, known, loc)
+	return out
+}
+
+func (c *checker) streamSource(v any, loc []any) BundleStreamSource {
+	out := BundleStreamSource{Kind: "webhook", Config: StrPairs{}, Credentials: StrPairs{}}
+	o, ok := c.model(v, "BundleStreamSource", loc)
+	if !ok {
+		return out
+	}
+	f := fields{o, loc}
+	out.Type = c.requiredStr(f, "type", 1, 0)
+	if v, ok := f.get("kind"); ok {
+		out.Kind, _ = c.literal(v, "literal_error", []string{"webhook", "poll"}, f.at("kind"))
+	}
+	for _, d := range []struct {
+		key string
+		dst *StrPairs
+	}{{"config", &out.Config}, {"credentials", &out.Credentials}} {
+		if v, ok := f.get(d.key); ok && v != nil {
+			if got, ok := c.strDict(v, f.at(d.key)); ok {
+				*d.dst = got
+			}
+		}
+	}
+	c.extra(o, []string{"type", "kind", "config", "credentials"}, loc)
+	return out
+}
+
+func bundleOpenAPIFrom(c *checker, v any, loc []any) (BundleOpenAPI, bool) {
+	o, ok := c.model(v, "BundleOpenAPI", loc)
+	if !ok {
+		return BundleOpenAPI{}, false
+	}
+	f := fields{o, loc}
+	before := c.count()
+	out := BundleOpenAPI{Key: c.entityKey(f, "openapi"), Name: c.requiredStr(f, "name", 1, BundleMaxNameLength),
+		Headers: StrPairs{}, Query: StrPairs{}, Variables: StrPairs{}}
+	if v, ok := f.get("description"); ok && v != nil {
+		out.Description, _ = c.str(v, 0, 0, f.at("description"))
+	}
+	out.BaseURL = c.requiredStr(f, "base_url", 1, 0)
+	if v, ok := f.get("spec_url"); ok {
+		out.SpecURL, _ = c.optStr(v, 0, f.at("spec_url"))
+	}
+	if v, ok := f.get("spec"); ok && v != nil {
+		if d, ok := c.anyDict(v, f.at("spec")); ok {
+			out.Spec = &d
+		}
+	}
+	for _, d := range []struct {
+		key string
+		dst *StrPairs
+	}{{"headers", &out.Headers}, {"query", &out.Query}, {"variables", &out.Variables}} {
+		if v, ok := f.get(d.key); ok && v != nil {
+			if got, ok := c.strDict(v, f.at(d.key)); ok {
+				*d.dst = got
+			}
+		}
+	}
+	out.RenamedFrom = c.renamedFrom(f)
+	c.extra(o, []string{"key", "name", "description", "base_url", "spec_url", "spec", "headers", "query", "variables", "renamed_from"}, loc)
+	if c.count() > before {
+		return out, false
+	}
+	if (out.SpecURL == nil) == (out.Spec == nil) {
+		c.valueError(fmt.Sprintf("openapi '%s' needs exactly one of 'spec_url' or 'spec'", out.Key), loc)
+		return out, false
+	}
+	return out, true
+}
+
+func bundleTaskFrom(c *checker, v any, loc []any) (BundleTask, bool) {
+	o, ok := c.model(v, "BundleTask", loc)
+	if !ok {
+		return BundleTask{}, false
+	}
+	f := fields{o, loc}
+	before := c.count()
+	out := BundleTask{Key: c.entityKey(f, "task"), Name: c.requiredStr(f, "name", 1, BundleMaxNameLength), Parameters: wirejson.Object{}}
+	out.Agent = c.requiredStr(f, "agent", 1, 0)
+	out.Prompt = c.requiredStr(f, "prompt", 1, 0)
+	if v, ok := f.get("parameters"); ok && v != nil {
+		out.Parameters, _ = c.anyDict(v, f.at("parameters"))
+	}
+	out.RenamedFrom = c.renamedFrom(f)
+	c.extra(o, []string{"key", "name", "agent", "prompt", "parameters", "renamed_from"}, loc)
+	return out, c.count() == before
+}
+
+func bundleProjectFrom(c *checker, v any, loc []any) (BundleProject, bool) {
+	o, ok := c.model(v, "BundleProject", loc)
+	if !ok {
+		return BundleProject{}, false
+	}
+	f := fields{o, loc}
+	before := c.count()
+	out := BundleProject{Key: c.entityKey(f, "project"), Name: c.requiredStr(f, "name", 1, BundleMaxNameLength),
+		Agents: []string{}, MCPs: []string{}, Skills: []string{}}
+	if v, ok := f.get("description"); ok && v != nil {
+		out.Description, _ = c.str(v, 0, 0, f.at("description"))
+	}
+	if v, ok := f.get("instructions"); ok {
+		out.Instructions, _ = c.optStr(v, 0, f.at("instructions"))
+	}
+	for _, l := range []struct {
+		key string
+		dst *[]string
+	}{{"agents", &out.Agents}, {"mcp", &out.MCPs}, {"skills", &out.Skills}} {
+		if v, ok := f.get(l.key); ok && v != nil {
+			if got, ok := c.strList(v, f.at(l.key)); ok {
+				*l.dst = got
+			}
+		}
+	}
+	out.RenamedFrom = c.renamedFrom(f)
+	c.extra(o, []string{"key", "name", "description", "instructions", "agents", "mcp", "skills", "renamed_from"}, loc)
+	return out, c.count() == before
+}
+
+func bundleStreamFrom(c *checker, v any, loc []any) (BundleStream, bool) {
+	o, ok := c.model(v, "BundleStream", loc)
+	if !ok {
+		return BundleStream{}, false
+	}
+	f := fields{o, loc}
+	before := c.count()
+	out := BundleStream{Key: c.entityKey(f, "stream"), Name: c.requiredStr(f, "name", 1, BundleMaxNameLength),
+		Sources: []BundleStreamSource{}, Processors: []BundleStreamWriter{}, Forwards: []BundleStreamWriter{}}
+	if v, ok := f.get("description"); ok && v != nil {
+		out.Description, _ = c.str(v, 0, 0, f.at("description"))
+	}
+	items := func(key string, each func(any, []any)) {
+		v, ok := f.get(key)
+		if !ok || v == nil {
+			return
+		}
+		l, ok := v.([]any)
+		if !ok {
+			c.add(fieldErr("list_type", "Input should be a valid list", f.at(key)))
+			return
+		}
+		for i, x := range l {
+			each(x, f.atList(key, i))
+		}
+	}
+	items("sources", func(x any, at []any) { out.Sources = append(out.Sources, c.streamSource(x, at)) })
+	items("processors", func(x any, at []any) { out.Processors = append(out.Processors, c.streamWriter(x, at, true)) })
+	items("forwards", func(x any, at []any) { out.Forwards = append(out.Forwards, c.streamWriter(x, at, false)) })
+	out.RenamedFrom = c.renamedFrom(f)
+	c.extra(o, []string{"key", "name", "description", "sources", "processors", "forwards", "renamed_from"}, loc)
 	return out, c.count() == before
 }
 
@@ -761,10 +1109,8 @@ func bundlePolicyFrom(c *checker, v any, loc []any) (BundlePolicy, bool) {
 	}
 	f := fields{o, loc}
 	before := c.count()
-	out := BundlePolicy{Key: c.entityKey(f, "policy"), Subject: "workspace", Params: wirejson.Object{}, Enabled: true}
-	if v, ok := f.get("subject"); ok {
-		out.Subject, _ = c.str(v, 0, 0, f.at("subject"))
-	}
+	out := BundlePolicy{Key: c.entityKey(f, "policy"), Params: wirejson.Object{}, Enabled: true}
+	out.Subject = c.requiredStr(f, "subject", 1, 0)
 	out.Target = c.requiredStr(f, "target", 1, 0)
 	if v, ok := f.get("effect"); !ok {
 		c.missing(f.at("effect"))
@@ -788,8 +1134,49 @@ func bundlePolicyFrom(c *checker, v any, loc []any) (BundlePolicy, bool) {
 	if v, ok := f.get("message"); ok {
 		out.Message, _ = c.optStr(v, 0, f.at("message"))
 	}
-	c.extra(o, []string{"key", "subject", "target", "effect", "params", "condition", "priority", "enabled", "message"}, loc)
-	return out, c.count() == before
+	if v, ok := f.get("billing_currency"); ok && v != nil {
+		if s, ok := c.str(v, 0, 0, f.at("billing_currency")); ok {
+			if !currencyRe.MatchString(s) {
+				c.valueError("billing_currency must be a three-letter currency code such as RUB", f.at("billing_currency"))
+			}
+			out.BillingCurrency = &s
+		}
+	}
+	if v, ok := f.get("approvers"); ok && v != nil {
+		out.Approvers, _ = c.strList(v, f.at("approvers"))
+		for _, a := range out.Approvers {
+			if !approverRefRe.MatchString(a) {
+				c.valueError(fmt.Sprintf("approver '%s' must be an email or user:<id>", a), f.at("approvers"))
+			}
+		}
+	}
+	out.RenamedFrom = c.renamedFrom(f)
+	c.extra(o, []string{"key", "subject", "target", "effect", "params", "condition", "priority", "enabled", "message", "billing_currency",
+		"approvers", "renamed_from"}, loc)
+	if c.count() > before {
+		return out, false
+	}
+	if v, set := out.Params.Get("approvers"); set {
+		if l, ok := v.([]any); ok {
+			for _, x := range l {
+				if s, ok := x.(string); ok && !approverRefRe.MatchString(s) {
+					c.valueError(fmt.Sprintf("approver '%s' must be an email or user:<id>", s), join(f.at("params"), "approvers"))
+					return out, false
+				}
+			}
+		}
+	}
+	if len(out.Approvers) > 0 {
+		if out.Effect != "approval" {
+			c.valueError(fmt.Sprintf("policy '%s': approvers apply only to an approval policy", out.Key), f.at("approvers"))
+			return out, false
+		}
+		if _, set := out.Params.Get("approvers"); set {
+			c.valueError(fmt.Sprintf("policy '%s': set approvers or params.approvers, not both", out.Key), f.at("approvers"))
+			return out, false
+		}
+	}
+	return out, true
 }
 
 const defaultChannelPrompt = "Handle the incoming message: {{ message_text }}"
@@ -816,7 +1203,8 @@ func bundleChannelFrom(c *checker, v any, loc []any) (BundleChannel, bool) {
 	if v, ok := f.get("enabled"); ok {
 		out.Enabled, _ = c.boolean(v, f.at("enabled"))
 	}
-	c.extra(o, []string{"key", "type", "name", "agent", "bindings", "prompt", "enabled"}, loc)
+	out.RenamedFrom = c.renamedFrom(f)
+	c.extra(o, []string{"key", "type", "name", "agent", "bindings", "prompt", "enabled", "renamed_from"}, loc)
 	return out, c.count() == before
 }
 
@@ -906,9 +1294,13 @@ func bundleFrom(c *checker, v any, loc []any) (Bundle, bool) {
 	out.Agents = listOf(c, f, "agents", bundleAgentFrom)
 	out.Channels = listOf(c, f, "channels", bundleChannelFrom)
 	out.Automations = listOf(c, f, "automations", bundleAutomationFrom)
-	out.Policies = listOf(c, f, "policies", bundlePolicyFrom)
+	out.Policies = policiesOf(c, f, out.Agents)
+	out.Streams = listOf(c, f, "streams", bundleStreamFrom)
+	out.OpenAPI = listOf(c, f, "openapi", bundleOpenAPIFrom)
+	out.Tasks = listOf(c, f, "tasks", bundleTaskFrom)
+	out.Projects = listOf(c, f, "projects", bundleProjectFrom)
 	c.extra(o, []string{"schema_version", "name", "display_name", "description", "metadata", "setup", "mcps", "skills",
-		"agents", "channels", "automations", "policies"}, loc)
+		"agents", "channels", "automations", "policies", "streams", "openapi", "tasks", "projects"}, loc)
 	return out, c.count() == before
 }
 
@@ -951,9 +1343,9 @@ func (m BundleMCP) dump() wirejson.Object {
 	if m.JSONSpec != nil {
 		spec = *m.JSONSpec
 	}
-	return wirejson.Object{{Key: "key", Value: m.Key}, {Key: "name", Value: m.Name}, {Key: "catalog", Value: optStrValue(m.Catalog)},
+	return withRenamedFrom(wirejson.Object{{Key: "key", Value: m.Key}, {Key: "name", Value: m.Name}, {Key: "catalog", Value: optStrValue(m.Catalog)},
 		{Key: "json_spec", Value: spec}, {Key: "bindings", Value: m.Bindings.object()},
-		{Key: "context_secret", Value: optStrValue(m.ContextSecret)}}
+		{Key: "context_secret", Value: optStrValue(m.ContextSecret)}}, m.RenamedFrom)
 }
 
 func (s BundleSkill) dump() wirejson.Object {
@@ -961,8 +1353,8 @@ func (s BundleSkill) dump() wirejson.Object {
 	if s.Files != nil {
 		files = s.Files.object()
 	}
-	return wirejson.Object{{Key: "key", Value: s.Key}, {Key: "name", Value: s.Name}, {Key: "source_type", Value: s.SourceType},
-		{Key: "content", Value: optStrValue(s.Content)}, {Key: "files", Value: files}, {Key: "source_url", Value: optStrValue(s.SourceURL)}}
+	return withRenamedFrom(wirejson.Object{{Key: "key", Value: s.Key}, {Key: "name", Value: s.Name}, {Key: "source_type", Value: s.SourceType},
+		{Key: "content", Value: optStrValue(s.Content)}, {Key: "files", Value: files}, {Key: "source_url", Value: optStrValue(s.SourceURL)}}, s.RenamedFrom)
 }
 
 func (a BundleAgent) dump() wirejson.Object {
@@ -970,27 +1362,89 @@ func (a BundleAgent) dump() wirejson.Object {
 	if a.ReasoningMaxTokens != nil {
 		tokens = json.Number(fmt.Sprint(*a.ReasoningMaxTokens))
 	}
-	return wirejson.Object{{Key: "key", Value: a.Key}, {Key: "name", Value: a.Name}, {Key: "description", Value: a.Description},
+	out := wirejson.Object{{Key: "key", Value: a.Key}, {Key: "name", Value: a.Name}, {Key: "description", Value: a.Description},
 		{Key: "instruction", Value: a.Instruction}, {Key: "model", Value: optStrValue(a.Model)}, {Key: "mcps", Value: strList(a.MCPs)},
 		{Key: "skills", Value: strList(a.Skills)}, {Key: "toolsets", Value: strList(a.Toolsets)},
 		{Key: "reasoning_effort", Value: optStrValue(a.ReasoningEffort)}, {Key: "reasoning_max_tokens", Value: tokens},
 		{Key: "client", Value: optStrValue(a.Client)}}
+	if len(a.Delegates) > 0 {
+		out = append(out, wirejson.Member{Key: "delegates", Value: strList(a.Delegates)})
+	}
+	if len(a.OpenAPI) > 0 {
+		out = append(out, wirejson.Member{Key: "openapi", Value: strList(a.OpenAPI)})
+	}
+	return withRenamedFrom(out, a.RenamedFrom)
 }
 
 func (a BundleAutomation) dump() wirejson.Object {
-	return wirejson.Object{{Key: "key", Value: a.Key}, {Key: "type", Value: a.Type}, {Key: "cron", Value: a.Cron},
+	out := wirejson.Object{{Key: "key", Value: a.Key}, {Key: "type", Value: a.Type}, {Key: "cron", Value: a.Cron},
 		{Key: "timezone", Value: a.Timezone}, {Key: "agent", Value: a.Agent}, {Key: "prompt", Value: a.Prompt}, {Key: "enabled", Value: a.Enabled}}
+	if a.On != nil {
+		out = append(omit(out, "cron"), wirejson.Member{Key: "on", Value: wirejson.Object{{Key: "stream", Value: a.On.Stream},
+			{Key: "filter", Value: nonNilObject(a.On.Filter)}}})
+	}
+	if a.Task != nil {
+		out = append(out, wirejson.Member{Key: "task", Value: *a.Task}, wirejson.Member{Key: "parameters", Value: nonNilObject(a.Parameters)})
+	}
+	return withRenamedFrom(out, a.RenamedFrom)
+}
+
+func (o BundleOpenAPI) dump() wirejson.Object {
+	var spec any
+	if o.Spec != nil {
+		spec = *o.Spec
+	}
+	return withRenamedFrom(wirejson.Object{{Key: "key", Value: o.Key}, {Key: "name", Value: o.Name}, {Key: "description", Value: o.Description},
+		{Key: "base_url", Value: o.BaseURL}, {Key: "spec_url", Value: optStrValue(o.SpecURL)}, {Key: "spec", Value: spec},
+		{Key: "headers", Value: o.Headers.object()}, {Key: "query", Value: o.Query.object()}, {Key: "variables", Value: o.Variables.object()}}, o.RenamedFrom)
+}
+
+func (t BundleTask) dump() wirejson.Object {
+	return withRenamedFrom(wirejson.Object{{Key: "key", Value: t.Key}, {Key: "name", Value: t.Name}, {Key: "agent", Value: t.Agent},
+		{Key: "prompt", Value: t.Prompt}, {Key: "parameters", Value: nonNilObject(t.Parameters)}}, t.RenamedFrom)
+}
+
+func (p BundleProject) dump() wirejson.Object {
+	return withRenamedFrom(wirejson.Object{{Key: "key", Value: p.Key}, {Key: "name", Value: p.Name}, {Key: "description", Value: p.Description},
+		{Key: "instructions", Value: optStrValue(p.Instructions)}, {Key: "agents", Value: strList(p.Agents)}, {Key: "mcp", Value: strList(p.MCPs)},
+		{Key: "skills", Value: strList(p.Skills)}}, p.RenamedFrom)
+}
+
+func (w BundleStreamWriter) dump() wirejson.Object {
+	out := wirejson.Object{{Key: "outputs", Value: strList(w.Outputs)}, {Key: "filter", Value: nonNilObject(w.Filter)}}
+	if w.Code != nil {
+		out = append(wirejson.Object{{Key: "code", Value: *w.Code}}, out...)
+	}
+	return out
+}
+
+func (s BundleStreamSource) dump() wirejson.Object {
+	return wirejson.Object{{Key: "type", Value: s.Type}, {Key: "kind", Value: s.Kind}, {Key: "config", Value: s.Config.object()},
+		{Key: "credentials", Value: s.Credentials.object()}}
+}
+
+func (s BundleStream) dump() wirejson.Object {
+	return withRenamedFrom(wirejson.Object{{Key: "key", Value: s.Key}, {Key: "name", Value: s.Name}, {Key: "description", Value: s.Description},
+		{Key: "sources", Value: dumpAll(s.Sources)}, {Key: "processors", Value: dumpAll(s.Processors)},
+		{Key: "forwards", Value: dumpAll(s.Forwards)}}, s.RenamedFrom)
 }
 
 func (p BundlePolicy) dump() wirejson.Object {
-	return wirejson.Object{{Key: "key", Value: p.Key}, {Key: "subject", Value: p.Subject}, {Key: "target", Value: p.Target},
+	out := wirejson.Object{{Key: "key", Value: p.Key}, {Key: "subject", Value: p.Subject}, {Key: "target", Value: p.Target},
 		{Key: "effect", Value: p.Effect}, {Key: "params", Value: nonNilObject(p.Params)}, {Key: "condition", Value: optStrValue(p.Condition)},
 		{Key: "priority", Value: json.Number(fmt.Sprint(p.Priority))}, {Key: "enabled", Value: p.Enabled}, {Key: "message", Value: optStrValue(p.Message)}}
+	if p.BillingCurrency != nil {
+		out = append(out, wirejson.Member{Key: "billing_currency", Value: *p.BillingCurrency})
+	}
+	if len(p.Approvers) > 0 {
+		out = append(out, wirejson.Member{Key: "approvers", Value: strList(p.Approvers)})
+	}
+	return withRenamedFrom(out, p.RenamedFrom)
 }
 
 func (ch BundleChannel) dump() wirejson.Object {
-	return wirejson.Object{{Key: "key", Value: ch.Key}, {Key: "type", Value: ch.Type}, {Key: "name", Value: ch.Name},
-		{Key: "agent", Value: ch.Agent}, {Key: "bindings", Value: ch.Bindings.object()}, {Key: "prompt", Value: ch.Prompt}, {Key: "enabled", Value: ch.Enabled}}
+	return withRenamedFrom(wirejson.Object{{Key: "key", Value: ch.Key}, {Key: "type", Value: ch.Type}, {Key: "name", Value: ch.Name},
+		{Key: "agent", Value: ch.Agent}, {Key: "bindings", Value: ch.Bindings.object()}, {Key: "prompt", Value: ch.Prompt}, {Key: "enabled", Value: ch.Enabled}}, ch.RenamedFrom)
 }
 
 func (m BundleMetadata) dump() wirejson.Object {
@@ -1018,11 +1472,25 @@ func dumpAll[T interface{ dump() wirejson.Object }](items []T) []any {
 	return out
 }
 
-// Dump is model_dump(mode="json").
+// Dump is model_dump(mode="json"); a kind the bundle does not use is left
+// out, so a bundle without one dumps as before the kind existed.
 func (b *Bundle) Dump() wirejson.Object {
-	return wirejson.Object{{Key: "schema_version", Value: b.SchemaVersion}, {Key: "name", Value: b.Name},
+	out := wirejson.Object{{Key: "schema_version", Value: b.SchemaVersion}, {Key: "name", Value: b.Name},
 		{Key: "display_name", Value: optStrValue(b.DisplayName)}, {Key: "description", Value: b.Description},
 		{Key: "metadata", Value: b.Metadata.dump()}, {Key: "setup", Value: dumpAll(b.Setup)}, {Key: "mcps", Value: dumpAll(b.MCPs)},
 		{Key: "skills", Value: dumpAll(b.Skills)}, {Key: "agents", Value: dumpAll(b.Agents)}, {Key: "channels", Value: dumpAll(b.Channels)},
 		{Key: "automations", Value: dumpAll(b.Automations)}, {Key: "policies", Value: dumpAll(b.Policies)}}
+	if len(b.Streams) > 0 {
+		out = append(out, wirejson.Member{Key: "streams", Value: dumpAll(b.Streams)})
+	}
+	if len(b.OpenAPI) > 0 {
+		out = append(out, wirejson.Member{Key: "openapi", Value: dumpAll(b.OpenAPI)})
+	}
+	if len(b.Tasks) > 0 {
+		out = append(out, wirejson.Member{Key: "tasks", Value: dumpAll(b.Tasks)})
+	}
+	if len(b.Projects) > 0 {
+		out = append(out, wirejson.Member{Key: "projects", Value: dumpAll(b.Projects)})
+	}
+	return out
 }

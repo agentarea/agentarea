@@ -18,8 +18,14 @@ func (e *BundleRefusal) Error() string { return e.Msg }
 // ErrBundleEntityGone is an entity a redeploy updates that went away mid-update.
 var ErrBundleEntityGone = errors.New("the entity went away mid-update")
 
-// BundleTool names one tool of an agent: a code toolset, or an MCP connection by id.
-type BundleTool struct{ Type, Name string }
+// BundleTool names one tool of an agent: a code toolset, an MCP connection
+// by id, a delegate (Type "agent", Name its key in the bundle, AgentID the
+// agent), or an OpenAPI connection (Type "openapi", Name and ConnectionID its id).
+type BundleTool struct {
+	Type, Name   string
+	AgentID      *string
+	ConnectionID *string
+}
 
 // BundleFile is one file of a skill package, path relative to its root.
 type BundleFile struct{ Path, Text string }
@@ -103,15 +109,40 @@ type BundleMCPCreated struct {
 	SpecID     string
 }
 
+// BundleMCPUpdate is a redeploy of an MCP connection the bundle created.
+// Spec, set when the bundle declares its own server, replaces that spec's
+// transport and env schema; Instance replaces the instance's name, environment
+// and headers, where KeepSecret() keeps the secret stored under that name.
+// SetContextSecret writes Instance.ContextSecret, nil clearing it.
+type BundleMCPUpdate struct {
+	Spec             *MCPSpecNew
+	Instance         BundleInstance
+	SetContextSecret bool
+}
+
+// BundleDiscovery is a verification of an instance: its status, how many
+// tools it serves now, and why it failed.
+type BundleDiscovery struct {
+	Status string
+	Tools  int
+	Error  *string
+}
+
 // BundleMCPs is what a bundle deploy reads and writes of MCP connections
 // (connections module). A refusal of the input is a *BundleRefusal.
 type BundleMCPs interface {
 	// InstanceName is the name of an instance the workspace sees.
 	InstanceName(ctx context.Context, c authn.Caller, id string) (string, bool, error)
+	// InstanceSpecID is the spec the instance runs from.
+	InstanceSpecID(ctx context.Context, c authn.Caller, id string) (string, bool, error)
 	// CreateFromSpec connects specID; a spec outside the workspace is copied into it.
 	CreateFromSpec(ctx context.Context, c authn.Caller, specID string, in BundleInstance) (BundleMCPCreated, error)
 	// CreateWithSpec creates spec and its instance.
 	CreateWithSpec(ctx context.Context, c authn.Caller, spec MCPSpecNew, in BundleInstance) (BundleMCPCreated, error)
+	// UpdateMCP applies a redeploy to the instance id and its spec.
+	UpdateMCP(ctx context.Context, c authn.Caller, id string, u BundleMCPUpdate) error
+	// Rediscover verifies the instance again and stores the tools it serves now.
+	Rediscover(ctx context.Context, c authn.Caller, id string) (BundleDiscovery, error)
 	DeleteInstance(ctx context.Context, c authn.Caller, id string) error
 	DeleteSpec(ctx context.Context, c authn.Caller, id string) error
 	// SecretProblem is the refusal of the caller referencing the workspace secret, "" when it may.
@@ -120,6 +151,12 @@ type BundleMCPs interface {
 	CarriesSecretRef(v any) bool
 	// SecretRef is the value an instance's environment or headers reference a workspace secret with.
 	SecretRef(name string) any
+	// KeepSecret is the value an update sends for a secret it leaves as stored.
+	KeepSecret() any
+	// SecretsMatch compares values with the secrets the instance stores under
+	// those environment or header names, and contextSecret with its context
+	// secret; it answers equal or not, never a value.
+	SecretsMatch(ctx context.Context, c authn.Caller, id string, values map[string]string, contextSecret *string) (map[string]bool, bool, error)
 	// ContextSecretLength is the length a context secret must have.
 	ContextSecretLength() (minimum, maximum int)
 	// SpecTransport is the transport an instance of spec gets; false when it declares none.
@@ -133,9 +170,15 @@ type BundleTrigger struct {
 	StreamID          *string
 }
 
-// BundleCron is the cron trigger an automation creates.
-type BundleCron struct {
+// BundleSchedule is the trigger an automation creates: on Cron in Timezone,
+// or, when StreamID is set, on that stream's events matching Filter. It asks
+// AgentID Text, or, when TaskDefinitionID is set, runs that saved task with Parameters.
+type BundleSchedule struct {
 	Name, Description, AgentID, Cron, Timezone, Text string
+	StreamID                                         *string
+	Filter                                           map[string]any
+	TaskDefinitionID                                 *string
+	Parameters                                       map[string]any
 	Enabled                                          bool
 }
 
@@ -151,10 +194,16 @@ type BundleChannelNew struct {
 type BundleChannelCreated struct{ TriggerID, StreamID string }
 
 // BundleTriggerUpdate is TriggerUpdate as a redeploy sends it; Cron and
-// Timezone are set for a cron trigger.
+// Timezone are set for a cron trigger, Filter for a stream trigger.
+// TaskDefinitionID, written when TaskDefinitionSet, is the saved task it
+// runs with Parameters, nil when it asks Text.
 type BundleTriggerUpdate struct {
 	Description, AgentID, Text string
 	Cron, Timezone             *string
+	Filter                     map[string]any
+	TaskDefinitionSet          bool
+	TaskDefinitionID           *string
+	Parameters                 map[string]any
 }
 
 // BundleChannelCredentials are the credentials stored for a channel's webhook source.
@@ -168,9 +217,9 @@ type BundleChannelCredentials struct {
 type BundleTriggers interface {
 	Trigger(ctx context.Context, id string) (BundleTrigger, bool, error)
 	Triggers(ctx context.Context) ([]BundleTrigger, error)
-	// CronProblem is why validate_configuration refuses the trigger, "" when it does not.
-	CronProblem(ctx context.Context, n BundleCron) (string, error)
-	CreateCron(ctx context.Context, n BundleCron) (string, error)
+	// ScheduleProblem is why validate_configuration refuses the trigger, "" when it does not.
+	ScheduleProblem(ctx context.Context, n BundleSchedule) (string, error)
+	CreateSchedule(ctx context.Context, n BundleSchedule) (string, error)
 	// CreateChannel makes the channel, or nothing of it.
 	CreateChannel(ctx context.Context, n BundleChannelNew) (BundleChannelCreated, error)
 	DeleteChannel(ctx context.Context, created BundleChannelCreated) error
@@ -180,6 +229,127 @@ type BundleTriggers interface {
 	// ChannelCredentials are the credentials of the webhook source feeding the trigger's stream.
 	ChannelCredentials(ctx context.Context, triggerID string) (BundleChannelCredentials, bool, error)
 	SetChannelCredentials(ctx context.Context, creds BundleChannelCredentials) error
+}
+
+// BundleStreamSource is a source a deploy adds to a stream: Values are
+// credentials as given, Secrets the credentials read from the workspace
+// secret of that name.
+type BundleStreamSource struct {
+	Type, Kind      string
+	Config          map[string]string
+	Values, Secrets map[string]string
+}
+
+// BundleStreamWriter is a processor of the stream when Code is set, else a
+// forward; Outputs are the ids of the streams it writes into.
+type BundleStreamWriter struct {
+	Code    *string
+	Outputs []string
+	Filter  map[string]any
+}
+
+// BundleStreamSpec is a stream as a deploy declares it.
+type BundleStreamSpec struct {
+	Name, Description string
+	Sources           []BundleStreamSource
+	Writers           []BundleStreamWriter
+}
+
+// BundleStreams is what a bundle deploy reads and writes of streams (streams
+// module). ctx carries the caller. A refusal of the input is a *BundleRefusal.
+type BundleStreams interface {
+	StreamName(ctx context.Context, id string) (string, bool, error)
+	// StreamNamed is the id of the workspace's stream called name.
+	StreamNamed(ctx context.Context, name string) (string, bool, error)
+	// StreamProblem is why the stream's sources or writers would be refused,
+	// "" when they would not; outputs are not checked.
+	StreamProblem(ctx context.Context, spec BundleStreamSpec) (string, error)
+	// CreateStream makes the stream with its sources and writers, or nothing of it.
+	CreateStream(ctx context.Context, spec BundleStreamSpec) (string, error)
+	// UpdateStream gives the stream spec's description, sources and writers: a
+	// source of the same type, kind and settings stays, the credentials given
+	// written over its own; every other source and writer is replaced.
+	// Triggers' subscriptions stay.
+	UpdateStream(ctx context.Context, id string, spec BundleStreamSpec) error
+	DeleteStream(ctx context.Context, id string) error
+}
+
+// BundleOpenAPIParam is a header, query parameter or URL variable of an
+// OpenAPI connection: Value, the value of the workspace secret SecretName,
+// or, when Keep, the value the connection stores already. Secret marks a
+// query parameter stored as a secret.
+type BundleOpenAPIParam struct {
+	Name, Value  string
+	SecretName   *string
+	Secret, Keep bool
+}
+
+// BundleOpenAPISpec is an OpenAPI connection as a deploy writes it: its spec
+// at SpecURL, or Spec inline.
+type BundleOpenAPISpec struct {
+	Name, BaseURL             string
+	Description, SpecURL      *string
+	Spec                      any
+	Headers, Query, Variables []BundleOpenAPIParam
+}
+
+// BundleOpenAPIs is what a bundle deploy reads and writes of OpenAPI
+// connections (connections module). A refusal of the input is a *BundleRefusal.
+type BundleOpenAPIs interface {
+	ConnectionName(ctx context.Context, c authn.Caller, id string) (string, bool, error)
+	// OpenAPIProblem is why creating the connection would be refused, "" when
+	// it would not; a spec_url is not fetched.
+	OpenAPIProblem(ctx context.Context, c authn.Caller, spec BundleOpenAPISpec) (string, error)
+	// CreateOpenAPI creates the connection with the tools its spec declares.
+	CreateOpenAPI(ctx context.Context, c authn.Caller, spec BundleOpenAPISpec) (string, error)
+	// UpdateOpenAPI writes spec over the connection and discovers its tools again.
+	UpdateOpenAPI(ctx context.Context, c authn.Caller, id string, spec BundleOpenAPISpec) error
+	DeleteOpenAPI(ctx context.Context, c authn.Caller, id string) error
+	// HeaderIsSecret reports a header whose value the connection stores as a secret.
+	HeaderIsSecret(name string) bool
+}
+
+// BundleTaskSpec is a saved task as a deploy writes it: a run of AgentID
+// asked Prompt, with Parameters.
+type BundleTaskSpec struct {
+	Name, Prompt, AgentID string
+	Parameters            map[string]any
+}
+
+// BundleTaskRef is a saved task of the workspace and the agent it runs.
+type BundleTaskRef struct{ ID, AgentID string }
+
+// BundleTasks is what a bundle deploy reads and writes of saved tasks (agents
+// module). A refusal of the input is a *BundleRefusal.
+type BundleTasks interface {
+	TaskName(ctx context.Context, c authn.Caller, id string) (string, bool, error)
+	// TaskNamed are the workspace's saved tasks called name.
+	TaskNamed(ctx context.Context, c authn.Caller, name string) ([]BundleTaskRef, error)
+	CreateTask(ctx context.Context, c authn.Caller, spec BundleTaskSpec) (string, error)
+	// UpdateTask writes spec over the saved task; moving it to another agent is
+	// refused while triggers run it.
+	UpdateTask(ctx context.Context, c authn.Caller, id string, spec BundleTaskSpec) error
+	DeleteTask(ctx context.Context, c authn.Caller, id string) error
+}
+
+// BundleProjectSpec is a project as a deploy writes it, with the agents, MCP
+// instances and skills it groups by id.
+type BundleProjectSpec struct {
+	Name                               string
+	Description, Instructions          *string
+	AgentIDs, MCPInstanceIDs, SkillIDs []string
+}
+
+// BundleProjects is what a bundle deploy reads and writes of projects
+// (projects module). A refusal of the input is a *BundleRefusal.
+type BundleProjects interface {
+	ProjectName(ctx context.Context, c authn.Caller, id string) (string, bool, error)
+	CreateProject(ctx context.Context, c authn.Caller, spec BundleProjectSpec) (string, error)
+	// UpdateProject writes spec's name, description and instructions and links
+	// what it lists; a link in managed, what the last deploy linked, that spec
+	// drops is removed, and links the deploy never made stay.
+	UpdateProject(ctx context.Context, c authn.Caller, id string, spec, managed BundleProjectSpec) error
+	DeleteProject(ctx context.Context, c authn.Caller, id string) error
 }
 
 // BundleRule is a governance rule a bundle policy installs as.

@@ -3,6 +3,8 @@ import type {
   Processing,
   ProcessingStatus,
 } from "@/api/client/types.gen";
+import { getTaskStatusPresentation, type StatusKind } from "@/lib/status";
+import { parseUtcTimestamp } from "@/utils/dateUtils";
 
 /** What the platform did with an event, as the feed filters it. */
 export const PROCESSING_RESULTS: readonly ProcessingStatus[] = [
@@ -26,8 +28,8 @@ export interface FeedState {
   event?: string;
   /** An older page: the sequence it starts before. */
   before?: string;
-  /** `1` shows the platform's own events, which the feed leaves out by default. */
-  platform?: "1";
+  /** `0` leaves out the platform's own events, which the feed shows by default. */
+  platform?: "0";
 }
 
 /** The source type of the events the platform writes about its own tasks. */
@@ -56,7 +58,7 @@ export function parseFeedState(
       const result = PROCESSING_RESULTS.find((r) => r === value);
       if (result) state.result = result;
     } else if (key === "platform") {
-      if (value === "1") state.platform = value;
+      if (value === "0") state.platform = value;
     } else {
       state[key] = value;
     }
@@ -64,16 +66,54 @@ export function parseFeedState(
   return state;
 }
 
-/** A feed URL; `patch` replaces values, an `undefined` in it removes one. */
+/**
+ * A feed URL; `patch` replaces values, an `undefined` in it removes one. A
+ * stream is the path, `/events/{stream}`, not a filter in the query.
+ */
 export function feedHref(state: FeedState, patch: Partial<FeedState> = {}) {
   const merged: FeedState = { ...state, ...patch };
   const params = new URLSearchParams();
   for (const key of KEYS) {
     const value = merged[key];
-    if (value) params.set(key, value);
+    if (value && key !== "stream") params.set(key, value);
   }
   const query = params.toString();
-  return `/events${query ? `?${query}` : ""}`;
+  const path = merged.stream
+    ? `/events/${encodeURIComponent(merged.stream)}`
+    : "/events";
+  return `${path}${query ? `?${query}` : ""}`;
+}
+
+/** An event by its id, opened in the feed of whichever stream holds it. */
+export function eventByIdHref(eventId: string): string {
+  return `/events/event/${encodeURIComponent(eventId)}`;
+}
+
+const LEGACY_OUTCOMES: Record<string, ProcessingStatus | undefined> = {
+  all: undefined,
+  reacted: "handled",
+  skipped: "skipped",
+  error: "error",
+  unheard: "no_handlers",
+};
+
+/**
+ * What a stream page URL from before the shared feed asked for: its
+ * `?outcome=` as a result, and its `?event=` as a sequence. Null when the URL
+ * carries neither.
+ */
+export function legacyStreamQuery(
+  params: Record<string, string | string[] | undefined>
+): { result?: ProcessingStatus; sequence?: number } | null {
+  const outcome = typeof params.outcome === "string" ? params.outcome : null;
+  const event = typeof params.event === "string" ? params.event : "";
+  const sequence = /^\d+$/.test(event) ? Number(event) : undefined;
+  if (outcome === null && sequence === undefined) return null;
+  const result = outcome === null ? undefined : LEGACY_OUTCOMES[outcome];
+  return {
+    ...(result ? { result } : {}),
+    ...(sequence !== undefined ? { sequence } : {}),
+  };
 }
 
 /** The view is the platform's own: its stream or its provider is the filter. */
@@ -92,7 +132,7 @@ export function showsPlatform(
   state: FeedState,
   platformStreams: readonly string[]
 ): boolean {
-  return state.platform === "1" || platformForced(state, platformStreams);
+  return state.platform !== "0" || platformForced(state, platformStreams);
 }
 
 /** The feed's filters as the API names them. */
@@ -131,6 +171,99 @@ export function matchesResult(
   result: ProcessingStatus | undefined
 ): boolean {
   return result === undefined || event.processing.status === result;
+}
+
+/** A result a row shows as its glyph alone: nothing in it asks to be read. */
+export function rowStatusQuiet(status: ProcessingStatus): boolean {
+  return (
+    status === "no_handlers" || status === "skipped" || status === "handled"
+  );
+}
+
+/** What became of an event, as its row says it. */
+export type EventFate =
+  | { key: "queued" | "processing" | "nobody" | "skipped" | "passedOn" }
+  | { key: "failed"; count: number }
+  | { key: "tasks"; count: number; status: StatusKind };
+
+const TASK_URGENCY: StatusKind[] = ["failed", "attention", "running", "queued"];
+
+export function eventFate(p: Processing): EventFate {
+  switch (p.status) {
+    case "queued":
+    case "processing":
+      return { key: p.status };
+    case "no_handlers":
+      return { key: "nobody" };
+    case "skipped":
+      return { key: "skipped" };
+    case "error":
+      return { key: "failed", count: p.errors };
+  }
+  const tasks = p.tasks ?? [];
+  if (tasks.length === 0) return { key: "passedOn" };
+  const kinds = tasks.map((t) => getTaskStatusPresentation(t.status).kind);
+  const status = TASK_URGENCY.find((k) => kinds.includes(k)) ?? "done";
+  return { key: "tasks", count: tasks.length, status };
+}
+
+/** An event the feed shows, with the alike events right after it that it stands for. */
+export interface FeedItem {
+  event: FeedEventResponse;
+  folded: FeedEventResponse[];
+}
+
+function runKey(e: FeedEventResponse): string {
+  return JSON.stringify([
+    e.stream_id,
+    e.kind,
+    e.summary,
+    e.sender,
+    eventFate(e.processing),
+  ]);
+}
+
+/**
+ * Neighbours from one stream that say and came to the same, as one item: the
+ * newest with the rest folded under it. A run with an event in `open` stays
+ * unfolded.
+ */
+export function foldRuns(
+  events: readonly FeedEventResponse[],
+  open: ReadonlySet<string>
+): FeedItem[] {
+  const runs: FeedEventResponse[][] = [];
+  let key = "";
+  for (const event of events) {
+    const k = runKey(event);
+    if (runs.length > 0 && k === key) runs[runs.length - 1].push(event);
+    else runs.push([event]);
+    key = k;
+  }
+  return runs.flatMap((run) =>
+    run.some((e) => open.has(e.event_id))
+      ? run.map((event) => ({ event, folded: [] }))
+      : [{ event: run[0], folded: run.slice(1) }]
+  );
+}
+
+const PLATFORM_OUTCOMES: Record<
+  string,
+  {
+    key: "completed" | "failed" | "cancelled" | "approval" | "input";
+    status: StatusKind;
+  }
+> = {
+  "task.completed": { key: "completed", status: "done" },
+  "task.failed": { key: "failed", status: "failed" },
+  "task.cancelled": { key: "cancelled", status: "cancelled" },
+  "approval.requested": { key: "approval", status: "attention" },
+  "input.request": { key: "input", status: "attention" },
+};
+
+/** What a platform event says about its task; null for a kind the platform does not write. */
+export function platformOutcome(kind: string) {
+  return PLATFORM_OUTCOMES[kind] ?? null;
 }
 
 export interface ProcessingProgress {
@@ -246,4 +379,36 @@ export function shortAge(ms: number): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h`;
   return `${Math.floor(hours / 24)}d`;
+}
+
+export type EventTimeStyle = "time" | "dateTime" | "full";
+
+const EVENT_TIME_FORMATS: Record<EventTimeStyle, Intl.DateTimeFormatOptions> = {
+  time: { hour: "2-digit", minute: "2-digit" },
+  dateTime: { dateStyle: "medium", timeStyle: "short" },
+  // `timeStyle: "long"` carries the zone's name; `timeZoneName` cannot be
+  // combined with a style.
+  full: { dateStyle: "medium", timeStyle: "long" },
+};
+
+/** An event's time in `zone`; "—" when it is not a time. */
+export function formatEventTime(
+  iso: string,
+  locale: string,
+  zone: string,
+  style: EventTimeStyle
+): string {
+  const date = parseUtcTimestamp(iso);
+  if (!date) return "—";
+  return date.toLocaleString(locale, {
+    ...EVENT_TIME_FORMATS[style],
+    timeZone: zone,
+  });
+}
+
+/** The full time in `zone`, then in UTC unless that is the zone. */
+export function utcTitle(iso: string, locale: string, zone: string): string {
+  const local = formatEventTime(iso, locale, zone, "full");
+  if (zone === "UTC") return local;
+  return `${local} · ${formatEventTime(iso, locale, "UTC", "full")}`;
 }

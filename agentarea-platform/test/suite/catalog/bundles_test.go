@@ -51,9 +51,11 @@ func install(c *h.Client, t *testing.T, w *h.Workspace, preview map[string]any, 
 	if setup == nil {
 		setup = map[string]any{}
 	}
-	return c.Post(t, w.Path("/bundles/install"), map[string]any{
-		"bundle": preview["bundle"], "setup_values": setup, "plan_digest": preview["plan_digest"],
-	})
+	body := map[string]any{"bundle": preview["bundle"], "setup_values": setup, "plan_digest": preview["plan_digest"]}
+	if into, ok := preview["install"].(map[string]any); ok {
+		body["install_id"] = into["id"]
+	}
+	return c.Post(t, w.Path("/bundles/install"), body)
 }
 
 func statuses(t *testing.T, entities any, field string) map[string]string {
@@ -117,17 +119,33 @@ func TestBundleDeployCreatesThenRedeploysInPlace(t *testing.T) {
 		t.Fatalf("agent = %v", agent)
 	}
 
-	again := analyze(t, w.Owner, w, map[string]any{"files": folder(model, "Be thorough.\n", nil)})
+	installID := result["install_id"]
+	if installID != result["installed_bundle_id"] {
+		t.Fatalf("install_id = %v, installed_bundle_id = %v", installID, result["installed_bundle_id"])
+	}
+	taken := analyze(t, w.Owner, w, map[string]any{"files": folder(model, "Be thorough.\n", nil)})
+	if taken["installable"] != false || taken["plan_digest"] != nil || taken["existing_install"].(map[string]any)["id"] != installID {
+		t.Fatalf("plan over an installed name = %v", taken)
+	}
+	exists := false
+	for _, i := range taken["issues"].([]any) {
+		exists = exists || i.(map[string]any)["code"] == "bundle_exists"
+	}
+	if !exists {
+		t.Fatalf("issues = %v", taken["issues"])
+	}
+
+	again := analyze(t, w.Owner, w, map[string]any{"files": folder(model, "Be thorough.\n", nil), "into": installID})
 	unchanged := map[string]string{"skill:notes": "unchanged", "agent:agent": "unchanged", "automation:daily": "unchanged"}
 	if got := statuses(t, again["entities"], "status"); !reflect.DeepEqual(got, unchanged) {
 		t.Fatalf("replan = %v", got)
 	}
 
-	changed := analyze(t, w.Owner, w, map[string]any{"files": folder(model, "Be brief.\n", nil)})
+	changed := analyze(t, w.Owner, w, map[string]any{"files": folder(model, "Be brief.\n", nil), "into": installID})
 	if got := statuses(t, changed["entities"], "status"); got["agent:agent"] != "will_update" {
 		t.Fatalf("change plan = %v", got)
 	}
-	stale := map[string]any{"bundle": changed["bundle"], "setup_values": map[string]any{}, "plan_digest": first["plan_digest"]}
+	stale := map[string]any{"bundle": changed["bundle"], "setup_values": map[string]any{}, "plan_digest": first["plan_digest"], "install_id": installID}
 	w.Owner.Post(t, w.Path("/bundles/install"), stale).Expect(http.StatusConflict).Match(map[string]any{
 		"type": "about:blank", "title": "Conflict", "status": 409, "code": "bundle_plan_changed",
 		"detail": "the deploy plan changed since it was shown; analyze the bundle again and review the new plan", "issues": []any{},

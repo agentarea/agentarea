@@ -4,16 +4,24 @@ import {
   applyProcessing,
   applyRecorded,
   dayGroups,
+  eventByIdHref,
+  eventFate,
   feedApiQuery,
   feedHref,
+  foldRuns,
+  formatEventTime,
+  legacyStreamQuery,
   liveQuery,
   matchesResult,
   neighbourEvent,
   parseFeedState,
   platformForced,
+  platformOutcome,
   processingProgress,
+  rowStatusQuiet,
   shortAge,
   showsPlatform,
+  utcTitle,
 } from "./eventFeed";
 
 function processing(over: Partial<Processing> = {}): Processing {
@@ -43,6 +51,7 @@ function event(
     key: `k${sequence}`,
     session_key: null,
     sender: null,
+    summary: null,
     received_at: "2026-10-19T10:00:00Z",
     occurred_at: "2026-10-19T10:00:00Z",
     depth: 0,
@@ -80,20 +89,34 @@ describe("the feed's URL state", () => {
   });
 
   it("reads the platform switch only as 1", () => {
-    expect(parseFeedState({ platform: "1" })).toEqual({ platform: "1" });
+    expect(parseFeedState({ platform: "0" })).toEqual({ platform: "0" });
+    expect(parseFeedState({ platform: "1" })).toEqual({});
     expect(parseFeedState({ platform: "true" })).toEqual({});
-    expect(feedHref({ platform: "1" }, { stream: "s1" })).toBe(
-      "/events?stream=s1&platform=1"
+    expect(feedHref({ platform: "0" }, { stream: "s1" })).toBe(
+      "/events/s1?platform=0"
     );
   });
 
   it("writes a link, a patch replacing or removing values", () => {
-    const state = { stream: "s1", result: "error" as const, event: "e1" };
-    expect(feedHref(state)).toBe("/events?stream=s1&result=error&event=e1");
+    const state = { kind: "order.*", result: "error" as const, event: "e1" };
+    expect(feedHref(state)).toBe("/events?kind=order.*&result=error&event=e1");
     expect(feedHref(state, { result: undefined, event: undefined })).toBe(
-      "/events?stream=s1"
+      "/events?kind=order.*"
     );
     expect(feedHref({})).toBe("/events");
+  });
+
+  it("puts the stream in the path and keeps the other filters in the query", () => {
+    const state = { stream: "s 1", result: "error" as const, event: "e1" };
+    expect(feedHref(state)).toBe("/events/s%201?result=error&event=e1");
+    expect(feedHref({ stream: "s1" })).toBe("/events/s1");
+    expect(feedHref(state, { stream: undefined, event: undefined })).toBe(
+      "/events?result=error"
+    );
+  });
+
+  it("links an event by its id", () => {
+    expect(eventByIdHref("a/b")).toBe("/events/event/a%2Fb");
   });
 
   it("names the API's parameters, and live leaves the result out", () => {
@@ -131,18 +154,21 @@ describe("the feed's URL state", () => {
 describe("the platform's own events", () => {
   const platformStreams = ["p1"];
 
-  it("are left out unless the switch is on", () => {
-    expect(showsPlatform({}, platformStreams)).toBe(false);
-    expect(showsPlatform({ stream: "s1" }, platformStreams)).toBe(false);
-    expect(showsPlatform({ platform: "1" }, platformStreams)).toBe(true);
+  it("are shown unless the switch is off", () => {
+    expect(showsPlatform({}, platformStreams)).toBe(true);
+    expect(showsPlatform({ stream: "s1" }, platformStreams)).toBe(true);
+    expect(showsPlatform({ platform: "0" }, platformStreams)).toBe(false);
   });
 
   it("are shown whatever the switch says when the view is the platform's", () => {
-    for (const state of [{ stream: "p1" }, { source_type: "platform" }]) {
+    for (const state of [
+      { stream: "p1", platform: "0" as const },
+      { source_type: "platform", platform: "0" as const },
+    ]) {
       expect(platformForced(state, platformStreams)).toBe(true);
       expect(showsPlatform(state, platformStreams)).toBe(true);
     }
-    expect(platformForced({ platform: "1" }, platformStreams)).toBe(false);
+    expect(platformForced({ platform: "0" }, platformStreams)).toBe(false);
   });
 });
 
@@ -251,5 +277,180 @@ describe("how long an event has waited", () => {
     expect(shortAge(125_000)).toBe("2m");
     expect(shortAge(3 * 3_600_000 + 5)).toBe("3h");
     expect(shortAge(50 * 3_600_000)).toBe("2d");
+  });
+});
+
+describe("a stream page URL from before the shared feed", () => {
+  it("reads its outcome as a result and its event as a sequence", () => {
+    expect(legacyStreamQuery({ outcome: "unheard", event: "12" })).toEqual({
+      result: "no_handlers",
+      sequence: 12,
+    });
+    expect(legacyStreamQuery({ outcome: "reacted" })).toEqual({
+      result: "handled",
+    });
+  });
+
+  it("drops an outcome of all, and one it does not know", () => {
+    expect(legacyStreamQuery({ outcome: "all" })).toEqual({});
+    expect(legacyStreamQuery({ outcome: "unknown" })).toEqual({});
+  });
+
+  it("is null for a URL of the shared feed", () => {
+    expect(legacyStreamQuery({})).toBeNull();
+    expect(legacyStreamQuery({ event: "8f2c-uuid", result: "error" })).toBe(
+      null
+    );
+  });
+});
+
+describe("which rows show their result as a glyph alone", () => {
+  it("is the results that need no reading", () => {
+    expect(
+      [
+        "no_handlers",
+        "skipped",
+        "handled",
+        "queued",
+        "processing",
+        "error",
+      ].filter((s) => rowStatusQuiet(s as Processing["status"]))
+    ).toEqual(["no_handlers", "skipped", "handled"]);
+  });
+});
+
+describe("an event's time", () => {
+  const iso = "2026-10-19T10:00:00Z";
+
+  it("is shown in the viewer's zone", () => {
+    expect(formatEventTime(iso, "en-GB", "Europe/Berlin", "time")).toBe(
+      "12:00"
+    );
+    expect(formatEventTime("2026-10-19T10:00:00", "en-GB", "UTC", "time")).toBe(
+      "10:00"
+    );
+    expect(formatEventTime("not a time", "en-GB", "UTC", "time")).toBe("—");
+  });
+
+  it("titles the zone's full time with UTC beside it, once when they are one", () => {
+    expect(utcTitle(iso, "en-GB", "Europe/Berlin")).toBe(
+      `${formatEventTime(iso, "en-GB", "Europe/Berlin", "full")} · ${formatEventTime(iso, "en-GB", "UTC", "full")}`
+    );
+    expect(utcTitle(iso, "en-GB", "Europe/Berlin")).toContain("12:00:00");
+    expect(utcTitle(iso, "en-GB", "Europe/Berlin")).toContain("10:00:00 UTC");
+    expect(utcTitle(iso, "en-GB", "UTC")).toBe(
+      formatEventTime(iso, "en-GB", "UTC", "full")
+    );
+  });
+});
+
+describe("what became of an event, in a row's words", () => {
+  it("says nobody listens, the handlers passed, or they failed", () => {
+    expect(eventFate(processing({ status: "no_handlers" }))).toEqual({
+      key: "nobody",
+    });
+    expect(eventFate(processing({ status: "skipped" }))).toEqual({
+      key: "skipped",
+    });
+    expect(eventFate(processing({ status: "error", errors: 2 }))).toEqual({
+      key: "failed",
+      count: 2,
+    });
+  });
+
+  it("names the tasks it started by the one that most needs a look", () => {
+    const tasks = (...statuses: string[]) =>
+      processing({
+        status: "handled",
+        reacted: statuses.length,
+        tasks: statuses.map((status, i) => ({ id: `t${i}`, status })),
+      });
+    expect(eventFate(tasks("completed"))).toEqual({
+      key: "tasks",
+      count: 1,
+      status: "done",
+    });
+    expect(eventFate(tasks("completed", "running"))).toMatchObject({
+      status: "running",
+    });
+    expect(eventFate(tasks("running", "waiting_for_approval"))).toMatchObject({
+      status: "attention",
+    });
+    expect(eventFate(tasks("waiting_for_input", "failed"))).toMatchObject({
+      count: 2,
+      status: "failed",
+    });
+  });
+
+  it("is passed on when the handlers reacted without a task", () => {
+    expect(
+      eventFate(processing({ status: "handled", reacted: 2, tasks: [] }))
+    ).toEqual({ key: "passedOn" });
+  });
+});
+
+describe("what a platform event says about a task", () => {
+  it("is the task's outcome with its status", () => {
+    expect(platformOutcome("task.completed")).toEqual({
+      key: "completed",
+      status: "done",
+    });
+    expect(platformOutcome("task.failed")?.status).toBe("failed");
+    expect(platformOutcome("task.cancelled")?.status).toBe("cancelled");
+    expect(platformOutcome("approval.requested")).toEqual({
+      key: "approval",
+      status: "attention",
+    });
+    expect(platformOutcome("input.request")?.key).toBe("input");
+  });
+
+  it("is nothing for a kind the platform does not write", () => {
+    expect(platformOutcome("webhook")).toBeNull();
+  });
+});
+
+describe("a run of alike events, as the feed folds it", () => {
+  const ids = (items: ReturnType<typeof foldRuns>) =>
+    items.map((i) => [i.event.event_id, i.folded.map((e) => e.event_id)]);
+
+  it("folds neighbours from one stream that say and came to the same", () => {
+    const events = [
+      event(4),
+      event(3),
+      event(2, { kind: "order.refunded" }),
+      event(1),
+    ];
+    expect(ids(foldRuns(events, new Set()))).toEqual([
+      ["e4", ["e3"]],
+      ["e2", []],
+      ["e1", []],
+    ]);
+  });
+
+  it("keeps apart what differs in stream, summary, sender or fate", () => {
+    const events = [
+      event(5),
+      event(4, { stream_id: "s2" }),
+      event(3, { summary: "Disk full" }),
+      event(2, { sender: "ann" }),
+      event(1, { processing: processing({ status: "no_handlers" }) }),
+    ];
+    expect(
+      foldRuns(events, new Set()).every((i) => i.folded.length === 0)
+    ).toBe(true);
+  });
+
+  it("unfolds the run an open event is in", () => {
+    const events = [event(3), event(2), event(1)];
+    expect(foldRuns(events, new Set(["e2"])).length).toBe(3);
+  });
+
+  it("leaves a run unfolded once it is opened", () => {
+    const events = [event(3), event(2), event(1)];
+    expect(ids(foldRuns(events, new Set(["e3"])))).toEqual([
+      ["e3", []],
+      ["e2", []],
+      ["e1", []],
+    ]);
   });
 });

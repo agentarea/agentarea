@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
+	catalogapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/catalog/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/projects/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/projects/handlers"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/projects/service"
@@ -46,6 +47,9 @@ func New(d Deps) *Module {
 
 // Lookup is what other modules read about projects.
 func (m *Module) Lookup() api.Lookup { return m.svc }
+
+// Bundles is what a bundle deploy reads and writes of projects.
+func (m *Module) Bundles() catalogapi.BundleProjects { return service.BundleProjects{S: m.svc} }
 
 // RunInstructions is what a run reads of its project's instructions.
 func (m *Module) RunInstructions() api.RunInstructions { return m.svc }

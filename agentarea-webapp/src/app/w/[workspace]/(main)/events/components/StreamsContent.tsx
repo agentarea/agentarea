@@ -4,8 +4,8 @@ import EmptyState from "@/components/EmptyState";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
 import { listStreams } from "@/lib/api";
 import { EntityIcon } from "@/lib/entity-icons";
-import { requireApiData } from "@/lib/server-resource";
 import { isPlatformStream } from "@/lib/platformStream";
+import { requireApiData } from "@/lib/server-resource";
 import { formatDate } from "@/utils/dateUtils";
 
 export default async function StreamsContent({

@@ -118,6 +118,8 @@ interface Props {
    * page it is on, so it shows only what each event recorded.
    */
   resourceScoped?: boolean;
+  /** Every event is by one actor, as on a member's Activity tab: no actor column. */
+  actorScoped?: boolean;
 }
 
 export default function AuditLogClient({
@@ -126,6 +128,7 @@ export default function AuditLogClient({
   query,
   filtered,
   resourceScoped = false,
+  actorScoped = false,
 }: Props) {
   const t = useTranslations("AuditLogPage");
   const [events, setEvents] = useState<AuditEvent[]>(initialEvents);
@@ -195,12 +198,18 @@ export default function AuditLogClient({
           <ResourceCell event={event} expanded={expandedId === event.id} />
         ),
     },
-    {
-      accessor: "actor_id",
-      header: t("table.actor"),
-      cellClassName: "w-[220px] max-w-[240px]",
-      render: (_: unknown, event: AuditEvent) => <AuditActor event={event} />,
-    },
+    ...(actorScoped
+      ? []
+      : [
+          {
+            accessor: "actor_id",
+            header: t("table.actor"),
+            cellClassName: "w-[220px] max-w-[240px]",
+            render: (_: unknown, event: AuditEvent) => (
+              <AuditActor event={event} />
+            ),
+          },
+        ]),
     {
       accessor: "source_ip",
       header: t("table.ip"),

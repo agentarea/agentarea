@@ -9,3 +9,8 @@ import (
 func (m *Module) Bundles() catalogapi.BundleMCPs {
 	return service.BundleMCPs{S: func() *service.Service { return m.svc }}
 }
+
+// OpenAPIBundles is what a bundle deploy reads and writes of OpenAPI connections.
+func (m *Module) OpenAPIBundles() catalogapi.BundleOpenAPIs {
+	return service.BundleOpenAPIs{S: func() *service.Service { return m.svc }}
+}

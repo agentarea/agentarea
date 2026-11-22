@@ -55,15 +55,31 @@ func (b BundleTriggers) Triggers(ctx context.Context) ([]catalogapi.BundleTrigge
 	return out, nil
 }
 
-func cronTrigger(n catalogapi.BundleCron) domain.NewTrigger {
-	cron, tz := n.Cron, n.Timezone
-	return domain.NewTrigger{Name: n.Name, Description: n.Description, AgentID: n.AgentID, Type: domain.TypeCron,
-		CronExpression: &cron, Timezone: &tz, TaskParameters: map[string]any{"text": n.Text}, Enabled: n.Enabled,
-		FailureThreshold: bundleFailureThreshold}
+// taskParameters are a trigger's: the saved task's parameters when it runs one, else the text it asks.
+func taskParameters(text string, task *string, params map[string]any) map[string]any {
+	if task == nil {
+		return map[string]any{"text": text}
+	}
+	if params == nil {
+		return map[string]any{}
+	}
+	return params
 }
 
-func (b BundleTriggers) CronProblem(_ context.Context, n catalogapi.BundleCron) (string, error) {
-	_, _, err := b.S.validateNew(cronTrigger(n))
+func scheduleTrigger(n catalogapi.BundleSchedule) domain.NewTrigger {
+	out := domain.NewTrigger{Name: n.Name, Description: n.Description, AgentID: n.AgentID, TaskParameters: taskParameters(n.Text, n.TaskDefinitionID, n.Parameters),
+		TaskDefinitionID: n.TaskDefinitionID, Enabled: n.Enabled, FailureThreshold: bundleFailureThreshold}
+	if n.StreamID != nil {
+		out.Type, out.StreamID, out.EventFilter = domain.TypeStream, n.StreamID, n.Filter
+		return out
+	}
+	cron, tz := n.Cron, n.Timezone
+	out.Type, out.CronExpression, out.Timezone = domain.TypeCron, &cron, &tz
+	return out
+}
+
+func (b BundleTriggers) ScheduleProblem(_ context.Context, n catalogapi.BundleSchedule) (string, error) {
+	_, _, err := b.S.validateNew(scheduleTrigger(n))
 	var invalid *domain.ValidationError
 	switch {
 	case err == nil:
@@ -74,8 +90,8 @@ func (b BundleTriggers) CronProblem(_ context.Context, n catalogapi.BundleCron) 
 	return "", err
 }
 
-func (b BundleTriggers) CreateCron(ctx context.Context, n catalogapi.BundleCron) (string, error) {
-	t, err := b.S.Create(ctx, cronTrigger(n))
+func (b BundleTriggers) CreateSchedule(ctx context.Context, n catalogapi.BundleSchedule) (string, error) {
+	t, err := b.S.Create(ctx, scheduleTrigger(n))
 	return t.ID, err
 }
 
@@ -124,8 +140,8 @@ func (b BundleTriggers) DeleteTrigger(ctx context.Context, id string) error {
 
 func (b BundleTriggers) UpdateTrigger(ctx context.Context, id string, u catalogapi.BundleTriggerUpdate) error {
 	desc, agent := u.Description, u.AgentID
-	_, err := b.S.Update(ctx, id, Patch{Description: &desc, AgentID: &agent, TaskParameters: map[string]any{"text": u.Text},
-		CronExpression: u.Cron, Timezone: u.Timezone})
+	_, err := b.S.Update(ctx, id, Patch{Description: &desc, AgentID: &agent, TaskParameters: taskParameters(u.Text, u.TaskDefinitionID, u.Parameters),
+		TaskDefinitionID: u.TaskDefinitionID, TaskDefinitionSet: u.TaskDefinitionSet, CronExpression: u.Cron, Timezone: u.Timezone, EventFilter: u.Filter})
 	return err
 }
 

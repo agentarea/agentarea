@@ -307,6 +307,31 @@ func (q *Queries) LockStreamForDelete(ctx context.Context, arg LockStreamForDele
 	return i, err
 }
 
+const setStreamDescription = `-- name: SetStreamDescription :execrows
+UPDATE streams SET description = $1, updated_at = $2
+WHERE workspace_id = $3 AND id = $4
+`
+
+type SetStreamDescriptionParams struct {
+	Description string
+	Now         pgtype.Timestamp
+	WorkspaceID string
+	ID          uuid.UUID
+}
+
+func (q *Queries) SetStreamDescription(ctx context.Context, arg SetStreamDescriptionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setStreamDescription,
+		arg.Description,
+		arg.Now,
+		arg.WorkspaceID,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const streamNames = `-- name: StreamNames :many
 SELECT id, name FROM streams WHERE workspace_id = $1 AND id = ANY($2::uuid[])
 `

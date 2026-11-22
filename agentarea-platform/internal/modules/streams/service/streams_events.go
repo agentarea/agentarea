@@ -42,12 +42,14 @@ func processingOf(e domain.RecordedEvent) Processing {
 // FeedItem is an event of the workspace feed: its envelope without body, and its processing.
 type FeedItem struct {
 	domain.RecordedEvent
+	Summary    *string
 	Processing Processing
 }
 
 // EventView is StreamEventResponse: the envelope, file links and each subscription's outcome.
 type EventView struct {
 	domain.RecordedEvent
+	Summary        *string
 	BodyURL        *string
 	AttachmentURLs []*string
 	Outcomes       []Outcome
@@ -131,6 +133,10 @@ func (s *Service) eventsWithOutcomes(ctx context.Context, sess db.Session, strea
 	if err != nil {
 		return nil, err
 	}
+	summaries, err := s.summaries(ctx, sess, evs)
+	if err != nil {
+		return nil, err
+	}
 	byEvent := map[string][]Outcome{}
 	for _, r := range rows {
 		if r.EventID == nil || r.SubscriptionID == nil {
@@ -140,7 +146,7 @@ func (s *Service) eventsWithOutcomes(ctx context.Context, sess db.Session, strea
 	}
 	out := make([]EventView, 0, len(evs))
 	for _, e := range evs {
-		v := EventView{RecordedEvent: e, Outcomes: byEvent[e.ID]}
+		v := EventView{RecordedEvent: e, Summary: summaries[e.ID], Outcomes: byEvent[e.ID]}
 		if v.Outcomes == nil {
 			v.Outcomes = []Outcome{}
 		}
@@ -183,6 +189,10 @@ func (s *Service) feedItems(ctx context.Context, sess db.Session, ws scope.Works
 	if err != nil {
 		return nil, err
 	}
+	summaries, err := s.summaries(ctx, sess, evs)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]FeedItem, 0, len(evs))
 	for _, e := range evs {
 		p := processingOf(e)
@@ -191,7 +201,59 @@ func (s *Service) feedItems(ctx context.Context, sess db.Session, ws scope.Works
 				p.Tasks = append(p.Tasks, ProcessingTask{ID: t, Status: st})
 			}
 		}
-		out = append(out, FeedItem{RecordedEvent: e, Processing: p})
+		out = append(out, FeedItem{RecordedEvent: e, Summary: summaries[e.ID], Processing: p})
+	}
+	return out, nil
+}
+
+// summaries is each event's one line, read off what it keeps: a platform event's by its body,
+// another's by its source's summary template or else its entry's.
+func (s *Service) summaries(ctx context.Context, sess db.Session, evs []domain.RecordedEvent) (map[string]*string, error) {
+	out := map[string]*string{}
+	entries := map[string]*domain.SourceTypeEntry{}
+	overrides := map[string]domain.EventOverrides{}
+	read := map[string]bool{}
+	for _, e := range evs {
+		if e.SourceType == nil {
+			continue
+		}
+		if *e.SourceType == domain.PlatformSourceType {
+			if body, ok := e.Data["body"].(map[string]any); ok {
+				out[e.ID] = PlatformEventSummary(body)
+			}
+			continue
+		}
+		entry, known := entries[*e.SourceType]
+		if !known {
+			got, ok, err := s.SourceTypeEntry(ctx, *e.SourceType)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				entry = &got
+			}
+			entries[*e.SourceType] = entry
+		}
+		if entry == nil {
+			continue
+		}
+		if !read[e.StreamID] {
+			read[e.StreamID] = true
+			sources, err := s.ss.ListSources(ctx, sess, uuid.MustParse(e.StreamID))
+			if err != nil {
+				return nil, err
+			}
+			for _, src := range sources {
+				if o, err := domain.ParseEventOverrides(src.EventTemplates); err == nil {
+					overrides[src.ID] = o
+				}
+			}
+		}
+		var o domain.EventOverrides
+		if e.SourceID != nil {
+			o = overrides[*e.SourceID]
+		}
+		out[e.ID] = domain.EventSummary(*entry, o, e.Data)
 	}
 	return out, nil
 }

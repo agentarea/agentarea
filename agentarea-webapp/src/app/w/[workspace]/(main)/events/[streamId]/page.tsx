@@ -1,54 +1,76 @@
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
-import ContentBlock from "@/components/ContentBlock";
-import SubheaderToolbar from "@/components/SubheaderToolbar";
-import { getStream, listStreamSourceTypes } from "@/lib/api";
+import { redirect } from "next/navigation";
+import {
+  getStream,
+  getStreamEvent,
+  listStreams,
+  listStreamSourceTypes,
+} from "@/lib/api";
+import { feedHref, legacyStreamQuery, parseFeedState } from "@/lib/eventFeed";
 import { isPlatformStream, memberSourceTypes } from "@/lib/platformStream";
-import { requireApiData } from "@/lib/server-resource";
-import type { DispositionFilter as Filter } from "@/lib/streamOutcome";
+import { optionalApiData, requireApiData } from "@/lib/server-resource";
+import { workspacePath } from "@/lib/workspace-routes";
+import FeedScreen from "../components/feed/FeedScreen";
 import AddSourceDialog from "./components/AddSourceDialog";
-import DispositionFilter from "./components/DispositionFilter";
-import EventDetail from "./components/EventDetail";
-import EventFeed from "./components/EventFeed";
-import EventFeedSkeleton from "./components/EventFeedSkeleton";
-import StreamProcessors from "./components/StreamProcessors";
-import StreamSources, {
-  StreamSourcesSkeleton,
-} from "./components/StreamSources";
+import StreamStrip, { StreamStripSkeleton } from "./components/StreamStrip";
 
-const FILTERS: Filter[] = ["all", "reacted", "skipped", "error", "unheard"];
-
-function sequenceParam(value: string | string[] | undefined) {
-  return typeof value === "string" && /^\d+$/.test(value)
-    ? Number(value)
-    : undefined;
-}
-
+/** The workspace feed with this stream as its filter, under the stream's sources. */
 export default async function StreamEventsPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ streamId: string }>;
+  params: Promise<{ workspace: string; streamId: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const [{ streamId }, query, t] = await Promise.all([
+  const [{ workspace, streamId }, query, t] = await Promise.all([
     params,
     searchParams,
     getTranslations("EventsPage"),
   ]);
-  const [streamResult, typesResult] = await Promise.all([
+  const state = { ...parseFeedState(query), stream: streamId };
+  const legacy = legacyStreamQuery(query);
+  if (legacy) {
+    const event =
+      legacy.sequence === undefined
+        ? undefined
+        : optionalApiData(
+            await getStreamEvent(streamId, legacy.sequence),
+            "stream event"
+          )?.event_id;
+    redirect(
+      workspacePath(
+        workspace,
+        feedHref(state, {
+          result: legacy.result,
+          before: undefined,
+          ...(legacy.sequence === undefined ? {} : { event }),
+        })
+      )
+    );
+  }
+
+  const [streamResult, streamsResult, typesResult] = await Promise.all([
     getStream(streamId),
+    listStreams(),
     listStreamSourceTypes(),
   ]);
   const stream = requireApiData(streamResult, "stream");
+  const streams = requireApiData(streamsResult, "streams").map((s) => ({
+    id: s.id,
+    name: s.name,
+    kind: s.kind,
+  }));
   const sourceTypes = requireApiData(typesResult, "stream source types");
-  const outcome = FILTERS.find((f) => f === query.outcome) ?? "all";
-  const before = sequenceParam(query.before);
-  const selected = sequenceParam(query.event);
+  const platformStreams = streams.filter(isPlatformStream).map((s) => s.id);
   const platform = isPlatformStream(stream);
 
   return (
-    <ContentBlock
+    <FeedScreen
+      state={state}
+      streams={streams}
+      platformStreams={platformStreams}
+      sourceTypes={sourceTypes}
       header={{
         breadcrumb: [
           { label: t("title"), href: "/events" },
@@ -64,43 +86,15 @@ export default async function StreamEventsPage({
           />
         ),
       }}
-      subheader={
-        <SubheaderToolbar controls={<DispositionFilter current={outcome} />} />
-      }
-    >
-      <Suspense fallback={<StreamSourcesSkeleton />}>
-        <StreamSources streamId={streamId} types={sourceTypes} />
-      </Suspense>
-      <Suspense fallback={null}>
-        <StreamProcessors streamId={streamId} />
-      </Suspense>
-      <div
-        className={
-          selected !== undefined
-            ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]"
-            : undefined
-        }
-      >
-        <Suspense key={`${outcome}-${before}`} fallback={<EventFeedSkeleton />}>
-          <EventFeed
+      aboveList={
+        <Suspense fallback={<StreamStripSkeleton />}>
+          <StreamStrip
             streamId={streamId}
-            outcome={outcome}
-            before={before}
-            selected={selected}
+            types={sourceTypes}
+            streams={streams}
           />
         </Suspense>
-        {selected !== undefined && (
-          <Suspense key={selected} fallback={<EventFeedSkeleton rows={4} />}>
-            <EventDetail
-              streamId={streamId}
-              sequence={selected}
-              outcome={outcome}
-              before={before}
-              sourceTypes={sourceTypes}
-            />
-          </Suspense>
-        )}
-      </div>
-    </ContentBlock>
+      }
+    />
   );
 }

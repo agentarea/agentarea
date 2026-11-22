@@ -10,8 +10,11 @@ import (
 	"testing"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authn"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authz"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx/wirejson"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
 	catalogapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/catalog/api"
+	modelsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/api"
 )
 
 const demoBundle = `
@@ -79,6 +82,7 @@ func (fakeShapes) SkillMainFile(paths []string) (string, bool) {
 func (fakeShapes) CarriesSecretRef(any) bool                   { return false }
 func (fakeShapes) RuleProblem(catalogapi.BundleRule) string    { return "" }
 func (fakeShapes) ContextSecretLength() (minimum, maximum int) { return 16, 512 }
+func (fakeShapes) HeaderIsSecret(name string) bool             { return !strings.EqualFold(name, "accept") }
 
 // The values are Python's: analyzer.spec_fingerprint and BundleAnalyzer.analyze
 // of the same bundle and setup values.
@@ -186,7 +190,9 @@ type fakeBundleAgents struct {
 	log     *deployLog
 	live    map[string]bool
 	n       int
+	created []catalogapi.BundleAgentNew
 	updates []catalogapi.BundleAgentUpdate
+	checked []catalogapi.BundleAgentConfig
 }
 
 func (f *fakeBundleAgents) next(prefix string) string {
@@ -198,10 +204,12 @@ func (f *fakeBundleAgents) next(prefix string) string {
 func (f *fakeBundleAgents) AgentLive(_ context.Context, _ authn.Caller, id string) (bool, error) {
 	return f.live[id], nil
 }
-func (f *fakeBundleAgents) AgentProblem(context.Context, authn.Caller, catalogapi.BundleAgentConfig) (string, error) {
+func (f *fakeBundleAgents) AgentProblem(_ context.Context, _ authn.Caller, cfg catalogapi.BundleAgentConfig) (string, error) {
+	f.checked = append(f.checked, cfg)
 	return "", nil
 }
 func (f *fakeBundleAgents) CreateAgent(_ context.Context, _ authn.Caller, in catalogapi.BundleAgentNew) (string, error) {
+	f.created = append(f.created, in)
 	id := f.next("agent")
 	f.log.add("create agent %s model=%s skills=%v", in.Name, in.ModelID, in.SkillIDs)
 	return id, nil
@@ -246,6 +254,7 @@ type fakeBundleTriggers struct {
 	triggers map[string]catalogapi.BundleTrigger
 	n        int
 	cronErr  error
+	updates  []catalogapi.BundleTriggerUpdate
 }
 
 func (f *fakeBundleTriggers) Trigger(_ context.Context, id string) (catalogapi.BundleTrigger, bool, error) {
@@ -259,16 +268,24 @@ func (f *fakeBundleTriggers) Triggers(context.Context) ([]catalogapi.BundleTrigg
 	}
 	return out, nil
 }
-func (f *fakeBundleTriggers) CronProblem(context.Context, catalogapi.BundleCron) (string, error) {
+func (f *fakeBundleTriggers) ScheduleProblem(context.Context, catalogapi.BundleSchedule) (string, error) {
 	return "", nil
 }
-func (f *fakeBundleTriggers) CreateCron(_ context.Context, n catalogapi.BundleCron) (string, error) {
+func (f *fakeBundleTriggers) CreateSchedule(_ context.Context, n catalogapi.BundleSchedule) (string, error) {
 	if f.cronErr != nil {
 		return "", f.cronErr
 	}
 	f.n++
 	id := fmt.Sprintf("trigger-%d", f.n)
-	f.triggers[id] = catalogapi.BundleTrigger{ID: id, Name: n.Name, AgentID: n.AgentID, Active: n.Enabled}
+	f.triggers[id] = catalogapi.BundleTrigger{ID: id, Name: n.Name, AgentID: n.AgentID, Active: n.Enabled, StreamID: n.StreamID}
+	if n.TaskDefinitionID != nil {
+		f.log.add("create schedule %s runs task %s for %s params=%v text=%q", n.Name, *n.TaskDefinitionID, n.AgentID, n.Parameters, n.Text)
+		return id, nil
+	}
+	if n.StreamID != nil {
+		f.log.add("create schedule %s on %s filter %v for %s text=%s", n.Name, *n.StreamID, n.Filter, n.AgentID, n.Text)
+		return id, nil
+	}
 	f.log.add("create cron %s %q for %s text=%s", n.Name, n.Description, n.AgentID, n.Text)
 	return id, nil
 }
@@ -284,6 +301,7 @@ func (f *fakeBundleTriggers) DeleteTrigger(_ context.Context, id string) error {
 	return nil
 }
 func (f *fakeBundleTriggers) UpdateTrigger(_ context.Context, id string, u catalogapi.BundleTriggerUpdate) error {
+	f.updates = append(f.updates, u)
 	f.log.add("update trigger %s", id)
 	return nil
 }
@@ -333,26 +351,65 @@ type fakeBundleMCPs struct{ catalogapi.BundleMCPs }
 
 func (fakeBundleMCPs) ContextSecretLength() (minimum, maximum int) { return 16, 512 }
 func (fakeBundleMCPs) CarriesSecretRef(any) bool                   { return false }
+func (fakeBundleMCPs) SecretProblem(context.Context, authn.Caller, string) (string, error) {
+	return "", nil
+}
+
+// fakeModelNames names chat instances and bills in RUB.
+type fakeModelNames struct{ instances []modelsapi.InstanceName }
+
+func (f fakeModelNames) ChatInstances(context.Context, scope.Workspace) ([]modelsapi.InstanceName, error) {
+	return f.instances, nil
+}
+func (fakeModelNames) BillingCurrency() string { return "RUB" }
+
+func demoModels() fakeModelNames {
+	return fakeModelNames{instances: []modelsapi.InstanceName{{ID: "model-us", Name: "us-model", ModelName: "us"},
+		{ID: "model-gpt", Name: "GPT", ModelName: "gpt-5"}}}
+}
 
 type deployFixture struct {
 	log      *deployLog
 	agents   *fakeBundleAgents
 	triggers *fakeBundleTriggers
+	streams  *fakeBundleStreams
+	openapis *fakeBundleOpenAPIs
+	tasks    *fakeBundleTasks
+	projects *fakeBundleProjects
 	rules    *fakeBundleRules
 	admin    int
+	notAdmin bool
 	mayEdit  bool
-	w        *workspace
+	// denied are the resource types the caller may not edit; edits the checks asked.
+	denied map[string]bool
+	edits  []string
+	w      *workspace
 }
 
 func newDeployFixture(t *testing.T) *deployFixture {
-	f := &deployFixture{log: &deployLog{}, mayEdit: true}
+	f := &deployFixture{log: &deployLog{}, mayEdit: true, denied: map[string]bool{}}
 	f.agents = &fakeBundleAgents{log: f.log, live: map[string]bool{}}
 	f.triggers = &fakeBundleTriggers{log: f.log, triggers: map[string]catalogapi.BundleTrigger{}}
 	f.rules = &fakeBundleRules{log: f.log, rules: map[string]catalogapi.BundleRule{}}
-	b := &Bundles{d: BundleDeps{Agents: f.agents, MCPs: fakeBundleMCPs{}, Triggers: f.triggers, Rules: f.rules,
-		Log:     slog.New(slog.DiscardHandler),
-		Admin:   func(context.Context) error { f.admin++; return nil },
-		MayEdit: func(context.Context, authn.Caller, string, string) (bool, error) { return f.mayEdit, nil }}}
+	f.streams = &fakeBundleStreams{log: f.log, names: map[string]string{"stream-audit": "audit-log"}, updated: map[string]catalogapi.BundleStreamSpec{}}
+	f.openapis = &fakeBundleOpenAPIs{log: f.log, names: map[string]string{}, updated: map[string]catalogapi.BundleOpenAPISpec{}}
+	f.tasks = &fakeBundleTasks{log: f.log, names: map[string]string{}}
+	f.projects = &fakeBundleProjects{log: f.log, names: map[string]string{}}
+	b := &Bundles{d: BundleDeps{Agents: f.agents, MCPs: fakeBundleMCPs{}, OpenAPIs: f.openapis, Triggers: f.triggers, Streams: f.streams,
+		Tasks: f.tasks, Projects: f.projects, Rules: f.rules, Members: fakeMembers{},
+		ModelNames: demoModels(),
+		Log:        slog.New(slog.DiscardHandler),
+		Admin: func(context.Context) error {
+			f.admin++
+			if f.notAdmin {
+				return authz.ErrNotWorkspaceAdmin
+			}
+			return nil
+		},
+		MayEdit: func(_ context.Context, _ authn.Caller, resourceType, id string) (bool, error) {
+			f.edits = append(f.edits, resourceType+":"+id)
+			return f.mayEdit && !f.denied[resourceType], nil
+		}}}
 	f.w = &workspace{b: b, c: authn.Caller{Principal: authn.Principal{UserID: "u"}, Workspace: ws(t)}, catalogs: map[string]*catalogMCP{}}
 	return f
 }
@@ -396,7 +453,7 @@ func TestBundleInstallCreatesInDependencyOrder(t *testing.T) {
 	}
 	wantCalls := []string{
 		"create skill Writer",
-		"create agent Demo model=us-model skills=[skill-1]",
+		"create agent Demo model=model-us skills=[skill-1]",
 		`create cron demo:daily "Runs 0 9 * * * (UTC)" for agent-2 text=go`,
 		"create rule rule-1 deny tool:web_search on agent:agent-2",
 	}
@@ -533,9 +590,8 @@ func TestBundleRedeployRecordsOrphans(t *testing.T) {
 	}
 }
 
-// The hash and the issue are Python's: load_folder of the same files,
-// sha256(json.dumps(bundle.model_dump(mode="json"), sort_keys=True)).
-func TestLoadBundleFolderMatchesPython(t *testing.T) {
+// The legacy one-agent layout: every MCP and skill of the folder lands on the one agent.
+func TestLoadLegacyBundleFolder(t *testing.T) {
 	files := StrPairs{
 		{"agent.yaml", "\nname: researcher\ndisplay_name: Researcher\ndescription: Finds things out\nmodel: gpt-4o\ntoolsets: [agentarea/shell]\n" +
 			"setup:\n  - {key: token, label: Token, type: secret, required: true}\n"},
@@ -546,18 +602,21 @@ func TestLoadBundleFolderMatchesPython(t *testing.T) {
 		{"schedules/daily.md", "---\ncron: '0 9 * * *'\ntimezone: Europe/Berlin\nenabled: true\n---\nWrite the morning report.\n"},
 		{"channels/inbox.yaml", "type: telegram\nname: Inbox\nprompt: Answer it\n"},
 		{"policies/no_email.yaml", "target: 'tool:send_email'\neffect: deny\n"},
-		{"policies/budget.yaml", "subject: workspace\ntarget: spend\neffect: cap\nparams: {amount_usd: 5}\n"},
 		{"README.md", "# hi"},
 	}
 	b, issues, err := LoadBundleFolder(files)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := sha256Dumps(b.Dump())
-	if err != nil || got != "33d63b3c73e61717680b2f57a27e16c47609502ecf64fe70d81bab0ccdfa32b8" {
-		t.Errorf("canonical hash = %s, %v", got, err)
+	a := b.Agents[0]
+	if len(b.Agents) != 1 || a.Key != RootAgentKey || a.Name != "researcher" || a.Instruction != "Be thorough.\n" ||
+		!reflect.DeepEqual(a.MCPs, []string{"github"}) || !reflect.DeepEqual(a.Skills, []string{"audit", "plain"}) ||
+		b.Skills[0].Name != "Site Audit" || b.Automations[0].Agent != RootAgentKey || b.Channels[0].Agent != RootAgentKey ||
+		len(b.Policies) != 1 || b.Policies[0].Subject != RootAgentKey {
+		t.Errorf("bundle = %+v", b)
 	}
-	if len(issues) != 1 || issues[0].Severity != SeverityWarn || issues[0].Message != "README.md: not part of the agent folder layout; not installed" || issues[0].EntityKey != nil {
+	if len(issues) != 2 || issues[0].Severity != SeverityWarn || !strings.Contains(issues[0].Message, "deprecated") ||
+		issues[1].Message != "README.md: not part of the agent folder layout; not installed" || issues[1].EntityKey != nil {
 		t.Errorf("issues = %+v", issues)
 	}
 }

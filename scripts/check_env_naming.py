@@ -25,6 +25,7 @@ DOMAINS = {
     "DB", "S3", "AUTH", "AUTHZ", "SECRET", "MCP", "SANDBOX", "TEMPORAL", "WORKER",
     "TASK", "TRIGGER", "CHANNEL", "EVENT", "CORS", "LOG", "REDIS", "KAFKA", "TOOL",
     "K8S", "API", "HTTP", "OTEL", "BILLING", "METRICS", "A2A", "SPEND", "ANALYTICS",
+    "BUNDLE",
 }
 
 # App-level names that carry no domain segment.

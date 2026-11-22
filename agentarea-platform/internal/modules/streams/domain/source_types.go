@@ -261,6 +261,7 @@ type EventTemplates struct {
 	Key           Template     `json:"key"`
 	SessionKey    Template     `json:"session_key"`
 	Sender        Template     `json:"sender"`
+	Summary       Template     `json:"summary"`
 	OccurredAt    Template     `json:"occurred_at"`
 	Depth         Template     `json:"depth"`
 	CorrelationID Template     `json:"correlation_id"`
@@ -287,6 +288,7 @@ type EventOverrides struct {
 	Kind       Template `json:"kind,omitempty"`
 	Key        Template `json:"key,omitempty"`
 	SessionKey Template `json:"session_key,omitempty"`
+	Summary    Template `json:"summary,omitempty"`
 }
 
 // ParseEventOverrides is EventOverrides.model_validate over a stored or sent object.
@@ -310,7 +312,7 @@ func ParseEventOverrides(m map[string]any) (EventOverrides, error) {
 // Dump is model_dump(exclude_none=True).
 func (o EventOverrides) Dump() map[string]any {
 	out := map[string]any{}
-	for k, t := range map[string]Template{"kind": o.Kind, "key": o.Key, "session_key": o.SessionKey} {
+	for k, t := range map[string]Template{"kind": o.Kind, "key": o.Key, "session_key": o.SessionKey, "summary": o.Summary} {
 		if t == nil {
 			continue
 		}

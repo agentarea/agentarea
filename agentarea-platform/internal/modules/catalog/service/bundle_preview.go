@@ -1,6 +1,9 @@
 package service
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx/wirejson"
 )
@@ -15,10 +18,14 @@ const (
 	KindChannel    EntityKind = "channel"
 	KindAutomation EntityKind = "automation"
 	KindPolicy     EntityKind = "policy"
+	KindStream     EntityKind = "stream"
+	KindOpenAPI    EntityKind = "openapi"
+	KindTask       EntityKind = "task"
+	KindProject    EntityKind = "project"
 )
 
 func entityKinds() []EntityKind {
-	return []EntityKind{KindMCP, KindSkill, KindAgent, KindChannel, KindAutomation, KindPolicy}
+	return []EntityKind{KindMCP, KindOpenAPI, KindSkill, KindAgent, KindTask, KindProject, KindStream, KindChannel, KindAutomation, KindPolicy}
 }
 
 // EntityStatus is what a deploy plan does with one entity.
@@ -61,13 +68,50 @@ type PreviewEntity struct {
 	Name   string
 	Status EntityStatus
 	Detail *string
+	// Approvals, on an agent, are the approval policies that bind it.
+	Approvals []PreviewApproval
 }
+
+// PreviewApproval is an approval policy as an agent's line shows it: its
+// target and who approves, by email or name; none is whoever may act on the run.
+type PreviewApproval struct {
+	Policy, Target string
+	Approvers      []string
+	// Workspace marks a workspace policy, which binds every agent.
+	Workspace bool
+}
+
+func (a PreviewApproval) dump() wirejson.Object {
+	return wirejson.Object{{Key: "policy", Value: a.Policy}, {Key: "target", Value: a.Target}, {Key: "approvers", Value: strList(a.Approvers)},
+		{Key: "workspace", Value: a.Workspace}}
+}
+
+// Issue codes a client acts on.
+const (
+	// CodeBundleExists: an install already has the bundle's name; deploy into it by id.
+	CodeBundleExists = "bundle_exists"
+	// CodeInstallNotFound: the install the deploy names is gone.
+	CodeInstallNotFound = "bundle_install_not_found"
+	// CodeInstallAmbiguous: several installs have the name the deploy gives.
+	CodeInstallAmbiguous = "bundle_install_ambiguous"
+)
 
 // PreviewIssue is a problem found analyzing the package.
 type PreviewIssue struct {
 	Severity  Severity
 	Message   string
 	EntityKey *string
+	// Code is set on the issues a client acts on (CodeBundleExists, ...).
+	Code *string
+}
+
+// InstallSummary is an install of a bundle as a plan names it.
+type InstallSummary struct {
+	ID, Name, CreatedBy string
+	UpdatedBy           *string
+	UpdatedAt           time.Time
+	// Origin is where the folder last deployed came from; nil when the deploy did not say.
+	Origin any
 }
 
 // ImportPreview is what the deploy wizard renders before the install.
@@ -78,6 +122,10 @@ type ImportPreview struct {
 	Issues      []PreviewIssue
 	Installable bool
 	PlanDigest  *string
+	// Install is the install this plan updates; nil when it creates one.
+	Install *InstallSummary
+	// ExistingInstall is the install that already has the bundle's name, when that blocks the plan.
+	ExistingInstall *InstallSummary
 }
 
 // Blocks are the issues that stop the install.
@@ -102,6 +150,8 @@ type InstalledEntity struct {
 	ID          *string
 	Detail      *string
 	Fingerprint *string
+	// ModelID is the instance an agent's model name resolved to when it was last written.
+	ModelID *string
 }
 
 // InstallResult is what an install did.
@@ -122,14 +172,44 @@ func warnIssue(key, msg string) PreviewIssue {
 
 // Dump is model_dump(mode="json").
 func (e PreviewEntity) Dump() wirejson.Object {
-	return wirejson.Object{{Key: "kind", Value: string(e.Kind)}, {Key: "key", Value: e.Key}, {Key: "name", Value: e.Name},
+	out := wirejson.Object{{Key: "kind", Value: string(e.Kind)}, {Key: "key", Value: e.Key}, {Key: "name", Value: e.Name},
 		{Key: "status", Value: string(e.Status)}, {Key: "detail", Value: optStrValue(e.Detail)}}
+	if len(e.Approvals) > 0 {
+		out = append(out, wirejson.Member{Key: "approvals", Value: dumpAll(e.Approvals)})
+	}
+	return out
 }
 
 // Dump is model_dump(mode="json").
 func (i PreviewIssue) Dump() wirejson.Object {
 	return wirejson.Object{{Key: "severity", Value: string(i.Severity)}, {Key: "message", Value: i.Message},
-		{Key: "entity_key", Value: optStrValue(i.EntityKey)}}
+		{Key: "entity_key", Value: optStrValue(i.EntityKey)}, {Key: "code", Value: optStrValue(i.Code)}}
+}
+
+// isoUTC is a UTC instant as the API writes timestamps: microseconds when there are any, then Z.
+func isoUTC(t time.Time) string {
+	t = t.UTC()
+	s := t.Format("2006-01-02T15:04:05")
+	if us := t.Nanosecond() / 1000; us != 0 {
+		s += fmt.Sprintf(".%06d", us)
+	}
+	return s + "Z"
+}
+
+func (s *InstallSummary) dumpInstall() any {
+	if s == nil {
+		return nil
+	}
+	return wirejson.Object{{Key: "id", Value: s.ID}, {Key: "name", Value: s.Name}, {Key: "updated_by", Value: optStrValue(s.UpdatedBy)},
+		{Key: "updated_at", Value: isoUTC(s.UpdatedAt)}, {Key: "origin", Value: s.Origin}}
+}
+
+func (s *InstallSummary) dumpExisting() any {
+	if s == nil {
+		return nil
+	}
+	return wirejson.Object{{Key: "id", Value: s.ID}, {Key: "name", Value: s.Name}, {Key: "created_by", Value: s.CreatedBy},
+		{Key: "updated_by", Value: optStrValue(s.UpdatedBy)}, {Key: "updated_at", Value: isoUTC(s.UpdatedAt)}}
 }
 
 // Dump is model_dump(mode="json").
@@ -140,7 +220,8 @@ func (p ImportPreview) Dump() wirejson.Object {
 	}
 	return wirejson.Object{{Key: "bundle", Value: p.Bundle.Dump()}, {Key: "setup", Value: dumpAll(p.Setup)},
 		{Key: "entities", Value: entities}, {Key: "issues", Value: IssueDumps(p.Issues)},
-		{Key: "installable", Value: p.Installable}, {Key: "plan_digest", Value: optStrValue(p.PlanDigest)}}
+		{Key: "installable", Value: p.Installable}, {Key: "plan_digest", Value: optStrValue(p.PlanDigest)},
+		{Key: "install", Value: p.Install.dumpInstall()}, {Key: "existing_install", Value: p.ExistingInstall.dumpExisting()}}
 }
 
 // IssueDumps is the issues as the API returns them.
@@ -154,9 +235,13 @@ func IssueDumps(issues []PreviewIssue) []any {
 
 // Dump is model_dump(mode="json").
 func (e InstalledEntity) Dump() wirejson.Object {
-	return wirejson.Object{{Key: "kind", Value: string(e.Kind)}, {Key: "key", Value: e.Key}, {Key: "name", Value: e.Name},
+	out := wirejson.Object{{Key: "kind", Value: string(e.Kind)}, {Key: "key", Value: e.Key}, {Key: "name", Value: e.Name},
 		{Key: "action", Value: string(e.Action)}, {Key: "id", Value: optStrValue(e.ID)}, {Key: "detail", Value: optStrValue(e.Detail)},
 		{Key: "fingerprint", Value: optStrValue(e.Fingerprint)}}
+	if e.ModelID != nil {
+		out = append(out, wirejson.Member{Key: "model_id", Value: *e.ModelID})
+	}
+	return out
 }
 
 // Dump is model_dump(mode="json").
@@ -194,12 +279,12 @@ func installedEntityFrom(c *checker, v any, loc []any) (InstalledEntity, bool) {
 	for _, s := range []struct {
 		key string
 		dst **string
-	}{{"id", &out.ID}, {"detail", &out.Detail}, {"fingerprint", &out.Fingerprint}} {
+	}{{"id", &out.ID}, {"detail", &out.Detail}, {"fingerprint", &out.Fingerprint}, {"model_id", &out.ModelID}} {
 		if v, ok := f.get(s.key); ok {
 			*s.dst, _ = c.optStr(v, 0, f.at(s.key))
 		}
 	}
-	c.extra(o, []string{"kind", "key", "name", "action", "id", "detail", "fingerprint"}, loc)
+	c.extra(o, []string{"kind", "key", "name", "action", "id", "detail", "fingerprint", "model_id"}, loc)
 	return out, c.count() == before
 }
 

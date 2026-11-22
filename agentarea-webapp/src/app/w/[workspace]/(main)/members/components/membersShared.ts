@@ -95,6 +95,10 @@ export function sortMembers(
   });
 }
 
+export function getMemberHref(member: Pick<DisplayMember, "user_id">): string {
+  return `/members/${encodeURIComponent(member.user_id)}`;
+}
+
 export function shortId(id: string): string {
   return id.length > 13 ? `${id.slice(0, 13)}…` : id;
 }

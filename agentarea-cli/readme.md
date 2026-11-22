@@ -63,6 +63,68 @@ leaves the others signed in, and a token is only ever sent to the origin it was
 issued for. A command against a host with no sign-in asks you to run
 `agentarea login --api-url=<that host>`.
 
+### Deploy a bundle folder
+
+A bundle folder deploys a team of agents into one workspace. `agentarea init`
+writes a starting point:
+
+```text
+my-team/
+├── agentarea.yaml      # name, schema_version, setup, and what to include
+└── agents/my-team.md   # front matter = configuration, body = system prompt
+```
+
+```yaml
+# agentarea.yaml
+name: my-team
+schema_version: 1
+setup:
+  model: {label: Model instance, required: true}
+agents: {include: ./agents/*.md}
+targets: # optional: one entry per workspace you deploy to
+  dev: {workspace: my-team-dev}
+  prod: {workspace: my-team, setup: {model: claude-sonnet-5-5}}
+```
+
+```bash
+$ agentarea init my-team
+$ agentarea deploy my-team                 # show the plan, confirm, install
+$ agentarea deploy my-team --dry-run       # show the plan only
+$ agentarea deploy my-team --plan-json     # the plan as JSON, for CI checks
+$ agentarea deploy my-team --target prod --yes
+```
+
+The plan names the bundle it creates or updates (with who deployed it last and
+from which git commit) and lists, per agent, its skills, MCP servers and
+delegates. Files under `.agentarea/` are never sent.
+
+After a deploy the CLI records the install in `.agentarea/deployments.json`,
+one entry per API URL and workspace, without secrets. The next deploy updates
+that install, so renaming the bundle in `agentarea.yaml` renames it instead of
+creating a second one. Commit the file if your team and CI should deploy into
+the same bundle. Without it, pass the bundle explicitly:
+
+- `--into <bundle>` (install id or name) wins over everything else;
+- `AGENTAREA_BUNDLE_ID` is the same for CI;
+- otherwise the entry in `.agentarea/deployments.json` is used.
+
+If a bundle with the folder's name already exists and nothing says to deploy
+into it, a terminal asks first; a non-interactive run fails until `--into` is
+passed. If the recorded bundle was deleted, a terminal offers to create it
+again.
+
+`--target <name>` takes the workspace and setup values of that entry in
+`targets:`; `--set key=value` still wins over the target's setup. A folder with
+the old `agent.yaml` layout still deploys, with a warning.
+
+A folder whose `agentarea.yaml` has `teams:` is an organization: it deploys
+several bundles, one per team, each into the workspace its `teams:` entry gives
+it. `agentarea init --org <dir>`
+scaffolds one, `--only-team <name>` deploys a single team, and `--plan-json`
+prints `{"<team>": <plan>}`. Teams include org-level shared files by their path
+from the org root (for example `./shared/mcp/telegram.yaml`); the CLI uploads
+only the shared files each team includes.
+
 ### List Agents
 
 After login, select "List Agents" to:

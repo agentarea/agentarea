@@ -360,35 +360,19 @@ export const zBudgetPeriod = z.enum(["execution", "daily", "monthly"]);
  */
 export const zBundleAgent = z.object({
   client: z.string().nullish(),
+  delegates: z.array(z.string()).optional(),
   description: z.string().max(1000).optional().default(""),
   instruction: z.string().max(20000).optional().default(""),
   key: z.string().min(1),
   mcps: z.array(z.string()).optional(),
   model: z.string().nullish(),
   name: z.string().min(1).max(255),
+  openapi: z.array(z.string()).optional(),
   reasoning_effort: z.string().nullish(),
   reasoning_max_tokens: z.int().nullish(),
+  renamed_from: z.string().nullish(),
   skills: z.array(z.string()).optional(),
   toolsets: z.array(z.string()).optional(),
-});
-
-/**
- * BundleAutomation
- *
- * A scheduled run of one of the package's agents (maps to a CronTrigger).
- *
- * Automations are imported disabled by default; the user enables them after
- * verifying connections, mirroring the Zapier/Make "connect then activate"
- * flow.
- */
-export const zBundleAutomation = z.object({
-  agent: z.string().min(1),
-  cron: z.string().min(1),
-  enabled: z.boolean().optional().default(false),
-  key: z.string().min(1),
-  prompt: z.string().min(1),
-  timezone: z.string().optional().default("UTC"),
-  type: z.literal("cron").optional().default("cron"),
 });
 
 /**
@@ -410,6 +394,7 @@ export const zBundleChannel = z.object({
     .min(1)
     .optional()
     .default("Handle the incoming message: {{ message_text }}"),
+  renamed_from: z.string().nullish(),
   type: z.enum(["telegram", "generic"]).optional().default("telegram"),
 });
 
@@ -425,6 +410,7 @@ export const zBundleMcp = z.object({
   json_spec: z.record(z.string(), z.unknown()).nullish(),
   key: z.string().min(1),
   name: z.string().min(1).max(255),
+  renamed_from: z.string().nullish(),
 });
 
 /**
@@ -443,16 +429,57 @@ export const zBundleMetadata = z.object({
 });
 
 /**
+ * BundleOpenAPI
+ *
+ * An OpenAPI connection the bundle creates: its spec at spec_url or inline in spec (exactly one).
+ */
+export const zBundleOpenApi = z.object({
+  base_url: z.string().min(1),
+  description: z.string().optional().default(""),
+  headers: z.record(z.string(), z.string()).optional(),
+  key: z.string().min(1),
+  name: z.string().min(1).max(255),
+  query: z.record(z.string(), z.string()).optional(),
+  renamed_from: z.string().nullish(),
+  spec: z.record(z.string(), z.unknown()).nullish(),
+  spec_url: z.string().nullish(),
+  variables: z.record(z.string(), z.string()).optional(),
+});
+
+/**
+ * BundleOrigin
+ *
+ * Where a deployed folder came from, as the CLI reports it. Shown in the plan and the install record, never checked.
+ */
+export const zBundleOrigin = z.object({
+  git_commit: z.string().nullish(),
+  git_remote: z.string().nullish(),
+  path: z.string().nullish(),
+});
+
+/**
+ * BundleInstallRef
+ *
+ * The install of a bundle a plan updates.
+ */
+export const zBundleInstallRef = z.object({
+  id: z.string(),
+  name: z.string(),
+  origin: zBundleOrigin.nullish(),
+  updated_at: z.iso.datetime(),
+  updated_by: z.string().nullish(),
+});
+
+/**
  * BundlePolicy
  *
- * A governance rule the package installs (maps to a PolicyRule).
+ * A governance rule the package installs on its own agents (maps to a PolicyRule).
  *
- * Portable like everything else: ``subject`` is the literal "workspace" or a
- * BundleAgent ``key`` (never a DB id); the installer resolves it to a real
- * subject id. ``target``/``effect``/``params`` mirror the unified governance
- * rule model, so this is "our policy format" — not a new one.
+ * ``subject`` is a BundleAgent ``key``, a list of them, or "*" for every agent of the bundle; a list or "*" becomes one policy per agent, keyed ``<key>-<agent>``. "workspace" and effect "allow" are refused: rules that reach beyond the bundle or loosen belong to an admin.
  */
 export const zBundlePolicy = z.object({
+  approvers: z.array(z.string()).optional(),
+  billing_currency: z.string().nullish(),
   condition: z.string().nullish(),
   effect: z.enum(["allow", "deny", "cap", "approval", "safety"]),
   enabled: z.boolean().optional().default(true),
@@ -460,8 +487,47 @@ export const zBundlePolicy = z.object({
   message: z.string().nullish(),
   params: z.record(z.string(), z.unknown()).optional(),
   priority: z.int().gte(-2147483648).lte(2147483647).optional().default(0),
-  subject: z.string().optional().default("workspace"),
+  renamed_from: z.string().nullish(),
+  subject: z.string(),
   target: z.string().min(1),
+});
+
+/**
+ * BundlePolicy
+ *
+ * A governance rule the package installs on its own agents (maps to a PolicyRule).
+ *
+ * ``subject`` is a BundleAgent ``key``, a list of them, or "*" for every agent of the bundle; a list or "*" becomes one policy per agent, keyed ``<key>-<agent>``. "workspace" and effect "allow" are refused: rules that reach beyond the bundle or loosen belong to an admin.
+ */
+export const zBundlePolicyInput = z.object({
+  approvers: z.array(z.string()).optional(),
+  billing_currency: z.string().nullish(),
+  condition: z.string().nullish(),
+  effect: z.enum(["allow", "deny", "cap", "approval", "safety"]),
+  enabled: z.boolean().optional().default(true),
+  key: z.string().min(1),
+  message: z.string().nullish(),
+  params: z.record(z.string(), z.unknown()).optional(),
+  priority: z.int().gte(-2147483648).lte(2147483647).optional().default(0),
+  renamed_from: z.string().nullish(),
+  subject: z.union([z.string(), z.array(z.string())]),
+  target: z.string().min(1),
+});
+
+/**
+ * BundleProject
+ *
+ * A project grouping the bundle's agents, MCP servers and skills by key.
+ */
+export const zBundleProject = z.object({
+  agents: z.array(z.string()).optional(),
+  description: z.string().optional().default(""),
+  instructions: z.string().nullish(),
+  key: z.string().min(1),
+  mcp: z.array(z.string()).optional(),
+  name: z.string().min(1).max(255),
+  renamed_from: z.string().nullish(),
+  skills: z.array(z.string()).optional(),
 });
 
 /**
@@ -474,11 +540,107 @@ export const zBundleSkill = z.object({
   files: z.record(z.string(), z.string()).nullish(),
   key: z.string().min(1),
   name: z.string().min(1).max(255),
+  renamed_from: z.string().nullish(),
   source_type: z
     .enum(["content", "files", "github"])
     .optional()
     .default("content"),
   source_url: z.string().nullish(),
+});
+
+/**
+ * BundleStreamForward
+ *
+ * A forward copying a bundle stream's events into other streams.
+ */
+export const zBundleStreamForward = z.object({
+  filter: z.record(z.string(), z.unknown()).optional(),
+  outputs: z.array(z.string()),
+});
+
+/**
+ * BundleStreamProcessor
+ *
+ * A processor of a bundle stream.
+ */
+export const zBundleStreamProcessor = z.object({
+  code: z.string().min(1),
+  filter: z.record(z.string(), z.unknown()).optional(),
+  outputs: z.array(z.string()),
+});
+
+/**
+ * BundleStreamSource
+ *
+ * A source feeding a bundle stream; credentials are ${secret.<name>} or ${setup.<key>} references.
+ */
+export const zBundleStreamSource = z.object({
+  config: z.record(z.string(), z.string()).optional(),
+  credentials: z.record(z.string(), z.string()).optional(),
+  kind: z.enum(["webhook", "poll"]).optional().default("webhook"),
+  type: z.string().min(1),
+});
+
+/**
+ * BundleStream
+ *
+ * A stream the bundle creates, with its sources, processors and forwards.
+ */
+export const zBundleStream = z.object({
+  description: z.string().optional().default(""),
+  forwards: z.array(zBundleStreamForward).optional(),
+  key: z.string().min(1),
+  name: z.string().min(1).max(255),
+  processors: z.array(zBundleStreamProcessor).optional(),
+  renamed_from: z.string().nullish(),
+  sources: z.array(zBundleStreamSource).optional(),
+});
+
+/**
+ * BundleTask
+ *
+ * A saved task the bundle creates: a run of agent asked prompt.
+ */
+export const zBundleTask = z.object({
+  agent: z.string().min(1),
+  key: z.string().min(1),
+  name: z.string().min(1).max(255),
+  parameters: z.record(z.string(), z.unknown()).optional(),
+  prompt: z.string().min(1),
+  renamed_from: z.string().nullish(),
+});
+
+/**
+ * BundleTriggerOn
+ *
+ * The stream an automation runs on and the events it takes.
+ */
+export const zBundleTriggerOn = z.object({
+  filter: z.record(z.string(), z.unknown()).optional(),
+  stream: z.string().min(1),
+});
+
+/**
+ * BundleAutomation
+ *
+ * A run of one of the package's agents: on a cron schedule, or on the events of a stream (`on`). Exactly one of `cron` and `on`, and either `task` or `agent` with `prompt`.
+ *
+ * Automations are imported disabled by default; the user enables them after
+ * verifying connections, mirroring the Zapier/Make "connect then activate"
+ * flow.
+ */
+export const zBundleAutomation = z.object({
+  agent: z.string().optional(),
+  cron: z.string().min(1).optional(),
+  enabled: z.boolean().optional().default(false),
+  key: z.string().min(1),
+  on: zBundleTriggerOn.optional(),
+  parameters: z.record(z.string(), z.unknown()).optional(),
+  prompt: z.string().optional(),
+  renamed_from: z.string().nullish(),
+  task: z.string().min(1).nullish(),
+  timezone: z.string().optional().default("UTC"),
+  type: z.literal("cron").optional().default("cron"),
 });
 
 /**
@@ -938,6 +1100,10 @@ export const zEntityKind = z.enum([
   "channel",
   "automation",
   "policy",
+  "stream",
+  "openapi",
+  "task",
+  "project",
 ]);
 
 /**
@@ -1051,6 +1217,19 @@ export const zExecutionTimelineResponse = z.object({
   period_hours: z.int(),
   timeline: z.array(z.record(z.string(), z.unknown())),
   trigger_id: z.uuid(),
+});
+
+/**
+ * ExistingBundleInstall
+ *
+ * The install that already has a bundle's name: deploy into it by id, or rename the bundle.
+ */
+export const zExistingBundleInstall = z.object({
+  created_by: z.string(),
+  id: z.string(),
+  name: z.string(),
+  updated_at: z.iso.datetime(),
+  updated_by: z.string().nullish(),
 });
 
 /**
@@ -1246,6 +1425,7 @@ export const zInstalledEntity = z.object({
   id: z.string().nullish(),
   key: z.string(),
   kind: zEntityKind,
+  model_id: z.string().nullish(),
   name: z.string(),
 });
 
@@ -1255,6 +1435,7 @@ export const zInstalledEntity = z.object({
 export const zInstallResult = z.object({
   bundle_name: z.string(),
   entities: z.array(zInstalledEntity).optional(),
+  install_id: z.string().optional(),
   installed_bundle_id: z.string().nullish(),
   setup_values: z.record(z.string(), z.unknown()).optional(),
 });
@@ -2414,11 +2595,24 @@ export const zPresignUploadResponse = z.object({
 });
 
 /**
+ * PreviewApproval
+ *
+ * An approval policy that binds an agent, as the agent's plan line shows it.
+ */
+export const zPreviewApproval = z.object({
+  approvers: z.array(z.string()),
+  policy: z.string(),
+  target: z.string(),
+  workspace: z.boolean(),
+});
+
+/**
  * PreviewEntity
  *
  * One thing the package will (or won't) create.
  */
 export const zPreviewEntity = z.object({
+  approvals: z.array(zPreviewApproval).optional(),
   detail: z.string().nullish(),
   key: z.string(),
   kind: zEntityKind,
@@ -2432,6 +2626,7 @@ export const zPreviewEntity = z.object({
  * A problem found while analyzing the package.
  */
 export const zPreviewIssue = z.object({
+  code: z.string().nullish(),
   entity_key: z.string().nullish(),
   message: z.string(),
   severity: zIssueSeverity,
@@ -2515,6 +2710,7 @@ export const zFeedEventResponse = z.object({
   source_id: z.uuid().nullable(),
   source_type: z.string().nullable(),
   stream_id: z.uuid(),
+  summary: z.string().nullable(),
   v: z.int().optional().default(1),
 });
 
@@ -3264,10 +3460,14 @@ export const zBundleInput = z.object({
   mcps: z.array(zBundleMcp).optional(),
   metadata: zBundleMetadata.optional(),
   name: z.string().min(1).max(255),
-  policies: z.array(zBundlePolicy).optional(),
+  openapi: z.array(zBundleOpenApi).optional(),
+  policies: z.array(zBundlePolicyInput).optional(),
+  projects: z.array(zBundleProject).optional(),
   schema_version: z.string().optional().default("0.1.0"),
   setup: z.array(zSetupField).optional(),
   skills: z.array(zBundleSkill).optional(),
+  streams: z.array(zBundleStream).optional(),
+  tasks: z.array(zBundleTask).optional(),
 });
 
 /**
@@ -3284,6 +3484,8 @@ export const zBundleInput = z.object({
 export const zAnalyzeRequest = z.object({
   bundle: zBundleInput.nullish(),
   files: z.record(z.string(), z.string()).nullish(),
+  into: z.string().nullish(),
+  origin: zBundleOrigin.nullish(),
   setup_values: z.record(z.string(), z.unknown()).optional(),
   source: z.string().nullish(),
   source_url: z.string().nullish(),
@@ -3303,10 +3505,14 @@ export const zBundleOutput = z.object({
   mcps: z.array(zBundleMcp).optional(),
   metadata: zBundleMetadata.optional(),
   name: z.string().min(1).max(255),
+  openapi: z.array(zBundleOpenApi).optional(),
   policies: z.array(zBundlePolicy).optional(),
+  projects: z.array(zBundleProject).optional(),
   schema_version: z.string().optional().default("0.1.0"),
   setup: z.array(zSetupField).optional(),
   skills: z.array(zBundleSkill).optional(),
+  streams: z.array(zBundleStream).optional(),
+  tasks: z.array(zBundleTask).optional(),
 });
 
 /**
@@ -3317,6 +3523,8 @@ export const zBundleOutput = z.object({
 export const zImportPreview = z.object({
   bundle: zBundleOutput,
   entities: z.array(zPreviewEntity).optional(),
+  existing_install: zExistingBundleInstall.nullish(),
+  install: zBundleInstallRef.nullish(),
   installable: z.boolean(),
   issues: z.array(zPreviewIssue).optional(),
   plan_digest: z.string().nullish(),
@@ -3330,6 +3538,8 @@ export const zImportPreview = z.object({
  */
 export const zInstallRequest = z.object({
   bundle: zBundleInput,
+  install_id: z.string().nullish(),
+  origin: zBundleOrigin.nullish(),
   plan_digest: z.string().min(1),
   setup_values: z.record(z.string(), z.unknown()).optional(),
 });
@@ -3714,6 +3924,7 @@ export const zStreamEventDetailResponse = z.object({
   source_id: z.uuid().nullable(),
   source_type: z.string().nullable(),
   stream_id: z.uuid(),
+  summary: z.string().nullable(),
   v: z.int().optional().default(1),
 });
 
@@ -3742,6 +3953,7 @@ export const zStreamEventResponse = z.object({
   source_id: z.uuid().nullable(),
   source_type: z.string().nullable(),
   stream_id: z.uuid(),
+  summary: z.string().nullable(),
   v: z.int().optional().default(1),
 });
 

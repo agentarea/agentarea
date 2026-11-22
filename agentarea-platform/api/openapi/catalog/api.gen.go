@@ -52,25 +52,52 @@ func (e BundleChannelType) Valid() bool {
 
 // Defines values for BundlePolicyEffect.
 const (
-	Allow    BundlePolicyEffect = "allow"
-	Approval BundlePolicyEffect = "approval"
-	Cap      BundlePolicyEffect = "cap"
-	Deny     BundlePolicyEffect = "deny"
-	Safety   BundlePolicyEffect = "safety"
+	BundlePolicyEffectAllow    BundlePolicyEffect = "allow"
+	BundlePolicyEffectApproval BundlePolicyEffect = "approval"
+	BundlePolicyEffectCap      BundlePolicyEffect = "cap"
+	BundlePolicyEffectDeny     BundlePolicyEffect = "deny"
+	BundlePolicyEffectSafety   BundlePolicyEffect = "safety"
 )
 
 // Valid indicates whether the value is a known member of the BundlePolicyEffect enum.
 func (e BundlePolicyEffect) Valid() bool {
 	switch e {
-	case Allow:
+	case BundlePolicyEffectAllow:
 		return true
-	case Approval:
+	case BundlePolicyEffectApproval:
 		return true
-	case Cap:
+	case BundlePolicyEffectCap:
 		return true
-	case Deny:
+	case BundlePolicyEffectDeny:
 		return true
-	case Safety:
+	case BundlePolicyEffectSafety:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BundlePolicyInputEffect.
+const (
+	BundlePolicyInputEffectAllow    BundlePolicyInputEffect = "allow"
+	BundlePolicyInputEffectApproval BundlePolicyInputEffect = "approval"
+	BundlePolicyInputEffectCap      BundlePolicyInputEffect = "cap"
+	BundlePolicyInputEffectDeny     BundlePolicyInputEffect = "deny"
+	BundlePolicyInputEffectSafety   BundlePolicyInputEffect = "safety"
+)
+
+// Valid indicates whether the value is a known member of the BundlePolicyInputEffect enum.
+func (e BundlePolicyInputEffect) Valid() bool {
+	switch e {
+	case BundlePolicyInputEffectAllow:
+		return true
+	case BundlePolicyInputEffectApproval:
+		return true
+	case BundlePolicyInputEffectCap:
+		return true
+	case BundlePolicyInputEffectDeny:
+		return true
+	case BundlePolicyInputEffectSafety:
 		return true
 	default:
 		return false
@@ -92,6 +119,24 @@ func (e BundleSkillSourceType) Valid() bool {
 	case BundleSkillSourceTypeFiles:
 		return true
 	case BundleSkillSourceTypeGithub:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BundleStreamSourceKind.
+const (
+	Poll    BundleStreamSourceKind = "poll"
+	Webhook BundleStreamSourceKind = "webhook"
+)
+
+// Valid indicates whether the value is a known member of the BundleStreamSourceKind enum.
+func (e BundleStreamSourceKind) Valid() bool {
+	switch e {
+	case Poll:
+		return true
+	case Webhook:
 		return true
 	default:
 		return false
@@ -161,8 +206,12 @@ const (
 	EntityKindAutomation EntityKind = "automation"
 	EntityKindChannel    EntityKind = "channel"
 	EntityKindMcp        EntityKind = "mcp"
+	EntityKindOpenapi    EntityKind = "openapi"
 	EntityKindPolicy     EntityKind = "policy"
+	EntityKindProject    EntityKind = "project"
 	EntityKindSkill      EntityKind = "skill"
+	EntityKindStream     EntityKind = "stream"
+	EntityKindTask       EntityKind = "task"
 )
 
 // Valid indicates whether the value is a known member of the EntityKind enum.
@@ -176,9 +225,17 @@ func (e EntityKind) Valid() bool {
 		return true
 	case EntityKindMcp:
 		return true
+	case EntityKindOpenapi:
+		return true
 	case EntityKindPolicy:
 		return true
+	case EntityKindProject:
+		return true
 	case EntityKindSkill:
+		return true
+	case EntityKindStream:
+		return true
+	case EntityKindTask:
 		return true
 	default:
 		return false
@@ -736,8 +793,14 @@ type AnalyzeRequest struct {
 	// Bundle A canonical bundle, as an earlier analyze returned it.
 	Bundle *BundleInput `json:"bundle"`
 
-	// Files An agent folder: relative POSIX path -> UTF-8 file text, rooted at agent.yaml. 5MB total.
+	// Files A bundle folder: relative POSIX path -> UTF-8 file text, rooted at agentarea.yaml (or the deprecated agent.yaml). 5MB total.
 	Files *map[string]string `json:"files"`
+
+	// Into The install to update: its id, or the name of exactly one install. Without it the bundle's name must be free in the workspace, else the plan blocks with code bundle_exists.
+	Into *string `json:"into"`
+
+	// Origin Where the folder came from; informational.
+	Origin *BundleOrigin `json:"origin"`
 
 	// SetupValues Setup values the install will be given, so a redeploy plan shows what a changed value updates. The plan_digest holds only for these values.
 	SetupValues *map[string]interface{} `json:"setup_values,omitempty"`
@@ -762,11 +825,15 @@ type BundleInput struct {
 	Metadata *BundleMetadata `json:"metadata,omitempty"`
 
 	// Name Stable package identifier (idempotency key).
-	Name          string          `json:"name"`
-	Policies      *[]BundlePolicy `json:"policies,omitempty"`
-	SchemaVersion *string         `json:"schema_version,omitempty"`
-	Setup         *[]SetupField   `json:"setup,omitempty"`
-	Skills        *[]BundleSkill  `json:"skills,omitempty"`
+	Name          string               `json:"name"`
+	Openapi       *[]BundleOpenAPI     `json:"openapi,omitempty"`
+	Policies      *[]BundlePolicyInput `json:"policies,omitempty"`
+	Projects      *[]BundleProject     `json:"projects,omitempty"`
+	SchemaVersion *string              `json:"schema_version,omitempty"`
+	Setup         *[]SetupField        `json:"setup,omitempty"`
+	Skills        *[]BundleSkill       `json:"skills,omitempty"`
+	Streams       *[]BundleStream      `json:"streams,omitempty"`
+	Tasks         *[]BundleTask        `json:"tasks,omitempty"`
 }
 
 // BundleOutput The canonical, fully-inlined package object.
@@ -782,31 +849,44 @@ type BundleOutput struct {
 	Metadata *BundleMetadata `json:"metadata,omitempty"`
 
 	// Name Stable package identifier (idempotency key).
-	Name          string          `json:"name"`
-	Policies      *[]BundlePolicy `json:"policies,omitempty"`
-	SchemaVersion *string         `json:"schema_version,omitempty"`
-	Setup         *[]SetupField   `json:"setup,omitempty"`
-	Skills        *[]BundleSkill  `json:"skills,omitempty"`
+	Name          string           `json:"name"`
+	Openapi       *[]BundleOpenAPI `json:"openapi,omitempty"`
+	Policies      *[]BundlePolicy  `json:"policies,omitempty"`
+	Projects      *[]BundleProject `json:"projects,omitempty"`
+	SchemaVersion *string          `json:"schema_version,omitempty"`
+	Setup         *[]SetupField    `json:"setup,omitempty"`
+	Skills        *[]BundleSkill   `json:"skills,omitempty"`
+	Streams       *[]BundleStream  `json:"streams,omitempty"`
+	Tasks         *[]BundleTask    `json:"tasks,omitempty"`
 }
 
 // BundleAgent An agent to create for the package.
 type BundleAgent struct {
 	// Client The id of a Codex or Claude Code client of the workspace whose runner runs the agent's tasks, or a ${setup.x} reference to one. Unset runs them on the platform.
-	Client      *string `json:"client"`
-	Description *string `json:"description,omitempty"`
-	Instruction *string `json:"instruction,omitempty"`
-	Key         string  `json:"key"`
+	Client *string `json:"client"`
+
+	// Delegates BundleAgent keys this agent may hand work to; each becomes a delegate tool.
+	Delegates   *[]string `json:"delegates,omitempty"`
+	Description *string   `json:"description,omitempty"`
+	Instruction *string   `json:"instruction,omitempty"`
+	Key         string    `json:"key"`
 
 	// Mcps BundleMcp keys to attach as tools.
 	Mcps  *[]string `json:"mcps,omitempty"`
 	Model *string   `json:"model"`
 	Name  string    `json:"name"`
 
+	// Openapi BundleOpenAPI keys of the connections the agent calls.
+	Openapi *[]string `json:"openapi,omitempty"`
+
 	// ReasoningEffort A reasoning level the model takes, e.g. low or high. Not with reasoning_max_tokens.
 	ReasoningEffort *string `json:"reasoning_effort"`
 
 	// ReasoningMaxTokens A token budget for the model's reasoning. Not with reasoning_effort.
 	ReasoningMaxTokens *int `json:"reasoning_max_tokens"`
+
+	// RenamedFrom The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+	RenamedFrom *string `json:"renamed_from"`
 
 	// Skills BundleSkill keys to attach.
 	Skills *[]string `json:"skills,omitempty"`
@@ -815,22 +895,34 @@ type BundleAgent struct {
 	Toolsets *[]string `json:"toolsets,omitempty"`
 }
 
-// BundleAutomation A scheduled run of one of the package's agents (maps to a CronTrigger).
+// BundleAutomation A run of one of the package's agents: on a cron schedule, or on the events of a stream (`on`). Exactly one of `cron` and `on`, and either `task` or `agent` with `prompt`.
 //
 // Automations are imported disabled by default; the user enables them after
 // verifying connections, mirroring the Zapier/Make "connect then activate"
 // flow.
 type BundleAutomation struct {
-	// Agent BundleAgent key to invoke.
-	Agent string `json:"agent"`
+	// Agent BundleAgent key to invoke; with task, the task's agent or left out.
+	Agent *string `json:"agent,omitempty"`
 
 	// Cron 5- or 6-field cron expression.
-	Cron    string `json:"cron"`
-	Enabled *bool  `json:"enabled,omitempty"`
-	Key     string `json:"key"`
+	Cron    *string `json:"cron,omitempty"`
+	Enabled *bool   `json:"enabled,omitempty"`
+	Key     string  `json:"key"`
 
-	// Prompt Task query passed to the agent on each run.
-	Prompt   string                `json:"prompt"`
+	// On Run on a stream's events instead of a cron schedule.
+	On *BundleTriggerOn `json:"on,omitempty"`
+
+	// Parameters Parameters of the saved task's runs; with task only.
+	Parameters *map[string]interface{} `json:"parameters,omitempty"`
+
+	// Prompt Task query passed to the agent on each run; left out with task.
+	Prompt *string `json:"prompt,omitempty"`
+
+	// RenamedFrom The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+	RenamedFrom *string `json:"renamed_from"`
+
+	// Task The saved task it runs instead of asking agent a prompt: a task key of the bundle or the name of a workspace's saved task. Its agent is the task's; prompt stays empty.
+	Task     *string               `json:"task"`
 	Timezone *string               `json:"timezone,omitempty"`
 	Type     *BundleAutomationType `json:"type,omitempty"`
 }
@@ -857,12 +949,26 @@ type BundleChannel struct {
 	// Prompt Task query template used for each inbound message.
 	Prompt *string `json:"prompt,omitempty"`
 
+	// RenamedFrom The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+	RenamedFrom *string `json:"renamed_from"`
+
 	// Type Webhook provider for the created trigger.
 	Type *BundleChannelType `json:"type,omitempty"`
 }
 
 // BundleChannelType Webhook provider for the created trigger.
 type BundleChannelType string
+
+// BundleInstallRef The install of a bundle a plan updates.
+type BundleInstallRef struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+
+	// Origin Where the folder last deployed came from.
+	Origin    *BundleOrigin `json:"origin"`
+	UpdatedAt time.Time     `json:"updated_at"`
+	UpdatedBy *string       `json:"updated_by"`
+}
 
 // BundleMcp An MCP server to provision for the package.
 type BundleMcp struct {
@@ -883,6 +989,9 @@ type BundleMcp struct {
 
 	// Name Instance display name created in the workspace.
 	Name string `json:"name"`
+
+	// RenamedFrom The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+	RenamedFrom *string `json:"renamed_from"`
 }
 
 // BundleMetadata Marketplace presentation metadata (parity with plugin/app listings).
@@ -901,13 +1010,49 @@ type BundleMetadata struct {
 	Website    *string `json:"website"`
 }
 
-// BundlePolicy A governance rule the package installs (maps to a PolicyRule).
+// BundleOpenAPI An OpenAPI connection the bundle creates: its spec at spec_url or inline in spec (exactly one).
+type BundleOpenAPI struct {
+	BaseUrl     string  `json:"base_url"`
+	Description *string `json:"description,omitempty"`
+
+	// Headers A secret header's value is ${secret.<name>} or ${setup.<key>}.
+	Headers *map[string]string `json:"headers,omitempty"`
+	Key     string             `json:"key"`
+	Name    string             `json:"name"`
+
+	// Query Query parameters; one reading a secret is stored as a secret.
+	Query *map[string]string `json:"query,omitempty"`
+
+	// RenamedFrom The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+	RenamedFrom *string `json:"renamed_from"`
+
+	// Spec The OpenAPI document inline.
+	Spec    *map[string]interface{} `json:"spec"`
+	SpecUrl *string                 `json:"spec_url"`
+
+	// Variables Values of the base URL's {variables}.
+	Variables *map[string]string `json:"variables,omitempty"`
+}
+
+// BundleOrigin Where a deployed folder came from, as the CLI reports it. Shown in the plan and the install record, never checked.
+type BundleOrigin struct {
+	GitCommit *string `json:"git_commit"`
+	GitRemote *string `json:"git_remote"`
+
+	// Path The folder's path inside the repository.
+	Path *string `json:"path"`
+}
+
+// BundlePolicy A governance rule the package installs on its own agents (maps to a PolicyRule).
 //
-// Portable like everything else: “subject“ is the literal "workspace" or a
-// BundleAgent “key“ (never a DB id); the installer resolves it to a real
-// subject id. “target“/“effect“/“params“ mirror the unified governance
-// rule model, so this is "our policy format" — not a new one.
+// “subject“ is a BundleAgent “key“, a list of them, or "*" for every agent of the bundle; a list or "*" becomes one policy per agent, keyed “<key>-<agent>“. "workspace" and effect "allow" are refused: rules that reach beyond the bundle or loosen belong to an admin.
 type BundlePolicy struct {
+	// Approvers Who approves an approval policy: emails or user:<id>, resolved to members of the workspace the bundle deploys into. None is whoever may act on the run.
+	Approvers *[]string `json:"approvers,omitempty"`
+
+	// BillingCurrency The currency params' amounts are in; the plan blocks when the workspace bills in another.
+	BillingCurrency *string `json:"billing_currency"`
+
 	// Condition Optional CEL condition.
 	Condition *string            `json:"condition"`
 	Effect    BundlePolicyEffect `json:"effect"`
@@ -921,8 +1066,11 @@ type BundlePolicy struct {
 	Params   *map[string]interface{} `json:"params,omitempty"`
 	Priority *int                    `json:"priority,omitempty"`
 
-	// Subject "workspace" or a BundleAgent key the rule binds to.
-	Subject *string `json:"subject,omitempty"`
+	// RenamedFrom The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+	RenamedFrom *string `json:"renamed_from"`
+
+	// Subject The BundleAgent key the rule binds to (a list or "*" was expanded to one policy per agent). "workspace" makes it a workspace policy: it binds every agent in the workspace and only a workspace admin deploys it.
+	Subject string `json:"subject"`
 
 	// Target Selector, e.g. "tool:send_email", "spend", "content", "*".
 	Target string `json:"target"`
@@ -931,16 +1079,85 @@ type BundlePolicy struct {
 // BundlePolicyEffect defines model for BundlePolicy.Effect.
 type BundlePolicyEffect string
 
+// BundlePolicyInput A governance rule the package installs on its own agents (maps to a PolicyRule).
+//
+// “subject“ is a BundleAgent “key“, a list of them, or "*" for every agent of the bundle; a list or "*" becomes one policy per agent, keyed “<key>-<agent>“. "workspace" and effect "allow" are refused: rules that reach beyond the bundle or loosen belong to an admin.
+type BundlePolicyInput struct {
+	// Approvers Who approves an approval policy: emails or user:<id>, resolved to members of the workspace the bundle deploys into. None is whoever may act on the run.
+	Approvers *[]string `json:"approvers,omitempty"`
+
+	// BillingCurrency The currency params' amounts are in; the plan blocks when the workspace bills in another.
+	BillingCurrency *string `json:"billing_currency"`
+
+	// Condition Optional CEL condition.
+	Condition *string                 `json:"condition"`
+	Effect    BundlePolicyInputEffect `json:"effect"`
+	Enabled   *bool                   `json:"enabled,omitempty"`
+	Key       string                  `json:"key"`
+
+	// Message Human-readable reason.
+	Message *string `json:"message"`
+
+	// Params Effect-specific params, e.g. {amount_usd, period} for cap.
+	Params   *map[string]interface{} `json:"params,omitempty"`
+	Priority *int                    `json:"priority,omitempty"`
+
+	// RenamedFrom The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+	RenamedFrom *string `json:"renamed_from"`
+
+	// Subject A BundleAgent key, a list of them, or "*". "workspace" makes it a workspace policy: it binds every agent in the workspace and only a workspace admin deploys it.
+	Subject BundlePolicyInput_Subject `json:"subject"`
+
+	// Target Selector, e.g. "tool:send_email", "spend", "content", "*".
+	Target string `json:"target"`
+}
+
+// BundlePolicyInputEffect defines model for BundlePolicyInput.Effect.
+type BundlePolicyInputEffect string
+
+// BundlePolicyInputSubject0 defines model for BundlePolicyInput.Subject.0.
+type BundlePolicyInputSubject0 = string
+
+// BundlePolicyInputSubject1 defines model for BundlePolicyInput.Subject.1.
+type BundlePolicyInputSubject1 = []string
+
+// BundlePolicyInput_Subject A BundleAgent key, a list of them, or "*". "workspace" makes it a workspace policy: it binds every agent in the workspace and only a workspace admin deploys it.
+type BundlePolicyInput_Subject struct {
+	union json.RawMessage
+}
+
+// BundleProject A project grouping the bundle's agents, MCP servers and skills by key.
+type BundleProject struct {
+	// Agents BundleAgent keys.
+	Agents       *[]string `json:"agents,omitempty"`
+	Description  *string   `json:"description,omitempty"`
+	Instructions *string   `json:"instructions"`
+	Key          string    `json:"key"`
+
+	// Mcp BundleMcp keys.
+	Mcp  *[]string `json:"mcp,omitempty"`
+	Name string    `json:"name"`
+
+	// RenamedFrom The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+	RenamedFrom *string `json:"renamed_from"`
+
+	// Skills BundleSkill keys.
+	Skills *[]string `json:"skills,omitempty"`
+}
+
 // BundleSkill A skill to create for the package.
 type BundleSkill struct {
 	// Content SKILL.md markdown for source_type=content.
 	Content *string `json:"content"`
 
 	// Files Package files for source_type=files: relative path -> UTF-8 text, SKILL.md at the root.
-	Files      *map[string]string     `json:"files"`
-	Key        string                 `json:"key"`
-	Name       string                 `json:"name"`
-	SourceType *BundleSkillSourceType `json:"source_type,omitempty"`
+	Files *map[string]string `json:"files"`
+	Key   string             `json:"key"`
+	Name  string             `json:"name"`
+
+	// RenamedFrom The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+	RenamedFrom *string                `json:"renamed_from"`
+	SourceType  *BundleSkillSourceType `json:"source_type,omitempty"`
 
 	// SourceUrl Repo URL for source_type=github.
 	SourceUrl *string `json:"source_url"`
@@ -948,6 +1165,80 @@ type BundleSkill struct {
 
 // BundleSkillSourceType defines model for BundleSkill.SourceType.
 type BundleSkillSourceType string
+
+// BundleStream A stream the bundle creates, with its sources, processors and forwards.
+type BundleStream struct {
+	Description *string                  `json:"description,omitempty"`
+	Forwards    *[]BundleStreamForward   `json:"forwards,omitempty"`
+	Key         string                   `json:"key"`
+	Name        string                   `json:"name"`
+	Processors  *[]BundleStreamProcessor `json:"processors,omitempty"`
+
+	// RenamedFrom The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+	RenamedFrom *string               `json:"renamed_from"`
+	Sources     *[]BundleStreamSource `json:"sources,omitempty"`
+}
+
+// BundleStreamForward A forward copying a bundle stream's events into other streams.
+type BundleStreamForward struct {
+	// Filter EventFilter of the events it copies.
+	Filter *map[string]interface{} `json:"filter,omitempty"`
+
+	// Outputs Stream keys of the bundle or names of workspace streams.
+	Outputs []string `json:"outputs"`
+}
+
+// BundleStreamProcessor A processor of a bundle stream.
+type BundleStreamProcessor struct {
+	// Code Python defining process(event).
+	Code string `json:"code"`
+
+	// Filter EventFilter of the events it takes.
+	Filter *map[string]interface{} `json:"filter,omitempty"`
+
+	// Outputs Stream keys of the bundle or names of workspace streams.
+	Outputs []string `json:"outputs"`
+}
+
+// BundleStreamSource A source feeding a bundle stream; credentials are ${secret.<name>} or ${setup.<key>} references.
+type BundleStreamSource struct {
+	// Config Source settings.
+	Config *map[string]string `json:"config,omitempty"`
+
+	// Credentials Credentials as ${secret.<name>} or ${setup.<key>}.
+	Credentials *map[string]string      `json:"credentials,omitempty"`
+	Kind        *BundleStreamSourceKind `json:"kind,omitempty"`
+
+	// Type Source type slug from the catalog.
+	Type string `json:"type"`
+}
+
+// BundleStreamSourceKind defines model for BundleStreamSource.Kind.
+type BundleStreamSourceKind string
+
+// BundleTask A saved task the bundle creates: a run of agent asked prompt.
+type BundleTask struct {
+	// Agent BundleAgent key.
+	Agent string `json:"agent"`
+	Key   string `json:"key"`
+	Name  string `json:"name"`
+
+	// Parameters Default parameters of a run.
+	Parameters *map[string]interface{} `json:"parameters,omitempty"`
+	Prompt     string                  `json:"prompt"`
+
+	// RenamedFrom The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+	RenamedFrom *string `json:"renamed_from"`
+}
+
+// BundleTriggerOn The stream an automation runs on and the events it takes.
+type BundleTriggerOn struct {
+	// Filter EventFilter: kinds and fields; empty takes every event.
+	Filter *map[string]interface{} `json:"filter,omitempty"`
+
+	// Stream A stream key of the bundle, or the name of a workspace stream.
+	Stream string `json:"stream"`
+}
 
 // CatalogBrowseResponse One page of a type's catalog plus the context needed to browse it.
 //
@@ -1058,6 +1349,15 @@ type EntityKind string
 // EntityStatus defines model for EntityStatus.
 type EntityStatus string
 
+// ExistingBundleInstall The install that already has a bundle's name: deploy into it by id, or rename the bundle.
+type ExistingBundleInstall struct {
+	CreatedBy string    `json:"created_by"`
+	Id        string    `json:"id"`
+	Name      string    `json:"name"`
+	UpdatedAt time.Time `json:"updated_at"`
+	UpdatedBy *string   `json:"updated_by"`
+}
+
 // HTTPValidationError defines model for HTTPValidationError.
 type HTTPValidationError struct {
 	Detail *[]ValidationError `json:"detail,omitempty"`
@@ -1068,6 +1368,12 @@ type ImportPreview struct {
 	// Bundle The canonical, fully-inlined package object.
 	Bundle   BundleOutput     `json:"bundle"`
 	Entities *[]PreviewEntity `json:"entities,omitempty"`
+
+	// ExistingInstall The install that already has the bundle's name, when that blocks the plan.
+	ExistingInstall *ExistingBundleInstall `json:"existing_install"`
+
+	// Install The install this plan updates; null when it creates one.
+	Install *BundleInstallRef `json:"install"`
 
 	// Installable True when there are no blocking issues (setup may still be required).
 	Installable bool            `json:"installable"`
@@ -1086,6 +1392,12 @@ type InstallRequest struct {
 	// Bundle The canonical, fully-inlined package object.
 	Bundle BundleInput `json:"bundle"`
 
+	// InstallId The install the plan was made for (the plan's install.id); null when the plan creates one. Another id, or an install written since the plan, is refused with 409.
+	InstallId *string `json:"install_id"`
+
+	// Origin Where the folder came from; informational.
+	Origin *BundleOrigin `json:"origin"`
+
 	// PlanDigest The plan_digest analyze returned for this bundle and these setup values: the plan the caller approved.
 	PlanDigest string `json:"plan_digest"`
 
@@ -1095,9 +1407,12 @@ type InstallRequest struct {
 
 // InstallResult defines model for InstallResult.
 type InstallResult struct {
-	BundleName        string             `json:"bundle_name"`
-	Entities          *[]InstalledEntity `json:"entities,omitempty"`
-	InstalledBundleId *string            `json:"installed_bundle_id"`
+	BundleName string             `json:"bundle_name"`
+	Entities   *[]InstalledEntity `json:"entities,omitempty"`
+
+	// InstallId The install this deploy wrote; pass it as into and install_id on the next deploy.
+	InstallId         *string `json:"install_id,omitempty"`
+	InstalledBundleId *string `json:"installed_bundle_id"`
 
 	// SetupValues Non-secret setup values supplied to installs of this bundle, reused on redeploy.
 	SetupValues *map[string]interface{} `json:"setup_values,omitempty"`
@@ -1115,7 +1430,10 @@ type InstalledEntity struct {
 	Id   *string    `json:"id"`
 	Key  string     `json:"key"`
 	Kind EntityKind `json:"kind"`
-	Name string     `json:"name"`
+
+	// ModelId For an agent whose model is given by name: the model instance the name resolved to when the agent was last written.
+	ModelId *string `json:"model_id"`
+	Name    string  `json:"name"`
 }
 
 // IssueSeverity defines model for IssueSeverity.
@@ -1319,17 +1637,32 @@ type PaginatedResponseMCPServerResponse struct {
 	Total    int                 `json:"total"`
 }
 
+// PreviewApproval An approval policy that binds an agent, as the agent's plan line shows it.
+type PreviewApproval struct {
+	// Approvers Approvers by email or name; empty is whoever may act on the run.
+	Approvers []string `json:"approvers"`
+	Policy    string   `json:"policy"`
+	Target    string   `json:"target"`
+
+	// Workspace A workspace policy, binding every agent.
+	Workspace bool `json:"workspace"`
+}
+
 // PreviewEntity One thing the package will (or won't) create.
 type PreviewEntity struct {
-	Detail *string      `json:"detail"`
-	Key    string       `json:"key"`
-	Kind   EntityKind   `json:"kind"`
-	Name   string       `json:"name"`
-	Status EntityStatus `json:"status"`
+	// Approvals On an agent: the approval policies that bind it.
+	Approvals *[]PreviewApproval `json:"approvals,omitempty"`
+	Detail    *string            `json:"detail"`
+	Key       string             `json:"key"`
+	Kind      EntityKind         `json:"kind"`
+	Name      string             `json:"name"`
+	Status    EntityStatus       `json:"status"`
 }
 
 // PreviewIssue A problem found while analyzing the package.
 type PreviewIssue struct {
+	// Code Set on issues a client acts on: bundle_exists, bundle_install_not_found, bundle_install_ambiguous.
+	Code      *string       `json:"code"`
 	EntityKey *string       `json:"entity_key"`
 	Message   string        `json:"message"`
 	Severity  IssueSeverity `json:"severity"`
@@ -1827,6 +2160,68 @@ type CreateWorkspaceRegistryV1WorkspaceRegistriesPostJSONRequestBody = Workspace
 
 // UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchJSONRequestBody defines body for UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatch for application/json ContentType.
 type UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchJSONRequestBody = WorkspaceRegistryUpdate
+
+// AsBundlePolicyInputSubject0 returns the union data inside the BundlePolicyInput_Subject as a BundlePolicyInputSubject0
+func (t BundlePolicyInput_Subject) AsBundlePolicyInputSubject0() (BundlePolicyInputSubject0, error) {
+	var body BundlePolicyInputSubject0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromBundlePolicyInputSubject0 overwrites any union data inside the BundlePolicyInput_Subject as the provided BundlePolicyInputSubject0
+func (t *BundlePolicyInput_Subject) FromBundlePolicyInputSubject0(v BundlePolicyInputSubject0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeBundlePolicyInputSubject0 performs a merge with any union data inside the BundlePolicyInput_Subject, using the provided BundlePolicyInputSubject0
+func (t *BundlePolicyInput_Subject) MergeBundlePolicyInputSubject0(v BundlePolicyInputSubject0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsBundlePolicyInputSubject1 returns the union data inside the BundlePolicyInput_Subject as a BundlePolicyInputSubject1
+func (t BundlePolicyInput_Subject) AsBundlePolicyInputSubject1() (BundlePolicyInputSubject1, error) {
+	var body BundlePolicyInputSubject1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromBundlePolicyInputSubject1 overwrites any union data inside the BundlePolicyInput_Subject as the provided BundlePolicyInputSubject1
+func (t *BundlePolicyInput_Subject) FromBundlePolicyInputSubject1(v BundlePolicyInputSubject1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeBundlePolicyInputSubject1 performs a merge with any union data inside the BundlePolicyInput_Subject, using the provided BundlePolicyInputSubject1
+func (t *BundlePolicyInput_Subject) MergeBundlePolicyInputSubject1(v BundlePolicyInputSubject1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t BundlePolicyInput_Subject) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *BundlePolicyInput_Subject) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // AsValidationErrorLoc0 returns the union data inside the ValidationError_Loc_Item as a ValidationErrorLoc0
 func (t ValidationError_Loc_Item) AsValidationErrorLoc0() (ValidationErrorLoc0, error) {

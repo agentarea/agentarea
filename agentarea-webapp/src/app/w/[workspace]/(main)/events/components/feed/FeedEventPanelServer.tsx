@@ -8,10 +8,12 @@ export default async function FeedEventPanelServer({
   eventId,
   streams,
   sourceTypes,
+  currentStream,
 }: {
   eventId: string;
   streams: { id: string; name: string }[];
   sourceTypes: SourceType[];
+  currentStream?: string;
 }) {
   const event = optionalApiData(
     await getStreamEventById(eventId),
@@ -23,6 +25,7 @@ export default async function FeedEventPanelServer({
       event={event}
       streams={streams}
       sourceTypes={sourceTypes}
+      currentStream={currentStream}
     />
   );
 }
