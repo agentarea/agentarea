@@ -711,7 +711,7 @@ func bundleMCPFrom(c *checker, v any, loc []any) (BundleMCP, bool) {
 		return out, false
 	}
 	if out.Existing {
-		if out.Catalog != nil || out.JSONSpec != nil || len(out.Bindings) > 0 || out.ContextSecret != nil {
+		if out.Catalog != nil || out.JSONSpec != nil || len(out.Bindings) > 0 || out.ContextSecret != nil { // pragma: allowlist secret
 			c.valueError(fmt.Sprintf("mcp '%s' is an existing connection: it takes only its name, not catalog, json_spec, bindings or context_secret", out.Key), loc)
 			return out, false
 		}
