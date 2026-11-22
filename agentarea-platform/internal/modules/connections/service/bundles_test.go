@@ -126,8 +126,8 @@ func TestBundleSecretsMatchComparesWithoutRevealing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctxSecret := "0123456789abcdef-context"
-	if err := b.UpdateMCP(ctx, f.c, made.InstanceID, catalogapi.BundleMCPUpdate{SetContextSecret: true,
+	ctxSecret := "0123456789abcdef-context"                                                             // pragma: allowlist secret
+	if err := b.UpdateMCP(ctx, f.c, made.InstanceID, catalogapi.BundleMCPUpdate{SetContextSecret: true, // pragma: allowlist secret
 		Instance: catalogapi.BundleInstance{Name: "remote", JSONSpec: map[string]any{"headers": map[string]any{"Authorization": b.KeepSecret()}},
 			ContextSecret: &ctxSecret}}); err != nil {
 		t.Fatal(err)

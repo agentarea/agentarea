@@ -552,12 +552,12 @@ func (in *bundleInstaller) redeployMCP(ctx context.Context, m BundleMCP, id, nam
 	}
 	values, contextSecret := suppliedSecrets(in.pkg, m, in.values, in.supplied)
 	same, contextSame := map[string]bool{}, false
-	if len(values) > 0 || contextSecret != nil {
+	if len(values) > 0 || contextSecret != nil { // pragma: allowlist secret
 		if same, contextSame, err = w.b.d.MCPs.SecretsMatch(ctx, w.c, id, values, contextSecret); err != nil {
 			return InstalledEntity{}, err
 		}
 	}
-	differ := contextSecret != nil && !contextSame
+	differ := contextSecret != nil && !contextSame // pragma: allowlist secret
 	for k := range values {
 		differ = differ || !same[k]
 	}

@@ -1152,7 +1152,7 @@ func (a *bundleAnalyzer) analyzeMCPs(ctx context.Context, b *Bundle, setupKeys m
 			return nil, err
 		}
 		if values, contextSecret := suppliedSecrets(b, m, a.values, suppliedKeys(a.supplied)); status == StatusUnchanged &&
-			(len(values) > 0 || contextSecret != nil) {
+			(len(values) > 0 || contextSecret != nil) { // pragma: allowlist secret
 			differ := true
 			if a.checks != nil {
 				if differ, err = a.checks.secretsDiffer(ctx, a.ids[entityRef{KindMCP, m.Key}], values, contextSecret); err != nil {

@@ -217,7 +217,7 @@ func (b BundleMCPs) SecretsMatch(ctx context.Context, c authn.Caller, id string,
 				return err
 			}
 		}
-		if contextSecret != nil {
+		if contextSecret != nil { // pragma: allowlist secret
 			contextSame, err = matches(domain.ContextSecretName, *contextSecret)
 		}
 		return err

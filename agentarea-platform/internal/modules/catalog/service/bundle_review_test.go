@@ -27,11 +27,11 @@ func TestAgentKeyWorkspaceIsRefused(t *testing.T) {
 
 func TestOriginGitRemoteLosesCredentialsQueryAndFragment(t *testing.T) {
 	for in, want := range map[string]string{
-		"https://user:tok3n@github.com/acme/bundles.git?ref=main#frag": "https://github.com/acme/bundles.git",
+		"https://user:tok3n@github.com/acme/bundles.git?ref=main#frag": "https://github.com/acme/bundles.git", // pragma: allowlist secret
 		"https://github.com/acme/bundles.git":                          "https://github.com/acme/bundles.git",
 		"ghp_x@github.com:acme/bundles.git":                            "github.com:acme/bundles.git",
 		"git@github.com:acme/bundles.git?x=1#y":                        "github.com:acme/bundles.git",
-		"ssh://git:pw@host:22/acme/b.git":                              "ssh://host:22/acme/b.git",
+		"ssh://git:pw@host:22/acme/b.git":                              "ssh://host:22/acme/b.git", // pragma: allowlist secret
 	} {
 		req, errs := ValidateAnalyzeRequest(wirejson.Object{{Key: "source", Value: "x"},
 			{Key: "origin", Value: wirejson.Object{{Key: "git_remote", Value: in}}}})

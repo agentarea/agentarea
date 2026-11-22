@@ -376,7 +376,7 @@ func (w *workspace) secretsDiffer(ctx context.Context, instanceID string, values
 			return true, nil
 		}
 	}
-	return contextSecret != nil && !contextSame, nil
+	return contextSecret != nil && !contextSame, nil // pragma: allowlist secret
 }
 
 func (w *workspace) specEditRefusal(ctx context.Context, instanceID string) (string, error) {
