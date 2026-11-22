@@ -7,8 +7,8 @@ name: Release CLI
 # when that version is not on npm yet, it is published and tagged cli-vX.Y.Z.
 # A push that leaves the version alone publishes nothing.
 #
-# Requires the repo secret NPM_TOKEN (npm automation token with publish rights
-# for the @agentarea scope).
+# Publishes through npm Trusted Publishing (OIDC): the package trusts this
+# workflow on npmjs.com, no npm token is stored in the repository.
 
 on:
   push:
@@ -79,9 +79,9 @@ jobs:
 
       - name: Publish to npm
         if: steps.version.outputs.release == 'true'
-        run: pnpm publish --provenance --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm install -g npm@^11.5.1
+          npm publish --provenance --access public
 
       - name: Tag the release
         if: steps.version.outputs.release == 'true'
