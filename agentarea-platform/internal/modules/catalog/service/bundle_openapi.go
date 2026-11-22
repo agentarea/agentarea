@@ -132,6 +132,12 @@ func (a *bundleAnalyzer) openAPIValueIssues(ctx context.Context, o BundleOpenAPI
 
 func (a *bundleAnalyzer) analyzeOpenAPIs(ctx context.Context, b *Bundle, setupKeys map[string]bool, entities *[]PreviewEntity, issues *[]PreviewIssue) error {
 	for _, o := range b.OpenAPI {
+		if o.Existing {
+			if err := a.analyzeExisting(ctx, KindOpenAPI, o.Key, o.Name, entities, issues); err != nil {
+				return err
+			}
+			continue
+		}
 		var secrets []string
 		addresses := []struct{ what, value string }{{"base_url", o.BaseURL}}
 		if o.SpecURL != nil {
@@ -181,6 +187,14 @@ func (in *bundleInstaller) installOpenAPIs(ctx context.Context) error {
 	op := w.b.d.OpenAPIs
 	in.openapiIDs = map[string]string{}
 	for _, o := range in.pkg.OpenAPI {
+		if o.Existing {
+			id, err := in.linkExisting(ctx, KindOpenAPI, o.Key, o.Name)
+			if err != nil {
+				return err
+			}
+			in.openapiIDs[o.Key] = id
+			continue
+		}
 		detail := openAPIDetail(o)
 		fp, err := in.fingerprint(o)
 		if err != nil {

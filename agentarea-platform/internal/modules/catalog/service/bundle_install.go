@@ -212,6 +212,22 @@ func (in *bundleInstaller) live(ctx context.Context, kind EntityKind, ref *Insta
 	return &id, l, nil
 }
 
+// linkExisting finds the workspace's connection named name and records it as
+// reused: the install links it and never writes it.
+func (in *bundleInstaller) linkExisting(ctx context.Context, kind EntityKind, key, name string) (string, error) {
+	id, problem, err := in.w.existing(ctx, kind, name)
+	if err != nil {
+		return "", err
+	}
+	if problem != "" {
+		return "", invalidError(fmt.Sprintf("%s '%s' %s", kind, key, problem))
+	}
+	e := reusedEntity(kind, key, name, id)
+	e.Detail = strp(existingDetail)
+	in.add(e)
+	return id, nil
+}
+
 func reusedEntity(kind EntityKind, key, name, id string) InstalledEntity {
 	return InstalledEntity{Kind: kind, Key: key, Name: name, Action: ActionReused, ID: &id}
 }
@@ -304,6 +320,14 @@ func (in *bundleInstaller) recordOrphans(ctx context.Context) error {
 func (in *bundleInstaller) installMCPs(ctx context.Context) error {
 	ids := map[string]string{}
 	for _, m := range in.pkg.MCPs {
+		if m.Existing {
+			id, err := in.linkExisting(ctx, KindMCP, m.Key, m.Name)
+			if err != nil {
+				return err
+			}
+			ids[m.Key] = id
+			continue
+		}
 		if reason := mcpUnsupported(m); reason != "" {
 			if err := in.addSkipped(KindMCP, m.Key, m.Name, reason); err != nil {
 				return err

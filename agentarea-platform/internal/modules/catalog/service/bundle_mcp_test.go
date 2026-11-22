@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -77,6 +78,16 @@ func (r *recordingMCPs) SecretsMatch(_ context.Context, _ authn.Caller, id strin
 		out[k] = r.stored[id][k] == v
 	}
 	return out, false, nil
+}
+func (r *recordingMCPs) InstancesNamed(_ context.Context, _ authn.Caller, name string) ([]string, error) {
+	var ids []string
+	for id, n := range r.names {
+		if n == name {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	return ids, nil
 }
 func (r *recordingMCPs) InstanceSpecID(_ context.Context, _ authn.Caller, id string) (string, bool, error) {
 	_, ok := r.names[id]
@@ -363,5 +374,84 @@ func TestRediscoveryOfAnMCPYouMayNotEdit(t *testing.T) {
 	in.rediscoverMCPs(context.Background(), &got)
 	if d := mcpEntity(t, got).Detail; d == nil || *d != "tools not re-discovered: you may not edit it" {
 		t.Fatalf("created mcp detail %v", d)
+	}
+}
+
+const existingBundle = `
+name: ex
+mcps:
+  - {key: sentry, name: cx-sentry, existing: true}
+agents:
+  - {key: a, name: A, model: us-model, mcps: [sentry]}
+`
+
+func existingFixture(t *testing.T) (*deployFixture, *recordingMCPs) {
+	t.Helper()
+	f := newDeployFixture(t)
+	mcps := &recordingMCPs{log: f.log, names: map[string]string{"inst-sentry": "cx-sentry"}, updates: map[string]catalogapi.BundleMCPUpdate{},
+		stored: map[string]map[string]string{}}
+	f.w.b.d.MCPs = mcps
+	return f, mcps
+}
+
+func TestAnExistingMCPIsLinkedNeverWritten(t *testing.T) {
+	f, mcps := existingFixture(t)
+	p, res, err := redeployMCP(t, f, existingBundle, wirejson.Object{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, i := range p.Issues {
+		if i.Severity == "block" {
+			t.Fatalf("blocked: %+v", i)
+		}
+	}
+	if p.Entities[0].Kind != KindMCP || p.Entities[0].Status != StatusAlreadyExists {
+		t.Fatalf("plan = %+v", p.Entities)
+	}
+	e := mcpEntity(t, res)
+	if e.Action != ActionReused || *e.ID != "inst-sentry" || len(mcps.names) != 1 || len(mcps.updates) != 0 || len(mcps.verified) != 0 {
+		t.Fatalf("entity %+v, names %v, updates %v, verified %v", e, mcps.names, mcps.updates, mcps.verified)
+	}
+	tools := f.agents.created[0].Tools
+	if len(tools) != 1 || tools[0].Type != "mcp" || tools[0].Name != "inst-sentry" {
+		t.Fatalf("agent tools = %+v", tools)
+	}
+
+	b := mustParse(t, existingBundle)
+	_, res2, err := redeployMCP(t, f, existingBundle, wirejson.Object{}, &priorInstall{bundle: b, result: res})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e := mcpEntity(t, res2); e.Action != ActionReused || *e.ID != "inst-sentry" || len(mcps.updates) != 0 {
+		t.Fatalf("redeploy entity %+v, updates %v", e, mcps.updates)
+	}
+}
+
+func TestAnExistingMCPTheWorkspaceLacksBlocks(t *testing.T) {
+	f, mcps := existingFixture(t)
+	mcps.names["inst-2"] = "cx-sentry"
+	for src, want := range map[string]string{
+		strings.Replace(existingBundle, "cx-sentry", "cx-missing", 1): "names no MCP connection of this workspace called 'cx-missing'",
+		existingBundle: "names 2 MCP connections called 'cx-sentry'",
+	} {
+		b := mustParse(t, src)
+		p, err := (&bundleAnalyzer{existence: f.w, checks: f.w, shapes: fakeShapes{}}).analyze(context.Background(), &b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, i := range p.Issues {
+			found = found || (i.Severity == "block" && strings.Contains(i.Message, want))
+		}
+		if !found {
+			t.Fatalf("%q: issues %+v", want, p.Issues)
+		}
+	}
+}
+
+func TestAnExistingMCPTakesOnlyItsName(t *testing.T) {
+	src := strings.Replace(existingBundle, "existing: true}", "existing: true, catalog: x}", 1)
+	if _, err := ParseBundle(src); err == nil || !strings.Contains(err.Error(), "existing connection") {
+		t.Fatalf("err = %v", err)
 	}
 }

@@ -498,6 +498,32 @@ func (w *workspace) mayEdit(ctx context.Context, kind EntityKind, id string) (bo
 	return w.b.d.MayEdit(ctx, w.c, editResourceType(kind), id)
 }
 
+// existing is the one connection of kind the workspace has under name, or why
+// there is not exactly one.
+func (w *workspace) existing(ctx context.Context, kind EntityKind, name string) (string, string, error) {
+	var ids []string
+	var err error
+	label := "MCP connection"
+	if kind == KindOpenAPI {
+		label = "OpenAPI connection"
+		if w.b.d.OpenAPIs == nil {
+			return "", "OpenAPI connections are not wired", nil
+		}
+		ids, err = w.b.d.OpenAPIs.ConnectionsNamed(ctx, w.c, name)
+	} else {
+		ids, err = w.b.d.MCPs.InstancesNamed(ctx, w.c, name)
+	}
+	switch {
+	case err != nil:
+		return "", "", err
+	case len(ids) == 0:
+		return "", fmt.Sprintf("names no %s of this workspace called '%s'", label, name), nil
+	case len(ids) > 1:
+		return "", fmt.Sprintf("names %d %ss called '%s' (%s); rename one in the workspace", len(ids), label, name, strings.Join(ids, ", ")), nil
+	}
+	return ids[0], "", nil
+}
+
 func (w *workspace) secretProblem(ctx context.Context, name string) (string, error) {
 	problem, err := w.b.d.MCPs.SecretProblem(ctx, w.c, name)
 	if err != nil || problem == "" {

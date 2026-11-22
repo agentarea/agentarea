@@ -82,6 +82,9 @@ type BundleMCP struct {
 	Bindings      StrPairs
 	ContextSecret *string
 	RenamedFrom   *string
+	// Existing names a connection the workspace already has, by Name: the
+	// deploy links it and never creates, updates or deletes it.
+	Existing bool
 }
 
 // BundleOpenAPI is an OpenAPI connection the bundle creates: its spec at
@@ -93,6 +96,9 @@ type BundleOpenAPI struct {
 	Spec                            *wirejson.Object
 	Headers, Query, Variables       StrPairs
 	RenamedFrom                     *string
+	// Existing names a connection the workspace already has, by Name: the
+	// deploy links it and never creates, updates or deletes it.
+	Existing bool
 }
 
 // BundleTask is a saved task the bundle creates: a run of Agent asked Prompt.
@@ -697,9 +703,19 @@ func bundleMCPFrom(c *checker, v any, loc []any) (BundleMCP, bool) {
 		}
 	}
 	out.RenamedFrom = c.renamedFrom(f)
-	c.extra(o, []string{"key", "name", "catalog", "json_spec", "bindings", "context_secret", "renamed_from"}, loc)
+	if v, ok := f.get("existing"); ok {
+		out.Existing, _ = c.boolean(v, f.at("existing"))
+	}
+	c.extra(o, []string{"key", "name", "catalog", "json_spec", "bindings", "context_secret", "renamed_from", "existing"}, loc)
 	if c.count() > before {
 		return out, false
+	}
+	if out.Existing {
+		if out.Catalog != nil || out.JSONSpec != nil || len(out.Bindings) > 0 || out.ContextSecret != nil {
+			c.valueError(fmt.Sprintf("mcp '%s' is an existing connection: it takes only its name, not catalog, json_spec, bindings or context_secret", out.Key), loc)
+			return out, false
+		}
+		return out, true
 	}
 	if (out.Catalog == nil) == (out.JSONSpec == nil) {
 		c.valueError(fmt.Sprintf("mcp '%s' needs exactly one of 'catalog' or 'json_spec'", out.Key), loc)
@@ -989,6 +1005,14 @@ func bundleOpenAPIFrom(c *checker, v any, loc []any) (BundleOpenAPI, bool) {
 	if v, ok := f.get("description"); ok && v != nil {
 		out.Description, _ = c.str(v, 0, 0, f.at("description"))
 	}
+	if v, ok := f.get("existing"); ok {
+		out.Existing, _ = c.boolean(v, f.at("existing"))
+	}
+	if out.Existing {
+		out.RenamedFrom = c.renamedFrom(f)
+		c.extra(o, []string{"key", "name", "description", "renamed_from", "existing"}, loc)
+		return out, c.count() == before
+	}
 	out.BaseURL = c.requiredStr(f, "base_url", 1, 0)
 	if v, ok := f.get("spec_url"); ok {
 		out.SpecURL, _ = c.optStr(v, 0, f.at("spec_url"))
@@ -1009,7 +1033,7 @@ func bundleOpenAPIFrom(c *checker, v any, loc []any) (BundleOpenAPI, bool) {
 		}
 	}
 	out.RenamedFrom = c.renamedFrom(f)
-	c.extra(o, []string{"key", "name", "description", "base_url", "spec_url", "spec", "headers", "query", "variables", "renamed_from"}, loc)
+	c.extra(o, []string{"key", "name", "description", "base_url", "spec_url", "spec", "headers", "query", "variables", "renamed_from", "existing"}, loc)
 	if c.count() > before {
 		return out, false
 	}
@@ -1343,9 +1367,13 @@ func (m BundleMCP) dump() wirejson.Object {
 	if m.JSONSpec != nil {
 		spec = *m.JSONSpec
 	}
-	return withRenamedFrom(wirejson.Object{{Key: "key", Value: m.Key}, {Key: "name", Value: m.Name}, {Key: "catalog", Value: optStrValue(m.Catalog)},
+	out := withRenamedFrom(wirejson.Object{{Key: "key", Value: m.Key}, {Key: "name", Value: m.Name}, {Key: "catalog", Value: optStrValue(m.Catalog)},
 		{Key: "json_spec", Value: spec}, {Key: "bindings", Value: m.Bindings.object()},
 		{Key: "context_secret", Value: optStrValue(m.ContextSecret)}}, m.RenamedFrom)
+	if m.Existing {
+		out = append(out, wirejson.Member{Key: "existing", Value: true})
+	}
+	return out
 }
 
 func (s BundleSkill) dump() wirejson.Object {
@@ -1394,9 +1422,14 @@ func (o BundleOpenAPI) dump() wirejson.Object {
 	if o.Spec != nil {
 		spec = *o.Spec
 	}
-	return withRenamedFrom(wirejson.Object{{Key: "key", Value: o.Key}, {Key: "name", Value: o.Name}, {Key: "description", Value: o.Description},
+	out := withRenamedFrom(wirejson.Object{{Key: "key", Value: o.Key}, {Key: "name", Value: o.Name}, {Key: "description", Value: o.Description},
 		{Key: "base_url", Value: o.BaseURL}, {Key: "spec_url", Value: optStrValue(o.SpecURL)}, {Key: "spec", Value: spec},
 		{Key: "headers", Value: o.Headers.object()}, {Key: "query", Value: o.Query.object()}, {Key: "variables", Value: o.Variables.object()}}, o.RenamedFrom)
+	if o.Existing {
+		return wirejson.Object{{Key: "key", Value: o.Key}, {Key: "name", Value: o.Name}, {Key: "description", Value: o.Description},
+			{Key: "existing", Value: true}}
+	}
+	return out
 }
 
 func (t BundleTask) dump() wirejson.Object {

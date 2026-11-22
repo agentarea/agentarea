@@ -21,6 +21,16 @@ type fakeBundleOpenAPIs struct {
 	updated map[string]catalogapi.BundleOpenAPISpec
 }
 
+func (f *fakeBundleOpenAPIs) ConnectionsNamed(_ context.Context, _ authn.Caller, name string) ([]string, error) {
+	var ids []string
+	for id, n := range f.names {
+		if n == name {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	return ids, nil
+}
 func (f *fakeBundleOpenAPIs) ConnectionName(_ context.Context, _ authn.Caller, id string) (string, bool, error) {
 	n, ok := f.names[id]
 	return n, ok, nil

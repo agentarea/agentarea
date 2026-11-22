@@ -47,6 +47,25 @@ func (b BundleOpenAPIs) ConnectionName(ctx context.Context, c authn.Caller, id s
 	return v.Connection.Name, true, nil
 }
 
+func (b BundleOpenAPIs) ConnectionsNamed(ctx context.Context, c authn.Caller, name string) ([]string, error) {
+	const page = 500
+	var ids []string
+	for offset := int32(0); ; offset += page {
+		views, err := b.S().ListConnections(ctx, c, ConnectionFilter{}, page, offset)
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range views {
+			if v.Connection.Name == name {
+				ids = append(ids, v.Connection.ID)
+			}
+		}
+		if len(views) < page {
+			return ids, nil
+		}
+	}
+}
+
 func (BundleOpenAPIs) HeaderIsSecret(name string) bool {
 	return !safeHeaders()[strings.ToLower(strings.TrimSpace(name))]
 }

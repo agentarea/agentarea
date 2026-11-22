@@ -348,3 +348,29 @@ func TestLoadInitTemplate(t *testing.T) {
 		t.Fatalf("bundle = %+v, issues %+v", b, issues)
 	}
 }
+
+func TestLoadTeamFolderExistingConnections(t *testing.T) {
+	files := with(with(teamFiles(), "mcp/sentry.yaml", "name: cx-sentry\nexisting: true\n"),
+		"agentarea.yaml", "name: team\nschema_version: 1\nagents: {include: ./agents/*.md}\nmcp: {include: ./mcp/*.yaml}\n"+
+			"skills: {include: ./skills/*/}\nopenapi: {checko: {existing: true}}\n")
+	b, _, err := LoadBundleFolder(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mcp *BundleMCP
+	for i := range b.MCPs {
+		if b.MCPs[i].Key == "cx-sentry" {
+			mcp = &b.MCPs[i]
+		}
+	}
+	if mcp == nil || !mcp.Existing || mcp.Name != "cx-sentry" || mcp.Catalog != nil {
+		t.Fatalf("mcp = %+v", mcp)
+	}
+	if len(b.OpenAPI) != 1 || !b.OpenAPI[0].Existing || b.OpenAPI[0].Name != "checko" || b.OpenAPI[0].BaseURL != "" {
+		t.Fatalf("openapi = %+v", b.OpenAPI)
+	}
+	if _, _, err := LoadBundleFolder(with(files, "mcp/sentry.yaml", "name: cx-sentry\nexisting: true\nbindings: {A: b}\n")); err == nil ||
+		!strings.Contains(err.Error(), "existing connection") {
+		t.Fatalf("err = %v", err)
+	}
+}

@@ -133,6 +133,8 @@ type BundleDiscovery struct {
 type BundleMCPs interface {
 	// InstanceName is the name of an instance the workspace sees.
 	InstanceName(ctx context.Context, c authn.Caller, id string) (string, bool, error)
+	// InstancesNamed are the ids of the instances the workspace sees under name.
+	InstancesNamed(ctx context.Context, c authn.Caller, name string) ([]string, error)
 	// InstanceSpecID is the spec the instance runs from.
 	InstanceSpecID(ctx context.Context, c authn.Caller, id string) (string, bool, error)
 	// CreateFromSpec connects specID; a spec outside the workspace is copied into it.
@@ -297,6 +299,8 @@ type BundleOpenAPISpec struct {
 // connections (connections module). A refusal of the input is a *BundleRefusal.
 type BundleOpenAPIs interface {
 	ConnectionName(ctx context.Context, c authn.Caller, id string) (string, bool, error)
+	// ConnectionsNamed are the ids of the connections the workspace sees under name.
+	ConnectionsNamed(ctx context.Context, c authn.Caller, name string) ([]string, error)
 	// OpenAPIProblem is why creating the connection would be refused, "" when
 	// it would not; a spec_url is not fetched.
 	OpenAPIProblem(ctx context.Context, c authn.Caller, spec BundleOpenAPISpec) (string, error)

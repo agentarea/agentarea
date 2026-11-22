@@ -58,6 +58,20 @@ func (b BundleMCPs) InstanceName(ctx context.Context, c authn.Caller, id string)
 	return inst.Name, true, nil
 }
 
+func (b BundleMCPs) InstancesNamed(ctx context.Context, c authn.Caller, name string) ([]string, error) {
+	views, err := b.S().ListInstances(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, v := range views {
+		if v.Instance.Name == name {
+			ids = append(ids, v.Instance.ID)
+		}
+	}
+	return ids, nil
+}
+
 func (b BundleMCPs) InstanceSpecID(ctx context.Context, c authn.Caller, id string) (string, bool, error) {
 	u, err := uuid.Parse(id)
 	if err != nil {

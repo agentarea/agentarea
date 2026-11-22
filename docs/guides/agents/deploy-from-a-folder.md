@@ -172,6 +172,22 @@ change the object; changing its `name` does — see
     A `command`-type server runs only with `npx`, `uvx`, `uv`, `python`,
     `python3`, `node`, `bunx` or `deno`; any other command shows as
     `unsupported` in the plan and its agents deploy without it.
+
+    To give agents a server the workspace already has (one connected by
+    hand, or through OAuth), name it and mark it `existing`:
+
+    ```yaml
+    # mcp/sentry.yaml
+    name: sentry
+    display_name: cx-sentry   # the server's name in the workspace; defaults to name
+    existing: true
+    ```
+
+    The deploy links that server and never creates, updates or deletes it:
+    its credentials stay as they are. It takes no `catalog`, `json_spec`,
+    `bindings` or `context_secret`. The plan shows it as `already_exists`, and
+    blocks when the workspace has no server by that name, or several. The same
+    `existing: true` works for an [OpenAPI connection](#openapi-connections).
   </Step>
 
   <Step title="Add skills">
@@ -434,6 +450,11 @@ A `${secret.<name>}` value is copied into the connection when you deploy.
 Rotating the workspace secret does not reach the connection until you deploy
 again.
 </Warning>
+
+A connection the workspace already has is linked by name with
+`existing: true` and nothing else, as for an MCP server: `name: checko` and
+`existing: true` give agents listing `openapi: [checko]` the workspace's
+`checko` connection, unchanged.
 
 ## Saved tasks
 

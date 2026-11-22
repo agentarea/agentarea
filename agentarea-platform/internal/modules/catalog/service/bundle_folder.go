@@ -36,7 +36,7 @@ func agentFileFields() []string {
 }
 
 func mcpFileFields() []string {
-	return []string{"name", "display_name", "catalog", "json_spec", "bindings", "context_secret", "renamed_from"}
+	return []string{"name", "display_name", "catalog", "json_spec", "bindings", "context_secret", "renamed_from", "existing"}
 }
 
 func policyFileFields() []string {
@@ -52,7 +52,7 @@ func workspacePolicyFields() []string {
 }
 
 func openAPIFields() []string {
-	return []string{"name", "display_name", "description", "base_url", "spec_url", "spec", "headers", "query", "variables", "renamed_from"}
+	return []string{"name", "display_name", "description", "base_url", "spec_url", "spec", "headers", "query", "variables", "renamed_from", "existing"}
 }
 
 func taskFields() []string {

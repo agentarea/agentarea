@@ -404,6 +404,8 @@ type deployChecks interface {
 	// specEditRefusal is why the caller may not edit the spec an MCP instance runs from, "" when they may.
 	specEditRefusal(ctx context.Context, instanceID string) (string, error)
 	secretProblem(ctx context.Context, name string) (string, error)
+	// existing is the one connection of kind the workspace has under name; problem when it has none or several.
+	existing(ctx context.Context, kind EntityKind, name string) (id, problem string, err error)
 	// modelID is the model instance ref names: its id, or the name of one; problem when it names none or several.
 	modelID(ctx context.Context, ref string) (id, problem string, err error)
 	billingCurrency() string
@@ -1160,6 +1162,12 @@ func (a *bundleAnalyzer) analyzeMCPs(ctx context.Context, b *Bundle, setupKeys m
 	issues *[]PreviewIssue) (map[string]bool, error) {
 	unsupported := map[string]bool{}
 	for _, m := range b.MCPs {
+		if m.Existing {
+			if err := a.analyzeExisting(ctx, KindMCP, m.Key, m.Name, entities, issues); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		reason := mcpUnsupported(m)
 		var secretRefs []string
 		for _, bind := range m.Bindings {
@@ -1562,6 +1570,35 @@ func (a *bundleAnalyzer) checkOwnership(ctx context.Context, entities []PreviewE
 }
 
 // mcpIdentityChange is how m stops being the server before was, "" when a redeploy can update it in place.
+// existingDetail is how a plan shows a connection the bundle links but does not own.
+const existingDetail = "existing connection of the workspace; linked, never changed by this bundle"
+
+// analyzeExisting plans a connection the bundle links by name: already there,
+// or a block when the workspace has none or several under that name.
+func (a *bundleAnalyzer) analyzeExisting(ctx context.Context, kind EntityKind, key, name string,
+	entities *[]PreviewEntity, issues *[]PreviewIssue) error {
+	ref := entityRef{kind, key}
+	if a.prior != nil && a.prior.owned(kind, key) != nil {
+		*issues = append(*issues, blockIssue(key, fmt.Sprintf("%s '%s' was created by this bundle and cannot become an existing connection; give it a new key", kind, key)))
+	}
+	status := StatusAlreadyExists
+	a.ids[ref] = notYetCreated
+	if a.checks != nil {
+		id, problem, err := a.checks.existing(ctx, kind, name)
+		if err != nil {
+			return err
+		}
+		if problem != "" {
+			*issues = append(*issues, blockIssue(key, fmt.Sprintf("%s '%s' %s", kind, key, problem)))
+		} else {
+			a.ids[ref] = id
+		}
+	}
+	a.planned[ref] = status
+	*entities = append(*entities, PreviewEntity{Kind: kind, Key: key, Name: name, Status: status, Detail: strp(existingDetail)})
+	return nil
+}
+
 func mcpIdentityChange(before, m BundleMCP) string {
 	switch {
 	case before.Catalog != nil && m.Catalog == nil:
