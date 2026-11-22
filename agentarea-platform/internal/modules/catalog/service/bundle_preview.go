@@ -265,7 +265,11 @@ func installedEntityFrom(c *checker, v any, loc []any) (InstalledEntity, bool) {
 	if v, ok := f.get("kind"); !ok {
 		c.missing(f.at("kind"))
 	} else {
-		k, _ := c.literal(v, "enum", []string{"mcp", "skill", "agent", "channel", "automation", "policy"}, f.at("kind"))
+		kinds := make([]string, 0, len(entityKinds()))
+		for _, k := range entityKinds() {
+			kinds = append(kinds, string(k))
+		}
+		k, _ := c.literal(v, "enum", kinds, f.at("kind"))
 		out.Kind = EntityKind(k)
 	}
 	out.Key = c.requiredStr(f, "key", 0, 0)

@@ -1546,6 +1546,9 @@ func (a *bundleAnalyzer) checkOwnership(ctx context.Context, entities []PreviewE
 		if !creates && e.Status != StatusAlreadyExists {
 			continue
 		}
+		if e.Detail != nil && *e.Detail == existingDetail {
+			continue
+		}
 		id := a.ids[entityRef{e.Kind, e.Key}]
 		for _, other := range a.others {
 			for _, owned := range other.result.Entities {
@@ -1569,7 +1572,6 @@ func (a *bundleAnalyzer) checkOwnership(ctx context.Context, entities []PreviewE
 	return nil
 }
 
-// mcpIdentityChange is how m stops being the server before was, "" when a redeploy can update it in place.
 // existingDetail is how a plan shows a connection the bundle links but does not own.
 const existingDetail = "existing connection of the workspace; linked, never changed by this bundle"
 
@@ -1599,6 +1601,7 @@ func (a *bundleAnalyzer) analyzeExisting(ctx context.Context, kind EntityKind, k
 	return nil
 }
 
+// mcpIdentityChange is how m stops being the server before was, "" when a redeploy can update it in place.
 func mcpIdentityChange(before, m BundleMCP) string {
 	switch {
 	case before.Catalog != nil && m.Catalog == nil:

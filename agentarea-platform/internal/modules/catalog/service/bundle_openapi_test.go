@@ -206,3 +206,19 @@ func TestOpenAPIInstallWiresTheAgentAndRedeploysInPlace(t *testing.T) {
 		t.Errorf("edit checks = %v", f.edits)
 	}
 }
+
+func TestAnInstallRecordWithEveryKindValidates(t *testing.T) {
+	var entities []string
+	for _, k := range entityKinds() {
+		entities = append(entities, fmt.Sprintf(`{"kind":%q,"key":"k-%s","name":"n","action":"created","id":"id-%s"}`, k, k, k))
+	}
+	raw, err := wirejson.Unmarshal([]byte(`{"bundle_name":"b","installed_bundle_id":"i","setup_values":{},"entities":[` + strings.Join(entities, ",") + `]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c checker
+	r, ok := installResultFrom(&c, raw)
+	if !ok || len(r.Entities) != len(entityKinds()) {
+		t.Fatalf("valid=%v entities=%d errors=%v", ok, len(r.Entities), c.errs)
+	}
+}
