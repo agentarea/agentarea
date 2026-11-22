@@ -465,7 +465,7 @@ export function ChatInputArea({
                     className="shrink min-w-0"
                     icon={FolderKanban}
                     label={t("project")}
-                    value={currentProjectId ?? NO_PROJECT_VALUE}
+                    value={currentProjectId}
                     disabled={isLoading}
                     onValueChange={(projectId) =>
                       onProjectChange(
@@ -484,7 +484,7 @@ export function ChatInputArea({
                     className="shrink min-w-0"
                     icon={ShieldCheck}
                     label={t("taskPolicy")}
-                    value={currentTaskPolicyId ?? DEFAULT_TASK_POLICY_VALUE}
+                    value={currentTaskPolicyId}
                     disabled={isLoading}
                     onValueChange={(policyId) =>
                       onTaskPolicyChange(
