@@ -72,7 +72,11 @@ export function NavSearch({ sections }: { sections: Sections }) {
           <Search />
         </SidebarMenuButton>
       )}
-      <CommandDialog open={open} onOpenChange={setOpen}>
+      <CommandDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={t("searchPlaceholder")}
+      >
         <CommandInput placeholder={t("searchPlaceholder")} />
         <CommandList>
           <CommandEmpty>{t("searchEmpty")}</CommandEmpty>

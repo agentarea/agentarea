@@ -24,6 +24,7 @@ export const PAGE_ROUTES = [
   "/apps/*/*",
   "/budgets",
   "/bundles/import",
+  "/canvas",
   "/channels",
   "/channels/new",
   "/clients",

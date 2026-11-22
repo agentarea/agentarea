@@ -3,6 +3,7 @@ import {
   Bot,
   Brain,
   ClipboardList,
+  Frame,
   FileText,
   GalleryVerticalEnd,
   Gauge,
@@ -61,6 +62,12 @@ export const navData = {
           titleKey: "apps",
           url: "/apps",
           icon: AppWindow,
+        },
+        {
+          title: "Canvas",
+          titleKey: "canvas",
+          url: "/canvas",
+          icon: Frame,
         },
         {
           title: "Tasks",
