@@ -676,11 +676,21 @@ export type AnalyzeRequest = {
     /**
      * Files
      *
-     * An agent folder: relative POSIX path -> UTF-8 file text, rooted at agent.yaml. 5MB total.
+     * A bundle folder: relative POSIX path -> UTF-8 file text, rooted at agentarea.yaml (or the deprecated agent.yaml). 5MB total.
      */
     files?: {
         [key: string]: string;
     } | null;
+    /**
+     * Into
+     *
+     * The install to update: its id, or the name of exactly one install. Without it the bundle's name must be free in the workspace, else the plan blocks with code bundle_exists.
+     */
+    into?: string | null;
+    /**
+     * Where the folder came from; informational.
+     */
+    origin?: BundleOrigin | null;
     /**
      * Setup Values
      *
@@ -1238,7 +1248,7 @@ export type BundleInput = {
     /**
      * Policies
      */
-    policies?: Array<BundlePolicy>;
+    policies?: Array<BundlePolicyInput>;
     /**
      * Schema Version
      */
@@ -1319,6 +1329,12 @@ export type BundleAgent = {
      */
     client?: string | null;
     /**
+     * Delegates
+     *
+     * BundleAgent keys this agent may hand work to; each becomes a delegate tool.
+     */
+    delegates?: Array<string>;
+    /**
      * Description
      */
     description?: string;
@@ -1356,6 +1372,12 @@ export type BundleAgent = {
      * A token budget for the model's reasoning. Not with reasoning_effort.
      */
     reasoning_max_tokens?: number | null;
+    /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
     /**
      * Skills
      *
@@ -1405,6 +1427,12 @@ export type BundleAutomation = {
      * Task query passed to the agent on each run.
      */
     prompt: string;
+    /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
     /**
      * Timezone
      */
@@ -1458,11 +1486,44 @@ export type BundleChannel = {
      */
     prompt?: string;
     /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
+    /**
      * Type
      *
      * Webhook provider for the created trigger.
      */
     type?: 'telegram' | 'generic';
+};
+/**
+ * BundleInstallRef
+ *
+ * The install of a bundle a plan updates.
+ */
+export type BundleInstallRef = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Where the folder last deployed came from.
+     */
+    origin?: BundleOrigin | null;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Updated By
+     */
+    updated_by?: string | null;
 };
 /**
  * BundleMcp
@@ -1510,6 +1571,12 @@ export type BundleMcp = {
      * Instance display name created in the workspace.
      */
     name: string;
+    /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
 };
 /**
  * BundleMetadata
@@ -1553,16 +1620,40 @@ export type BundleMetadata = {
     website?: string | null;
 };
 /**
+ * BundleOrigin
+ *
+ * Where a deployed folder came from, as the CLI reports it. Shown in the plan and the install record, never checked.
+ */
+export type BundleOrigin = {
+    /**
+     * Git Commit
+     */
+    git_commit?: string | null;
+    /**
+     * Git Remote
+     */
+    git_remote?: string | null;
+    /**
+     * Path
+     *
+     * The folder's path inside the repository.
+     */
+    path?: string | null;
+};
+/**
  * BundlePolicy
  *
- * A governance rule the package installs (maps to a PolicyRule).
+ * A governance rule the package installs on its own agents (maps to a PolicyRule).
  *
- * Portable like everything else: ``subject`` is the literal "workspace" or a
- * BundleAgent ``key`` (never a DB id); the installer resolves it to a real
- * subject id. ``target``/``effect``/``params`` mirror the unified governance
- * rule model, so this is "our policy format" — not a new one.
+ * ``subject`` is a BundleAgent ``key``, a list of them, or "*" for every agent of the bundle; a list or "*" becomes one policy per agent, keyed ``<key>-<agent>``. "workspace" and effect "allow" are refused: rules that reach beyond the bundle or loosen belong to an admin.
  */
 export type BundlePolicy = {
+    /**
+     * Billing Currency
+     *
+     * The currency params' amounts are in; the plan blocks when the workspace bills in another.
+     */
+    billing_currency?: string | null;
     /**
      * Condition
      *
@@ -1600,11 +1691,86 @@ export type BundlePolicy = {
      */
     priority?: number;
     /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
+    /**
      * Subject
      *
-     * "workspace" or a BundleAgent key the rule binds to.
+     * The BundleAgent key the rule binds to (a list or "*" was expanded to one policy per agent).
      */
-    subject?: string;
+    subject: string;
+    /**
+     * Target
+     *
+     * Selector, e.g. "tool:send_email", "spend", "content", "*".
+     */
+    target: string;
+};
+/**
+ * BundlePolicy
+ *
+ * A governance rule the package installs on its own agents (maps to a PolicyRule).
+ *
+ * ``subject`` is a BundleAgent ``key``, a list of them, or "*" for every agent of the bundle; a list or "*" becomes one policy per agent, keyed ``<key>-<agent>``. "workspace" and effect "allow" are refused: rules that reach beyond the bundle or loosen belong to an admin.
+ */
+export type BundlePolicyInput = {
+    /**
+     * Billing Currency
+     *
+     * The currency params' amounts are in; the plan blocks when the workspace bills in another.
+     */
+    billing_currency?: string | null;
+    /**
+     * Condition
+     *
+     * Optional CEL condition.
+     */
+    condition?: string | null;
+    /**
+     * Effect
+     */
+    effect: 'allow' | 'deny' | 'cap' | 'approval' | 'safety';
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Message
+     *
+     * Human-readable reason.
+     */
+    message?: string | null;
+    /**
+     * Params
+     *
+     * Effect-specific params, e.g. {amount_usd, period} for cap.
+     */
+    params?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Priority
+     */
+    priority?: number;
+    /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
+    /**
+     * Subject
+     *
+     * A BundleAgent key, a list of them, or "*".
+     */
+    subject: string | Array<string>;
     /**
      * Target
      *
@@ -1640,6 +1806,12 @@ export type BundleSkill = {
      * Name
      */
     name: string;
+    /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
     /**
      * Source Type
      */
@@ -3114,6 +3286,33 @@ export type ExecutionTimelineResponse = {
     trigger_id: string;
 };
 /**
+ * ExistingBundleInstall
+ *
+ * The install that already has a bundle's name: deploy into it by id, or rename the bundle.
+ */
+export type ExistingBundleInstall = {
+    /**
+     * Created By
+     */
+    created_by: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Updated By
+     */
+    updated_by?: string | null;
+};
+/**
  * ExternalIdentityResponse
  */
 export type ExternalIdentityResponse = {
@@ -3549,6 +3748,14 @@ export type ImportPreview = {
      */
     entities?: Array<PreviewEntity>;
     /**
+     * The install that already has the bundle's name, when that blocks the plan.
+     */
+    existing_install?: ExistingBundleInstall | null;
+    /**
+     * The install this plan updates; null when it creates one.
+     */
+    install?: BundleInstallRef | null;
+    /**
      * Installable
      *
      * True when there are no blocking issues (setup may still be required).
@@ -3617,6 +3824,16 @@ export type InstallAction = 'created' | 'updated' | 'unchanged' | 'orphaned' | '
 export type InstallRequest = {
     bundle: BundleInput;
     /**
+     * Install Id
+     *
+     * The install the plan was made for (the plan's install.id); null when the plan creates one. Another id, or an install written since the plan, is refused with 409.
+     */
+    install_id?: string | null;
+    /**
+     * Where the folder came from; informational.
+     */
+    origin?: BundleOrigin | null;
+    /**
      * Plan Digest
      *
      * The plan_digest analyze returned for this bundle and these setup values: the plan the caller approved.
@@ -3643,6 +3860,12 @@ export type InstallResult = {
      * Entities
      */
     entities?: Array<InstalledEntity>;
+    /**
+     * Install Id
+     *
+     * The install this deploy wrote; pass it as into and install_id on the next deploy.
+     */
+    install_id?: string;
     /**
      * Installed Bundle Id
      */
@@ -6199,6 +6422,12 @@ export type PreviewEntity = {
  * A problem found while analyzing the package.
  */
 export type PreviewIssue = {
+    /**
+     * Code
+     *
+     * Set on issues a client acts on: bundle_exists, bundle_install_not_found, bundle_install_ambiguous.
+     */
+    code?: string | null;
     /**
      * Entity Key
      */

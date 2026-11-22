@@ -6,7 +6,7 @@
 // sections gain their switches, the model pickers and the setup fields, and a
 // footer that installs exactly what is on screen.
 import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import {
   ListChecks,
   Puzzle,
@@ -27,6 +27,7 @@ import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import ConfigSheet from "@/components/ConfigSheet";
 import FormError from "@/components/FormError";
+import NoticeBanner from "@/components/NoticeBanner";
 import {
   FactRow,
   GlanceRow,
@@ -57,12 +58,15 @@ import {
 } from "./actions";
 import {
   agentsWithoutModel,
+  analyzeRequestFor,
   boundSetupKeys,
   buildInstallRequest,
   bundleEditReducer,
   bundlePolicyAsPolicy,
+  existingInstall,
   initialEdit,
   installedMcpKeys,
+  installRequestFor,
   isAgentMcpOn,
   isPlanChanged,
   launchPlan,
@@ -117,6 +121,7 @@ export function BundlePlan({
   const router = useWorkspaceRouter();
   const t = useTranslations("BundleInstall");
   const tCommon = useTranslations("Common");
+  const format = useFormatter();
   const [load, setLoad] = useState<Load>({ kind: "loading" });
   const [models, setModels] = useState<ModelInstanceResponse[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
@@ -132,6 +137,7 @@ export function BundlePlan({
     autoEnabled: {},
     policyOff: new Set<string>(),
     policyEnabled: {},
+    into: null,
   }));
   // A callback prop must not re-run the analysis when the parent re-renders.
   const onLoadedRef = useRef(onLoaded);
@@ -222,7 +228,7 @@ export function BundlePlan({
   async function plan(draft: InstallDraft, changed: boolean) {
     setInstall({ kind: "planning" });
     try {
-      const planned = await analyzeBundleAction(draft);
+      const planned = await analyzeBundleAction(analyzeRequestFor(draft));
       if (planned.error || !planned.data) {
         setInstall({
           kind: "error",
@@ -245,14 +251,11 @@ export function BundlePlan({
   }
 
   async function runInstall(draft: InstallDraft, planned: Planned) {
-    const digest = planned.preview.plan_digest;
-    if (!digest) return;
+    const body = installRequestFor(draft, planned.preview);
+    if (!body) return;
     setInstall({ kind: "installing", planned });
     try {
-      const installed = await installBundleAction({
-        ...draft,
-        plan_digest: digest,
-      });
+      const installed = await installBundleAction(body);
       if (isPlanChanged(installed)) {
         await plan(draft, true);
         return;
@@ -323,12 +326,44 @@ export function BundlePlan({
     (i) => i.severity === "block"
   );
   const ready = planned !== null && planBlocking.length === 0 ? planned : null;
+  // The bundle's name belongs to an install already: offer to update it.
+  const existing =
+    existingInstall(preview, edit) ??
+    (planned ? existingInstall(planned.preview, edit) : null);
+  const shownBlocking = blocking.filter(
+    (i) => !existing || i.code !== "bundle_exists"
+  );
+  const shownPlanBlocking = planBlocking.filter(
+    (i) => !existing || i.code !== "bundle_exists"
+  );
 
   return (
     <div className="space-y-4">
-      {blocking.length > 0 && (
+      {existing && (
+        <NoticeBanner
+          title={t("existing.title", { name: existing.name })}
+          action={
+            <Button
+              size="xs"
+              className="shrink-0"
+              onClick={() => dispatch({ type: "deployInto", id: existing.id })}
+            >
+              {t("existing.update")}
+            </Button>
+          }
+        >
+          {t("existing.detail", {
+            who: existing.updated_by || existing.created_by,
+            when: format.dateTime(new Date(existing.updated_at), {
+              dateStyle: "medium",
+              timeStyle: "short",
+            }),
+          })}
+        </NoticeBanner>
+      )}
+      {shownBlocking.length > 0 && (
         <FormError>
-          {blocking.map((i) => (
+          {shownBlocking.map((i) => (
             <span key={i.message} className="block">
               {i.message}
             </span>
@@ -370,9 +405,9 @@ export function BundlePlan({
               {t("planStale")}
             </StatusIndicator>
           )}
-          {planBlocking.length > 0 && (
+          {shownPlanBlocking.length > 0 && (
             <FormError>
-              {planBlocking.map((i) => (
+              {shownPlanBlocking.map((i) => (
                 <span key={i.message} className="block">
                   {i.message}
                 </span>

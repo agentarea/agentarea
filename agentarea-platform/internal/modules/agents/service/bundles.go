@@ -36,10 +36,18 @@ func bundleRefusal(err error) error {
 	return err
 }
 
+func bundleTool(t catalogapi.BundleTool) domain.Tool {
+	out := domain.Tool{Type: t.Type, Name: t.Name}
+	if t.AgentID != nil {
+		out.Settings = &domain.Settings{AgentID: t.AgentID}
+	}
+	return out
+}
+
 func bundleTools(tools []catalogapi.BundleTool) []domain.Tool {
 	out := make([]domain.Tool, len(tools))
 	for i, t := range tools {
-		out[i] = domain.Tool{Type: t.Type, Name: t.Name}
+		out[i] = bundleTool(t)
 	}
 	return out
 }
@@ -118,6 +126,44 @@ func (b BundleAgents) CreateAgent(ctx context.Context, c authn.Caller, in catalo
 	return v.Agent.ID, nil
 }
 
+// bundleToolsAfter are the agent's tools once a redeploy applies in: the
+// managed ones replaced by what the folder declares (a delegate with its new
+// agent id), the ones added in the workspace kept.
+func bundleToolsAfter(current []domain.Tool, in catalogapi.BundleAgentUpdate) []domain.Tool {
+	type ref struct{ typ, name string }
+	managed := map[ref]bool{}
+	for _, t := range in.ManagedTools {
+		managed[ref{t.Type, t.Name}] = true
+	}
+	wanted := map[ref]bool{}
+	for _, t := range in.Tools {
+		managed[ref{t.Type, t.Name}] = true
+		wanted[ref{t.Type, t.Name}] = true
+	}
+	var tools []domain.Tool
+	present := map[ref]bool{}
+	for _, t := range current {
+		r := ref{t.Type, t.Name}
+		if wanted[r] && t.Type == domain.ToolAgent {
+			continue
+		}
+		if wanted[r] || !managed[r] {
+			tools = append(tools, t)
+			present[r] = true
+		}
+	}
+	for _, t := range in.Tools {
+		if r := (ref{t.Type, t.Name}); !present[r] {
+			tools = append(tools, bundleTool(t))
+			present[r] = true
+		}
+	}
+	if tools == nil {
+		tools = []domain.Tool{}
+	}
+	return tools
+}
+
 // UpdateAgent applies the folder to the agent: the tools and skills it
 // manages replaced, the ones added in the workspace kept, approvals as they were.
 func (b BundleAgents) UpdateAgent(ctx context.Context, c authn.Caller, id string, in catalogapi.BundleAgentUpdate) error {
@@ -137,34 +183,7 @@ func (b BundleAgents) UpdateAgent(ctx context.Context, c authn.Caller, id string
 	if err != nil {
 		return err
 	}
-	type ref struct{ typ, name string }
-	managed := map[ref]bool{}
-	for _, t := range in.ManagedTools {
-		managed[ref{t.Type, t.Name}] = true
-	}
-	wanted := map[ref]bool{}
-	for _, t := range in.Tools {
-		managed[ref{t.Type, t.Name}] = true
-		wanted[ref{t.Type, t.Name}] = true
-	}
-	var tools []domain.Tool
-	present := map[ref]bool{}
-	for _, t := range views[0].Tools {
-		r := ref{t.Type, t.Name}
-		if wanted[r] || !managed[r] {
-			tools = append(tools, t)
-			present[r] = true
-		}
-	}
-	for _, t := range in.Tools {
-		if r := (ref{t.Type, t.Name}); !present[r] {
-			tools = append(tools, domain.Tool{Type: t.Type, Name: t.Name})
-			present[r] = true
-		}
-	}
-	if tools == nil {
-		tools = []domain.Tool{}
-	}
+	tools := bundleToolsAfter(views[0].Tools, in)
 	managedSkills := map[string]bool{}
 	for _, id := range append(append([]string{}, in.ManagedSkillIDs...), in.SkillIDs...) {
 		managedSkills[id] = true

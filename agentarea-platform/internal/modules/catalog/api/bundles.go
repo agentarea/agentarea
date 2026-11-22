@@ -18,8 +18,12 @@ func (e *BundleRefusal) Error() string { return e.Msg }
 // ErrBundleEntityGone is an entity a redeploy updates that went away mid-update.
 var ErrBundleEntityGone = errors.New("the entity went away mid-update")
 
-// BundleTool names one tool of an agent: a code toolset, or an MCP connection by id.
-type BundleTool struct{ Type, Name string }
+// BundleTool names one tool of an agent: a code toolset, an MCP connection
+// by id, or a delegate: Type "agent", Name its key in the bundle, AgentID the agent.
+type BundleTool struct {
+	Type, Name string
+	AgentID    *string
+}
 
 // BundleFile is one file of a skill package, path relative to its root.
 type BundleFile struct{ Path, Text string }
@@ -103,6 +107,25 @@ type BundleMCPCreated struct {
 	SpecID     string
 }
 
+// BundleMCPUpdate is a redeploy of an MCP connection the bundle created.
+// Spec, set when the bundle declares its own server, replaces that spec's
+// transport and env schema; Instance replaces the instance's name, environment
+// and headers, where KeepSecret() keeps the secret stored under that name.
+// SetContextSecret writes Instance.ContextSecret, nil clearing it.
+type BundleMCPUpdate struct {
+	Spec             *MCPSpecNew
+	Instance         BundleInstance
+	SetContextSecret bool
+}
+
+// BundleDiscovery is a verification of an instance: its status, how many
+// tools it serves now, and why it failed.
+type BundleDiscovery struct {
+	Status string
+	Tools  int
+	Error  *string
+}
+
 // BundleMCPs is what a bundle deploy reads and writes of MCP connections
 // (connections module). A refusal of the input is a *BundleRefusal.
 type BundleMCPs interface {
@@ -112,6 +135,10 @@ type BundleMCPs interface {
 	CreateFromSpec(ctx context.Context, c authn.Caller, specID string, in BundleInstance) (BundleMCPCreated, error)
 	// CreateWithSpec creates spec and its instance.
 	CreateWithSpec(ctx context.Context, c authn.Caller, spec MCPSpecNew, in BundleInstance) (BundleMCPCreated, error)
+	// UpdateMCP applies a redeploy to the instance id and its spec.
+	UpdateMCP(ctx context.Context, c authn.Caller, id string, u BundleMCPUpdate) error
+	// Rediscover verifies the instance again and stores the tools it serves now.
+	Rediscover(ctx context.Context, c authn.Caller, id string) (BundleDiscovery, error)
 	DeleteInstance(ctx context.Context, c authn.Caller, id string) error
 	DeleteSpec(ctx context.Context, c authn.Caller, id string) error
 	// SecretProblem is the refusal of the caller referencing the workspace secret, "" when it may.
@@ -120,6 +147,8 @@ type BundleMCPs interface {
 	CarriesSecretRef(v any) bool
 	// SecretRef is the value an instance's environment or headers reference a workspace secret with.
 	SecretRef(name string) any
+	// KeepSecret is the value an update sends for a secret it leaves as stored.
+	KeepSecret() any
 	// ContextSecretLength is the length a context secret must have.
 	ContextSecretLength() (minimum, maximum int)
 	// SpecTransport is the transport an instance of spec gets; false when it declares none.

@@ -27,6 +27,7 @@ var (
 	setupKeyRe         = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*$`)
 	entityKeyRe        = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*$`)
 	effortShapeRe      = regexp.MustCompile(`^[a-z][a-z_-]{0,15}$`)
+	currencyRe         = regexp.MustCompile(`^[A-Z]{3}$`)
 )
 
 // Setup field types (SetupFieldType).
@@ -79,6 +80,7 @@ type BundleMCP struct {
 	JSONSpec      *wirejson.Object
 	Bindings      StrPairs
 	ContextSecret *string
+	RenamedFrom   *string
 }
 
 // BundleSkill is a skill the bundle creates.
@@ -87,6 +89,7 @@ type BundleSkill struct {
 	Content               *string
 	Files                 *StrPairs
 	SourceURL             *string
+	RenamedFrom           *string
 }
 
 // BundleAgent is an agent the bundle creates.
@@ -94,15 +97,20 @@ type BundleAgent struct {
 	Key, Name, Description, Instruction string
 	Model                               *string
 	MCPs, Skills, Toolsets              []string
-	ReasoningEffort                     *string
-	ReasoningMaxTokens                  *int64
-	Client                              *string
+	// Delegates are the keys of the bundle's agents this one may hand work to.
+	Delegates          []string
+	ReasoningEffort    *string
+	ReasoningMaxTokens *int64
+	Client             *string
+	// RenamedFrom is the key an earlier install knew this object by.
+	RenamedFrom *string
 }
 
 // BundleAutomation is a scheduled run of one of the bundle's agents.
 type BundleAutomation struct {
 	Key, Type, Cron, Timezone, Agent, Prompt string
 	Enabled                                  bool
+	RenamedFrom                              *string
 }
 
 // BundlePolicy is a governance rule the bundle installs.
@@ -113,6 +121,10 @@ type BundlePolicy struct {
 	Priority                     int64
 	Enabled                      bool
 	Message                      *string
+	// BillingCurrency is the currency Params' amounts are in; the plan blocks
+	// when the workspace bills in another.
+	BillingCurrency *string
+	RenamedFrom     *string
 }
 
 // BundleChannel is an inbound channel bound to one of the bundle's agents.
@@ -121,6 +133,7 @@ type BundleChannel struct {
 	Bindings               StrPairs
 	Prompt                 string
 	Enabled                bool
+	RenamedFrom            *string
 }
 
 // BundleMetadata is marketplace presentation metadata.
@@ -549,6 +562,29 @@ func (c *checker) entityKey(f fields, label string) string {
 	return s
 }
 
+// renamedFrom is the renamed_from field: the key an earlier install knew the object by.
+func (c *checker) renamedFrom(f fields) *string {
+	v, ok := f.get("renamed_from")
+	if !ok || v == nil {
+		return nil
+	}
+	s, ok := c.str(v, 1, 0, f.at("renamed_from"))
+	if !ok {
+		return nil
+	}
+	if !entityKeyRe.MatchString(s) {
+		c.valueError(fmt.Sprintf("renamed_from '%s' must be a key: [a-zA-Z][a-zA-Z0-9_-]*", s), f.at("renamed_from"))
+	}
+	return &s
+}
+
+func withRenamedFrom(o wirejson.Object, from *string) wirejson.Object {
+	if from != nil {
+		o = append(o, wirejson.Member{Key: "renamed_from", Value: *from})
+	}
+	return o
+}
+
 func (c *checker) requiredStr(f fields, key string, minLen, maxLen int) string {
 	v, ok := f.get(key)
 	if !ok {
@@ -587,7 +623,8 @@ func bundleMCPFrom(c *checker, v any, loc []any) (BundleMCP, bool) {
 			out.ContextSecret = &stripped
 		}
 	}
-	c.extra(o, []string{"key", "name", "catalog", "json_spec", "bindings", "context_secret"}, loc)
+	out.RenamedFrom = c.renamedFrom(f)
+	c.extra(o, []string{"key", "name", "catalog", "json_spec", "bindings", "context_secret", "renamed_from"}, loc)
 	if c.count() > before {
 		return out, false
 	}
@@ -620,7 +657,8 @@ func bundleSkillFrom(c *checker, v any, loc []any) (BundleSkill, bool) {
 	if v, ok := f.get("source_url"); ok {
 		out.SourceURL, _ = c.optStr(v, 0, f.at("source_url"))
 	}
-	c.extra(o, []string{"key", "name", "source_type", "content", "files", "source_url"}, loc)
+	out.RenamedFrom = c.renamedFrom(f)
+	c.extra(o, []string{"key", "name", "source_type", "content", "files", "source_url", "renamed_from"}, loc)
 	if c.count() > before {
 		return out, false
 	}
@@ -680,7 +718,7 @@ func bundleAgentFrom(c *checker, v any, loc []any) (BundleAgent, bool) {
 	f := fields{o, loc}
 	before := c.count()
 	out := BundleAgent{Key: c.entityKey(f, "agent"), Name: c.requiredStr(f, "name", 1, BundleMaxNameLength),
-		MCPs: []string{}, Skills: []string{}, Toolsets: []string{}}
+		MCPs: []string{}, Skills: []string{}, Toolsets: []string{}, Delegates: []string{}}
 	if v, ok := f.get("description"); ok {
 		out.Description, _ = c.str(v, 0, 1000, f.at("description"))
 	}
@@ -693,7 +731,7 @@ func bundleAgentFrom(c *checker, v any, loc []any) (BundleAgent, bool) {
 	for _, l := range []struct {
 		key string
 		dst *[]string
-	}{{"mcps", &out.MCPs}, {"skills", &out.Skills}, {"toolsets", &out.Toolsets}} {
+	}{{"mcps", &out.MCPs}, {"skills", &out.Skills}, {"toolsets", &out.Toolsets}, {"delegates", &out.Delegates}} {
 		if v, ok := f.get(l.key); ok {
 			if got, ok := c.strList(v, f.at(l.key)); ok {
 				*l.dst = got
@@ -718,8 +756,9 @@ func bundleAgentFrom(c *checker, v any, loc []any) (BundleAgent, bool) {
 			}
 		}
 	}
-	c.extra(o, []string{"key", "name", "description", "instruction", "model", "mcps", "skills", "toolsets",
-		"reasoning_effort", "reasoning_max_tokens", "client"}, loc)
+	out.RenamedFrom = c.renamedFrom(f)
+	c.extra(o, []string{"key", "name", "description", "instruction", "model", "mcps", "skills", "toolsets", "delegates",
+		"reasoning_effort", "reasoning_max_tokens", "client", "renamed_from"}, loc)
 	if c.count() > before {
 		return out, false
 	}
@@ -750,7 +789,8 @@ func bundleAutomationFrom(c *checker, v any, loc []any) (BundleAutomation, bool)
 	if v, ok := f.get("enabled"); ok {
 		out.Enabled, _ = c.boolean(v, f.at("enabled"))
 	}
-	c.extra(o, []string{"key", "type", "cron", "timezone", "agent", "prompt", "enabled"}, loc)
+	out.RenamedFrom = c.renamedFrom(f)
+	c.extra(o, []string{"key", "type", "cron", "timezone", "agent", "prompt", "enabled", "renamed_from"}, loc)
 	return out, c.count() == before
 }
 
@@ -761,10 +801,8 @@ func bundlePolicyFrom(c *checker, v any, loc []any) (BundlePolicy, bool) {
 	}
 	f := fields{o, loc}
 	before := c.count()
-	out := BundlePolicy{Key: c.entityKey(f, "policy"), Subject: "workspace", Params: wirejson.Object{}, Enabled: true}
-	if v, ok := f.get("subject"); ok {
-		out.Subject, _ = c.str(v, 0, 0, f.at("subject"))
-	}
+	out := BundlePolicy{Key: c.entityKey(f, "policy"), Params: wirejson.Object{}, Enabled: true}
+	out.Subject = c.requiredStr(f, "subject", 1, 0)
 	out.Target = c.requiredStr(f, "target", 1, 0)
 	if v, ok := f.get("effect"); !ok {
 		c.missing(f.at("effect"))
@@ -788,7 +826,17 @@ func bundlePolicyFrom(c *checker, v any, loc []any) (BundlePolicy, bool) {
 	if v, ok := f.get("message"); ok {
 		out.Message, _ = c.optStr(v, 0, f.at("message"))
 	}
-	c.extra(o, []string{"key", "subject", "target", "effect", "params", "condition", "priority", "enabled", "message"}, loc)
+	if v, ok := f.get("billing_currency"); ok && v != nil {
+		if s, ok := c.str(v, 0, 0, f.at("billing_currency")); ok {
+			if !currencyRe.MatchString(s) {
+				c.valueError("billing_currency must be a three-letter currency code such as RUB", f.at("billing_currency"))
+			}
+			out.BillingCurrency = &s
+		}
+	}
+	out.RenamedFrom = c.renamedFrom(f)
+	c.extra(o, []string{"key", "subject", "target", "effect", "params", "condition", "priority", "enabled", "message", "billing_currency",
+		"renamed_from"}, loc)
 	return out, c.count() == before
 }
 
@@ -816,7 +864,8 @@ func bundleChannelFrom(c *checker, v any, loc []any) (BundleChannel, bool) {
 	if v, ok := f.get("enabled"); ok {
 		out.Enabled, _ = c.boolean(v, f.at("enabled"))
 	}
-	c.extra(o, []string{"key", "type", "name", "agent", "bindings", "prompt", "enabled"}, loc)
+	out.RenamedFrom = c.renamedFrom(f)
+	c.extra(o, []string{"key", "type", "name", "agent", "bindings", "prompt", "enabled", "renamed_from"}, loc)
 	return out, c.count() == before
 }
 
@@ -906,7 +955,7 @@ func bundleFrom(c *checker, v any, loc []any) (Bundle, bool) {
 	out.Agents = listOf(c, f, "agents", bundleAgentFrom)
 	out.Channels = listOf(c, f, "channels", bundleChannelFrom)
 	out.Automations = listOf(c, f, "automations", bundleAutomationFrom)
-	out.Policies = listOf(c, f, "policies", bundlePolicyFrom)
+	out.Policies = policiesOf(c, f, out.Agents)
 	c.extra(o, []string{"schema_version", "name", "display_name", "description", "metadata", "setup", "mcps", "skills",
 		"agents", "channels", "automations", "policies"}, loc)
 	return out, c.count() == before
@@ -951,9 +1000,9 @@ func (m BundleMCP) dump() wirejson.Object {
 	if m.JSONSpec != nil {
 		spec = *m.JSONSpec
 	}
-	return wirejson.Object{{Key: "key", Value: m.Key}, {Key: "name", Value: m.Name}, {Key: "catalog", Value: optStrValue(m.Catalog)},
+	return withRenamedFrom(wirejson.Object{{Key: "key", Value: m.Key}, {Key: "name", Value: m.Name}, {Key: "catalog", Value: optStrValue(m.Catalog)},
 		{Key: "json_spec", Value: spec}, {Key: "bindings", Value: m.Bindings.object()},
-		{Key: "context_secret", Value: optStrValue(m.ContextSecret)}}
+		{Key: "context_secret", Value: optStrValue(m.ContextSecret)}}, m.RenamedFrom)
 }
 
 func (s BundleSkill) dump() wirejson.Object {
@@ -961,8 +1010,8 @@ func (s BundleSkill) dump() wirejson.Object {
 	if s.Files != nil {
 		files = s.Files.object()
 	}
-	return wirejson.Object{{Key: "key", Value: s.Key}, {Key: "name", Value: s.Name}, {Key: "source_type", Value: s.SourceType},
-		{Key: "content", Value: optStrValue(s.Content)}, {Key: "files", Value: files}, {Key: "source_url", Value: optStrValue(s.SourceURL)}}
+	return withRenamedFrom(wirejson.Object{{Key: "key", Value: s.Key}, {Key: "name", Value: s.Name}, {Key: "source_type", Value: s.SourceType},
+		{Key: "content", Value: optStrValue(s.Content)}, {Key: "files", Value: files}, {Key: "source_url", Value: optStrValue(s.SourceURL)}}, s.RenamedFrom)
 }
 
 func (a BundleAgent) dump() wirejson.Object {
@@ -970,27 +1019,35 @@ func (a BundleAgent) dump() wirejson.Object {
 	if a.ReasoningMaxTokens != nil {
 		tokens = json.Number(fmt.Sprint(*a.ReasoningMaxTokens))
 	}
-	return wirejson.Object{{Key: "key", Value: a.Key}, {Key: "name", Value: a.Name}, {Key: "description", Value: a.Description},
+	out := wirejson.Object{{Key: "key", Value: a.Key}, {Key: "name", Value: a.Name}, {Key: "description", Value: a.Description},
 		{Key: "instruction", Value: a.Instruction}, {Key: "model", Value: optStrValue(a.Model)}, {Key: "mcps", Value: strList(a.MCPs)},
 		{Key: "skills", Value: strList(a.Skills)}, {Key: "toolsets", Value: strList(a.Toolsets)},
 		{Key: "reasoning_effort", Value: optStrValue(a.ReasoningEffort)}, {Key: "reasoning_max_tokens", Value: tokens},
 		{Key: "client", Value: optStrValue(a.Client)}}
+	if len(a.Delegates) > 0 {
+		out = append(out, wirejson.Member{Key: "delegates", Value: strList(a.Delegates)})
+	}
+	return withRenamedFrom(out, a.RenamedFrom)
 }
 
 func (a BundleAutomation) dump() wirejson.Object {
-	return wirejson.Object{{Key: "key", Value: a.Key}, {Key: "type", Value: a.Type}, {Key: "cron", Value: a.Cron},
-		{Key: "timezone", Value: a.Timezone}, {Key: "agent", Value: a.Agent}, {Key: "prompt", Value: a.Prompt}, {Key: "enabled", Value: a.Enabled}}
+	return withRenamedFrom(wirejson.Object{{Key: "key", Value: a.Key}, {Key: "type", Value: a.Type}, {Key: "cron", Value: a.Cron},
+		{Key: "timezone", Value: a.Timezone}, {Key: "agent", Value: a.Agent}, {Key: "prompt", Value: a.Prompt}, {Key: "enabled", Value: a.Enabled}}, a.RenamedFrom)
 }
 
 func (p BundlePolicy) dump() wirejson.Object {
-	return wirejson.Object{{Key: "key", Value: p.Key}, {Key: "subject", Value: p.Subject}, {Key: "target", Value: p.Target},
+	out := wirejson.Object{{Key: "key", Value: p.Key}, {Key: "subject", Value: p.Subject}, {Key: "target", Value: p.Target},
 		{Key: "effect", Value: p.Effect}, {Key: "params", Value: nonNilObject(p.Params)}, {Key: "condition", Value: optStrValue(p.Condition)},
 		{Key: "priority", Value: json.Number(fmt.Sprint(p.Priority))}, {Key: "enabled", Value: p.Enabled}, {Key: "message", Value: optStrValue(p.Message)}}
+	if p.BillingCurrency != nil {
+		out = append(out, wirejson.Member{Key: "billing_currency", Value: *p.BillingCurrency})
+	}
+	return withRenamedFrom(out, p.RenamedFrom)
 }
 
 func (ch BundleChannel) dump() wirejson.Object {
-	return wirejson.Object{{Key: "key", Value: ch.Key}, {Key: "type", Value: ch.Type}, {Key: "name", Value: ch.Name},
-		{Key: "agent", Value: ch.Agent}, {Key: "bindings", Value: ch.Bindings.object()}, {Key: "prompt", Value: ch.Prompt}, {Key: "enabled", Value: ch.Enabled}}
+	return withRenamedFrom(wirejson.Object{{Key: "key", Value: ch.Key}, {Key: "type", Value: ch.Type}, {Key: "name", Value: ch.Name},
+		{Key: "agent", Value: ch.Agent}, {Key: "bindings", Value: ch.Bindings.object()}, {Key: "prompt", Value: ch.Prompt}, {Key: "enabled", Value: ch.Enabled}}, ch.RenamedFrom)
 }
 
 func (m BundleMetadata) dump() wirejson.Object {

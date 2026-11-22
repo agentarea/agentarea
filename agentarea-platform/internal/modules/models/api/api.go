@@ -162,3 +162,14 @@ type SpecUse interface {
 	ProviderSpecIDsWithVisibleConfigs(ctx context.Context, ws scope.Workspace) ([]uuid.UUID, error)
 	ModelSpecIDsWithVisibleInstances(ctx context.Context, ws scope.Workspace) ([]uuid.UUID, error)
 }
+
+// InstanceName is a chat model instance by the names a bundle may give it:
+// the instance's own name, or its model's name.
+type InstanceName struct{ ID, Name, ModelName string }
+
+// Directory is what a bundle deploy reads of models: the active chat
+// instances a workspace sees, and the currency it bills in.
+type Directory interface {
+	ChatInstances(ctx context.Context, ws scope.Workspace) ([]InstanceName, error)
+	BillingCurrency() string
+}

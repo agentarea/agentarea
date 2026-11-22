@@ -28,6 +28,8 @@ const RESERVED = new Set([
 	'set',
 	'yes',
 	'dryRun',
+	'planJson',
+	'into',
 ]);
 
 export function findSpec(noun: string, verb: string): CommandSpec | undefined {
@@ -164,10 +166,13 @@ export function printRootHelp(): void {
 	console.log('Usage: agentarea <resource> <verb> [args] [flags]\n');
 	console.log('Resources:');
 	console.log(`  ${listNouns().join(', ')}\n`);
-	console.log('Agent folders:');
+	console.log('Bundle folders:');
 	console.log('  agentarea init [dir]');
 	console.log(
-		'  agentarea deploy [dir] [--dry-run] [--set key=value ...] [--yes]\n',
+		'  agentarea deploy [dir] [--dry-run | --plan-json] [--set key=value ...]',
+	);
+	console.log(
+		'                   [--target <name>] [--into <bundle>] [--yes]\n',
 	);
 	console.log('Run "agentarea <resource>" to list its verbs.');
 	console.log('Escape hatch: "agentarea api --list" for raw operationIds.');

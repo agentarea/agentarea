@@ -47,7 +47,8 @@ func refusalOf(err error) (string, bool) {
 }
 
 func (in *bundleInstaller) install(ctx context.Context, b *Bundle, supplied wirejson.Object, prior *priorInstall, writesPolicies *bool) (InstallResult, error) {
-	in.prior, in.pkg = prior, b
+	renames, _ := renamesOf(b, prior)
+	in.prior, in.pkg = prior.renamed(renames), b
 	in.values = effectiveSetup(b, supplied, prior)
 	in.supplied = suppliedKeys(supplied)
 	if err := in.refuseBlockingIssues(ctx, b, supplied); err != nil {
@@ -311,18 +312,7 @@ func (in *bundleInstaller) installMCPs(ctx context.Context) error {
 		}
 		if id != nil {
 			ids[m.Key] = *id
-			changed, err := in.needsUpdate(KindMCP, m, nil)
-			if err != nil {
-				return err
-			}
-			e := InstalledEntity{Kind: KindMCP, Key: m.Key, Name: l.name, Action: ActionUnchanged, ID: id}
-			if changed {
-				detail := mcpNotApplied
-				e.Detail = &detail
-				e.Fingerprint, err = in.applied(KindMCP, m.Key)
-			} else {
-				e.Fingerprint, err = in.fingerprint(m)
-			}
+			e, err := in.redeployMCP(ctx, m, *id, l.name)
 			if err != nil {
 				return err
 			}
@@ -430,23 +420,35 @@ func strOf(v any) *string {
 	return nil
 }
 
-func (in *bundleInstaller) createMCP(ctx context.Context, m BundleMCP) (string, error) {
+// mcpWrite is what the bundle declares of an MCP, its placeholders resolved:
+// the spec it creates (nil for a catalog server, whose spec id it names) and the instance.
+type mcpWrite struct {
+	catalogSpecID string
+	spec          *catalogapi.MCPSpecNew
+	instance      catalogapi.BundleInstance
+	// contextSecret: instance.ContextSecret is the declared one, resolved.
+	contextSecret bool
+}
+
+// mcpWrite builds m's spec and instance; keep is what an unresolved secret
+// binding is sent as, nil leaving it out.
+func (in *bundleInstaller) mcpWrite(ctx context.Context, m BundleMCP, keep any) (mcpWrite, error) {
 	w := in.w
+	var out mcpWrite
 	var transport string
 	var specFields map[string]any
-	var catalogSpecID string
 	if m.Catalog != nil {
 		found, err := w.catalogMCP(ctx, *m.Catalog)
 		if err != nil {
-			return "", err
+			return mcpWrite{}, err
 		}
 		if found == nil {
-			return "", invalidError(fmt.Sprintf("mcp '%s' names catalog server '%s', which the catalog does not have", m.Key, *m.Catalog))
+			return mcpWrite{}, invalidError(fmt.Sprintf("mcp '%s' names catalog server '%s', which the catalog does not have", m.Key, *m.Catalog))
 		}
 		if found.Transport == nil {
-			return "", invalidError(fmt.Sprintf("mcp '%s' names catalog server '%s', which declares no transport", m.Key, *m.Catalog))
+			return mcpWrite{}, invalidError(fmt.Sprintf("mcp '%s' names catalog server '%s', which declares no transport", m.Key, *m.Catalog))
 		}
-		transport, catalogSpecID = *found.Transport, found.SpecID
+		transport, out.catalogSpecID = *found.Transport, found.SpecID
 	} else {
 		spec := wirejson.Object{}
 		if m.JSONSpec != nil {
@@ -454,6 +456,20 @@ func (in *bundleInstaller) createMCP(ctx context.Context, m BundleMCP) (string, 
 		}
 		specFields = in.transportFields(spec)
 		transport, _ = specFields["type"].(string)
+		n := catalogapi.MCPSpecNew{Name: m.Name, Description: fmt.Sprintf("Imported from package '%s'", in.pkg.Name),
+			Version: "1.0.0", EnvSchema: in.envSchema(m), JSONSpec: specFields, Tags: []any{}}
+		switch transport {
+		case "command":
+			if command := specFields["command"]; given(command) {
+				args, _ := specFields["args"].([]any)
+				n.Cmd = append([]any{command}, args...)
+			}
+		case "docker":
+			n.DockerImageURL = strOf(specFields["image"])
+		case "url":
+			n.RemoteURL = strOf(specFields["endpoint_url"])
+		}
+		out.spec = &n
 	}
 
 	target := "environment"
@@ -466,6 +482,8 @@ func (in *bundleInstaller) createMCP(ctx context.Context, m BundleMCP) (string, 
 			resolved.Set(b.Key, w.b.d.MCPs.SecretRef(name))
 		} else if v := resolvePlaceholders(b.Value, in.values); len(setupRefsOf(v)) == 0 {
 			resolved.Set(b.Key, v)
+		} else if keep != nil && bindsSecret(in.pkg, b.Value) {
+			resolved.Set(b.Key, keep)
 		}
 	}
 	instanceJSON := map[string]any{}
@@ -480,31 +498,26 @@ func (in *bundleInstaller) createMCP(ctx context.Context, m BundleMCP) (string, 
 			instanceJSON[field] = plainJSON(values)
 		}
 	}
-	var contextSecret *string
+	out.instance = catalogapi.BundleInstance{Name: m.Name, JSONSpec: instanceJSON}
 	if m.ContextSecret != nil && *m.ContextSecret != "" {
-		contextSecret = strp(resolvePlaceholders(*m.ContextSecret, in.values))
-	}
-	instance := catalogapi.BundleInstance{Name: m.Name, JSONSpec: instanceJSON, ContextSecret: contextSecret}
-
-	var made catalogapi.BundleMCPCreated
-	var err error
-	if m.Catalog != nil {
-		made, err = w.b.d.MCPs.CreateFromSpec(ctx, w.c, catalogSpecID, instance)
-	} else {
-		spec := catalogapi.MCPSpecNew{Name: m.Name, Description: fmt.Sprintf("Imported from package '%s'", in.pkg.Name),
-			Version: "1.0.0", EnvSchema: in.envSchema(m), JSONSpec: specFields, Tags: []any{}}
-		switch transport {
-		case "command":
-			if command := specFields["command"]; given(command) {
-				args, _ := specFields["args"].([]any)
-				spec.Cmd = append([]any{command}, args...)
-			}
-		case "docker":
-			spec.DockerImageURL = strOf(specFields["image"])
-		case "url":
-			spec.RemoteURL = strOf(specFields["endpoint_url"])
+		if v := resolvePlaceholders(*m.ContextSecret, in.values); len(setupRefsOf(v)) == 0 {
+			out.instance.ContextSecret, out.contextSecret = &v, true
 		}
-		made, err = w.b.d.MCPs.CreateWithSpec(ctx, w.c, spec, instance)
+	}
+	return out, nil
+}
+
+func (in *bundleInstaller) createMCP(ctx context.Context, m BundleMCP) (string, error) {
+	w := in.w
+	plan, err := in.mcpWrite(ctx, m, nil)
+	if err != nil {
+		return "", err
+	}
+	var made catalogapi.BundleMCPCreated
+	if plan.spec == nil {
+		made, err = w.b.d.MCPs.CreateFromSpec(ctx, w.c, plan.catalogSpecID, plan.instance)
+	} else {
+		made, err = w.b.d.MCPs.CreateWithSpec(ctx, w.c, *plan.spec, plan.instance)
 	}
 	if msg, ok := refusalOf(err); ok {
 		return "", invalidError(fmt.Sprintf("MCP '%s' was refused: %s", m.Key, msg))
@@ -512,9 +525,9 @@ func (in *bundleInstaller) createMCP(ctx context.Context, m BundleMCP) (string, 
 	if err != nil {
 		return "", err
 	}
-	if m.Catalog == nil || (made.SpecID != "" && made.SpecID != catalogSpecID) {
+	if plan.spec != nil || (made.SpecID != "" && made.SpecID != plan.catalogSpecID) {
 		what := fmt.Sprintf("MCP server spec '%s'", m.Name)
-		if m.Catalog != nil {
+		if plan.spec == nil {
 			what = fmt.Sprintf("MCP server spec copy '%s'", m.Name)
 		}
 		specID := made.SpecID
@@ -525,6 +538,59 @@ func (in *bundleInstaller) createMCP(ctx context.Context, m BundleMCP) (string, 
 		return w.b.d.MCPs.DeleteInstance(ctx, w.c, instanceID)
 	})
 	return instanceID, nil
+}
+
+// redeployMCP applies the bundle to an MCP an earlier install created, when it
+// changed or was given a secret, then discovers its tools again so agents see
+// the ones it serves now.
+func (in *bundleInstaller) redeployMCP(ctx context.Context, m BundleMCP, id, name string) (InstalledEntity, error) {
+	w := in.w
+	e := InstalledEntity{Kind: KindMCP, Key: m.Key, Name: name, Action: ActionUnchanged, ID: &id}
+	changed, err := in.needsUpdate(KindMCP, m, nil)
+	if err != nil {
+		return InstalledEntity{}, err
+	}
+	if changed || mcpSecretSupplied(in.pkg, m, in.supplied) {
+		if err := in.authorizeUpdate(ctx, KindMCP, m.Key, id); err != nil {
+			return InstalledEntity{}, err
+		}
+		plan, err := in.mcpWrite(ctx, m, w.b.d.MCPs.KeepSecret())
+		if err != nil {
+			return InstalledEntity{}, err
+		}
+		u := catalogapi.BundleMCPUpdate{Spec: plan.spec, Instance: plan.instance, SetContextSecret: plan.contextSecret}
+		if before, ok := in.prior.spec(KindMCP, m.Key).(BundleMCP); ok && m.ContextSecret == nil && before.ContextSecret != nil {
+			u.SetContextSecret = true
+		}
+		err = w.b.d.MCPs.UpdateMCP(ctx, w.c, id, u)
+		if msg, ok := refusalOf(err); ok {
+			return InstalledEntity{}, installError(fmt.Sprintf("MCP '%s' was refused: %s", m.Key, msg))
+		}
+		if errors.Is(err, catalogapi.ErrBundleEntityGone) {
+			return InstalledEntity{}, installError(fmt.Sprintf("mcp '%s' disappeared mid-update", m.Key))
+		}
+		if err != nil {
+			return InstalledEntity{}, err
+		}
+		in.updatedInPlace = true
+		e.Action, e.Name = ActionUpdated, m.Name
+	}
+	if e.Fingerprint, err = in.fingerprint(m); err != nil {
+		return InstalledEntity{}, err
+	}
+	found, err := w.b.d.MCPs.Rediscover(ctx, w.c, id)
+	if err != nil {
+		return InstalledEntity{}, err
+	}
+	detail := fmt.Sprintf("tools re-discovered: %d", found.Tools)
+	if found.Status != "succeeded" {
+		detail = "tools not re-discovered: verification " + found.Status
+		if found.Error != nil && *found.Error != "" {
+			detail += ": " + *found.Error
+		}
+	}
+	e.Detail = &detail
+	return e, nil
 }
 
 // -- skills
@@ -680,10 +746,28 @@ func (in *bundleInstaller) linkedBefore(kind EntityKind, refs []string) []string
 func setStr(s *string) bool { return s != nil && *s != "" }
 func setInt(n *int64) bool  { return n != nil && *n != 0 }
 
+// modelID is the instance an agent's model names, its setup placeholders resolved.
+func (in *bundleInstaller) modelID(ctx context.Context, a BundleAgent) (string, error) {
+	model := ""
+	if a.Model != nil {
+		model = *a.Model
+	}
+	id, problem, err := in.w.modelID(ctx, resolvePlaceholders(model, in.values))
+	if err != nil {
+		return "", err
+	}
+	if problem != "" {
+		return "", invalidError(fmt.Sprintf("agent '%s': %s", a.Key, problem))
+	}
+	return id, nil
+}
+
+// installAgents writes the agents delegates first, so a delegate tool names an agent that exists.
 func (in *bundleInstaller) installAgents(ctx context.Context) error {
 	w := in.w
 	in.agentIDs = map[string]string{}
-	for _, a := range in.pkg.Agents {
+	order, _ := agentOrder(in.pkg.Agents)
+	for _, a := range order {
 		var tools []catalogapi.BundleTool
 		for _, n := range a.Toolsets {
 			tools = append(tools, catalogapi.BundleTool{Type: "code", Name: n})
@@ -693,17 +777,21 @@ func (in *bundleInstaller) installAgents(ctx context.Context) error {
 				tools = append(tools, catalogapi.BundleTool{Type: "mcp", Name: id})
 			}
 		}
+		for _, ref := range a.Delegates {
+			if id, ok := in.agentIDs[ref]; ok {
+				tools = append(tools, catalogapi.BundleTool{Type: "agent", Name: ref, AgentID: strp(id)})
+			}
+		}
 		var skillIDs []string
 		for _, ref := range a.Skills {
 			if id, ok := in.skillIDs[ref]; ok {
 				skillIDs = append(skillIDs, id)
 			}
 		}
-		model := ""
-		if a.Model != nil {
-			model = *a.Model
+		modelID, err := in.modelID(ctx, a)
+		if err != nil {
+			return err
 		}
-		modelID := resolvePlaceholders(model, in.values)
 
 		id, _, err := in.owned(ctx, KindAgent, a.Key)
 		if err != nil {
@@ -712,14 +800,7 @@ func (in *bundleInstaller) installAgents(ctx context.Context) error {
 		if id != nil {
 			in.agentIDs[a.Key] = *id
 			e := InstalledEntity{Kind: KindAgent, Key: a.Key, Name: a.Name, Action: ActionUnchanged, ID: id}
-			var deps []entityRef
-			for _, r := range a.MCPs {
-				deps = append(deps, entityRef{KindMCP, r})
-			}
-			for _, r := range a.Skills {
-				deps = append(deps, entityRef{KindSkill, r})
-			}
-			update, err := in.needsUpdate(KindAgent, a, deps)
+			update, err := in.needsUpdate(KindAgent, a, agentDeps(a))
 			if err != nil {
 				return err
 			}
@@ -788,6 +869,9 @@ func (in *bundleInstaller) updateAgent(ctx context.Context, id string, a BundleA
 		}
 		for _, mid := range in.linkedBefore(KindMCP, before.MCPs) {
 			u.ManagedTools = append(u.ManagedTools, catalogapi.BundleTool{Type: "mcp", Name: mid})
+		}
+		for _, d := range before.Delegates {
+			u.ManagedTools = append(u.ManagedTools, catalogapi.BundleTool{Type: "agent", Name: d})
 		}
 		u.ManagedSkillIDs = in.linkedBefore(KindSkill, before.Skills)
 	}
@@ -1051,16 +1135,12 @@ func (in *bundleInstaller) installPolicies(ctx context.Context) error {
 	w := in.w
 	r := w.b.d.Rules
 	for _, p := range in.pkg.Policies {
-		subjectID := w.c.Workspace.ID()
-		if p.Subject != "workspace" {
-			agentID, ok := in.agentIDs[p.Subject]
-			if !ok {
-				if err := in.addSkipped(KindPolicy, p.Key, p.Key, fmt.Sprintf("agent '%s' was not created", p.Subject)); err != nil {
-					return err
-				}
-				continue
+		subjectID, ok := in.agentIDs[p.Subject]
+		if !ok {
+			if err := in.addSkipped(KindPolicy, p.Key, p.Key, fmt.Sprintf("agent '%s' was not created", p.Subject)); err != nil {
+				return err
 			}
-			subjectID = agentID
+			continue
 		}
 		rule := policyAsRule(p, subjectID)
 		if problem := r.RuleProblem(rule); problem != "" {

@@ -1,6 +1,9 @@
 package service
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx/wirejson"
 )
@@ -63,11 +66,32 @@ type PreviewEntity struct {
 	Detail *string
 }
 
+// Issue codes a client acts on.
+const (
+	// CodeBundleExists: an install already has the bundle's name; deploy into it by id.
+	CodeBundleExists = "bundle_exists"
+	// CodeInstallNotFound: the install the deploy names is gone.
+	CodeInstallNotFound = "bundle_install_not_found"
+	// CodeInstallAmbiguous: several installs have the name the deploy gives.
+	CodeInstallAmbiguous = "bundle_install_ambiguous"
+)
+
 // PreviewIssue is a problem found analyzing the package.
 type PreviewIssue struct {
 	Severity  Severity
 	Message   string
 	EntityKey *string
+	// Code is set on the issues a client acts on (CodeBundleExists, ...).
+	Code *string
+}
+
+// InstallSummary is an install of a bundle as a plan names it.
+type InstallSummary struct {
+	ID, Name, CreatedBy string
+	UpdatedBy           *string
+	UpdatedAt           time.Time
+	// Origin is where the folder last deployed came from; nil when the deploy did not say.
+	Origin any
 }
 
 // ImportPreview is what the deploy wizard renders before the install.
@@ -78,6 +102,10 @@ type ImportPreview struct {
 	Issues      []PreviewIssue
 	Installable bool
 	PlanDigest  *string
+	// Install is the install this plan updates; nil when it creates one.
+	Install *InstallSummary
+	// ExistingInstall is the install that already has the bundle's name, when that blocks the plan.
+	ExistingInstall *InstallSummary
 }
 
 // Blocks are the issues that stop the install.
@@ -129,7 +157,33 @@ func (e PreviewEntity) Dump() wirejson.Object {
 // Dump is model_dump(mode="json").
 func (i PreviewIssue) Dump() wirejson.Object {
 	return wirejson.Object{{Key: "severity", Value: string(i.Severity)}, {Key: "message", Value: i.Message},
-		{Key: "entity_key", Value: optStrValue(i.EntityKey)}}
+		{Key: "entity_key", Value: optStrValue(i.EntityKey)}, {Key: "code", Value: optStrValue(i.Code)}}
+}
+
+// isoUTC is a UTC instant as the API writes timestamps: microseconds when there are any, then Z.
+func isoUTC(t time.Time) string {
+	t = t.UTC()
+	s := t.Format("2006-01-02T15:04:05")
+	if us := t.Nanosecond() / 1000; us != 0 {
+		s += fmt.Sprintf(".%06d", us)
+	}
+	return s + "Z"
+}
+
+func (s *InstallSummary) dumpInstall() any {
+	if s == nil {
+		return nil
+	}
+	return wirejson.Object{{Key: "id", Value: s.ID}, {Key: "name", Value: s.Name}, {Key: "updated_by", Value: optStrValue(s.UpdatedBy)},
+		{Key: "updated_at", Value: isoUTC(s.UpdatedAt)}, {Key: "origin", Value: s.Origin}}
+}
+
+func (s *InstallSummary) dumpExisting() any {
+	if s == nil {
+		return nil
+	}
+	return wirejson.Object{{Key: "id", Value: s.ID}, {Key: "name", Value: s.Name}, {Key: "created_by", Value: s.CreatedBy},
+		{Key: "updated_by", Value: optStrValue(s.UpdatedBy)}, {Key: "updated_at", Value: isoUTC(s.UpdatedAt)}}
 }
 
 // Dump is model_dump(mode="json").
@@ -140,7 +194,8 @@ func (p ImportPreview) Dump() wirejson.Object {
 	}
 	return wirejson.Object{{Key: "bundle", Value: p.Bundle.Dump()}, {Key: "setup", Value: dumpAll(p.Setup)},
 		{Key: "entities", Value: entities}, {Key: "issues", Value: IssueDumps(p.Issues)},
-		{Key: "installable", Value: p.Installable}, {Key: "plan_digest", Value: optStrValue(p.PlanDigest)}}
+		{Key: "installable", Value: p.Installable}, {Key: "plan_digest", Value: optStrValue(p.PlanDigest)},
+		{Key: "install", Value: p.Install.dumpInstall()}, {Key: "existing_install", Value: p.ExistingInstall.dumpExisting()}}
 }
 
 // IssueDumps is the issues as the API returns them.

@@ -4240,6 +4240,11 @@
       "orphaned": "Kept, not deleted",
       "changes_not_applied": "Changes not applied",
       "unsupported": "Unsupported"
+    },
+    "existing": {
+      "title": "{name} is already installed in this workspace",
+      "detail": "Last deployed by {who}, {when}. Update it with this bundle, or rename the bundle to install it separately.",
+      "update": "Update existing bundle"
     }
   },
   "ProjectOverviewPage": {

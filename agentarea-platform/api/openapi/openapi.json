@@ -1354,8 +1354,31 @@
                 "type": "null"
               }
             ],
-            "description": "An agent folder: relative POSIX path -> UTF-8 file text, rooted at agent.yaml. 5MB total.",
+            "description": "A bundle folder: relative POSIX path -> UTF-8 file text, rooted at agentarea.yaml (or the deprecated agent.yaml). 5MB total.",
             "title": "Files"
+          },
+          "into": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The install to update: its id, or the name of exactly one install. Without it the bundle's name must be free in the workspace, else the plan blocks with code bundle_exists.",
+            "title": "Into"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleOrigin"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the folder came from; informational."
           },
           "setup_values": {
             "additionalProperties": true,
@@ -2409,7 +2432,7 @@
           },
           "policies": {
             "items": {
-              "$ref": "#/components/schemas/BundlePolicy"
+              "$ref": "#/components/schemas/BundlePolicy-Input"
             },
             "title": "Policies",
             "type": "array"
@@ -2548,6 +2571,14 @@
             "description": "The id of a Codex or Claude Code client of the workspace whose runner runs the agent's tasks, or a ${setup.x} reference to one. Unset runs them on the platform.",
             "title": "Client"
           },
+          "delegates": {
+            "description": "BundleAgent keys this agent may hand work to; each becomes a delegate tool.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Delegates",
+            "type": "array"
+          },
           "description": {
             "default": "",
             "maxLength": 1000,
@@ -2614,6 +2645,18 @@
             "description": "A token budget for the model's reasoning. Not with reasoning_effort.",
             "title": "Reasoning Max Tokens"
           },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
+          },
           "skills": {
             "description": "BundleSkill keys to attach.",
             "items": {
@@ -2669,6 +2712,18 @@
             "minLength": 1,
             "title": "Prompt",
             "type": "string"
+          },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
           },
           "timezone": {
             "default": "UTC",
@@ -2732,6 +2787,18 @@
             "title": "Prompt",
             "type": "string"
           },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
+          },
           "type": {
             "default": "telegram",
             "description": "Webhook provider for the created trigger.",
@@ -2749,6 +2816,54 @@
           "agent"
         ],
         "title": "BundleChannel",
+        "type": "object"
+      },
+      "BundleInstallRef": {
+        "additionalProperties": false,
+        "description": "The install of a bundle a plan updates.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleOrigin"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the folder last deployed came from."
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "updated_at"
+        ],
+        "title": "BundleInstallRef",
         "type": "object"
       },
       "BundleMcp": {
@@ -2813,6 +2928,18 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
           }
         },
         "required": [
@@ -2906,10 +3033,64 @@
         "title": "BundleMetadata",
         "type": "object"
       },
+      "BundleOrigin": {
+        "additionalProperties": false,
+        "description": "Where a deployed folder came from, as the CLI reports it. Shown in the plan and the install record, never checked.",
+        "properties": {
+          "git_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Commit"
+          },
+          "git_remote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Remote"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The folder's path inside the repository.",
+            "title": "Path"
+          }
+        },
+        "title": "BundleOrigin",
+        "type": "object"
+      },
       "BundlePolicy": {
         "additionalProperties": false,
-        "description": "A governance rule the package installs (maps to a PolicyRule).\n\nPortable like everything else: ``subject`` is the literal \"workspace\" or a\nBundleAgent ``key`` (never a DB id); the installer resolves it to a real\nsubject id. ``target``/``effect``/``params`` mirror the unified governance\nrule model, so this is \"our policy format\" \u2014 not a new one.",
+        "description": "A governance rule the package installs on its own agents (maps to a PolicyRule).\n\n``subject`` is a BundleAgent ``key``, a list of them, or \"*\" for every agent of the bundle; a list or \"*\" becomes one policy per agent, keyed ``<key>-<agent>``. \"workspace\" and effect \"allow\" are refused: rules that reach beyond the bundle or loosen belong to an admin.",
         "properties": {
+          "billing_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The currency params' amounts are in; the plan blocks when the workspace bills in another.",
+            "title": "Billing Currency"
+          },
           "condition": {
             "anyOf": [
               {
@@ -2968,9 +3149,20 @@
             "title": "Priority",
             "type": "integer"
           },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
+          },
           "subject": {
-            "default": "workspace",
-            "description": "\"workspace\" or a BundleAgent key the rule binds to.",
+            "description": "The BundleAgent key the rule binds to (a list or \"*\" was expanded to one policy per agent).",
             "title": "Subject",
             "type": "string"
           },
@@ -2983,6 +3175,124 @@
         },
         "required": [
           "key",
+          "subject",
+          "target",
+          "effect"
+        ],
+        "title": "BundlePolicy",
+        "type": "object"
+      },
+      "BundlePolicy-Input": {
+        "additionalProperties": false,
+        "description": "A governance rule the package installs on its own agents (maps to a PolicyRule).\n\n``subject`` is a BundleAgent ``key``, a list of them, or \"*\" for every agent of the bundle; a list or \"*\" becomes one policy per agent, keyed ``<key>-<agent>``. \"workspace\" and effect \"allow\" are refused: rules that reach beyond the bundle or loosen belong to an admin.",
+        "properties": {
+          "billing_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The currency params' amounts are in; the plan blocks when the workspace bills in another.",
+            "title": "Billing Currency"
+          },
+          "condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional CEL condition.",
+            "title": "Condition"
+          },
+          "effect": {
+            "enum": [
+              "allow",
+              "deny",
+              "cap",
+              "approval",
+              "safety"
+            ],
+            "title": "Effect",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "key": {
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Human-readable reason.",
+            "title": "Message"
+          },
+          "params": {
+            "additionalProperties": true,
+            "description": "Effect-specific params, e.g. {amount_usd, period} for cap.",
+            "title": "Params",
+            "type": "object"
+          },
+          "priority": {
+            "default": 0,
+            "maximum": 2147483647.0,
+            "minimum": -2147483648.0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ],
+            "description": "A BundleAgent key, a list of them, or \"*\".",
+            "title": "Subject"
+          },
+          "target": {
+            "description": "Selector, e.g. \"tool:send_email\", \"spend\", \"content\", \"*\".",
+            "minLength": 1,
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "subject",
           "target",
           "effect"
         ],
@@ -3030,6 +3340,18 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
           },
           "source_type": {
             "default": "content",
@@ -5811,6 +6133,48 @@
         "title": "ExecutionTimelineResponse",
         "type": "object"
       },
+      "ExistingBundleInstall": {
+        "additionalProperties": false,
+        "description": "The install that already has a bundle's name: deploy into it by id, or rename the bundle.",
+        "properties": {
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_by",
+          "updated_at"
+        ],
+        "title": "ExistingBundleInstall",
+        "type": "object"
+      },
       "ExternalIdentityResponse": {
         "properties": {
           "external_id": {
@@ -6528,6 +6892,28 @@
             "title": "Entities",
             "type": "array"
           },
+          "existing_install": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExistingBundleInstall"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The install that already has the bundle's name, when that blocks the plan."
+          },
+          "install": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleInstallRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The install this plan updates; null when it creates one."
+          },
           "installable": {
             "description": "True when there are no blocking issues (setup may still be required).",
             "title": "Installable",
@@ -6644,6 +7030,29 @@
           "bundle": {
             "$ref": "#/components/schemas/Bundle-Input"
           },
+          "install_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The install the plan was made for (the plan's install.id); null when the plan creates one. Another id, or an install written since the plan, is refused with 409.",
+            "title": "Install Id"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleOrigin"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the folder came from; informational."
+          },
           "plan_digest": {
             "description": "The plan_digest analyze returned for this bundle and these setup values: the plan the caller approved.",
             "minLength": 1,
@@ -6677,6 +7086,11 @@
             },
             "title": "Entities",
             "type": "array"
+          },
+          "install_id": {
+            "description": "The install this deploy wrote; pass it as into and install_id on the next deploy.",
+            "title": "Install Id",
+            "type": "string"
           },
           "installed_bundle_id": {
             "anyOf": [
@@ -11453,6 +11867,18 @@
         "additionalProperties": false,
         "description": "A problem found while analyzing the package.",
         "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set on issues a client acts on: bundle_exists, bundle_install_not_found, bundle_install_ambiguous.",
+            "title": "Code"
+          },
           "entity_key": {
             "anyOf": [
               {

@@ -360,6 +360,7 @@ export const zBudgetPeriod = z.enum(["execution", "daily", "monthly"]);
  */
 export const zBundleAgent = z.object({
   client: z.string().nullish(),
+  delegates: z.array(z.string()).optional(),
   description: z.string().max(1000).optional().default(""),
   instruction: z.string().max(20000).optional().default(""),
   key: z.string().min(1),
@@ -368,6 +369,7 @@ export const zBundleAgent = z.object({
   name: z.string().min(1).max(255),
   reasoning_effort: z.string().nullish(),
   reasoning_max_tokens: z.int().nullish(),
+  renamed_from: z.string().nullish(),
   skills: z.array(z.string()).optional(),
   toolsets: z.array(z.string()).optional(),
 });
@@ -387,6 +389,7 @@ export const zBundleAutomation = z.object({
   enabled: z.boolean().optional().default(false),
   key: z.string().min(1),
   prompt: z.string().min(1),
+  renamed_from: z.string().nullish(),
   timezone: z.string().optional().default("UTC"),
   type: z.literal("cron").optional().default("cron"),
 });
@@ -410,6 +413,7 @@ export const zBundleChannel = z.object({
     .min(1)
     .optional()
     .default("Handle the incoming message: {{ message_text }}"),
+  renamed_from: z.string().nullish(),
   type: z.enum(["telegram", "generic"]).optional().default("telegram"),
 });
 
@@ -425,6 +429,7 @@ export const zBundleMcp = z.object({
   json_spec: z.record(z.string(), z.unknown()).nullish(),
   key: z.string().min(1),
   name: z.string().min(1).max(255),
+  renamed_from: z.string().nullish(),
 });
 
 /**
@@ -443,16 +448,38 @@ export const zBundleMetadata = z.object({
 });
 
 /**
+ * BundleOrigin
+ *
+ * Where a deployed folder came from, as the CLI reports it. Shown in the plan and the install record, never checked.
+ */
+export const zBundleOrigin = z.object({
+  git_commit: z.string().nullish(),
+  git_remote: z.string().nullish(),
+  path: z.string().nullish(),
+});
+
+/**
+ * BundleInstallRef
+ *
+ * The install of a bundle a plan updates.
+ */
+export const zBundleInstallRef = z.object({
+  id: z.string(),
+  name: z.string(),
+  origin: zBundleOrigin.nullish(),
+  updated_at: z.iso.datetime(),
+  updated_by: z.string().nullish(),
+});
+
+/**
  * BundlePolicy
  *
- * A governance rule the package installs (maps to a PolicyRule).
+ * A governance rule the package installs on its own agents (maps to a PolicyRule).
  *
- * Portable like everything else: ``subject`` is the literal "workspace" or a
- * BundleAgent ``key`` (never a DB id); the installer resolves it to a real
- * subject id. ``target``/``effect``/``params`` mirror the unified governance
- * rule model, so this is "our policy format" — not a new one.
+ * ``subject`` is a BundleAgent ``key``, a list of them, or "*" for every agent of the bundle; a list or "*" becomes one policy per agent, keyed ``<key>-<agent>``. "workspace" and effect "allow" are refused: rules that reach beyond the bundle or loosen belong to an admin.
  */
 export const zBundlePolicy = z.object({
+  billing_currency: z.string().nullish(),
   condition: z.string().nullish(),
   effect: z.enum(["allow", "deny", "cap", "approval", "safety"]),
   enabled: z.boolean().optional().default(true),
@@ -460,7 +487,29 @@ export const zBundlePolicy = z.object({
   message: z.string().nullish(),
   params: z.record(z.string(), z.unknown()).optional(),
   priority: z.int().gte(-2147483648).lte(2147483647).optional().default(0),
-  subject: z.string().optional().default("workspace"),
+  renamed_from: z.string().nullish(),
+  subject: z.string(),
+  target: z.string().min(1),
+});
+
+/**
+ * BundlePolicy
+ *
+ * A governance rule the package installs on its own agents (maps to a PolicyRule).
+ *
+ * ``subject`` is a BundleAgent ``key``, a list of them, or "*" for every agent of the bundle; a list or "*" becomes one policy per agent, keyed ``<key>-<agent>``. "workspace" and effect "allow" are refused: rules that reach beyond the bundle or loosen belong to an admin.
+ */
+export const zBundlePolicyInput = z.object({
+  billing_currency: z.string().nullish(),
+  condition: z.string().nullish(),
+  effect: z.enum(["allow", "deny", "cap", "approval", "safety"]),
+  enabled: z.boolean().optional().default(true),
+  key: z.string().min(1),
+  message: z.string().nullish(),
+  params: z.record(z.string(), z.unknown()).optional(),
+  priority: z.int().gte(-2147483648).lte(2147483647).optional().default(0),
+  renamed_from: z.string().nullish(),
+  subject: z.union([z.string(), z.array(z.string())]),
   target: z.string().min(1),
 });
 
@@ -474,6 +523,7 @@ export const zBundleSkill = z.object({
   files: z.record(z.string(), z.string()).nullish(),
   key: z.string().min(1),
   name: z.string().min(1).max(255),
+  renamed_from: z.string().nullish(),
   source_type: z
     .enum(["content", "files", "github"])
     .optional()
@@ -1054,6 +1104,19 @@ export const zExecutionTimelineResponse = z.object({
 });
 
 /**
+ * ExistingBundleInstall
+ *
+ * The install that already has a bundle's name: deploy into it by id, or rename the bundle.
+ */
+export const zExistingBundleInstall = z.object({
+  created_by: z.string(),
+  id: z.string(),
+  name: z.string(),
+  updated_at: z.iso.datetime(),
+  updated_by: z.string().nullish(),
+});
+
+/**
  * ExternalIdentityResponse
  */
 export const zExternalIdentityResponse = z.object({
@@ -1255,6 +1318,7 @@ export const zInstalledEntity = z.object({
 export const zInstallResult = z.object({
   bundle_name: z.string(),
   entities: z.array(zInstalledEntity).optional(),
+  install_id: z.string().optional(),
   installed_bundle_id: z.string().nullish(),
   setup_values: z.record(z.string(), z.unknown()).optional(),
 });
@@ -2432,6 +2496,7 @@ export const zPreviewEntity = z.object({
  * A problem found while analyzing the package.
  */
 export const zPreviewIssue = z.object({
+  code: z.string().nullish(),
   entity_key: z.string().nullish(),
   message: z.string(),
   severity: zIssueSeverity,
@@ -3264,7 +3329,7 @@ export const zBundleInput = z.object({
   mcps: z.array(zBundleMcp).optional(),
   metadata: zBundleMetadata.optional(),
   name: z.string().min(1).max(255),
-  policies: z.array(zBundlePolicy).optional(),
+  policies: z.array(zBundlePolicyInput).optional(),
   schema_version: z.string().optional().default("0.1.0"),
   setup: z.array(zSetupField).optional(),
   skills: z.array(zBundleSkill).optional(),
@@ -3284,6 +3349,8 @@ export const zBundleInput = z.object({
 export const zAnalyzeRequest = z.object({
   bundle: zBundleInput.nullish(),
   files: z.record(z.string(), z.string()).nullish(),
+  into: z.string().nullish(),
+  origin: zBundleOrigin.nullish(),
   setup_values: z.record(z.string(), z.unknown()).optional(),
   source: z.string().nullish(),
   source_url: z.string().nullish(),
@@ -3317,6 +3384,8 @@ export const zBundleOutput = z.object({
 export const zImportPreview = z.object({
   bundle: zBundleOutput,
   entities: z.array(zPreviewEntity).optional(),
+  existing_install: zExistingBundleInstall.nullish(),
+  install: zBundleInstallRef.nullish(),
   installable: z.boolean(),
   issues: z.array(zPreviewIssue).optional(),
   plan_digest: z.string().nullish(),
@@ -3330,6 +3399,8 @@ export const zImportPreview = z.object({
  */
 export const zInstallRequest = z.object({
   bundle: zBundleInput,
+  install_id: z.string().nullish(),
+  origin: zBundleOrigin.nullish(),
   plan_digest: z.string().min(1),
   setup_values: z.record(z.string(), z.unknown()).optional(),
 });

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx/wirejson"
@@ -55,6 +57,8 @@ type BundleDeps struct {
 	Rules    catalogapi.BundleRules
 	// Models resolves the model an agent runs, for the reasoning levels it takes.
 	Models modelsapi.Resolver
+	// ModelNames finds a model instance by name, and the currency a limit is in.
+	ModelNames modelsapi.Directory
 	// MayEdit is the per-object edit check of the entity's own update route.
 	MayEdit func(ctx context.Context, c authn.Caller, resourceType, id string) (bool, error)
 	// Admin is requires_workspace_admin, asked before a deploy writes a policy.
@@ -87,7 +91,7 @@ func NewBundles(d BundleDeps) (*Bundles, error) {
 		name string
 		set  bool
 	}{{"database", d.DB != nil}, {"agents", d.Agents != nil}, {"MCP connections", d.MCPs != nil}, {"triggers", d.Triggers != nil},
-		{"policy rules", d.Rules != nil}, {"models", d.Models != nil}, {"edit check", d.MayEdit != nil}, {"workspace admin", d.Admin != nil}} {
+		{"policy rules", d.Rules != nil}, {"models", d.Models != nil}, {"model names", d.ModelNames != nil}, {"edit check", d.MayEdit != nil}, {"workspace admin", d.Admin != nil}} {
 		if !dep.set {
 			missing = append(missing, dep.name)
 		}
@@ -136,6 +140,7 @@ type workspace struct {
 	b        *Bundles
 	c        authn.Caller
 	catalogs map[string]*catalogMCP
+	models   []modelsapi.InstanceName
 }
 
 func (b *Bundles) workspace(ctx context.Context) (*workspace, error) {
@@ -197,14 +202,10 @@ func (w *workspace) findTrigger(ctx context.Context, name, agentID string, recor
 }
 
 func (w *workspace) findPolicy(ctx context.Context, p BundlePolicy, agentID *string) (*string, error) {
-	subjectID := w.c.Workspace.ID()
-	if p.Subject != "workspace" {
-		if agentID == nil {
-			return nil, nil
-		}
-		subjectID = *agentID
+	if agentID == nil {
+		return nil, nil
 	}
-	id, ok, err := w.b.d.Rules.MatchingRule(ctx, w.c, policyAsRule(p, subjectID))
+	id, ok, err := w.b.d.Rules.MatchingRule(ctx, w.c, policyAsRule(p, *agentID))
 	if err != nil || !ok {
 		return nil, err
 	}
@@ -286,6 +287,63 @@ func (w *workspace) agentProblem(ctx context.Context, a BundleAgent, modelID str
 	return "", nil
 }
 
+func (w *workspace) billingCurrency() string { return w.b.d.ModelNames.BillingCurrency() }
+
+const maxModelCandidates = 10
+
+// modelID is ref when it is an id, else the one active chat instance named
+// ref: by its own name first, then by its model's name.
+func (w *workspace) modelID(ctx context.Context, ref string) (string, string, error) {
+	if u, err := uuid.Parse(ref); err == nil {
+		return u.String(), "", nil
+	}
+	if w.models == nil {
+		found, err := w.b.d.ModelNames.ChatInstances(ctx, w.c.Workspace)
+		if err != nil {
+			return "", "", err
+		}
+		w.models = found
+	}
+	var byName, byModel []modelsapi.InstanceName
+	for _, m := range w.models {
+		if m.Name == ref {
+			byName = append(byName, m)
+		} else if m.ModelName == ref {
+			byModel = append(byModel, m)
+		}
+	}
+	matches := byName
+	if len(matches) == 0 {
+		matches = byModel
+	}
+	describe := func(l []modelsapi.InstanceName, withID bool) string {
+		var parts []string
+		for i, m := range l {
+			if i == maxModelCandidates {
+				parts = append(parts, fmt.Sprintf("and %d more", len(l)-i))
+				break
+			}
+			if withID {
+				parts = append(parts, fmt.Sprintf("'%s' (%s, %s)", m.Name, m.ModelName, m.ID))
+			} else {
+				parts = append(parts, fmt.Sprintf("'%s' (%s)", m.Name, m.ModelName))
+			}
+		}
+		return strings.Join(parts, ", ")
+	}
+	switch len(matches) {
+	case 1:
+		return matches[0].ID, "", nil
+	case 0:
+		if len(w.models) == 0 {
+			return "", fmt.Sprintf("model '%s' names no model instance: this workspace has no active chat model instance", ref), nil
+		}
+		return "", fmt.Sprintf("model '%s' names no active chat model instance in this workspace; the workspace has %s", ref, describe(w.models, false)), nil
+	}
+	return "", fmt.Sprintf("model '%s' names %d model instances here: %s; give the instance's id or a name only one of them has",
+		ref, len(matches), describe(matches, true)), nil
+}
+
 func containsString(l []string, s string) bool {
 	for _, x := range l {
 		if x == s {
@@ -329,23 +387,49 @@ func (b *Bundles) read(ctx context.Context, c authn.Caller, fn func(db.Session) 
 	return fn(sess)
 }
 
+// BundleOrigin is where a deployed folder came from, as the CLI reports it: shown, never checked.
+type BundleOrigin struct{ GitRemote, GitCommit, Path *string }
+
+func (o *BundleOrigin) object() wirejson.Object {
+	if o == nil {
+		return nil
+	}
+	out := wirejson.Object{}
+	for _, f := range []struct {
+		key string
+		v   *string
+	}{{"git_remote", o.GitRemote}, {"git_commit", o.GitCommit}, {"path", o.Path}} {
+		if f.v != nil {
+			out.Set(f.key, *f.v)
+		}
+	}
+	return out
+}
+
+// BundleTarget is the install a deploy updates: Into names it by id, or by
+// the name of exactly one install. Without it the bundle's name must be free.
+type BundleTarget struct {
+	Into   *string
+	Origin *BundleOrigin
+}
+
 // AnalyzeText is analyze_text: source text into a bundle, then its plan.
-func (b *Bundles) AnalyzeText(ctx context.Context, text string, setup wirejson.Object) (ImportPreview, error) {
+func (b *Bundles) AnalyzeText(ctx context.Context, text string, setup wirejson.Object, target BundleTarget) (ImportPreview, error) {
 	pkg, err := ParseBundle(text)
 	if err != nil {
 		return ImportPreview{}, err
 	}
-	return b.AnalyzeBundle(ctx, pkg, setup, false)
+	return b.AnalyzeBundle(ctx, pkg, setup, false, target)
 }
 
-// AnalyzeFiles is analyze_files: an agent folder into a bundle, then its plan,
+// AnalyzeFiles is analyze_files: a bundle folder into a bundle, then its plan,
 // blocking on required setup without a value.
-func (b *Bundles) AnalyzeFiles(ctx context.Context, files StrPairs, setup wirejson.Object) (ImportPreview, error) {
+func (b *Bundles) AnalyzeFiles(ctx context.Context, files StrPairs, setup wirejson.Object, target BundleTarget) (ImportPreview, error) {
 	pkg, folderIssues, err := LoadBundleFolder(files)
 	if err != nil {
 		return ImportPreview{}, err
 	}
-	p, err := b.AnalyzeBundle(ctx, pkg, setup, true)
+	p, err := b.AnalyzeBundle(ctx, pkg, setup, true, target)
 	if err != nil {
 		return ImportPreview{}, err
 	}
@@ -354,25 +438,32 @@ func (b *Bundles) AnalyzeFiles(ctx context.Context, files StrPairs, setup wirejs
 }
 
 // AnalyzeBundle plans the install; reportMissingSetup also blocks on required setup with no value.
-func (b *Bundles) AnalyzeBundle(ctx context.Context, pkg Bundle, setup wirejson.Object, reportMissingSetup bool) (ImportPreview, error) {
+func (b *Bundles) AnalyzeBundle(ctx context.Context, pkg Bundle, setup wirejson.Object, reportMissingSetup bool, target BundleTarget) (ImportPreview, error) {
 	w, err := b.workspace(ctx)
 	if err != nil {
 		return ImportPreview{}, err
 	}
-	prior, unreadable, err := b.prior(ctx, w.c, pkg.Name)
+	t, err := b.target(ctx, w.c, pkg.Name, target.Into)
+	if err != nil {
+		return ImportPreview{}, err
+	}
+	if t.issue != nil {
+		return ImportPreview{Bundle: pkg, Setup: pkg.Setup, Issues: []PreviewIssue{*t.issue}, ExistingInstall: t.existing}, nil
+	}
+	a, unreadable, err := b.analyzer(ctx, w, t, setup)
 	if err != nil {
 		return ImportPreview{}, err
 	}
 	if unreadable != nil {
-		return ImportPreview{Bundle: pkg, Setup: pkg.Setup, Issues: []PreviewIssue{*unreadable}}, nil
+		return ImportPreview{Bundle: pkg, Setup: pkg.Setup, Issues: []PreviewIssue{*unreadable}, Install: t.summary}, nil
 	}
-	a := &bundleAnalyzer{existence: w, prior: prior, checks: w, shapes: b.shapes(), supplied: setup}
 	p, err := a.analyze(ctx, &pkg)
 	if err != nil {
 		return ImportPreview{}, err
 	}
+	p.Install = t.summary
 	if reportMissingSetup {
-		if missing := requiredSetupErrors(&pkg, effectiveSetup(&pkg, setup, prior), a.neededSetup); len(missing) > 0 {
+		if missing := requiredSetupErrors(&pkg, effectiveSetup(&pkg, setup, a.prior), a.neededSetup); len(missing) > 0 {
 			p.Issues = append(p.Issues, missing...)
 			p.Installable = false
 		}
@@ -380,18 +471,156 @@ func (b *Bundles) AnalyzeBundle(ctx context.Context, pkg Bundle, setup wirejson.
 	return p, nil
 }
 
-// prior is the last install of the bundle in the workspace; a record that no
-// longer validates is a blocking issue, never "no prior install".
-func (b *Bundles) prior(ctx context.Context, c authn.Caller, name string) (*priorInstall, *PreviewIssue, error) {
-	var row store.BundleRow
-	var ok bool
-	if err := b.read(ctx, c, func(sess db.Session) error {
-		var err error
-		row, ok, err = b.rows.ByName(ctx, sess, name)
+// deployTarget is the install a deploy updates, or why it has none to update.
+type deployTarget struct {
+	row      *store.BundleRow
+	summary  *InstallSummary
+	issue    *PreviewIssue
+	existing *InstallSummary
+}
+
+func codeIssue(code, msg string) *PreviewIssue {
+	return &PreviewIssue{Severity: SeverityBlock, Message: msg, Code: &code}
+}
+
+func summaryOf(r store.BundleRow) (*InstallSummary, error) {
+	var origin any
+	if len(r.Source) > 0 {
+		v, err := wirejson.Unmarshal(r.Source)
+		if err != nil {
+			return nil, fmt.Errorf("installed bundle %s: source: %w", r.ID, err)
+		}
+		origin = v
+	}
+	return &InstallSummary{ID: r.ID, Name: r.Name, CreatedBy: r.CreatedBy, UpdatedBy: r.UpdatedBy, UpdatedAt: r.UpdatedAt, Origin: origin}, nil
+}
+
+func lastDeployed(r store.BundleRow) string {
+	by := r.CreatedBy
+	if r.UpdatedBy != nil && *r.UpdatedBy != "" {
+		by = *r.UpdatedBy
+	}
+	return fmt.Sprintf("last deployed by %s at %s", by, isoUTC(r.UpdatedAt))
+}
+
+// target resolves into, or the bundle's name when into is nil.
+func (b *Bundles) target(ctx context.Context, c authn.Caller, name string, into *string) (deployTarget, error) {
+	var t deployTarget
+	var taken []store.BundleRow
+	err := b.read(ctx, c, func(sess db.Session) error {
+		if into == nil {
+			var err error
+			taken, err = b.rows.ByName(ctx, sess, name)
+			return err
+		}
+		ref := pyStrip(*into)
+		row, ok, err := b.rows.ByID(ctx, sess, ref)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			rows, err := b.rows.ByName(ctx, sess, ref)
+			if err != nil {
+				return err
+			}
+			switch len(rows) {
+			case 0:
+				t.issue = codeIssue(CodeInstallNotFound, fmt.Sprintf("bundle install %s not found; it was deleted — deploy without --into to create it again", ref))
+				return nil
+			case 1:
+				row = rows[0]
+			default:
+				ids := make([]string, len(rows))
+				for i, r := range rows {
+					ids[i] = r.ID
+				}
+				t.issue = codeIssue(CodeInstallAmbiguous, fmt.Sprintf("%d bundle installs are named '%s' (%s); deploy --into one of their ids",
+					len(rows), ref, strings.Join(ids, ", ")))
+				return nil
+			}
+		}
+		t.row = &row
+		if row.Name == name {
+			return nil
+		}
+		others, err := b.rows.ByName(ctx, sess, name)
+		for _, r := range others {
+			if r.ID != row.ID {
+				taken = append(taken, r)
+			}
+		}
 		return err
-	}); err != nil || !ok {
+	})
+	if err != nil {
+		return deployTarget{}, err
+	}
+	if t.row != nil {
+		if t.summary, err = summaryOf(*t.row); err != nil {
+			return deployTarget{}, err
+		}
+	}
+	if len(taken) > 0 {
+		if t.existing, err = summaryOf(taken[0]); err != nil {
+			return deployTarget{}, err
+		}
+		msg := fmt.Sprintf("bundle '%s' is already installed in this workspace as install %s (%s); deploy --into %s to update it, or give the bundle another name",
+			name, taken[0].ID, lastDeployed(taken[0]), taken[0].ID)
+		if t.row != nil {
+			msg = fmt.Sprintf("renaming install %s to '%s' would give it the name of install %s (%s); choose another name",
+				t.row.ID, name, taken[0].ID, lastDeployed(taken[0]))
+		}
+		t.issue = codeIssue(CodeBundleExists, msg)
+	}
+	return t, nil
+}
+
+// analyzer plans against the target install and the workspace's other installs;
+// a record that no longer validates is a blocking issue, never "no prior install".
+func (b *Bundles) analyzer(ctx context.Context, w *workspace, t deployTarget, setup wirejson.Object) (*bundleAnalyzer, *PreviewIssue, error) {
+	a := &bundleAnalyzer{existence: w, checks: w, shapes: b.shapes(), supplied: setup}
+	var results []store.BundleResult
+	if err := b.read(ctx, w.c, func(sess db.Session) error {
+		var err error
+		results, err = b.rows.Results(ctx, sess)
+		return err
+	}); err != nil {
 		return nil, nil, err
 	}
+	for _, r := range results {
+		if t.row != nil && r.ID == t.row.ID {
+			continue
+		}
+		result := InstallResult{BundleName: r.Name}
+		if len(r.InstallResult) > 0 {
+			raw, err := wirejson.Unmarshal(r.InstallResult)
+			if err != nil {
+				return nil, nil, fmt.Errorf("installed bundle %s: install_result: %w", r.ID, err)
+			}
+			if raw != nil {
+				var c checker
+				var valid bool
+				if result, valid = installResultFrom(&c, raw); !valid {
+					b.d.Log.ErrorContext(ctx, "Stored install of bundle no longer validates", "install", r.ID, "errors", validationText("InstallResult", c.errs))
+					return nil, &PreviewIssue{Severity: SeverityBlock, Message: fmt.Sprintf("the record of install %s ('%s') no longer validates "+
+						"(%d errors), so what it owns cannot be told apart from this bundle; nothing is planned", r.ID, r.Name, len(c.errs))}, nil
+				}
+			}
+		}
+		a.others = append(a.others, otherInstall{id: r.ID, name: r.Name, result: result})
+	}
+	if t.row == nil {
+		return a, nil, nil
+	}
+	prior, unreadable, err := b.prior(ctx, *t.row)
+	if err != nil || unreadable != nil {
+		return nil, unreadable, err
+	}
+	a.prior, a.revision = prior, &installRevision{id: t.row.ID, updatedAt: isoUTC(t.row.UpdatedAt)}
+	return a, nil, nil
+}
+
+// prior is what the install row last declared and created.
+func (b *Bundles) prior(ctx context.Context, row store.BundleRow) (*priorInstall, *PreviewIssue, error) {
 	canonical, err := wirejson.Unmarshal(row.Canonical)
 	if err != nil {
 		return nil, nil, fmt.Errorf("installed bundle %s: canonical: %w", row.ID, err)
@@ -409,9 +638,9 @@ func (b *Bundles) prior(ctx context.Context, c authn.Caller, name string) (*prio
 		}
 	}
 	if !valid {
-		b.d.Log.ErrorContext(ctx, "Stored install of bundle no longer validates", "bundle", name, "errors", validationText("Bundle", c1.errs))
+		b.d.Log.ErrorContext(ctx, "Stored install of bundle no longer validates", "bundle", row.Name, "errors", validationText("Bundle", c1.errs))
 		return nil, &PreviewIssue{Severity: SeverityBlock, Message: fmt.Sprintf("the record of the last install of '%s' no longer validates "+
-			"(%d errors), so what it created cannot be matched; nothing is planned", name, len(c1.errs))}, nil
+			"(%d errors), so what it created cannot be matched; nothing is planned", row.Name, len(c1.errs))}, nil
 	}
 	return &priorInstall{bundle: pkg, result: result}, nil, nil
 }
@@ -424,29 +653,40 @@ func blockedMessage(block []PreviewIssue) string {
 	return msg
 }
 
+func planChanged(msg string, issues ...PreviewIssue) *BundleError {
+	return &BundleError{Kind: BundlePlanChanged, Msg: msg, Issues: issues}
+}
+
 // Install plans the deploy again, refuses a plan other than the approved one
-// or anything it blocks, then writes it and records what it did.
-func (b *Bundles) Install(ctx context.Context, pkg Bundle, setup wirejson.Object, digest string) (InstallResult, error) {
+// or anything it blocks, then writes it and records what it did. target.Into
+// is the install id the plan was made for; the digest names it and its revision.
+func (b *Bundles) Install(ctx context.Context, pkg Bundle, setup wirejson.Object, digest string, target BundleTarget) (InstallResult, error) {
 	w, err := b.workspace(ctx)
 	if err != nil {
 		return InstallResult{}, err
 	}
-	prior, unreadable, err := b.prior(ctx, w.c, pkg.Name)
+	t, err := b.target(ctx, w.c, pkg.Name, target.Into)
+	if err != nil {
+		return InstallResult{}, err
+	}
+	if t.issue != nil {
+		return InstallResult{}, planChanged(t.issue.Message+"; analyze the bundle again and review the new plan", *t.issue)
+	}
+	a, unreadable, err := b.analyzer(ctx, w, t, setup)
 	if err != nil {
 		return InstallResult{}, err
 	}
 	if unreadable != nil {
 		return InstallResult{}, invalidError(unreadable.Message, *unreadable)
 	}
-	a := &bundleAnalyzer{existence: w, prior: prior, checks: w, shapes: b.shapes(), supplied: setup}
 	preview, err := a.analyze(ctx, &pkg)
 	if err != nil {
 		return InstallResult{}, err
 	}
 	if preview.PlanDigest == nil || *preview.PlanDigest != digest {
-		return InstallResult{}, &BundleError{Kind: BundlePlanChanged,
-			Msg: "the deploy plan changed since it was shown; analyze the bundle again and review the new plan"}
+		return InstallResult{}, planChanged("the deploy plan changed since it was shown; analyze the bundle again and review the new plan")
 	}
+	prior := a.prior
 	values := effectiveSetup(&pkg, setup, prior)
 	block := append(append(preview.Blocks(), requiredSetupErrors(&pkg, values, a.neededSetup)...), contextSecretErrors(b.shapes(), &pkg, values)...)
 	if len(block) > 0 {
@@ -464,13 +704,13 @@ func (b *Bundles) Install(ctx context.Context, pkg Bundle, setup wirejson.Object
 	result, err := in.install(ctx, &pkg, setup, prior, &writesPolicies)
 	if err != nil {
 		if in.updatedInPlace {
-			if rerr := b.recordPartial(context.WithoutCancel(ctx), w.c, &pkg, in); rerr != nil {
+			if rerr := b.recordPartial(context.WithoutCancel(ctx), w.c, &pkg, in, t.row, target.Origin); rerr != nil {
 				b.d.Log.ErrorContext(ctx, "Could not record the failed redeploy of bundle", "bundle", pkg.Name, "error", rerr)
 			}
 		}
 		return InstallResult{}, err
 	}
-	id, err := b.recordID(ctx, w.c, &pkg, result, "installed")
+	id, err := b.recordID(ctx, w.c, &pkg, result, "installed", t.row, target.Origin)
 	if err != nil {
 		return InstallResult{}, err
 	}
@@ -478,13 +718,9 @@ func (b *Bundles) Install(ctx context.Context, pkg Bundle, setup wirejson.Object
 	return result, nil
 }
 
-func (b *Bundles) record(ctx context.Context, c authn.Caller, pkg *Bundle, result InstallResult, status string) error {
-	_, err := b.recordID(ctx, c, pkg, result, status)
-	return err
-}
-
-// recordID upserts the installed_bundles row of the bundle, by name.
-func (b *Bundles) recordID(ctx context.Context, c authn.Caller, pkg *Bundle, result InstallResult, status string) (string, error) {
+// recordID writes the install row: the target's when the deploy updated one, else a new one.
+func (b *Bundles) recordID(ctx context.Context, c authn.Caller, pkg *Bundle, result InstallResult, status string,
+	row *store.BundleRow, origin *BundleOrigin) (string, error) {
 	canonical, err := wirejson.Marshal(pkg.Dump(), wirejson.Compact)
 	if err != nil {
 		return "", err
@@ -495,26 +731,29 @@ func (b *Bundles) recordID(ctx context.Context, c authn.Caller, pkg *Bundle, res
 	}
 	r := store.BundleRecord{Name: pkg.Name, DisplayName: pkg.DisplayName, Description: pkg.Description,
 		SchemaVersion: pkg.SchemaVersion, Status: status, Canonical: canonical, InstallResult: installResult}
+	if o := origin.object(); o != nil {
+		if r.Source, err = wirejson.Marshal(o, wirejson.Compact); err != nil {
+			return "", err
+		}
+	}
 	var id string
 	err = b.d.DB.Write(ctx, c.Workspace, func(ctx context.Context, sess db.Session) error {
-		existing, ok, err := b.rows.ByName(ctx, sess, pkg.Name)
-		if err != nil {
-			return err
+		if row != nil {
+			id = row.ID
+			return b.rows.Update(ctx, sess, row.ID, c.UserID, r, b.d.Now().UTC())
 		}
-		if ok {
-			id = existing.ID
-			return b.rows.Update(ctx, sess, existing.ID, r, b.d.Now().UTC())
-		}
+		var err error
 		id, err = b.rows.Insert(ctx, sess, c.UserID, r, b.d.Now().UTC())
 		return err
 	})
 	return id, err
 }
 
-func (b *Bundles) recordPartial(ctx context.Context, c authn.Caller, pkg *Bundle, in *bundleInstaller) error {
+func (b *Bundles) recordPartial(ctx context.Context, c authn.Caller, pkg *Bundle, in *bundleInstaller, row *store.BundleRow, origin *BundleOrigin) error {
 	partial, err := in.partialResult()
 	if err != nil {
 		return err
 	}
-	return b.record(ctx, c, pkg, partial, "failed")
+	_, err = b.recordID(ctx, c, pkg, partial, "failed", row, origin)
+	return err
 }

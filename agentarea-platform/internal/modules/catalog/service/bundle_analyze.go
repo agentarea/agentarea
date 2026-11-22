@@ -13,7 +13,6 @@ import (
 )
 
 const (
-	mcpNotApplied         = "changes not applied: MCP servers are not updated on redeploy yet"
 	githubSkillNotApplied = "changes not applied: a GitHub skill is not re-imported on redeploy"
 	orphanedDetail        = "removed from the bundle; left in place, not deleted"
 	notYetCreated         = "<created by this deploy>"
@@ -54,6 +53,7 @@ func writes(s EntityStatus) bool { return s == StatusWillCreate || s == StatusWi
 
 type bundleSpec interface {
 	specKey() string
+	renamedFrom() *string
 	dump() wirejson.Object
 }
 
@@ -63,6 +63,13 @@ func (a BundleAgent) specKey() string      { return a.Key }
 func (ch BundleChannel) specKey() string   { return ch.Key }
 func (a BundleAutomation) specKey() string { return a.Key }
 func (p BundlePolicy) specKey() string     { return p.Key }
+
+func (m BundleMCP) renamedFrom() *string        { return m.RenamedFrom }
+func (s BundleSkill) renamedFrom() *string      { return s.RenamedFrom }
+func (a BundleAgent) renamedFrom() *string      { return a.RenamedFrom }
+func (ch BundleChannel) renamedFrom() *string   { return ch.RenamedFrom }
+func (a BundleAutomation) renamedFrom() *string { return a.RenamedFrom }
+func (p BundlePolicy) renamedFrom() *string     { return p.RenamedFrom }
 
 func specsOf[T bundleSpec](items []T) []bundleSpec {
 	out := make([]bundleSpec, len(items))
@@ -196,7 +203,7 @@ func specFingerprint(b *Bundle, spec bundleSpec, values wirejson.Object) (string
 			public = append(public, m)
 		}
 	}
-	return sha256Dumps(resolveTree(spec.dump(), public))
+	return sha256Dumps(resolveTree(omit(spec.dump(), "renamed_from"), public))
 }
 
 // channelCredentials are the channel's bound credentials that resolve fully
@@ -380,6 +387,9 @@ type deployChecks interface {
 	automationProblem(ctx context.Context, b *Bundle, a BundleAutomation) (string, error)
 	mayEdit(ctx context.Context, kind EntityKind, id string) (bool, error)
 	secretProblem(ctx context.Context, name string) (string, error)
+	// modelID is the model instance ref names: its id, or the name of one; problem when it names none or several.
+	modelID(ctx context.Context, ref string) (id, problem string, err error)
+	billingCurrency() string
 }
 
 // bundleShapes are the owners' pure checks a plan applies.
@@ -404,12 +414,9 @@ func (noExistence) channelCredentialKeys(context.Context, string) (map[string]bo
 	return nil, nil
 }
 
+// policyAsRule is p as the governance rule on the agent subjectID.
 func policyAsRule(p BundlePolicy, subjectID string) catalogapi.BundleRule {
-	subject := "agent"
-	if p.Subject == "workspace" {
-		subject = "workspace"
-	}
-	return catalogapi.BundleRule{Enabled: p.Enabled, Priority: p.Priority, SubjectType: subject, SubjectID: subjectID,
+	return catalogapi.BundleRule{Enabled: p.Enabled, Priority: p.Priority, SubjectType: "agent", SubjectID: subjectID,
 		Target: p.Target, Effect: p.Effect, Params: nonNilObject(p.Params), Condition: p.Condition}
 }
 
@@ -594,6 +601,10 @@ type bundleAnalyzer struct {
 	checks    deployChecks
 	shapes    bundleShapes
 	supplied  wirejson.Object
+	// revision is the install the plan updates, as last written; nil on a first install.
+	revision *installRevision
+	// others are the workspace's other installs, whose entities this bundle may not take.
+	others []otherInstall
 
 	planned    map[entityRef]EntityStatus
 	ids        map[entityRef]string
@@ -612,6 +623,9 @@ func (a *bundleAnalyzer) analyze(ctx context.Context, b *Bundle) (ImportPreview,
 	var entities []PreviewEntity
 	a.planned, a.ids, a.unfinished = map[entityRef]EntityStatus{}, map[entityRef]string{}, map[string]bool{}
 	a.pkg = b
+	renames, renameIssues := renamesOf(b, a.prior)
+	issues = append(append(issues, legacyAgentKept(b, a.prior)...), renameIssues...)
+	a.prior = a.prior.renamed(renames)
 	a.values = effectiveSetup(b, a.supplied, a.prior)
 
 	setupKeys, mcpKeys, skillKeys, agentKeys := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
@@ -636,13 +650,17 @@ func (a *bundleAnalyzer) analyze(ctx context.Context, b *Bundle) (ImportPreview,
 	steps := []func() error{
 		func() error { return a.checkContextSecrets(ctx, b, &issues) },
 		func() error { return a.analyzeSkills(ctx, b, &entities, &issues) },
-		func() error { a.analyzeAgents(b, mcpKeys, skillKeys, setupKeys, unsupported, &issues); return nil },
+		func() error {
+			a.analyzeAgents(b, mcpKeys, skillKeys, setupKeys, agentKeys, unsupported, &issues)
+			return nil
+		},
 		func() error { return a.populateAgentEntities(ctx, b, &entities) },
 		func() error { return a.analyzeChannels(ctx, b, agentKeys, setupKeys, &entities, &issues) },
 		func() error { return a.analyzeAutomations(ctx, b, agentKeys, &entities, &issues) },
 		func() error { return a.analyzePolicies(ctx, b, agentKeys, &entities, &issues) },
 		func() error { a.checkTriggerNames(b, &issues); return nil },
-		func() error { return a.reportOrphans(ctx, b, &entities) },
+		func() error { return a.reportOrphans(ctx, b, &entities, &issues) },
+		func() error { return a.checkOwnership(ctx, entities, &issues) },
 		func() error {
 			if a.checks == nil {
 				return nil
@@ -656,6 +674,15 @@ func (a *bundleAnalyzer) analyze(ctx context.Context, b *Bundle) (ImportPreview,
 		}
 	}
 
+	for i, e := range entities {
+		if from, ok := renames[entityRef{e.Kind, e.Key}]; ok {
+			d := fmt.Sprintf("renamed %s → %s", from, e.Key)
+			if e.Detail != nil {
+				d += "; " + *e.Detail
+			}
+			entities[i].Detail = &d
+		}
+	}
 	a.neededSetup = a.needed(b)
 	setup := append([]SetupField{}, b.Setup...)
 	if a.neededSetup != nil {
@@ -707,7 +734,11 @@ func (a *bundleAnalyzer) digest(b *Bundle, entities []PreviewEntity) (string, er
 	for i, r := range rows {
 		plan[i] = r.values
 	}
-	return sha256Dumps(wirejson.Object{{Key: "bundle", Value: b.Dump()}, {Key: "plan", Value: plan}})
+	named := wirejson.Object{{Key: "bundle", Value: b.Dump()}, {Key: "plan", Value: plan}}
+	if a.revision != nil {
+		named.Set("install", []any{a.revision.id, a.revision.updatedAt})
+	}
+	return sha256Dumps(named)
 }
 
 func (a *bundleAnalyzer) priorSpec(kind EntityKind, key string) bundleSpec {
@@ -870,7 +901,15 @@ func (a *bundleAnalyzer) checkWrites(ctx context.Context, b *Bundle, issues *[]P
 		if modelID == "" || unresolved {
 			continue
 		}
-		problem, err := a.checks.agentProblem(ctx, ag, modelID, client)
+		resolved, problem, err := a.checks.modelID(ctx, modelID)
+		if err != nil {
+			return err
+		}
+		if problem != "" {
+			*issues = append(*issues, blockIssue(ag.Key, fmt.Sprintf("agent '%s': %s", ag.Key, problem)))
+			continue
+		}
+		problem, err = a.checks.agentProblem(ctx, ag, resolved, client)
 		if err != nil {
 			return err
 		}
@@ -915,7 +954,7 @@ func (a *bundleAnalyzer) checkWrites(ctx context.Context, b *Bundle, issues *[]P
 	return nil
 }
 
-func (a *bundleAnalyzer) reportOrphans(ctx context.Context, b *Bundle, entities *[]PreviewEntity) error {
+func (a *bundleAnalyzer) reportOrphans(ctx context.Context, b *Bundle, entities *[]PreviewEntity, issues *[]PreviewIssue) error {
 	if a.prior == nil {
 		return nil
 	}
@@ -937,6 +976,8 @@ func (a *bundleAnalyzer) reportOrphans(ctx context.Context, b *Bundle, entities 
 		a.ids[entityRef{ref.Kind, ref.Key}] = *ref.ID
 		*entities = append(*entities, PreviewEntity{Kind: ref.Kind, Key: ref.Key, Name: ref.Name, Status: StatusOrphaned,
 			Detail: strp(orphanedDetail)})
+		*issues = append(*issues, warnIssue(ref.Key, fmt.Sprintf("%s '%s' left the bundle; it stays in the workspace as an orphan, not deleted",
+			ref.Kind, ref.Key)))
 	}
 	return nil
 }
@@ -1087,17 +1128,22 @@ func (a *bundleAnalyzer) analyzeMCPs(ctx context.Context, b *Bundle, setupKeys m
 			*issues = append(*issues, warnIssue(m.Key, fmt.Sprintf("mcp '%s' will be skipped: %s", m.Key, reason)))
 			continue
 		}
+		if before, ok := a.priorSpec(KindMCP, m.Key).(BundleMCP); ok {
+			if change := mcpIdentityChange(before, m); change != "" {
+				*issues = append(*issues, blockIssue(m.Key, fmt.Sprintf("mcp '%s' %s, which a redeploy cannot apply; give it a new key", m.Key, change)))
+			}
+		}
 		status, err := a.plan(ctx, KindMCP, m, nil, nil)
 		if err != nil {
 			return nil, err
 		}
+		if status == StatusUnchanged && mcpSecretSupplied(b, m, suppliedKeys(a.supplied)) {
+			status = StatusWillUpdate
+			a.planned[entityRef{KindMCP, m.Key}] = status
+		}
 		var detail *string
 		if len(secretRefs) > 0 {
 			detail = strp(strings.Join(secretRefs, "; "))
-		}
-		if status == StatusWillUpdate {
-			status, detail = StatusChangesNotApplied, strp(mcpNotApplied)
-			*issues = append(*issues, warnIssue(m.Key, fmt.Sprintf("mcp '%s' changed: %s", m.Key, mcpNotApplied)))
 		}
 		*entities = append(*entities, PreviewEntity{Kind: KindMCP, Key: m.Key, Name: m.Name, Status: status, Detail: detail})
 	}
@@ -1124,8 +1170,14 @@ func (a *bundleAnalyzer) analyzeSkills(ctx context.Context, b *Bundle, entities 
 	return nil
 }
 
-func (a *bundleAnalyzer) analyzeAgents(b *Bundle, mcpKeys, skillKeys, setupKeys, unsupported map[string]bool, issues *[]PreviewIssue) {
+func (a *bundleAnalyzer) analyzeAgents(b *Bundle, mcpKeys, skillKeys, setupKeys, agentKeys, unsupported map[string]bool, issues *[]PreviewIssue) {
+	if _, cycle := agentOrder(b.Agents); cycle != nil {
+		*issues = append(*issues, blockIssue(cycle[0], cycleText(cycle)))
+	}
 	for _, ag := range b.Agents {
+		if problem := delegateProblem(ag, agentKeys); problem != "" {
+			*issues = append(*issues, blockIssue(ag.Key, problem))
+		}
 		for _, ref := range ag.MCPs {
 			switch {
 			case !mcpKeys[ref]:
@@ -1155,16 +1207,24 @@ func (a *bundleAnalyzer) analyzeAgents(b *Bundle, mcpKeys, skillKeys, setupKeys,
 	}
 }
 
+func agentDeps(ag BundleAgent) []entityRef {
+	var deps []entityRef
+	for _, ref := range ag.MCPs {
+		deps = append(deps, entityRef{KindMCP, ref})
+	}
+	for _, ref := range ag.Skills {
+		deps = append(deps, entityRef{KindSkill, ref})
+	}
+	for _, ref := range ag.Delegates {
+		deps = append(deps, entityRef{KindAgent, ref})
+	}
+	return deps
+}
+
 func (a *bundleAnalyzer) populateAgentEntities(ctx context.Context, b *Bundle, entities *[]PreviewEntity) error {
-	for _, ag := range b.Agents {
-		var deps []entityRef
-		for _, ref := range ag.MCPs {
-			deps = append(deps, entityRef{KindMCP, ref})
-		}
-		for _, ref := range ag.Skills {
-			deps = append(deps, entityRef{KindSkill, ref})
-		}
-		status, err := a.plan(ctx, KindAgent, ag, deps, nil)
+	order, _ := agentOrder(b.Agents)
+	for _, ag := range order {
+		status, err := a.plan(ctx, KindAgent, ag, agentDeps(ag), nil)
 		if err != nil {
 			return err
 		}
@@ -1261,17 +1321,22 @@ func (a *bundleAnalyzer) analyzeChannels(ctx context.Context, b *Bundle, agentKe
 func (a *bundleAnalyzer) analyzePolicies(ctx context.Context, b *Bundle, agentKeys map[string]bool, entities *[]PreviewEntity,
 	issues *[]PreviewIssue) error {
 	for _, p := range b.Policies {
-		if p.Subject != "workspace" && !agentKeys[p.Subject] {
-			*issues = append(*issues, blockIssue(p.Key, fmt.Sprintf("policy '%s' subject '%s' is neither 'workspace' nor a known agent key", p.Key, p.Subject)))
+		if _, refused := policyRefusal(p); refused != "" {
+			*issues = append(*issues, blockIssue(p.Key, refused))
+		} else if !agentKeys[p.Subject] {
+			*issues = append(*issues, blockIssue(p.Key, policyStranger(p.Key, p.Subject)))
+		}
+		if p.BillingCurrency != nil && a.checks != nil {
+			if billed := a.checks.billingCurrency(); billed != *p.BillingCurrency {
+				*issues = append(*issues, blockIssue(p.Key, fmt.Sprintf("policy '%s' caps spend in %s, but this workspace bills in %s; write the amount in %s",
+					p.Key, *p.BillingCurrency, billed, billed)))
+			}
 		}
 		if problem := a.shapes.RuleProblem(policyAsRule(p, placeholderSubjectID)); problem != "" {
 			*issues = append(*issues, blockIssue(p.Key, fmt.Sprintf("policy '%s' target '%s' is invalid (%s); it would install but never enforce",
 				p.Key, p.Target, problem)))
 		}
 		status, err := a.plan(ctx, KindPolicy, p, []entityRef{{KindAgent, p.Subject}}, func() (*string, error) {
-			if p.Subject == "workspace" {
-				return a.existence.findPolicy(ctx, p, nil)
-			}
 			agentID := a.plannedID(KindAgent, p.Subject)
 			if agentID == nil {
 				return nil, nil
@@ -1285,4 +1350,97 @@ func (a *bundleAnalyzer) analyzePolicies(ctx context.Context, b *Bundle, agentKe
 			Detail: strp(fmt.Sprintf("%s %s on %s", p.Effect, p.Target, p.Subject))})
 	}
 	return nil
+}
+
+// installRevision is an install as the plan saw it: a later write changes updatedAt.
+type installRevision struct{ id, updatedAt string }
+
+// otherInstall is another install of the workspace and what it recorded.
+type otherInstall struct {
+	id, name string
+	result   InstallResult
+}
+
+// ownershipKinds are the kinds a bundle creates under a name another bundle may already own.
+func ownershipKinds() []EntityKind { return []EntityKind{KindMCP, KindSkill, KindAgent} }
+
+// checkOwnership blocks taking what another install owns: creating an MCP
+// server, skill or agent under the name of one it created, or linking one of its entities.
+func (a *bundleAnalyzer) checkOwnership(ctx context.Context, entities []PreviewEntity, issues *[]PreviewIssue) error {
+	for _, e := range entities {
+		creates := e.Status == StatusWillCreate && containsKind(ownershipKinds(), e.Kind)
+		if !creates && e.Status != StatusAlreadyExists {
+			continue
+		}
+		id := a.ids[entityRef{e.Kind, e.Key}]
+		for _, other := range a.others {
+			for _, owned := range other.result.Entities {
+				if owned.Kind != e.Kind || !hasID(owned) || !ownedAction(owned.Action) {
+					continue
+				}
+				if (creates && owned.Name != e.Name) || (!creates && *owned.ID != id) {
+					continue
+				}
+				live, err := a.existence.refExists(ctx, owned.Kind, *owned.ID)
+				if err != nil {
+					return err
+				}
+				if live {
+					*issues = append(*issues, blockIssue(e.Key, fmt.Sprintf("%s '%s' belongs to bundle '%s' (install %s); a bundle owns what it "+
+						"creates, so give this one another name or deploy it from that bundle", e.Kind, e.Name, other.name, other.id)))
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// mcpIdentityChange is how m stops being the server before was, "" when a redeploy can update it in place.
+func mcpIdentityChange(before, m BundleMCP) string {
+	switch {
+	case before.Catalog != nil && m.Catalog == nil:
+		return fmt.Sprintf("changes from catalog server '%s' to its own spec", *before.Catalog)
+	case before.Catalog == nil && m.Catalog != nil:
+		return fmt.Sprintf("changes from its own spec to catalog server '%s'", *m.Catalog)
+	case m.Catalog != nil && *before.Catalog != *m.Catalog:
+		return fmt.Sprintf("changes from catalog server '%s' to '%s'", *before.Catalog, *m.Catalog)
+	case m.Catalog != nil:
+		return ""
+	}
+	from, _ := specString(before.JSONSpec, "type")
+	to, _ := specString(m.JSONSpec, "type")
+	if from != to {
+		return fmt.Sprintf("changes transport from %s to %s", from, to)
+	}
+	return ""
+}
+
+// bindsSecret is a value reading a secret setup field.
+func bindsSecret(b *Bundle, value string) bool {
+	for _, k := range setupRefsOf(value) {
+		if f, ok := b.SetupField(k); ok && f.Type == SetupSecret {
+			return true
+		}
+	}
+	return false
+}
+
+// mcpSecretSupplied is a secret this deploy was given for m's bindings or
+// context secret: a value the fingerprint never sees, so it is written anyway.
+func mcpSecretSupplied(b *Bundle, m BundleMCP, supplied map[string]bool) bool {
+	values := make([]string, 0, len(m.Bindings)+1)
+	for _, bind := range m.Bindings {
+		values = append(values, bind.Value)
+	}
+	if m.ContextSecret != nil {
+		values = append(values, *m.ContextSecret)
+	}
+	for _, v := range values {
+		for _, k := range setupRefsOf(v) {
+			if f, ok := b.SetupField(k); ok && f.Type == SetupSecret && supplied[k] {
+				return true
+			}
+		}
+	}
+	return false
 }

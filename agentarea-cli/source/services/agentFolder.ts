@@ -242,7 +242,7 @@ export type ResolvedSetup = {
  */
 export function resolveSetup(
 	fields: SetupField[],
-	given: Record<string, string>,
+	given: Record<string, unknown>,
 ): ResolvedSetup {
 	const declared = new Set(fields.map(field => field.key));
 	const unknown = Object.keys(given).filter(key => !declared.has(key));
@@ -423,20 +423,27 @@ export function slugifyName(base: string): string {
 
 export function scaffoldFiles(name: string): Record<string, string> {
 	return {
-		'agent.yaml': [
+		'agentarea.yaml': [
 			`name: ${name}`,
-			'description: ""',
-			'# A model instance id (agentarea models instances-list). Write the id here',
-			'# and drop the setup entry below to stop deploy from asking for it.',
-			'model: ${setup.model}',
-			'toolsets: []',
+			'schema_version: 1',
 			'setup:',
-			'  - key: model',
-			'    label: Model instance id',
-			'    required: true',
-			'    help: Run `agentarea models instances-list` to find one.',
+			'  model: {label: Model instance, required: true, help: Run `agentarea models instances-list` to find one.}',
+			'agents: {include: ./agents/*.md}',
+			'# Add mcp, skills, policies and schedules sections, each with its own',
+			'# include, when the folder has files for them.',
 			'',
 		].join('\n'),
-		'instructions.md': `You are ${name}. Describe what this agent does and how it should work.\n`,
+		[`agents/${name}.md`]: [
+			'---',
+			`name: ${name}`,
+			'description: ""',
+			'model: ${setup.model}',
+			'skills: []',
+			'mcp: []',
+			'delegates: []',
+			'---',
+			`You are ${name}. Describe what this agent does and how it should work.`,
+			'',
+		].join('\n'),
 	};
 }
