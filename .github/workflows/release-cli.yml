@@ -3,26 +3,27 @@ name: Release CLI
 # Publishes @agentarea/cli to npm.
 #
 # Versioned INDEPENDENTLY from the platform (VERSION / docker images / helm).
-# Triggered by pushing a tag in the dedicated `cli-vX.Y.Z` namespace, so it
-# never collides with the platform's `vX.Y.Z` release tags.
+# A release is a version bump of agentarea-cli/package.json merged to main:
+# when that version is not on npm yet, it is published and tagged cli-vX.Y.Z.
+# A push that leaves the version alone publishes nothing.
 #
-# Preconditions:
-#   - Tag name is `cli-vX.Y.Z` (semver)
-#   - agentarea-cli/package.json version == X.Y.Z (enforced below)
-#   - Repo secret NPM_TOKEN is set (npm automation token with publish rights
-#     for the @agentarea scope)
-#
-# Manual fallback: `cd agentarea-cli && npm publish`.
+# Requires the repo secret NPM_TOKEN (npm automation token with publish rights
+# for the @agentarea scope).
 
 on:
   push:
-    tags:
-      - 'cli-v*'
+    branches: [main]
+    paths:
+      - 'agentarea-cli/package.json'
   workflow_dispatch:
 
 permissions:
-  contents: read
-  id-token: write # required for npm provenance
+  contents: write # the cli-vX.Y.Z tag
+  id-token: write # npm provenance
+
+concurrency:
+  group: release-cli
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -52,27 +53,39 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: 'agentarea-cli/pnpm-lock.yaml'
 
-      - name: Verify tag matches package.json version
-        if: github.event_name == 'push'
+      - name: Is this version new
+        id: version
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#cli-v}"
-          PKG_VERSION="$(node -p "require('./package.json').version")"
-          echo "tag=$TAG_VERSION package.json=$PKG_VERSION"
-          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION"
-            exit 1
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if npm view "@agentarea/cli@$VERSION" version >/dev/null 2>&1; then
+            echo "@agentarea/cli@$VERSION is already on npm; nothing to release"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Install dependencies
+        if: steps.version.outputs.release == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Test
+        if: steps.version.outputs.release == 'true'
         run: pnpm run test
 
       - name: Build
+        if: steps.version.outputs.release == 'true'
         run: pnpm run build
 
       - name: Publish to npm
+        if: steps.version.outputs.release == 'true'
         run: pnpm publish --provenance --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Tag the release
+        if: steps.version.outputs.release == 'true'
+        run: |
+          TAG="cli-v${{ steps.version.outputs.version }}"
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "$TAG"
