@@ -146,3 +146,19 @@ func TestAnUnchangedAgentIsNotResolvedAtInstall(t *testing.T) {
 		t.Fatalf("install: %v, %+v", err, res.Entities)
 	}
 }
+
+// An install recorded before model_id existed: its name-model agents are unchanged, and the next write records the id.
+func TestAPriorWithoutModelIDLeavesTheAgentUnchanged(t *testing.T) {
+	const first = "11111111-1111-1111-1111-111111111111"
+	f, prior := modelFixture(t, first)
+	prior.result.Entities[0].ModelID = nil
+	if got := planned(analyzeWith(t, f, modelBundle, func(a *bundleAnalyzer) { a.prior = prior })); !reflect.DeepEqual(got, []string{"agent:a:unchanged"}) {
+		t.Fatalf("plan = %v", got)
+	}
+	changed := strings.Replace(modelBundle, "name: A,", "name: A2,", 1)
+	b := mustParse(t, changed)
+	_, res, err := f.install(t, &b, prior, entityRef{KindAgent, "a"})
+	if err != nil || res.Entities[0].Action != ActionUpdated || res.Entities[0].ModelID == nil || *res.Entities[0].ModelID != first {
+		t.Fatalf("install: %v, %+v", err, res.Entities)
+	}
+}

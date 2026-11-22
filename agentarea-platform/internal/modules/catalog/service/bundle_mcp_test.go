@@ -24,8 +24,9 @@ type recordingMCPs struct {
 	n        int
 	updates  map[string]catalogapi.BundleMCPUpdate
 	verified []string
-	// discoverErr fails every re-discovery.
+	// discoverErr fails every re-discovery; refuse refuses the caller every comparison and re-discovery.
 	discoverErr error
+	refuse      bool
 }
 
 func (r *recordingMCPs) InstanceName(_ context.Context, _ authn.Caller, id string) (string, bool, error) {
@@ -68,6 +69,9 @@ func (r *recordingMCPs) store(id string, spec map[string]any) {
 }
 
 func (r *recordingMCPs) SecretsMatch(_ context.Context, _ authn.Caller, id string, values map[string]string, _ *string) (map[string]bool, bool, error) {
+	if r.refuse {
+		return nil, false, &catalogapi.BundleRefusal{Msg: "you may not edit MCP instance " + id}
+	}
 	out := map[string]bool{}
 	for k, v := range values {
 		out[k] = r.stored[id][k] == v
@@ -79,6 +83,9 @@ func (r *recordingMCPs) InstanceSpecID(_ context.Context, _ authn.Caller, id str
 	return "spec-of-" + id, ok, nil
 }
 func (r *recordingMCPs) Rediscover(_ context.Context, _ authn.Caller, id string) (catalogapi.BundleDiscovery, error) {
+	if r.refuse {
+		return catalogapi.BundleDiscovery{}, &catalogapi.BundleRefusal{Msg: "you may not edit MCP instance " + id}
+	}
 	r.verified = append(r.verified, id)
 	r.log.add("rediscover %s", id)
 	if r.discoverErr != nil {
@@ -147,7 +154,11 @@ func redeployMCP(t *testing.T, f *deployFixture, src string, supplied wirejson.O
 			approved[entityRef{e.Kind, e.Key}] = true
 		}
 	}
-	res, err := (&bundleInstaller{w: f.w, approved: approved}).install(context.Background(), &b, supplied, prior, nil)
+	in := &bundleInstaller{w: f.w, approved: approved}
+	res, err := in.install(context.Background(), &b, supplied, prior, nil)
+	if err == nil {
+		in.rediscoverMCPs(context.Background(), &res)
+	}
 	return p, res, err
 }
 
@@ -306,5 +317,51 @@ func TestRediscoveryComesLastAndNeverFailsTheInstall(t *testing.T) {
 	}
 	if d := mcpEntity(t, res2).Detail; d == nil || *d != "tools not re-discovered: gateway unreachable" {
 		t.Fatalf("detail = %v", d)
+	}
+}
+
+// A member without edit on the MCP who supplies its secret gets the plan's block, never a 500.
+func TestASuppliedSecretOnAnMCPYouMayNotEditBlocks(t *testing.T) {
+	f, mcps, first, res := mcpFixture(t)
+	mcps.refuse = true
+	f.denied["mcp_instance"] = true
+	b := mustParse(t, mcpBundle)
+	p, err := (&bundleAnalyzer{existence: f.w, checks: f.w, prior: &priorInstall{bundle: first, result: res}, shapes: fakeShapes{},
+		supplied: wirejson.Object{{Key: "token", Value: "n3w"}}}).analyze(context.Background(), &b)
+	if err != nil {
+		t.Fatalf("analyze failed instead of blocking: %v", err)
+	}
+	if got := blockMessages(p); len(got) != 1 || got[0] != "mcp 'search' would be updated, but you may not edit mcp mcp-1" {
+		t.Fatalf("blocks = %q", got)
+	}
+	in := &bundleInstaller{w: f.w, approved: map[entityRef]bool{{KindMCP, "search"}: true}}
+	_, err = in.install(context.Background(), &b, wirejson.Object{{Key: "token", Value: "n3w"}}, &priorInstall{bundle: first, result: res}, nil)
+	var be *BundleError
+	if !errors.As(err, &be) || be.Msg != "mcp 'search' would be updated, but you may not edit mcp mcp-1" || len(mcps.updates) != 0 {
+		t.Fatalf("install = %v, updates %v", err, mcps.updates)
+	}
+}
+
+// Re-discovery covers what this deploy created or updated, and an unchanged MCP only when the caller may edit it.
+func TestRediscoveryOfAnMCPYouMayNotEdit(t *testing.T) {
+	f, mcps, first, res := mcpFixture(t)
+	f.denied["mcp_instance"] = true
+	_, res2, err := redeployMCP(t, f, mcpBundle, wirejson.Object{}, &priorInstall{bundle: first, result: res})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := mcpEntity(t, res2).Detail; d == nil || *d != "tools not re-discovered: you may not edit it" || len(mcps.verified) != 0 {
+		t.Fatalf("detail %v, verified %v", d, mcps.verified)
+	}
+	created := mustParse(t, strings.ReplaceAll(strings.Replace(mcpBundle, "key: search", "key: search2", 1), "[search]", "[search2]"))
+	in := &bundleInstaller{w: f.w, approved: map[entityRef]bool{}}
+	got, err := in.install(context.Background(), &created, demoValues(), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mcps.refuse = true
+	in.rediscoverMCPs(context.Background(), &got)
+	if d := mcpEntity(t, got).Detail; d == nil || *d != "tools not re-discovered: you may not edit it" {
+		t.Fatalf("created mcp detail %v", d)
 	}
 }

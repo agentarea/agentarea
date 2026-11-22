@@ -93,6 +93,8 @@ func (s *Server) InstallBundleV1BundlesInstallPost(ctx context.Context, _ gen.In
 		switch be.Kind {
 		case service.BundlePlanChanged:
 			return nil, bundleProblem(http.StatusConflict, "bundle_plan_changed", be.Msg, be.Issues).Wrap(err)
+		case service.BundleDeployRunning:
+			return nil, bundleProblem(http.StatusConflict, "bundle_deploy_running", be.Msg, nil).Wrap(err)
 		case service.BundleInvalid:
 			return nil, bundleProblem(http.StatusUnprocessableEntity, "bundle_invalid", be.Msg, be.Issues).Wrap(err)
 		case service.BundleInstallFailed:

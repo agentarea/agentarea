@@ -208,7 +208,8 @@ UPDATE installed_bundles SET name = $1, display_name = $2, description = $3,
     schema_version = $4, status = $5, canonical = $6::jsonb,
     install_result = $7::jsonb, updated_at = $8, updated_by = $9,
     source = COALESCE($10::jsonb, source)
-WHERE id = $11 AND workspace_id = $12 AND updated_at = $13
+WHERE id = $11 AND workspace_id = $12
+  AND ($13::timestamp IS NULL OR updated_at = $13)
 `
 
 type UpdateInstalledBundleParams struct {

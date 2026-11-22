@@ -21,7 +21,8 @@ UPDATE installed_bundles SET name = @name, display_name = sqlc.narg(display_name
     schema_version = @schema_version, status = @status, canonical = @canonical::jsonb,
     install_result = @install_result::jsonb, updated_at = @now, updated_by = @updated_by,
     source = COALESCE(sqlc.narg(source)::jsonb, source)
-WHERE id = @id AND workspace_id = @workspace_id AND updated_at = @seen_updated_at;
+WHERE id = @id AND workspace_id = @workspace_id
+  AND (sqlc.narg(seen_updated_at)::timestamp IS NULL OR updated_at = sqlc.narg(seen_updated_at));
 
 -- name: CatalogMCPItemByExternalID :one
 SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, ri.tags, ri.created_at, ri.updated_at FROM registry_items ri

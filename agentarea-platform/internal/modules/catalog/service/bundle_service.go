@@ -29,6 +29,8 @@ const (
 	BundleInvalid
 	// BundlePlanChanged is BundlePlanChangedError: 409 bundle_plan_changed.
 	BundlePlanChanged
+	// BundleDeployRunning is another deploy of the bundle holding its lock: 409 bundle_deploy_running.
+	BundleDeployRunning
 )
 
 // BundleError is a deploy refused before or while it wrote.
@@ -368,6 +370,9 @@ func editResourceType(kind EntityKind) string {
 
 func (w *workspace) secretsDiffer(ctx context.Context, instanceID string, values map[string]string, contextSecret *string) (bool, error) {
 	same, contextSame, err := w.b.d.MCPs.SecretsMatch(ctx, w.c, instanceID, values, contextSecret)
+	if _, refused := refusalOf(err); refused {
+		return true, nil
+	}
 	if err != nil {
 		return false, err
 	}
@@ -738,57 +743,90 @@ func installLockKey(workspaceID, name string) db.LockKey {
 // Install plans the deploy again, refuses a plan other than the approved one
 // or anything it blocks, then writes it and records what it did. target.Into
 // is the install id the plan was made for; the digest names it and its
-// revision. The bundle name's lock is held from the plan check to the record,
-// so two deploys of one name, first installs included, run one after the other.
+// revision. A deploy holds the bundle name's lock from the plan check to the
+// record, so a second deploy of the name, first installs included, is refused
+// while one runs. The MCPs' tools are discovered again once it committed.
 func (b *Bundles) Install(ctx context.Context, pkg Bundle, setup wirejson.Object, digest string, target BundleTarget) (InstallResult, error) {
 	w, err := b.workspace(ctx)
 	if err != nil {
 		return InstallResult{}, err
 	}
 	var result InstallResult
+	var in *bundleInstaller
+	var conflict error
 	err = b.d.DB.Write(ctx, w.c.Workspace, func(ctx context.Context, sess db.Session) error {
-		if err := db.XactLock(ctx, sess.Q(), installLockKey(w.c.Workspace.ID(), pkg.Name)); err != nil {
+		held, err := db.TryXactLock(ctx, sess.Q(), installLockKey(w.c.Workspace.ID(), pkg.Name))
+		if err != nil {
 			return err
 		}
+		if !held {
+			return &BundleError{Kind: BundleDeployRunning, Msg: "a deploy of this bundle is running; try again when it finishes"}
+		}
 		record := func(ctx context.Context, fn func(context.Context, db.Session) error) error { return fn(ctx, sess) }
-		var err error
-		result, err = b.install(ctx, w, record, pkg, setup, digest, target)
+		result, in, conflict, err = b.install(ctx, w, record, pkg, setup, digest, target)
 		return err
 	})
-	return result, err
+	if err != nil {
+		return InstallResult{}, err
+	}
+	if conflict != nil {
+		return InstallResult{}, conflict
+	}
+	in.rediscoverMCPs(ctx, &result)
+	return result, nil
 }
 
 // recorder runs a write of the install row: in the deploy's own transaction, or one of its own.
 type recorder func(ctx context.Context, fn func(context.Context, db.Session) error) error
 
+// install is Install under the lock; conflict is the 409 of a record that
+// had to be kept over a newer revision, returned once that record committed.
 func (b *Bundles) install(ctx context.Context, w *workspace, record recorder, pkg Bundle, setup wirejson.Object, digest string,
-	target BundleTarget) (InstallResult, error) {
+	target BundleTarget) (result InstallResult, in *bundleInstaller, conflict, err error) {
+	result, in, err = b.installLocked(ctx, w, record, pkg, setup, digest, target)
+	if err != nil || in == nil {
+		return InstallResult{}, nil, nil, err
+	}
+	id, stale, err := b.recordID(ctx, record, w.c, &pkg, result, "installed", in.row, target.Origin)
+	if err != nil {
+		return InstallResult{}, nil, nil, err
+	}
+	if stale {
+		return InstallResult{}, nil, planChanged(fmt.Sprintf("install %s was deployed by someone else while this deploy ran; both deploys' "+
+			"entities are recorded (status conflict); analyze the bundle again and review the new plan", id)), nil
+	}
+	result.InstalledBundleID = &id
+	return result, in, nil, nil
+}
+
+func (b *Bundles) installLocked(ctx context.Context, w *workspace, record recorder, pkg Bundle, setup wirejson.Object, digest string,
+	target BundleTarget) (InstallResult, *bundleInstaller, error) {
 	t, err := b.target(ctx, w.c, pkg.Name, target.Into)
 	if err != nil {
-		return InstallResult{}, err
+		return InstallResult{}, nil, err
 	}
 	if t.issue != nil {
-		return InstallResult{}, planChanged(t.issue.Message+"; analyze the bundle again and review the new plan", *t.issue)
+		return InstallResult{}, nil, planChanged(t.issue.Message+"; analyze the bundle again and review the new plan", *t.issue)
 	}
 	a, unreadable, err := b.analyzer(ctx, w, t, &pkg, setup)
 	if err != nil {
-		return InstallResult{}, err
+		return InstallResult{}, nil, err
 	}
 	if unreadable != nil {
-		return InstallResult{}, invalidError(unreadable.Message, *unreadable)
+		return InstallResult{}, nil, invalidError(unreadable.Message, *unreadable)
 	}
 	preview, err := a.analyze(ctx, &pkg)
 	if err != nil {
-		return InstallResult{}, err
+		return InstallResult{}, nil, err
 	}
 	if preview.PlanDigest == nil || *preview.PlanDigest != digest {
-		return InstallResult{}, planChanged("the deploy plan changed since it was shown; analyze the bundle again and review the new plan")
+		return InstallResult{}, nil, planChanged("the deploy plan changed since it was shown; analyze the bundle again and review the new plan")
 	}
 	prior := a.prior
 	values := effectiveSetup(&pkg, setup, prior)
 	block := append(append(preview.Blocks(), requiredSetupErrors(&pkg, values, a.neededSetup)...), contextSecretErrors(b.shapes(), &pkg, values)...)
 	if len(block) > 0 {
-		return InstallResult{}, invalidError(blockedMessage(block), block...)
+		return InstallResult{}, nil, invalidError(blockedMessage(block), block...)
 	}
 	approved := map[entityRef]bool{}
 	writesPolicies := false
@@ -798,7 +836,7 @@ func (b *Bundles) install(ctx context.Context, w *workspace, record recorder, pk
 		}
 		writesPolicies = writesPolicies || e.Kind == KindPolicy && writes(e.Status)
 	}
-	in := &bundleInstaller{w: w, approved: approved}
+	in := &bundleInstaller{w: w, approved: approved, row: t.row}
 	result, err := in.install(ctx, &pkg, setup, prior, &writesPolicies)
 	if err != nil {
 		if in.updatedInPlace {
@@ -809,50 +847,91 @@ func (b *Bundles) install(ctx context.Context, w *workspace, record recorder, pk
 				b.d.Log.ErrorContext(ctx, "Could not record the failed redeploy of bundle", "bundle", pkg.Name, "error", rerr)
 			}
 		}
-		return InstallResult{}, err
+		return InstallResult{}, nil, err
 	}
-	id, err := b.recordID(ctx, record, w.c, &pkg, result, "installed", t.row, target.Origin)
-	if err != nil {
-		return InstallResult{}, err
-	}
-	result.InstalledBundleID = &id
-	return result, nil
+	return result, in, nil
 }
 
-// recordID writes the install row: the target's when the deploy updated one, else a new one.
+// recordID writes the install row: the target's when the deploy updated one,
+// else a new one. Over a row written since the deploy read it, it keeps both
+// deploys' entities under status "conflict" and reports stale: what either
+// created stays tracked, the next plan sees all of it.
 func (b *Bundles) recordID(ctx context.Context, record recorder, c authn.Caller, pkg *Bundle, result InstallResult, status string,
-	row *store.BundleRow, origin *BundleOrigin) (string, error) {
+	row *store.BundleRow, origin *BundleOrigin) (id string, stale bool, err error) {
 	canonical, err := wirejson.Marshal(pkg.Dump(), wirejson.Compact)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
-	installResult, err := wirejson.Marshal(result.Dump(), wirejson.Compact)
-	if err != nil {
-		return "", err
-	}
-	r := store.BundleRecord{Name: pkg.Name, DisplayName: pkg.DisplayName, Description: pkg.Description,
-		SchemaVersion: pkg.SchemaVersion, Status: status, Canonical: canonical, InstallResult: installResult}
-	if o := origin.object(); o != nil {
-		if r.Source, err = wirejson.Marshal(o, wirejson.Compact); err != nil {
-			return "", err
+	encode := func(result InstallResult, status string) (store.BundleRecord, error) {
+		installResult, err := wirejson.Marshal(result.Dump(), wirejson.Compact)
+		if err != nil {
+			return store.BundleRecord{}, err
 		}
-	}
-	var id string
-	err = record(ctx, func(ctx context.Context, sess db.Session) error {
-		if row != nil {
-			id = row.ID
-			ok, err := b.rows.Update(ctx, sess, row.ID, c.UserID, row.UpdatedAt, r, b.d.Now().UTC())
-			if err == nil && !ok {
-				return planChanged(fmt.Sprintf("install %s was deployed by someone else while this deploy ran; analyze the bundle again "+
-					"and review the new plan", row.ID))
+		r := store.BundleRecord{Name: pkg.Name, DisplayName: pkg.DisplayName, Description: pkg.Description,
+			SchemaVersion: pkg.SchemaVersion, Status: status, Canonical: canonical, InstallResult: installResult}
+		if o := origin.object(); o != nil {
+			if r.Source, err = wirejson.Marshal(o, wirejson.Compact); err != nil {
+				return store.BundleRecord{}, err
 			}
+		}
+		return r, nil
+	}
+	r, err := encode(result, status)
+	if err != nil {
+		return "", false, err
+	}
+	err = record(ctx, func(ctx context.Context, sess db.Session) error {
+		if row == nil {
+			var err error
+			id, err = b.rows.Insert(ctx, sess, c.UserID, r, b.d.Now().UTC())
 			return err
 		}
-		var err error
-		id, err = b.rows.Insert(ctx, sess, c.UserID, r, b.d.Now().UTC())
+		id = row.ID
+		seen := row.UpdatedAt
+		ok, err := b.rows.Update(ctx, sess, row.ID, c.UserID, &seen, r, b.d.Now().UTC())
+		if err != nil || ok {
+			return err
+		}
+		current, found, err := b.rows.ByID(ctx, sess, row.ID)
+		if err != nil || !found {
+			return err
+		}
+		merged := result
+		if theirs, unreadable, err := b.prior(ctx, current); err == nil && unreadable == nil && theirs != nil {
+			merged = mergedResults(result, theirs.result)
+		}
+		if r, err = encode(merged, "conflict"); err != nil {
+			return err
+		}
+		stale = true
+		_, err = b.rows.Update(ctx, sess, row.ID, c.UserID, nil, r, b.d.Now().UTC())
 		return err
 	})
-	return id, err
+	return id, stale, err
+}
+
+// mergedResults is ours plus what theirs recorded that ours did not: an
+// entity theirs created under a key ours also wrote, with another id, stays as an orphan.
+func mergedResults(ours, theirs InstallResult) InstallResult {
+	out := ours
+	out.Entities = append([]InstalledEntity{}, ours.Entities...)
+	for _, e := range theirs.Entities {
+		var mine *InstalledEntity
+		for i := range ours.Entities {
+			if ours.Entities[i].Kind == e.Kind && ours.Entities[i].Key == e.Key {
+				mine = &ours.Entities[i]
+			}
+		}
+		switch {
+		case mine == nil:
+			out.Entities = append(out.Entities, e)
+		case hasID(e) && !sameID(mine.ID, e.ID):
+			detail := "recorded by a concurrent deploy; left in place, not deleted"
+			e.Action, e.Detail = ActionOrphaned, &detail
+			out.Entities = append(out.Entities, e)
+		}
+	}
+	return out
 }
 
 func (b *Bundles) recordPartial(ctx context.Context, record recorder, c authn.Caller, pkg *Bundle, in *bundleInstaller, row *store.BundleRow,
@@ -861,6 +940,6 @@ func (b *Bundles) recordPartial(ctx context.Context, record recorder, c authn.Ca
 	if err != nil {
 		return err
 	}
-	_, err = b.recordID(ctx, record, c, pkg, partial, "failed", row, origin)
+	_, _, err = b.recordID(ctx, record, c, pkg, partial, "failed", row, origin)
 	return err
 }

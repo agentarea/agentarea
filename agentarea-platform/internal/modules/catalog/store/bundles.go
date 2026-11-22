@@ -96,16 +96,21 @@ func (Bundles) Insert(ctx context.Context, s db.Session, createdBy string, r Bun
 }
 
 // Update records a redeploy over the row id, by updatedBy; the bundle's name
-// may have changed. False when the row is gone or was written after seen.
-func (Bundles) Update(ctx context.Context, s db.Session, id, updatedBy string, seen time.Time, r BundleRecord, now time.Time) (bool, error) {
+// may have changed. False when the row is gone, or was written after seen
+// when seen is given.
+func (Bundles) Update(ctx context.Context, s db.Session, id, updatedBy string, seen *time.Time, r BundleRecord, now time.Time) (bool, error) {
 	u, err := uuid.Parse(id)
 	if err != nil {
 		return false, err
 	}
-	n, err := New(s.Q()).UpdateInstalledBundle(ctx, UpdateInstalledBundleParams{Name: r.Name, DisplayName: text(r.DisplayName),
+	p := UpdateInstalledBundleParams{Name: r.Name, DisplayName: text(r.DisplayName),
 		Description: pgtype.Text{String: r.Description, Valid: true}, SchemaVersion: r.SchemaVersion, Status: r.Status,
 		Canonical: r.Canonical, InstallResult: r.InstallResult, Now: naive(now), UpdatedBy: text(&updatedBy), Source: r.Source,
-		ID: u, WorkspaceID: s.Workspace().ID(), SeenUpdatedAt: naive(seen)})
+		ID: u, WorkspaceID: s.Workspace().ID()}
+	if seen != nil {
+		p.SeenUpdatedAt = naive(*seen)
+	}
+	n, err := New(s.Q()).UpdateInstalledBundle(ctx, p)
 	return n == 1, err
 }
 

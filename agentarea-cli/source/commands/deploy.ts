@@ -20,7 +20,9 @@ import {
 	decideExisting,
 	folderFormat,
 	formatBundlePlan,
+	isDeployRunning,
 	isPlanChanged,
+	DEPLOY_RUNNING_MESSAGE,
 	PLAN_CHANGED_MESSAGE,
 	readGitOrigin,
 	resolveTarget,
@@ -367,6 +369,11 @@ export async function runDeploy(
 	const installed = await installBundleV1BundlesInstallPost({body});
 	if (isPlanChanged(installed.error)) {
 		console.error(PLAN_CHANGED_MESSAGE);
+		return 1;
+	}
+
+	if (isDeployRunning(installed.error)) {
+		console.error(DEPLOY_RUNNING_MESSAGE);
 		return 1;
 	}
 

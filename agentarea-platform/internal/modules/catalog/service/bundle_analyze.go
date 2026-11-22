@@ -1484,24 +1484,23 @@ func suppliedSecrets(b *Bundle, m BundleMCP, values wirejson.Object, supplied ma
 }
 
 // modelMoved is will_update for an otherwise unchanged agent whose model name
-// resolves to another instance than it did when last written, or to none.
+// resolves to another instance than it did when last written, or to none. A
+// record from before model_id has nothing to compare: the agent is unchanged,
+// and its next write records the instance.
 func (a *bundleAnalyzer) modelMoved(ctx context.Context, ag BundleAgent) (EntityStatus, *string, error) {
 	name := modelName(ag, a.values)
-	if name == "" || a.checks == nil {
+	owned := a.prior.owned(KindAgent, ag.Key)
+	if name == "" || a.checks == nil || owned == nil || owned.ModelID == nil {
 		return StatusUnchanged, nil, nil
 	}
 	id, problem, err := a.checks.modelID(ctx, name)
 	if err != nil {
 		return "", nil, err
 	}
-	var recorded *string
-	if owned := a.prior.owned(KindAgent, ag.Key); owned != nil {
-		recorded = owned.ModelID
-	}
 	switch {
 	case problem != "":
 		return StatusWillUpdate, nil, nil
-	case recorded == nil || *recorded != id:
+	case *owned.ModelID != id:
 		return StatusWillUpdate, strp(fmt.Sprintf("model '%s' now names instance %s", name, id)), nil
 	}
 	return StatusUnchanged, nil, nil

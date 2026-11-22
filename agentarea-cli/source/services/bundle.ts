@@ -248,6 +248,16 @@ export function isPlanChanged(error: unknown): boolean {
 	);
 }
 
+export const DEPLOY_RUNNING_MESSAGE =
+	'A deploy of this bundle is running; try again when it finishes. Nothing was deployed.';
+
+/** Install's 409: another deploy of the same bundle holds it right now. */
+export function isDeployRunning(error: unknown): boolean {
+	return (
+		(error as {code?: unknown} | undefined)?.code === 'bundle_deploy_running'
+	);
+}
+
 /** A remote URL without the user name or token it may carry. */
 export function stripCredentials(remote: string): string {
 	let url: URL;

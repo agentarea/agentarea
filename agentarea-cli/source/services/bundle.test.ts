@@ -6,6 +6,7 @@ import {
 	formatAgentMatrix,
 	formatBundleHeader,
 	formatBundlePlan,
+	isDeployRunning,
 	isPlanChanged,
 	resolveTarget,
 	stripCredentials,
@@ -324,6 +325,14 @@ test('isPlanChanged recognises only the 409 bundle_plan_changed problem', t => {
 	t.false(isPlanChanged({status: 409, code: 'conflict'}));
 	t.false(isPlanChanged(undefined));
 	t.false(isPlanChanged(new Error('network')));
+});
+
+test('isDeployRunning recognises only the 409 bundle_deploy_running problem', t => {
+	t.true(
+		isDeployRunning({status: 409, code: 'bundle_deploy_running', detail: 'x'}),
+	);
+	t.false(isDeployRunning({status: 409, code: 'bundle_plan_changed'}));
+	t.false(isDeployRunning(undefined));
 });
 
 test('formatBundlePlan prints the rename the server reports for an entity', t => {

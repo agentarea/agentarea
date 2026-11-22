@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -183,9 +184,8 @@ func isPlanChanged(err error) bool {
 	return errors.As(err, &be) && be.Kind == BundlePlanChanged
 }
 
-// A deploy holds the bundle name's lock from plan check to record: a first
-// install of the same name that commits meanwhile turns this one into a 409.
-func TestBundleInstallWaitsForTheNameLock(t *testing.T) {
+// A second deploy of a bundle name while one runs is refused at once, not queued behind it.
+func TestBundleInstallRefusesWhileADeployOfTheNameRuns(t *testing.T) {
 	b, _, ctx := newDBBundles(t)
 	c, _ := authn.CallerFrom(ctx)
 	first, err := b.AnalyzeText(ctx, demoBundle, demoValues(), BundleTarget{})
@@ -200,29 +200,75 @@ func TestBundleInstallWaitsForTheNameLock(t *testing.T) {
 			}
 			close(locked)
 			<-release
-			_, err := b.rows.Insert(ctx, sess, "someone", store.BundleRecord{Name: "demo", SchemaVersion: BundleSchemaVersion,
-				Status: "installed", Canonical: []byte(`{}`), InstallResult: []byte(`{"bundle_name":"demo","entities":[]}`)}, time.Now())
-			return err
+			return nil
 		})
 	}()
 	<-locked
-	done := make(chan error, 1)
-	go func() {
-		_, err := b.Install(ctx, first.Bundle, demoValues(), *first.PlanDigest, BundleTarget{})
-		done <- err
-	}()
-	select {
-	case err := <-done:
-		t.Fatalf("install did not wait for the lock: %v", err)
-	case <-time.After(300 * time.Millisecond):
-	}
+	_, err = b.Install(ctx, first.Bundle, demoValues(), *first.PlanDigest, BundleTarget{})
 	close(release)
 	if err := <-held; err != nil {
 		t.Fatal(err)
 	}
-	if err := <-done; !isPlanChanged(err) {
-		t.Fatalf("install after a concurrent first install: %v", err)
+	var be *BundleError
+	if !errors.As(err, &be) || be.Kind != BundleDeployRunning || be.Msg != "a deploy of this bundle is running; try again when it finishes" {
+		t.Fatalf("install while another runs: %v", err)
 	}
+	if _, err := b.Install(ctx, first.Bundle, demoValues(), *first.PlanDigest, BundleTarget{}); err != nil {
+		t.Fatalf("install once it finished: %v", err)
+	}
+}
+
+// A redeploy whose row was written meanwhile still records what it did, as a conflict, and asks for a new plan.
+func TestARecordOverANewerRevisionIsKeptAsAConflict(t *testing.T) {
+	b, _, ctx := newDBBundles(t)
+	c, _ := authn.CallerFrom(ctx)
+	theirs := InstallResult{BundleName: "demo", Entities: []InstalledEntity{
+		{Kind: KindAgent, Key: "agent", Name: "Demo", Action: ActionCreated, ID: strp("agent-theirs")},
+		{Kind: KindSkill, Key: "s1", Name: "Writer", Action: ActionCreated, ID: strp("skill-1")},
+	}}
+	pkg := mustParse(t, demoBundle)
+	own := func(ctx context.Context, fn func(context.Context, db.Session) error) error {
+		return b.d.DB.Write(ctx, c.Workspace, fn)
+	}
+	id, _, err := b.recordID(ctx, own, c, &pkg, theirs, "installed", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var row store.BundleRow
+	if err := b.read(ctx, c, func(sess db.Session) error { row, _, err = b.rows.ByID(ctx, sess, id); return err }); err != nil {
+		t.Fatal(err)
+	}
+	stale := row
+	stale.UpdatedAt = row.UpdatedAt.Add(-time.Second)
+	ours := InstallResult{BundleName: "demo", Entities: []InstalledEntity{
+		{Kind: KindAgent, Key: "agent", Name: "Demo", Action: ActionCreated, ID: strp("agent-ours")},
+	}}
+	_, conflict, err := b.recordID(ctx, own, c, &pkg, ours, "installed", &stale, nil)
+	if err != nil || !conflict {
+		t.Fatalf("record over a newer revision: conflict %v, %v", conflict, err)
+	}
+	prior, issue, err := b.prior(ctx, mustRow(t, b, ctx, id))
+	if err != nil || issue != nil {
+		t.Fatal(err, issue)
+	}
+	if got := actions(prior.result); !reflect.DeepEqual(got, []string{"agent:agent:created:agent-ours", "agent:agent:orphaned:agent-theirs",
+		"skill:s1:created:skill-1"}) {
+		t.Fatalf("recorded = %v", got)
+	}
+}
+
+func mustRow(t *testing.T, b *Bundles, ctx context.Context, id string) store.BundleRow {
+	t.Helper()
+	c, _ := authn.CallerFrom(ctx)
+	var row store.BundleRow
+	if err := b.read(ctx, c, func(sess db.Session) error {
+		var err error
+		row, _, err = b.rows.ByID(ctx, sess, id)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return row
 }
 
 func TestBundleRowUpdateRefusesAStaleRevision(t *testing.T) {
@@ -250,7 +296,8 @@ func TestBundleRowUpdateRefusesAStaleRevision(t *testing.T) {
 		var ok bool
 		if err := b.d.DB.Write(ctx, c.Workspace, func(ctx context.Context, sess db.Session) error {
 			var err error
-			ok, err = b.rows.Update(ctx, sess, id, "u", c2.seen, rec, time.Now().Add(time.Minute))
+			seen := c2.seen
+			ok, err = b.rows.Update(ctx, sess, id, "u", &seen, rec, time.Now().Add(time.Minute))
 			return err
 		}); err != nil {
 			t.Fatal(err)

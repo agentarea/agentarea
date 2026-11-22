@@ -10,6 +10,7 @@ import (
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx/wirejson"
 	catalogapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/catalog/api"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/catalog/store"
 )
 
 // created is one thing an install created and how to delete it again.
@@ -26,6 +27,8 @@ type created struct {
 type bundleInstaller struct {
 	w        *workspace
 	approved map[entityRef]bool
+	// row is the install this deploy updates; nil creates one.
+	row *store.BundleRow
 
 	prior          *priorInstall
 	pkg            *Bundle
@@ -66,7 +69,7 @@ func (in *bundleInstaller) install(ctx context.Context, b *Bundle, supplied wire
 	in.result = InstallResult{BundleName: b.Name, SetupValues: rememberedSetup(b, supplied, prior)}
 	in.created, in.updatedInPlace = nil, false
 	steps := []func(context.Context) error{in.installMCPs, in.installSkills, in.installAgents, in.installChannels,
-		in.installAutomations, in.installPolicies, in.recordOrphans, in.rediscoverMCPs}
+		in.installAutomations, in.installPolicies, in.recordOrphans}
 	for _, step := range steps {
 		if err := step(ctx); err != nil {
 			if in.updatedInPlace {
@@ -553,8 +556,19 @@ func (in *bundleInstaller) redeployMCP(ctx context.Context, m BundleMCP, id, nam
 	values, contextSecret := suppliedSecrets(in.pkg, m, in.values, in.supplied)
 	same, contextSame := map[string]bool{}, false
 	if len(values) > 0 || contextSecret != nil { // pragma: allowlist secret
-		if same, contextSame, err = w.b.d.MCPs.SecretsMatch(ctx, w.c, id, values, contextSecret); err != nil {
+		// Comparing needs edit on the instance: without it the update is refused below, by authorizeUpdate.
+		allowed, err := w.mayEdit(ctx, KindMCP, id)
+		if err != nil {
 			return InstalledEntity{}, err
+		}
+		if allowed {
+			same, contextSame, err = w.b.d.MCPs.SecretsMatch(ctx, w.c, id, values, contextSecret)
+			if _, refused := refusalOf(err); refused {
+				err = nil
+			}
+			if err != nil {
+				return InstalledEntity{}, err
+			}
 		}
 	}
 	differ := contextSecret != nil && !contextSame // pragma: allowlist secret
@@ -612,32 +626,53 @@ func (in *bundleInstaller) redeployMCP(ctx context.Context, m BundleMCP, id, nam
 	return e, nil
 }
 
-// rediscoverMCPs discovers again the tools of every MCP an earlier install
-// created, once everything is written, so agents see the ones it serves now.
-// A failure is the MCP's detail, never the install's: the writes are done.
-func (in *bundleInstaller) rediscoverMCPs(ctx context.Context) error {
+// rediscoverMCPs discovers again the tools of the MCPs this deploy created or
+// updated, and of the unchanged ones the caller may edit, once the install
+// committed: agents see the tools each serves now. The outcome is each MCP's
+// detail in result, never the install's: the writes are done.
+func (in *bundleInstaller) rediscoverMCPs(ctx context.Context, result *InstallResult) {
 	w := in.w
-	for i, e := range in.result.Entities {
-		if e.Kind != KindMCP || !hasID(e) || (e.Action != ActionUpdated && e.Action != ActionUnchanged) {
+	refused := "tools not re-discovered: you may not edit it"
+	for i, e := range result.Entities {
+		if e.Kind != KindMCP || !hasID(e) {
+			continue
+		}
+		set := func(d string) { result.Entities[i].Detail = &d }
+		switch e.Action {
+		case ActionCreated, ActionUpdated:
+		case ActionUnchanged:
+			allowed, err := w.mayEdit(ctx, KindMCP, *e.ID)
+			if err != nil {
+				w.b.d.Log.ErrorContext(ctx, "Could not check edit on a bundle's MCP", "mcp", e.Key, "instance_id", *e.ID, "error", err)
+				set("tools not re-discovered: " + err.Error())
+				continue
+			}
+			if !allowed {
+				set(refused)
+				continue
+			}
+		case ActionOrphaned, ActionReused, ActionSkipped:
 			continue
 		}
 		found, err := w.b.d.MCPs.Rediscover(ctx, w.c, *e.ID)
-		var detail string
+		if _, isRefusal := refusalOf(err); isRefusal {
+			set(refused)
+			continue
+		}
 		switch {
 		case err != nil:
 			w.b.d.Log.ErrorContext(ctx, "Could not re-discover the tools of a bundle's MCP", "mcp", e.Key, "instance_id", *e.ID, "error", err)
-			detail = "tools not re-discovered: " + err.Error()
+			set("tools not re-discovered: " + err.Error())
 		case found.Status != "succeeded":
-			detail = "tools not re-discovered: verification " + found.Status
+			d := "tools not re-discovered: verification " + found.Status
 			if found.Error != nil && *found.Error != "" {
-				detail += ": " + *found.Error
+				d += ": " + *found.Error
 			}
+			set(d)
 		default:
-			detail = fmt.Sprintf("tools re-discovered: %d", found.Tools)
+			set(fmt.Sprintf("tools re-discovered: %d", found.Tools))
 		}
-		in.result.Entities[i].Detail = &detail
 	}
-	return nil
 }
 
 // -- skills
