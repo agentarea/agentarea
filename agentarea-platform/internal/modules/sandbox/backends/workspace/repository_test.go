@@ -18,6 +18,8 @@ import (
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
+
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/config"
 )
 
 func TestRepositoryRejectsCrossTaskObjectBeforeSigning(t *testing.T) {
@@ -231,20 +233,29 @@ func TestManifestRefRejectsTraversalAndSignedURI(t *testing.T) {
 	}
 }
 
-func TestLoadConfigFromEnvUsesPlatformStorageFallbacksAndExplicitQuotas(t *testing.T) {
-	t.Setenv("AGENTAREA_SANDBOX_S3_BUCKET", "")
-	t.Setenv("AGENTAREA_SANDBOX_S3_REGION", "")
-	t.Setenv("AGENTAREA_SANDBOX_S3_ENDPOINT", "")
-	t.Setenv("AGENTAREA_SANDBOX_MAX_FILES", "10000")
-	t.Setenv("AGENTAREA_SANDBOX_MAX_FILE_SIZE", "268435456")
-	t.Setenv("AGENTAREA_SANDBOX_MAX_TOTAL_SIZE", "2147483648")
-	t.Setenv("AGENTAREA_SANDBOX_S3_URL_TTL", "1h")
-	t.Setenv("AGENTAREA_SANDBOX_S3_PATH_STYLE", "true")
-	t.Setenv("AGENTAREA_S3_ARTIFACTS_BUCKET", "artifacts-fallback")
-	t.Setenv("AGENTAREA_S3_REGION", "eu-west-2")
-	t.Setenv("AGENTAREA_S3_ENDPOINT", "http://rustfs:9000/")
+func workspacePolicyEnv() map[string]string {
+	return map[string]string{
+		"AGENTAREA_SANDBOX_MAX_FILES":      "10000",
+		"AGENTAREA_SANDBOX_MAX_FILE_SIZE":  "268435456",
+		"AGENTAREA_SANDBOX_MAX_TOTAL_SIZE": "2147483648",
+		"AGENTAREA_SANDBOX_S3_URL_TTL":     "1h",
+		"AGENTAREA_SANDBOX_S3_PATH_STYLE":  "true",
+	}
+}
 
-	cfg, err := LoadConfigFromEnv()
+func loadWorkspaceConfig(vars map[string]string) (RepositoryConfig, error) {
+	l := config.FromMap(vars)
+	cfg := LoadConfig(l)
+	return cfg, l.Err()
+}
+
+func TestLoadConfigUsesPlatformStorageFallbacksAndExplicitQuotas(t *testing.T) {
+	vars := workspacePolicyEnv()
+	vars["AGENTAREA_S3_ARTIFACTS_BUCKET"] = "artifacts-fallback"
+	vars["AGENTAREA_S3_REGION"] = "eu-west-2"
+	vars["AGENTAREA_S3_ENDPOINT"] = "http://rustfs:9000/"
+
+	cfg, err := loadWorkspaceConfig(vars)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,21 +265,21 @@ func TestLoadConfigFromEnvUsesPlatformStorageFallbacksAndExplicitQuotas(t *testi
 	if cfg.MaxFiles != 10_000 || cfg.MaxFileBytes != 256*1024*1024 || cfg.MaxBytes != 2*1024*1024*1024 {
 		t.Fatalf("workspace quota defaults = %#v", cfg)
 	}
-	if cfg.SignedURLTTL != time.Hour {
-		t.Fatalf("signed URL TTL = %s, want %s", cfg.SignedURLTTL, time.Hour)
+	if cfg.SignedURLTTL != time.Hour || !cfg.ForcePathStyle {
+		t.Fatalf("signed URL TTL = %s, path style %v", cfg.SignedURLTTL, cfg.ForcePathStyle)
 	}
 }
 
-func TestLoadConfigFromEnvPrefersWorkspaceOverrides(t *testing.T) {
-	setWorkspacePolicyEnv(t)
-	t.Setenv("AGENTAREA_S3_ARTIFACTS_BUCKET", "platform-bucket")
-	t.Setenv("AGENTAREA_S3_REGION", "platform-region")
-	t.Setenv("AGENTAREA_S3_ENDPOINT", "http://platform.invalid")
-	t.Setenv("AGENTAREA_SANDBOX_S3_BUCKET", "workspace-bucket")
-	t.Setenv("AGENTAREA_SANDBOX_S3_REGION", "workspace-region")
-	t.Setenv("AGENTAREA_SANDBOX_S3_ENDPOINT", "http://workspace.invalid/")
+func TestLoadConfigPrefersWorkspaceOverrides(t *testing.T) {
+	vars := workspacePolicyEnv()
+	vars["AGENTAREA_S3_ARTIFACTS_BUCKET"] = "platform-bucket"
+	vars["AGENTAREA_S3_REGION"] = "platform-region"
+	vars["AGENTAREA_S3_ENDPOINT"] = "http://platform.invalid"
+	vars["AGENTAREA_SANDBOX_S3_BUCKET"] = "workspace-bucket"
+	vars["AGENTAREA_SANDBOX_S3_REGION"] = "workspace-region"
+	vars["AGENTAREA_SANDBOX_S3_ENDPOINT"] = "http://workspace.invalid/"
 
-	cfg, err := LoadConfigFromEnv()
+	cfg, err := loadWorkspaceConfig(vars)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,20 +288,22 @@ func TestLoadConfigFromEnvPrefersWorkspaceOverrides(t *testing.T) {
 	}
 }
 
-func TestLoadConfigFromEnvRejectsMissingQuotaPolicy(t *testing.T) {
-	t.Setenv("AGENTAREA_SANDBOX_MAX_FILES", "")
-	if _, err := LoadConfigFromEnv(); err == nil {
-		t.Fatal("missing workspace quota policy unexpectedly accepted")
+func TestLoadConfigRejectsMissingQuotaPolicy(t *testing.T) {
+	vars := workspacePolicyEnv()
+	vars["AGENTAREA_S3_ARTIFACTS_BUCKET"] = "artifacts"
+	delete(vars, "AGENTAREA_SANDBOX_MAX_FILES")
+	if _, err := loadWorkspaceConfig(vars); err == nil || !strings.Contains(err.Error(), "AGENTAREA_SANDBOX_MAX_FILES") {
+		t.Fatalf("missing workspace quota policy unexpectedly accepted: %v", err)
 	}
 }
 
-func setWorkspacePolicyEnv(t *testing.T) {
-	t.Helper()
-	t.Setenv("AGENTAREA_SANDBOX_MAX_FILES", "10000")
-	t.Setenv("AGENTAREA_SANDBOX_MAX_FILE_SIZE", "268435456")
-	t.Setenv("AGENTAREA_SANDBOX_MAX_TOTAL_SIZE", "2147483648")
-	t.Setenv("AGENTAREA_SANDBOX_S3_URL_TTL", "1h")
-	t.Setenv("AGENTAREA_SANDBOX_S3_PATH_STYLE", "true")
+func TestLoadConfigRequiresABucketAndAPathStyle(t *testing.T) {
+	vars := workspacePolicyEnv()
+	delete(vars, "AGENTAREA_SANDBOX_S3_PATH_STYLE")
+	_, err := loadWorkspaceConfig(vars)
+	if err == nil || !strings.Contains(err.Error(), "AGENTAREA_SANDBOX_S3_BUCKET") || !strings.Contains(err.Error(), "AGENTAREA_SANDBOX_S3_PATH_STYLE") {
+		t.Fatalf("want bucket and path-style errors, got %v", err)
+	}
 }
 
 func TestRepositoryReleaseLeaseExpiresMatchingToken(t *testing.T) {

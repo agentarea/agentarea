@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/blob"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/netguard"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/domain"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/service/servicetest"
@@ -103,6 +105,19 @@ type fixture struct {
 	ws     scope.Workspace
 }
 
+// directClients hands every destination the default transport and records
+// which destinations were asked for.
+type directClients struct{ asked *[]netguard.Destination }
+
+func (c directClients) Transport(dest netguard.Destination) http.RoundTripper {
+	if c.asked != nil {
+		*c.asked = append(*c.asked, dest)
+	}
+	return http.DefaultTransport
+}
+
+func (directClients) Dialer() netguard.Dialer { return nil }
+
 func newFixture(t *testing.T, d Deps) fixture {
 	t.Helper()
 	ws, err := scope.NewWorkspace(wsID, "acme")
@@ -114,6 +129,9 @@ func newFixture(t *testing.T, d Deps) fixture {
 	d.DB, d.Blob, d.Events = fakeDB{}, st, ev
 	if d.Projects == nil {
 		d.Projects = projectIDs{"p1"}
+	}
+	if d.Out == nil {
+		d.Out = directClients{}
 	}
 	if d.Bucket == "" {
 		d.Bucket = "artifacts"

@@ -81,12 +81,12 @@ func toolNames(inst domain.Instance) []string {
 	return out
 }
 
-func (s *Service) instanceToolPolicies(inst domain.Instance, rules []WorkspaceRule, p governanceapi.Policy) []ToolPolicy {
+func (s *Service) instanceToolPolicies(inst domain.Instance, rules []WorkspaceRule, pdp *governanceapi.ToolRules) []ToolPolicy {
 	names := toolNames(inst)
 	out := make([]ToolPolicy, 0, len(names))
 	for _, n := range names {
 		out = append(out, ToolPolicyOf(n, "tool:"+toolname.MCPToolTarget(inst.ID, globLiteral(n)),
-			toolname.MCPToolTarget(inst.ID, n), toolname.MCPNarrowingNames(inst.Name, n), rules, p))
+			toolname.MCPToolTarget(inst.ID, n), toolname.MCPNarrowingNames(inst.Name, n), rules, pdp))
 	}
 	return out
 }
@@ -101,7 +101,7 @@ func (s *Service) InstanceToolPolicies(ctx context.Context, c authn.Caller, id u
 	if err != nil {
 		return nil, err
 	}
-	return s.instanceToolPolicies(inst, rules, p), nil
+	return s.instanceToolPolicies(inst, rules, governanceapi.CompileToolRules(&p)), nil
 }
 
 // InstanceTools is one instance's tools on the agent editor.
@@ -120,9 +120,10 @@ func (s *Service) WorkspaceToolPolicies(ctx context.Context, c authn.Caller) ([]
 	if err != nil {
 		return nil, err
 	}
+	pdp := governanceapi.CompileToolRules(&p)
 	out := make([]InstanceTools, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, InstanceTools{InstanceID: r.ID, Tools: s.instanceToolPolicies(r, rules, p)})
+		out = append(out, InstanceTools{InstanceID: r.ID, Tools: s.instanceToolPolicies(r, rules, pdp)})
 	}
 	return out, nil
 }

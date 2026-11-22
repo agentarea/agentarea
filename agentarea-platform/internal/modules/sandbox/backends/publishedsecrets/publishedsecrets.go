@@ -1,10 +1,7 @@
 // Package publishedsecrets refuses HMAC keys that the repository once shipped as values.
 package publishedsecrets
 
-import (
-	"fmt"
-	"os"
-)
+import "fmt"
 
 // Envs are the sandbox and MCP gateway HMAC keys that
 // .env.example and docker-compose.dev.yaml once shipped with concrete values.
@@ -35,12 +32,12 @@ func values() map[string]struct{} {
 	}
 }
 
-// Reject fails when any of Envs holds a value
+// Reject fails when any of Envs, read through getenv, holds a value
 // that was published in the AgentArea repository.
-func Reject() error {
+func Reject(getenv func(string) string) error {
 	published := values()
 	for _, name := range Envs() {
-		if _, ok := published[os.Getenv(name)]; ok {
+		if _, ok := published[getenv(name)]; ok {
 			return fmt.Errorf("%s is set to a value published in the AgentArea repository; generate a new one (scripts/gen-dev-secrets.sh rotates it) and restart every service that shares it", name)
 		}
 	}

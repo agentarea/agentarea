@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +30,8 @@ type dockerTaskRetirement struct {
 // AGENTAREA_SANDBOX_ALLOW_WEAK_ISOLATION=true.
 type Docker struct {
 	executorURL         string
+	allowWeakIsolation  bool
+	executor            warmpool.Executor
 	logger              *slog.Logger
 	retirementMu        sync.Mutex
 	retirements         map[string]*dockerTaskRetirement
@@ -41,14 +42,17 @@ type Docker struct {
 	executorIncarnation string
 }
 
-// NewDocker is the shared-executor sandbox at executorURL.
-func NewDocker(executorURL string, logger *slog.Logger) *Docker {
+// NewDocker is the shared-executor sandbox at executorURL; allowWeakIsolation
+// is AGENTAREA_SANDBOX_ALLOW_WEAK_ISOLATION=true.
+func NewDocker(executorURL string, allowWeakIsolation bool, executor warmpool.Executor, logger *slog.Logger) *Docker {
 	return &Docker{
-		executorURL: executorURL,
-		logger:      logger,
-		retirements: make(map[string]*dockerTaskRetirement),
-		activeOps:   make(map[string]int),
-		hydrated:    make(map[string]string),
+		executorURL:        executorURL,
+		allowWeakIsolation: allowWeakIsolation,
+		executor:           executor,
+		logger:             logger,
+		retirements:        make(map[string]*dockerTaskRetirement),
+		activeOps:          make(map[string]int),
+		hydrated:           make(map[string]string),
 	}
 }
 
@@ -61,7 +65,7 @@ func NewDocker(executorURL string, logger *slog.Logger) *Docker {
 // refused to start at all. Sandbox callers hit it here instead, where the
 // weak-isolation decision actually applies.
 func (d *Docker) sharedExecutorBase() (string, error) {
-	if os.Getenv("AGENTAREA_SANDBOX_ALLOW_WEAK_ISOLATION") != "true" {
+	if !d.allowWeakIsolation {
 		return "", fmt.Errorf("docker shared sandbox executor is development-only; set AGENTAREA_SANDBOX_ALLOW_WEAK_ISOLATION=true explicitly")
 	}
 	base := strings.TrimRight(d.executorURL, "/")
@@ -76,7 +80,7 @@ func (d *Docker) RuntimeManifest(ctx context.Context) (*runtimeinfo.Manifest, er
 	if err != nil {
 		return nil, err
 	}
-	return warmpool.GetRuntimeManifest(ctx, base, 10*time.Second)
+	return d.executor.GetRuntimeManifest(ctx, base, 10*time.Second)
 }
 
 // EnsureWorkspaceHydrated coordinates the explicitly development-only shared
@@ -126,7 +130,7 @@ func (d *Docker) observeExecutorIncarnation(ctx context.Context) (string, bool, 
 	if err != nil {
 		return "", false, err
 	}
-	incarnation, err := warmpool.GetExecutorIncarnation(ctx, base, 10*time.Second)
+	incarnation, err := d.executor.GetExecutorIncarnation(ctx, base, 10*time.Second)
 	if err != nil {
 		return "", false, err
 	}
@@ -161,7 +165,7 @@ func (d *Docker) ExecuteSandbox(ctx context.Context, req warmpool.ExecuteRequest
 		return nil, err
 	}
 	defer finish()
-	result, err := warmpool.PostExecute(ctx, base+"/execute", req, 30*time.Second)
+	result, err := d.executor.PostExecute(ctx, base+"/execute", req, 30*time.Second)
 	return result, mapDockerExecutorError(err)
 }
 
@@ -188,7 +192,7 @@ func (d *Docker) SandboxFilePut(ctx context.Context, req warmpool.FilePutRequest
 		return nil, err
 	}
 	defer finish()
-	result, err := warmpool.PutFile(ctx, base, req, 30*time.Second)
+	result, err := d.executor.PutFile(ctx, base, req, 30*time.Second)
 	return result, mapDockerExecutorError(err)
 }
 
@@ -208,7 +212,7 @@ func (d *Docker) SandboxFileUpload(ctx context.Context, req sandboxruntime.FileU
 		return nil, err
 	}
 	defer finish()
-	result, err := warmpool.PutFileStream(ctx, base, warmpool.FileTransferRequest{
+	result, err := d.executor.PutFileStream(ctx, base, warmpool.FileTransferRequest{
 		WorkspaceID: req.WorkspaceID, TaskID: req.TaskID,
 		ExecutorIncarnation: incarnation,
 		Path:                req.Path, Size: req.Size, SHA256: req.SHA256, Mode: uint32(req.Mode),
@@ -237,7 +241,7 @@ func (d *Docker) SandboxFileGet(ctx context.Context, workspaceID, taskID, path s
 		return nil, err
 	}
 	defer finish()
-	result, err := warmpool.GetFileForIncarnation(ctx, base, workspaceID, taskID, path, incarnation, 30*time.Second)
+	result, err := d.executor.GetFileForIncarnation(ctx, base, workspaceID, taskID, path, incarnation, 30*time.Second)
 	return result, mapDockerExecutorError(err)
 }
 
@@ -257,7 +261,7 @@ func (d *Docker) SandboxFileDownload(ctx context.Context, workspaceID, taskID, p
 	if err != nil {
 		return nil, err
 	}
-	result, err := warmpool.OpenFileForIncarnation(ctx, base, workspaceID, taskID, path, incarnation, 10*time.Minute)
+	result, err := d.executor.OpenFileForIncarnation(ctx, base, workspaceID, taskID, path, incarnation, 10*time.Minute)
 	if err != nil {
 		finish()
 		return nil, mapDockerExecutorError(err)
@@ -283,7 +287,7 @@ func (d *Docker) SandboxFileList(ctx context.Context, workspaceID, taskID, prefi
 		return nil, err
 	}
 	defer finish()
-	result, err := warmpool.ListFilesForIncarnation(ctx, base, workspaceID, taskID, prefix, incarnation, 30*time.Second)
+	result, err := d.executor.ListFilesForIncarnation(ctx, base, workspaceID, taskID, prefix, incarnation, 30*time.Second)
 	return result, mapDockerExecutorError(err)
 }
 
@@ -467,7 +471,7 @@ func (d *Docker) deleteTaskWorkspace(ctx context.Context, workspaceID, taskID st
 	if err != nil {
 		return err
 	}
-	if err := warmpool.DeleteTaskWorkspace(ctx, base, workspaceID, taskID, 30*time.Second); err != nil {
+	if err := d.executor.DeleteTaskWorkspace(ctx, base, workspaceID, taskID, 30*time.Second); err != nil {
 		return err
 	}
 	d.hydrationMu.Lock()

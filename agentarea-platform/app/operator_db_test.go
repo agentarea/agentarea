@@ -49,7 +49,7 @@ func TestTheOperatorWritesEachDeclarationOnceThroughItsOwners(t *testing.T) {
 	}
 	session := secrets.NewSession(factory)
 	models := modelsservice.New(modelsservice.Deps{DB: d, Store: modelsstore.Store{}, Secrets: session})
-	connections := connectionsservice.New(connectionsservice.Deps{DB: d, Secrets: session})
+	connections := connectionsservice.New(connectionsservice.Deps{DB: d, Secrets: session, Stamps: connectionsservice.NewStamps(), Verdicts: connectionsservice.NewVerdicts()})
 	r := operator.New(operator.Deps{
 		Catalog: catalogservice.New(catalogservice.Deps{DB: d, Specs: catalogstore.Specs{}}).Platform(), Models: models,
 		Connections: connections, Egress: governanceservice.New(governanceservice.Deps{DB: d}),

@@ -19,6 +19,8 @@ import (
 	"time"
 )
 
+var errNoManagerClient = errors.New("the sandbox manager is unreachable: no outbound clients were given")
+
 // publishedSecret is PUBLISHED_SECRET_VALUES: secrets printed in the repository.
 func publishedSecret(v string) bool {
 	switch v {
@@ -140,7 +142,10 @@ func (s *Service) call(ctx context.Context, method, rawURL string, h http.Header
 	for k, vs := range h {
 		req.Header[k] = vs
 	}
-	resp, err := s.d.HTTP.Do(req)
+	if s.http == nil {
+		return managerResponse{}, errNoManagerClient
+	}
+	resp, err := s.http.Do(req)
 	if err != nil {
 		return managerResponse{}, err
 	}

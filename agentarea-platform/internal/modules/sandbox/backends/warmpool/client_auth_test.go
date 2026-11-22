@@ -18,8 +18,32 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/workspace"
 )
 
+var testSecret = []byte(strings.Repeat("s", 32))
+
+func testExecutor() Executor { return Executor{Transport: http.DefaultTransport, Secret: testSecret} }
+
+type recordingTransport struct{ hosts []string }
+
+func (r *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.hosts = append(r.hosts, req.URL.Host)
+	return http.DefaultTransport.RoundTrip(req)
+}
+
+func TestExecutorSendsThroughItsTransport(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	transport := &recordingTransport{}
+	if err := (Executor{Transport: transport, Secret: testSecret}).DeleteTaskWorkspace(context.Background(), server.URL, "workspace-1", "task-1", time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if len(transport.hosts) != 1 || "http://"+transport.hosts[0] != server.URL {
+		t.Fatalf("requests through the injected transport = %v, want one to %s", transport.hosts, server.URL)
+	}
+}
+
 func TestPostExecuteUsesTaskBoundBearerToken(t *testing.T) {
-	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
 	digest := strings.Repeat("a", 64)
 	ref := &workspace.ManifestRef{
 		SchemaVersion: workspace.SchemaVersion, WorkspaceID: "workspace-1", TaskID: "task-1",
@@ -38,11 +62,11 @@ func TestPostExecuteUsesTaskBoundBearerToken(t *testing.T) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		err = activationauth.VerifyFromEnv(token, activationauth.ScopeExecute, activationauth.Identity{
+		err = activationauth.Verify(token, testSecret, activationauth.ScopeExecute, activationauth.Identity{
 			WorkspaceID: "workspace-1", TaskID: "task-1", Generation: 0, FencingToken: 1,
 		}, activationauth.BodySHA256(body), time.Now())
 		if err != nil {
-			t.Errorf("VerifyFromEnv() error = %v", err)
+			t.Errorf("Verify() error = %v", err)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -50,7 +74,7 @@ func TestPostExecuteUsesTaskBoundBearerToken(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, err := PostExecute(context.Background(), server.URL, ExecuteRequest{
+	_, err := testExecutor().PostExecute(context.Background(), server.URL, ExecuteRequest{
 		CommandBody: "echo ok", WorkspaceID: "workspace-1", TaskID: "task-1",
 		WorkspaceManifestRef: ref,
 	}, time.Second)
@@ -60,7 +84,6 @@ func TestPostExecuteUsesTaskBoundBearerToken(t *testing.T) {
 }
 
 func TestPostWritebackUsesSeparateScope(t *testing.T) {
-	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, readErr := io.ReadAll(r.Body)
 		if readErr != nil {
@@ -72,11 +95,11 @@ func TestPostWritebackUsesSeparateScope(t *testing.T) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		err = activationauth.VerifyFromEnv(token, activationauth.ScopeWriteback, activationauth.Identity{
+		err = activationauth.Verify(token, testSecret, activationauth.ScopeWriteback, activationauth.Identity{
 			WorkspaceID: "workspace-1", TaskID: "task-1", Generation: 2, FencingToken: 7,
 		}, activationauth.BodySHA256(body), time.Now())
 		if err != nil {
-			t.Errorf("VerifyFromEnv() error = %v", err)
+			t.Errorf("Verify() error = %v", err)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -84,7 +107,7 @@ func TestPostWritebackUsesSeparateScope(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, err := PostWriteback(context.Background(), server.URL, workspace.WritebackRequest{
+	_, err := testExecutor().PostWriteback(context.Background(), server.URL, workspace.WritebackRequest{
 		WorkspaceID: "workspace-1", TaskID: "task-1", BaseGeneration: 2, FencingToken: 7,
 	}, time.Second)
 	if err != nil {
@@ -93,9 +116,8 @@ func TestPostWritebackUsesSeparateScope(t *testing.T) {
 }
 
 func TestPostExecuteFailsClosedWithoutAuthSecret(t *testing.T) {
-	t.Setenv(activationauth.SecretEnv, "")
 	ref := &workspace.ManifestRef{WorkspaceID: "workspace-1", TaskID: "task-1", Generation: 1, FencingToken: 1}
-	_, err := PostExecute(context.Background(), "http://127.0.0.1:1", ExecuteRequest{
+	_, err := Executor{Transport: http.DefaultTransport}.PostExecute(context.Background(), "http://127.0.0.1:1", ExecuteRequest{
 		CommandBody: "echo ok", WorkspaceID: "workspace-1", TaskID: "task-1",
 		WorkspaceManifestRef: ref,
 	}, time.Second)
@@ -105,7 +127,6 @@ func TestPostExecuteFailsClosedWithoutAuthSecret(t *testing.T) {
 }
 
 func TestDeleteTaskWorkspaceUsesSeparateTaskBoundScope(t *testing.T) {
-	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete || r.URL.Path != "/workspace/task" ||
 			r.URL.Query().Get("workspace_id") != "workspace-1" || r.URL.Query().Get("task_id") != "task-1" {
@@ -119,11 +140,11 @@ func TestDeleteTaskWorkspaceUsesSeparateTaskBoundScope(t *testing.T) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		err = activationauth.VerifyFromEnv(token, activationauth.ScopeCleanup, activationauth.Identity{
+		err = activationauth.Verify(token, testSecret, activationauth.ScopeCleanup, activationauth.Identity{
 			WorkspaceID: "workspace-1", TaskID: "task-1", Generation: 0, FencingToken: 1,
 		}, activationauth.BodySHA256(nil), time.Now())
 		if err != nil {
-			t.Errorf("VerifyFromEnv() error = %v", err)
+			t.Errorf("Verify() error = %v", err)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -131,28 +152,26 @@ func TestDeleteTaskWorkspaceUsesSeparateTaskBoundScope(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if err := DeleteTaskWorkspace(context.Background(), server.URL, "workspace-1", "task-1", time.Second); err != nil {
+	if err := testExecutor().DeleteTaskWorkspace(context.Background(), server.URL, "workspace-1", "task-1", time.Second); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestFileReadMapsReclaimedWorkspaceToTypedGone(t *testing.T) {
-	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "gone", http.StatusGone)
 	}))
 	defer server.Close()
 
-	if _, err := GetFile(context.Background(), server.URL, "workspace-1", "task-1", "report.txt", time.Second); !errors.Is(err, ErrTaskWorkspaceGone) {
+	if _, err := testExecutor().GetFile(context.Background(), server.URL, "workspace-1", "task-1", "report.txt", time.Second); !errors.Is(err, ErrTaskWorkspaceGone) {
 		t.Fatalf("GetFile() error = %v, want ErrTaskWorkspaceGone", err)
 	}
-	if _, err := ListFiles(context.Background(), server.URL, "workspace-1", "task-1", "", time.Second); !errors.Is(err, ErrTaskWorkspaceGone) {
+	if _, err := testExecutor().ListFiles(context.Background(), server.URL, "workspace-1", "task-1", "", time.Second); !errors.Is(err, ErrTaskWorkspaceGone) {
 		t.Fatalf("ListFiles() error = %v, want ErrTaskWorkspaceGone", err)
 	}
 }
 
 func TestPutFileStreamSignsAndTransfersRawContent(t *testing.T) {
-	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
 	content := bytes.Repeat([]byte("x"), 1024*1024+7)
 	digest := sha256.Sum256(content)
 	digestHex := hex.EncodeToString(digest[:])
@@ -168,10 +187,10 @@ func TestPutFileStreamSignsAndTransfersRawContent(t *testing.T) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		if err := activationauth.VerifyFromEnv(token, activationauth.ScopeFiles, activationauth.Identity{
+		if err := activationauth.Verify(token, testSecret, activationauth.ScopeFiles, activationauth.Identity{
 			WorkspaceID: "workspace-1", TaskID: "task-1", Generation: 0, FencingToken: 1,
 		}, activationauth.TransferSHA256(http.MethodPut, "inputs/data.bin", int64(len(content)), 0o600, digestHex), time.Now()); err != nil {
-			t.Errorf("VerifyFromEnv() error = %v", err)
+			t.Errorf("Verify() error = %v", err)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -183,7 +202,7 @@ func TestPutFileStreamSignsAndTransfersRawContent(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result, err := PutFileStream(context.Background(), server.URL, FileTransferRequest{
+	result, err := testExecutor().PutFileStream(context.Background(), server.URL, FileTransferRequest{
 		WorkspaceID: "workspace-1", TaskID: "task-1", Path: "inputs/data.bin",
 		Size: int64(len(content)), SHA256: digestHex,
 		Mode: 0o600,

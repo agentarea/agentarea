@@ -4,17 +4,14 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"net/http"
-	"os"
 	"strings"
 )
-
-const sandboxCleanupAuthSecretEnv = "AGENTAREA_SANDBOX_CLEANUP_SECRET"
 
 // deleteSandboxTask retires the sandbox state for a finished task. In K8s it
 // marks the task pod idle and schedules deletion after AGENTAREA_SANDBOX_IDLE_TTL;
 // the GC loop performs the actual delete.
 func (h *Handler) deleteSandboxTask(c *reqctx) {
-	if !sandboxCleanupAuthorized(c.GetHeader("Authorization"), os.Getenv(sandboxCleanupAuthSecretEnv)) {
+	if !sandboxCleanupAuthorized(c.GetHeader("Authorization"), h.secrets.Cleanup) {
 		c.JSON(http.StatusUnauthorized, jsonObject{"error": "unauthorized", "message": "valid cleanup bearer token is required"})
 		return
 	}

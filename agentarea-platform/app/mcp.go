@@ -20,7 +20,6 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/config"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx"
-	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/lifecycle"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/money"
 	knetguard "github.com/agentarea/agentarea/agentarea-platform/internal/kernel/netguard"
 	kobs "github.com/agentarea/agentarea/agentarea-platform/internal/kernel/obs"
@@ -36,8 +35,8 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/connections/runtime/workload"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/connections/service"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/plane"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/profiles/cluster"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/profiles/cluster/netguard"
-	clusterobs "github.com/agentarea/agentarea/agentarea-platform/internal/profiles/cluster/obs"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/profiles/cluster/secrets"
 )
 
@@ -161,12 +160,11 @@ func dockerValidator(b *docker.Backend) runtime.Validator {
 // database, or, with AGENTAREA_MCP_MODE=dataplane, a remote workload host.
 func (b *Build) runMCP(ctx context.Context) error {
 	l := config.New(b.lookup)
-	common := config.LoadCommon(l)
 	mode := l.OneOfEnv("AGENTAREA_MCP_MODE", "", mcpHostMode)
 	if mode == mcpHostMode {
-		return b.runMCPHost(ctx, l, common)
+		return b.runMCPHost(ctx, l)
 	}
-	return b.runMCPControl(ctx, l, common)
+	return b.runMCPControl(ctx, l)
 }
 
 func mcpListen(l *config.Loader) string {
@@ -178,48 +176,32 @@ func mcpListen(l *config.Loader) string {
 	return net.JoinHostPort(host, strconv.Itoa(port))
 }
 
-func (b *Build) runMCPControl(ctx context.Context, l *config.Loader, common config.Common) (err error) {
+func (b *Build) runMCPControl(ctx context.Context, l *config.Loader) (err error) {
 	addr := mcpListen(l)
 	dbCfg := db.LoadConfig(l)
 	secretsCfg := ksecrets.LoadConfig(l)
-	outCfg := knetguard.LoadConfig(l)
 	spend := money.LoadSpendCurrency(l)
 	mc := loadMCPConfig(l)
 	sc := plane.LoadConfig(l)
-	if err := l.Err(); err != nil {
-		return fmt.Errorf("configuration: %w", err)
-	}
-	log := newLogger(b.stderr, common).With("component", "mcp")
-	tel, err := clusterobs.Setup(ctx, clusterobs.Options{Enabled: common.OTelEnabled, Service: "agentarea-mcp",
-		Version: buildVersion(), Environment: common.Env, Getenv: func(name string) string { v, _ := b.lookup(name); return v }})
+	rb, err := b.bootstrap(ctx, l, "mcp")
 	if err != nil {
-		return fmt.Errorf("telemetry: %w", err)
+		return err
 	}
-	defer func() { err = errors.Join(err, tel.Shutdown(context.WithoutCancel(ctx))) }()
-	pools, err := db.Open(ctx, dbCfg, log)
+	defer func() { err = errors.Join(err, rb.close()) }()
+	log := rb.log
+	stores, err := cluster.OpenStores(ctx, cluster.StoresConfig{DB: dbCfg, Secrets: secretsCfg, RedisURL: sc.RedisURL, Outbound: rb.outbound}, log)
 	if err != nil {
-		return fmt.Errorf("database: %w", err)
+		return err
 	}
-	defer pools.Close()
-	sf, err := secrets.NewFactory(secretsCfg, &http.Client{})
-	if err != nil {
-		return fmt.Errorf("secrets: %w", err)
-	}
-	trust, err := netguard.LoadTrust(outCfg.ExtraCACerts)
-	if err != nil {
-		return fmt.Errorf("outbound trust: %w", err)
-	}
-	outbound, err := netguard.New(outCfg, trust, log, netguard.Options{})
-	if err != nil {
-		return fmt.Errorf("outbound: %w", err)
-	}
-	exts, err := b.resolveExtensions(ctx, ext.Deps{Logger: log, Config: config.New(b.lookup), DB: pools,
-		Secrets: workspaceSecrets{db: pools, secrets: sf}}, spend)
+	defer func() { err = errors.Join(err, stores.Close()) }()
+	extDeps := rb.ext
+	extDeps.DB, extDeps.Secrets = stores.DB, workspaceSecrets{db: stores.DB, secrets: stores.Secrets}
+	exts, err := b.resolveExtensions(ctx, extDeps, spend)
 	if err != nil {
 		return err
 	}
 	defer func() { err = errors.Join(err, exts.Close()) }()
-	rt, sampler, err := newMCPRuntime(ctx, mc, mcpDeps{DB: pools, Secrets: sf, Outbound: outbound, Hooks: exts.WorkloadHooks, Log: log})
+	rt, sampler, err := newMCPRuntime(ctx, mc, mcpDeps{DB: stores.DB, Secrets: stores.Secrets, Outbound: rb.outbound, Hooks: exts.WorkloadHooks, Log: log})
 	if err != nil {
 		return err
 	}
@@ -229,13 +211,12 @@ func (b *Build) runMCPControl(ctx context.Context, l *config.Loader, common conf
 	}
 	mux := http.NewServeMux()
 	gw.Routes(mux)
-	sb, err := plane.Open(ctx, sc, sandboxBuiltin(mc.Runtime.Backend), sandboxHooks(exts.WorkloadHooks, false), log.With("component", "sandbox"))
+	sb, err := openSandbox(ctx, sc, stores.Redis, sandboxBuiltin(mc.Runtime.Backend), rb.outbound, sandboxHooks(exts.WorkloadHooks, false), log.With("component", "sandbox"))
 	if err != nil {
 		return err
 	}
-	defer func() { err = errors.Join(err, sb.Close()) }()
 	var artifacts ext.ArtifactStorage
-	if err := sb.Routes(ctx, mux, artifactHooks(exts.WorkloadHooks, &artifacts)...); err != nil {
+	if err := sb.Routes(mux, artifactHooks(exts.WorkloadHooks, &artifacts)...); err != nil {
 		return err
 	}
 	if mc.Storage.ManagerURL != "" {
@@ -252,32 +233,28 @@ func (b *Build) runMCPControl(ctx context.Context, l *config.Loader, common conf
 	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
-		if err := pools.Ping(r.Context()); err != nil {
+		if err := stores.DB.Ping(r.Context()); err != nil {
 			log.Warn("mcp role not ready", "error", err)
 			http.Error(w, "database unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
 	})
-	if err := attachWorkloads(ctx, exts.WorkloadHooks, ext.Workloads{Redis: sb.Redis(), Backend: mc.Runtime.Backend,
+	if err := attachWorkloads(ctx, exts.WorkloadHooks, ext.Workloads{Redis: stores.Redis, Backend: mc.Runtime.Backend,
 		Runtime: sampler, SandboxProvider: sb.Provider, Allocations: sb.Allocations(), Artifacts: artifacts}); err != nil {
 		return err
 	}
-	g := lifecycle.NewGroup(lifecycle.Options{StartupTimeout: common.StartupTimeout, ShutdownTimeout: common.ShutdownTimeout})
+	g := rb.group()
 	g.Add(newHTTPComponent("mcp", addr, mux, log), &runComponent{name: "mcp-reaper", run: rt.Run, log: log})
 	g.Add(&runComponent{name: "sandbox task GC", run: sb.GC, log: log})
 	if sb.EmbeddedRunner() {
 		g.Add(&runComponent{name: "sandbox runner", run: sb.Run, log: log})
 	}
-	for i, h := range exts.WorkloadHooks {
-		if h.Run != nil {
-			g.Add(&runComponent{name: fmt.Sprintf("workload hooks %d", i+1), run: h.Run, close: h.Close, log: log})
-		}
-	}
+	runWorkloadHooks(g, exts.WorkloadHooks, log)
 	return g.Run(ctx)
 }
 
-func (b *Build) runMCPHost(ctx context.Context, l *config.Loader, common config.Common) (err error) {
+func (b *Build) runMCPHost(ctx context.Context, l *config.Loader) (err error) {
 	hc := dataplane.LoadHostConfig(l)
 	rc := runtime.Config{Backend: runtime.LoadBackend(l)}
 	var dc docker.Config
@@ -290,10 +267,12 @@ func (b *Build) runMCPHost(ctx context.Context, l *config.Loader, common config.
 	default:
 		l.Fail("AGENTAREA_MCP_BACKEND", errors.New("a data-plane host runs workloads itself: docker or kubernetes"))
 	}
-	if err := l.Err(); err != nil {
-		return fmt.Errorf("configuration: %w", err)
+	rb, err := b.bootstrap(ctx, l, "mcp-host")
+	if err != nil {
+		return err
 	}
-	log := newLogger(b.stderr, common).With("component", "mcp-host")
+	defer func() { err = errors.Join(err, rb.close()) }()
+	log := rb.log
 	var backend workload.Backend
 	var sampler ext.RuntimeSampler
 	if rc.Backend == runtime.BackendDocker {
@@ -312,8 +291,7 @@ func (b *Build) runMCPHost(ctx context.Context, l *config.Loader, common config.
 		}
 		backend, sampler = kb, kb.Sampler(hc.ID)
 	}
-	extDeps := ext.Deps{Logger: log, Config: config.New(b.lookup)}
-	exts, err := b.resolveWorkloadHooks(ctx, extDeps)
+	exts, err := b.resolveWorkloadHooks(ctx, rb.ext)
 	if err != nil {
 		return err
 	}
@@ -326,7 +304,7 @@ func (b *Build) runMCPHost(ctx context.Context, l *config.Loader, common config.
 			if h.HostRoutes == nil {
 				continue
 			}
-			if err := h.HostRoutes(ctx, extDeps, r); err != nil {
+			if err := h.HostRoutes(ctx, rb.ext, r); err != nil {
 				return err
 			}
 		}
@@ -335,13 +313,9 @@ func (b *Build) runMCPHost(ctx context.Context, l *config.Loader, common config.
 	if err != nil {
 		return err
 	}
-	g := lifecycle.NewGroup(lifecycle.Options{StartupTimeout: common.StartupTimeout, ShutdownTimeout: common.ShutdownTimeout})
+	g := rb.group()
 	g.Add(newHTTPComponent("mcp-host", hc.Addr, handler, log))
-	for i, h := range exts.WorkloadHooks {
-		if h.Run != nil {
-			g.Add(&runComponent{name: fmt.Sprintf("workload hooks %d", i+1), run: h.Run, close: h.Close, log: log})
-		}
-	}
+	runWorkloadHooks(g, exts.WorkloadHooks, log)
 	return g.Run(ctx)
 }
 

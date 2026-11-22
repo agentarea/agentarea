@@ -265,7 +265,7 @@ func (s *Service) callSetup(ctx context.Context, ws scope.Workspace, inst domain
 		}
 	}
 	o = mcpclient.Options{URL: t.url, Transport: t.declared, RoundTripper: t.transport, Headers: h,
-		ReadTimeout: timeout + toolTimeoutGrace, Verdicts: eraVerdicts, VerdictKey: mcpclient.VerdictKey(inst.ID, merged)}
+		ReadTimeout: timeout + toolTimeoutGrace, Verdicts: s.d.Verdicts, VerdictKey: mcpclient.VerdictKey(inst.ID, merged)}
 	return o, callHeaders, meta, timeout, nil
 }
 

@@ -22,10 +22,7 @@ type Durable struct {
 // Open loads kernel.Config from l and dials Temporal with TEMPORAL_* read
 // from the process environment. Every configuration problem is reported at once.
 func Open(ctx context.Context, l *config.Loader, logger *slog.Logger) (*Durable, error) {
-	cfg := kernel.Load(l)
-	if _, err := temporal.ConnectOptions(nil); err != nil {
-		l.Fail("TEMPORAL_ADDRESS", err)
-	}
+	cfg := LoadConfig(l)
 	if err := l.Err(); err != nil {
 		return nil, err
 	}
@@ -36,16 +33,19 @@ func Open(ctx context.Context, l *config.Loader, logger *slog.Logger) (*Durable,
 	return &Durable{Config: cfg, client: c}, nil
 }
 
-// OpenLazy is Open without the connection: the client dials on first use, so
-// the serve role starts while Temporal is still coming up.
-func OpenLazy(l *config.Loader, logger *slog.Logger) (*Durable, error) {
+// LoadConfig reads kernel.Config from l and checks TEMPORAL_* in the process
+// environment; l reports what is wrong.
+func LoadConfig(l *config.Loader) kernel.Config {
 	cfg := kernel.Load(l)
 	if _, err := temporal.ConnectOptions(nil); err != nil {
 		l.Fail("TEMPORAL_ADDRESS", err)
 	}
-	if err := l.Err(); err != nil {
-		return nil, err
-	}
+	return cfg
+}
+
+// OpenLazy is Open over a checked cfg without the connection: the client
+// dials on first use, so the serve role starts while Temporal is still coming up.
+func OpenLazy(cfg kernel.Config, logger *slog.Logger) (*Durable, error) {
 	c, err := temporal.DialLazy(cfg, nil, logger)
 	if err != nil {
 		return nil, err

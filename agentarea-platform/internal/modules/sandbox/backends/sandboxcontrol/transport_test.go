@@ -23,14 +23,14 @@ import (
 func TestRedisCASAllowsOnlyOneConcurrentQueuedTransition(t *testing.T) {
 	server := miniredis.RunT(t)
 	store, err := NewRedisStore(
-		"redis://"+server.Addr(), "cas", time.Hour,
+		redis.NewClient(&redis.Options{Addr: server.Addr()}), "cas", time.Hour,
 		testExecutionPolicy(testMaxExecutionTimeoutSeconds),
 		WithEventStreams("cas.requests", "cas.events", "test"),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.RedisClient().Close() }()
 	service := newTestService(t, store, testMaxExecutionTimeoutSeconds)
 	record, err := service.CreateExecution(context.Background(), ExecutionCreateRequest{
 		WorkspaceID: "workspace-1", TaskID: "task-1",
@@ -149,11 +149,11 @@ func TestExecutionContractsRejectCallerControlledBodyChannels(t *testing.T) {
 
 func TestRedisStoreRejectsNonInternalMetadata(t *testing.T) {
 	server := miniredis.RunT(t)
-	store, err := NewRedisStore("redis://"+server.Addr(), "agentarea:sandbox", time.Hour, testExecutionPolicy(testMaxExecutionTimeoutSeconds))
+	store, err := NewRedisStore(redis.NewClient(&redis.Options{Addr: server.Addr()}), "agentarea:sandbox", time.Hour, testExecutionPolicy(testMaxExecutionTimeoutSeconds))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.RedisClient().Close() }()
 	record := validStoredExecutionRecord()
 	record.Metadata = map[string]string{"caller_note": "REDIS-METADATA-CANARY"}
 	if err := store.CreateExecution(context.Background(), record); err == nil || !strings.Contains(err.Error(), "metadata") {
@@ -166,11 +166,11 @@ func TestRedisStoreRejectsNonInternalMetadata(t *testing.T) {
 
 func TestRedisStoreAcceptsAllowlistedRunnerMetadata(t *testing.T) {
 	server := miniredis.RunT(t)
-	store, err := NewRedisStore("redis://"+server.Addr(), "agentarea:sandbox", time.Hour, testExecutionPolicy(testMaxExecutionTimeoutSeconds))
+	store, err := NewRedisStore(redis.NewClient(&redis.Options{Addr: server.Addr()}), "agentarea:sandbox", time.Hour, testExecutionPolicy(testMaxExecutionTimeoutSeconds))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.RedisClient().Close() }()
 	record := validStoredExecutionRecord()
 	record.Metadata = map[string]string{
 		"runner_consumer": "runner-1",
@@ -203,7 +203,7 @@ func TestRedisTransportRefsOnlyCanary(t *testing.T) {
 	server := miniredis.RunT(t)
 	ctx := context.Background()
 	store, err := NewRedisStore(
-		"redis://"+server.Addr(),
+		redis.NewClient(&redis.Options{Addr: server.Addr()}),
 		"agentarea:sandbox",
 		time.Hour,
 		testExecutionPolicy(testMaxExecutionTimeoutSeconds),
@@ -212,7 +212,7 @@ func TestRedisTransportRefsOnlyCanary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = store.Close() }()
+	defer func() { _ = store.RedisClient().Close() }()
 	service := newTestService(t, store, testMaxExecutionTimeoutSeconds)
 	pubsub := store.RedisClient().Subscribe(ctx, "test.requests", "test.events")
 	defer func() { _ = pubsub.Close() }()

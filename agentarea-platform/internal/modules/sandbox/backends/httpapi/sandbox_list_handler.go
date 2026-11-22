@@ -2,15 +2,12 @@ package httpapi
 
 import (
 	"net/http"
-	"os"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/sandboxruntime"
 )
 
-const sandboxInspectionAuthSecretEnv = "AGENTAREA_SANDBOX_INSPECT_SECRET"
-
 func (h *Handler) listSandboxes(c *reqctx) {
-	if !sandboxCleanupAuthorized(c.GetHeader("Authorization"), os.Getenv(sandboxInspectionAuthSecretEnv)) {
+	if !sandboxCleanupAuthorized(c.GetHeader("Authorization"), h.secrets.Inspect) {
 		c.JSON(http.StatusUnauthorized, jsonObject{
 			"error":   "unauthorized",
 			"message": "valid internal bearer token is required",

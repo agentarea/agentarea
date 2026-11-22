@@ -104,7 +104,7 @@ func newClientFixture(t *testing.T, denied []string) clientFixture {
 		AvailableTools: []domain.Tool{{Name: "list invoices", Description: "List"}, {Name: "void"}},
 	}}}
 	f := clientFixture{audit: &fakeAudit{}, carrier: &fakeCarrier{}, clientID: clientID, connID: connID}
-	f.svc = New(Deps{
+	f.svc = New(Deps{Stamps: NewStamps(), Verdicts: NewVerdicts(),
 		DB: memDB{}, Connections: conns, Instances: manyInstances{},
 		Graph:    useGraph{readable: map[string]bool{clientID: true}},
 		Policies: fakePolicies{policy: governanceapi.Policy{Tools: &governanceapi.Tools{Denied: denied}}},
@@ -233,7 +233,7 @@ func TestClientEndpointAuthorization(t *testing.T) {
 	}
 	g := useGraph{readable: map[string]bool{}}
 	f.svc.d.Graph = g
-	f.svc.perms = New(Deps{Graph: g}).perms
+	f.svc.perms = New(Deps{Stamps: NewStamps(), Verdicts: NewVerdicts(), Graph: g}).perms
 	denied = append(denied, workspaceMember())
 	for _, p := range denied {
 		_, err := f.svc.ClientEndpoint(ctx, p, f.clientID, enterClientWS, f.carrier)
@@ -259,7 +259,7 @@ func TestClientEndpointAuthorization(t *testing.T) {
 }
 
 func TestJudgeProxyRequest(t *testing.T) {
-	svc := New(Deps{Policies: fakePolicies{policy: governanceapi.Policy{Tools: &governanceapi.Tools{Denied: []string{"mcp:inst-1:wipe"}}}}})
+	svc := New(Deps{Stamps: NewStamps(), Verdicts: NewVerdicts(), Policies: fakePolicies{policy: governanceapi.Policy{Tools: &governanceapi.Tools{Denied: []string{"mcp:inst-1:wipe"}}}}})
 	ws, _ := scope.NewWorkspace(clientWS, "acme")
 	c := authn.Caller{Principal: authn.Principal{UserID: "u1"}, Workspace: ws}
 	ctx := context.Background()

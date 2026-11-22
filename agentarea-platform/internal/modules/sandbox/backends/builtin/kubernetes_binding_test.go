@@ -189,7 +189,7 @@ func TestWorkspaceRuntimeReadRejectsKubernetesPodReplacementAfterHydration(t *te
 		WorkspaceID: workspaceID, TaskID: taskID, Root: sandboxruntime.WorkspaceRoot,
 		RevisionSHA256: revision,
 		Hydration:      workspace.Hydration{RevisionSHA256: revision},
-	}})
+	}}, http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}

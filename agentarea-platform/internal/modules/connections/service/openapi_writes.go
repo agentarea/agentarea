@@ -21,6 +21,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/connections/domain"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/connections/openapispec"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/connections/store"
+	governanceapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/governance/api"
 )
 
 // OpenAPIWriteStore is the openapi_connections writes and full reads (store.OpenAPI).
@@ -685,6 +686,7 @@ func (s *Service) ConnectionToolPolicies(ctx context.Context, c authn.Caller, id
 	if err != nil {
 		return nil, err
 	}
+	pdp := governanceapi.CompileToolRules(&policy)
 	seen := map[string]bool{}
 	out := []ToolPolicy{}
 	for _, t := range v.Connection.AvailableTools {
@@ -694,7 +696,7 @@ func (s *Service) ConnectionToolPolicies(ctx context.Context, c authn.Caller, id
 		seen[t.Name] = true
 		tool := openapispec.Slugify(t.Name)
 		target := openapispec.ToolTarget(v.Connection.ID, tool)
-		out = append(out, ToolPolicyOf(t.Name, "tool:"+target, target, []string{tool}, rules, policy))
+		out = append(out, ToolPolicyOf(t.Name, "tool:"+target, target, []string{tool}, rules, pdp))
 	}
 	return out, nil
 }

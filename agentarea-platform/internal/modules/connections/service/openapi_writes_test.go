@@ -209,7 +209,7 @@ func newWritesFixture(t *testing.T, allowPrivate bool, policy governanceapi.Poli
 		ws:      ws,
 		caller:  authn.Caller{Principal: authn.Principal{UserID: "owner"}, Workspace: ws},
 	}
-	f.svc = New(Deps{
+	f.svc = New(Deps{Stamps: NewStamps(), Verdicts: NewVerdicts(),
 		DB: memDB{}, Auth: &memAuth{rows: map[uuid.UUID]domain.AuthConfig{}}, Connections: f.conns, OpenAPIWrites: f.conns,
 		Secrets: f.secrets, Graph: f.graph, Out: newWritesOut(t, allowPrivate), Policies: writesPolicies{policy},
 		Now: func() time.Time { return time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC) },

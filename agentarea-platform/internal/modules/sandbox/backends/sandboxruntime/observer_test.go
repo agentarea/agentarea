@@ -220,7 +220,7 @@ func TestFailedE2BBootstrapKeepsTheEarlierAllocationObservation(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	provider, err := NewE2BProvider(testE2BConfig("e2b", server.URL))
+	provider, err := NewE2BProvider(testE2BConfig("e2b", server.URL), http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}

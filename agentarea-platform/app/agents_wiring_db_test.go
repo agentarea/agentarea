@@ -15,10 +15,12 @@ import (
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authz"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/config"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
 	ksecrets "github.com/agentarea/agentarea/agentarea-platform/internal/kernel/secrets"
 	agentsservice "github.com/agentarea/agentarea/agentarea-platform/internal/modules/agents/service"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/connections"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/profiles/cluster/secrets"
 )
 
@@ -83,8 +85,8 @@ func wiredModules(t *testing.T) wired {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := buildModules(newEdge(nil, authz.Admins{}), coreDeps{DB: d, Graph: &wiringGraph{objects: map[string]bool{}}, Redis: rdb, Secrets: f,
-		APIURL: "https://api.test", Lookup: mapLookup(nil)})
+	m := buildModules(newEdge(nil, authz.Admins{}), coreDeps{DB: d, Graph: &wiringGraph{objects: map[string]bool{}}, Redis: rdb, Secrets: f, Outbound: testOutbound(t),
+		APIURL: "https://api.test", Lookup: mapLookup(nil), Connections: connections.LoadConfig(config.New(mapLookup(nil)))})
 	ws, err := scope.NewWorkspace(uuid.NewString(), "acme")
 	if err != nil {
 		t.Fatal(err)

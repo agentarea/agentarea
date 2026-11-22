@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	redis "github.com/redis/go-redis/v9"
@@ -47,10 +46,10 @@ func WithEventStreams(requestStream, eventStream, source string) RedisStoreOptio
 	}
 }
 
-func NewRedisStore(redisURL, prefix string, ttl time.Duration, policy ExecutionPolicy, options ...RedisStoreOption) (*RedisStore, error) {
-	opts, err := parseRedisOptions(redisURL)
-	if err != nil {
-		return nil, err
+// NewRedisStore keeps execution records on client; the caller owns and closes it.
+func NewRedisStore(client *redis.Client, prefix string, ttl time.Duration, policy ExecutionPolicy, options ...RedisStoreOption) (*RedisStore, error) {
+	if client == nil {
+		return nil, fmt.Errorf("sandbox execution records require a Redis client")
 	}
 	if prefix == "" {
 		prefix = "agentarea:sandbox"
@@ -62,7 +61,7 @@ func NewRedisStore(redisURL, prefix string, ttl time.Duration, policy ExecutionP
 		return nil, err
 	}
 	store := &RedisStore{
-		client:        redis.NewClient(opts),
+		client:        client,
 		prefix:        prefix,
 		ttl:           ttl,
 		policy:        policy,
@@ -76,13 +75,6 @@ func NewRedisStore(redisURL, prefix string, ttl time.Duration, policy ExecutionP
 		}
 	}
 	return store, nil
-}
-
-func (s *RedisStore) Close() error {
-	if s == nil || s.client == nil {
-		return nil
-	}
-	return s.client.Close()
 }
 
 func (s *RedisStore) RedisClient() *redis.Client {
@@ -232,18 +224,4 @@ func transactionError(operation, id string, err error) error {
 
 func (s *RedisStore) key(id string) string {
 	return s.prefix + ":execution:" + id
-}
-
-func parseRedisOptions(redisURL string) (*redis.Options, error) {
-	if parsed, err := redis.ParseURL(redisURL); err == nil {
-		return parsed, nil
-	}
-	addr := redisURL
-	if cutAddr, found := strings.CutPrefix(redisURL, "redis://"); found {
-		addr = cutAddr
-	}
-	if addr == "" {
-		addr = "localhost:6379"
-	}
-	return &redis.Options{Addr: addr}, nil
 }

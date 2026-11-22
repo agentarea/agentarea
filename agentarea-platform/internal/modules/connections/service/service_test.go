@@ -254,7 +254,7 @@ func newFixture(t *testing.T, personal ...string) *fixture {
 	for _, p := range personal {
 		g.personal[p] = true
 	}
-	f.svc = New(Deps{
+	f.svc = New(Deps{Stamps: NewStamps(), Verdicts: NewVerdicts(),
 		DB: memDB{}, Auth: f.auth, Links: f.links, Connections: f.conns, Instances: f.inst,
 		Secrets: f.secrets, Catalog: func(scope.Workspace, ksecrets.Actor) ksecrets.Catalog { return f.catalog },
 		Graph: g, Now: func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
@@ -385,7 +385,7 @@ func TestGetConnectionSharing(t *testing.T) {
 	f := newFixture(t)
 	connID := uuid.New()
 	f.conns.rows[connID] = domain.Connection{ID: connID.String(), CreatedBy: "owner"}
-	f.svc = New(Deps{DB: memDB{}, Connections: f.conns, Auth: f.auth, Secrets: f.secrets,
+	f.svc = New(Deps{Stamps: NewStamps(), Verdicts: NewVerdicts(), DB: memDB{}, Connections: f.conns, Auth: f.auth, Secrets: f.secrets,
 		Catalog: func(scope.Workspace, ksecrets.Actor) ksecrets.Catalog { return f.catalog },
 		Graph:   memGraph{personal: map[string]bool{connID.String(): true}}})
 	v, err := f.svc.GetConnection(context.Background(), f.caller, connID)

@@ -32,7 +32,7 @@ func TestClientCallerIsTheClientsWorkspace(t *testing.T) {
 
 	g := useGraph{readable: map[string]bool{}}
 	f.svc.d.Graph = g
-	f.svc.perms = New(Deps{Graph: g}).perms
+	f.svc.perms = New(Deps{Stamps: NewStamps(), Verdicts: NewVerdicts(), Graph: g}).perms
 	if _, ok, err := f.svc.ClientCaller(ctx, workspaceMember(), f.clientID, enterClientWS); ok || err != nil {
 		t.Fatalf("unauthorized: %v %v", ok, err)
 	}

@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 )
@@ -43,11 +42,6 @@ type claims struct {
 func BodySHA256(body []byte) string {
 	digest := sha256.Sum256(body)
 	return hex.EncodeToString(digest[:])
-}
-
-func VerifyFromEnv(token, scope string, identity Identity, bodySHA256 string, now time.Time) error {
-	secret := []byte(os.Getenv(SecretEnv))
-	return Verify(token, secret, scope, identity, bodySHA256, now)
 }
 
 func Verify(token string, secret []byte, scope string, identity Identity, bodySHA256 string, now time.Time) error {

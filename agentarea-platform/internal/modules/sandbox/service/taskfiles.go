@@ -97,9 +97,12 @@ func (t taskFiles) open(ctx context.Context, p string, q url.Values, idle time.D
 		cancel()
 	}
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, t.s.managerURL(p, q), nil)
+	if err == nil && t.s.http == nil {
+		err = errNoManagerClient
+	}
 	if err == nil {
 		req.Header.Set("Authorization", "Bearer "+secret)
-		client := *t.s.d.HTTP
+		client := *t.s.http
 		client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 		var resp *http.Response
 		if resp, err = client.Do(req); err == nil {

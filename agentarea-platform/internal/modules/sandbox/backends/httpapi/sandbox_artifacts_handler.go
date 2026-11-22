@@ -32,7 +32,7 @@ func (h *Handler) SetSandboxArtifactStore(store sandboxArtifactStore) {
 }
 
 func (h *Handler) sandboxArtifactsCollection(c *reqctx) {
-	if !requireSandboxFileAuthorization(c) {
+	if !h.requireSandboxFileAuthorization(c) {
 		return
 	}
 	if h.sandboxArtifacts == nil {
@@ -108,7 +108,7 @@ func (h *Handler) listSandboxArtifacts(c *reqctx) {
 }
 
 func (h *Handler) getSandboxArtifact(c *reqctx) {
-	if !requireSandboxFileAuthorization(c) {
+	if !h.requireSandboxFileAuthorization(c) {
 		return
 	}
 	if h.sandboxArtifacts == nil {

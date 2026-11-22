@@ -26,7 +26,7 @@ func TestProviderUsagePreservesAllocationWithoutInventingActualMetrics(t *testin
 		ProviderName: "e2b", APIURL: server.URL, APIKey: "e2b_test", SandboxURL: server.URL,
 		Template: "runtime-template", LeaseTTL: 15 * time.Minute, AllowInternetAccess: true,
 		AllowInsecure: true, Isolation: "firecracker", AttestationPath: DefaultIsolationAttestationPath,
-	})
+	}, http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}

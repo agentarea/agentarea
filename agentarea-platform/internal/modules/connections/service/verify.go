@@ -406,10 +406,8 @@ func errorMessage(err error) string {
 	return err.Error()
 }
 
-// eraVerdicts is the process's verdict cache.
-//
-//nolint:gochecknoglobals // a process cache, like the Python module-level one; it outlives a Service rebuilt by Use
-var eraVerdicts = mcpclient.NewVerdicts(eraVerdictTTL)
+// NewVerdicts makes the verdict cache the module shares across its Services.
+func NewVerdicts() *mcpclient.Verdicts { return mcpclient.NewVerdicts(eraVerdictTTL) }
 
 // listOnce is one attempt: connect, list tools and, when the server offers
 // the events extension, its event types.
@@ -417,7 +415,7 @@ func (s *Service) listOnce(ctx context.Context, t target, h http.Header, key str
 	ctx, cancel := context.WithTimeout(ctx, listAttemptTimeout)
 	defer cancel()
 	c, err := mcpclient.Connect(ctx, mcpclient.Options{URL: t.url, Transport: t.declared, RoundTripper: t.transport,
-		Headers: h, Verdicts: eraVerdicts, VerdictKey: key})
+		Headers: h, Verdicts: s.d.Verdicts, VerdictKey: key})
 	if err != nil {
 		return nil, err
 	}

@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/activationauth"
 	execsupervisor "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/supervisor"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -40,26 +39,25 @@ func TestExecuteTransportTimeoutReservesSupervisorCompletionProof(t *testing.T) 
 }
 
 func TestMutationTransportsSurfaceUnsafeExecutorIncarnation(t *testing.T) {
-	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-Agentarea-Executor-Unsafe", "true")
 		http.Error(w, "discarded", http.StatusInsufficientStorage)
 	}))
 	defer server.Close()
 
-	if _, err := PostExecute(context.Background(), server.URL, ExecuteRequest{
+	if _, err := testExecutor().PostExecute(context.Background(), server.URL, ExecuteRequest{
 		WorkspaceID: "workspace-1", TaskID: "task-1",
 		CommandBody: "true",
 	}, time.Second); !errors.Is(err, ErrExecutorUnsafe) {
 		t.Fatalf("PostExecute() error = %v, want ErrExecutorUnsafe", err)
 	}
-	if _, err := PutFile(context.Background(), server.URL, FilePutRequest{
+	if _, err := testExecutor().PutFile(context.Background(), server.URL, FilePutRequest{
 		WorkspaceID: "workspace-1", TaskID: "task-1", Path: "result.txt", ContentBase64: "eA==",
 	}, time.Second); !errors.Is(err, ErrExecutorUnsafe) {
 		t.Fatalf("PutFile() error = %v, want ErrExecutorUnsafe", err)
 	}
 	digest := sha256.Sum256([]byte("x"))
-	if _, err := PutFileStream(context.Background(), server.URL, FileTransferRequest{
+	if _, err := testExecutor().PutFileStream(context.Background(), server.URL, FileTransferRequest{
 		WorkspaceID: "workspace-1", TaskID: "task-1", Path: "result.txt", Size: 1,
 		SHA256: hex.EncodeToString(digest[:]), Mode: 0o600,
 	}, bytes.NewReader([]byte("x")), time.Second); !errors.Is(err, ErrExecutorUnsafe) {
@@ -82,7 +80,7 @@ func TestDeleteExactPodCannotDeleteReplacementWithSameName(t *testing.T) {
 		}
 		return true, nil, k8serrors.NewConflict(schema.GroupResource{Resource: "pods"}, replacement.Name, errors.New("UID precondition failed"))
 	})
-	client := NewClient(clientset, "test", time.Hour)
+	client := NewClient(clientset, "test", time.Hour, testExecutor())
 	captured := replacement.DeepCopy()
 	captured.UID = types.UID("pod-a")
 
@@ -97,7 +95,7 @@ func TestDeleteExactPodCannotDeleteReplacementWithSameName(t *testing.T) {
 func TestRetirePodForTaskMarksPodIdle(t *testing.T) {
 	ctx := context.Background()
 	clientset := fake.NewSimpleClientset(taskPod("sandbox-1", "task-1", statusAssigned))
-	client := NewClient(clientset, "test", 2*time.Hour)
+	client := NewClient(clientset, "test", 2*time.Hour, testExecutor())
 
 	if err := client.RetirePodForTask(ctx, "workspace-1", "task-1", 15*time.Minute); err != nil {
 		t.Fatalf("RetirePodForTask() error = %v", err)
@@ -122,7 +120,7 @@ func TestRetirePodForTaskRefusesLiveOperation(t *testing.T) {
 	ctx := context.Background()
 	pod := taskPod("sandbox-1", "task-1", statusAssigned)
 	clientset := fake.NewSimpleClientset(pod)
-	client := NewClient(clientset, "test", 2*time.Hour)
+	client := NewClient(clientset, "test", 2*time.Hour, testExecutor())
 	operation, err := client.BeginTaskOperation(ctx, pod, time.Minute)
 	if err != nil {
 		t.Fatal(err)
@@ -148,7 +146,7 @@ func TestFindOrAssignPodForTaskReactivatesIdlePod(t *testing.T) {
 		annotationTaskID:        "task-1",
 	}
 	clientset := fake.NewSimpleClientset(pod)
-	client := NewClient(clientset, "test", 2*time.Hour)
+	client := NewClient(clientset, "test", 2*time.Hour, testExecutor())
 
 	assigned, err := client.FindOrAssignPodForTask(ctx, "workspace-1", "task-1")
 	if err != nil {
@@ -174,7 +172,7 @@ func TestFindOrAssignPodForTaskExtendsAssignedLease(t *testing.T) {
 	oldLease := time.Now().Add(time.Minute).UTC().Format(time.RFC3339)
 	pod.Annotations[annotationTaskLeaseUntil] = oldLease
 	clientset := fake.NewSimpleClientset(pod)
-	client := NewClient(clientset, "test", 2*time.Hour)
+	client := NewClient(clientset, "test", 2*time.Hour, testExecutor())
 
 	if _, err := client.FindOrAssignPodForTask(ctx, "workspace-1", "task-1"); err != nil {
 		t.Fatalf("FindOrAssignPodForTask() error = %v", err)
@@ -191,7 +189,7 @@ func TestFindOrAssignPodForTaskExtendsAssignedLease(t *testing.T) {
 func TestFindAvailablePodUsesConfiguredPool(t *testing.T) {
 	ctx := context.Background()
 	warm := waitingPoolPod("warm")
-	client := NewClient(fake.NewSimpleClientset(warm), "test", 2*time.Hour)
+	client := NewClient(fake.NewSimpleClientset(warm), "test", 2*time.Hour, testExecutor())
 
 	pod, err := client.FindAvailablePod(ctx)
 	if err != nil {
@@ -209,7 +207,7 @@ func TestFindRuntimeManifestPodUsesAssignedOnlyPoolWithoutMutation(t *testing.T)
 		{Type: corev1.PodReady, Status: corev1.ConditionTrue},
 	}
 	clientset := fake.NewSimpleClientset(assigned)
-	client := NewClient(clientset, "test", 2*time.Hour)
+	client := NewClient(clientset, "test", 2*time.Hour, testExecutor())
 
 	pod, err := client.FindRuntimeManifestPod(ctx)
 	if err != nil {
@@ -239,7 +237,7 @@ func TestFindRuntimeManifestPodSkipsUnreadyAndTerminalPods(t *testing.T) {
 	terminal.Status.Conditions = []corev1.PodCondition{
 		{Type: corev1.PodReady, Status: corev1.ConditionTrue},
 	}
-	client := NewClient(fake.NewSimpleClientset(unready, terminal), "test", 2*time.Hour)
+	client := NewClient(fake.NewSimpleClientset(unready, terminal), "test", 2*time.Hour, testExecutor())
 
 	_, err := client.FindRuntimeManifestPod(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "no ready runtime pods") {
@@ -260,7 +258,7 @@ func TestDeleteExpiredTaskPodsDeletesIdleAfterCleanupDeadline(t *testing.T) {
 	}
 
 	clientset := fake.NewSimpleClientset(expired, fresh)
-	client := NewClient(clientset, "test", 2*time.Hour)
+	client := NewClient(clientset, "test", 2*time.Hour, testExecutor())
 
 	deleted, err := client.DeleteExpiredTaskPods(ctx, now)
 	if err != nil {
@@ -283,7 +281,7 @@ func TestDeleteExpiredTaskPodsSkipsPodWithLiveOperation(t *testing.T) {
 	pod := taskPod("busy", "task-1", statusIdle)
 	pod.Annotations[annotationTaskCleanupAt] = now.Add(-time.Minute).Format(time.RFC3339)
 	clientset := fake.NewSimpleClientset(pod)
-	client := NewClient(clientset, "test", 2*time.Hour)
+	client := NewClient(clientset, "test", 2*time.Hour, testExecutor())
 	if _, err := client.BeginTaskOperation(ctx, pod, time.Minute); err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +303,7 @@ func TestListTaskPodsForWorkspaceValidatesAndScopesLiveInventory(t *testing.T) {
 	other := taskPod("sandbox-2", "task-2", statusAssigned)
 	other.Annotations[annotationWorkspaceID] = "workspace-2"
 	other.Labels[labelTaskBinding] = taskBinding("workspace-2", "task-2")
-	client := NewClient(fake.NewSimpleClientset(matching, other), "test", time.Hour)
+	client := NewClient(fake.NewSimpleClientset(matching, other), "test", time.Hour, testExecutor())
 
 	items, err := client.ListTaskPodsForWorkspace(context.Background(), "workspace-1")
 	if err != nil {
@@ -319,7 +317,7 @@ func TestListTaskPodsForWorkspaceValidatesAndScopesLiveInventory(t *testing.T) {
 func TestWaitForPodRunningRequiresReadyCondition(t *testing.T) {
 	pod := taskPod("unready", "task-1", statusAssigned)
 	pod.Status.Conditions = nil
-	client := NewClient(fake.NewSimpleClientset(pod), "test", time.Hour)
+	client := NewClient(fake.NewSimpleClientset(pod), "test", time.Hour, testExecutor())
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
@@ -371,7 +369,7 @@ func TestEnsurePodHydratedSerializesConcurrentManagerReplicas(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	clientset := fake.NewSimpleClientset(taskPod("sandbox-1", "task-1", statusAssigned))
-	client := NewClient(clientset, "test", time.Hour)
+	client := NewClient(clientset, "test", time.Hour, testExecutor())
 	stubExecutorIncarnation(client, "test-incarnation")
 	var calls atomic.Int32
 	entered := make(chan struct{})
@@ -417,7 +415,7 @@ func TestEnsurePodHydratedRenewsTaskLeaseWhileMaterializingInputs(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	clientset := fake.NewSimpleClientset(taskPod("sandbox-1", "task-1", statusAssigned))
-	client := NewClient(clientset, "test", 3*time.Second)
+	client := NewClient(clientset, "test", 3*time.Second, testExecutor())
 	stubExecutorIncarnation(client, "test-incarnation")
 	entered := make(chan struct{})
 	release := make(chan struct{})
@@ -455,7 +453,7 @@ func TestVerifyOrBindExecutorIncarnationDeletesSameUIDRestart(t *testing.T) {
 	pod.UID = "pod-uid-1"
 	pod.Annotations[annotationHydrationIncarnation] = "old-incarnation"
 	clientset := fake.NewSimpleClientset(pod)
-	client := NewClient(clientset, "test", time.Hour)
+	client := NewClient(clientset, "test", time.Hour, testExecutor())
 	stubExecutorIncarnation(client, "new-incarnation")
 
 	_, _, err := client.VerifyOrBindExecutorIncarnation(context.Background(), pod)
@@ -471,7 +469,7 @@ func TestEnsurePodHydratedRejectsRestartBeforeCommit(t *testing.T) {
 	pod := taskPod("sandbox-1", "task-1", statusAssigned)
 	pod.UID = "pod-uid-1"
 	clientset := fake.NewSimpleClientset(pod)
-	client := NewClient(clientset, "test", time.Hour)
+	client := NewClient(clientset, "test", time.Hour, testExecutor())
 	var observations atomic.Int32
 	client.observeExecutorIncarnation = func(context.Context, *corev1.Pod) (string, error) {
 		if observations.Add(1) == 1 {
@@ -495,7 +493,7 @@ func TestEnsurePodHydratedRejectsRestartBeforeCommit(t *testing.T) {
 func TestFindPodForTaskRejectsTamperedWorkspaceAnnotation(t *testing.T) {
 	pod := taskPod("sandbox-1", "task-1", statusAssigned)
 	pod.Annotations[annotationWorkspaceID] = "workspace-other"
-	client := NewClient(fake.NewSimpleClientset(pod), "test", time.Hour)
+	client := NewClient(fake.NewSimpleClientset(pod), "test", time.Hour, testExecutor())
 	if _, err := client.FindPodForTask(context.Background(), "workspace-1", "task-1"); err == nil || !strings.Contains(err.Error(), "identity") {
 		t.Fatalf("FindPodForTask() error = %v, want identity rejection", err)
 	}

@@ -309,7 +309,7 @@ func newOAuthFixture(t *testing.T, p *oauthProvider, cfg Config) *oauthFixture {
 	if p != nil {
 		rt = p.srv.Client().Transport
 	}
-	f.svc = New(Deps{
+	f.svc = New(Deps{Stamps: NewStamps(), Verdicts: NewVerdicts(),
 		DB: &oaDB{}, Auth: auth, Instances: f.inst, Connections: f.conns, Secrets: f.secrets,
 		Catalog: func(scope.Workspace, ksecrets.Actor) ksecrets.Catalog { return &memCatalog{} },
 		Graph:   oaGraph{}, Specs: f.specs, Out: oaOut{rt}, KV: f.kv, OAuthStore: f.store, CatalogItems: f.items,

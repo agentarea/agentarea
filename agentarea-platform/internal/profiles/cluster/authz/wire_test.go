@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel/metric/noop"
+
 	kauthz "github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authz"
 )
 
@@ -217,7 +219,7 @@ func TestWireMatchesCapture(t *testing.T) {
 			fake := &fakeServer{responses: sc.Responses, requests: []recorded{}}
 			srv := httptest.NewServer(fake)
 			defer srv.Close()
-			c, err := NewClient(srv.URL+"/", pyStore, sc.ModelID, sc.Token, 5*time.Second, nil)
+			c, err := NewClient(srv.URL+"/", pyStore, sc.ModelID, sc.Token, 5*time.Second, nil, noop.NewMeterProvider().Meter("test"))
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -441,14 +442,14 @@ func (b *Broker) OpenLive(ctx context.Context) (kernel.LiveChannels, error) {
 type liveChannels struct {
 	ps         *redis.PubSub
 	b          *Broker
-	subscribed int
+	subscribed atomic.Int64
 }
 
 func (l *liveChannels) Subscribe(ctx context.Context, channel string) error {
 	if err := l.ps.Subscribe(ctx, l.b.key(channel)); err != nil {
 		return err
 	}
-	l.subscribed++
+	l.subscribed.Add(1)
 	return nil
 }
 
@@ -456,12 +457,14 @@ func (l *liveChannels) Unsubscribe(ctx context.Context, channel string) error {
 	if err := l.ps.Unsubscribe(ctx, l.b.key(channel)); err != nil {
 		return err
 	}
-	l.subscribed = max(0, l.subscribed-1)
+	if l.subscribed.Add(-1) < 0 {
+		l.subscribed.Store(0)
+	}
 	return nil
 }
 
 func (l *liveChannels) Next(ctx context.Context, timeout time.Duration) (string, map[string]string, bool, error) {
-	if l.subscribed == 0 {
+	if l.subscribed.Load() == 0 {
 		select {
 		case <-ctx.Done():
 			return "", nil, false, ctx.Err()

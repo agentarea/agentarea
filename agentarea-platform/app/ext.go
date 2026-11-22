@@ -123,12 +123,8 @@ func (b *Build) resolveExtensions(ctx context.Context, deps ext.Deps, spend mone
 	if e.AuditSink, err = build(ctx, e, deps, "audit_sink", s.AuditSink); err != nil {
 		return nil, err
 	}
-	for _, f := range s.WorkloadHooks {
-		h, err := build(ctx, e, deps, "workload hooks", f)
-		if err != nil {
-			return nil, err
-		}
-		e.WorkloadHooks = append(e.WorkloadHooks, h)
+	if err = b.buildWorkloadHooks(ctx, e, deps); err != nil {
+		return nil, err
 	}
 	return e, nil
 }

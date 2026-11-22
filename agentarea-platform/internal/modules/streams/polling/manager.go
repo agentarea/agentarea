@@ -16,12 +16,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	kobs "github.com/agentarea/agentarea/agentarea-platform/internal/kernel/obs"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
 )
 
@@ -45,6 +43,7 @@ type Manager struct {
 	maxPollers  int
 	now         func() time.Time
 	log         *slog.Logger
+	tracer      trace.Tracer
 
 	metrics pollMetrics
 
@@ -71,11 +70,14 @@ type mcpRegistration struct {
 }
 
 // NewManager builds a Manager.
-func NewManager(d Deps) *Manager {
+func NewManager(d Deps) (*Manager, error) {
+	if d.Meter == nil || d.Tracer == nil {
+		return nil, errors.New("polling manager needs a meter and a tracer")
+	}
 	m := &Manager{
 		sources: d.Sources, credentials: d.Credentials, intake: d.Intake, transports: d.Transports,
 		caller: d.Caller, mcp: d.MCP, claimer: d.Claimer, webhookURL: d.WebhookURL,
-		interval: d.Interval, maxPollers: d.MaxPollers, now: d.Now, log: d.Log,
+		interval: d.Interval, maxPollers: d.MaxPollers, now: d.Now, log: d.Log, tracer: d.Tracer,
 		pollers:    make(map[string]*runningPoller),
 		registered: make(map[string]registration),
 	}
@@ -85,8 +87,8 @@ func NewManager(d Deps) *Manager {
 	if m.log == nil {
 		m.log = slog.Default()
 	}
-	m.metrics = newPollMetrics(m)
-	return m
+	m.metrics = newPollMetrics(m, d.Meter)
+	return m, nil
 }
 
 // Run reconciles until ctx is cancelled.
@@ -599,7 +601,7 @@ func (m *Manager) clearWebhook(ctx context.Context, src Source) {
 // for (0: the entry's interval).
 func (m *Manager) pollOnce(ctx context.Context, src Source, tr Transport, cursor string) (next string, wait time.Duration, err error) {
 	name := src.Entry.Poll.Transport
-	ctx, span := otel.Tracer(kobs.MeterScope).Start(ctx, "poll "+name, trace.WithAttributes(
+	ctx, span := m.tracer.Start(ctx, "poll "+name, trace.WithAttributes(
 		attribute.String("agentarea.source.id", src.ID),
 		attribute.String("agentarea.source.transport", name),
 	))

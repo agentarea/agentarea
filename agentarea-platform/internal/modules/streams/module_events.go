@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/events"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/lifecycle"
@@ -29,6 +31,9 @@ type PollerDeps struct {
 	Instances polling.MCPInstances
 	// GatewaySecret authenticates the MCP Events calls at the MCP manager (AGENTAREA_MCP_GATEWAY_SECRET).
 	GatewaySecret string
+	// Meter and Tracer are the OTel providers of the poll manager.
+	Meter  metric.Meter
+	Tracer trace.Tracer
 }
 
 // Pollers is the event service folded into streams: one poller per poll source, webhook
@@ -44,7 +49,10 @@ func (m *Module) Pollers(p PollerDeps) ([]lifecycle.Component, error) {
 		return nil, errors.New("pollers need AGENTAREA_MCP_GATEWAY_SECRET for MCP Events sources")
 	}
 	log := m.log().With("component", "pollers")
-	mgr := polling.NewManager(m.pollingDeps(p, log))
+	mgr, err := polling.NewManager(m.pollingDeps(p, log))
+	if err != nil {
+		return nil, err
+	}
 	backlog := polling.Backlog{
 		Broker: m.d.Broker, Intake: intake{m.svc}, Consumer: "ingest-" + p.Config.WorkerID,
 		Block: 5 * time.Second, Batch: 10, Log: log,
@@ -73,6 +81,8 @@ func (m *Module) pollingDeps(p PollerDeps, log *slog.Logger) polling.Deps {
 		MaxPollers:  p.Config.MaxPollers,
 		Now:         m.d.Now,
 		Log:         log,
+		Meter:       p.Meter,
+		Tracer:      p.Tracer,
 	}
 }
 

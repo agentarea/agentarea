@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/config"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/sandboxcontrol"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/sandboxruntime"
 )
@@ -22,6 +23,25 @@ type SandboxPolicy struct {
 	MaxFileBytes int64
 }
 
+// Secrets are the bearer secrets of the route families; an empty one refuses
+// every request of its routes.
+type Secrets struct {
+	Cleanup string
+	Inspect string
+	File    string
+	Control string
+}
+
+// LoadSecrets reads the route secrets.
+func LoadSecrets(l *config.Loader) Secrets {
+	return Secrets{
+		Cleanup: l.StringEnv("AGENTAREA_SANDBOX_CLEANUP_SECRET", ""),
+		Inspect: l.StringEnv("AGENTAREA_SANDBOX_INSPECT_SECRET", ""),
+		File:    l.StringEnv("AGENTAREA_SANDBOX_FILE_SECRET", ""),
+		Control: l.StringEnv("AGENTAREA_SANDBOX_CONTROL_SECRET", ""),
+	}
+}
+
 // Handler serves the sandbox routes over one composed runtime.
 type Handler struct {
 	sandboxControl   *sandboxcontrol.Service
@@ -29,19 +49,20 @@ type Handler struct {
 	sandboxArtifacts sandboxArtifactStore
 	logger           *slog.Logger
 	sandboxPolicy    SandboxPolicy
+	secrets          Secrets
 }
 
 // New builds the handler; a control store that cannot be built is a startup
 // error, not a service answering 503 for the process lifetime.
-func New(runtime sandboxruntime.ControlRuntime, controlConfig sandboxcontrol.Config, policy SandboxPolicy, logger *slog.Logger) (*Handler, error) {
+func New(runtime sandboxruntime.ControlRuntime, store *sandboxcontrol.RedisStore, controlConfig sandboxcontrol.Config, policy SandboxPolicy, secrets Secrets, logger *slog.Logger) (*Handler, error) {
 	if runtime == nil {
 		return nil, fmt.Errorf("sandbox control runtime is required")
 	}
-	control, err := newSandboxControlService(controlConfig)
+	control, err := sandboxcontrol.NewService(store, controlConfig.ExecutionPolicy())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("sandbox control service: %w", err)
 	}
-	return &Handler{sandboxControl: control, sandboxRuntime: runtime, logger: logger, sandboxPolicy: policy}, nil
+	return &Handler{sandboxControl: control, sandboxRuntime: runtime, logger: logger, sandboxPolicy: policy, secrets: secrets}, nil
 }
 
 // Routes mounts the sandbox routes on mux.

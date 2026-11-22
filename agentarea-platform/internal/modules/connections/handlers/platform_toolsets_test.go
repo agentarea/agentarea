@@ -20,7 +20,7 @@ func TestToolWritesCheckTheRoutesRelation(t *testing.T) {
 	}
 	c := authn.Caller{Principal: authn.Principal{UserID: "member"}, Workspace: ws}
 	w := &world{allow: false}
-	svc := service.New(service.Deps{DB: memDB{}, Graph: worldGraph{w}})
+	svc := service.New(service.Deps{Stamps: service.NewStamps(), Verdicts: service.NewVerdicts(), DB: memDB{}, Graph: worldGraph{w}})
 	ctx := context.Background()
 	id := uuid.NewString()
 	openapi := OpenAPIToolset{Svc: svc}

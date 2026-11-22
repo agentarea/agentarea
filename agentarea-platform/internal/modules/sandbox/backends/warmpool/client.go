@@ -74,9 +74,22 @@ type TaskPodInfo struct {
 	Isolation   string
 }
 
+// Executor reaches a sandbox executor's activation service: a warm pod or the
+// shared development executor. Every request is signed with Secret
+// (AGENTAREA_SANDBOX_ACTIVATION_SECRET) and sent over Transport.
+type Executor struct {
+	Transport http.RoundTripper
+	Secret    []byte
+}
+
+func (e Executor) client(timeout time.Duration) *http.Client {
+	return &http.Client{Transport: e.Transport, Timeout: timeout}
+}
+
 // Client manages warm pool operations
 type Client struct {
 	client                     kubernetes.Interface
+	executor                   Executor
 	namespace                  string
 	timeout                    time.Duration
 	taskLeaseTTL               time.Duration
@@ -105,15 +118,16 @@ func DefaultConfig() Config {
 }
 
 // NewClient creates a new warm pool client
-func NewClient(client kubernetes.Interface, namespace string, taskLeaseTTL time.Duration) *Client {
+func NewClient(client kubernetes.Interface, namespace string, taskLeaseTTL time.Duration, executor Executor) *Client {
 	clientInstance := &Client{
 		client:       client,
+		executor:     executor,
 		namespace:    namespace,
 		timeout:      120 * time.Second,
 		taskLeaseTTL: taskLeaseTTL,
 	}
 	clientInstance.observeExecutorIncarnation = func(ctx context.Context, pod *corev1.Pod) (string, error) {
-		return GetExecutorIncarnation(ctx, fmt.Sprintf("http://%s:8080", pod.Status.PodIP), 10*time.Second)
+		return clientInstance.executor.GetExecutorIncarnation(ctx, fmt.Sprintf("http://%s:8080", pod.Status.PodIP), 10*time.Second)
 	}
 	return clientInstance
 }
@@ -221,7 +235,8 @@ func (c *Client) ActivatePod(ctx context.Context, pod *corev1.Pod, req Activatio
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	token, err := activationauth.SignFromEnv(
+	token, err := activationauth.SignDefault(
+		c.executor.Secret,
 		activationauth.ScopeActivate,
 		activationauth.Identity{
 			WorkspaceID:  "mcp-control",
@@ -237,7 +252,7 @@ func (c *Client) ActivatePod(ctx context.Context, pod *corev1.Pod, req Activatio
 	}
 	httpReq.Header.Set("Authorization", "Bearer "+token)
 
-	client := &http.Client{Timeout: c.timeout}
+	client := c.executor.client(c.timeout)
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("activation request failed: %w", err)
@@ -272,28 +287,28 @@ func (c *Client) ExecuteInPod(ctx context.Context, pod *corev1.Pod, req ExecuteR
 	if podIP == "" {
 		return nil, fmt.Errorf("pod has no IP address")
 	}
-	return PostExecute(ctx, fmt.Sprintf("http://%s:8080/execute", podIP), req, c.timeout)
+	return c.executor.PostExecute(ctx, fmt.Sprintf("http://%s:8080/execute", podIP), req, c.timeout)
 }
 
 func (c *Client) RuntimeManifestInPod(ctx context.Context, pod *corev1.Pod) (*runtimeinfo.Manifest, error) {
 	if pod.Status.PodIP == "" {
 		return nil, fmt.Errorf("pod has no IP address")
 	}
-	return GetRuntimeManifest(ctx, fmt.Sprintf("http://%s:8080", pod.Status.PodIP), c.timeout)
+	return c.executor.GetRuntimeManifest(ctx, fmt.Sprintf("http://%s:8080", pod.Status.PodIP), c.timeout)
 }
 
 func (c *Client) WritebackInPod(ctx context.Context, pod *corev1.Pod, req workspace.WritebackRequest) (*workspace.WritebackResponse, error) {
 	if pod.Status.PodIP == "" {
 		return nil, fmt.Errorf("pod has no IP address")
 	}
-	return PostWriteback(ctx, fmt.Sprintf("http://%s:8080", pod.Status.PodIP), req, c.timeout)
+	return c.executor.PostWriteback(ctx, fmt.Sprintf("http://%s:8080", pod.Status.PodIP), req, c.timeout)
 }
 
 // PostExecute sends an ExecuteRequest to a sandbox executor's /execute endpoint
 // and returns the parsed result. The endpoint is the same whether it is a
 // Kubernetes warm pod (warm-pool data plane) or the dev/compose sandbox-executor
 // container, so both backends share this transport.
-func PostExecute(ctx context.Context, executeURL string, req ExecuteRequest, baseTimeout time.Duration) (*ExecuteResponse, error) {
+func (e Executor) PostExecute(ctx context.Context, executeURL string, req ExecuteRequest, baseTimeout time.Duration) (*ExecuteResponse, error) {
 	if req.CommandBody == "" {
 		return nil, fmt.Errorf("command_body is required")
 	}
@@ -312,7 +327,8 @@ func PostExecute(ctx context.Context, executeURL string, req ExecuteRequest, bas
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	token, err := activationauth.SignFromEnv(
+	token, err := activationauth.SignDefault(
+		e.Secret,
 		activationauth.ScopeExecute,
 		activationauth.Identity{
 			WorkspaceID:  req.WorkspaceID,
@@ -328,7 +344,7 @@ func PostExecute(ctx context.Context, executeURL string, req ExecuteRequest, bas
 	}
 	httpReq.Header.Set("Authorization", "Bearer "+token)
 
-	client := &http.Client{Timeout: timeout}
+	client := e.client(timeout)
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("execute request failed: %w", err)
@@ -363,7 +379,7 @@ func executeTransportTimeout(commandTimeoutSeconds int, baseTimeout time.Duratio
 	return time.Duration(commandTimeoutSeconds)*time.Second + execsupervisor.TransportGrace
 }
 
-func PostWriteback(ctx context.Context, executeURL string, req workspace.WritebackRequest, baseTimeout time.Duration) (*workspace.WritebackResponse, error) {
+func (e Executor) PostWriteback(ctx context.Context, executeURL string, req workspace.WritebackRequest, baseTimeout time.Duration) (*workspace.WritebackResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal writeback request: %w", err)
@@ -373,7 +389,8 @@ func PostWriteback(ctx context.Context, executeURL string, req workspace.Writeba
 		return nil, fmt.Errorf("failed to create writeback request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	token, err := activationauth.SignFromEnv(
+	token, err := activationauth.SignDefault(
+		e.Secret,
 		activationauth.ScopeWriteback,
 		activationauth.Identity{
 			WorkspaceID:  req.WorkspaceID,
@@ -388,7 +405,7 @@ func PostWriteback(ctx context.Context, executeURL string, req workspace.Writeba
 		return nil, fmt.Errorf("create activation authorization: %w", err)
 	}
 	httpReq.Header.Set("Authorization", "Bearer "+token)
-	client := &http.Client{Timeout: baseTimeout}
+	client := e.client(baseTimeout)
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("writeback request failed: %w", err)
@@ -454,7 +471,7 @@ func executorUnsafe(response *http.Response) bool {
 // PutFile writes a file into the task workspace on the executor's filesystem —
 // the same filesystem /execute (bash) uses — signing a ScopeFiles token so the
 // activation secret stays control-plane side.
-func PutFile(ctx context.Context, baseURL string, req FilePutRequest, timeout time.Duration) (*FilePutResponse, error) {
+func (e Executor) PutFile(ctx context.Context, baseURL string, req FilePutRequest, timeout time.Duration) (*FilePutResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal file put request: %w", err)
@@ -464,10 +481,10 @@ func PutFile(ctx context.Context, baseURL string, req FilePutRequest, timeout ti
 		return nil, fmt.Errorf("failed to create file put request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	if err := signFilesRequest(httpReq, req.WorkspaceID, req.TaskID, activationauth.BodySHA256(body)); err != nil {
+	if err := e.signFilesRequest(httpReq, req.WorkspaceID, req.TaskID, activationauth.BodySHA256(body)); err != nil {
 		return nil, err
 	}
-	client := &http.Client{Timeout: timeout}
+	client := e.client(timeout)
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("file put request failed: %w", err)
@@ -492,7 +509,7 @@ func PutFile(ctx context.Context, baseURL string, req FilePutRequest, timeout ti
 // PutFileStream writes a file without buffering or base64 expansion. The
 // manager has already admitted Size against task policy; the executor verifies
 // the signed SHA-256 while atomically replacing the destination.
-func PutFileStream(ctx context.Context, baseURL string, req FileTransferRequest, content io.Reader, timeout time.Duration) (*FilePutResponse, error) {
+func (e Executor) PutFileStream(ctx context.Context, baseURL string, req FileTransferRequest, content io.Reader, timeout time.Duration) (*FilePutResponse, error) {
 	if req.WorkspaceID == "" || req.TaskID == "" || req.Path == "" || req.Size < 0 || content == nil {
 		return nil, fmt.Errorf("workspace_id, task_id, path, non-negative size, and content are required")
 	}
@@ -517,10 +534,10 @@ func PutFileStream(ctx context.Context, baseURL string, req FileTransferRequest,
 	httpReq.URL.RawQuery = query.Encode()
 	httpReq.ContentLength = req.Size
 	httpReq.Header.Set("Content-Type", "application/octet-stream")
-	if err := signFilesRequest(httpReq, req.WorkspaceID, req.TaskID, activationauth.BoundTransferSHA256(http.MethodPut, req.Path, req.Size, req.Mode, req.SHA256, req.ExecutorIncarnation)); err != nil {
+	if err := e.signFilesRequest(httpReq, req.WorkspaceID, req.TaskID, activationauth.BoundTransferSHA256(http.MethodPut, req.Path, req.Size, req.Mode, req.SHA256, req.ExecutorIncarnation)); err != nil {
 		return nil, err
 	}
-	client := &http.Client{Timeout: timeout}
+	client := e.client(timeout)
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("streamed file put request failed: %w", err)
@@ -545,11 +562,11 @@ func PutFileStream(ctx context.Context, baseURL string, req FileTransferRequest,
 
 // OpenFile streams a file from the executor. The response body remains open so
 // a caller can copy it directly to S3 or an HTTP response with constant memory.
-func OpenFile(ctx context.Context, baseURL, workspaceID, taskID, path string, timeout time.Duration) (*FileDownload, error) {
-	return OpenFileForIncarnation(ctx, baseURL, workspaceID, taskID, path, "", timeout)
+func (e Executor) OpenFile(ctx context.Context, baseURL, workspaceID, taskID, path string, timeout time.Duration) (*FileDownload, error) {
+	return e.OpenFileForIncarnation(ctx, baseURL, workspaceID, taskID, path, "", timeout)
 }
 
-func OpenFileForIncarnation(ctx context.Context, baseURL, workspaceID, taskID, path, executorIncarnation string, timeout time.Duration) (*FileDownload, error) {
+func (e Executor) OpenFileForIncarnation(ctx context.Context, baseURL, workspaceID, taskID, path, executorIncarnation string, timeout time.Duration) (*FileDownload, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/files/content", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create streamed file get request: %w", err)
@@ -562,10 +579,10 @@ func OpenFileForIncarnation(ctx context.Context, baseURL, workspaceID, taskID, p
 		query.Set("executor_incarnation", executorIncarnation)
 	}
 	httpReq.URL.RawQuery = query.Encode()
-	if err := signFilesRequest(httpReq, workspaceID, taskID, activationauth.BoundTransferSHA256(http.MethodGet, path, -1, 0, activationauth.BodySHA256(nil), executorIncarnation)); err != nil {
+	if err := e.signFilesRequest(httpReq, workspaceID, taskID, activationauth.BoundTransferSHA256(http.MethodGet, path, -1, 0, activationauth.BodySHA256(nil), executorIncarnation)); err != nil {
 		return nil, err
 	}
-	client := &http.Client{Timeout: timeout}
+	client := e.client(timeout)
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("streamed file get request failed: %w", err)
@@ -605,11 +622,11 @@ func OpenFileForIncarnation(ctx context.Context, baseURL, workspaceID, taskID, p
 
 // GetFile reads a file from the task workspace. It returns ErrFileNotFound when
 // the executor reports a 404 so callers can distinguish "missing" from failure.
-func GetFile(ctx context.Context, baseURL, workspaceID, taskID, path string, timeout time.Duration) (*FileGetResponse, error) {
-	return GetFileForIncarnation(ctx, baseURL, workspaceID, taskID, path, "", timeout)
+func (e Executor) GetFile(ctx context.Context, baseURL, workspaceID, taskID, path string, timeout time.Duration) (*FileGetResponse, error) {
+	return e.GetFileForIncarnation(ctx, baseURL, workspaceID, taskID, path, "", timeout)
 }
 
-func GetFileForIncarnation(ctx context.Context, baseURL, workspaceID, taskID, path, executorIncarnation string, timeout time.Duration) (*FileGetResponse, error) {
+func (e Executor) GetFileForIncarnation(ctx context.Context, baseURL, workspaceID, taskID, path, executorIncarnation string, timeout time.Duration) (*FileGetResponse, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/files", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file get request: %w", err)
@@ -622,10 +639,10 @@ func GetFileForIncarnation(ctx context.Context, baseURL, workspaceID, taskID, pa
 		query.Set("executor_incarnation", executorIncarnation)
 	}
 	httpReq.URL.RawQuery = query.Encode()
-	if err := signFilesRequest(httpReq, workspaceID, taskID, activationauth.BoundTransferSHA256(http.MethodGet, "file:"+path, -1, 0, activationauth.BodySHA256(nil), executorIncarnation)); err != nil {
+	if err := e.signFilesRequest(httpReq, workspaceID, taskID, activationauth.BoundTransferSHA256(http.MethodGet, "file:"+path, -1, 0, activationauth.BodySHA256(nil), executorIncarnation)); err != nil {
 		return nil, err
 	}
-	client := &http.Client{Timeout: timeout}
+	client := e.client(timeout)
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("file get request failed: %w", err)
@@ -651,11 +668,11 @@ func GetFileForIncarnation(ctx context.Context, baseURL, workspaceID, taskID, pa
 }
 
 // ListFiles lists regular files under prefix in the task workspace.
-func ListFiles(ctx context.Context, baseURL, workspaceID, taskID, prefix string, timeout time.Duration) (*FileListResponse, error) {
-	return ListFilesForIncarnation(ctx, baseURL, workspaceID, taskID, prefix, "", timeout)
+func (e Executor) ListFiles(ctx context.Context, baseURL, workspaceID, taskID, prefix string, timeout time.Duration) (*FileListResponse, error) {
+	return e.ListFilesForIncarnation(ctx, baseURL, workspaceID, taskID, prefix, "", timeout)
 }
 
-func ListFilesForIncarnation(ctx context.Context, baseURL, workspaceID, taskID, prefix, executorIncarnation string, timeout time.Duration) (*FileListResponse, error) {
+func (e Executor) ListFilesForIncarnation(ctx context.Context, baseURL, workspaceID, taskID, prefix, executorIncarnation string, timeout time.Duration) (*FileListResponse, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/files", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file list request: %w", err)
@@ -668,10 +685,10 @@ func ListFilesForIncarnation(ctx context.Context, baseURL, workspaceID, taskID, 
 		query.Set("executor_incarnation", executorIncarnation)
 	}
 	httpReq.URL.RawQuery = query.Encode()
-	if err := signFilesRequest(httpReq, workspaceID, taskID, activationauth.BoundTransferSHA256(http.MethodGet, "list:"+prefix, -1, 0, activationauth.BodySHA256(nil), executorIncarnation)); err != nil {
+	if err := e.signFilesRequest(httpReq, workspaceID, taskID, activationauth.BoundTransferSHA256(http.MethodGet, "list:"+prefix, -1, 0, activationauth.BodySHA256(nil), executorIncarnation)); err != nil {
 		return nil, err
 	}
-	client := &http.Client{Timeout: timeout}
+	client := e.client(timeout)
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("file list request failed: %w", err)
@@ -693,8 +710,9 @@ func ListFilesForIncarnation(ctx context.Context, baseURL, workspaceID, taskID, 
 	return &result, nil
 }
 
-func signFilesRequest(httpReq *http.Request, workspaceID, taskID, bodySHA256 string) error {
-	token, err := activationauth.SignFromEnv(
+func (e Executor) signFilesRequest(httpReq *http.Request, workspaceID, taskID, bodySHA256 string) error {
+	token, err := activationauth.SignDefault(
+		e.Secret,
 		activationauth.ScopeFiles,
 		activationauth.Identity{
 			WorkspaceID:  workspaceID,
@@ -715,7 +733,7 @@ func signFilesRequest(httpReq *http.Request, workspaceID, taskID, bodySHA256 str
 // DeleteTaskWorkspace deletes only the ephemeral workspace for one exact
 // workspace/task identity. The executor never receives the manager's cleanup
 // secret; it verifies a short-lived task-bound activation token instead.
-func DeleteTaskWorkspace(ctx context.Context, baseURL, workspaceID, taskID string, timeout time.Duration) error {
+func (e Executor) DeleteTaskWorkspace(ctx context.Context, baseURL, workspaceID, taskID string, timeout time.Duration) error {
 	request, err := http.NewRequestWithContext(ctx, http.MethodDelete, strings.TrimRight(baseURL, "/")+"/workspace/task", nil)
 	if err != nil {
 		return fmt.Errorf("failed to create task workspace delete request: %w", err)
@@ -724,7 +742,8 @@ func DeleteTaskWorkspace(ctx context.Context, baseURL, workspaceID, taskID strin
 	query.Set("workspace_id", workspaceID)
 	query.Set("task_id", taskID)
 	request.URL.RawQuery = query.Encode()
-	token, err := activationauth.SignFromEnv(
+	token, err := activationauth.SignDefault(
+		e.Secret,
 		activationauth.ScopeCleanup,
 		activationauth.Identity{
 			WorkspaceID:  workspaceID,
@@ -739,7 +758,7 @@ func DeleteTaskWorkspace(ctx context.Context, baseURL, workspaceID, taskID strin
 		return fmt.Errorf("create task workspace cleanup authorization: %w", err)
 	}
 	request.Header.Set("Authorization", "Bearer "+token)
-	client := &http.Client{Timeout: timeout}
+	client := e.client(timeout)
 	response, err := client.Do(request)
 	if err != nil {
 		return fmt.Errorf("task workspace delete request failed: %w", err)
@@ -751,12 +770,12 @@ func DeleteTaskWorkspace(ctx context.Context, baseURL, workspaceID, taskID strin
 	return nil
 }
 
-func GetRuntimeManifest(ctx context.Context, baseURL string, timeout time.Duration) (*runtimeinfo.Manifest, error) {
+func (e Executor) GetRuntimeManifest(ctx context.Context, baseURL string, timeout time.Duration) (*runtimeinfo.Manifest, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/runtime/manifest", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create runtime manifest request: %w", err)
 	}
-	client := &http.Client{Timeout: timeout}
+	client := e.client(timeout)
 	response, err := client.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("runtime manifest request failed: %w", err)
@@ -780,12 +799,12 @@ func GetRuntimeManifest(ctx context.Context, baseURL string, timeout time.Durati
 // GetExecutorIncarnation identifies one activation-service process. Docker
 // development workspaces live only in that process's ephemeral filesystem, so
 // a changed value invalidates every manager-side hydration record.
-func GetExecutorIncarnation(ctx context.Context, baseURL string, timeout time.Duration) (string, error) {
+func (e Executor) GetExecutorIncarnation(ctx context.Context, baseURL string, timeout time.Duration) (string, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/health", nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create executor health request: %w", err)
 	}
-	client := &http.Client{Timeout: timeout}
+	client := e.client(timeout)
 	response, err := client.Do(request)
 	if err != nil {
 		return "", fmt.Errorf("executor health request failed: %w", err)

@@ -189,7 +189,7 @@ func TestWorkspaceRuntimeStreamingReadHoldsDemandFenceUntilClose(t *testing.T) {
 		Hydration:      workspace.Hydration{RevisionSHA256: revision},
 	}}
 	dataPlane := &fakeWorkspaceRuntime{files: map[string][]byte{"result.txt": []byte("result")}}
-	runtime, err := NewWorkspaceRuntime(dataPlane, provider)
+	runtime, err := NewWorkspaceRuntime(dataPlane, provider, http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestWorkspaceRuntimeMaterializesInputsBeforeExecutionOnce(t *testing.T) {
 		},
 	}}
 	dataPlane := &fakeWorkspaceRuntime{files: map[string][]byte{}, workspaceGone: true}
-	runtime, err := NewWorkspaceRuntime(dataPlane, provider)
+	runtime, err := NewWorkspaceRuntime(dataPlane, provider, http.DefaultTransport)
 	if err != nil {
 		t.Fatalf("NewWorkspaceRuntime() error = %v", err)
 	}
@@ -306,7 +306,7 @@ func TestWorkspaceRuntimeRehydratesOnNextDemandAfterProviderSessionDisappears(t 
 		},
 	}}
 	dataPlane := &fakeWorkspaceRuntime{files: map[string][]byte{}, executeMissingOnce: true}
-	runtime, err := NewWorkspaceRuntime(dataPlane, provider)
+	runtime, err := NewWorkspaceRuntime(dataPlane, provider, http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,7 +356,7 @@ func TestWorkspaceRuntimeWithManagerDoesNotReplaceMissingSessionWithinSameDemand
 	// renew, then execute renew. Simulate the provider session disappearing at
 	// the boundary immediately before command execution.
 	provider.renewErrOn = 4
-	runtime, err := NewWorkspaceRuntime(manager, workspaces)
+	runtime, err := NewWorkspaceRuntime(manager, workspaces, http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +408,7 @@ func TestWorkspaceRuntimeRejectsTamperedInputBeforeExecution(t *testing.T) {
 		}}},
 	}}
 	dataPlane := &fakeWorkspaceRuntime{files: map[string][]byte{}}
-	runtime, err := NewWorkspaceRuntime(dataPlane, provider)
+	runtime, err := NewWorkspaceRuntime(dataPlane, provider, http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -446,7 +446,7 @@ func TestWorkspaceRuntimeRejectsNonCanonicalInputPathFromProvider(t *testing.T) 
 		},
 	}}
 	dataPlane := &fakeWorkspaceRuntime{files: map[string][]byte{}}
-	runtime, err := NewWorkspaceRuntime(dataPlane, provider)
+	runtime, err := NewWorkspaceRuntime(dataPlane, provider, http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -474,7 +474,7 @@ func TestWorkspaceRuntimeDoesNotRehydrateWhenOnlyContainingManifestChanges(t *te
 		},
 	}}
 	dataPlane := &fakeWorkspaceRuntime{files: map[string][]byte{}}
-	runtime, err := NewWorkspaceRuntime(dataPlane, provider)
+	runtime, err := NewWorkspaceRuntime(dataPlane, provider, http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -517,7 +517,7 @@ func TestWorkspaceRuntimeRejectsInputRevisionChangeAfterMaterialization(t *testi
 		},
 	}}
 	dataPlane := &fakeWorkspaceRuntime{files: map[string][]byte{}}
-	runtime, err := NewWorkspaceRuntime(dataPlane, provider)
+	runtime, err := NewWorkspaceRuntime(dataPlane, provider, http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -564,7 +564,7 @@ func TestWorkspaceRuntimeStreamsInputLargerThanLegacyInlineLimit(t *testing.T) {
 		},
 	}}
 	dataPlane := &fakeWorkspaceRuntime{files: map[string][]byte{}}
-	runtime, err := NewWorkspaceRuntime(dataPlane, provider)
+	runtime, err := NewWorkspaceRuntime(dataPlane, provider, http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -634,7 +634,7 @@ func TestEnsureWorkspaceHydrated_AdditiveAttachmentsHydrateInPlace(t *testing.T)
 	revisionX, revisionY := strings.Repeat("a", 64), strings.Repeat("b", 64)
 	workspaces := &fakeWorkspaceProvider{mount: inputMount(t, server, revisionX, brief)}
 	manager, provider := newTestManager(t)
-	runtime, err := NewWorkspaceRuntime(manager, workspaces)
+	runtime, err := NewWorkspaceRuntime(manager, workspaces, http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -692,7 +692,7 @@ func TestEnsureWorkspaceHydrated_NonAdditiveDiffStillRefused(t *testing.T) {
 			next := inputServer(t, tc.inputs...)
 			workspaces := &fakeWorkspaceProvider{mount: inputMount(t, initial, revisionX, brief)}
 			manager, provider := newTestManager(t)
-			runtime, err := NewWorkspaceRuntime(manager, workspaces)
+			runtime, err := NewWorkspaceRuntime(manager, workspaces, http.DefaultTransport)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -733,7 +733,7 @@ func TestWorkspaceRuntimeEnsuredReadOfAnUnwrittenWorkspaceIsEmpty(t *testing.T) 
 		Hydration:      workspace.Hydration{RevisionSHA256: revision},
 	}}
 	dataPlane := &fakeWorkspaceRuntime{workspaceGone: true}
-	runtime, err := NewWorkspaceRuntime(dataPlane, provider)
+	runtime, err := NewWorkspaceRuntime(dataPlane, provider, http.DefaultTransport)
 	if err != nil {
 		t.Fatal(err)
 	}

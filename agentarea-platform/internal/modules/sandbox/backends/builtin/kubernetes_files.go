@@ -80,7 +80,7 @@ func (k *Kubernetes) SandboxFilePut(ctx context.Context, req warmpool.FilePutReq
 	req.ExecutorIncarnation = incarnation
 	err = k.withPodLease(ctx, wp, pod, func(operationCtx context.Context) error {
 		var operationErr error
-		result, operationErr = warmpool.PutFile(operationCtx, base, req, sandboxFileTimeout)
+		result, operationErr = k.executor.PutFile(operationCtx, base, req, sandboxFileTimeout)
 		return operationErr
 	})
 	return result, k.invalidateUnsafePod(ctx, wp, pod, err)
@@ -94,7 +94,7 @@ func (k *Kubernetes) SandboxFileUpload(ctx context.Context, req sandboxruntime.F
 	var result *warmpool.FilePutResponse
 	err = k.withPodLease(ctx, wp, pod, func(operationCtx context.Context) error {
 		var operationErr error
-		result, operationErr = warmpool.PutFileStream(operationCtx, base, warmpool.FileTransferRequest{
+		result, operationErr = k.executor.PutFileStream(operationCtx, base, warmpool.FileTransferRequest{
 			WorkspaceID: req.WorkspaceID, TaskID: req.TaskID,
 			ExecutorIncarnation: incarnation, Path: req.Path, Size: req.Size, SHA256: req.SHA256, Mode: uint32(req.Mode),
 		}, content, 10*time.Minute)
@@ -116,7 +116,7 @@ func (k *Kubernetes) SandboxFileGet(ctx context.Context, workspaceID, taskID, pa
 	var result *warmpool.FileGetResponse
 	err = k.withPodLease(ctx, wp, pod, func(operationCtx context.Context) error {
 		var operationErr error
-		result, operationErr = warmpool.GetFileForIncarnation(operationCtx, base, workspaceID, taskID, path, incarnation, sandboxFileTimeout)
+		result, operationErr = k.executor.GetFileForIncarnation(operationCtx, base, workspaceID, taskID, path, incarnation, sandboxFileTimeout)
 		return operationErr
 	})
 	return result, k.invalidateUnsafePod(ctx, wp, pod, err)
@@ -131,7 +131,7 @@ func (k *Kubernetes) SandboxFileDownload(ctx context.Context, workspaceID, taskI
 	if err != nil {
 		return nil, err
 	}
-	result, err := warmpool.OpenFileForIncarnation(leaseCtx, base, workspaceID, taskID, path, incarnation, 10*time.Minute)
+	result, err := k.executor.OpenFileForIncarnation(leaseCtx, base, workspaceID, taskID, path, incarnation, 10*time.Minute)
 	if err != nil {
 		leaseErr := heartbeat.stop()
 		return nil, k.invalidateUnsafePod(ctx, wp, pod, errors.Join(err, leaseErr))
@@ -148,7 +148,7 @@ func (k *Kubernetes) SandboxFileList(ctx context.Context, workspaceID, taskID, p
 	var result *warmpool.FileListResponse
 	err = k.withPodLease(ctx, wp, pod, func(operationCtx context.Context) error {
 		var operationErr error
-		result, operationErr = warmpool.ListFilesForIncarnation(operationCtx, base, workspaceID, taskID, prefix, incarnation, sandboxFileTimeout)
+		result, operationErr = k.executor.ListFilesForIncarnation(operationCtx, base, workspaceID, taskID, prefix, incarnation, sandboxFileTimeout)
 		return operationErr
 	})
 	return result, k.invalidateUnsafePod(ctx, wp, pod, err)

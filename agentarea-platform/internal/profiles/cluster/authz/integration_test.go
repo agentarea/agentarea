@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel/metric/noop"
+
 	kauthz "github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authz"
 )
 
@@ -371,7 +373,7 @@ func TestBatchCheckChunks(t *testing.T) {
 }
 
 func TestUnreachableGraphFailsClosed(t *testing.T) {
-	c, err := NewClient("http://127.0.0.1:1", pyStore, "", "", time.Second, nil)
+	c, err := NewClient("http://127.0.0.1:1", pyStore, "", "", time.Second, nil, noop.NewMeterProvider().Meter("test"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -399,7 +401,7 @@ func TestRedirectIsNotFollowed(t *testing.T) {
 		http.Redirect(w, r, target.URL+r.URL.Path, http.StatusTemporaryRedirect)
 	}))
 	defer redirect.Close()
-	c, err := NewClient(redirect.URL, pyStore, "", "secret", time.Second, nil)
+	c, err := NewClient(redirect.URL, pyStore, "", "secret", time.Second, nil, noop.NewMeterProvider().Meter("test"))
 	if err != nil {
 		t.Fatal(err)
 	}

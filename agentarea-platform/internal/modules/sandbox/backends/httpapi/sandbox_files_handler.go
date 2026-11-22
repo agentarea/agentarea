@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io/fs"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 
@@ -13,14 +12,12 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/backends/warmpool"
 )
 
-const sandboxFileAuthSecretEnv = "AGENTAREA_SANDBOX_FILE_SECRET"
-
 // sandboxFiles proxies the sandbox file API to the executor data plane. The file
 // tool writes here so its files land on the same filesystem bash executes in,
 // instead of the S3 task workspace bash cannot see. The control plane signs the
 // ScopeFiles token; the activation secret never reaches the worker.
 func (h *Handler) sandboxFiles(c *reqctx) {
-	if !requireSandboxFileAuthorization(c) {
+	if !h.requireSandboxFileAuthorization(c) {
 		return
 	}
 	switch c.Request.Method {
@@ -104,7 +101,7 @@ func (h *Handler) sandboxFiles(c *reqctx) {
 // used by current clients for file bodies while the JSON endpoint remains only
 // as a bounded compatibility surface.
 func (h *Handler) sandboxFileContent(c *reqctx) {
-	if !requireSandboxFileAuthorization(c) {
+	if !h.requireSandboxFileAuthorization(c) {
 		return
 	}
 	maxBytes := h.sandboxPolicy.MaxFileBytes
@@ -178,8 +175,8 @@ func (h *Handler) sandboxFileContent(c *reqctx) {
 	}
 }
 
-func requireSandboxFileAuthorization(c *reqctx) bool {
-	if sandboxCleanupAuthorized(c.GetHeader("Authorization"), os.Getenv(sandboxFileAuthSecretEnv)) {
+func (h *Handler) requireSandboxFileAuthorization(c *reqctx) bool {
+	if sandboxCleanupAuthorized(c.GetHeader("Authorization"), h.secrets.File) {
 		return true
 	}
 	c.JSON(http.StatusUnauthorized, jsonObject{

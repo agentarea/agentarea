@@ -171,8 +171,9 @@ func (t sandboxTools) listFiles(ctx context.Context, ws, task string, args map[s
 	matched := names
 	if search || (pattern != "" && pattern != "*") {
 		matched = nil
+		re := governanceapi.CompileFnmatch(pattern)
 		for _, n := range names {
-			if governanceapi.Fnmatch(n, pattern) {
+			if re.MatchString(n) {
 				matched = append(matched, n)
 			}
 		}

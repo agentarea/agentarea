@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 
+	"go.opentelemetry.io/otel"
+
 	kauthz "github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authz"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/config"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
+	kobs "github.com/agentarea/agentarea/agentarea-platform/internal/kernel/obs"
 	clusterauthz "github.com/agentarea/agentarea/agentarea-platform/internal/profiles/cluster/authz"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/profiles/cluster/secrets"
 )
@@ -32,7 +35,7 @@ func (b *Build) applyGraphMigrations(ctx context.Context, dbc db.Config, steps [
 		if err := l.Err(); err != nil {
 			return nil, fmt.Errorf("configuration: %w", err)
 		}
-		c, _, err := clusterauthz.Open(ctx, cfg, clusterauthz.Options{Log: log})
+		c, _, err := clusterauthz.Open(ctx, cfg, clusterauthz.Options{Log: log, Meter: otel.Meter(kobs.MeterScope)})
 		return c, err
 	})
 	ran, err := kauthz.ApplyPendingGraphMigrations(ctx, clusterauthz.Ledger{Global: pools.Global()}, steps, graph, log)
