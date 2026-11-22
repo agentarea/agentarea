@@ -719,6 +719,10 @@ func bundleAgentFrom(c *checker, v any, loc []any) (BundleAgent, bool) {
 	before := c.count()
 	out := BundleAgent{Key: c.entityKey(f, "agent"), Name: c.requiredStr(f, "name", 1, BundleMaxNameLength),
 		MCPs: []string{}, Skills: []string{}, Toolsets: []string{}, Delegates: []string{}}
+	if out.Key == "workspace" {
+		c.valueError("agent key 'workspace' is reserved: a policy subject 'workspace' would mean the whole workspace; name the agent something else",
+			f.at("key"))
+	}
 	if v, ok := f.get("description"); ok {
 		out.Description, _ = c.str(v, 0, 1000, f.at("description"))
 	}

@@ -85,3 +85,66 @@ func TestBundleRediscoverCountsTheToolsServedNow(t *testing.T) {
 		t.Fatalf("rediscover = %+v, %v", got, err)
 	}
 }
+
+func TestBundleUpdateMCPAndRediscoverNeedEditOnTheInstance(t *testing.T) {
+	f := newInstFixture(t)
+	ctx := context.Background()
+	b := BundleMCPs{S: func() *Service { return f.svc }}
+	made, err := b.CreateWithSpec(ctx, f.c, catalogapi.MCPSpecNew{Name: "fs", Cmd: []any{"npx", "fs"}},
+		catalogapi.BundleInstance{Name: "fs", JSONSpec: map[string]any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec, ok, err := b.InstanceSpecID(ctx, f.c, made.InstanceID); err != nil || !ok || spec != made.SpecID {
+		t.Fatalf("spec of the instance = %s %v %v", spec, ok, err)
+	}
+	f.graph.denied = map[string]bool{made.InstanceID: true}
+	err = b.UpdateMCP(ctx, f.c, made.InstanceID, catalogapi.BundleMCPUpdate{Instance: catalogapi.BundleInstance{Name: "x", JSONSpec: map[string]any{}}})
+	var refusal *catalogapi.BundleRefusal
+	if !errors.As(err, &refusal) || refusal.Msg != "you may not edit MCP instance "+made.InstanceID {
+		t.Fatalf("update without edit: %v", err)
+	}
+	if _, err := b.Rediscover(ctx, f.c, made.InstanceID); !errors.As(err, &refusal) {
+		t.Fatalf("rediscover without edit: %v", err)
+	}
+	f.graph.denied = map[string]bool{made.SpecID: true}
+	err = b.UpdateMCP(ctx, f.c, made.InstanceID, catalogapi.BundleMCPUpdate{Spec: &catalogapi.MCPSpecNew{Name: "fs", Cmd: []any{"npx", "fs2"}},
+		Instance: catalogapi.BundleInstance{Name: "fs", JSONSpec: map[string]any{}}})
+	if !errors.As(err, &refusal) || refusal.Msg != "you may not edit MCP server spec "+made.SpecID {
+		t.Fatalf("spec update without edit: %v", err)
+	}
+}
+
+func TestBundleSecretsMatchComparesWithoutRevealing(t *testing.T) {
+	f := newInstFixture(t)
+	ctx := context.Background()
+	b := BundleMCPs{S: func() *Service { return f.svc }}
+	url := "https://mcp.example.com/mcp"
+	made, err := b.CreateWithSpec(ctx, f.c, catalogapi.MCPSpecNew{Name: "remote", RemoteURL: &url,
+		EnvSchema: []any{map[string]any{"name": "Authorization", "isSecret": true}}},
+		catalogapi.BundleInstance{Name: "remote", JSONSpec: map[string]any{"headers": map[string]any{"Authorization": "Bearer t0k"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctxSecret := "0123456789abcdef-context"
+	if err := b.UpdateMCP(ctx, f.c, made.InstanceID, catalogapi.BundleMCPUpdate{SetContextSecret: true,
+		Instance: catalogapi.BundleInstance{Name: "remote", JSONSpec: map[string]any{"headers": map[string]any{"Authorization": b.KeepSecret()}},
+			ContextSecret: &ctxSecret}}); err != nil {
+		t.Fatal(err)
+	}
+	same, contextSame, err := b.SecretsMatch(ctx, f.c, made.InstanceID,
+		map[string]string{"Authorization": "Bearer t0k", "Missing": "x"}, &ctxSecret)
+	if err != nil || !same["Authorization"] || same["Missing"] || !contextSame {
+		t.Fatalf("same = %v, context %v, %v", same, contextSame, err)
+	}
+	other := "another-context-secret-value"
+	same, contextSame, err = b.SecretsMatch(ctx, f.c, made.InstanceID, map[string]string{"Authorization": "Bearer n3w"}, &other)
+	if err != nil || same["Authorization"] || contextSame {
+		t.Fatalf("different values matched: %v %v %v", same, contextSame, err)
+	}
+	f.graph.denied = map[string]bool{made.InstanceID: true}
+	var refusal *catalogapi.BundleRefusal
+	if _, _, err := b.SecretsMatch(ctx, f.c, made.InstanceID, map[string]string{"Authorization": "x"}, nil); !errors.As(err, &refusal) {
+		t.Fatalf("compare without edit: %v", err)
+	}
+}

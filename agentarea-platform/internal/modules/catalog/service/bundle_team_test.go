@@ -76,7 +76,7 @@ func TestTeamInstallCreatesDelegatesFirst(t *testing.T) {
 	}
 	u := f.agents.updates[0]
 	if len(u.Tools) != 1 || u.Tools[0].Name != "writer" || *u.Tools[0].AgentID != "agent-1" ||
-		!reflect.DeepEqual(u.ManagedTools[len(u.ManagedTools)-2:], []catalogapi.BundleTool{{Type: "agent", Name: "writer"}, {Type: "agent", Name: "researcher"}}) {
+		!reflect.DeepEqual(managedDelegates(u.ManagedTools), []string{"writer=agent-1", "researcher=agent-2"}) {
 		t.Fatalf("update = %+v", u)
 	}
 }
@@ -241,4 +241,14 @@ func TestAnalyzeWarnsOfOrphans(t *testing.T) {
 		p.Issues[0].Message != "policy 'cap' left the bundle; it stays in the workspace as an orphan, not deleted" {
 		t.Fatalf("issues = %+v", p.Issues)
 	}
+}
+
+func managedDelegates(tools []catalogapi.BundleTool) []string {
+	var out []string
+	for _, t := range tools {
+		if t.Type == "agent" {
+			out = append(out, t.Name+"="+deref(t.AgentID))
+		}
+	}
+	return out
 }

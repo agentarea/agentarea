@@ -4047,6 +4047,12 @@ export type InstalledEntity = {
     key: string;
     kind: EntityKind;
     /**
+     * Model Id
+     *
+     * For an agent whose model is given by name: the model instance the name resolved to when the agent was last written.
+     */
+    model_id?: string | null;
+    /**
      * Name
      */
     name: string;

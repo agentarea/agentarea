@@ -36,6 +36,10 @@ func renamesOf(b *Bundle, prior *priorInstall) (map[entityRef]string, []PreviewI
 				issues = append(issues, blockIssue(s.specKey(), fmt.Sprintf("%s '%s' is renamed_from '%s', but the bundle still declares %s '%s'",
 					kind, s.specKey(), *from, kind, *from)))
 			case prior != nil && prior.recorded(kind, s.specKey()) != nil:
+				if prior.recorded(kind, *from) != nil {
+					issues = append(issues, warnIssue(s.specKey(), fmt.Sprintf("%s '%s': renamed_from '%s' is ignored: the last install has both '%s' and '%s'; "+
+						"'%s' stays as an orphan", kind, s.specKey(), *from, *from, s.specKey(), *from)))
+				}
 			case prior == nil || prior.recorded(kind, *from) == nil:
 				issues = append(issues, warnIssue(s.specKey(), fmt.Sprintf("%s '%s': renamed_from '%s' names no %s of the last install; it is created new",
 					kind, s.specKey(), *from, kind)))

@@ -1,6 +1,9 @@
 package service
 
 import (
+	"net/url"
+	"strings"
+
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx/wirejson"
 )
@@ -35,8 +38,29 @@ func (c *checker) origin(f fields) *BundleOrigin {
 	}
 	of := fields{o, f.at("origin")}
 	out := &BundleOrigin{GitRemote: c.nullableStr(of, "git_remote"), GitCommit: c.nullableStr(of, "git_commit"), Path: c.nullableStr(of, "path")}
+	if out.GitRemote != nil {
+		remote := plainRemote(*out.GitRemote)
+		out.GitRemote = &remote
+	}
 	c.extra(o, []string{"git_remote", "git_commit", "path"}, f.at("origin"))
 	return out
+}
+
+// plainRemote is a git remote without credentials, query or fragment: it is
+// shown to whoever reads the plan, so a token pasted into it must not travel.
+func plainRemote(remote string) string {
+	r := strings.TrimSpace(remote)
+	if i := strings.IndexAny(r, "?#"); i >= 0 {
+		r = r[:i]
+	}
+	if u, err := url.Parse(r); err == nil && u.Scheme != "" && u.Host != "" {
+		u.User = nil
+		return u.String()
+	}
+	if at := strings.Index(r, "@"); at >= 0 && !strings.Contains(r[:at], "/") {
+		r = r[at+1:]
+	}
+	return r
 }
 
 func (c *checker) installRef(f fields, key string) *string {

@@ -2,12 +2,16 @@ package service
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"strings"
 
 	"github.com/google/uuid"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authn"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authz"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
+	ksecrets "github.com/agentarea/agentarea/agentarea-platform/internal/kernel/secrets"
 	catalogapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/catalog/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/connections/domain"
 )
@@ -54,6 +58,31 @@ func (b BundleMCPs) InstanceName(ctx context.Context, c authn.Caller, id string)
 	return inst.Name, true, nil
 }
 
+func (b BundleMCPs) InstanceSpecID(ctx context.Context, c authn.Caller, id string) (string, bool, error) {
+	u, err := uuid.Parse(id)
+	if err != nil {
+		return "", false, nil
+	}
+	inst, err := b.S().GetInstance(ctx, c, u)
+	var nf *domain.NotFound
+	switch {
+	case errors.As(err, &nf):
+		return "", false, nil
+	case err != nil:
+		return "", false, err
+	}
+	return inst.ServerSpecID, true, nil
+}
+
+// mayEdit refuses a caller without edit on the resource, as its own update route does.
+func (b BundleMCPs) mayEdit(ctx context.Context, c authn.Caller, resourceType, id, what string) error {
+	err := b.S().Require(ctx, c, "edit", resourceType, id)
+	if errors.Is(err, authz.ErrDenied) {
+		return &catalogapi.BundleRefusal{Msg: "you may not edit " + what + " " + id}
+	}
+	return err
+}
+
 func created(v InstanceView, err error) (catalogapi.BundleMCPCreated, error) {
 	if err != nil {
 		return catalogapi.BundleMCPCreated{}, bundleRefusal(err)
@@ -97,13 +126,21 @@ func (b BundleMCPs) UpdateMCP(ctx context.Context, c authn.Caller, id string, u 
 	if err != nil {
 		return err
 	}
+	if err := b.mayEdit(ctx, c, "mcp_instance", id, "MCP instance"); err != nil {
+		return err
+	}
+	if u.Spec != nil {
+		if err := b.mayEdit(ctx, c, "mcp_server", inst.ServerSpecID, "MCP server spec"); err != nil {
+			return err
+		}
+	}
 	name := u.Instance.Name
 	p := InstancePatchIn{Name: &name, JSONSpec: u.Instance.JSONSpec}
 	if p.JSONSpec == nil {
 		p.JSONSpec = map[string]any{}
 	}
 	if u.SetContextSecret {
-		p.ContextSecretSet, p.ContextSecret = true, u.Instance.ContextSecret
+		p.ContextSecretSet, p.ContextSecret = true, u.Instance.ContextSecret // pragma: allowlist secret
 	}
 	if u.Spec != nil {
 		n := *u.Spec
@@ -143,11 +180,59 @@ func (b BundleMCPs) UpdateMCP(ctx context.Context, c authn.Caller, id string, u 
 	return bundleRefusal(err)
 }
 
+// SecretsMatch compares values with the instance's stored secrets in constant
+// time; a name with no stored secret does not match.
+func (b BundleMCPs) SecretsMatch(ctx context.Context, c authn.Caller, id string, values map[string]string, contextSecret *string) (map[string]bool, bool, error) {
+	s := b.S()
+	u, err := uuid.Parse(id)
+	if err != nil {
+		return nil, false, catalogapi.ErrBundleEntityGone
+	}
+	if err := b.mayEdit(ctx, c, "mcp_instance", id, "MCP instance"); err != nil {
+		return nil, false, err
+	}
+	same := map[string]bool{}
+	contextSame := false
+	err = s.read(ctx, c, func(sess db.Session) error {
+		inst, ok, err := s.d.Instances.Get(ctx, sess, u)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return catalogapi.ErrBundleEntityGone
+		}
+		m := s.d.Secrets.Manager(sess, c.UserID)
+		matches := func(name, value string) (bool, error) {
+			stored, err := m.Get(ctx, domain.InstanceSecretName(inst.ID, name))
+			if errors.Is(err, ksecrets.ErrNotFound) {
+				return false, nil
+			}
+			if err != nil {
+				return false, err
+			}
+			return subtle.ConstantTimeCompare([]byte(stored), []byte(value)) == 1, nil
+		}
+		for name, value := range values {
+			if same[name], err = matches(name, value); err != nil {
+				return err
+			}
+		}
+		if contextSecret != nil {
+			contextSame, err = matches(domain.ContextSecretName, *contextSecret)
+		}
+		return err
+	})
+	return same, contextSame, err
+}
+
 // Rediscover verifies the instance again: the tools it stores are the ones it serves now.
 func (b BundleMCPs) Rediscover(ctx context.Context, c authn.Caller, id string) (catalogapi.BundleDiscovery, error) {
 	iid, err := uuid.Parse(id)
 	if err != nil {
 		return catalogapi.BundleDiscovery{}, catalogapi.ErrBundleEntityGone
+	}
+	if err := b.mayEdit(ctx, c, "mcp_instance", id, "MCP instance"); err != nil {
+		return catalogapi.BundleDiscovery{}, err
 	}
 	tools, v, err := b.S().DiscoverInstanceTools(ctx, c.Workspace, iid)
 	if err != nil {

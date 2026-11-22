@@ -130,6 +130,8 @@ type InstalledEntity struct {
 	ID          *string
 	Detail      *string
 	Fingerprint *string
+	// ModelID is the instance an agent's model name resolved to when it was last written.
+	ModelID *string
 }
 
 // InstallResult is what an install did.
@@ -209,9 +211,13 @@ func IssueDumps(issues []PreviewIssue) []any {
 
 // Dump is model_dump(mode="json").
 func (e InstalledEntity) Dump() wirejson.Object {
-	return wirejson.Object{{Key: "kind", Value: string(e.Kind)}, {Key: "key", Value: e.Key}, {Key: "name", Value: e.Name},
+	out := wirejson.Object{{Key: "kind", Value: string(e.Kind)}, {Key: "key", Value: e.Key}, {Key: "name", Value: e.Name},
 		{Key: "action", Value: string(e.Action)}, {Key: "id", Value: optStrValue(e.ID)}, {Key: "detail", Value: optStrValue(e.Detail)},
 		{Key: "fingerprint", Value: optStrValue(e.Fingerprint)}}
+	if e.ModelID != nil {
+		out = append(out, wirejson.Member{Key: "model_id", Value: *e.ModelID})
+	}
+	return out
 }
 
 // Dump is model_dump(mode="json").
@@ -249,12 +255,12 @@ func installedEntityFrom(c *checker, v any, loc []any) (InstalledEntity, bool) {
 	for _, s := range []struct {
 		key string
 		dst **string
-	}{{"id", &out.ID}, {"detail", &out.Detail}, {"fingerprint", &out.Fingerprint}} {
+	}{{"id", &out.ID}, {"detail", &out.Detail}, {"fingerprint", &out.Fingerprint}, {"model_id", &out.ModelID}} {
 		if v, ok := f.get(s.key); ok {
 			*s.dst, _ = c.optStr(v, 0, f.at(s.key))
 		}
 	}
-	c.extra(o, []string{"kind", "key", "name", "action", "id", "detail", "fingerprint"}, loc)
+	c.extra(o, []string{"kind", "key", "name", "action", "id", "detail", "fingerprint", "model_id"}, loc)
 	return out, c.count() == before
 }
 

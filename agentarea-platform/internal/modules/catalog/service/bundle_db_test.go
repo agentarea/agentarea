@@ -6,12 +6,15 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authn"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx/wirejson"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/catalog/store"
 	modelsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/api"
 )
 
@@ -178,4 +181,82 @@ func TestBundleInstallIsFoundByIDNotByName(t *testing.T) {
 func isPlanChanged(err error) bool {
 	var be *BundleError
 	return errors.As(err, &be) && be.Kind == BundlePlanChanged
+}
+
+// A deploy holds the bundle name's lock from plan check to record: a first
+// install of the same name that commits meanwhile turns this one into a 409.
+func TestBundleInstallWaitsForTheNameLock(t *testing.T) {
+	b, _, ctx := newDBBundles(t)
+	c, _ := authn.CallerFrom(ctx)
+	first, err := b.AnalyzeText(ctx, demoBundle, demoValues(), BundleTarget{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	locked, release, held := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	go func() {
+		held <- b.d.DB.Write(context.Background(), c.Workspace, func(ctx context.Context, sess db.Session) error {
+			if err := db.XactLock(ctx, sess.Q(), installLockKey(c.Workspace.ID(), "demo")); err != nil {
+				return err
+			}
+			close(locked)
+			<-release
+			_, err := b.rows.Insert(ctx, sess, "someone", store.BundleRecord{Name: "demo", SchemaVersion: BundleSchemaVersion,
+				Status: "installed", Canonical: []byte(`{}`), InstallResult: []byte(`{"bundle_name":"demo","entities":[]}`)}, time.Now())
+			return err
+		})
+	}()
+	<-locked
+	done := make(chan error, 1)
+	go func() {
+		_, err := b.Install(ctx, first.Bundle, demoValues(), *first.PlanDigest, BundleTarget{})
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("install did not wait for the lock: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	close(release)
+	if err := <-held; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; !isPlanChanged(err) {
+		t.Fatalf("install after a concurrent first install: %v", err)
+	}
+}
+
+func TestBundleRowUpdateRefusesAStaleRevision(t *testing.T) {
+	b, _, ctx := newDBBundles(t)
+	c, _ := authn.CallerFrom(ctx)
+	rec := store.BundleRecord{Name: "demo", SchemaVersion: BundleSchemaVersion, Status: "installed", Canonical: []byte(`{}`),
+		InstallResult: []byte(`{}`)}
+	var id string
+	var row store.BundleRow
+	err := b.d.DB.Write(ctx, c.Workspace, func(ctx context.Context, sess db.Session) error {
+		var err error
+		if id, err = b.rows.Insert(ctx, sess, "u", rec, time.Now()); err != nil {
+			return err
+		}
+		row, _, err = b.rows.ByID(ctx, sess, id)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c2 := range []struct {
+		seen time.Time
+		want bool
+	}{{row.UpdatedAt.Add(-time.Second), false}, {row.UpdatedAt, true}, {row.UpdatedAt, false}} {
+		var ok bool
+		if err := b.d.DB.Write(ctx, c.Workspace, func(ctx context.Context, sess db.Session) error {
+			var err error
+			ok, err = b.rows.Update(ctx, sess, id, "u", c2.seen, rec, time.Now().Add(time.Minute))
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if ok != c2.want {
+			t.Fatalf("update seen %v = %v, want %v", c2.seen, ok, c2.want)
+		}
+	}
 }

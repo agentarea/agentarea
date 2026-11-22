@@ -66,7 +66,7 @@ func (in *bundleInstaller) install(ctx context.Context, b *Bundle, supplied wire
 	in.result = InstallResult{BundleName: b.Name, SetupValues: rememberedSetup(b, supplied, prior)}
 	in.created, in.updatedInPlace = nil, false
 	steps := []func(context.Context) error{in.installMCPs, in.installSkills, in.installAgents, in.installChannels,
-		in.installAutomations, in.installPolicies, in.recordOrphans}
+		in.installAutomations, in.installPolicies, in.recordOrphans, in.rediscoverMCPs}
 	for _, step := range steps {
 		if err := step(ctx); err != nil {
 			if in.updatedInPlace {
@@ -550,17 +550,48 @@ func (in *bundleInstaller) redeployMCP(ctx context.Context, m BundleMCP, id, nam
 	if err != nil {
 		return InstalledEntity{}, err
 	}
-	if changed || mcpSecretSupplied(in.pkg, m, in.supplied) {
+	values, contextSecret := suppliedSecrets(in.pkg, m, in.values, in.supplied)
+	same, contextSame := map[string]bool{}, false
+	if len(values) > 0 || contextSecret != nil {
+		if same, contextSame, err = w.b.d.MCPs.SecretsMatch(ctx, w.c, id, values, contextSecret); err != nil {
+			return InstalledEntity{}, err
+		}
+	}
+	differ := contextSecret != nil && !contextSame
+	for k := range values {
+		differ = differ || !same[k]
+	}
+	if changed || differ {
 		if err := in.authorizeUpdate(ctx, KindMCP, m.Key, id); err != nil {
 			return InstalledEntity{}, err
+		}
+		if m.Catalog == nil {
+			refusal, err := w.specEditRefusal(ctx, id)
+			if err != nil {
+				return InstalledEntity{}, err
+			}
+			if refusal != "" {
+				msg := fmt.Sprintf("mcp '%s' would be updated, but %s", m.Key, refusal)
+				return InstalledEntity{}, installError(msg, blockIssue(m.Key, msg))
+			}
 		}
 		plan, err := in.mcpWrite(ctx, m, w.b.d.MCPs.KeepSecret())
 		if err != nil {
 			return InstalledEntity{}, err
 		}
-		u := catalogapi.BundleMCPUpdate{Spec: plan.spec, Instance: plan.instance, SetContextSecret: plan.contextSecret}
+		keep := w.b.d.MCPs.KeepSecret()
+		for _, field := range []string{"environment", "headers"} {
+			if set, ok := plan.instance.JSONSpec[field].(map[string]any); ok {
+				for k := range set {
+					if same[k] {
+						set[k] = keep
+					}
+				}
+			}
+		}
+		u := catalogapi.BundleMCPUpdate{Spec: plan.spec, Instance: plan.instance, SetContextSecret: plan.contextSecret && !contextSame}
 		if before, ok := in.prior.spec(KindMCP, m.Key).(BundleMCP); ok && m.ContextSecret == nil && before.ContextSecret != nil {
-			u.SetContextSecret = true
+			u.SetContextSecret = true // pragma: allowlist secret
 		}
 		err = w.b.d.MCPs.UpdateMCP(ctx, w.c, id, u)
 		if msg, ok := refusalOf(err); ok {
@@ -578,19 +609,35 @@ func (in *bundleInstaller) redeployMCP(ctx context.Context, m BundleMCP, id, nam
 	if e.Fingerprint, err = in.fingerprint(m); err != nil {
 		return InstalledEntity{}, err
 	}
-	found, err := w.b.d.MCPs.Rediscover(ctx, w.c, id)
-	if err != nil {
-		return InstalledEntity{}, err
-	}
-	detail := fmt.Sprintf("tools re-discovered: %d", found.Tools)
-	if found.Status != "succeeded" {
-		detail = "tools not re-discovered: verification " + found.Status
-		if found.Error != nil && *found.Error != "" {
-			detail += ": " + *found.Error
-		}
-	}
-	e.Detail = &detail
 	return e, nil
+}
+
+// rediscoverMCPs discovers again the tools of every MCP an earlier install
+// created, once everything is written, so agents see the ones it serves now.
+// A failure is the MCP's detail, never the install's: the writes are done.
+func (in *bundleInstaller) rediscoverMCPs(ctx context.Context) error {
+	w := in.w
+	for i, e := range in.result.Entities {
+		if e.Kind != KindMCP || !hasID(e) || (e.Action != ActionUpdated && e.Action != ActionUnchanged) {
+			continue
+		}
+		found, err := w.b.d.MCPs.Rediscover(ctx, w.c, *e.ID)
+		var detail string
+		switch {
+		case err != nil:
+			w.b.d.Log.ErrorContext(ctx, "Could not re-discover the tools of a bundle's MCP", "mcp", e.Key, "instance_id", *e.ID, "error", err)
+			detail = "tools not re-discovered: " + err.Error()
+		case found.Status != "succeeded":
+			detail = "tools not re-discovered: verification " + found.Status
+			if found.Error != nil && *found.Error != "" {
+				detail += ": " + *found.Error
+			}
+		default:
+			detail = fmt.Sprintf("tools re-discovered: %d", found.Tools)
+		}
+		in.result.Entities[i].Detail = &detail
+	}
+	return nil
 }
 
 // -- skills
@@ -746,6 +793,29 @@ func (in *bundleInstaller) linkedBefore(kind EntityKind, refs []string) []string
 func setStr(s *string) bool { return s != nil && *s != "" }
 func setInt(n *int64) bool  { return n != nil && *n != 0 }
 
+// modelName is the model an agent names by name rather than id, "" when it gives an id or a placeholder left unresolved.
+func modelName(a BundleAgent, values wirejson.Object) string {
+	if a.Model == nil {
+		return ""
+	}
+	ref := resolvePlaceholders(*a.Model, values)
+	if ref == "" || len(setupRefsOf(ref)) > 0 {
+		return ""
+	}
+	if _, err := uuid.Parse(ref); err == nil {
+		return ""
+	}
+	return ref
+}
+
+// namedModel is the instance recorded for an agent whose model is a name: what a later plan compares the name against.
+func (in *bundleInstaller) namedModel(a BundleAgent, id string) *string {
+	if modelName(a, in.values) == "" {
+		return nil
+	}
+	return &id
+}
+
 // modelID is the instance an agent's model names, its setup placeholders resolved.
 func (in *bundleInstaller) modelID(ctx context.Context, a BundleAgent) (string, error) {
 	model := ""
@@ -788,28 +858,29 @@ func (in *bundleInstaller) installAgents(ctx context.Context) error {
 				skillIDs = append(skillIDs, id)
 			}
 		}
-		modelID, err := in.modelID(ctx, a)
-		if err != nil {
-			return err
-		}
-
 		id, _, err := in.owned(ctx, KindAgent, a.Key)
 		if err != nil {
 			return err
 		}
 		if id != nil {
 			in.agentIDs[a.Key] = *id
-			e := InstalledEntity{Kind: KindAgent, Key: a.Key, Name: a.Name, Action: ActionUnchanged, ID: id}
+			e := InstalledEntity{Kind: KindAgent, Key: a.Key, Name: a.Name, Action: ActionUnchanged, ID: id,
+				ModelID: in.prior.owned(KindAgent, a.Key).ModelID}
 			update, err := in.needsUpdate(KindAgent, a, agentDeps(a))
 			if err != nil {
 				return err
 			}
-			if update {
+			// The plan also approves an agent whose model name now names another instance.
+			if update || in.approved[entityRef{KindAgent, a.Key}] {
+				modelID, err := in.modelID(ctx, a)
+				if err != nil {
+					return err
+				}
 				if err := in.updateAgent(ctx, *id, a, modelID, tools, skillIDs); err != nil {
 					return err
 				}
 				in.updatedInPlace = true
-				e.Action = ActionUpdated
+				e.Action, e.ModelID = ActionUpdated, in.namedModel(a, modelID)
 			}
 			if e.Fingerprint, err = in.fingerprint(a); err != nil {
 				return err
@@ -830,6 +901,10 @@ func (in *bundleInstaller) installAgents(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		modelID, err := in.modelID(ctx, a)
+		if err != nil {
+			return err
+		}
 		created, err := w.b.d.Agents.CreateAgent(ctx, w.c, catalogapi.BundleAgentNew{Name: a.Name, Description: a.Description,
 			Instruction: a.Instruction, ModelID: modelID, ClientID: client, Tools: tools, SkillIDs: skillIDs,
 			ReasoningEffort: a.ReasoningEffort, ReasoningMaxTokens: int32Of(a.ReasoningMaxTokens)})
@@ -845,7 +920,8 @@ func (in *bundleInstaller) installAgents(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		in.add(InstalledEntity{Kind: KindAgent, Key: a.Key, Name: a.Name, Action: ActionCreated, ID: &created, Fingerprint: fp})
+		in.add(InstalledEntity{Kind: KindAgent, Key: a.Key, Name: a.Name, Action: ActionCreated, ID: &created, Fingerprint: fp,
+			ModelID: in.namedModel(a, modelID)})
 	}
 	return nil
 }
@@ -871,7 +947,7 @@ func (in *bundleInstaller) updateAgent(ctx context.Context, id string, a BundleA
 			u.ManagedTools = append(u.ManagedTools, catalogapi.BundleTool{Type: "mcp", Name: mid})
 		}
 		for _, d := range before.Delegates {
-			u.ManagedTools = append(u.ManagedTools, catalogapi.BundleTool{Type: "agent", Name: d})
+			u.ManagedTools = append(u.ManagedTools, catalogapi.BundleTool{Type: "agent", Name: d, AgentID: linkedID(&in.prior.result, KindAgent, d)})
 		}
 		u.ManagedSkillIDs = in.linkedBefore(KindSkill, before.Skills)
 	}

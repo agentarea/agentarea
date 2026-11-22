@@ -1309,6 +1309,7 @@ export const zInstalledEntity = z.object({
   id: z.string().nullish(),
   key: z.string(),
   kind: zEntityKind,
+  model_id: z.string().nullish(),
   name: z.string(),
 });
 

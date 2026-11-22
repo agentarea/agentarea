@@ -360,18 +360,24 @@ type deployFixture struct {
 	rules    *fakeBundleRules
 	admin    int
 	mayEdit  bool
-	w        *workspace
+	// denied are the resource types the caller may not edit; edits the checks asked.
+	denied map[string]bool
+	edits  []string
+	w      *workspace
 }
 
 func newDeployFixture(t *testing.T) *deployFixture {
-	f := &deployFixture{log: &deployLog{}, mayEdit: true}
+	f := &deployFixture{log: &deployLog{}, mayEdit: true, denied: map[string]bool{}}
 	f.agents = &fakeBundleAgents{log: f.log, live: map[string]bool{}}
 	f.triggers = &fakeBundleTriggers{log: f.log, triggers: map[string]catalogapi.BundleTrigger{}}
 	f.rules = &fakeBundleRules{log: f.log, rules: map[string]catalogapi.BundleRule{}}
 	b := &Bundles{d: BundleDeps{Agents: f.agents, MCPs: fakeBundleMCPs{}, Triggers: f.triggers, Rules: f.rules, ModelNames: demoModels(),
-		Log:     slog.New(slog.DiscardHandler),
-		Admin:   func(context.Context) error { f.admin++; return nil },
-		MayEdit: func(context.Context, authn.Caller, string, string) (bool, error) { return f.mayEdit, nil }}}
+		Log:   slog.New(slog.DiscardHandler),
+		Admin: func(context.Context) error { f.admin++; return nil },
+		MayEdit: func(_ context.Context, _ authn.Caller, resourceType, id string) (bool, error) {
+			f.edits = append(f.edits, resourceType+":"+id)
+			return f.mayEdit && !f.denied[resourceType], nil
+		}}}
 	f.w = &workspace{b: b, c: authn.Caller{Principal: authn.Principal{UserID: "u"}, Workspace: ws(t)}, catalogs: map[string]*catalogMCP{}}
 	return f
 }

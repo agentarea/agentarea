@@ -144,6 +144,11 @@ agents:
 policies:
   - {key: p, subject: a, target: "tool:x", effect: deny}
 `, nil, []string{"agent 'c': renamed_from 'ghost' names no agent of the last install; it is created new"}},
+		{"new key already installed", `
+name: r
+agents:
+  - {key: b, name: B, model: us-model, renamed_from: a}
+`, nil, []string{"agent 'b': renamed_from 'a' is ignored: the last install has both 'a' and 'b'; 'a' stays as an orphan"}},
 		{"two claims", `
 name: r
 agents:

@@ -7164,6 +7164,18 @@
           "kind": {
             "$ref": "#/components/schemas/EntityKind"
           },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For an agent whose model is given by name: the model instance the name resolved to when the agent was last written.",
+            "title": "Model Id"
+          },
           "name": {
             "title": "Name",
             "type": "string"

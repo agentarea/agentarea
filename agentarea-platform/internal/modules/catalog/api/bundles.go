@@ -131,6 +131,8 @@ type BundleDiscovery struct {
 type BundleMCPs interface {
 	// InstanceName is the name of an instance the workspace sees.
 	InstanceName(ctx context.Context, c authn.Caller, id string) (string, bool, error)
+	// InstanceSpecID is the spec the instance runs from.
+	InstanceSpecID(ctx context.Context, c authn.Caller, id string) (string, bool, error)
 	// CreateFromSpec connects specID; a spec outside the workspace is copied into it.
 	CreateFromSpec(ctx context.Context, c authn.Caller, specID string, in BundleInstance) (BundleMCPCreated, error)
 	// CreateWithSpec creates spec and its instance.
@@ -149,6 +151,10 @@ type BundleMCPs interface {
 	SecretRef(name string) any
 	// KeepSecret is the value an update sends for a secret it leaves as stored.
 	KeepSecret() any
+	// SecretsMatch compares values with the secrets the instance stores under
+	// those environment or header names, and contextSecret with its context
+	// secret; it answers equal or not, never a value.
+	SecretsMatch(ctx context.Context, c authn.Caller, id string, values map[string]string, contextSecret *string) (map[string]bool, bool, error)
 	// ContextSecretLength is the length a context secret must have.
 	ContextSecretLength() (minimum, maximum int)
 	// SpecTransport is the transport an instance of spec gets; false when it declares none.

@@ -1257,7 +1257,10 @@ type InstalledEntity struct {
 	Id   *string    `json:"id"`
 	Key  string     `json:"key"`
 	Kind EntityKind `json:"kind"`
-	Name string     `json:"name"`
+
+	// ModelId For an agent whose model is given by name: the model instance the name resolved to when the agent was last written.
+	ModelId *string `json:"model_id"`
+	Name    string  `json:"name"`
 }
 
 // IssueSeverity defines model for IssueSeverity.

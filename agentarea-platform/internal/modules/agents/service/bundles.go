@@ -127,27 +127,60 @@ func (b BundleAgents) CreateAgent(ctx context.Context, c authn.Caller, in catalo
 }
 
 // bundleToolsAfter are the agent's tools once a redeploy applies in: the
-// managed ones replaced by what the folder declares (a delegate with its new
-// agent id), the ones added in the workspace kept.
+// managed ones replaced by what the folder declares, the ones added in the
+// workspace kept. A delegate is matched by the agent it reaches, then by name,
+// and keeps the settings set on it; only its name and agent id follow the folder.
 func bundleToolsAfter(current []domain.Tool, in catalogapi.BundleAgentUpdate) []domain.Tool {
 	type ref struct{ typ, name string }
-	managed := map[ref]bool{}
-	for _, t := range in.ManagedTools {
+	managed, wanted := map[ref]bool{}, map[ref]bool{}
+	managedAgents := map[string]bool{}
+	byAgent, byName := map[string]catalogapi.BundleTool{}, map[string]catalogapi.BundleTool{}
+	for _, t := range append(append([]catalogapi.BundleTool{}, in.ManagedTools...), in.Tools...) {
 		managed[ref{t.Type, t.Name}] = true
+		if t.Type == domain.ToolAgent && t.AgentID != nil {
+			managedAgents[*t.AgentID] = true
+		}
 	}
-	wanted := map[ref]bool{}
 	for _, t := range in.Tools {
-		managed[ref{t.Type, t.Name}] = true
 		wanted[ref{t.Type, t.Name}] = true
+		if t.Type == domain.ToolAgent {
+			byName[t.Name] = t
+			if t.AgentID != nil {
+				byAgent[*t.AgentID] = t
+			}
+		}
 	}
 	var tools []domain.Tool
 	present := map[ref]bool{}
 	for _, t := range current {
 		r := ref{t.Type, t.Name}
-		if wanted[r] && t.Type == domain.ToolAgent {
+		if t.Type != domain.ToolAgent {
+			if wanted[r] || !managed[r] {
+				tools = append(tools, t)
+				present[r] = true
+			}
 			continue
 		}
-		if wanted[r] || !managed[r] {
+		agentID := ""
+		if t.Settings != nil && t.Settings.AgentID != nil {
+			agentID = *t.Settings.AgentID
+		}
+		isManaged := managed[r] || managedAgents[agentID]
+		d, ok := byAgent[agentID]
+		if !ok && isManaged {
+			d, ok = byName[t.Name]
+		}
+		if ok && !present[ref{d.Type, d.Name}] {
+			st := domain.Settings{}
+			if t.Settings != nil {
+				st = *t.Settings
+			}
+			st.AgentID = d.AgentID
+			tools = append(tools, domain.Tool{Type: t.Type, Name: d.Name, Settings: &st})
+			present[ref{d.Type, d.Name}] = true
+			continue
+		}
+		if !isManaged {
 			tools = append(tools, t)
 			present[r] = true
 		}

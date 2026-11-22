@@ -26,7 +26,7 @@ func supportedCommands() []string {
 }
 
 func editGuarded() []EntityKind {
-	return []EntityKind{KindSkill, KindAgent, KindChannel, KindAutomation}
+	return []EntityKind{KindMCP, KindSkill, KindAgent, KindChannel, KindAutomation}
 }
 
 func ownedAction(a InstallAction) bool {
@@ -386,6 +386,10 @@ type deployChecks interface {
 	agentProblem(ctx context.Context, a BundleAgent, modelID string, clientID *string) (string, error)
 	automationProblem(ctx context.Context, b *Bundle, a BundleAutomation) (string, error)
 	mayEdit(ctx context.Context, kind EntityKind, id string) (bool, error)
+	// secretsDiffer reports a supplied secret the MCP instance does not store already.
+	secretsDiffer(ctx context.Context, instanceID string, values map[string]string, contextSecret *string) (bool, error)
+	// specEditRefusal is why the caller may not edit the spec an MCP instance runs from, "" when they may.
+	specEditRefusal(ctx context.Context, instanceID string) (string, error)
 	secretProblem(ctx context.Context, name string) (string, error)
 	// modelID is the model instance ref names: its id, or the name of one; problem when it names none or several.
 	modelID(ctx context.Context, ref string) (id, problem string, err error)
@@ -948,6 +952,16 @@ func (a *bundleAnalyzer) checkWrites(ctx context.Context, b *Bundle, issues *[]P
 			if !allowed {
 				*issues = append(*issues, blockIssue(ref.key, fmt.Sprintf("%s '%s' would be updated, but you may not edit %s %s",
 					kind, ref.key, kind, id)))
+				continue
+			}
+			if m, ok := item.(BundleMCP); ok && m.Catalog == nil {
+				refusal, err := a.checks.specEditRefusal(ctx, id)
+				if err != nil {
+					return err
+				}
+				if refusal != "" {
+					*issues = append(*issues, blockIssue(ref.key, fmt.Sprintf("mcp '%s' would be updated, but %s", ref.key, refusal)))
+				}
 			}
 		}
 	}
@@ -1137,9 +1151,18 @@ func (a *bundleAnalyzer) analyzeMCPs(ctx context.Context, b *Bundle, setupKeys m
 		if err != nil {
 			return nil, err
 		}
-		if status == StatusUnchanged && mcpSecretSupplied(b, m, suppliedKeys(a.supplied)) {
-			status = StatusWillUpdate
-			a.planned[entityRef{KindMCP, m.Key}] = status
+		if values, contextSecret := suppliedSecrets(b, m, a.values, suppliedKeys(a.supplied)); status == StatusUnchanged &&
+			(len(values) > 0 || contextSecret != nil) {
+			differ := true
+			if a.checks != nil {
+				if differ, err = a.checks.secretsDiffer(ctx, a.ids[entityRef{KindMCP, m.Key}], values, contextSecret); err != nil {
+					return nil, err
+				}
+			}
+			if differ {
+				status = StatusWillUpdate
+				a.planned[entityRef{KindMCP, m.Key}] = status
+			}
 		}
 		var detail *string
 		if len(secretRefs) > 0 {
@@ -1228,7 +1251,14 @@ func (a *bundleAnalyzer) populateAgentEntities(ctx context.Context, b *Bundle, e
 		if err != nil {
 			return err
 		}
-		*entities = append(*entities, PreviewEntity{Kind: KindAgent, Key: ag.Key, Name: ag.Name, Status: status})
+		var detail *string
+		if status == StatusUnchanged {
+			if status, detail, err = a.modelMoved(ctx, ag); err != nil {
+				return err
+			}
+			a.planned[entityRef{KindAgent, ag.Key}] = status
+		}
+		*entities = append(*entities, PreviewEntity{Kind: KindAgent, Key: ag.Key, Name: ag.Name, Status: status, Detail: detail})
 	}
 	return nil
 }
@@ -1425,22 +1455,54 @@ func bindsSecret(b *Bundle, value string) bool {
 	return false
 }
 
-// mcpSecretSupplied is a secret this deploy was given for m's bindings or
-// context secret: a value the fingerprint never sees, so it is written anyway.
-func mcpSecretSupplied(b *Bundle, m BundleMCP, supplied map[string]bool) bool {
-	values := make([]string, 0, len(m.Bindings)+1)
-	for _, bind := range m.Bindings {
-		values = append(values, bind.Value)
-	}
-	if m.ContextSecret != nil {
-		values = append(values, *m.ContextSecret)
-	}
-	for _, v := range values {
+// suppliedSecrets are the secrets this deploy was given for m: binding name
+// to resolved value, and the context secret. The fingerprint never sees them,
+// so the plan asks whether the instance stores them already.
+func suppliedSecrets(b *Bundle, m BundleMCP, values wirejson.Object, supplied map[string]bool) (map[string]string, *string) {
+	given := func(v string) (string, bool) {
 		for _, k := range setupRefsOf(v) {
 			if f, ok := b.SetupField(k); ok && f.Type == SetupSecret && supplied[k] {
-				return true
+				resolved := resolvePlaceholders(v, values)
+				return resolved, len(setupRefsOf(resolved)) == 0
 			}
 		}
+		return "", false
 	}
-	return false
+	out := map[string]string{}
+	for _, bind := range m.Bindings {
+		if v, ok := given(bind.Value); ok {
+			out[bind.Key] = v
+		}
+	}
+	var contextSecret *string
+	if m.ContextSecret != nil {
+		if v, ok := given(*m.ContextSecret); ok {
+			contextSecret = &v
+		}
+	}
+	return out, contextSecret
+}
+
+// modelMoved is will_update for an otherwise unchanged agent whose model name
+// resolves to another instance than it did when last written, or to none.
+func (a *bundleAnalyzer) modelMoved(ctx context.Context, ag BundleAgent) (EntityStatus, *string, error) {
+	name := modelName(ag, a.values)
+	if name == "" || a.checks == nil {
+		return StatusUnchanged, nil, nil
+	}
+	id, problem, err := a.checks.modelID(ctx, name)
+	if err != nil {
+		return "", nil, err
+	}
+	var recorded *string
+	if owned := a.prior.owned(KindAgent, ag.Key); owned != nil {
+		recorded = owned.ModelID
+	}
+	switch {
+	case problem != "":
+		return StatusWillUpdate, nil, nil
+	case recorded == nil || *recorded != id:
+		return StatusWillUpdate, strp(fmt.Sprintf("model '%s' now names instance %s", name, id)), nil
+	}
+	return StatusUnchanged, nil, nil
 }

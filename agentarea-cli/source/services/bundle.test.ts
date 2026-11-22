@@ -87,7 +87,7 @@ test('formatBundleHeader names the install it updates, who deployed it and from 
 					updated_at: '2026-11-20T10:00:00Z',
 					origin: {
 						git_remote: 'git@github.com:acme/agents.git',
-						git_commit: 'abcdef1234567890',
+						git_commit: 'abcdef1234567890', // pragma: allowlist secret
 					},
 				},
 			}),
@@ -264,7 +264,7 @@ test('decideExisting fails a non-interactive run when the bundle was deleted', t
 
 test('stripCredentials drops user info from URL remotes and keeps scp-style ones', t => {
 	t.is(
-		stripCredentials('https://x-access-token:ghs_abc@github.com/acme/a.git'),
+		stripCredentials('https://x-access-token:ghs_abc@github.com/acme/a.git'), // pragma: allowlist secret
 		'https://github.com/acme/a.git',
 	);
 	t.is(

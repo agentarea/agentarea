@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -16,11 +17,15 @@ const keepSecret = "<kept>"
 
 // recordingMCPs creates, updates and re-discovers MCP connections in memory.
 type recordingMCPs struct {
-	log      *deployLog
-	names    map[string]string
+	log   *deployLog
+	names map[string]string
+	// stored are the plain values each instance's environment and headers hold.
+	stored   map[string]map[string]string
 	n        int
 	updates  map[string]catalogapi.BundleMCPUpdate
 	verified []string
+	// discoverErr fails every re-discovery.
+	discoverErr error
 }
 
 func (r *recordingMCPs) InstanceName(_ context.Context, _ authn.Caller, id string) (string, bool, error) {
@@ -37,16 +42,48 @@ func (r *recordingMCPs) CreateWithSpec(_ context.Context, _ authn.Caller, _ cata
 	r.n++
 	id := fmt.Sprintf("mcp-%d", r.n)
 	r.names[id] = in.Name
+	r.store(id, in.JSONSpec)
 	r.log.add("create mcp %s %v", in.Name, in.JSONSpec)
-	return catalogapi.BundleMCPCreated{InstanceID: id, SpecID: fmt.Sprintf("spec-%d", r.n)}, nil
+	return catalogapi.BundleMCPCreated{InstanceID: id, SpecID: "spec-of-" + id}, nil
 }
 func (r *recordingMCPs) UpdateMCP(_ context.Context, _ authn.Caller, id string, u catalogapi.BundleMCPUpdate) error {
 	r.updates[id] = u
 	r.names[id] = u.Instance.Name
+	r.store(id, u.Instance.JSONSpec)
 	return nil
+}
+
+func (r *recordingMCPs) store(id string, spec map[string]any) {
+	if r.stored[id] == nil {
+		r.stored[id] = map[string]string{}
+	}
+	for _, field := range []string{"environment", "headers"} {
+		values, _ := spec[field].(map[string]any)
+		for k, v := range values {
+			if s, ok := v.(string); ok && s != keepSecret {
+				r.stored[id][k] = s
+			}
+		}
+	}
+}
+
+func (r *recordingMCPs) SecretsMatch(_ context.Context, _ authn.Caller, id string, values map[string]string, _ *string) (map[string]bool, bool, error) {
+	out := map[string]bool{}
+	for k, v := range values {
+		out[k] = r.stored[id][k] == v
+	}
+	return out, false, nil
+}
+func (r *recordingMCPs) InstanceSpecID(_ context.Context, _ authn.Caller, id string) (string, bool, error) {
+	_, ok := r.names[id]
+	return "spec-of-" + id, ok, nil
 }
 func (r *recordingMCPs) Rediscover(_ context.Context, _ authn.Caller, id string) (catalogapi.BundleDiscovery, error) {
 	r.verified = append(r.verified, id)
+	r.log.add("rediscover %s", id)
+	if r.discoverErr != nil {
+		return catalogapi.BundleDiscovery{}, r.discoverErr
+	}
 	return catalogapi.BundleDiscovery{Status: "succeeded", Tools: 3}, nil
 }
 func (r *recordingMCPs) DeleteInstance(_ context.Context, _ authn.Caller, id string) error {
@@ -82,7 +119,8 @@ agents:
 func mcpFixture(t *testing.T) (*deployFixture, *recordingMCPs, Bundle, InstallResult) {
 	t.Helper()
 	f := newDeployFixture(t)
-	mcps := &recordingMCPs{log: f.log, names: map[string]string{}, updates: map[string]catalogapi.BundleMCPUpdate{}}
+	mcps := &recordingMCPs{log: f.log, names: map[string]string{}, updates: map[string]catalogapi.BundleMCPUpdate{},
+		stored: map[string]map[string]string{}}
 	f.w.b.d.MCPs = mcps
 	b := mustParse(t, mcpBundle)
 	in := &bundleInstaller{w: f.w, approved: map[entityRef]bool{}}
@@ -99,7 +137,7 @@ func mcpFixture(t *testing.T) (*deployFixture, *recordingMCPs, Bundle, InstallRe
 func redeployMCP(t *testing.T, f *deployFixture, src string, supplied wirejson.Object, prior *priorInstall) (ImportPreview, InstallResult, error) {
 	t.Helper()
 	b := mustParse(t, src)
-	p, err := (&bundleAnalyzer{existence: f.w, prior: prior, shapes: fakeShapes{}, supplied: supplied}).analyze(context.Background(), &b)
+	p, err := (&bundleAnalyzer{existence: f.w, checks: f.w, prior: prior, shapes: fakeShapes{}, supplied: supplied}).analyze(context.Background(), &b)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,5 +241,70 @@ func TestRedeployRefusesAnMCPThatChangesWhatItIs(t *testing.T) {
 		if got := blockMessages(p); len(got) != 1 || got[0] != c.want {
 			t.Fatalf("blocks = %q", got)
 		}
+	}
+}
+
+// A member who may not edit another's MCP connection cannot update it by deploying --into its bundle.
+func TestRedeployOfAnMCPNeedsEditOnItAndItsSpec(t *testing.T) {
+	changed := strings.Replace(mcpBundle, "search.example/mcp", "search.example/v2/mcp", 1)
+	for _, c := range []struct {
+		denied string
+		want   string
+	}{
+		{"mcp_instance", "mcp 'search' would be updated, but you may not edit mcp mcp-1"},
+		{"mcp_server", "mcp 'search' would be updated, but you may not edit its MCP server spec spec-of-mcp-1"},
+	} {
+		f, mcps, first, res := mcpFixture(t)
+		f.denied[c.denied] = true
+		b := mustParse(t, changed)
+		p, err := (&bundleAnalyzer{existence: f.w, checks: f.w, prior: &priorInstall{bundle: first, result: res}, shapes: fakeShapes{},
+			supplied: wirejson.Object{}}).analyze(context.Background(), &b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := blockMessages(p); len(got) != 1 || got[0] != c.want {
+			t.Fatalf("denied %s: blocks = %q, edits asked %v", c.denied, got, f.edits)
+		}
+		_, _, err = redeployMCP(t, f, changed, wirejson.Object{}, &priorInstall{bundle: first, result: res})
+		if err == nil || len(mcps.updates) != 0 {
+			t.Fatalf("denied %s: install err %v, updates %v", c.denied, err, mcps.updates)
+		}
+	}
+}
+
+// CI redeploys with the same --set secret every time: that is no change, and no restart.
+func TestRedeployWithTheSameSecretIsUnchanged(t *testing.T) {
+	f, mcps, first, res := mcpFixture(t)
+	p, res2, err := redeployMCP(t, f, mcpBundle, demoValues(), &priorInstall{bundle: first, result: res})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Entities[0].Status != StatusUnchanged || len(mcps.updates) != 0 || mcpEntity(t, res2).Action != ActionUnchanged {
+		t.Fatalf("plan %+v, updates %v", p.Entities, mcps.updates)
+	}
+	changed := strings.Replace(mcpBundle, "search.example/mcp", "search.example/v2/mcp", 1)
+	if _, _, err := redeployMCP(t, f, changed, demoValues(), &priorInstall{bundle: first, result: res}); err != nil {
+		t.Fatal(err)
+	}
+	if h := mcps.updates["mcp-1"].Instance.JSONSpec["headers"]; !reflect.DeepEqual(h, map[string]any{"Authorization": keepSecret, "X-Region": "us"}) {
+		t.Fatalf("an update re-sent an unchanged secret: %v", h)
+	}
+}
+
+// Re-discovery runs once every write is done, and its failure is reported on the MCP, never failing the install.
+func TestRediscoveryComesLastAndNeverFailsTheInstall(t *testing.T) {
+	f, mcps, first, res := mcpFixture(t)
+	src := mcpBundle + "policies:\n  - {key: p, subject: a, target: \"tool:x\", effect: deny}\n"
+	f.log.calls = nil
+	mcps.discoverErr = errors.New("gateway unreachable")
+	_, res2, err := redeployMCP(t, f, src, wirejson.Object{}, &priorInstall{bundle: first, result: res})
+	if err != nil {
+		t.Fatalf("a failed re-discovery failed the install: %v", err)
+	}
+	if last := f.log.calls[len(f.log.calls)-1]; last != "rediscover mcp-1" {
+		t.Fatalf("calls = %q", f.log.calls)
+	}
+	if d := mcpEntity(t, res2).Detail; d == nil || *d != "tools not re-discovered: gateway unreachable" {
+		t.Fatalf("detail = %v", d)
 	}
 }
