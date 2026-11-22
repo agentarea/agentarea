@@ -17,7 +17,11 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getLiveSessionIdentityId } from "@/lib/auth-session";
+import {
+  getLiveSessionIdentity,
+  getLiveSessionIdentityId,
+  type SessionIdentity,
+} from "@/lib/auth-session";
 import { type ConsentRequest, consentDecisionBody } from "./decision-body";
 import { sessionMatchesConsentSubject } from "./subject-match";
 
@@ -92,7 +96,11 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  const sessionIdentityId = await requireSessionIdentity(request);
+  const sessionIdentity: SessionIdentity | null = await getLiveSessionIdentity(
+    request.headers.get("cookie"),
+    { orySdkUrl: KRATOS_PUBLIC_URL }
+  );
+  const sessionIdentityId = sessionIdentity?.id ?? null;
   if (!sessionIdentityId) {
     return NextResponse.json({ error: "No active session" }, { status: 401 });
   }
@@ -135,7 +143,9 @@ export async function PUT(request: NextRequest) {
     const res = await fetch(consentUrl(`/${action}`, challenge), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(consentDecisionBody(action, consentRequest)),
+      body: JSON.stringify(
+        consentDecisionBody(action, consentRequest, sessionIdentity ?? undefined)
+      ),
     });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });

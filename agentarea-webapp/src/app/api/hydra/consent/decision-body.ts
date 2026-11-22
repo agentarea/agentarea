@@ -1,4 +1,6 @@
 import { grantedAccessTokenAudience } from "@/app/auth/consent/oauth-audience";
+import type { SessionIdentity } from "@/lib/auth-session";
+import { identityClaims } from "./identity-claims";
 
 export interface ConsentRequest {
   subject?: string;
@@ -16,7 +18,8 @@ export interface ConsentRequest {
  */
 export function consentDecisionBody(
   action: "accept" | "reject",
-  consentRequest: ConsentRequest
+  consentRequest: ConsentRequest,
+  identity?: SessionIdentity
 ) {
   if (action === "reject") {
     return {
@@ -24,11 +27,14 @@ export function consentDecisionBody(
       error_description: "The user denied the request",
     };
   }
+  const grantScope = consentRequest.requested_scope ?? [];
+  const claims = identity ? identityClaims(grantScope, identity) : {};
   return {
-    grant_scope: consentRequest.requested_scope ?? [],
+    grant_scope: grantScope,
     grant_access_token_audience: grantedAccessTokenAudience(
       consentRequest.requested_access_token_audience,
       consentRequest.client?.audience
     ),
+    ...(Object.keys(claims).length > 0 ? { session: { id_token: claims } } : {}),
   };
 }
