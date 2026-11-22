@@ -18,7 +18,6 @@ import { type LoginRequest, loginDecision } from "./decision";
 const KRATOS_PUBLIC_URL = process.env.ORY_SDK_URL || "http://localhost:4433";
 const HYDRA_ADMIN_URL =
   process.env.AGENTAREA_AUTH_HYDRA_ADMIN_URL ||
-  process.env.AGENTAREA_AUTH_HYDRA_ADMIN_URL ||
   "http://localhost:4445";
 
 function loginUrl(suffix: string, challenge: string): string {

@@ -621,7 +621,7 @@ def run_pack(arguments: Sequence[str]) -> PackResult:
         report["ok"] = True
         report["error"] = None
         return PackResult(report, layer_path, workdir)
-    except BaseException as exc:
+    except Exception as exc:
         if isinstance(exc, CommandError):
             output += exc.output
         output = f"{output}\n{exc}" if output else str(exc)

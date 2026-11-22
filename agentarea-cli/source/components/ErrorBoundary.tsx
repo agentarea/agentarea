@@ -9,7 +9,6 @@ interface ErrorBoundaryProps {
 
 interface ErrorBoundaryState {
 	hasError: boolean;
-	error: Error | null;
 	errorMessage: string;
 }
 
@@ -21,7 +20,6 @@ export class ErrorBoundary extends Component<
 		super(props);
 		this.state = {
 			hasError: false,
-			error: null,
 			errorMessage: '',
 		};
 	}
@@ -29,7 +27,6 @@ export class ErrorBoundary extends Component<
 	static getDerivedStateFromError(error: Error): ErrorBoundaryState {
 		return {
 			hasError: true,
-			error,
 			errorMessage: error.message || 'An unexpected error occurred',
 		};
 	}
