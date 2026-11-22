@@ -195,7 +195,7 @@ func (b *Build) runMCPControl(ctx context.Context, l *config.Loader) (err error)
 	}
 	defer func() { err = errors.Join(err, stores.Close()) }()
 	extDeps := rb.ext
-	extDeps.DB, extDeps.Secrets = stores.DB, workspaceSecrets{db: stores.DB, secrets: stores.Secrets}
+	extDeps.DB, extDeps.Secrets = stores.DB, workspaceSecrets{db: stores.DB, secrets: stores.Secrets} // pragma: allowlist secret
 	exts, err := b.resolveExtensions(ctx, extDeps, spend)
 	if err != nil {
 		return err

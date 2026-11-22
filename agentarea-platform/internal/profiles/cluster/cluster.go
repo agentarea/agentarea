@@ -135,7 +135,7 @@ func Open(ctx context.Context, cfg Config, log *slog.Logger) (_ *Profile, err er
 		return nil, err
 	}
 	p.closers = append(p.closers, stores.Close)
-	p.DB, p.Redis, p.Secrets = stores.DB, stores.Redis, stores.Secrets
+	p.DB, p.Redis, p.Secrets = stores.DB, stores.Redis, stores.Secrets // pragma: allowlist secret
 	if p.primary, err = store.OpenPrimary(ctx, cfg.DB); err != nil {
 		return nil, err
 	}

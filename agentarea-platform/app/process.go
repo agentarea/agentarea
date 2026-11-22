@@ -134,7 +134,7 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 	}
 	defer dur.Close()
 	extDeps := rb.ext
-	extDeps.DB, extDeps.Secrets = profile.DB, workspaceSecrets{db: profile.DB, secrets: profile.Secrets}
+	extDeps.DB, extDeps.Secrets = profile.DB, workspaceSecrets{db: profile.DB, secrets: profile.Secrets} // pragma: allowlist secret
 	exts, err := b.resolveExtensions(ctx, extDeps, spend)
 	if err != nil {
 		return err
