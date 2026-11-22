@@ -1,10 +1,12 @@
 import type {
+  AnalyzeRequest,
   BundleAgent,
   BundleAutomation,
   BundleChannel,
   BundleMcp,
   BundlePolicy,
   EntityKind,
+  ExistingBundleInstall,
   ImportPreview,
   InstallRequest,
   InstallResult,
@@ -134,6 +136,8 @@ export type BundleEdit = {
   autoEnabled: Record<string, boolean>;
   policyOff: Set<string>;
   policyEnabled: Record<string, boolean>;
+  // The install this deploy updates, picked when the bundle's name is taken.
+  into: string | null;
 };
 
 export function initialEdit(
@@ -162,6 +166,7 @@ export function initialEdit(
     policyEnabled: Object.fromEntries(
       (bundle.policies ?? []).map((p) => [p.key, p.enabled !== false])
     ),
+    into: null,
   };
 }
 
@@ -175,7 +180,8 @@ export type BundleEditAction =
   | { type: "toggleChannel"; key: string; on: boolean }
   | { type: "toggleAuto"; key: string; on: boolean }
   | { type: "togglePolicyInclude"; key: string; on: boolean }
-  | { type: "togglePolicyEnabled"; key: string; on: boolean };
+  | { type: "togglePolicyEnabled"; key: string; on: boolean }
+  | { type: "deployInto"; id: string };
 
 // Add/remove a key from a Set immutably (`present` = should it be in the set).
 function withKey(set: Set<string>, key: string, present: boolean): Set<string> {
@@ -245,6 +251,8 @@ export function bundleEditReducer(
         ...state,
         policyEnabled: { ...state.policyEnabled, [action.key]: action.on },
       };
+    case "deployInto":
+      return { ...state, into: action.id };
   }
 }
 
@@ -311,8 +319,21 @@ export function openIssues(
         issue.entity_key &&
         edit.agentModels[issue.entity_key] &&
         / has no model$/.test(issue.message)
-      )
+      ) && !(edit.into && issue.code === "bundle_exists")
   );
+}
+
+/**
+ * The install that already has the bundle's name, while that blocks the plan
+ * and the user has not chosen to update it.
+ */
+export function existingInstall(
+  preview: ImportPreview,
+  edit: BundleEdit
+): ExistingBundleInstall | null {
+  if (edit.into) return null;
+  const taken = (preview.issues ?? []).some((i) => i.code === "bundle_exists");
+  return taken ? (preview.existing_install ?? null) : null;
 }
 
 /** What /install is sent but the plan digest, which an analyze of exactly this gives. */
@@ -337,6 +358,28 @@ function canonical(value: unknown): unknown {
  */
 export function planKey(draft: InstallDraft): string {
   return JSON.stringify(canonical(draft));
+}
+
+/** The analyze body of a draft: the install it updates travels as `into`. */
+export function analyzeRequestFor(draft: InstallDraft): AnalyzeRequest {
+  const { install_id, ...rest } = draft;
+  return install_id ? { ...rest, into: install_id } : rest;
+}
+
+/**
+ * The install body: the draft, the digest of the plan on screen, and the
+ * install that plan was made for (null when it creates one). Null without a plan to install.
+ */
+export function installRequestFor(
+  draft: InstallDraft,
+  plan: ImportPreview
+): InstallRequest | null {
+  if (!plan.plan_digest) return null;
+  return {
+    ...draft,
+    plan_digest: plan.plan_digest,
+    install_id: plan.install?.id ?? null,
+  };
 }
 
 /** Install refused the plan it was sent: the workspace changed since it was shown. */
@@ -366,7 +409,10 @@ export function buildInstallRequest(
     .filter((c) => keptAgents.has(c.agent))
     .map((c) => ({ ...c, enabled: edit.channelEnabled[c.key] ?? false }));
   const automations: BundleAutomation[] = (bundle.automations ?? [])
-    .filter((a) => keptAgents.has(a.agent))
+    .filter((a) => {
+      const agent = automationAgent(bundle, a);
+      return agent === undefined || keptAgents.has(agent);
+    })
     .map((a) => ({ ...a, enabled: edit.autoEnabled[a.key] ?? false }));
   // A policy bound to an agent left out has nothing to govern; sent anyway it
   // comes back skipped as "agent 'x' was not created".
@@ -401,6 +447,7 @@ export function buildInstallRequest(
       policies,
     },
     setup_values: setupValues,
+    ...(edit.into ? { install_id: edit.into } : {}),
   };
 }
 
@@ -541,4 +588,14 @@ export function launchPlan(
       ? agents[0].href
       : null;
   return { agents, connections, todo, skipped, openNow };
+}
+
+/** The agent key a schedule runs: its saved task's when it runs one of the
+ * bundle's tasks, undefined for a task of the workspace, else its own. */
+export function automationAgent(
+  bundle: { tasks?: Array<{ key: string; agent: string }> | null },
+  a: BundleAutomation
+): string | undefined {
+  if (!a.task) return a.agent ?? undefined;
+  return (bundle.tasks ?? []).find((t) => t.key === a.task)?.agent;
 }

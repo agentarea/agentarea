@@ -27,14 +27,22 @@ const cli = meow(
 	  files sync <dir> [prefix] Upload a folder into workspace storage; only
 	                            files whose content changed are sent
 	                            (--exclude=a,b skips names or paths)
-	  init [dir]                Scaffold an agent folder (agent.yaml +
-	                            instructions.md) in dir (default: .)
-	  deploy [dir]              Deploy an agent folder: show the plan, confirm,
-	                            then create or update the agent
-	                            (--dry-run, --set key=value, --yes)
+	  init [dir]                Scaffold a bundle folder (agentarea.yaml +
+	                            agents/<name>.md) in dir (default: .);
+	                            --org scaffolds an organization (teams:) and
+	                            one team folder
+	  deploy [dir]              Deploy a bundle folder: show the plan, confirm,
+	                            then create or update its agents. The install
+	                            is recorded in .agentarea/deployments.json and
+	                            the next deploy updates it (--dry-run,
+	                            --plan-json, --set, --target <name>, --into,
+	                            --yes). A folder whose agentarea.yaml has
+	                            teams: deploys each team to its workspace
+	                            (--only-team <name>)
 	  connect codex|claude      Connect a harness to its client bundle
 	                            (creates the client if it does not exist)
 	  mcp sync                  Same, addressing an existing client by id
+	                            (--client <id>, --target codex|claude)
 	  api <operationId>         Escape hatch: call any operation by operationId
 	  api --list                List all raw operationIds
 
@@ -54,13 +62,22 @@ const cli = meow(
 	                  project scope (claude); user = the harness's own global
 	                  config (default: project)
 	  --client        Existing client id for 'mcp sync'
-	  --target        Harness for 'mcp sync': codex or claude (default: codex)
+	  --target        mcp sync: the harness, codex or claude (default: codex)
+	                  deploy: a target name from agentarea.yaml's targets:;
+	                  deploys to its workspace with its setup values
+	                  (--set still wins)
 	  --data          JSON request body (api / tasks submit)
 	  --query         JSON query params (api)
 	  --path          JSON path params (api)
 	  --list          List operationIds (api)
 	  --dry-run       Print the deploy plan and stop (deploy)
+	  --plan-json     Print the plan as JSON and stop; exits 1 on blocking
+	                  issues, never prompts (deploy)
 	  --set           Setup value as key=value; repeatable (deploy)
+	  --org           Scaffold an organization instead of one bundle (init)
+	  --only-team     Deploy only this team of an organization folder (deploy)
+	  --into          Bundle install id or name to deploy into; overrides
+	                  AGENTAREA_BUNDLE_ID and .agentarea/deployments.json (deploy)
 	  --yes           Deploy without asking for confirmation (deploy)
 
 	Examples
@@ -70,6 +87,7 @@ const cli = meow(
 	  $ agentarea-cli api --list
 	  $ agentarea-cli init my-agent
 	  $ agentarea-cli deploy my-agent --set model=<instance-id> --yes
+	  $ agentarea-cli deploy my-agent --target prod --plan-json
 	  $ agentarea-cli api listAgentsV1AgentsGet
 	  $ agentarea-cli api getAgentV1AgentsAgentIdGet --path='{"agent_id":"abc"}'
 `,
@@ -125,6 +143,18 @@ const cli = meow(
 			},
 			dryRun: {
 				type: 'boolean',
+			},
+			planJson: {
+				type: 'boolean',
+			},
+			into: {
+				type: 'string',
+			},
+			org: {
+				type: 'boolean',
+			},
+			onlyTeam: {
+				type: 'string',
 			},
 			set: {
 				type: 'string',

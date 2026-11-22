@@ -186,6 +186,13 @@ func (Streams) StreamNames(ctx context.Context, s db.Session, ids []string) (map
 	return out, nil
 }
 
+// SetDescription writes the stream's description; false when there is no such stream.
+func (Streams) SetDescription(ctx context.Context, s db.Session, id uuid.UUID, description string, now time.Time) (bool, error) {
+	n, err := New(s.Q()).SetStreamDescription(ctx, SetStreamDescriptionParams{WorkspaceID: s.Workspace().ID(), ID: id, Description: description,
+		Now: naive(now)})
+	return n == 1, err
+}
+
 // DeleteStream removes the stream; its sources, subscriptions and events go with it.
 func (Streams) DeleteStream(ctx context.Context, s db.Session, id uuid.UUID) (bool, error) {
 	n, err := New(s.Q()).DeleteStream(ctx, DeleteStreamParams{WorkspaceID: s.Workspace().ID(), ID: id})

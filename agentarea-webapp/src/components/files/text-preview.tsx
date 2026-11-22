@@ -151,28 +151,54 @@ function fenceFor(text: string): string {
  * Streamdown draws a code block as a chat message's: a card with the
  * language and its own copy and download. A file's viewer already names the
  * file and carries those actions, so the block is flattened to its body — one
- * card around the code — and long lines scroll instead of being clipped.
+ * card around the code — and long lines scroll instead of being clipped, or
+ * wrap where the block is too narrow to scroll comfortably.
  */
 const FILE_CODE_BLOCK = cn(
   "[&_[data-streamdown=code-block]]:my-0 [&_[data-streamdown=code-block]]:gap-0 [&_[data-streamdown=code-block]]:rounded-none [&_[data-streamdown=code-block]]:border-0 [&_[data-streamdown=code-block]]:bg-transparent [&_[data-streamdown=code-block]]:p-0",
   "[&_[data-streamdown=code-block-header]]:hidden",
-  "[&_[data-streamdown=code-block-body]]:overflow-x-auto [&_[data-streamdown=code-block-body]]:text-xs"
+  "[&_[data-streamdown=code-block-body]]:text-xs"
 );
 
-function CodePreview({ text, lang }: { text: string; lang: string }) {
+const SCROLL_LINES = "[&_[data-streamdown=code-block-body]]:overflow-x-auto";
+const WRAP_LINES =
+  "[&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_[data-streamdown=code-block-body]]:whitespace-pre-wrap [&_[data-streamdown=code-block-body]]:break-words";
+
+function CodePreview({
+  text,
+  lang,
+  wrap,
+}: {
+  text: string;
+  lang: string;
+  wrap: boolean;
+}) {
   const shown = lang === "json" ? indentJson(text) : text;
   const fence = fenceFor(shown);
   return (
     <Streamdown
       controls={false}
-      className={cn("max-w-none p-4 text-xs [&_pre]:my-0", FILE_CODE_BLOCK)}
+      className={cn(
+        "max-w-none p-4 text-xs [&_pre]:my-0",
+        FILE_CODE_BLOCK,
+        wrap ? WRAP_LINES : SCROLL_LINES
+      )}
     >
       {`${fence}${lang}\n${shown}\n${fence}`}
     </Streamdown>
   );
 }
 
-export function TextPreview({ path, text }: { path: string; text: string }) {
+export function TextPreview({
+  path,
+  text,
+  wrap = false,
+}: {
+  path: string;
+  text: string;
+  /** Wrap long code lines instead of scrolling them sideways. */
+  wrap?: boolean;
+}) {
   const variant = textVariantOf(path);
 
   switch (variant.kind) {
@@ -185,7 +211,7 @@ export function TextPreview({ path, text }: { path: string; text: string }) {
     case "csv":
       return <CsvPreview text={text} delimiter={variant.delimiter} />;
     case "code":
-      return <CodePreview text={text} lang={variant.lang} />;
+      return <CodePreview text={text} lang={variant.lang} wrap={wrap} />;
     case "plain":
       return (
         <pre className="whitespace-pre-wrap break-words p-4 text-xs font-mono">

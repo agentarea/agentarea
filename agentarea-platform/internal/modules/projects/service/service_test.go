@@ -89,6 +89,12 @@ func (f *fakeStore) Update(ctx context.Context, s db.Session, id uuid.UUID, p do
 	if p.Name != nil {
 		cur.Name = *p.Name
 	}
+	if p.Description.Set {
+		cur.Description = p.Description.Value
+	}
+	if p.Instructions.Set {
+		cur.Instructions = p.Instructions.Value
+	}
 	f.rows[id] = row{s.Workspace().ID(), cur}
 	return true, nil
 }
@@ -117,18 +123,39 @@ func (f *fakeStore) Link(_ context.Context, _ db.Session, k domain.LinkKind, pro
 		l = &domain.Links{}
 		f.links[project.String()] = l
 	}
+	add := func(ids []string) []string {
+		if slices.Contains(ids, child.String()) {
+			return ids
+		}
+		return append(ids, child.String())
+	}
 	switch k {
 	case domain.LinkSkill:
-		l.Skills = append(l.Skills, child.String())
+		l.Skills = add(l.Skills)
 	case domain.LinkMCPInstance:
-		l.MCPInstances = append(l.MCPInstances, child.String())
+		l.MCPInstances = add(l.MCPInstances)
 	case domain.LinkAgent:
-		l.Agents = append(l.Agents, child.String())
+		l.Agents = add(l.Agents)
 	}
 	return nil
 }
 
-func (f *fakeStore) Unlink(context.Context, db.Session, domain.LinkKind, uuid.UUID, uuid.UUID) error {
+func (f *fakeStore) Unlink(_ context.Context, _ db.Session, k domain.LinkKind, project, child uuid.UUID) error {
+	l, ok := f.links[project.String()]
+	if !ok {
+		return nil
+	}
+	drop := func(ids []string) []string {
+		return slices.DeleteFunc(ids, func(id string) bool { return id == child.String() })
+	}
+	switch k {
+	case domain.LinkSkill:
+		l.Skills = drop(l.Skills)
+	case domain.LinkMCPInstance:
+		l.MCPInstances = drop(l.MCPInstances)
+	case domain.LinkAgent:
+		l.Agents = drop(l.Agents)
+	}
 	return nil
 }
 

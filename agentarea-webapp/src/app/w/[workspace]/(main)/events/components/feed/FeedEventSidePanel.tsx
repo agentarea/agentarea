@@ -22,10 +22,13 @@ const NARROW = "(max-width: 1279px)";
 export default function FeedEventSidePanel({
   streams,
   sourceTypes,
+  currentStream,
   children,
 }: {
   streams: { id: string; name: string }[];
   sourceTypes: SourceType[];
+  /** The stream the feed is filtered to, if any. */
+  currentStream?: string;
   /** The server's panel for the event the URL came with. */
   children: ReactNode;
 }) {
@@ -74,6 +77,7 @@ export default function FeedEventSidePanel({
           onRetry={reload}
           streams={streams}
           sourceTypes={sourceTypes}
+          currentStream={currentStream}
         />
       ) : serverRendered ? (
         children

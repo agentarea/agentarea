@@ -77,7 +77,9 @@ export async function handleCliCommand(
 	}
 
 	if (command === 'init') {
-		await flushAndExit(await runInit(subcommand));
+		await flushAndExit(
+			await runInit(subcommand, options.rawFlags?.['org'] === true),
+		);
 	}
 
 	if (command === 'workspace' && subcommand === 'use') {

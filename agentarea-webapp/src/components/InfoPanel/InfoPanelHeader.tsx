@@ -1,25 +1,35 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 export default function InfoPanelHeader({
   label,
   title,
   right,
   className,
+  labelClassName,
 }: {
   label: ReactNode;
   /** Optional: a panel that names no single thing shows its label only. */
   title?: ReactNode;
   right?: ReactNode;
   className?: string;
+  labelClassName?: string;
 }) {
   return (
-    <div className={`flex items-start justify-between gap-3 px-3 pb-3 pt-3 ${className || ""}`}>
+    <div
+      className={`flex items-start justify-between gap-3 px-3 pb-3 pt-3 ${className || ""}`}
+    >
       {/* The title takes what is left and wraps; the badge on the right
           keeps its one line instead of being squeezed into two. */}
       <div className="min-w-0 flex-1 space-y-1">
-        <div className="text-xs font-normal uppercase tracking-wide text-muted-foreground">
+        <div
+          className={cn(
+            "text-xs font-normal uppercase tracking-wide text-muted-foreground",
+            labelClassName
+          )}
+        >
           {label}
         </div>
         {title && (
@@ -32,4 +42,3 @@ export default function InfoPanelHeader({
     </div>
   );
 }
-

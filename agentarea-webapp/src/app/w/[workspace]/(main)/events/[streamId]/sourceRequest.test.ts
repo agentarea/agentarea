@@ -130,17 +130,22 @@ describe("toSourceRequest", () => {
           kind: " {body:trigger.name}.{body:event.op} ",
           key: "{body:id}",
           session_key: "",
+          summary: " {body:title} ",
         },
       }).event_templates
     ).toEqual({
       kind: "{body:trigger.name}.{body:event.op}",
       key: "{body:id}",
+      summary: "{body:title}",
     });
   });
 
   it("never sends event templates for a type the catalog describes", () => {
     expect(
-      toSourceRequest(payments, { ...blank, templates: { key: "{body:x}" } })
+      toSourceRequest(payments, {
+        ...blank,
+        templates: { key: "{body:x}", summary: "{body:title}" },
+      })
     ).not.toHaveProperty("event_templates");
   });
 

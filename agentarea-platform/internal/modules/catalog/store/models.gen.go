@@ -22,6 +22,8 @@ type InstalledBundle struct {
 	Status        string
 	Canonical     []byte
 	InstallResult []byte
+	UpdatedBy     pgtype.Text
+	Source        []byte
 }
 
 type McpServer struct {

@@ -128,7 +128,7 @@ func (s *Service) projectIDs(ctx context.Context, ws scope.Workspace) ([]string,
 	return s.d.Projects.IDs(ctx, ws)
 }
 
-func reservedRoots() []string { return []string{"tasks", "staging", "events", ".trash"} }
+func reservedRoots() []string { return api.ReservedRoots() }
 
 // ListWorkspace is list_workspace_files.
 func (s *Service) ListWorkspace(ctx context.Context, ws scope.Workspace) (Listing, error) {

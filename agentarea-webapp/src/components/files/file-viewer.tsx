@@ -4,10 +4,7 @@ import { useEffect, useState } from "react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import {
   Bot,
-  Check,
   ChevronDown,
-  CircleX,
-  Copy,
   Download,
   FileText,
   History,
@@ -16,6 +13,7 @@ import {
   User,
   X,
 } from "lucide-react";
+import CopyContentsButton from "@/components/CopyContentsButton";
 import FormError from "@/components/FormError";
 import { Button } from "@/components/ui/button";
 import {
@@ -282,53 +280,6 @@ function ProvenanceStrip({
         </ul>
       )}
     </div>
-  );
-}
-
-/**
- * Copy a text file's contents. The icon answers for a moment: a tick when it
- * worked, a cross (and the reason in its label) when the clipboard refused.
- */
-function CopyContentsButton({ text }: { text: string }) {
-  const t = useTranslations("FilesPage");
-  const tCommon = useTranslations("Common");
-  const [outcome, setOutcome] = useState<"copied" | "failed" | null>(null);
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setOutcome("copied");
-    } catch (err) {
-      console.error("Failed to copy file contents", err);
-      setOutcome("failed");
-    }
-    setTimeout(() => setOutcome(null), 2000);
-  };
-
-  const label =
-    outcome === "copied"
-      ? t("copied")
-      : outcome === "failed"
-        ? tCommon("copyFailed")
-        : t("copyContents");
-
-  return (
-    <Button
-      size="icon"
-      variant="ghost"
-      className="h-7 w-7 shrink-0 text-muted-foreground"
-      aria-label={label}
-      title={label}
-      onClick={() => void copy()}
-    >
-      {outcome === "copied" ? (
-        <Check className="h-4 w-4" />
-      ) : outcome === "failed" ? (
-        <CircleX className="h-4 w-4 text-destructive" />
-      ) : (
-        <Copy className="h-4 w-4" />
-      )}
-    </Button>
   );
 }
 

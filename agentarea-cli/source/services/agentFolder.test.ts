@@ -71,6 +71,29 @@ test('readAgentFolder skips dotfiles, dot directories and node_modules', async t
 	t.deepEqual(Object.keys(files), ['agent.yaml']);
 });
 
+test('readAgentFolder leaves out the paths skip names', async t => {
+	const root = await tree({
+		'agentarea.yaml': 'name: acme\nteams: {sales: {workspace: s}}\n',
+		'shared/mcp/a.yaml': 'name: a\n',
+		'sales/agentarea.yaml': 'name: sales\n',
+	});
+
+	const {files} = await readAgentFolder(root, relative => relative === 'sales');
+
+	t.deepEqual(Object.keys(files), ['agentarea.yaml', 'shared/mcp/a.yaml']);
+});
+
+test('readAgentFolder never sends .agentarea/', async t => {
+	const root = await tree({
+		'agentarea.yaml': 'name: a\n',
+		'.agentarea/deployments.json': '{"version": 1, "deployments": []}',
+	});
+
+	const {files} = await readAgentFolder(root);
+
+	t.deepEqual(Object.keys(files), ['agentarea.yaml']);
+});
+
 test('readAgentFolder reports binary and non-UTF-8 files instead of sending them', async t => {
 	const root = await tree({
 		'agent.yaml': 'name: a\n',
@@ -327,11 +350,14 @@ test('slugifyName derives a bundle name from a directory name', t => {
 	t.throws(() => slugifyName('___'), {message: /Cannot derive/});
 });
 
-test('scaffoldFiles writes a folder whose model comes from setup', t => {
+test('scaffoldFiles writes agentarea.yaml and one agent file it includes', t => {
 	const files = scaffoldFiles('helper');
 
-	t.deepEqual(Object.keys(files), ['agent.yaml', 'instructions.md']);
-	t.true(files['agent.yaml']!.startsWith('name: helper\n'));
-	t.true(files['agent.yaml']!.includes('model: ${setup.model}'));
-	t.true(files['agent.yaml']!.includes('  - key: model\n'));
+	t.deepEqual(Object.keys(files), ['agentarea.yaml', 'agents/helper.md']);
+	t.true(
+		files['agentarea.yaml']!.startsWith('name: helper\nschema_version: 1\n'),
+	);
+	t.true(files['agentarea.yaml']!.includes('agents: {include: ./agents/*.md}'));
+	t.true(files['agents/helper.md']!.startsWith('---\nname: helper\n'));
+	t.true(files['agents/helper.md']!.includes('model: ${setup.model}\n'));
 });

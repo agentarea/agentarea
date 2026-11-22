@@ -138,6 +138,7 @@ type envelopeJSON struct {
 	Key           string    `json:"key"`
 	SessionKey    *string   `json:"session_key"`
 	Sender        *string   `json:"sender"`
+	Summary       *string   `json:"summary"`
 	ReceivedAt    time.Time `json:"received_at"`
 	OccurredAt    time.Time `json:"occurred_at"`
 	Depth         int       `json:"depth"`
@@ -145,10 +146,10 @@ type envelopeJSON struct {
 	CausationID   *string   `json:"causation_id"`
 }
 
-func envelopeOut(e domain.RecordedEvent) envelopeJSON {
+func envelopeOut(e domain.RecordedEvent, summary *string) envelopeJSON {
 	return envelopeJSON{Sequence: e.Sequence, V: domain.EnvelopeVersion, EventID: e.ID, StreamID: e.StreamID, SourceID: e.SourceID,
 		SourceType: e.SourceType, Kind: e.Kind, Key: e.EventKey, SessionKey: e.SessionKey, Sender: e.Sender,
-		ReceivedAt: e.ReceivedAt.UTC(), OccurredAt: e.OccurredAt.UTC(), Depth: e.Depth, CorrelationID: e.CorrelationID,
+		Summary: summary, ReceivedAt: e.ReceivedAt.UTC(), OccurredAt: e.OccurredAt.UTC(), Depth: e.Depth, CorrelationID: e.CorrelationID,
 		CausationID: e.CausationID}
 }
 
@@ -159,7 +160,7 @@ type feedItemJSON struct {
 }
 
 func feedItemOut(it service.FeedItem) feedItemJSON {
-	return feedItemJSON{envelopeJSON: envelopeOut(it.RecordedEvent), Attachments: len(it.Attachments), Processing: processingOut(it.Processing)}
+	return feedItemJSON{envelopeJSON: envelopeOut(it.RecordedEvent, it.Summary), Attachments: len(it.Attachments), Processing: processingOut(it.Processing)}
 }
 
 type attachmentJSON struct {
@@ -181,7 +182,7 @@ type eventJSON struct {
 }
 
 func eventOut(v service.EventView) eventJSON {
-	out := eventJSON{envelopeJSON: envelopeOut(v.RecordedEvent), Data: v.Data, BodyURL: v.BodyURL,
+	out := eventJSON{envelopeJSON: envelopeOut(v.RecordedEvent, v.Summary), Data: v.Data, BodyURL: v.BodyURL,
 		Attachments: make([]attachmentJSON, len(v.Attachments)), Outcomes: make([]outcomeJSON, len(v.Outcomes))}
 	if out.Data == nil {
 		out.Data = map[string]any{}

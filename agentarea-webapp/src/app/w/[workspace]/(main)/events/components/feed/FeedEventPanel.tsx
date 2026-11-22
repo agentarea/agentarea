@@ -1,11 +1,12 @@
 "use client";
 
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { RefreshCw } from "lucide-react";
 import type {
   HandlerResponse,
   StreamEventDetailResponse,
 } from "@/api/client/types.gen";
+import EventTime from "@/components/EventTime";
 import FormError from "@/components/FormError/FormError";
 import {
   InfoPanelBody,
@@ -16,23 +17,20 @@ import { TaskStatus } from "@/components/TaskStatus";
 import { Button } from "@/components/ui/button";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import WorkspaceLink from "@/components/WorkspaceLink";
-import { processingProgress } from "@/lib/eventFeed";
+import { eventByIdHref, feedHref, processingProgress } from "@/lib/eventFeed";
 import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
 import { getStreamOutcomeStatusPresentation } from "@/lib/status";
-import { formatDateTime } from "@/utils/dateUtils";
 import {
-  EventEnvelope,
-  EventPayload,
-} from "../../[streamId]/components/EventEnvelope";
-import {
-  eventHref,
-  feedHref as streamFeedHref,
-} from "../../[streamId]/feedHref";
+  EventAttachments,
+  EventBody,
+  EventFacts,
+  EventHeaders,
+} from "./EventEnvelope";
 import ProcessingPill from "./ProcessingPill";
 
 type Translator = ReturnType<typeof useTranslations>;
 
-/** The event open in the side panel: its envelope, each subscriber's answer, its body. */
+/** The event open in the side panel: what it says, its body, each subscriber's answer, then its envelope. */
 export default function FeedEventPanel({
   eventId,
   event,
@@ -40,6 +38,7 @@ export default function FeedEventPanel({
   onRetry,
   streams,
   sourceTypes,
+  currentStream,
 }: {
   eventId: string;
   /** Null when the event is no longer kept. */
@@ -49,12 +48,12 @@ export default function FeedEventPanel({
   onRetry?: () => void;
   streams: { id: string; name: string }[];
   sourceTypes: SourceType[];
+  /** The stream the feed is filtered to, if any. */
+  currentStream?: string;
 }) {
   const t = useTranslations("EventsPage");
-  const tDetail = useTranslations("EventsPage.detail");
   const tFilter = useTranslations("EventsPage.filter");
   const tCommon = useTranslations("Common");
-  const locale = useLocale();
 
   if (!event) {
     return (
@@ -94,63 +93,60 @@ export default function FeedEventPanel({
     <>
       <InfoPanelHeader
         className="pr-10"
-        label={`${streamName ?? t("list.unknownStream")} · ${formatDateTime(event.received_at, locale)}`}
+        labelClassName="normal-case tracking-normal"
+        label={streamName ?? t("list.unknownStream")}
         title={event.kind}
-        right={
-          event.processing && (
+      />
+      <div className="-mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-3 pb-3 text-xs text-muted-foreground">
+        <EventTime value={event.received_at} style="dateTime" />
+        {event.processing && event.processing.status !== "no_handlers" && (
+          <>
+            <span aria-hidden="true">·</span>
             <ProcessingPill
               processing={event.processing}
               receivedAt={event.received_at}
               now={null}
             />
-          )
-        }
-      />
+          </>
+        )}
+      </div>
       <InfoPanelBody>
-        <EventEnvelope
+        {event.summary && <p className="text-sm">{event.summary}</p>}
+        <EventBody event={event} />
+        {(event.handlers.length > 0 ||
+          (progress && progress.total > progress.done) ||
+          event.processing?.status === "queued") && (
+          <InfoPanelSection title={t("panel.handlers")} contentClassName="p-0">
+            <Handlers
+              handlers={event.handlers}
+              pending={progress ? progress.total - progress.done : 0}
+              status={event.processing?.status}
+              triggers={
+                new Map(
+                  event.outcomes.flatMap((o) =>
+                    o.trigger_id ? [[o.subscription_id, o.trigger_id]] : []
+                  )
+                )
+              }
+              t={t}
+              tFilter={tFilter}
+            />
+          </InfoPanelSection>
+        )}
+        <EventAttachments event={event} />
+        <EventHeaders event={event} />
+        <EventFacts
           event={event}
           sourceType={sourceTypeBySlug(sourceTypes, event.source_type)}
-          locale={locale}
-          t={tDetail}
         />
-        <InfoPanelSection title={t("panel.handlers")} contentClassName="p-0">
-          <Handlers
-            handlers={event.handlers}
-            pending={progress ? progress.total - progress.done : 0}
-            status={event.processing?.status}
-            triggers={
-              new Map(
-                event.outcomes.flatMap((o) =>
-                  o.trigger_id ? [[o.subscription_id, o.trigger_id]] : []
-                )
-              )
-            }
-            t={t}
-            tFilter={tFilter}
-          />
-        </InfoPanelSection>
-        {event.causation_id && (
-          <div className="text-muted-foreground">
-            {tDetail("causedBy")}:{" "}
-            <WorkspaceLink
-              href={eventHref(event.causation_id)}
-              className="font-mono text-primary hover:underline"
-              title={event.causation_id}
-            >
-              {event.causation_id.slice(0, 8)}
-            </WorkspaceLink>
-          </div>
+        {currentStream !== event.stream_id && (
+          <WorkspaceLink
+            href={feedHref({ stream: event.stream_id, event: event.event_id })}
+            className="inline-block text-primary hover:underline"
+          >
+            {t("panel.openInStream")}
+          </WorkspaceLink>
         )}
-        <EventPayload event={event} t={tDetail} />
-        <WorkspaceLink
-          href={streamFeedHref(event.stream_id, {
-            outcome: "all",
-            event: event.sequence,
-          })}
-          className="inline-block text-primary hover:underline"
-        >
-          {t("panel.openInStream")}
-        </WorkspaceLink>
       </InfoPanelBody>
     </>
   );
@@ -174,9 +170,6 @@ function Handlers({
 }) {
   if (status === "queued") {
     return <p className="p-3 text-muted-foreground">{t("panel.queued")}</p>;
-  }
-  if (handlers.length === 0 && pending === 0) {
-    return <p className="p-3 text-muted-foreground">{t("panel.noHandlers")}</p>;
   }
   return (
     <div>
@@ -241,7 +234,7 @@ function Handlers({
                   {handler.derived_event_ids.map((id) => (
                     <WorkspaceLink
                       key={id}
-                      href={eventHref(id)}
+                      href={eventByIdHref(id)}
                       className="font-mono text-primary hover:underline"
                       title={id}
                     >

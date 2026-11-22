@@ -113,10 +113,12 @@ func (m *memSpecs) Delete(_ context.Context, tx db.Session, id string) (bool, er
 type recGraph struct {
 	mu     sync.Mutex
 	writes []authz.Tuple
+	// denied are the object ids every check refuses.
+	denied map[string]bool
 }
 
-func (g *recGraph) Check(context.Context, string, string, string, string) (bool, error) {
-	return true, nil
+func (g *recGraph) Check(_ context.Context, _, _, _, id string) (bool, error) {
+	return !g.denied[id], nil
 }
 func (g *recGraph) Read(context.Context, authz.Query) ([]authz.Tuple, error) { return nil, nil }
 func (g *recGraph) Write(_ context.Context, writes, _ []authz.Tuple) error {

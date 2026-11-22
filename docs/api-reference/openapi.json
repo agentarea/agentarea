@@ -1354,8 +1354,31 @@
                 "type": "null"
               }
             ],
-            "description": "An agent folder: relative POSIX path -> UTF-8 file text, rooted at agent.yaml. 5MB total.",
+            "description": "A bundle folder: relative POSIX path -> UTF-8 file text, rooted at agentarea.yaml (or the deprecated agent.yaml). 5MB total.",
             "title": "Files"
+          },
+          "into": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The install to update: its id, or the name of exactly one install. Without it the bundle's name must be free in the workspace, else the plan blocks with code bundle_exists.",
+            "title": "Into"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleOrigin"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the folder came from; informational."
           },
           "setup_values": {
             "additionalProperties": true,
@@ -2407,11 +2430,25 @@
             "title": "Name",
             "type": "string"
           },
+          "openapi": {
+            "items": {
+              "$ref": "#/components/schemas/BundleOpenAPI"
+            },
+            "title": "Openapi",
+            "type": "array"
+          },
           "policies": {
             "items": {
-              "$ref": "#/components/schemas/BundlePolicy"
+              "$ref": "#/components/schemas/BundlePolicy-Input"
             },
             "title": "Policies",
+            "type": "array"
+          },
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/BundleProject"
+            },
+            "title": "Projects",
             "type": "array"
           },
           "schema_version": {
@@ -2431,6 +2468,20 @@
               "$ref": "#/components/schemas/BundleSkill"
             },
             "title": "Skills",
+            "type": "array"
+          },
+          "streams": {
+            "items": {
+              "$ref": "#/components/schemas/BundleStream"
+            },
+            "title": "Streams",
+            "type": "array"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/BundleTask"
+            },
+            "title": "Tasks",
             "type": "array"
           }
         },
@@ -2499,11 +2550,25 @@
             "title": "Name",
             "type": "string"
           },
+          "openapi": {
+            "items": {
+              "$ref": "#/components/schemas/BundleOpenAPI"
+            },
+            "title": "Openapi",
+            "type": "array"
+          },
           "policies": {
             "items": {
               "$ref": "#/components/schemas/BundlePolicy"
             },
             "title": "Policies",
+            "type": "array"
+          },
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/BundleProject"
+            },
+            "title": "Projects",
             "type": "array"
           },
           "schema_version": {
@@ -2523,6 +2588,20 @@
               "$ref": "#/components/schemas/BundleSkill"
             },
             "title": "Skills",
+            "type": "array"
+          },
+          "streams": {
+            "items": {
+              "$ref": "#/components/schemas/BundleStream"
+            },
+            "title": "Streams",
+            "type": "array"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/BundleTask"
+            },
+            "title": "Tasks",
             "type": "array"
           }
         },
@@ -2547,6 +2626,14 @@
             ],
             "description": "The id of a Codex or Claude Code client of the workspace whose runner runs the agent's tasks, or a ${setup.x} reference to one. Unset runs them on the platform.",
             "title": "Client"
+          },
+          "delegates": {
+            "description": "BundleAgent keys this agent may hand work to; each becomes a delegate tool.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Delegates",
+            "type": "array"
           },
           "description": {
             "default": "",
@@ -2590,6 +2677,14 @@
             "title": "Name",
             "type": "string"
           },
+          "openapi": {
+            "description": "BundleOpenAPI keys of the connections the agent calls.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Openapi",
+            "type": "array"
+          },
           "reasoning_effort": {
             "anyOf": [
               {
@@ -2613,6 +2708,18 @@
             ],
             "description": "A token budget for the model's reasoning. Not with reasoning_effort.",
             "title": "Reasoning Max Tokens"
+          },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
           },
           "skills": {
             "description": "BundleSkill keys to attach.",
@@ -2640,11 +2747,10 @@
       },
       "BundleAutomation": {
         "additionalProperties": false,
-        "description": "A scheduled run of one of the package's agents (maps to a CronTrigger).\n\nAutomations are imported disabled by default; the user enables them after\nverifying connections, mirroring the Zapier/Make \"connect then activate\"\nflow.",
+        "description": "A run of one of the package's agents: on a cron schedule, or on the events of a stream (`on`). Exactly one of `cron` and `on`, and either `task` or `agent` with `prompt`.\n\nAutomations are imported disabled by default; the user enables them after\nverifying connections, mirroring the Zapier/Make \"connect then activate\"\nflow.",
         "properties": {
           "agent": {
-            "description": "BundleAgent key to invoke.",
-            "minLength": 1,
+            "description": "BundleAgent key to invoke; with task, the task's agent or left out.",
             "title": "Agent",
             "type": "string"
           },
@@ -2664,11 +2770,45 @@
             "title": "Key",
             "type": "string"
           },
+          "on": {
+            "$ref": "#/components/schemas/BundleTriggerOn",
+            "description": "Run on a stream's events instead of a cron schedule."
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "description": "Parameters of the saved task's runs; with task only.",
+            "title": "Parameters",
+            "type": "object"
+          },
           "prompt": {
-            "description": "Task query passed to the agent on each run.",
-            "minLength": 1,
+            "description": "Task query passed to the agent on each run; left out with task.",
             "title": "Prompt",
             "type": "string"
+          },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The saved task it runs instead of asking agent a prompt: a task key of the bundle or the name of a workspace's saved task. Its agent is the task's; prompt stays empty.",
+            "title": "Task"
           },
           "timezone": {
             "default": "UTC",
@@ -2683,10 +2823,7 @@
           }
         },
         "required": [
-          "key",
-          "cron",
-          "agent",
-          "prompt"
+          "key"
         ],
         "title": "BundleAutomation",
         "type": "object"
@@ -2732,6 +2869,18 @@
             "title": "Prompt",
             "type": "string"
           },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
+          },
           "type": {
             "default": "telegram",
             "description": "Webhook provider for the created trigger.",
@@ -2749,6 +2898,54 @@
           "agent"
         ],
         "title": "BundleChannel",
+        "type": "object"
+      },
+      "BundleInstallRef": {
+        "additionalProperties": false,
+        "description": "The install of a bundle a plan updates.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleOrigin"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the folder last deployed came from."
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "updated_at"
+        ],
+        "title": "BundleInstallRef",
         "type": "object"
       },
       "BundleMcp": {
@@ -2813,6 +3010,18 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
           }
         },
         "required": [
@@ -2906,10 +3115,166 @@
         "title": "BundleMetadata",
         "type": "object"
       },
+      "BundleOpenAPI": {
+        "additionalProperties": false,
+        "description": "An OpenAPI connection the bundle creates: its spec at spec_url or inline in spec (exactly one).",
+        "properties": {
+          "base_url": {
+            "minLength": 1,
+            "title": "Base Url",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "A secret header's value is ${secret.<name>} or ${setup.<key>}.",
+            "title": "Headers",
+            "type": "object"
+          },
+          "key": {
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "query": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Query parameters; one reading a secret is stored as a secret.",
+            "title": "Query",
+            "type": "object"
+          },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The OpenAPI document inline.",
+            "title": "Spec"
+          },
+          "spec_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec Url"
+          },
+          "variables": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Values of the base URL's {variables}.",
+            "title": "Variables",
+            "type": "object"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "base_url"
+        ],
+        "title": "BundleOpenAPI",
+        "type": "object"
+      },
+      "BundleOrigin": {
+        "additionalProperties": false,
+        "description": "Where a deployed folder came from, as the CLI reports it. Shown in the plan and the install record, never checked.",
+        "properties": {
+          "git_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Commit"
+          },
+          "git_remote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Remote"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The folder's path inside the repository.",
+            "title": "Path"
+          }
+        },
+        "title": "BundleOrigin",
+        "type": "object"
+      },
       "BundlePolicy": {
         "additionalProperties": false,
-        "description": "A governance rule the package installs (maps to a PolicyRule).\n\nPortable like everything else: ``subject`` is the literal \"workspace\" or a\nBundleAgent ``key`` (never a DB id); the installer resolves it to a real\nsubject id. ``target``/``effect``/``params`` mirror the unified governance\nrule model, so this is \"our policy format\" \u2014 not a new one.",
+        "description": "A governance rule the package installs on its own agents (maps to a PolicyRule).\n\n``subject`` is a BundleAgent ``key``, a list of them, or \"*\" for every agent of the bundle; a list or \"*\" becomes one policy per agent, keyed ``<key>-<agent>``. \"workspace\" and effect \"allow\" are refused: rules that reach beyond the bundle or loosen belong to an admin.",
         "properties": {
+          "approvers": {
+            "description": "Who approves an approval policy: emails or user:<id>, resolved to members of the workspace the bundle deploys into. None is whoever may act on the run.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Approvers",
+            "type": "array"
+          },
+          "billing_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The currency params' amounts are in; the plan blocks when the workspace bills in another.",
+            "title": "Billing Currency"
+          },
           "condition": {
             "anyOf": [
               {
@@ -2968,9 +3333,20 @@
             "title": "Priority",
             "type": "integer"
           },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
+          },
           "subject": {
-            "default": "workspace",
-            "description": "\"workspace\" or a BundleAgent key the rule binds to.",
+            "description": "The BundleAgent key the rule binds to (a list or \"*\" was expanded to one policy per agent). \"workspace\" makes it a workspace policy: it binds every agent in the workspace and only a workspace admin deploys it.",
             "title": "Subject",
             "type": "string"
           },
@@ -2983,10 +3359,211 @@
         },
         "required": [
           "key",
+          "subject",
           "target",
           "effect"
         ],
         "title": "BundlePolicy",
+        "type": "object"
+      },
+      "BundlePolicy-Input": {
+        "additionalProperties": false,
+        "description": "A governance rule the package installs on its own agents (maps to a PolicyRule).\n\n``subject`` is a BundleAgent ``key``, a list of them, or \"*\" for every agent of the bundle; a list or \"*\" becomes one policy per agent, keyed ``<key>-<agent>``. \"workspace\" and effect \"allow\" are refused: rules that reach beyond the bundle or loosen belong to an admin.",
+        "properties": {
+          "approvers": {
+            "description": "Who approves an approval policy: emails or user:<id>, resolved to members of the workspace the bundle deploys into. None is whoever may act on the run.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Approvers",
+            "type": "array"
+          },
+          "billing_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The currency params' amounts are in; the plan blocks when the workspace bills in another.",
+            "title": "Billing Currency"
+          },
+          "condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional CEL condition.",
+            "title": "Condition"
+          },
+          "effect": {
+            "enum": [
+              "allow",
+              "deny",
+              "cap",
+              "approval",
+              "safety"
+            ],
+            "title": "Effect",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "key": {
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Human-readable reason.",
+            "title": "Message"
+          },
+          "params": {
+            "additionalProperties": true,
+            "description": "Effect-specific params, e.g. {amount_usd, period} for cap.",
+            "title": "Params",
+            "type": "object"
+          },
+          "priority": {
+            "default": 0,
+            "maximum": 2147483647.0,
+            "minimum": -2147483648.0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ],
+            "description": "A BundleAgent key, a list of them, or \"*\". \"workspace\" makes it a workspace policy: it binds every agent in the workspace and only a workspace admin deploys it.",
+            "title": "Subject"
+          },
+          "target": {
+            "description": "Selector, e.g. \"tool:send_email\", \"spend\", \"content\", \"*\".",
+            "minLength": 1,
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "subject",
+          "target",
+          "effect"
+        ],
+        "title": "BundlePolicy",
+        "type": "object"
+      },
+      "BundleProject": {
+        "additionalProperties": false,
+        "description": "A project grouping the bundle's agents, MCP servers and skills by key.",
+        "properties": {
+          "agents": {
+            "description": "BundleAgent keys.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Agents",
+            "type": "array"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "instructions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instructions"
+          },
+          "key": {
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "mcp": {
+            "description": "BundleMcp keys.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Mcp",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
+          },
+          "skills": {
+            "description": "BundleSkill keys.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Skills",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "title": "BundleProject",
         "type": "object"
       },
       "BundleSkill": {
@@ -3031,6 +3608,18 @@
             "title": "Name",
             "type": "string"
           },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
+          },
           "source_type": {
             "default": "content",
             "enum": [
@@ -3059,6 +3648,243 @@
           "name"
         ],
         "title": "BundleSkill",
+        "type": "object"
+      },
+      "BundleStream": {
+        "additionalProperties": false,
+        "description": "A stream the bundle creates, with its sources, processors and forwards.",
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "forwards": {
+            "items": {
+              "$ref": "#/components/schemas/BundleStreamForward"
+            },
+            "title": "Forwards",
+            "type": "array"
+          },
+          "key": {
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "processors": {
+            "items": {
+              "$ref": "#/components/schemas/BundleStreamProcessor"
+            },
+            "title": "Processors",
+            "type": "array"
+          },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/BundleStreamSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "title": "BundleStream",
+        "type": "object"
+      },
+      "BundleStreamForward": {
+        "additionalProperties": false,
+        "description": "A forward copying a bundle stream's events into other streams.",
+        "properties": {
+          "filter": {
+            "additionalProperties": true,
+            "description": "EventFilter of the events it copies.",
+            "title": "Filter",
+            "type": "object"
+          },
+          "outputs": {
+            "description": "Stream keys of the bundle or names of workspace streams.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Outputs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "outputs"
+        ],
+        "title": "BundleStreamForward",
+        "type": "object"
+      },
+      "BundleStreamProcessor": {
+        "additionalProperties": false,
+        "description": "A processor of a bundle stream.",
+        "properties": {
+          "code": {
+            "description": "Python defining process(event).",
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "filter": {
+            "additionalProperties": true,
+            "description": "EventFilter of the events it takes.",
+            "title": "Filter",
+            "type": "object"
+          },
+          "outputs": {
+            "description": "Stream keys of the bundle or names of workspace streams.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Outputs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "outputs"
+        ],
+        "title": "BundleStreamProcessor",
+        "type": "object"
+      },
+      "BundleStreamSource": {
+        "additionalProperties": false,
+        "description": "A source feeding a bundle stream; credentials are ${secret.<name>} or ${setup.<key>} references.",
+        "properties": {
+          "config": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Source settings.",
+            "title": "Config",
+            "type": "object"
+          },
+          "credentials": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Credentials as ${secret.<name>} or ${setup.<key>}.",
+            "title": "Credentials",
+            "type": "object"
+          },
+          "kind": {
+            "default": "webhook",
+            "enum": [
+              "webhook",
+              "poll"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "type": {
+            "description": "Source type slug from the catalog.",
+            "minLength": 1,
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "BundleStreamSource",
+        "type": "object"
+      },
+      "BundleTask": {
+        "additionalProperties": false,
+        "description": "A saved task the bundle creates: a run of agent asked prompt.",
+        "properties": {
+          "agent": {
+            "description": "BundleAgent key.",
+            "minLength": 1,
+            "title": "Agent",
+            "type": "string"
+          },
+          "key": {
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "description": "Default parameters of a run.",
+            "title": "Parameters",
+            "type": "object"
+          },
+          "prompt": {
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.",
+            "title": "Renamed From"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "agent",
+          "prompt"
+        ],
+        "title": "BundleTask",
+        "type": "object"
+      },
+      "BundleTriggerOn": {
+        "additionalProperties": false,
+        "description": "The stream an automation runs on and the events it takes.",
+        "properties": {
+          "filter": {
+            "additionalProperties": true,
+            "description": "EventFilter: kinds and fields; empty takes every event.",
+            "title": "Filter",
+            "type": "object"
+          },
+          "stream": {
+            "description": "A stream key of the bundle, or the name of a workspace stream.",
+            "minLength": 1,
+            "title": "Stream",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stream"
+        ],
+        "title": "BundleTriggerOn",
         "type": "object"
       },
       "CatalogBrowseResponse": {
@@ -5377,7 +6203,11 @@
           "agent",
           "channel",
           "automation",
-          "policy"
+          "policy",
+          "stream",
+          "openapi",
+          "task",
+          "project"
         ],
         "title": "EntityKind",
         "type": "string"
@@ -5811,6 +6641,48 @@
         "title": "ExecutionTimelineResponse",
         "type": "object"
       },
+      "ExistingBundleInstall": {
+        "additionalProperties": false,
+        "description": "The install that already has a bundle's name: deploy into it by id, or rename the bundle.",
+        "properties": {
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_by",
+          "updated_at"
+        ],
+        "title": "ExistingBundleInstall",
+        "type": "object"
+      },
       "ExternalIdentityResponse": {
         "properties": {
           "external_id": {
@@ -6004,6 +6876,17 @@
             "title": "Stream Id",
             "type": "string"
           },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
           "v": {
             "default": 1,
             "title": "V",
@@ -6020,6 +6903,7 @@
           "key",
           "session_key",
           "sender",
+          "summary",
           "received_at",
           "occurred_at",
           "depth",
@@ -6528,6 +7412,28 @@
             "title": "Entities",
             "type": "array"
           },
+          "existing_install": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExistingBundleInstall"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The install that already has the bundle's name, when that blocks the plan."
+          },
+          "install": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleInstallRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The install this plan updates; null when it creates one."
+          },
           "installable": {
             "description": "True when there are no blocking issues (setup may still be required).",
             "title": "Installable",
@@ -6644,6 +7550,29 @@
           "bundle": {
             "$ref": "#/components/schemas/Bundle-Input"
           },
+          "install_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The install the plan was made for (the plan's install.id); null when the plan creates one. Another id, or an install written since the plan, is refused with 409.",
+            "title": "Install Id"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleOrigin"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the folder came from; informational."
+          },
           "plan_digest": {
             "description": "The plan_digest analyze returned for this bundle and these setup values: the plan the caller approved.",
             "minLength": 1,
@@ -6677,6 +7606,11 @@
             },
             "title": "Entities",
             "type": "array"
+          },
+          "install_id": {
+            "description": "The install this deploy wrote; pass it as into and install_id on the next deploy.",
+            "title": "Install Id",
+            "type": "string"
           },
           "installed_bundle_id": {
             "anyOf": [
@@ -6749,6 +7683,18 @@
           },
           "kind": {
             "$ref": "#/components/schemas/EntityKind"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For an agent whose model is given by name: the model instance the name resolved to when the agent was last written.",
+            "title": "Model Id"
           },
           "name": {
             "title": "Name",
@@ -11410,10 +12356,53 @@
         "title": "PresignUploadResponse",
         "type": "object"
       },
+      "PreviewApproval": {
+        "additionalProperties": false,
+        "description": "An approval policy that binds an agent, as the agent's plan line shows it.",
+        "properties": {
+          "approvers": {
+            "description": "Approvers by email or name; empty is whoever may act on the run.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Approvers",
+            "type": "array"
+          },
+          "policy": {
+            "title": "Policy",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "workspace": {
+            "description": "A workspace policy, binding every agent.",
+            "title": "Workspace",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "policy",
+          "target",
+          "approvers",
+          "workspace"
+        ],
+        "title": "PreviewApproval",
+        "type": "object"
+      },
       "PreviewEntity": {
         "additionalProperties": false,
         "description": "One thing the package will (or won't) create.",
         "properties": {
+          "approvals": {
+            "description": "On an agent: the approval policies that bind it.",
+            "items": {
+              "$ref": "#/components/schemas/PreviewApproval"
+            },
+            "title": "Approvals",
+            "type": "array"
+          },
           "detail": {
             "anyOf": [
               {
@@ -11453,6 +12442,18 @@
         "additionalProperties": false,
         "description": "A problem found while analyzing the package.",
         "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set on issues a client acts on: bundle_exists, bundle_install_not_found, bundle_install_ambiguous.",
+            "title": "Code"
+          },
           "entity_key": {
             "anyOf": [
               {
@@ -15858,6 +16859,17 @@
             "title": "Stream Id",
             "type": "string"
           },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
           "v": {
             "default": 1,
             "title": "V",
@@ -15874,6 +16886,7 @@
           "key",
           "session_key",
           "sender",
+          "summary",
           "received_at",
           "occurred_at",
           "depth",
@@ -16078,6 +17091,17 @@
             "title": "Stream Id",
             "type": "string"
           },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
           "v": {
             "default": 1,
             "title": "V",
@@ -16094,6 +17118,7 @@
           "key",
           "session_key",
           "sender",
+          "summary",
           "received_at",
           "occurred_at",
           "depth",

@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/blob"
+	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 )
 
 // contextToolset is context_toolset.py: read-only access to the workspace's
@@ -56,6 +57,9 @@ func listOrgFiles(ctx context.Context, scoped *blob.Scoped, prefix string) strin
 		if err != nil {
 			return "Error listing organization files: " + err.Error()
 		}
+		if sandboxapi.IsReservedPath(info.Key) {
+			continue
+		}
 		paths = append(paths, info.Key)
 	}
 	if len(paths) == 0 {
@@ -68,6 +72,9 @@ func listOrgFiles(ctx context.Context, scoped *blob.Scoped, prefix string) strin
 func readOrgFile(ctx context.Context, scoped *blob.Scoped, path string) string {
 	if path == "" || strings.HasPrefix(path, "/") || strings.Contains(path, "\\") || containsSegment(path, "..") {
 		return fmt.Sprintf("Error: path escapes the context store: %q", path)
+	}
+	if sandboxapi.IsReservedPath(path) {
+		return fmt.Sprintf("Error: %s is not in the organization library", path)
 	}
 	rc, _, err := scoped.Get(ctx, path)
 	if errors.Is(err, blob.ErrNotFound) {

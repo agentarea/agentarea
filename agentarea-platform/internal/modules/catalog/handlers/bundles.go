@@ -50,9 +50,9 @@ func (s *Server) AnalyzeBundleV1BundlesAnalyzePost(ctx context.Context, _ gen.An
 	var err error
 	switch {
 	case req.Bundle != nil:
-		preview, err = s.bundles.AnalyzeBundle(ctx, *req.Bundle, req.SetupValues, false)
+		preview, err = s.bundles.AnalyzeBundle(ctx, *req.Bundle, req.SetupValues, false, req.Target)
 	case len(req.Files) > 0:
-		preview, err = s.bundles.AnalyzeFiles(ctx, req.Files, req.SetupValues)
+		preview, err = s.bundles.AnalyzeFiles(ctx, req.Files, req.SetupValues, req.Target)
 	default:
 		source := ""
 		if req.Source != nil {
@@ -68,7 +68,7 @@ func (s *Server) AnalyzeBundleV1BundlesAnalyzePost(ctx context.Context, _ gen.An
 				return nil, err
 			}
 		}
-		preview, err = s.bundles.AnalyzeText(ctx, source, req.SetupValues)
+		preview, err = s.bundles.AnalyzeText(ctx, source, req.SetupValues, req.Target)
 	}
 	if err != nil {
 		return nil, bundleParseError(err)
@@ -82,15 +82,19 @@ func bundleProblem(status int, code, msg string, issues []service.PreviewIssue) 
 
 func (s *Server) InstallBundleV1BundlesInstallPost(ctx context.Context, _ gen.InstallBundleV1BundlesInstallPostRequestObject) (gen.InstallBundleV1BundlesInstallPostResponseObject, error) {
 	req := inputFrom(ctx).install
-	result, err := s.bundles.Install(ctx, req.Bundle, req.SetupValues, req.PlanDigest)
+	result, err := s.bundles.Install(ctx, req.Bundle, req.SetupValues, req.PlanDigest, req.Target)
 	if err == nil {
-		return ok(result.Dump()), nil
+		out := result.Dump()
+		out.Set("install_id", *result.InstalledBundleID)
+		return ok(out), nil
 	}
 	var be *service.BundleError
 	if errors.As(err, &be) {
 		switch be.Kind {
 		case service.BundlePlanChanged:
-			return nil, bundleProblem(http.StatusConflict, "bundle_plan_changed", be.Msg, nil).Wrap(err)
+			return nil, bundleProblem(http.StatusConflict, "bundle_plan_changed", be.Msg, be.Issues).Wrap(err)
+		case service.BundleDeployRunning:
+			return nil, bundleProblem(http.StatusConflict, "bundle_deploy_running", be.Msg, nil).Wrap(err)
 		case service.BundleInvalid:
 			return nil, bundleProblem(http.StatusUnprocessableEntity, "bundle_invalid", be.Msg, be.Issues).Wrap(err)
 		case service.BundleInstallFailed:

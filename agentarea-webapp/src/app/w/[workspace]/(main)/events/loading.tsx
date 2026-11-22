@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
-import FeedSkeleton, { FEED_GRID } from "./components/feed/FeedSkeleton";
+import FeedSkeleton from "./components/feed/FeedSkeleton";
 
 export default async function Loading() {
   const t = await getTranslations("EventsPage");
@@ -11,9 +11,7 @@ export default async function Loading() {
         description: t("description"),
       }}
     >
-      <div className={FEED_GRID}>
-        <FeedSkeleton />
-      </div>
+      <FeedSkeleton />
     </ContentBlock>
   );
 }

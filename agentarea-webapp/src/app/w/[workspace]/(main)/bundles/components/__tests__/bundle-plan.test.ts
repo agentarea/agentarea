@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { ImportPreview } from "@/api/client/types.gen";
 import {
+  analyzeRequestFor,
   buildInstallRequest,
   bundleEditReducer,
   bundlePolicyAsPolicy,
+  existingInstall,
   initialEdit,
+  installRequestFor,
   isPlanChanged,
   openIssues,
   planKey,
@@ -143,6 +146,35 @@ describe("install request", () => {
     expect(bundle.agents?.[0].mcps).toEqual(["github"]);
     expect(bundle.mcps?.map((m) => m.key)).toEqual(["github"]);
     expect(bundle.automations).toEqual([]);
+  });
+
+  it("keeps a schedule that runs a saved task while the task's agent stays", () => {
+    const withTask = preview({
+      tasks: [{ key: "report", name: "Report", agent: "writer", prompt: "go" }],
+      automations: [
+        { key: "weekly", task: "report", cron: "0 9 * * 1" },
+        { key: "legacy", task: "Saved elsewhere", cron: "0 9 * * 1" },
+      ],
+    });
+    const kept = buildInstallRequest(
+      withTask,
+      initialEdit(withTask, models),
+      true
+    );
+    expect(kept.bundle.automations?.map((a) => a.key)).toEqual([
+      "weekly",
+      "legacy",
+    ]);
+    const edit = bundleEditReducer(initialEdit(withTask, models), {
+      type: "toggleAgent",
+      key: "writer",
+      on: false,
+    });
+    expect(
+      buildInstallRequest(withTask, edit, true).bundle.automations?.map(
+        (a) => a.key
+      )
+    ).toEqual(["legacy"]);
   });
 
   it("sends policies only when the viewer may install them", () => {
@@ -285,5 +317,99 @@ describe("isPlanChanged", () => {
     expect(
       isPlanChanged({ status: 400, error: { code: "bundle_install_failed" } })
     ).toBe(false);
+  });
+});
+
+describe("deploying into an existing install", () => {
+  const existing = {
+    id: "inst-1",
+    name: "Research kit",
+    created_by: "u-1",
+    updated_by: "u-2",
+    updated_at: "2026-11-22T10:00:00Z",
+  };
+  const taken: ImportPreview = {
+    ...preview(),
+    installable: false,
+    plan_digest: null,
+    issues: [
+      {
+        severity: "block",
+        message: "bundle 'Research kit' is already installed",
+        code: "bundle_exists",
+      },
+    ],
+    existing_install: existing,
+  };
+
+  it("offers the install that has the bundle's name until the user picks it", () => {
+    const edit = initialEdit(taken, models);
+    expect(existingInstall(taken, edit)).toEqual(existing);
+    expect(openIssues(taken, edit)).toHaveLength(1);
+    const into = bundleEditReducer(edit, { type: "deployInto", id: "inst-1" });
+    expect(existingInstall(taken, into)).toBeNull();
+    expect(openIssues(taken, into)).toEqual([]);
+  });
+
+  it("does not offer an install for a block it cannot settle", () => {
+    const gone: ImportPreview = {
+      ...taken,
+      existing_install: null,
+      issues: [
+        {
+          severity: "block",
+          message: "bundle install x not found",
+          code: "bundle_install_not_found",
+        },
+      ],
+    };
+    const edit = initialEdit(gone, models);
+    expect(existingInstall(gone, edit)).toBeNull();
+    expect(openIssues(gone, edit)).toHaveLength(1);
+  });
+
+  it("plans into the picked install and installs into the one the plan names", () => {
+    const edit = bundleEditReducer(initialEdit(preview(), models), {
+      type: "deployInto",
+      id: "Research kit",
+    });
+    const draft = buildInstallRequest(preview(), edit, true);
+    expect(draft.install_id).toBe("Research kit");
+    const analyze = analyzeRequestFor(draft);
+    expect(analyze.into).toBe("Research kit");
+    expect("install_id" in analyze).toBe(false);
+    expect(
+      planKey(draft) !==
+        planKey(
+          buildInstallRequest(preview(), initialEdit(preview(), models), true)
+        )
+    ).toBe(true);
+
+    const plan: ImportPreview = {
+      ...preview(),
+      plan_digest: "d1",
+      install: {
+        id: "inst-1",
+        name: "Research kit",
+        updated_at: existing.updated_at,
+      },
+    };
+    expect(installRequestFor(draft, plan)).toMatchObject({
+      plan_digest: "d1",
+      install_id: "inst-1",
+    });
+    expect(installRequestFor(draft, { ...plan, plan_digest: null })).toBeNull();
+  });
+
+  it("creates a new install when nothing was picked", () => {
+    const draft = buildInstallRequest(
+      preview(),
+      initialEdit(preview(), models),
+      true
+    );
+    expect(analyzeRequestFor(draft).into).toBeUndefined();
+    expect(
+      installRequestFor(draft, { ...preview(), plan_digest: "d0" })?.install_id
+    ).toBeNull();
   });
 });

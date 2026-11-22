@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { ListChecks, Send, ShieldCheck, type LucideIcon } from "lucide-react";
+import { Globe, ListChecks, Send, ShieldCheck, type LucideIcon } from "lucide-react";
 import type { EntityKind, ImportPreview } from "@/api/client/types.gen";
 import {
   FactRow,
@@ -21,6 +21,10 @@ export const BUNDLE_KIND_ICONS: Record<EntityKind, LucideIcon> = {
   channel: Send,
   automation: ENTITY_ICONS.trigger,
   policy: ShieldCheck,
+  stream: ENTITY_ICONS.stream,
+  openapi: Globe,
+  task: ListChecks,
+  project: ENTITY_ICONS.project,
 };
 
 type PlanStatusKey =

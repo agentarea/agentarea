@@ -1,6 +1,9 @@
 package service
 
 import (
+	"net/url"
+	"strings"
+
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx/wirejson"
 )
@@ -11,6 +14,8 @@ type AnalyzeRequest struct {
 	Files             StrPairs
 	Bundle            *Bundle
 	SetupValues       wirejson.Object
+	// Target is into (the install to update) and origin (where the folder came from).
+	Target BundleTarget
 }
 
 // InstallRequest is POST /bundles/install's body.
@@ -18,6 +23,53 @@ type InstallRequest struct {
 	Bundle      Bundle
 	SetupValues wirejson.Object
 	PlanDigest  string
+	// Target is install_id (the install the plan was made for) and origin.
+	Target BundleTarget
+}
+
+func (c *checker) origin(f fields) *BundleOrigin {
+	v, ok := f.get("origin")
+	if !ok || v == nil {
+		return nil
+	}
+	o, ok := c.model(v, "BundleOrigin", f.at("origin"))
+	if !ok {
+		return nil
+	}
+	of := fields{o, f.at("origin")}
+	out := &BundleOrigin{GitRemote: c.nullableStr(of, "git_remote"), GitCommit: c.nullableStr(of, "git_commit"), Path: c.nullableStr(of, "path")}
+	if out.GitRemote != nil {
+		remote := plainRemote(*out.GitRemote)
+		out.GitRemote = &remote
+	}
+	c.extra(o, []string{"git_remote", "git_commit", "path"}, f.at("origin"))
+	return out
+}
+
+// plainRemote is a git remote without credentials, query or fragment: it is
+// shown to whoever reads the plan, so a token pasted into it must not travel.
+func plainRemote(remote string) string {
+	r := strings.TrimSpace(remote)
+	if i := strings.IndexAny(r, "?#"); i >= 0 {
+		r = r[:i]
+	}
+	if u, err := url.Parse(r); err == nil && u.Scheme != "" && u.Host != "" {
+		u.User = nil
+		return u.String()
+	}
+	if at := strings.Index(r, "@"); at >= 0 && !strings.Contains(r[:at], "/") {
+		r = r[at+1:]
+	}
+	return r
+}
+
+func (c *checker) installRef(f fields, key string) *string {
+	s := c.nullableStr(f, key)
+	if s != nil && pyStrip(*s) == "" {
+		c.add(fieldErr("string_too_short", "String should have at least 1 character", f.at(key)))
+		return nil
+	}
+	return s
 }
 
 func (c *checker) nullableStr(f fields, key string) *string {
@@ -57,6 +109,7 @@ func ValidateAnalyzeRequest(o wirejson.Object) (AnalyzeRequest, []httpx.FieldErr
 		}
 	}
 	out.SetupValues = c.setupValues(f)
+	out.Target = BundleTarget{Into: c.installRef(f, "into"), Origin: c.origin(f)}
 	if len(c.errs) > 0 {
 		return AnalyzeRequest{}, c.errs
 	}
@@ -102,6 +155,7 @@ func ValidateInstallRequest(o wirejson.Object) (InstallRequest, []httpx.FieldErr
 	}
 	out.SetupValues = c.setupValues(f)
 	out.PlanDigest = c.requiredStr(f, "plan_digest", 1, 0)
+	out.Target = BundleTarget{Into: c.installRef(f, "install_id"), Origin: c.origin(f)}
 	if len(c.errs) > 0 {
 		return InstallRequest{}, c.errs
 	}

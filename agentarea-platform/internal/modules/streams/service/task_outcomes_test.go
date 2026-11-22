@@ -206,9 +206,15 @@ func TestTaskOutcomesReachThePlatformStream(t *testing.T) {
 	if res, _ := inner["result"].(string); len([]rune(res)) != 501 || !strings.HasSuffix(res, "…") {
 		t.Fatalf("result summary = %q", res)
 	}
+	if ev.Extensions["sender"] != r.agent {
+		t.Fatalf("completion names agent %q", ev.Extensions["sender"])
+	}
 	approval := got[1].Event
 	if approval.Type != service.ApprovalRequested || approval.Extensions["eventkey"] != "approval:esc-1" {
 		t.Fatalf("approval = %+v", approval)
+	}
+	if got := service.PlatformEventSummary(approval.Data["body"].(map[string]any)); got == nil || *got != "shell: may I?" {
+		t.Fatalf("approval says %v", got)
 	}
 	owners := 0
 	for _, w := range r.graph.Writes {
@@ -241,6 +247,24 @@ func TestPlatformEventShape(t *testing.T) {
 	q := service.PlatformEventData(service.InputRequest, "waiting_for_input", "t1", "a1", map[string]any{"question": "which?"})
 	if q["question"] != "which?" {
 		t.Fatalf("input = %v", q)
+	}
+	for _, c := range []struct {
+		body map[string]any
+		want string
+	}{
+		{d, "boom"},
+		{q, "which?"},
+		{map[string]any{"kind": service.TaskFailed, "failure_reason": "quota"}, "quota"},
+		{map[string]any{"kind": service.TaskCompleted, "result": "line one\n\n  line two"}, "line one line two"},
+		{map[string]any{"kind": service.ApprovalRequested, "tool_name": "send_email"}, "send_email"},
+	} {
+		got := service.PlatformEventSummary(c.body)
+		if got == nil || *got != c.want {
+			t.Fatalf("summary of %v = %v, want %q", c.body, got, c.want)
+		}
+	}
+	if got := service.PlatformEventSummary(map[string]any{"kind": service.TaskCancelled}); got != nil {
+		t.Fatalf("a cancellation without a reason says %q", *got)
 	}
 	for _, c := range []struct {
 		kind string
