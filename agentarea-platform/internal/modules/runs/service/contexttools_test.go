@@ -42,3 +42,26 @@ func TestContextToolsReadOwnWorkspaceOnly(t *testing.T) {
 		t.Fatalf("empty: %q", out.Result)
 	}
 }
+
+func TestContextToolsHideReservedRoots(t *testing.T) {
+	store := newMemBlob()
+	store.m["workspaces/ws-1/channel/plan.csv"] = []byte("date,title")
+	for _, p := range []string{"tasks/t-1/outputs/report.md", "staging/up.bin", "events/e.json", ".trash/old.md"} {
+		store.m["workspaces/ws-1/"+p] = []byte("private")
+	}
+	tools := contextTools{store: store}
+	ctx := context.Background()
+
+	if out, _ := tools.Call(ctx, contextInvocation("list_org_files", nil)); out.Result != "channel/plan.csv" {
+		t.Fatalf("list: %q", out.Result)
+	}
+	if out, _ := tools.Call(ctx, contextInvocation("list_org_files", map[string]any{"prefix": "tasks/"})); out.Result != "No context files found." {
+		t.Fatalf("list tasks/: %q", out.Result)
+	}
+	for _, p := range []string{"tasks/t-1/outputs/report.md", "staging/up.bin", "events/e.json", ".trash/old.md", "./tasks/t-1/outputs/report.md"} {
+		out, _ := tools.Call(ctx, contextInvocation("read_org_file", map[string]any{"path": p}))
+		if out.Success || !strings.Contains(out.Result, "not in the organization library") {
+			t.Fatalf("read %s: %+v", p, out)
+		}
+	}
+}

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 )
 
 // MaxWritePathBytes bounds a written path so the file stays archivable
@@ -158,13 +160,7 @@ func firstPart(p string) string {
 }
 
 // IsReservedPath is is_reserved_path: tasks/, staging/, events/, .trash/.
-func IsReservedPath(p string) bool {
-	switch firstPart(p) {
-	case "tasks", "staging", "events", ".trash":
-		return true
-	}
-	return false
-}
+func IsReservedPath(p string) bool { return api.IsReservedPath(p) }
 
 // IsReadOnlyPath is is_read_only_path: apps/ belongs to MCP apps.
 func IsReadOnlyPath(p string) bool { return firstPart(p) == "apps" }
