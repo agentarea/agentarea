@@ -129,10 +129,20 @@ func (s *Service) grantOwner(ctx context.Context, c authn.Caller, id string) err
 	return authz.GrantResourceOwner(ctx, s.d.Graph, id, c.Workspace.ID(), authz.UserSubject(c.UserID), authz.AgentOwnerRelations())
 }
 
+// requireUsable refuses a newly attached connection the caller may not use. A
+// platform-managed connection (paid by the platform, shown to every workspace)
+// is no workspace's resource, so the graph never grants it; any member may attach it.
 func (s *Service) requireUsable(ctx context.Context, c authn.Caller, tools, previous []domain.Tool) error {
 	prev := connectionIDs(previous)
 	for _, id := range sortedKeys(connectionIDs(tools)) {
 		if prev[id] {
+			continue
+		}
+		platform, err := s.platformConnection(ctx, c, tools, id)
+		if err != nil {
+			return err
+		}
+		if platform {
 			continue
 		}
 		ok, err := s.d.Graph.Check(ctx, c.GraphSubject(), authz.CanUseConnection, authz.TypeResource, id)
@@ -144,6 +154,23 @@ func (s *Service) requireUsable(ctx context.Context, c authn.Caller, tools, prev
 		}
 	}
 	return nil
+}
+
+// platformConnection reports whether id, attached in tools, is a connection the platform manages.
+func (s *Service) platformConnection(ctx context.Context, c authn.Caller, tools []domain.Tool, id string) (bool, error) {
+	if s.d.Attachable == nil {
+		return false, nil
+	}
+	look := s.d.Attachable.MCPInstance
+	for _, t := range tools {
+		if t.Type == domain.ToolOpenAPI && t.Settings != nil && t.Settings.OpenAPIConnectionID != nil &&
+			isUUID(*t.Settings.OpenAPIConnectionID) && uuid.MustParse(*t.Settings.OpenAPIConnectionID).String() == id {
+			look = s.d.Attachable.OpenAPIConnection
+			break
+		}
+	}
+	found, platform, err := look(ctx, c.Workspace, id)
+	return found && platform, err
 }
 
 // PermissionError is Python's builtin PermissionError: a 403 permission_denied.

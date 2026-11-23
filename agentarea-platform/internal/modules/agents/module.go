@@ -207,6 +207,7 @@ func (m *Module) Use(l Later) {
 		m.svc.UseAudit(l.Audit)
 		m.svc.UseModels(m.d.Models)
 		m.svc.UseConnections(m.d.Connections)
+		m.svc.UseAttachable(m.d.ClientConnections)
 		m.svc.UseApprovals(m.d.Approvals)
 	}
 }
