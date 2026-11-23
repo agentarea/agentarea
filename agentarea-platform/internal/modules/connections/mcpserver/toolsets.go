@@ -39,6 +39,7 @@ type Providers struct {
 	StreamEvents    streamsapi.PlatformStreamEvents
 	WorkspaceFiles  sandboxapi.PlatformFiles
 	Inbox           runsapi.PlatformInbox
+	Messages        streamsapi.PlatformMessages
 	OpenAPI         connectionsapi.PlatformOpenAPI
 	MCPServers      connectionsapi.PlatformMCPServers
 	ConnectorTools  connectionsapi.PlatformConnectorTools
@@ -104,6 +105,8 @@ func (p Providers) specs(apiURL string) []toolsetSpec {
 			p.WorkspaceFiles != nil, func() map[string]toolDef { return workspaceFileTools(p.WorkspaceFiles, p.Slugs) }},
 		{"inbox", "Inbox", "Inspect agent inbox messages awaiting human input.", "operate", false,
 			p.Inbox != nil, func() map[string]toolDef { return inboxTools(p.Inbox) }},
+		{"messages", "Messages", "Write first to a workspace member through a messenger stream (Telegram).", "operate", false,
+			p.Messages != nil && p.Members != nil, func() map[string]toolDef { return messageTools(p.Messages, p.Members) }},
 		{"openapi_connections", "OpenAPI Connections", "Manage OpenAPI connections that expose external APIs as tools.", "build", false,
 			p.OpenAPI != nil, func() map[string]toolDef { return openAPITools(p.OpenAPI) }},
 		{"mcp_servers", "MCP Server Management", "Start, stop, and manage MCP server instances.", "build", false,

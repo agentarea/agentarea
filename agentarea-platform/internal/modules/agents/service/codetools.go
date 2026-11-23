@@ -19,7 +19,7 @@ func codePlanes() map[string]string {
 		"agentarea/streams": "build", "agentarea/stream_events": "operate", "agentarea/inbox": "operate",
 		"agentarea/openapi_connections": "build", "agentarea/mcp_servers": "build", "agentarea/providers": "build",
 		"agentarea/models": "build", "agentarea/secrets": "build", "agentarea/audit": "observe",
-		"agentarea/network": "observe", "agentarea/workspace_config": "build",
+		"agentarea/network": "observe", "agentarea/workspace_config": "build", "agentarea/messages": "operate",
 	}
 }
 

@@ -150,6 +150,38 @@ func TestExecuteToolHeldForApprovalUntilGranted(t *testing.T) {
 	}
 }
 
+func TestAMessageToAPersonGoesThroughThePolicyLikeAnyPlatformTool(t *testing.T) {
+	tool := &fakeTool{out: ToolOutput{Success: true, Result: `{"sent":true}`}}
+	s := New(Deps{Pricing: eurPricing{}, Tools: map[string]ToolCaller{"code": tool}, Log: quiet()})
+	call := func(p api.Policy) ToolResult {
+		t.Helper()
+		out, err := s.ExecuteTool(context.Background(), testPrincipal(), ToolCall{
+			TaskID: "t1", ToolName: "messages", Args: map[string]any{"text": "The report is ready"},
+			Binding: api.ToolBinding{Source: "code", PolicyNames: []string{"agentarea/messages", "messages"},
+				Code: &api.CodeBinding{Namespace: "agentarea/messages", Method: "send_message"}},
+			Policy: p,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	if out := call(api.Policy{Tools: &api.ToolsPolicy{Denied: []string{"messages"}}}); out.Out.Success ||
+		out.Out.Result != "Tool call denied by policy: tool 'messages' is denied by policy" {
+		t.Fatalf("denied %+v", out)
+	}
+	if out := call(api.Policy{Approval: &api.ApprovalPolicy{EscalationRules: []string{"messages"}}}); out.Out.Success ||
+		!strings.HasPrefix(out.Out.Error, "tool 'messages' requires approval") {
+		t.Fatalf("held %+v", out)
+	}
+	if len(tool.calls) != 0 {
+		t.Fatalf("sent despite the policy: %+v", tool.calls)
+	}
+	if out := call(api.Policy{}); !out.Out.Success || len(tool.calls) != 1 {
+		t.Fatalf("allowed %+v", out)
+	}
+}
+
 func TestExecuteToolOffloadsLargeOutputStoresImagesAndRelaysProgress(t *testing.T) {
 	b, ev := newMemBlob(), &fakeEvents{}
 	big := strings.Repeat("x", domain.OutputOffloadChars+1)

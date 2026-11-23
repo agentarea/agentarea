@@ -30,7 +30,7 @@ func everyProvider() Providers {
 		StreamEvents: struct {
 			streamsapi.PlatformStreamEvents
 		}{}, WorkspaceFiles: struct{ sandboxapi.PlatformFiles }{},
-		Inbox: struct{ runsapi.PlatformInbox }{}, OpenAPI: struct{ connectionsapi.PlatformOpenAPI }{},
+		Inbox: struct{ runsapi.PlatformInbox }{}, Messages: struct{ streamsapi.PlatformMessages }{}, OpenAPI: struct{ connectionsapi.PlatformOpenAPI }{},
 		MCPServers: struct {
 			connectionsapi.PlatformMCPServers
 		}{}, ConnectorTools: struct {
@@ -135,7 +135,7 @@ func TestRegistryMatchesContract(t *testing.T) {
 		server   contract.MCPServer
 		spanning bool
 		count    int
-	}{{c.PlatformSpanning, true, 137}, {c.PlatformPinned, false, 134}} {
+	}{{c.PlatformSpanning, true, 138}, {c.PlatformPinned, false, 135}} {
 		if len(mount.server.Tools) != mount.count {
 			t.Fatalf("%s: contract lists %d tools, want %d", mount.server.Mount, len(mount.server.Tools), mount.count)
 		}

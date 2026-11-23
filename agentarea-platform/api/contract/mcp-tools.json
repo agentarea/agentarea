@@ -4435,6 +4435,43 @@
     "toolset": "inbox"
    },
    {
+    "name": "messages_send_message",
+    "description": "Send a message to a workspace member through a messenger stream (Telegram), so you can start the conversation.\n\nThe member must have linked their Telegram account to AgentArea; there is no chat id to give. ``to`` defaults to the person this run acts for and ``stream`` to the only messenger stream\nthat reaches them. The text is sent as plain text, cut at the messenger's limit. When they\nanswer, the reply reaches the stream like any message they send, and its trigger runs as usual.",
+    "inputSchema": {
+     "properties": {
+      "workspace": {
+       "description": "Slug or id of the workspace to act in.",
+       "title": "Workspace",
+       "type": "string"
+      },
+      "text": {
+       "description": "The message, as plain text.",
+       "title": "Text",
+       "type": "string"
+      },
+      "to": {
+       "default": "",
+       "description": "The workspace member to write to: their user id or email, from `members_list`; empty for the person this run acts for.",
+       "title": "To",
+       "type": "string"
+      },
+      "stream": {
+       "default": "",
+       "description": "Messenger stream name or id, from `streams_list`; empty for the only one that reaches the member.",
+       "title": "Stream",
+       "type": "string"
+      }
+     },
+     "required": [
+      "workspace",
+      "text"
+     ],
+     "title": "send_messageArguments",
+     "type": "object"
+    },
+    "toolset": "messages"
+   },
+   {
     "name": "openapi_connections_create",
     "description": "Create a new OpenAPI connection.\n\nArgs:\n    name: Display name for the connection (unique per workspace).\n    base_url: Base URL for API requests, e.g. ``https://api.example.com``.\n        The path may hold ``{name}`` placeholders filled from\n        ``url_variables_json``, e.g. ``https://api.telegram.org/bot{token}``.\n    description: Optional human-readable summary.\n    spec_url: URL to an OpenAPI 3.x JSON or YAML spec. Spec is fetched\n        and parsed eagerly at create time so the connection is ready.\n    spec_content_json: Inline OpenAPI 3.x spec as a JSON-encoded string.\n        Use instead of ``spec_url`` when the host is unreachable from\n        the API container.\n    auth_config_id: Optional MCPAuthConfig UUID for OAuth2 token rotation.\n    custom_headers_json: JSON-encoded array of ``{\"name\", \"value\"}``\n        header objects. Non-safe headers (e.g. Authorization) are stored\n        encrypted in the secret manager.\n    custom_query_params_json: JSON-encoded array of ``{\"name\", \"value\",\n        \"secret\"}`` objects sent in every request's query string, e.g. an\n        API key the upstream takes as ``?api_key=``. ``secret`` defaults to\n        true: the value is stored encrypted and never returned. A configured\n        parameter wins over a same-named one passed at call time.\n    url_variables_json: JSON-encoded array of ``{\"name\", \"value\"}`` objects,\n        one per ``{name}`` placeholder in ``base_url``. Values are stored\n        encrypted in the secret manager and never returned.",
     "inputSchema": {
@@ -9706,6 +9743,37 @@
      "type": "object"
     },
     "toolset": "inbox"
+   },
+   {
+    "name": "messages_send_message",
+    "description": "Send a message to a workspace member through a messenger stream (Telegram), so you can start the conversation.\n\nThe member must have linked their Telegram account to AgentArea; there is no chat id to give. ``to`` defaults to the person this run acts for and ``stream`` to the only messenger stream\nthat reaches them. The text is sent as plain text, cut at the messenger's limit. When they\nanswer, the reply reaches the stream like any message they send, and its trigger runs as usual.",
+    "inputSchema": {
+     "properties": {
+      "text": {
+       "description": "The message, as plain text.",
+       "title": "Text",
+       "type": "string"
+      },
+      "to": {
+       "default": "",
+       "description": "The workspace member to write to: their user id or email, from `members_list`; empty for the person this run acts for.",
+       "title": "To",
+       "type": "string"
+      },
+      "stream": {
+       "default": "",
+       "description": "Messenger stream name or id, from `streams_list`; empty for the only one that reaches the member.",
+       "title": "Stream",
+       "type": "string"
+      }
+     },
+     "required": [
+      "text"
+     ],
+     "title": "send_messageArguments",
+     "type": "object"
+    },
+    "toolset": "messages"
    },
    {
     "name": "openapi_connections_create",

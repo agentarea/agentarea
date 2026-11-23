@@ -132,6 +132,9 @@ func ClientPlatformToolsets() []ClientPlatformToolset {
 		{Namespace: "agentarea/inbox", Name: "inbox", DisplayName: "Inbox", Description: "Inspect agent inbox messages awaiting human input.", Methods: []ClientPlatformToolsetMethod{
 			{Name: "list", DisplayName: "List inbox items", Description: "List inbox items, optionally filtered by status or agent.", Effect: "read"},
 		}},
+		{Namespace: "agentarea/messages", Name: "messages", DisplayName: "Messages", Description: "Write first to a workspace member through a messenger stream (Telegram).", Methods: []ClientPlatformToolsetMethod{
+			{Name: "send_message", DisplayName: "Send a message to a member", Description: "Send a message to a workspace member through a messenger stream (Telegram), so you can start the conversation.", Effect: "write"},
+		}},
 		{Namespace: "agentarea/openapi_connections", Name: "openapi_connections", DisplayName: "OpenAPI Connections", Description: "Manage OpenAPI connections that expose external APIs as tools.", Methods: []ClientPlatformToolsetMethod{
 			{Name: "create", DisplayName: "Create OpenAPI connection", Description: "Create a new OpenAPI connection.", Effect: "write"},
 			{Name: "delete", DisplayName: "Delete OpenAPI connection", Description: "Delete an OpenAPI connection, its stored secrets and the OAuth auth config it connected with.", Effect: "destructive"},

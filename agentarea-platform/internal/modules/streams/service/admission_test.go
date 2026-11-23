@@ -63,6 +63,8 @@ type links struct {
 	holders map[string]string
 	codes   map[string]string
 	pending map[string]string
+	// accounts are each user's linked Telegram ids.
+	accounts map[string][]string
 }
 
 func (l *links) Holder(_ context.Context, _, id string) (string, bool, error) {
@@ -93,6 +95,13 @@ func (l *links) Confirm(_ context.Context, _, id string) (string, bool, error) {
 }
 
 func (l *links) Describe(context.Context, string) string { return "o***@example.com" }
+
+func (l *links) Accounts(_ context.Context, userID, provider string) ([]string, error) {
+	if provider != "telegram" {
+		return nil, nil
+	}
+	return l.accounts[userID], nil
+}
 
 type owners struct{ owner string }
 

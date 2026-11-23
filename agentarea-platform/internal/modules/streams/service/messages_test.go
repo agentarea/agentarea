@@ -1,0 +1,208 @@
+package service_test
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/google/uuid"
+
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/netguard"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/api"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/service"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/store/storetest"
+)
+
+// telegramServer is the Bot API as a transport: it records each sendMessage and refuses chat 666
+// the way Telegram refuses a user who never started the bot.
+type telegramServer struct {
+	mu   sync.Mutex
+	sent []string
+}
+
+func (s *telegramServer) RoundTrip(r *http.Request) (*http.Response, error) {
+	answer, status := `{"ok":true,"result":true}`, http.StatusOK
+	token, method, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/bot"), "/")
+	if r.URL.Host == "api.telegram.org" && method == "sendMessage" {
+		var m struct {
+			ChatID any    `json:"chat_id"`
+			Text   string `json:"text"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
+			return nil, err
+		}
+		answer = `{"ok":true,"result":{"message_id":77}}`
+		if m.ChatID == "666" {
+			answer, status = `{"ok":false,"error_code":403,"description":"Forbidden: bot can't initiate conversation with a user"}`, http.StatusForbidden
+		}
+		s.mu.Lock()
+		s.sent = append(s.sent, fmt.Sprintf("%s %v %s", token, m.ChatID, m.Text))
+		s.mu.Unlock()
+	}
+	return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": {"application/json"}},
+		Body: io.NopCloser(strings.NewReader(answer)), Request: r}, nil
+}
+
+func (s *telegramServer) Transport(netguard.Destination) http.RoundTripper { return s }
+func (s *telegramServer) Dialer() netguard.Dialer                          { return &net.Dialer{} }
+
+func (s *telegramServer) take() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := s.sent
+	s.sent = nil
+	return out
+}
+
+type messaging struct {
+	svc   *service.Service
+	ctx   context.Context
+	tg    *telegramServer
+	links *links
+	graph *storetest.Graph
+}
+
+func newMessaging(t *testing.T) messaging {
+	t.Helper()
+	pool := storetest.Pool(t)
+	ws := storetest.Workspace(t, pool)
+	ctx, _ := storetest.Caller(context.Background(), ws, "owner")
+	secrets := storetest.NewSecrets()
+	m := messaging{ctx: ctx, tg: &telegramServer{}, graph: &storetest.Graph{AllowAll: true},
+		links: &links{accounts: map[string][]string{}}}
+	m.svc = service.New(service.Deps{
+		DB: storetest.DB{Pool: pool}, Graph: m.graph, SourceTypes: storetest.ShippedSourceTypes(t),
+		Secrets: secrets, SecretCatalog: secrets.Catalog, Blob: &storetest.Blob{}, Bus: &storetest.Bus{},
+		Dedup: &storetest.Dedup{}, Quota: &storetest.Quota{}, Out: m.tg, APIURL: "https://api.example.test",
+		Links: m.links, Owners: owners{owner: "owner"}, Notices: &storetest.Dedup{},
+	})
+	return m
+}
+
+// stream adds a readable stream with one source of sourceType, whose bot token is token.
+func (m messaging) stream(t *testing.T, name, sourceType, token string) string {
+	t.Helper()
+	st, err := m.svc.CreateStream(m.ctx, name, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := service.NewSource{SourceType: sourceType, Kind: "webhook"}
+	if token != "" {
+		src.Credentials = map[string]service.Credential{"bot_token": value(token)}
+	}
+	if _, _, err := m.svc.AddSource(m.ctx, st.ID, src); err != nil {
+		t.Fatal(err)
+	}
+	m.tg.take()
+	m.graph.Readable = append(m.graph.Readable, st.ID)
+	return st.ID
+}
+
+func (m messaging) send(to, stream, text string) (api.MessageSent, error) {
+	return m.svc.SendMessage(m.ctx, api.MessageSend{UserID: to, Recipient: to + "@example.com", Stream: stream, Text: text})
+}
+
+func TestAMessageGoesToTheLinkedAccountThroughTheOnlyMessengerStream(t *testing.T) {
+	m := newMessaging(t)
+	m.stream(t, "hooks-"+uuid.NewString()[:8], "generic_webhook", "")
+	name := "tg-" + uuid.NewString()[:8]
+	id := m.stream(t, name, "telegram", "TOKEN")
+	m.links.accounts["owner"] = []string{"42", "41"}
+
+	out, err := m.send("owner", "", "The CEO report is ready")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !out.Sent || out.To != "owner@example.com" || out.Stream.ID != id || out.Stream.Name != name ||
+		out.Messenger != "telegram" || out.MessageID == nil || *out.MessageID != 77 || out.Truncated {
+		t.Fatalf("sent %+v", out)
+	}
+	if sent := m.tg.take(); len(sent) != 1 || sent[0] != "TOKEN 42 The CEO report is ready" {
+		t.Fatalf("telegram got %q", sent)
+	}
+}
+
+func TestAMessageReachesOnlyAMemberWhoLinkedTheirAccount(t *testing.T) {
+	m := newMessaging(t)
+	name := "tg-" + uuid.NewString()[:8]
+	m.stream(t, name, "telegram", "TOKEN")
+
+	_, err := m.send("bob", "", "hello")
+	if err == nil || !strings.Contains(err.Error(), "bob@example.com has not linked a Telegram account") ||
+		!strings.Contains(err.Error(), name) {
+		t.Fatalf("unlinked: %v", err)
+	}
+	if sent := m.tg.take(); len(sent) != 0 {
+		t.Fatalf("telegram got %q", sent)
+	}
+
+	m.links.accounts["bob"] = []string{"666"}
+	_, err = m.send("bob", "", "hello")
+	if err == nil || !strings.Contains(err.Error(), "can't initiate conversation") || !strings.Contains(err.Error(), "press Start") {
+		t.Fatalf("never started the bot: %v", err)
+	}
+}
+
+func TestTheStreamIsPickedWhenSeveralReachTheMember(t *testing.T) {
+	m := newMessaging(t)
+	first, second := "tg-a-"+uuid.NewString()[:8], "tg-b-"+uuid.NewString()[:8]
+	m.stream(t, first, "telegram", "FIRST")
+	id := m.stream(t, second, "telegram", "SECOND")
+	m.links.accounts["owner"] = []string{"42"}
+
+	_, err := m.send("owner", "", "hello")
+	if err == nil || !strings.Contains(err.Error(), first) || !strings.Contains(err.Error(), second) ||
+		!strings.Contains(err.Error(), "stream") {
+		t.Fatalf("ambiguous: %v", err)
+	}
+	if _, err := m.send("owner", second, "by name"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.send("owner", id, "by id"); err != nil {
+		t.Fatal(err)
+	}
+	if sent := m.tg.take(); len(sent) != 2 || sent[0] != "SECOND 42 by name" || sent[1] != "SECOND 42 by id" {
+		t.Fatalf("telegram got %q", sent)
+	}
+}
+
+func TestNoMessengerStreamIsSaidSo(t *testing.T) {
+	m := newMessaging(t)
+	hooks := "hooks-" + uuid.NewString()[:8]
+	m.stream(t, hooks, "generic_webhook", "")
+	m.links.accounts["owner"] = []string{"42"}
+
+	if _, err := m.send("owner", "", "hello"); err == nil || !strings.Contains(err.Error(), "no messenger stream") {
+		t.Fatalf("none: %v", err)
+	}
+	if _, err := m.send("owner", hooks, "hello"); err == nil || !strings.Contains(err.Error(), "has no Telegram source") {
+		t.Fatalf("not a messenger: %v", err)
+	}
+	if sent := m.tg.take(); len(sent) != 0 {
+		t.Fatalf("telegram got %q", sent)
+	}
+}
+
+func TestAStreamTheCallerCannotReadIsNotUsed(t *testing.T) {
+	m := newMessaging(t)
+	name := "tg-" + uuid.NewString()[:8]
+	m.stream(t, name, "telegram", "TOKEN")
+	m.links.accounts["owner"] = []string{"42"}
+	m.graph.AllowAll, m.graph.Readable = false, nil
+
+	if _, err := m.send("owner", "", "hello"); err == nil || !strings.Contains(err.Error(), "no messenger stream") {
+		t.Fatalf("unreadable picked: %v", err)
+	}
+	if _, err := m.send("owner", name, "hello"); err == nil {
+		t.Fatal("an unreadable stream was used by name")
+	}
+	if sent := m.tg.take(); len(sent) != 0 {
+		t.Fatalf("telegram got %q", sent)
+	}
+}

@@ -26,7 +26,7 @@ func TestClientAttachableToolset(t *testing.T) {
 
 func TestClientPlatformToolsetsAreSorted(t *testing.T) {
 	all := ClientPlatformToolsets()
-	if len(all) != 22 {
+	if len(all) != 23 {
 		t.Fatalf("%d toolsets", len(all))
 	}
 	for _, ts := range all {
