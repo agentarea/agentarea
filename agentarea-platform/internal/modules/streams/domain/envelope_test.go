@@ -107,3 +107,27 @@ func TestABlankFirstSummaryGivesWayToTheNext(t *testing.T) {
 		t.Fatalf("got %+v", f)
 	}
 }
+
+func TestEventTextKeepsTheWholeMessage(t *testing.T) {
+	e := summaryEntry(t, `,"summary":["{body:message.text}","{body:message.caption}"]`)
+	long := strings.Repeat("слово ", 200) + "\nвторая строка"
+	got := EventText(e, EventOverrides{}, data(map[string]any{"message": map[string]any{"text": long}}))
+	if got == nil || *got != strings.TrimSpace(long) {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestEventTextFallsThroughToTheNextTemplate(t *testing.T) {
+	e := summaryEntry(t, `,"summary":["{body:message.text}","{body:message.caption}"]`)
+	got := EventText(e, EventOverrides{}, data(map[string]any{"message": map[string]any{"caption": "подпись"}}))
+	if got == nil || *got != "подпись" {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestEventTextIsNilWhenNothingRenders(t *testing.T) {
+	e := summaryEntry(t, `,"summary":"{body:message.text}"`)
+	if got := EventText(e, EventOverrides{}, data(map[string]any{"callback_query": map[string]any{}})); got != nil {
+		t.Fatalf("got %q", *got)
+	}
+}

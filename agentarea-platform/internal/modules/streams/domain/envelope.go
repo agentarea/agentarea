@@ -95,6 +95,39 @@ func EventSummary(e SourceTypeEntry, o EventOverrides, data map[string]any) *str
 	return summaryOf(pick(o.Summary, e.Event.Summary), TemplateContext{Body: data["body"], Headers: headers})
 }
 
+// MaxEventTextRunes is the longest message text a firing carries inline.
+const MaxEventTextRunes = 16000
+
+// EventText is the whole message a recorded event carries, by the same templates as its
+// summary but kept as written: a messenger event's text is what its trigger asks the agent.
+// nil when none renders or the body is stored as a file.
+func EventText(e SourceTypeEntry, o EventOverrides, data map[string]any) *string {
+	headers := map[string]string{}
+	if h, ok := data["headers"].(map[string]any); ok {
+		for k, v := range h {
+			if text, ok := v.(string); ok {
+				headers[k] = text
+			}
+		}
+	}
+	c := TemplateContext{Body: data["body"], Headers: headers}
+	for _, tpl := range pick(o.Summary, e.Event.Summary) {
+		v, ok := Render(tpl, c)
+		if !ok {
+			continue
+		}
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		if r := []rune(v); len(r) > MaxEventTextRunes {
+			v = string(r[:MaxEventTextRunes])
+		}
+		return &v
+	}
+	return nil
+}
+
 // SummaryLine is s as one line of at most MaxSummaryRunes, nil when nothing is left.
 func SummaryLine(s string) *string {
 	return oneLine(&s, MaxSummaryRunes)
