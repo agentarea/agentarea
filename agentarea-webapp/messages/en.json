@@ -4276,6 +4276,23 @@
       "computePerMonth": "Per month if always on",
       "vendorCost": "{price}, the vendor's cost without markup",
       "priceUnavailable": "{price} · price unavailable, vendor cost without markup"
+    },
+    "loading": "Loading…",
+    "loadMore": "Load more",
+    "card": {
+      "verified": "Verified",
+      "featured": "Featured"
+    },
+    "filters": {
+      "category": "Category",
+      "all": "All",
+      "protocol": "Protocol",
+      "hosting": "Runs",
+      "clear": "Clear",
+      "hostings": {
+        "vendor": "Hosted by vendor",
+        "agentarea": "Runs on AgentArea"
+      }
     }
   },
   "BundleInstall": {

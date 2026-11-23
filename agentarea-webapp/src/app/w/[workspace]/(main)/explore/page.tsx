@@ -31,6 +31,10 @@ import CatalogGallery, {
   ExploreTypeTabs,
   ExploreViewToggle,
 } from "../bundles/components/CatalogGallery";
+import {
+  ExploreConnectionFilters,
+  ExploreSearch,
+} from "../bundles/components/ExploreFilters";
 
 export const metadata: Metadata = {
   title: "Catalog",
@@ -138,8 +142,15 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         subheader={
           <SubheaderToolbar
             categories={<ExploreTypeTabs initialType={type} />}
+            search={<ExploreSearch initialType={type} />}
             controls={
               <>
+                <ExploreConnectionFilters
+                  initialType={type}
+                  protocols={protocols ?? []}
+                  hostings={hostings ?? []}
+                  pricings={pricings ?? []}
+                />
                 <ExploreSortSelect initialSort={sort} />
                 <ExploreViewToggle initialView={initialView} />
               </>

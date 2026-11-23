@@ -9,6 +9,7 @@ import {
   ExploreTypeTabs,
   ExploreViewToggle,
 } from "../bundles/components/CatalogGallery";
+import { ExploreSearch } from "../bundles/components/ExploreFilters";
 
 // Route-level Suspense fallback for /explore. The page is an async Server
 // Component that awaits the first catalog page, so without this the nearest
@@ -36,6 +37,7 @@ export default async function Loading() {
       subheader={
         <SubheaderToolbar
           categories={<ExploreTypeTabs initialType="bundles" />}
+          search={<ExploreSearch initialType="bundles" />}
           controls={
             <>
               <ExploreSortSelect />

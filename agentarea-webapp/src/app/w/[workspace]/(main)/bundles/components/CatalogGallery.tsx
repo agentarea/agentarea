@@ -22,6 +22,7 @@ import {
   ExternalLink,
   FileText,
   Globe,
+  LayoutGrid,
   Plug,
   Puzzle,
   Search,
@@ -50,7 +51,6 @@ import {
 } from "@/components/ui/command";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import { HoverLink } from "@/components/ui/hover-link";
-import { Input } from "@/components/ui/input";
 import { MenuRow, MenuSectionLabel } from "@/components/ui/menu-row";
 import ModelBadge from "@/components/ui/model-badge";
 import {
@@ -271,7 +271,7 @@ export function ExplorePendingProvider({
   );
 }
 
-function useExplorePending() {
+export function useExplorePending() {
   return useContext(ExplorePendingContext);
 }
 
@@ -540,16 +540,6 @@ export default function CatalogGallery({
     })
   );
 
-  // Typing shouldn't round-trip the server on every keystroke, so the input is
-  // local and the URL follows it on a short debounce.
-  const [draftQuery, setDraftQuery] = useState(query);
-  useEffect(() => setDraftQuery(query), [query]);
-  useEffect(() => {
-    if (draftQuery === query) return;
-    const t = setTimeout(() => void setQuery(draftQuery || null), 300);
-    return () => clearTimeout(t);
-  }, [draftQuery, query, setQuery]);
-
   // Deep-link fallback for ?item= that points outside the loaded page(s).
   const [deepItem, setDeepItem] = useState<CatalogEntry | null>(null);
   const [deepLoading, setDeepLoading] = useState(false);
@@ -737,25 +727,6 @@ export default function CatalogGallery({
     () => paging.categories.map((c) => [c.value, c.count] as [string, number]),
     [paging.categories]
   );
-  const protocols = useMemo(
-    () => paging.protocols.map((p) => [p.value, p.count] as [string, number]),
-    [paging.protocols]
-  );
-  const hostings = useMemo(
-    () =>
-      (paging.hostings ?? []).map(
-        (h) => [h.value, h.count] as [string, number]
-      ),
-    [paging.hostings]
-  );
-  const pricings = useMemo(
-    () =>
-      (paging.pricings ?? []).map(
-        (p) => [p.value, p.count] as [string, number]
-      ),
-    [paging.pricings]
-  );
-  const tPricing = useTranslations("CatalogPage.pricing");
 
   // A detail replaces the list, so the list's scroll position is kept here and
   // put back on return: "Back to catalog" lands where the user left, with the
@@ -799,52 +770,9 @@ export default function CatalogGallery({
           <FacetSkeleton />
         ) : (
           <>
-            {/* Connections are not all MCP — an entry may be a plain HTTP API —
-                so the split leads the sidebar when there is one to make. */}
-            {protocols.length > 1 && (
-              <FacetGroup
-                label="Protocol"
-                options={protocols}
-                labels={PROTOCOL_LABELS}
-                selected={protocol}
-                onSelect={(v) => {
-                  void setProtocol(v === ALL ? null : v);
-                  void setItemId(null);
-                }}
-              />
-            )}
-            {/* Where an MCP connection runs: connecting means an OAuth sign-in
-                for one and keys for a process we start for the other. */}
-            {hostings.length > 1 && (
-              <FacetGroup
-                label="Runs"
-                options={hostings}
-                labels={HOSTING_LABELS}
-                selected={hosting}
-                onSelect={(v) => {
-                  void setHosting(v === ALL ? null : v);
-                  void setItemId(null);
-                }}
-              />
-            )}
-            {pricings.length > 1 && (
-              <FacetGroup
-                label={tPricing("facet")}
-                options={pricings}
-                labels={{
-                  paid: tPricing("kinds.paid"),
-                  own_key: tPricing("kinds.own_key"),
-                  free: tPricing("kinds.free"),
-                }}
-                selected={pricing}
-                onSelect={(v) => {
-                  void setPricing(v === ALL ? null : v);
-                  void setItemId(null);
-                }}
-              />
-            )}
             <FacetGroup
-              label="Category"
+              label={tCatalog("filters.category")}
+              allLabel={tCatalog("filters.all")}
               options={categories}
               icons={getCategoryIcon}
               selected={category}
@@ -865,7 +793,7 @@ export default function CatalogGallery({
           <DeepItemStatus onBack={closeItem}>
             {deepLoading ? (
               <StatusIndicator kind="running" size="sm">
-                Loading…
+                {tCatalog("loading")}
               </StatusIndicator>
             ) : deepError && !deepNotFound ? (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
@@ -905,7 +833,7 @@ export default function CatalogGallery({
                   className="w-full"
                   itemClassName="capitalize"
                   items={[
-                    { value: ALL, label: "All" },
+                    { value: ALL, label: tCatalog("filters.all") },
                     ...categories.map(([value, count]) => ({
                       value,
                       label: value,
@@ -920,17 +848,6 @@ export default function CatalogGallery({
                 />
               </div>
             )}
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={draftQuery}
-                onChange={(e) => setDraftQuery(e.target.value)}
-                placeholder={tCatalog(`search.${type}`)}
-                aria-label={tCatalog(`search.${type}`)}
-                className="pl-9"
-              />
-            </div>
-
             {paging.error && (
               <div className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
                 <StatusIndicator kind="failed" size="sm" className="text-sm">
@@ -977,7 +894,6 @@ export default function CatalogGallery({
                       ? {
                           label: tCatalog("empty.clearFilters"),
                           onClick: () => {
-                            setDraftQuery("");
                             void setQuery(null);
                             void setCategory(null);
                             void setProtocol(null);
@@ -1005,15 +921,23 @@ export default function CatalogGallery({
                     title={sec.title}
                     description={sec.description}
                   />
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                    {sec.entries.map((e) => (
-                      <CatalogCard
-                        key={e.id}
-                        entry={e}
-                        onOpen={() => openItem(e.id)}
-                      />
-                    ))}
-                  </div>
+                  {/* Shelves follow the chosen view like the list below them. */}
+                  {view === "grid" ? (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                      {sec.entries.map((e) => (
+                        <CatalogCard
+                          key={e.id}
+                          entry={e}
+                          onOpen={() => openItem(e.id)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <CatalogTable
+                      entries={sec.entries}
+                      onOpen={(e) => openItem(e.id)}
+                    />
+                  )}
                 </section>
               ))}
             {!busy &&
@@ -1068,13 +992,13 @@ export default function CatalogGallery({
                     <StatusIndicator
                       kind="running"
                       size="sm"
-                      aria-label="Loading…"
-                      title="Loading…"
+                      aria-label={tCatalog("loading")}
+                      title={tCatalog("loading")}
                     />
                   ) : (
                     !paging.error && (
                       <Button variant="outline" onClick={() => void loadMore()}>
-                        Load more
+                        {tCatalog("loadMore")}
                       </Button>
                     )
                   )}
@@ -1201,8 +1125,10 @@ function FacetGroup({
   icons,
   selected,
   onSelect,
+  allLabel,
 }: {
   label: string;
+  allLabel: string;
   options: [string, number][];
   /** Display names for machine values ("mcp" reads as "Mcp" otherwise). */
   labels?: Record<string, string>;
@@ -1219,9 +1145,13 @@ function FacetGroup({
       </div>
       <div className="space-y-0.5">
         {rows.map(([value, count]) => {
-          // "All" is the absence of a filter, not a topic, so it stays bare —
-          // but it still takes the icon's width so the labels line up.
-          const Icon = icons && value !== ALL ? icons(value) : null;
+          // "All" is the absence of a filter, not a topic, so it gets a
+          // neutral grid glyph rather than a category's own.
+          const Icon = icons
+            ? value === ALL
+              ? LayoutGrid
+              : icons(value)
+            : null;
           return (
             <button
               key={value}
@@ -1233,14 +1163,9 @@ function FacetGroup({
                   : "text-muted-foreground hover:bg-muted/50"
               )}
             >
-              {icons &&
-                (Icon ? (
-                  <Icon className="h-3.5 w-3.5 shrink-0" />
-                ) : (
-                  <span className="h-3.5 w-3.5 shrink-0" />
-                ))}
+              {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
               <span className="min-w-0 flex-1 truncate text-left capitalize">
-                {value === ALL ? "All" : (labels?.[value] ?? value)}
+                {value === ALL ? allLabel : (labels?.[value] ?? value)}
               </span>
               {count !== null && (
                 <span className="text-[10px] tabular-nums text-muted-foreground">
@@ -1325,24 +1250,26 @@ function CatalogCard({
   entry: CatalogEntry;
   onOpen: () => void;
 }) {
+  const t = useTranslations("CatalogPage.card");
+  const tCommon = useTranslations("Common");
   return (
     <button
       onClick={onOpen}
-      className="group flex flex-col overflow-hidden rounded-lg border border-border/60 bg-white text-left transition-shadow hover:shadow-md dark:border-zinc-700/60 dark:bg-zinc-900"
+      className="group flex flex-col overflow-hidden rounded-lg border border-border/60 bg-white text-left transition-[box-shadow,border-color] hover:border-border hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700/60 dark:bg-zinc-900 dark:hover:border-zinc-600"
     >
       <div className="relative flex h-20 items-center justify-center gap-1.5 border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
         {entry.verified ? (
           <span className="absolute left-2 top-2">
             <Badge variant="blue" size="sm" className="gap-1">
               <BadgeCheck className="h-3 w-3" />
-              Verified
+              {t("verified")}
             </Badge>
           </span>
         ) : entry.featured ? (
           <span className="absolute left-2 top-2">
             <Badge variant="blue" size="sm" className="gap-1">
               <Star className="h-3 w-3 fill-current" />
-              Featured
+              {t("featured")}
             </Badge>
           </span>
         ) : null}
@@ -1367,21 +1294,26 @@ function CatalogCard({
           />
         )}
         <span className="absolute right-2 top-2">
-          <HoverLink text="View" />
+          <HoverLink text={tCommon("view")} />
         </span>
       </div>
 
       <div className="flex flex-1 flex-col gap-1 p-3">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-semibold">{entry.title}</span>
-          {entry.category && <CategoryBadge category={entry.category} />}
-        </div>
-        <p className="table-description line-clamp-2">{entry.description}</p>
-        {(entry.source ||
+        {/* The title gets the whole row: next to the category badge a long
+            name was cut to a few letters. */}
+        <span className="truncate text-sm font-semibold" title={entry.title}>
+          {entry.title}
+        </span>
+        <p className="table-description line-clamp-2 min-h-[2lh]">
+          {entry.description}
+        </p>
+        {(entry.category ||
+          entry.source ||
           entry.protocol ||
           entry.meta.length > 0 ||
           entry.connections.length > 0) && (
           <div className="mt-auto flex flex-wrap items-center gap-1 pt-1.5">
+            {entry.category && <CategoryBadge category={entry.category} />}
             {entry.source && (
               <RegistryBadge
                 name={entry.source.name}
@@ -1438,6 +1370,7 @@ function DetailView({
   const [state, setState] = useState<InstallState>({ phase: "idle" });
   const tBundle = useTranslations("BundleInstall");
   const tConnected = useTranslations("CatalogPage.connected");
+  const tCatalog = useTranslations("CatalogPage");
   const catalogFetchError = useCatalogFetchError();
   // Bundles open an inline configure-then-install step rather than installing on
   // the first click (pick model, skip connections, tune policies, then commit).
@@ -1510,7 +1443,7 @@ function DetailView({
         className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronLeft className="h-4 w-4" />
-        Back to catalog
+        {tCatalog("empty.backToCatalog")}
       </button>
 
       {/* header — icon, title/badges, description, primary action */}
@@ -1529,7 +1462,7 @@ function DetailView({
               {entry.verified && (
                 <Badge variant="blue" size="sm" className="gap-1">
                   <BadgeCheck className="h-3 w-3" />
-                  Verified
+                  {tCatalog("card.verified")}
                 </Badge>
               )}
               {entry.source && (
@@ -2812,10 +2745,6 @@ export function CatalogGallerySkeleton({
 }: {
   initialView?: ViewMode;
 }) {
-  const [type] = useQueryState(
-    "type",
-    parseAsStringLiteral(TYPE_KEYS).withDefault("bundles")
-  );
   // Match the view the page will actually restore (URL param > persisted cookie
   // > server-seeded default), read on the client via a lazy initializer. The
   // server seed alone is unreliable (a cached RSC / auth-gated SSR can serve a
@@ -2829,17 +2758,12 @@ export function CatalogGallerySkeleton({
     const saved = fromUrl ?? getUiView(EXPLORE_VIEW_KEY);
     return saved === "table" || saved === "grid" ? saved : initialView;
   });
-  const t = useTranslations("CatalogPage.search");
   return (
     <div className="flex gap-6">
       <aside className="hidden w-52 shrink-0 lg:block">
         <FacetSkeleton />
       </aside>
       <div className="min-w-0 flex-1 space-y-4">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input disabled placeholder={t(type)} aria-hidden className="pl-9" />
-        </div>
         <ContentSkeleton view={view} />
       </div>
     </div>
@@ -2919,6 +2843,7 @@ function DeepItemStatus({
   onBack: () => void;
   children: React.ReactNode;
 }) {
+  const tCatalog = useTranslations("CatalogPage");
   return (
     <div className="space-y-6">
       <button
@@ -2926,7 +2851,7 @@ function DeepItemStatus({
         className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronLeft className="h-4 w-4" />
-        Back to catalog
+        {tCatalog("empty.backToCatalog")}
       </button>
       {children}
     </div>

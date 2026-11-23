@@ -4277,6 +4277,23 @@
       "computePerMonth": "В месяц, если работает постоянно",
       "vendorCost": "{price} — стоимость у поставщика, без наценки",
       "priceUnavailable": "{price} · цена недоступна, стоимость у поставщика без наценки"
+    },
+    "loading": "Загрузка…",
+    "loadMore": "Показать ещё",
+    "card": {
+      "verified": "Проверено",
+      "featured": "Избранное"
+    },
+    "filters": {
+      "category": "Категория",
+      "all": "Все",
+      "protocol": "Протокол",
+      "hosting": "Где работает",
+      "clear": "Сбросить",
+      "hostings": {
+        "vendor": "У вендора",
+        "agentarea": "На AgentArea"
+      }
     }
   },
   "BundleInstall": {
