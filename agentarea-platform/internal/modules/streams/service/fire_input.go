@@ -280,9 +280,9 @@ func renderEventBlock(triggerName, triggerType string, ev TriggerEvent, limit in
 // renderMessage is a chat message as its task reads it: the message after the trigger's own ask,
 // labelled, or as the ask; where it came from; and the input file the whole event is in.
 func renderMessage(ask, said string, ev TriggerEvent) string {
-	origin := "Received"
+	origin := "Message"
 	if ev.Sender != nil && oneLine(*ev.Sender) != "" {
-		origin = "Sent by " + senderValue(oneLine(*ev.Sender))
+		origin += " from " + senderValue(oneLine(*ev.Sender))
 	}
 	if ev.StreamName != nil {
 		origin += " on stream " + oneLine(*ev.StreamName)

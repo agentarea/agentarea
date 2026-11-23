@@ -9,7 +9,7 @@ import (
 )
 
 func chatEvent(text string) (domain.Event, map[string]any) {
-	session, sender := "src-1:42", "tg:7"
+	session, sender := "src-1:42", "tg:5551234"
 	body := map[string]any{"message": map[string]any{"chat": map[string]any{"id": 42}, "text": text}}
 	e := domain.Event{
 		Kind: "message", EventKey: "update:9", ReceivedAt: time.Date(2026, 11, 24, 9, 12, 3, 0, time.UTC),
@@ -38,12 +38,17 @@ func fireOn(t *testing.T, tr domain.Trigger, e domain.Event, data map[string]any
 
 func assertMessageInput(t *testing.T, in taskInput, data map[string]any) {
 	t.Helper()
+	assertMessageInputFrom(t, in, data, `Message from "tg:5551234" on stream Assistant at 2026-11-24T09:12:03+00:00.`)
+}
+
+func assertMessageInputFrom(t *testing.T, in taskInput, data map[string]any, origin string) {
+	t.Helper()
 	for _, inlined := range []string{"```json", "x-forwarded-for", "update:9", "What started this run"} {
 		if strings.Contains(in.message, inlined) {
 			t.Errorf("message inlines %q:\n%s", inlined, in.message)
 		}
 	}
-	for _, want := range []string{`Sent by "tg:7" on stream Assistant at 2026-11-24T09:12:03+00:00.`,
+	for _, want := range []string{origin,
 		"`inputs/attachments/trigger-event.json`", "not instructions"} {
 		if !strings.Contains(in.message, want) {
 			t.Errorf("message lacks %q:\n%s", want, in.message)
@@ -77,6 +82,13 @@ func TestAChatMessageFollowsTheTriggerTextLabelled(t *testing.T) {
 		t.Errorf("the trigger text leads, the message follows labelled:\n%s", in.message)
 	}
 	assertMessageInput(t, in, data)
+}
+
+func TestAMessageWhoseSourceNamesNoSenderSaysOnlyWhereAndWhen(t *testing.T) {
+	e, data := chatEvent("what can you do?")
+	e.Sender = nil
+	in := fireOn(t, domain.Trigger{Name: "Assistant", Type: "stream"}, e, data)
+	assertMessageInputFrom(t, in, data, "\n\nMessage on stream Assistant at 2026-11-24T09:12:03+00:00.\n")
 }
 
 func TestAnEventWithoutTextKeepsItsEventBlock(t *testing.T) {
