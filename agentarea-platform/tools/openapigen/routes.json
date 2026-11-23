@@ -764,6 +764,18 @@
   "router_file": "oauth_connect"
  },
  {
+  "operation_id": "oauth_installations_v1_oauth_installations_get",
+  "router_file": "oauth_connect"
+ },
+ {
+  "operation_id": "oauth_installation_repositories_v1_oauth_installations__installation_id__repositories_get",
+  "router_file": "oauth_connect"
+ },
+ {
+  "operation_id": "oauth_bind_installation_v1_oauth_installation_put",
+  "router_file": "oauth_connect"
+ },
+ {
   "operation_id": "list_connections_v1_openapi_connections__get",
   "router_file": "openapi_connections"
  },

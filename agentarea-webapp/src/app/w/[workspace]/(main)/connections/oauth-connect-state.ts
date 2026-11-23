@@ -11,6 +11,7 @@
 
 import type {
   OAuthAuthorizeRequest,
+  OAuthInstallationBinding,
   OAuthPreflightResponse,
 } from "@/api/client";
 import type { CustomOAuthAppCredentials } from "@/lib/oauth-app";
@@ -68,7 +69,9 @@ export type OAuthConnectState =
    * Connect runs on its own, with the operator's `platform` app, a client
    * the provider registers `dynamic`ally, or the `custom` app the connection
    * already holds — `clientId` when it was typed in. `installUrl`: where a
-   * signed-in person picks what the operator's app may reach.
+   * signed-in person picks what the operator's app may reach. `installation`:
+   * the connection can be bound to one installation of the app, and is bound
+   * to `binding` (null: the user's own token).
    */
   | {
       kind: "ready";
@@ -76,6 +79,7 @@ export type OAuthConnectState =
       credentialSource?: "platform" | "dynamic" | "custom" | null;
       clientId?: string | null;
       installUrl?: string;
+      installation?: { binding: OAuthInstallationBinding | null };
     }
   /**
    * Connect needs a client ID/secret first. `optional`: the person chose their
@@ -132,6 +136,13 @@ export function deriveOAuthConnectState({
           : {}),
         ...(preflight.connected && preflight.install_url
           ? { installUrl: preflight.install_url }
+          : {}),
+        ...(preflight.connected && preflight.installation_binding_available
+          ? {
+              installation: {
+                binding: preflight.installation_binding ?? null,
+              },
+            }
           : {}),
       };
     case "oauth_app_required":

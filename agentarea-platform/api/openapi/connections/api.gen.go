@@ -535,6 +535,65 @@ type OAuthFinishResponse struct {
 	Location string `json:"location"`
 }
 
+// OAuthInstallation defines model for OAuthInstallation.
+type OAuthInstallation struct {
+	Account string `json:"account"`
+
+	// AccountType Organization or User
+	AccountType string `json:"account_type"`
+	Id          int    `json:"id"`
+
+	// RepositorySelection all or selected: what the installation itself reaches
+	RepositorySelection string `json:"repository_selection"`
+}
+
+// OAuthInstallationBinding The installation a connection's calls are limited to.
+type OAuthInstallationBinding struct {
+	// Account Login of the account (organization or user) the installation belongs to
+	Account        string `json:"account"`
+	InstallationId int    `json:"installation_id"`
+
+	// Repositories Names of the repositories the token is limited to; null for every repository of the installation
+	Repositories *[]string `json:"repositories"`
+}
+
+// OAuthInstallationBindingRequest defines model for OAuthInstallationBindingRequest.
+type OAuthInstallationBindingRequest struct {
+	// InstallationId Installation to bind to; null returns the connection to the user's token
+	InstallationId *int `json:"installation_id"`
+
+	// InstanceId MCP instance to bind
+	InstanceId *openapi_types.UUID `json:"instance_id"`
+
+	// OpenapiConnectionId API connection to bind
+	OpenapiConnectionId *openapi_types.UUID `json:"openapi_connection_id"`
+
+	// Repositories Repository names to limit the token to; null or empty for every repository of the installation
+	Repositories *[]string `json:"repositories"`
+}
+
+// OAuthInstallationBindingResponse defines model for OAuthInstallationBindingResponse.
+type OAuthInstallationBindingResponse struct {
+	InstallationBinding *OAuthInstallationBinding `json:"installation_binding"`
+}
+
+// OAuthInstallationRepositoriesResponse defines model for OAuthInstallationRepositoriesResponse.
+type OAuthInstallationRepositoriesResponse struct {
+	Repositories []OAuthInstallationRepository `json:"repositories"`
+}
+
+// OAuthInstallationRepository defines model for OAuthInstallationRepository.
+type OAuthInstallationRepository struct {
+	FullName string `json:"full_name"`
+	Name     string `json:"name"`
+	Private  bool   `json:"private"`
+}
+
+// OAuthInstallationsResponse defines model for OAuthInstallationsResponse.
+type OAuthInstallationsResponse struct {
+	Installations []OAuthInstallation `json:"installations"`
+}
+
 // OAuthLinkCreateRequest defines model for OAuthLinkCreateRequest.
 type OAuthLinkCreateRequest struct {
 	// AccessControl Access control level: workspace | public
@@ -577,11 +636,17 @@ type OAuthPreflightResponse struct {
 	Detail                *string                                 `json:"detail,omitempty"`
 
 	// InstallUrl Install page of the platform OAuth app the connection's credential was minted through, where the user picks what the app may reach (a GitHub App's repositories). Null for any other credential.
-	InstallUrl  *string                      `json:"install_url"`
-	Issuer      *string                      `json:"issuer"`
-	RedirectUri string                       `json:"redirect_uri"`
-	Scopes      *[]string                    `json:"scopes,omitempty"`
-	Status      OAuthPreflightResponseStatus `json:"status"`
+	InstallUrl *string `json:"install_url"`
+
+	// InstallationBinding The GitHub App installation the connection's calls are limited to; null when it uses the user's token.
+	InstallationBinding *OAuthInstallationBinding `json:"installation_binding"`
+
+	// InstallationBindingAvailable The connection signed in through a platform GitHub App with installation tokens, so it can be bound to one of its installations.
+	InstallationBindingAvailable *bool                        `json:"installation_binding_available,omitempty"`
+	Issuer                       *string                      `json:"issuer"`
+	RedirectUri                  string                       `json:"redirect_uri"`
+	Scopes                       *[]string                    `json:"scopes,omitempty"`
+	Status                       OAuthPreflightResponseStatus `json:"status"`
 }
 
 // OAuthPreflightResponseCredentialSource defines model for OAuthPreflightResponse.CredentialSource.
@@ -774,6 +839,24 @@ type ValidateConnectionV1McpServerInstancesValidateConnectionPostJSONBody map[st
 // CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostJSONBody defines parameters for CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPost.
 type CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostJSONBody map[string]interface{}
 
+// OauthInstallationsV1OauthInstallationsGetParams defines parameters for OauthInstallationsV1OauthInstallationsGet.
+type OauthInstallationsV1OauthInstallationsGetParams struct {
+	// InstanceId MCP instance whose sign-in to use
+	InstanceId *openapi_types.UUID `form:"instance_id,omitempty" json:"instance_id,omitempty"`
+
+	// OpenapiConnectionId API connection whose sign-in to use
+	OpenapiConnectionId *openapi_types.UUID `form:"openapi_connection_id,omitempty" json:"openapi_connection_id,omitempty"`
+}
+
+// OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetParams defines parameters for OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet.
+type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetParams struct {
+	// InstanceId MCP instance whose sign-in to use
+	InstanceId *openapi_types.UUID `form:"instance_id,omitempty" json:"instance_id,omitempty"`
+
+	// OpenapiConnectionId API connection whose sign-in to use
+	OpenapiConnectionId *openapi_types.UUID `form:"openapi_connection_id,omitempty" json:"openapi_connection_id,omitempty"`
+}
+
 // OauthPreflightV1OauthPreflightGetParams defines parameters for OauthPreflightV1OauthPreflightGet.
 type OauthPreflightV1OauthPreflightGetParams struct {
 	// InstanceId MCP instance to inspect
@@ -835,6 +918,9 @@ type SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutJSONRequ
 
 // OauthAuthorizeV1OauthAuthorizePostJSONRequestBody defines body for OauthAuthorizeV1OauthAuthorizePost for application/json ContentType.
 type OauthAuthorizeV1OauthAuthorizePostJSONRequestBody = OAuthAuthorizeRequest
+
+// OauthBindInstallationV1OauthInstallationPutJSONRequestBody defines body for OauthBindInstallationV1OauthInstallationPut for application/json ContentType.
+type OauthBindInstallationV1OauthInstallationPutJSONRequestBody = OAuthInstallationBindingRequest
 
 // CreateConnectionV1OpenapiConnectionsPostJSONRequestBody defines body for CreateConnectionV1OpenapiConnectionsPost for application/json ContentType.
 type CreateConnectionV1OpenapiConnectionsPostJSONRequestBody = OpenAPIConnectionCreate
@@ -1118,6 +1204,15 @@ type ServerInterface interface {
 	// OauthAuthorizeV1OauthAuthorizePost Oauth Authorize
 	// (POST /v1/workspaces/{workspace}/oauth/authorize)
 	OauthAuthorizeV1OauthAuthorizePost(w http.ResponseWriter, r *http.Request, workspace string)
+	// OauthBindInstallationV1OauthInstallationPut Oauth Bind Installation
+	// (PUT /v1/workspaces/{workspace}/oauth/installation)
+	OauthBindInstallationV1OauthInstallationPut(w http.ResponseWriter, r *http.Request, workspace string)
+	// OauthInstallationsV1OauthInstallationsGet Oauth Installations
+	// (GET /v1/workspaces/{workspace}/oauth/installations)
+	OauthInstallationsV1OauthInstallationsGet(w http.ResponseWriter, r *http.Request, workspace string, params OauthInstallationsV1OauthInstallationsGetParams)
+	// OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet Oauth Installation Repositories
+	// (GET /v1/workspaces/{workspace}/oauth/installations/{installation_id}/repositories)
+	OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet(w http.ResponseWriter, r *http.Request, workspace string, installationId int, params OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetParams)
 	// OauthPreflightV1OauthPreflightGet Oauth Preflight
 	// (GET /v1/workspaces/{workspace}/oauth/preflight)
 	OauthPreflightV1OauthPreflightGet(w http.ResponseWriter, r *http.Request, workspace string, params OauthPreflightV1OauthPreflightGetParams)
@@ -1439,6 +1534,24 @@ func (_ Unimplemented) VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVeri
 // OauthAuthorizeV1OauthAuthorizePost Oauth Authorize
 // (POST /v1/workspaces/{workspace}/oauth/authorize)
 func (_ Unimplemented) OauthAuthorizeV1OauthAuthorizePost(w http.ResponseWriter, r *http.Request, workspace string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// OauthBindInstallationV1OauthInstallationPut Oauth Bind Installation
+// (PUT /v1/workspaces/{workspace}/oauth/installation)
+func (_ Unimplemented) OauthBindInstallationV1OauthInstallationPut(w http.ResponseWriter, r *http.Request, workspace string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// OauthInstallationsV1OauthInstallationsGet Oauth Installations
+// (GET /v1/workspaces/{workspace}/oauth/installations)
+func (_ Unimplemented) OauthInstallationsV1OauthInstallationsGet(w http.ResponseWriter, r *http.Request, workspace string, params OauthInstallationsV1OauthInstallationsGetParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet Oauth Installation Repositories
+// (GET /v1/workspaces/{workspace}/oauth/installations/{installation_id}/repositories)
+func (_ Unimplemented) OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet(w http.ResponseWriter, r *http.Request, workspace string, installationId int, params OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2890,6 +3003,151 @@ func (siw *ServerInterfaceWrapper) OauthAuthorizeV1OauthAuthorizePost(w http.Res
 	handler.ServeHTTP(w, r)
 }
 
+// OauthBindInstallationV1OauthInstallationPut operation middleware
+func (siw *ServerInterfaceWrapper) OauthBindInstallationV1OauthInstallationPut(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", chi.URLParam(r, "workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OauthBindInstallationV1OauthInstallationPut(w, r, workspace)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// OauthInstallationsV1OauthInstallationsGet operation middleware
+func (siw *ServerInterfaceWrapper) OauthInstallationsV1OauthInstallationsGet(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", chi.URLParam(r, "workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params OauthInstallationsV1OauthInstallationsGetParams
+
+	// ------------- Optional query parameter "instance_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "instance_id", r.URL.Query(), &params.InstanceId, runtime.BindQueryParameterOptions{Type: "", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "instance_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instance_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "openapi_connection_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "openapi_connection_id", r.URL.Query(), &params.OpenapiConnectionId, runtime.BindQueryParameterOptions{Type: "", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "openapi_connection_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "openapi_connection_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OauthInstallationsV1OauthInstallationsGet(w, r, workspace, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet operation middleware
+func (siw *ServerInterfaceWrapper) OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", chi.URLParam(r, "workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation_id" -------------
+	var installationId int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation_id", chi.URLParam(r, "installation_id"), &installationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetParams
+
+	// ------------- Optional query parameter "instance_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "instance_id", r.URL.Query(), &params.InstanceId, runtime.BindQueryParameterOptions{Type: "", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "instance_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instance_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "openapi_connection_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "openapi_connection_id", r.URL.Query(), &params.OpenapiConnectionId, runtime.BindQueryParameterOptions{Type: "", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "openapi_connection_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "openapi_connection_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet(w, r, workspace, installationId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // OauthPreflightV1OauthPreflightGet operation middleware
 func (siw *ServerInterfaceWrapper) OauthPreflightV1OauthPreflightGet(w http.ResponseWriter, r *http.Request) {
 
@@ -3637,6 +3895,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/workspaces/{workspace}/oauth/authorize", wrapper.OauthAuthorizeV1OauthAuthorizePost)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/v1/workspaces/{workspace}/oauth/installation", wrapper.OauthBindInstallationV1OauthInstallationPut)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/workspaces/{workspace}/oauth/installations", wrapper.OauthInstallationsV1OauthInstallationsGet)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/workspaces/{workspace}/oauth/installations/{installation_id}/repositories", wrapper.OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/v1/workspaces/{workspace}/oauth/preflight", wrapper.OauthPreflightV1OauthPreflightGet)
@@ -5322,6 +5589,118 @@ func (response OauthAuthorizeV1OauthAuthorizePost422JSONResponse) VisitOauthAuth
 	return err
 }
 
+type OauthBindInstallationV1OauthInstallationPutRequestObject struct {
+	Workspace string `json:"workspace"`
+	Body      *OauthBindInstallationV1OauthInstallationPutJSONRequestBody
+}
+
+type OauthBindInstallationV1OauthInstallationPutResponseObject interface {
+	VisitOauthBindInstallationV1OauthInstallationPutResponse(w http.ResponseWriter) error
+}
+
+type OauthBindInstallationV1OauthInstallationPut200JSONResponse OAuthInstallationBindingResponse
+
+func (response OauthBindInstallationV1OauthInstallationPut200JSONResponse) VisitOauthBindInstallationV1OauthInstallationPutResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OauthBindInstallationV1OauthInstallationPut422JSONResponse HTTPValidationError
+
+func (response OauthBindInstallationV1OauthInstallationPut422JSONResponse) VisitOauthBindInstallationV1OauthInstallationPutResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OauthInstallationsV1OauthInstallationsGetRequestObject struct {
+	Workspace string `json:"workspace"`
+	Params    OauthInstallationsV1OauthInstallationsGetParams
+}
+
+type OauthInstallationsV1OauthInstallationsGetResponseObject interface {
+	VisitOauthInstallationsV1OauthInstallationsGetResponse(w http.ResponseWriter) error
+}
+
+type OauthInstallationsV1OauthInstallationsGet200JSONResponse OAuthInstallationsResponse
+
+func (response OauthInstallationsV1OauthInstallationsGet200JSONResponse) VisitOauthInstallationsV1OauthInstallationsGetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OauthInstallationsV1OauthInstallationsGet422JSONResponse HTTPValidationError
+
+func (response OauthInstallationsV1OauthInstallationsGet422JSONResponse) VisitOauthInstallationsV1OauthInstallationsGetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetRequestObject struct {
+	Workspace      string `json:"workspace"`
+	InstallationId int    `json:"installation_id"`
+	Params         OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetParams
+}
+
+type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponseObject interface {
+	VisitOauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponse(w http.ResponseWriter) error
+}
+
+type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet200JSONResponse OAuthInstallationRepositoriesResponse
+
+func (response OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet200JSONResponse) VisitOauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet422JSONResponse HTTPValidationError
+
+func (response OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet422JSONResponse) VisitOauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type OauthPreflightV1OauthPreflightGetRequestObject struct {
 	Workspace string `json:"workspace"`
 	Params    OauthPreflightV1OauthPreflightGetParams
@@ -5906,6 +6285,15 @@ type StrictServerInterface interface {
 	// OauthAuthorizeV1OauthAuthorizePost Oauth Authorize
 	// (POST /v1/workspaces/{workspace}/oauth/authorize)
 	OauthAuthorizeV1OauthAuthorizePost(ctx context.Context, request OauthAuthorizeV1OauthAuthorizePostRequestObject) (OauthAuthorizeV1OauthAuthorizePostResponseObject, error)
+	// OauthBindInstallationV1OauthInstallationPut Oauth Bind Installation
+	// (PUT /v1/workspaces/{workspace}/oauth/installation)
+	OauthBindInstallationV1OauthInstallationPut(ctx context.Context, request OauthBindInstallationV1OauthInstallationPutRequestObject) (OauthBindInstallationV1OauthInstallationPutResponseObject, error)
+	// OauthInstallationsV1OauthInstallationsGet Oauth Installations
+	// (GET /v1/workspaces/{workspace}/oauth/installations)
+	OauthInstallationsV1OauthInstallationsGet(ctx context.Context, request OauthInstallationsV1OauthInstallationsGetRequestObject) (OauthInstallationsV1OauthInstallationsGetResponseObject, error)
+	// OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet Oauth Installation Repositories
+	// (GET /v1/workspaces/{workspace}/oauth/installations/{installation_id}/repositories)
+	OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet(ctx context.Context, request OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetRequestObject) (OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponseObject, error)
 	// OauthPreflightV1OauthPreflightGet Oauth Preflight
 	// (GET /v1/workspaces/{workspace}/oauth/preflight)
 	OauthPreflightV1OauthPreflightGet(ctx context.Context, request OauthPreflightV1OauthPreflightGetRequestObject) (OauthPreflightV1OauthPreflightGetResponseObject, error)
@@ -7296,6 +7684,94 @@ func (sh *strictHandler) OauthAuthorizeV1OauthAuthorizePost(w http.ResponseWrite
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(OauthAuthorizeV1OauthAuthorizePostResponseObject); ok {
 		if err := validResponse.VisitOauthAuthorizeV1OauthAuthorizePostResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// OauthBindInstallationV1OauthInstallationPut operation middleware
+func (sh *strictHandler) OauthBindInstallationV1OauthInstallationPut(w http.ResponseWriter, r *http.Request, workspace string) {
+	var request OauthBindInstallationV1OauthInstallationPutRequestObject
+
+	request.Workspace = workspace
+
+	var body OauthBindInstallationV1OauthInstallationPutJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.OauthBindInstallationV1OauthInstallationPut(ctx, request.(OauthBindInstallationV1OauthInstallationPutRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "OauthBindInstallationV1OauthInstallationPut")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(OauthBindInstallationV1OauthInstallationPutResponseObject); ok {
+		if err := validResponse.VisitOauthBindInstallationV1OauthInstallationPutResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// OauthInstallationsV1OauthInstallationsGet operation middleware
+func (sh *strictHandler) OauthInstallationsV1OauthInstallationsGet(w http.ResponseWriter, r *http.Request, workspace string, params OauthInstallationsV1OauthInstallationsGetParams) {
+	var request OauthInstallationsV1OauthInstallationsGetRequestObject
+
+	request.Workspace = workspace
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.OauthInstallationsV1OauthInstallationsGet(ctx, request.(OauthInstallationsV1OauthInstallationsGetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "OauthInstallationsV1OauthInstallationsGet")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(OauthInstallationsV1OauthInstallationsGetResponseObject); ok {
+		if err := validResponse.VisitOauthInstallationsV1OauthInstallationsGetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet operation middleware
+func (sh *strictHandler) OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet(w http.ResponseWriter, r *http.Request, workspace string, installationId int, params OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetParams) {
+	var request OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetRequestObject
+
+	request.Workspace = workspace
+	request.InstallationId = installationId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet(ctx, request.(OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponseObject); ok {
+		if err := validResponse.VisitOauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

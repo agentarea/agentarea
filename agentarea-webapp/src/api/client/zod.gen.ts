@@ -2203,6 +2203,67 @@ export const zOAuthAuthorizeResponse = z.object({
 });
 
 /**
+ * OAuthInstallation
+ */
+export const zOAuthInstallation = z.object({
+  account: z.string(),
+  account_type: z.string(),
+  id: z.int(),
+  repository_selection: z.string(),
+});
+
+/**
+ * OAuthInstallationsResponse
+ */
+export const zOAuthInstallationsResponse = z.object({
+  installations: z.array(zOAuthInstallation),
+});
+
+/**
+ * OAuthInstallationRepository
+ */
+export const zOAuthInstallationRepository = z.object({
+  full_name: z.string(),
+  name: z.string(),
+  private: z.boolean(),
+});
+
+/**
+ * OAuthInstallationRepositoriesResponse
+ */
+export const zOAuthInstallationRepositoriesResponse = z.object({
+  repositories: z.array(zOAuthInstallationRepository),
+});
+
+/**
+ * OAuthInstallationBinding
+ *
+ * The installation a connection's calls are limited to.
+ */
+export const zOAuthInstallationBinding = z.object({
+  account: z.string(),
+  installation_id: z.int(),
+  repositories: z.array(z.string()).nullable(),
+});
+
+/**
+ * OAuthInstallationBindingRequest
+ */
+export const zOAuthInstallationBindingRequest = z.object({
+  installation_id: z.int().gte(1).nullable(),
+  instance_id: z.uuid().nullish(),
+  openapi_connection_id: z.uuid().nullish(),
+  repositories: z.array(z.string().min(1).max(100)).max(500).nullish(),
+});
+
+/**
+ * OAuthInstallationBindingResponse
+ */
+export const zOAuthInstallationBindingResponse = z.object({
+  installation_binding: zOAuthInstallationBinding.nullable(),
+});
+
+/**
  * OAuthFinishRequest
  */
 export const zOAuthFinishRequest = z.object({
@@ -2260,6 +2321,8 @@ export const zOAuthPreflightResponse = z.object({
   default_scopes: z.array(z.string()).optional(),
   detail: z.string().optional().default(""),
   install_url: z.string().nullish(),
+  installation_binding: zOAuthInstallationBinding.nullish(),
+  installation_binding_available: z.boolean().optional().default(false),
   issuer: z.string().nullish(),
   redirect_uri: z.string(),
   scopes: z.array(z.string()).optional(),
@@ -6852,6 +6915,43 @@ export const zOauthPreflightV1OauthPreflightGetQuery = z.object({
  */
 export const zOauthPreflightV1OauthPreflightGetResponse =
   zOAuthPreflightResponse;
+
+export const zOauthInstallationsV1OauthInstallationsGetQuery = z.object({
+  instance_id: z.uuid().nullish(),
+  openapi_connection_id: z.uuid().nullish(),
+});
+
+/**
+ * Successful Response
+ */
+export const zOauthInstallationsV1OauthInstallationsGetResponse =
+  zOAuthInstallationsResponse;
+
+export const zOauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetPath =
+  z.object({
+    installation_id: z.int().gte(1),
+  });
+
+export const zOauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetQuery =
+  z.object({
+    instance_id: z.uuid().nullish(),
+    openapi_connection_id: z.uuid().nullish(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zOauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponse =
+  zOAuthInstallationRepositoriesResponse;
+
+export const zOauthBindInstallationV1OauthInstallationPutBody =
+  zOAuthInstallationBindingRequest;
+
+/**
+ * Successful Response
+ */
+export const zOauthBindInstallationV1OauthInstallationPutResponse =
+  zOAuthInstallationBindingResponse;
 
 export const zListConnectionsV1OpenapiConnectionsGetQuery = z.object({
   status: z.string().nullish(),

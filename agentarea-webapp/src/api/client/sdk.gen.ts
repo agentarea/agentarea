@@ -727,12 +727,21 @@ import type {
   OauthAuthorizeV1OauthAuthorizePostData,
   OauthAuthorizeV1OauthAuthorizePostErrors,
   OauthAuthorizeV1OauthAuthorizePostResponses,
+  OauthBindInstallationV1OauthInstallationPutData,
+  OauthBindInstallationV1OauthInstallationPutErrors,
+  OauthBindInstallationV1OauthInstallationPutResponses,
   OauthCallbackV1OauthCallbackGetData,
   OauthCallbackV1OauthCallbackGetErrors,
   OauthCallbackV1OauthCallbackGetResponses,
   OauthFinishV1OauthFinishPostData,
   OauthFinishV1OauthFinishPostErrors,
   OauthFinishV1OauthFinishPostResponses,
+  OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetData,
+  OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetErrors,
+  OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponses,
+  OauthInstallationsV1OauthInstallationsGetData,
+  OauthInstallationsV1OauthInstallationsGetErrors,
+  OauthInstallationsV1OauthInstallationsGetResponses,
   OauthPreflightV1OauthPreflightGetData,
   OauthPreflightV1OauthPreflightGetErrors,
   OauthPreflightV1OauthPreflightGetResponses,
@@ -7387,6 +7396,109 @@ export const oauthPreflightV1OauthPreflightGet = <
     ],
     url: "/v1/workspaces/{workspace}/oauth/preflight",
     ...options,
+  });
+
+/**
+ * Oauth Installations
+ *
+ * List the installations of the GitHub App a connection signed in through that the connection's GitHub user can access.
+ *
+ * Only for a connection whose credential was minted through a platform OAuth app with installation tokens (preflight's ``installation_binding_available``); 409 otherwise.
+ */
+export const oauthInstallationsV1OauthInstallationsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<OauthInstallationsV1OauthInstallationsGetData, ThrowOnError>
+): RequestResult<
+  OauthInstallationsV1OauthInstallationsGetResponses,
+  OauthInstallationsV1OauthInstallationsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    OauthInstallationsV1OauthInstallationsGetResponses,
+    OauthInstallationsV1OauthInstallationsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/oauth/installations",
+    ...options,
+  });
+
+/**
+ * Oauth Installation Repositories
+ *
+ * List the repositories of one of those installations the connection's GitHub user can access.
+ */
+export const oauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponses,
+    OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).get<
+      OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponses,
+      OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/oauth/installations/{installation_id}/repositories",
+      ...options,
+    });
+
+/**
+ * Oauth Bind Installation
+ *
+ * Bind a connection to one installation of its GitHub App, and optionally to some of its repositories: its calls then carry an installation access token limited to them instead of the user's token. A null ``installation_id`` returns it to the user's token.
+ *
+ * Only an installation, and repositories of it, that the connection's GitHub user can access are accepted. Whoever may sign the connection in again may bind it.
+ */
+export const oauthBindInstallationV1OauthInstallationPut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    OauthBindInstallationV1OauthInstallationPutData,
+    ThrowOnError
+  >
+): RequestResult<
+  OauthBindInstallationV1OauthInstallationPutResponses,
+  OauthBindInstallationV1OauthInstallationPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    OauthBindInstallationV1OauthInstallationPutResponses,
+    OauthBindInstallationV1OauthInstallationPutErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/oauth/installation",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**

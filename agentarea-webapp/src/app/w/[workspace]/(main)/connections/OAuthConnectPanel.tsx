@@ -14,6 +14,7 @@ import {
   oauthPreflightAction,
 } from "@/lib/server-actions";
 import { AppInstallAction } from "./components/AppInstallAction";
+import { InstallationAccess } from "./components/InstallationAccess";
 import {
   authorizeTargetOf,
   buildAuthorizeRequest,
@@ -327,6 +328,21 @@ export function OAuthConnectPanel({
         {state.installUrl && (
           <AppInstallAction url={state.installUrl} prominent={installNext} />
         )}
+        {state.installation &&
+          preflight &&
+          (target.kind === "instance" || target.kind === "api_connection") && (
+            <InstallationAccess
+              target={
+                target.kind === "instance"
+                  ? { instance_id: targetKey }
+                  : { openapi_connection_id: targetKey }
+              }
+              binding={state.installation.binding}
+              onBound={(binding) =>
+                setPreflight({ ...preflight, installation_binding: binding })
+              }
+            />
+          )}
         {canUseOwnApp(preflight) && (
           <Button
             variant="link"
