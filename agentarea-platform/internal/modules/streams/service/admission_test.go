@@ -116,7 +116,7 @@ type door struct {
 	graph *storetest.Graph
 }
 
-func newDoor(t *testing.T) door {
+func newDoor(t *testing.T, allow string) door {
 	t.Helper()
 	pool := storetest.Pool(t)
 	ws := storetest.Workspace(t, pool)
@@ -136,7 +136,7 @@ func newDoor(t *testing.T) door {
 		t.Fatal(err)
 	}
 	d.src, _, err = d.svc.AddSource(ctx, st.ID, service.NewSource{SourceType: "telegram", Kind: "webhook",
-		Credentials: map[string]service.Credential{"bot_token": value("TOKEN")}})
+		Credentials: map[string]service.Credential{"bot_token": value("TOKEN")}, Senders: &domain.Senders{Allow: allow}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func (d door) admit(t *testing.T, from int, chat, text string) (service.Admitted
 }
 
 func TestATelegramSenderLinksFromInsideTheChatThenReachesTheAgent(t *testing.T) {
-	d := newDoor(t)
+	d := newDoor(t, domain.SendersMembers)
 	if _, refused := d.admit(t, 42, "private", "hello"); refused != "the sender has not linked their Telegram account" {
 		t.Fatalf("refused %q", refused)
 	}
@@ -199,7 +199,7 @@ func TestATelegramSenderLinksFromInsideTheChatThenReachesTheAgent(t *testing.T) 
 }
 
 func TestATelegramDoorRefusesWhoItCannotAnswerFor(t *testing.T) {
-	d := newDoor(t)
+	d := newDoor(t, domain.SendersOwner)
 	d.links.holders["7"] = "stranger"
 	d.links.holders["42"] = "owner"
 	if _, refused := d.admit(t, 42, "group", "hi"); refused != "only private chats reach the agent" {
@@ -208,8 +208,8 @@ func TestATelegramDoorRefusesWhoItCannotAnswerFor(t *testing.T) {
 	if _, refused := d.admit(t, 7, "private", "hi"); !strings.HasPrefix(refused, "only the source's owner may write") {
 		t.Fatalf("stranger: %q", refused)
 	}
-	if sent := d.bot.take(); len(sent) != 1 || sent[0] != "This bot is private." {
-		t.Fatalf("sent %q", sent)
+	if sent := d.bot.take(); len(sent) != 0 {
+		t.Fatalf("a private bot answered a linked stranger: %q", sent)
 	}
 	if _, refused := d.admit(t, 42, "private", "/start link_USED"); refused != "account link requested" {
 		t.Fatalf("used code: %q", refused)
@@ -223,5 +223,18 @@ func TestATelegramDoorRefusesWhoItCannotAnswerFor(t *testing.T) {
 	}
 	if sent := d.bot.take(); len(sent) != 1 || !strings.Contains(sent[0], "doesn't have access") {
 		t.Fatalf("sent %q", sent)
+	}
+}
+
+func TestAPrivateTelegramBotSaysNothingToStrangers(t *testing.T) {
+	d := newDoor(t, domain.SendersOwner)
+	if _, refused := d.admit(t, 99, "private", "hello"); refused != "the sender has not linked their Telegram account" {
+		t.Fatalf("refused %q", refused)
+	}
+	if sent := d.bot.take(); len(sent) != 0 {
+		t.Fatalf("a private bot answered a stranger: %q", sent)
+	}
+	if _, refused := d.admit(t, 99, "private", "/start link_CODE"); refused != "account link requested" {
+		t.Fatalf("the owner's own link from the app must still work: %q", refused)
 	}
 }

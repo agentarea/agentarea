@@ -27,7 +27,6 @@ const (
 	ConfirmCommand   = "/confirm"
 	NoticeInterval   = 24 * time.Hour
 	NoticePrefix     = "telegram-sender-notice"
-	privateNotice    = "This bot is private."
 	telegramBotAPI   = "https://api.telegram.org"
 	telegramCallTime = 10 * time.Second
 )
@@ -117,7 +116,7 @@ func (s *Service) Admit(ctx context.Context, ws scope.Workspace, t domain.Trigge
 	switch door.Senders.Allow {
 	case domain.SendersIDs:
 		if !contains(door.Senders.IDs, sender.externalID) {
-			return Admitted{}, "the sender is not on the source's list", s.notifyOnce(ctx, t, bot, sender, "private", privateNotice)
+			return Admitted{}, "the sender is not on the source's list", nil
 		}
 		if door.OwnerID == "" {
 			return Admitted{}, "the source has no owner to answer for its senders", nil
@@ -129,12 +128,14 @@ func (s *Service) Admit(ctx context.Context, ws scope.Workspace, t domain.Trigge
 			return Admitted{}, "", err
 		}
 		if !linked {
+			if door.Senders.Allow == domain.SendersOwner {
+				return Admitted{}, "the sender has not linked their Telegram account", nil
+			}
 			return Admitted{}, "the sender has not linked their Telegram account",
 				s.notifyOnce(ctx, t, bot, sender, "unlinked", s.unlinkedText(ctx, bot))
 		}
 		if door.Senders.Allow == domain.SendersOwner && holder != door.OwnerID {
-			return Admitted{}, fmt.Sprintf("only the source's owner may write; %s is not", holder),
-				s.notifyOnce(ctx, t, bot, sender, "private", privateNotice)
+			return Admitted{}, fmt.Sprintf("only the source's owner may write; %s is not", holder), nil
 		}
 		userID = holder
 	}
