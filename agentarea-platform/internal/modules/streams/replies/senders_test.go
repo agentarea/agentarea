@@ -544,3 +544,36 @@ func TestTelegramLiveIgnoresProgressAfterTheEndAndSerializesSends(t *testing.T) 
 		t.Fatalf("%d messages posted: %v", n, methods)
 	}
 }
+
+func TestTelegramLiveAnswersEachTurnOfASession(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	var methods []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methods = append(methods, r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:])
+		_, _ = io.WriteString(w, `{"ok":true,"result":{"message_id":77}}`)
+	}))
+	t.Cleanup(srv.Close)
+	tg := replies.TelegramLive{Credentials: creds(map[string]string{"bot_token": "TOKEN"}), Redis: rdb, Client: srv.Client(), API: srv.URL}
+	send := func(kind, at, msg string) {
+		t.Helper()
+		err := tg.Send(context.Background(), replies.Send{
+			Event: replies.Event{Type: kind, TaskID: "t1", Timestamp: at}, Reply: &domain.Reply{Markup: "telegram"},
+			Target: replies.Target{Config: map[string]any{"credential_type": "telegram", "credential_key": "k",
+				"target": map[string]any{"chat_id": 5}}},
+		}, msg)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	send("task.completed", "2026-11-23T14:56:13Z", "First answer")
+	send("tool.call", "2026-11-23T14:56:12Z", "late progress of the first turn")
+	if n := strings.Count(strings.Join(methods, ","), "sendMessage"); n != 1 {
+		t.Fatalf("late progress of a finished turn posted: %v", methods)
+	}
+	send("task.completed", "2026-11-23T14:57:28Z", "Second answer")
+	if n := strings.Count(strings.Join(methods, ","), "sendMessage"); n != 2 {
+		t.Fatalf("the next turn of the session was not posted: %v", methods)
+	}
+}
