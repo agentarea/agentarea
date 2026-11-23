@@ -323,6 +323,7 @@ The following table lists configurable parameters of the chart and their default
 | platformNetworkPolicy.extraEgress | list | `[]` |  |
 | mcpManager.enabled | bool | `true` |  |
 | mcpManager.replicaCount | int | `1` |  |
+| mcpManager.workloadUrl | string | `""` |  |
 | mcpManager.service.type | string | `"ClusterIP"` |  |
 | mcpManager.service.port | int | `80` |  |
 | mcpManager.serviceAccount.create | bool | `true` |  |
