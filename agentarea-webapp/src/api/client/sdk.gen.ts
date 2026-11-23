@@ -13,6 +13,9 @@ import type {
   AcceptInvitationV1InvitationsAcceptPostData,
   AcceptInvitationV1InvitationsAcceptPostErrors,
   AcceptInvitationV1InvitationsAcceptPostResponses,
+  AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostData,
+  AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostErrors,
+  AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponses,
   AddAgentToProjectV1ProjectsProjectIdAgentsPostData,
   AddAgentToProjectV1ProjectsProjectIdAgentsPostErrors,
   AddAgentToProjectV1ProjectsProjectIdAgentsPostResponses,
@@ -771,6 +774,9 @@ import type {
   PreviewSpecV1OpenapiConnectionsPreviewSpecPostData,
   PreviewSpecV1OpenapiConnectionsPreviewSpecPostErrors,
   PreviewSpecV1OpenapiConnectionsPreviewSpecPostResponses,
+  PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostData,
+  PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostErrors,
+  PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponses,
   ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostData,
   ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostErrors,
   ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostResponses,
@@ -1863,6 +1869,79 @@ export const startTelegramLinkV1MeExternalIdentitiesTelegramLinkPost = <
       ...options.headers,
     },
   });
+
+/**
+ * Accept Telegram Link Offer
+ *
+ * Links the Telegram account a bot offered the code to to the caller, a member of the bot's workspace, who confirmed it.
+ * The code is spent; 404 when it expired or was used, 409 when another account holds the Telegram account. 403 for a caller outside the bot's workspace.
+ */
+export const acceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponses,
+    AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).post<
+      AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponses,
+      AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/me/external-identities/telegram/offer/accept",
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
+
+/**
+ * Preview Telegram Link Offer
+ *
+ * The Telegram account a bot offered the code to, shown before the caller, a member of the bot's workspace, confirms; the code stays unspent. 403 for a caller outside the bot's workspace.
+ */
+export const previewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponses,
+    PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).post<
+      PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponses,
+      PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/me/external-identities/telegram/offer/preview",
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
 
 /**
  * Unlink External Identity

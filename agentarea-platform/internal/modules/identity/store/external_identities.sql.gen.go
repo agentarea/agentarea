@@ -30,25 +30,29 @@ func (q *Queries) ExternalIdentityHolder(ctx context.Context, arg ExternalIdenti
 }
 
 const insertExternalIdentity = `-- name: InsertExternalIdentity :one
-INSERT INTO user_external_identities (id, created_at, updated_at, user_id, provider, external_id, method)
-VALUES ($1, $2, $2, $3, $4, $5, $6)
-RETURNING id, provider, external_id, created_at
+INSERT INTO user_external_identities (id, created_at, updated_at, user_id, provider, external_id, method, username, display_name)
+VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, provider, external_id, username, display_name, created_at
 `
 
 type InsertExternalIdentityParams struct {
-	ID         uuid.UUID
-	Now        pgtype.Timestamp
-	UserID     string
-	Provider   string
-	ExternalID string
-	Method     string
+	ID          uuid.UUID
+	Now         pgtype.Timestamp
+	UserID      string
+	Provider    string
+	ExternalID  string
+	Method      string
+	Username    pgtype.Text
+	DisplayName pgtype.Text
 }
 
 type InsertExternalIdentityRow struct {
-	ID         uuid.UUID
-	Provider   string
-	ExternalID string
-	CreatedAt  pgtype.Timestamp
+	ID          uuid.UUID
+	Provider    string
+	ExternalID  string
+	Username    pgtype.Text
+	DisplayName pgtype.Text
+	CreatedAt   pgtype.Timestamp
 }
 
 func (q *Queries) InsertExternalIdentity(ctx context.Context, arg InsertExternalIdentityParams) (InsertExternalIdentityRow, error) {
@@ -59,27 +63,33 @@ func (q *Queries) InsertExternalIdentity(ctx context.Context, arg InsertExternal
 		arg.Provider,
 		arg.ExternalID,
 		arg.Method,
+		arg.Username,
+		arg.DisplayName,
 	)
 	var i InsertExternalIdentityRow
 	err := row.Scan(
 		&i.ID,
 		&i.Provider,
 		&i.ExternalID,
+		&i.Username,
+		&i.DisplayName,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const listExternalIdentities = `-- name: ListExternalIdentities :many
-SELECT id, provider, external_id, created_at FROM user_external_identities
+SELECT id, provider, external_id, username, display_name, created_at FROM user_external_identities
 WHERE user_id = $1 AND revoked_at IS NULL ORDER BY created_at
 `
 
 type ListExternalIdentitiesRow struct {
-	ID         uuid.UUID
-	Provider   string
-	ExternalID string
-	CreatedAt  pgtype.Timestamp
+	ID          uuid.UUID
+	Provider    string
+	ExternalID  string
+	Username    pgtype.Text
+	DisplayName pgtype.Text
+	CreatedAt   pgtype.Timestamp
 }
 
 func (q *Queries) ListExternalIdentities(ctx context.Context, userID string) ([]ListExternalIdentitiesRow, error) {
@@ -95,6 +105,8 @@ func (q *Queries) ListExternalIdentities(ctx context.Context, userID string) ([]
 			&i.ID,
 			&i.Provider,
 			&i.ExternalID,
+			&i.Username,
+			&i.DisplayName,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -105,6 +117,54 @@ func (q *Queries) ListExternalIdentities(ctx context.Context, userID string) ([]
 		return nil, err
 	}
 	return items, nil
+}
+
+const renameExternalIdentity = `-- name: RenameExternalIdentity :one
+UPDATE user_external_identities
+SET username = COALESCE($1, username),
+    display_name = COALESCE($2, display_name),
+    updated_at = $3
+WHERE user_id = $4 AND provider = $5 AND external_id = $6 AND revoked_at IS NULL
+RETURNING id, provider, external_id, username, display_name, created_at
+`
+
+type RenameExternalIdentityParams struct {
+	Username    pgtype.Text
+	DisplayName pgtype.Text
+	Now         pgtype.Timestamp
+	UserID      string
+	Provider    string
+	ExternalID  string
+}
+
+type RenameExternalIdentityRow struct {
+	ID          uuid.UUID
+	Provider    string
+	ExternalID  string
+	Username    pgtype.Text
+	DisplayName pgtype.Text
+	CreatedAt   pgtype.Timestamp
+}
+
+func (q *Queries) RenameExternalIdentity(ctx context.Context, arg RenameExternalIdentityParams) (RenameExternalIdentityRow, error) {
+	row := q.db.QueryRow(ctx, renameExternalIdentity,
+		arg.Username,
+		arg.DisplayName,
+		arg.Now,
+		arg.UserID,
+		arg.Provider,
+		arg.ExternalID,
+	)
+	var i RenameExternalIdentityRow
+	err := row.Scan(
+		&i.ID,
+		&i.Provider,
+		&i.ExternalID,
+		&i.Username,
+		&i.DisplayName,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const revokeExternalIdentity = `-- name: RevokeExternalIdentity :execrows

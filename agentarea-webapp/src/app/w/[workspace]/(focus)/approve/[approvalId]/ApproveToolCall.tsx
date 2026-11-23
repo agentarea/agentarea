@@ -11,7 +11,12 @@ import {
 } from "@/components/Approvals/ApprovalDecisionCard";
 import { ApprovalOutcome } from "@/components/Approvals/ApprovalOutcome";
 import { ToolArguments } from "@/components/Approvals/EscalationArguments";
-import { FocusCard, FocusHeader, FocusStep } from "@/components/FocusCard";
+import {
+  FocusDetail as Detail,
+  FocusCard,
+  FocusHeader,
+  FocusStep,
+} from "@/components/FocusCard";
 import FormError from "@/components/FormError";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Textarea } from "@/components/ui/textarea";
@@ -245,14 +250,5 @@ export default function ApproveToolCall({
         {error && <FormError>{error}</FormError>}
       </div>
     </FocusCard>
-  );
-}
-
-function Detail({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 break-words">{children}</dd>
-    </div>
   );
 }

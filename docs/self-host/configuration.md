@@ -446,7 +446,7 @@ It also reads, from the groups above:
   registers with a provider. Required; the chart sets the backend's own value.
 - `AGENTAREA_APP_URL`: the webapp's public base, derived like the backend's.
   The Telegram bot's reply to a sender who has not linked an account links to
-  `<app>/link/telegram`.
+  `<app>/link/telegram?code=...`.
 - `AGENTAREA_SECRET_ENCRYPTION_KEY`: source credentials are read from the
   `database` secret backend. Required; the event service refuses to start with
   any other `AGENTAREA_SECRET_BACKEND`.

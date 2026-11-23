@@ -280,7 +280,11 @@ func (p PlatformStreams) require(ctx context.Context, permission, streamID strin
 var errSourcesUnavailable = errors.New("stream sources need the catalog's source types and the secret stores, which this process was not given")
 
 func (p PlatformStreams) List(ctx context.Context, c authn.Caller, limit, offset int) (any, error) {
-	rows, err := p.s.svc.ListStreams(authn.WithCaller(ctx, c), limit, offset)
+	ctx = authn.WithCaller(ctx, c)
+	rows, err := p.s.svc.ListStreams(ctx, limit, offset)
+	if err == nil {
+		err = p.s.svc.WithSourceTypes(ctx, rows)
+	}
 	if err != nil {
 		return nil, toolText(err)
 	}
@@ -297,10 +301,14 @@ func (p PlatformStreams) Get(ctx context.Context, c authn.Caller, streamID strin
 		return nil, err
 	}
 	st, err := p.s.svc.GetStream(ctx, streamID)
+	one := []domain.Stream{st}
+	if err == nil {
+		err = p.s.svc.WithSourceTypes(ctx, one)
+	}
 	if err != nil {
 		return nil, toolText(err)
 	}
-	return streamOut(st), nil
+	return streamOut(one[0]), nil
 }
 
 func (p PlatformStreams) Create(ctx context.Context, c authn.Caller, name, description string) (any, error) {

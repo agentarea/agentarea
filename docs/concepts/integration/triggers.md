@@ -115,13 +115,17 @@ per provider. The cost is a model call per candidate event, which the
 
 **A messenger admits senders, not anyone who writes.** A catalog entry with an
 `admission` block, today Telegram's, lets an event through only from a sender
-linked to a platform user. A person links their Telegram account from inside
-Telegram with a code they asked for while signed in, then `/confirm`. A linked
-sender is admitted only when the authorization graph lets them run the agent,
-and the task runs as that person, not as whoever configured the trigger.
-Everyone else is refused and the reaction is `skipped`: an unlinked sender is
-told at most once a day how to link, a linked sender without access is told
-they have none, and group chats and other bots are ignored.
+linked to a platform user. The bot answers an unlinked sender with a link,
+good for 30 minutes and once, that names their Telegram account; opened by a
+signed-in member of the bot's workspace, it links the account after one
+confirmation. A person can also link
+from inside Telegram with a code they asked for while signed in, then
+`/confirm`. A linked sender is admitted only when the authorization graph lets
+them run the agent, and the task runs as that person, not as whoever
+configured the trigger. Everyone else is refused and the reaction is
+`skipped`: an unlinked sender gets one link at a time (writing after it expired
+or was used brings a fresh one), a linked sender without access is told they have
+none, and group chats and other bots are ignored.
 
 **A trigger's run acts as its agent.** The run reaches what the agent was
 granted, not what the person who configured the trigger can reach, so that

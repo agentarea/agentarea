@@ -28,24 +28,50 @@ export function FocusCard({ children }: { children: ReactNode }) {
   );
 }
 
-/** What the link is about: the entity's mark, the question, the workspace. */
+/**
+ * What the link is about: the entity's mark (from its identity, or a mark the
+ * caller draws), the question, the workspace.
+ */
 export function FocusHeader({
   identity,
+  mark,
   title,
   subtitle,
 }: {
-  identity: EntityIdentity;
   title: string;
   subtitle: string;
-}) {
+} & (
+  | { identity: EntityIdentity; mark?: never }
+  | { mark: ReactNode; identity?: never }
+)) {
   return (
     <header className="flex flex-col items-center gap-3 text-center">
-      <EntityMark identity={identity} className="h-12 w-12 rounded-lg" />
+      {identity ? (
+        <EntityMark identity={identity} className="h-12 w-12 rounded-lg" />
+      ) : (
+        mark
+      )}
       <div className="space-y-1">
         <h1 className="text-balance">{title}</h1>
         <p className="text-xs text-muted-foreground">{subtitle}</p>
       </div>
     </header>
+  );
+}
+
+/** One labelled fact of what the link is about, inside a `<dl>`. */
+export function FocusDetail({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-1">
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 break-words">{children}</dd>
+    </div>
   );
 }
 

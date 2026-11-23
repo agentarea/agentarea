@@ -330,6 +330,7 @@ func (o EventOverrides) Dump() map[string]any {
 }
 
 // Admission is who may reach an agent through a source: senders linked to a platform user.
+// Username, FirstName and LastName are how the provider names the sender, kept when they link.
 type Admission struct {
 	Identity     string   `json:"identity"`
 	ExternalID   Template `json:"external_id"`
@@ -338,14 +339,18 @@ type Admission struct {
 	Private      Template `json:"private"`
 	PrivateValue string   `json:"private_value"`
 	IsBot        Template `json:"is_bot"`
+	Username     Template `json:"username,omitempty"`
+	FirstName    Template `json:"first_name,omitempty"`
+	LastName     Template `json:"last_name,omitempty"`
 }
 
-// UnmarshalJSON applies Admission's defaults and refuses extra keys.
+// UnmarshalJSON applies Admission's defaults. Keys it does not know are ignored, so a catalog
+// entry naming more of the sender than this binary reads still admits senders.
 func (a *Admission) UnmarshalJSON(b []byte) error {
 	type plain Admission
 	p := plain{PrivateValue: "private"}
-	if err := strict(b, &p); err != nil {
-		return err
+	if err := json.Unmarshal(b, &p); err != nil {
+		return &ValidationError{Msg: err.Error()}
 	}
 	*a = Admission(p)
 	return nil

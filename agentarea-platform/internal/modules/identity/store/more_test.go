@@ -224,13 +224,17 @@ func TestExternalIdentitiesLiveOnly(t *testing.T) {
 	var st Store
 	user := "u-" + uuid.NewString()
 	now := time.Date(2026, 11, 12, 1, 0, 0, 0, time.UTC)
-	first, err := st.InsertExternalIdentity(ctx, pool, user, "telegram", "1"+uuid.NewString()[:8], "deep_link", now)
+	first, err := st.InsertExternalIdentity(ctx, pool, user, domain.MessengerAccount{Provider: "telegram", ExternalID: "1" + uuid.NewString()[:8]}, "deep_link", now)
+	if err != nil || first.Username != nil || first.DisplayName != nil {
+		t.Fatalf("%+v %v", first, err)
+	}
+	second, err := st.InsertExternalIdentity(ctx, pool, user, domain.MessengerAccount{Provider: "telegram", ExternalID: "2" + uuid.NewString()[:8], Username: "alice"}, "deep_link", now.Add(time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := st.InsertExternalIdentity(ctx, pool, user, "telegram", "2"+uuid.NewString()[:8], "deep_link", now.Add(time.Second))
-	if err != nil {
-		t.Fatal(err)
+	renamed, err := st.RenameExternalIdentity(ctx, pool, user, domain.MessengerAccount{Provider: "telegram", ExternalID: second.ExternalID, Name: "Alice Liddell"}, now)
+	if err != nil || renamed.ID != second.ID || renamed.Username == nil || *renamed.Username != "alice" || renamed.DisplayName == nil || *renamed.DisplayName != "Alice Liddell" {
+		t.Fatalf("renamed %+v %v", renamed, err)
 	}
 	if ok, err := st.RevokeExternalIdentity(ctx, pool, "someone-else", uuid.MustParse(first.ID), now); ok || err != nil {
 		t.Fatalf("someone else unlinked it: %v %v", ok, err)

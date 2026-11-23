@@ -392,6 +392,22 @@ func (r redisSetEX) SetEX(ctx context.Context, key, value string, ttl time.Durat
 	return r.c.Set(ctx, key, value, ttl).Err()
 }
 
+func (r redisSetEX) SetNX(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
+	return r.c.SetNX(ctx, key, value, ttl).Result()
+}
+
+func (r redisSetEX) Del(ctx context.Context, key string) error {
+	return r.c.Del(ctx, key).Err()
+}
+
+func (r redisSetEX) Get(ctx context.Context, key string) (string, error) {
+	v, err := r.c.Get(ctx, key).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", nil
+	}
+	return v, err
+}
+
 func (r redisSetEX) GetDel(ctx context.Context, key string) (string, error) {
 	v, err := r.c.GetDel(ctx, key).Result()
 	if errors.Is(err, redis.Nil) {

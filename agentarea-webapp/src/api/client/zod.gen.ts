@@ -1234,12 +1234,17 @@ export const zExistingBundleInstall = z.object({
 
 /**
  * ExternalIdentityResponse
+ *
+ * A messenger account linked to the caller. username and display_name are how the
+ * messenger named the account when it was linked; null for links made before they were kept.
  */
 export const zExternalIdentityResponse = z.object({
+  display_name: z.string().nullable(),
   external_id: z.string(),
   id: z.uuid(),
   linked_at: z.iso.datetime(),
   provider: z.string(),
+  username: z.string().nullable(),
 });
 
 /**
@@ -3976,6 +3981,7 @@ export const zStreamResponse = z.object({
   id: z.uuid(),
   kind: z.string(),
   name: z.string(),
+  source_types: z.array(z.string()),
 });
 
 /**
@@ -4266,6 +4272,30 @@ export const zInboxResponse = z.object({
  */
 export const zTelegramLinkRequest = z.object({
   bot: z.string().regex(/^[A-Za-z0-9_]{5,32}$/),
+});
+
+/**
+ * TelegramLinkOfferRequest
+ */
+export const zTelegramLinkOfferRequest = z.object({
+  code: z.string().min(1),
+});
+
+/**
+ * TelegramLinkOfferResponse
+ *
+ * The Telegram account a bot offered a link for, as Telegram named it when the bot
+ * answered, and the workspace whose bot offered it; only a member of that workspace
+ * sees or accepts it. linked_to is who already holds it: "you", "another_account", or null.
+ */
+export const zTelegramLinkOfferResponse = z.object({
+  bot: z.string().nullable(),
+  display_name: z.string().nullable(),
+  external_id: z.string(),
+  linked_to: z.enum(["you", "another_account"]).nullable(),
+  provider: z.string(),
+  username: z.string().nullable(),
+  workspace_name: z.string(),
 });
 
 /**
@@ -5357,6 +5387,24 @@ export const zStartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostBody =
  */
 export const zStartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponse =
   zTelegramLinkResponse;
+
+export const zAcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostBody =
+  zTelegramLinkOfferRequest;
+
+/**
+ * Successful Response
+ */
+export const zAcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponse =
+  zExternalIdentityResponse;
+
+export const zPreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostBody =
+  zTelegramLinkOfferRequest;
+
+/**
+ * Successful Response
+ */
+export const zPreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponse =
+  zTelegramLinkOfferResponse;
 
 export const zUnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeletePath =
   z.object({

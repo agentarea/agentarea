@@ -108,6 +108,14 @@
   "router_file": "external_identities"
  },
  {
+  "operation_id": "preview_telegram_link_offer_v1_me_external_identities_telegram_offer_preview_post",
+  "router_file": "external_identities"
+ },
+ {
+  "operation_id": "accept_telegram_link_offer_v1_me_external_identities_telegram_offer_accept_post",
+  "router_file": "external_identities"
+ },
+ {
   "operation_id": "unlink_external_identity_v1_me_external_identities__identity_id__delete",
   "router_file": "external_identities"
  },

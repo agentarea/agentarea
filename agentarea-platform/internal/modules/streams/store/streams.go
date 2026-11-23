@@ -186,6 +186,23 @@ func (Streams) StreamNames(ctx context.Context, s db.Session, ids []string) (map
 	return out, nil
 }
 
+// StreamSourceTypes are the source types of each stream's sources, the first added first.
+func (Streams) StreamSourceTypes(ctx context.Context, s db.Session, ids []string) (map[string][]string, error) {
+	out := map[string][]string{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := New(s.Q()).StreamSourceTypes(ctx, StreamSourceTypesParams{WorkspaceID: s.Workspace().ID(), Ids: uuids(ids)})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		id := r.StreamID.String()
+		out[id] = append(out[id], r.SourceType)
+	}
+	return out, nil
+}
+
 // SetDescription writes the stream's description; false when there is no such stream.
 func (Streams) SetDescription(ctx context.Context, s db.Session, id uuid.UUID, description string, now time.Time) (bool, error) {
 	n, err := New(s.Q()).SetStreamDescription(ctx, SetStreamDescriptionParams{WorkspaceID: s.Workspace().ID(), ID: id, Description: description,

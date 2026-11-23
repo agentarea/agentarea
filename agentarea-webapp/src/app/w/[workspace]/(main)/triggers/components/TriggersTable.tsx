@@ -2,6 +2,7 @@
 
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import SourceTypeMark from "@/components/SourceTypeMark";
 import Table, { type Column } from "@/components/Table/Table";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
@@ -9,6 +10,7 @@ import { getTriggerStatusPresentation } from "@/lib/status";
 import { parseUtcTimestamp } from "@/utils/dateUtils";
 import {
   describeTriggerSchedule,
+  describeTriggerSources,
   getTriggerDisplayName,
   getTriggerHealth,
   TriggerSourceMark,
@@ -45,13 +47,20 @@ export default function TriggersTable({
       headerClassName: "w-[200px]",
       render: (_value, trigger) => {
         if (!trigger) return null;
+        const sources = describeTriggerSources(trigger);
         return (
           <span className="flex min-w-0 items-center gap-2.5">
-            <TriggerSourceMark trigger={trigger} size={28} />
+            {trigger.source_types?.[0] ? (
+              <SourceTypeMark type={trigger.source_types[0]} size={28} />
+            ) : (
+              <TriggerSourceMark trigger={trigger} size={28} />
+            )}
             <span className="truncate text-[13px] text-muted-foreground">
-              {trigger.trigger_type === "stream"
-                ? tCommon("onStreamEvents")
-                : describeTriggerSchedule(trigger)}
+              {trigger.trigger_type !== "stream"
+                ? describeTriggerSchedule(trigger)
+                : sources
+                  ? tCommon("onSourceEvents", { source: sources })
+                  : tCommon("onStreamEvents")}
             </span>
           </span>
         );
@@ -76,14 +85,19 @@ export default function TriggersTable({
             accessor: "channel",
             headerClassName: "hidden w-[150px] sm:table-cell",
             cellClassName: "hidden sm:table-cell",
-            render: (_value, trigger) =>
-              trigger ? (
+            render: (_value, trigger) => {
+              if (!trigger) return null;
+              const sources = describeTriggerSources(trigger);
+              return (
                 <span className="block truncate text-[13px] text-muted-foreground">
-                  {getTriggerDisplayName(trigger, (type) =>
-                    tCommon(`type.${type}`)
-                  )}
+                  {sources
+                    ? [sources, trigger.stream_name].filter(Boolean).join(" · ")
+                    : getTriggerDisplayName(trigger, (type) =>
+                        tCommon(`type.${type}`)
+                      )}
                 </span>
-              ) : null,
+              );
+            },
           } satisfies Column<EnrichedTrigger>,
         ]),
     {
@@ -116,9 +130,7 @@ export default function TriggersTable({
       cellClassName: "hidden lg:table-cell",
       render: (_value, trigger) => {
         if (!trigger?.last_execution_at) {
-          return (
-            <span className="text-[13px] text-muted-foreground">—</span>
-          );
+          return <span className="text-[13px] text-muted-foreground">—</span>;
         }
         const failing = Number(trigger.consecutive_failures ?? 0) > 0;
         return (

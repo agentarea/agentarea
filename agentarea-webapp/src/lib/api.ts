@@ -2723,6 +2723,23 @@ export const startTelegramLink = async (bot: string) => {
   return withStatus(result);
 };
 
+// A code a bot handed an unlinked Telegram sender: what it links, then linking it.
+export const previewTelegramLinkOffer = async (code: string) => {
+  const result =
+    await sdk.previewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost(
+      { client: serverClient, body: { code } }
+    );
+  return withStatus(result);
+};
+
+export const acceptTelegramLinkOffer = async (code: string) => {
+  const result =
+    await sdk.acceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost(
+      { client: serverClient, body: { code } }
+    );
+  return withStatus(result);
+};
+
 export const unlinkExternalIdentity = async (identityId: string) => {
   const { data, error } =
     await sdk.unlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDelete({

@@ -113,6 +113,18 @@ func TestSendersAreValidatedAsPydanticDoes(t *testing.T) {
 	}
 }
 
+func TestAnAdmissionWithKeysThisBinaryDoesNotKnowStillParses(t *testing.T) {
+	var a Admission
+	raw := `{"identity":"telegram","external_id":"{body:message.from.id}","chat":"{body:message.chat.id}",` +
+		`"username":"{body:message.from.username}","language":"{body:message.from.language_code}"}`
+	if err := json.Unmarshal([]byte(raw), &a); err != nil {
+		t.Fatal(err)
+	}
+	if a.Identity != "telegram" || a.PrivateValue != "private" || len(a.Username) != 1 {
+		t.Fatalf("got %+v", a)
+	}
+}
+
 func TestEnvelopeScrubsCredentialHeadersAndReadsProviderTimes(t *testing.T) {
 	v := Verification{Header: sp("X-Webhook-Signature")}
 	got := WithoutCredentials(map[string]string{"Authorization": "a", "x-webhook-signature": "s", "X-Shop-Token": "t",

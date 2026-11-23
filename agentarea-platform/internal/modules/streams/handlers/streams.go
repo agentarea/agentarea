@@ -44,10 +44,16 @@ type streamJSON struct {
 	Kind        string    `json:"kind"`
 	CreatedBy   string    `json:"created_by"`
 	CreatedAt   time.Time `json:"created_at"`
+	SourceTypes []string  `json:"source_types"`
 }
 
 func streamOut(s domain.Stream) streamJSON {
-	return streamJSON{ID: s.ID, Name: s.Name, Description: s.Description, Kind: s.Kind, CreatedBy: s.CreatedBy, CreatedAt: s.CreatedAt.UTC()}
+	types := s.SourceTypes
+	if types == nil {
+		types = []string{}
+	}
+	return streamJSON{ID: s.ID, Name: s.Name, Description: s.Description, Kind: s.Kind, CreatedBy: s.CreatedBy,
+		CreatedAt: s.CreatedAt.UTC(), SourceTypes: types}
 }
 
 type subscriptionJSON struct {
@@ -270,6 +276,9 @@ func (s *Server) ListStreamsV1StreamsGet(ctx context.Context, req gen.ListStream
 	if err != nil {
 		return nil, err
 	}
+	if err := s.svc.WithSourceTypes(ctx, rows); err != nil {
+		return nil, err
+	}
 	out := make([]streamJSON, len(rows))
 	for i, r := range rows {
 		out[i] = streamOut(r)
@@ -313,7 +322,11 @@ func (s *Server) GetStreamV1StreamsStreamIdGet(ctx context.Context, req gen.GetS
 	if err != nil {
 		return nil, err
 	}
-	return response{status: http.StatusOK, body: streamOut(st)}, nil
+	one := []domain.Stream{st}
+	if err := s.svc.WithSourceTypes(ctx, one); err != nil {
+		return nil, err
+	}
+	return response{status: http.StatusOK, body: streamOut(one[0])}, nil
 }
 
 func (s *Server) DeleteStreamV1StreamsStreamIdDelete(ctx context.Context, req gen.DeleteStreamV1StreamsStreamIdDeleteRequestObject) (gen.DeleteStreamV1StreamsStreamIdDeleteResponseObject, error) {
