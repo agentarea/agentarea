@@ -148,6 +148,7 @@ without them, and refuses them while RustFS is enabled.
 | `AGENTAREA_LOG_LEVEL` | fixed in `config.yaml` | `info` |
 | `AGENTAREA_API_URL` | `global.api.publicUrl`, else derived from `ingress.hosts.backend.host`, else the ClusterIP service URL | derived |
 | `AGENTAREA_MCP_MANAGER_URL` | the MCP Manager service and `mcpManager.service.port` | derived |
+| `AGENTAREA_MCP_STORAGE_URL` | `mcpManager.workloadUrl`, else the MCP Manager service | derived |
 | `AGENTAREA_MCP_TIMEOUT` | fixed | `30` |
 | `AGENTAREA_S3_PUBLIC_ENDPOINT` | `global.storage.publicEndpoint` | `""` |
 | `AGENTAREA_ANALYTICS_ENABLED` | `global.analytics.enabled` | `true` |
@@ -220,6 +221,7 @@ it, the worker to refresh tokens.
 | `AGENTAREA_TEMPORAL_MAX_WORKFLOWS` | fixed in `config.yaml` | `5` |
 | `AGENTAREA_DEBUG` | fixed | `false` |
 | `AGENTAREA_MCP_MANAGER_URL` | derived | — |
+| `AGENTAREA_MCP_STORAGE_URL` | `mcpManager.workloadUrl`, else the MCP Manager service | derived |
 | `AGENTAREA_MCP_OAUTH_APPS` | same Secret as the backend | unset |
 | `AGENTAREA_TASK_OUTAGE_RETRY_WINDOW` | `worker.outageWait.retryWindow` | `5m` |
 | `AGENTAREA_TASK_OUTAGE_WAIT_BACKOFF` | `worker.outageWait.backoff` | `1m,5m,10m` |
@@ -279,6 +281,7 @@ are not rendered into environment variables.
 | `AGENTAREA_API_URL` | the backend service, port 8000 | derived |
 | `HOST` | fixed | `0.0.0.0` |
 | `PORT` | fixed; the Service still answers on `mcpManager.service.port` | `8000` |
+| `AGENTAREA_MCP_STORAGE_URL` | `mcpManager.workloadUrl`, else the MCP Manager service | derived |
 | `AGENTAREA_MCP_BACKEND` | fixed to `kubernetes` in `config.yaml` | `kubernetes` |
 | `AGENTAREA_K8S_ENABLED` | fixed | `true` |
 | `AGENTAREA_K8S_NAMESPACE` | the release namespace | derived |

@@ -54,12 +54,12 @@ type Config struct {
 	Writes     ConditionalWrites
 }
 
-// LoadConfig reads AGENTAREA_MCP_MANAGER_URL and AGENTAREA_S3_CONDITIONAL_WRITES.
+// LoadConfig reads AGENTAREA_MCP_STORAGE_URL and AGENTAREA_S3_CONDITIONAL_WRITES.
 func LoadConfig(l *config.Loader) Config {
-	raw, _ := l.OptionalEnv("AGENTAREA_MCP_MANAGER_URL")
+	raw, _ := l.OptionalEnv("AGENTAREA_MCP_STORAGE_URL")
 	managerURL, err := ParseManagerURL(raw)
 	if err != nil {
-		l.Fail("AGENTAREA_MCP_MANAGER_URL", err)
+		l.Fail("AGENTAREA_MCP_STORAGE_URL", err)
 	}
 	writes := l.OneOfEnv("AGENTAREA_S3_CONDITIONAL_WRITES", string(NativeConditionalWrites),
 		string(NativeConditionalWrites), string(EmulatedConditionalWrites))
@@ -93,10 +93,10 @@ func ParseManagerURL(raw string) (string, error) {
 	}
 	parsed, err := url.Parse(raw)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-		return "", errors.New("AGENTAREA_MCP_MANAGER_URL must be an absolute http(s) URL")
+		return "", errors.New("AGENTAREA_MCP_STORAGE_URL must be an absolute http(s) URL")
 	}
 	if parsed.RawQuery != "" || parsed.Fragment != "" || parsed.User != nil {
-		return "", errors.New("AGENTAREA_MCP_MANAGER_URL must not carry credentials, a query or a fragment")
+		return "", errors.New("AGENTAREA_MCP_STORAGE_URL must not carry credentials, a query or a fragment")
 	}
 	return strings.TrimRight(raw, "/"), nil
 }
@@ -122,7 +122,7 @@ func (i *Issuer) Environment(instanceID, workspaceID string, spec map[string]any
 		return nil, err
 	}
 	if i == nil || i.managerURL == "" {
-		return nil, fmt.Errorf("MCP instance %s opts into storage, but AGENTAREA_MCP_MANAGER_URL is not set, so there is no MCP_MANAGER_URL to give it", instanceID)
+		return nil, fmt.Errorf("MCP instance %s opts into storage, but AGENTAREA_MCP_STORAGE_URL is not set, so there is no MCP_MANAGER_URL to give it", instanceID)
 	}
 	token, err := signToken(i.secret, workspaceID, instanceID, i.now(), TokenTTL)
 	if err != nil {

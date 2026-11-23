@@ -8,6 +8,7 @@ AGENTAREA_LOG_LEVEL: "INFO"
 AGENTAREA_API_URL: "http://{{ include "agentarea.fullname" . }}-backend:8000"
 HOST: "0.0.0.0"
 PORT: "8000"
+AGENTAREA_MCP_STORAGE_URL: "{{ include "agentarea.mcpManager.workloadUrl" . }}"
 AGENTAREA_SANDBOX_STORAGE: "s3"
 AGENTAREA_SANDBOX_MAX_FILES: "{{ .Values.sandboxRuntime.workspace.maxFiles }}"
 AGENTAREA_SANDBOX_MAX_FILE_SIZE: "{{ .Values.sandboxRuntime.workspace.maxFileBytes }}"
@@ -37,6 +38,11 @@ AGENTAREA_SANDBOX_S3_PATH_STYLE: "{{ .Values.sandboxRuntime.workspace.forcePathS
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: PORT
+- name: AGENTAREA_MCP_STORAGE_URL
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: AGENTAREA_MCP_STORAGE_URL
 - name: AGENTAREA_SANDBOX_STORAGE
   valueFrom:
     configMapKeyRef:

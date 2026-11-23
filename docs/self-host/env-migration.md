@@ -83,6 +83,7 @@ keep the old behaviour.
 | Variable | Service | Was | Is |
 |---|---|---|---|
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | event-service | `grpc` | `http/protobuf`, the OpenTelemetry SDK default (port 4318). An endpoint on the gRPC port 4317 with no protocol set now loses every span and metric without an error; set `grpc` to keep it. |
+| `AGENTAREA_MCP_MANAGER_URL` | backend, worker, mcp-manager | also the address handed to MCP instances for their storage | only where this process calls the MCP role. The address handed to MCP instances is `AGENTAREA_MCP_STORAGE_URL`; without it an instance that opts into storage is refused. The chart sets both. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | event-service | optional; the SDK fell back to `localhost` | required while `AGENTAREA_OTEL_ENABLED` is true, unless every OTLP signal has its own `OTEL_EXPORTER_OTLP_{TRACES,METRICS}_ENDPOINT`. The service refuses to start without one. The mcp-manager, which exports for the first time, applies the same rule. |
 
 ## Renamed
