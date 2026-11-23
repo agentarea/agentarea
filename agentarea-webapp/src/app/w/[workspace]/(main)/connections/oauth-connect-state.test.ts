@@ -67,6 +67,36 @@ describe("deriveOAuthConnectState", () => {
       after
     );
   });
+  it("names the app's install page only for a signed-in connection", () => {
+    const install = "https://github.com/apps/agentarea/installations/new";
+    expect(
+      deriveOAuthConnectState({
+        isUrlType: true,
+        preflight: preflight({
+          credential_source: "platform",
+          connected: true,
+          install_url: install,
+        }),
+      })
+    ).toEqual({
+      kind: "ready",
+      connected: true,
+      credentialSource: "platform",
+      installUrl: install,
+    });
+    expect(
+      deriveOAuthConnectState({
+        isUrlType: true,
+        preflight: preflight({ connected: false, install_url: install }),
+      })
+    ).not.toHaveProperty("installUrl");
+    expect(
+      deriveOAuthConnectState({
+        isUrlType: true,
+        preflight: preflight({ connected: true, install_url: null }),
+      })
+    ).not.toHaveProperty("installUrl");
+  });
   it("offers nothing until the preflight answer arrives", () => {
     expect(
       deriveOAuthConnectState({ isUrlType: true, preflight: null })

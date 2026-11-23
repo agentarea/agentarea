@@ -58,6 +58,11 @@ export default function MCPInstanceSettings({
       ? searchParams.get("reason") || "unknown"
       : null
   );
+  const [installNext] = useState(
+    () =>
+      searchParams.get("oauth") === "success" &&
+      searchParams.get("install") === "1"
+  );
   const [oauthState, setOauthState] = useState<OAuthConnectState | undefined>();
   // The headers draft, null while they are not being edited.
   const [headersDraft, setHeadersDraft] = useState<HeaderRow[] | null>(null);
@@ -170,6 +175,7 @@ export default function MCPInstanceSettings({
                 isUrlType={isUrlType}
                 onStateChange={setOauthState}
                 onConnectStart={() => setOauthError(null)}
+                installNext={installNext}
                 bare
               />
             </div>

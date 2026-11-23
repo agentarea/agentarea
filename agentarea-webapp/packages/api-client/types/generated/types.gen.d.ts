@@ -5978,6 +5978,12 @@ export type OAuthPreflightResponse = {
      */
     detail?: string;
     /**
+     * Install Url
+     *
+     * Install page of the platform OAuth app the connection's credential was minted through, where the user picks what the app may reach (a GitHub App's repositories). Null for any other credential.
+     */
+    install_url?: string | null;
+    /**
      * Issuer
      */
     issuer?: string | null;
