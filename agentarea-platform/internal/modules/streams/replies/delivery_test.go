@@ -84,6 +84,13 @@ func (t tasks) OutcomeTask(_ context.Context, _ scope.Workspace, id string) (run
 	return x, ok, nil
 }
 
+type turns map[string]map[string]any
+
+func (t turns) Address(_ context.Context, taskID string) (map[string]any, bool, error) {
+	a, ok := t[taskID]
+	return a, ok, nil
+}
+
 type sender struct {
 	mu   sync.Mutex
 	err  error
@@ -125,7 +132,7 @@ func newDeliveryRig(t *testing.T) *deliveryRig {
 	r := &deliveryRig{broker: &broker{}, dedup: &dedup{keys: map[string]bool{}}, chat: &sender{}, webhook: &sender{},
 		ws: uuid.NewString(), task: uuid.NewString()}
 	x, err := replies.New(replies.Deps{
-		Broker: r.broker, Dedup: r.dedup, Consumer: "c1", Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Broker: r.broker, Dedup: r.dedup, Turns: turns{}, Consumer: "c1", Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Tasks: tasks{r.task: {ID: r.task, Owner: "u1",
 			Parameters: map[string]any{"delivery_address": map[string]any{"type": "slack", "sender": "http"}},
 			Metadata:   map[string]any{"task_webhook": map[string]any{"url": "https://x.test", "signed": false}}}},
@@ -267,7 +274,7 @@ func (b *claimBroker) Autoclaim(_ context.Context, _, _, _ string, idle time.Dur
 func TestClaimIdleCoversAWholeBatchOfSlowSends(t *testing.T) {
 	b := &claimBroker{}
 	x, err := replies.New(replies.Deps{
-		Broker: b, Dedup: &dedup{keys: map[string]bool{}}, Consumer: "c1", Tasks: tasks{},
+		Broker: b, Dedup: &dedup{keys: map[string]bool{}}, Turns: turns{}, Consumer: "c1", Tasks: tasks{},
 		Replies: func(context.Context, string) (*domain.Reply, bool, error) { return nil, false, nil },
 		Senders: map[string]replies.Sender{"http": &sender{}},
 		Config:  replies.Config{AutoclaimIdle: time.Minute, AutoclaimEvery: time.Second, DedupTTL: time.Hour, Block: time.Second, BatchSize: 10, MaxAttempts: 5},
@@ -303,7 +310,7 @@ func TestTwoReplicasHandlingOneMessageSendEachTargetOnce(t *testing.T) {
 	r := newDeliveryRig(t)
 	g := &gate{in: make(chan struct{}, 4), release: make(chan struct{})}
 	x, err := replies.New(replies.Deps{
-		Broker: r.broker, Dedup: r.dedup, Consumer: "c2", Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Broker: r.broker, Dedup: r.dedup, Turns: turns{}, Consumer: "c2", Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Tasks: tasks{r.task: {ID: r.task, Owner: "u1",
 			Parameters: map[string]any{"delivery_address": map[string]any{"type": "slack", "sender": "http"}}}},
 		Replies: func(context.Context, string) (*domain.Reply, bool, error) {

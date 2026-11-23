@@ -331,6 +331,12 @@ func (f firer) submit(ctx context.Context, def *TaskDefinitionText) (Firing, err
 	}
 	if sub.Routed {
 		f.s.log.InfoContext(ctx, "Routed follow-up to existing workflow", "trigger_id", t.ID)
+		if r.Delivery != nil && r.Delivery.Address != nil && f.s.d.Turns != nil {
+			if err := f.s.d.Turns.Begin(ctx, sub.TaskID, r.Delivery.Address); err != nil {
+				f.s.log.ErrorContext(ctx, "The follow-up's turn is answered at the message that started its task",
+					"task_id", sub.TaskID, "trigger_id", t.ID, "error", err)
+			}
+		}
 	} else {
 		f.s.log.InfoContext(ctx, "Submitted task for trigger", "trigger_id", t.ID, "task_id", sub.TaskID)
 	}
