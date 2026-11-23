@@ -85,6 +85,24 @@ export function needsOAuthPreflight({
   return !authorized && !hasStoredSecrets;
 }
 
+/**
+ * Whether the page asks the preflight for the install page of the app a
+ * signed-in connection authorized through. Never while a check runs.
+ */
+export function looksUpInstallPage({
+  transport,
+  authorized,
+  verificationStatus,
+}: {
+  transport: McpTransport;
+  authorized: boolean;
+  verificationStatus: MCPVerificationStatus;
+}): boolean {
+  return (
+    transport === "url" && authorized && verificationStatus !== "in_progress"
+  );
+}
+
 export function deriveConnectStep({
   secretFields,
   missingFields,

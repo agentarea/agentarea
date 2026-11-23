@@ -2259,6 +2259,7 @@ export const zOAuthPreflightResponse = z.object({
   credential_source: z.enum(["platform", "dynamic", "custom"]).nullish(),
   default_scopes: z.array(z.string()).optional(),
   detail: z.string().optional().default(""),
+  install_url: z.string().nullish(),
   issuer: z.string().nullish(),
   redirect_uri: z.string(),
   scopes: z.array(z.string()).optional(),

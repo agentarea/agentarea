@@ -3,6 +3,7 @@ package connections
 import (
 	"encoding/json"
 	"errors"
+	"net/url"
 	"strings"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/config"
@@ -37,13 +38,18 @@ func LoadConfig(l *config.Loader) Config {
 func parseOAuthApps(raw string) ([]service.OAuthApp, error) {
 	var apps []service.OAuthApp
 	if err := json.Unmarshal([]byte(raw), &apps); err != nil {
-		return nil, errors.New("must be a JSON list of {issuer, client_id, client_secret, authorization_endpoint, token_endpoint, resource_origins}")
+		return nil, errors.New("must be a JSON list of {issuer, client_id, client_secret, authorization_endpoint, token_endpoint, resource_origins, install_url}")
 	}
 	seen := map[string]bool{}
 	var dup []string
 	for _, a := range apps {
 		if a.Issuer == "" || a.ClientID == "" || a.ClientSecret == "" || a.AuthorizationEndpoint == "" || a.TokenEndpoint == "" {
 			return nil, errors.New("every app needs issuer, client_id, client_secret, authorization_endpoint and token_endpoint")
+		}
+		if a.InstallURL != "" {
+			if u, err := url.Parse(a.InstallURL); err != nil || u.Scheme != "https" || u.Host == "" {
+				return nil, errors.New("install_url of " + a.Issuer + " must be an https URL")
+			}
 		}
 		if seen[a.Issuer] {
 			dup = append(dup, a.Issuer)

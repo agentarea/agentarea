@@ -131,6 +131,7 @@ func oauthPreflight(w http.ResponseWriter, r *http.Request, svc *service.Service
 		{Key: "scopes", Value: oauthStrings(pf.Scopes)},
 		{Key: "default_scopes", Value: oauthStrings(pf.DefaultScopes)},
 		{Key: "redirect_uri", Value: svc.OAuthCallbackURI()},
+		{Key: "install_url", Value: orNil(pf.InstallURL)},
 	})
 }
 

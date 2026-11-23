@@ -67,13 +67,15 @@ export type OAuthConnectState =
   /**
    * Connect runs on its own, with the operator's `platform` app, a client
    * the provider registers `dynamic`ally, or the `custom` app the connection
-   * already holds — `clientId` when it was typed in.
+   * already holds — `clientId` when it was typed in. `installUrl`: where a
+   * signed-in person picks what the operator's app may reach.
    */
   | {
       kind: "ready";
       connected: boolean;
       credentialSource?: "platform" | "dynamic" | "custom" | null;
       clientId?: string | null;
+      installUrl?: string;
     }
   /**
    * Connect needs a client ID/secret first. `optional`: the person chose their
@@ -127,6 +129,9 @@ export function deriveOAuthConnectState({
         credentialSource: preflight.credential_source ?? null,
         ...(preflight.credential_source === "custom"
           ? { clientId: preflight.client_id ?? null }
+          : {}),
+        ...(preflight.connected && preflight.install_url
+          ? { installUrl: preflight.install_url }
           : {}),
       };
     case "oauth_app_required":

@@ -1085,6 +1085,8 @@
         "readyDetail": "Try signing in. If the provider refuses automatic registration, additional setup is required.",
         "authorizedTitle": "Authorized",
         "authorizedDetail": "This connection holds an access token. Reconnect to re-authorize it.",
+        "chooseRepositories": "Choose repositories",
+        "chooseRepositoriesHint": "The app can only see the repositories you pick on GitHub.",
         "needsAppTitle": "Needs an OAuth app",
         "needsAppTitleConnected": "Re-authorizing needs your OAuth app",
         "needsAppHint": "Enter a client ID and secret, or pick them from workspace secrets.",

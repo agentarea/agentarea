@@ -13,6 +13,7 @@ import {
   oauthAuthorizeAction,
   oauthPreflightAction,
 } from "@/lib/server-actions";
+import { AppInstallAction } from "./components/AppInstallAction";
 import {
   authorizeTargetOf,
   buildAuthorizeRequest,
@@ -74,6 +75,7 @@ export function OAuthConnectPanel({
   actionLabel,
   onAuthorizeError,
   preflight: givenPreflight,
+  installNext,
 }: {
   target: OAuthConnectTarget;
   isUrlType: boolean;
@@ -94,6 +96,8 @@ export function OAuthConnectPanel({
   onAuthorizeError?: (code: string | null) => void;
   /** The page already asked the API; the panel then does not ask again. */
   preflight?: OAuthPreflight;
+  /** Just signed in through an app with an install page: picking what it reaches comes next. */
+  installNext?: boolean;
 }) {
   const t = useTranslations("MCPServersPage.instanceDetail.oauth");
   const [fetchedPreflight, setPreflight] = useState<OAuthPreflight | null>(
@@ -320,6 +324,14 @@ export function OAuthConnectPanel({
         </Row>
         {scopePicker}
         {bare && button}
+        {state.installUrl && (
+          <AppInstallAction
+            url={state.installUrl}
+            prominent={installNext}
+            size={buttonSize}
+            className={bare ? "w-full" : undefined}
+          />
+        )}
         {canUseOwnApp(preflight) && (
           <Button
             variant="link"

@@ -102,8 +102,11 @@ global:
   #    "client_secret": "...",
   #    "authorization_endpoint": "https://github.com/login/oauth/authorize",
   #    "token_endpoint": "https://github.com/login/oauth/access_token",
-  #    "resource_origins": ["https://api.githubcopilot.com"]}
+  #    "resource_origins": ["https://api.githubcopilot.com"],
+  #    "install_url": "https://github.com/apps/<app>/installations/new"}
   # Tokens minted through an app are only ever sent to its resource_origins.
+  # Optional install_url (https) is where a signed-in user picks what the app
+  # may reach; a GitHub App's user token sees only repositories it is installed on.
   # One-click catalog API connections use the app whose endpoints equal theirs.
   # A malformed value fails startup.
   mcpOAuthApps:

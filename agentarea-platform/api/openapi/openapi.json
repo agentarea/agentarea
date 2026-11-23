@@ -10822,6 +10822,18 @@
             "title": "Detail",
             "type": "string"
           },
+          "install_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Install page of the platform OAuth app the connection's credential was minted through, where the user picks what the app may reach (a GitHub App's repositories). Null for any other credential.",
+            "title": "Install Url"
+          },
           "issuer": {
             "anyOf": [
               {
