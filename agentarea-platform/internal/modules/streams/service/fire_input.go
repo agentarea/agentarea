@@ -271,6 +271,9 @@ type TaskDelivery struct {
 	StreamEventID *string
 	Address       map[string]any
 	Session       map[string]any
+	// Text is the message the event carries by its source's templates (a messenger's text):
+	// the ask of a trigger that sets none, and the follow-up of a session it continues.
+	Text *string
 }
 
 func (d TaskDelivery) stamp(p map[string]any) {

@@ -152,6 +152,16 @@ func (h *TriggerHandler) handle(ctx context.Context, sub domain.Subscription, e 
 	if err != nil {
 		return store.Result{}, err
 	}
+	if delivery.Text != nil {
+		if _, has := te.Data["text"]; !has {
+			withText := make(map[string]any, len(te.Data)+1)
+			for k, v := range te.Data {
+				withText[k] = v
+			}
+			withText["text"] = *delivery.Text
+			te.Data = withText
+		}
+	}
 	cause := store.CauseOf(sub, e)
 	firing, err := svc.Fire(ctx, ws, service.FireRequest{
 		TriggerID: t.ID,
