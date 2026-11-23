@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import type { McpTransport } from "@/api/client/types.gen";
 import { verifyInstance } from "@/app/w/[workspace]/(main)/connections/[id]/actions";
+import { AppInstallAction } from "@/app/w/[workspace]/(main)/connections/components/AppInstallAction";
 import { ConnectKeyForm } from "@/app/w/[workspace]/(main)/connections/components/ConnectKeyForm";
 import { CredentialEncryptionNote } from "@/app/w/[workspace]/(main)/connections/components/CredentialFields";
 import {
@@ -80,6 +81,21 @@ export default function ConnectInstance({
       ? searchParams.get("reason") || "unknown"
       : null
   );
+  const [installNext] = useState(
+    () =>
+      searchParams.get("oauth") === "success" &&
+      searchParams.get("install") === "1"
+  );
+  const installUrl = preflight?.install_url;
+  const install = (prominent: boolean) =>
+    installUrl && (
+      <AppInstallAction
+        url={installUrl}
+        prominent={prominent}
+        size="lg"
+        className="w-full"
+      />
+    );
 
   const finish = useCallback(
     (save?: () => Promise<string | null>) => {
@@ -194,7 +210,9 @@ export default function ConnectInstance({
         kind="done"
         title={t("connectedTitle")}
         detail={t("connectedDetail", { name })}
-      />
+      >
+        {install(installNext)}
+      </FocusStep>
     );
   } else if (step.kind === "unverified") {
     body = (
@@ -206,6 +224,7 @@ export default function ConnectInstance({
         <Button size="lg" className="w-full" onClick={() => finish()}>
           {t("check")}
         </Button>
+        {install(false)}
       </FocusStep>
     );
   } else {
@@ -218,6 +237,7 @@ export default function ConnectInstance({
         <Button size="lg" className="w-full" onClick={() => finish()}>
           {tCommon("retry")}
         </Button>
+        {install(false)}
         <Link
           href={`/connections/${instanceId}`}
           className="self-center text-xs text-primary transition-all duration-300 hover:text-accent dark:text-accent-foreground"

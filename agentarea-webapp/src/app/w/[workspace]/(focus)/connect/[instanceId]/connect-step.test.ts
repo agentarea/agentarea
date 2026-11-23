@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   deriveConnectStep,
+  looksUpInstallPage,
   needsOAuthPreflight,
   stepAfterSignInError,
 } from "./connect-step";
@@ -204,6 +205,25 @@ describe("needsOAuthPreflight", () => {
         verificationError: UNAUTHORIZED,
       })
     ).toBe(false);
+  });
+});
+
+describe("looksUpInstallPage", () => {
+  const signedIn: Parameters<typeof looksUpInstallPage>[0] = {
+    transport: "url",
+    authorized: true,
+    verificationStatus: "succeeded",
+  };
+
+  it("asks for the app's install page once the remote connection is signed in", () => {
+    expect(looksUpInstallPage(signedIn)).toBe(true);
+    expect(looksUpInstallPage({ ...signedIn, verificationStatus: "failed" })).toBe(true);
+  });
+
+  it("skips it while the check runs, without a sign-in, or off a remote server", () => {
+    expect(looksUpInstallPage({ ...signedIn, verificationStatus: "in_progress" })).toBe(false);
+    expect(looksUpInstallPage({ ...signedIn, authorized: false })).toBe(false);
+    expect(looksUpInstallPage({ ...signedIn, transport: "docker" })).toBe(false);
   });
 });
 

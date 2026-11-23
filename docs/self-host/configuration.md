@@ -205,6 +205,11 @@ GitHub. It is a JSON list of objects with `issuer`, `client_id`,
 at one of `resource_origins` through `issuer` then authorizes with that app
 without registering its own; tokens minted through it are sent only to
 `resource_origins`. Unset, such providers need the workspace's own OAuth app.
+An app may also set `install_url` (https), such as a GitHub App's
+`https://github.com/apps/<app>/installations/new`: a GitHub App's user token
+reaches only the repositories the app is installed on, so once a user has
+signed in through the app the connection offers a "Choose repositories"
+button that opens this page.
 The same list serves one-click catalog API connections (Google Search Console,
 Yandex Metrica and the like): a catalog connection uses the app whose
 `authorization_endpoint` and `token_endpoint` equal its own and whose

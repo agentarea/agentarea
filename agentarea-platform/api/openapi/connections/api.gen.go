@@ -651,10 +651,13 @@ type OAuthPreflightResponse struct {
 	CredentialSource      *OAuthPreflightResponseCredentialSource `json:"credential_source"`
 	DefaultScopes         *[]string                               `json:"default_scopes,omitempty"`
 	Detail                *string                                 `json:"detail,omitempty"`
-	Issuer                *string                                 `json:"issuer"`
-	RedirectUri           string                                  `json:"redirect_uri"`
-	Scopes                *[]string                               `json:"scopes,omitempty"`
-	Status                OAuthPreflightResponseStatus            `json:"status"`
+
+	// InstallUrl Install page of the platform OAuth app the connection's credential was minted through, where the user picks what the app may reach (a GitHub App's repositories). Null for any other credential.
+	InstallUrl  *string                      `json:"install_url"`
+	Issuer      *string                      `json:"issuer"`
+	RedirectUri string                       `json:"redirect_uri"`
+	Scopes      *[]string                    `json:"scopes,omitempty"`
+	Status      OAuthPreflightResponseStatus `json:"status"`
 }
 
 // OAuthPreflightResponseCredentialSource defines model for OAuthPreflightResponse.CredentialSource.

@@ -24,6 +24,9 @@ type OAuthApp struct {
 	AuthorizationEndpoint string   `json:"authorization_endpoint"`
 	TokenEndpoint         string   `json:"token_endpoint"`
 	ResourceOrigins       []string `json:"resource_origins"`
+	// InstallURL is where a user picks what the app may reach (a GitHub
+	// App's installations/new page); empty when the app has none.
+	InstallURL string `json:"install_url,omitempty"`
 }
 
 // App is the platform app registered for issuer; nil when none.

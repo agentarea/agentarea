@@ -18,6 +18,7 @@ import { getWorkspaces } from "@/lib/workspace-context";
 import { workspacePath } from "@/lib/workspace-routes";
 import {
   deriveConnectStep,
+  looksUpInstallPage,
   needsOAuthPreflight,
   type VerificationError,
 } from "./connect-step";
@@ -64,9 +65,10 @@ export default async function ConnectPage({ params }: Props) {
     hasStoredSecrets: storedSecrets.length > 0,
   };
 
+  const signIn = needsOAuthPreflight({ ...credentials, ...verification });
   const [serverSpecResult, preflightResult, workspaces] = await Promise.all([
     getMCPServer(instance.server_spec_id),
-    needsOAuthPreflight({ ...credentials, ...verification })
+    signIn || looksUpInstallPage({ ...credentials, ...verification })
       ? oauthPreflightAction({ instance_id: instance.id })
       : null,
     getWorkspaces(),
@@ -111,7 +113,7 @@ export default async function ConnectPage({ params }: Props) {
       keyFields={keyFields}
       preflight={preflight}
       preflightError={
-        preflightResult?.error
+        signIn && preflightResult?.error
           ? `${t("instanceDetail.oauth.preflightFailed")}: ${preflightResult.error}`
           : null
       }
