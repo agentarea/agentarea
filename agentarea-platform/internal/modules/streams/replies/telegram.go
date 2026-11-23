@@ -76,10 +76,18 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 	defer release()
 	key := "tg:live:" + s.Event.TaskID
 	end := terminal(s.Event.Type)
-	if over, err := t.Redis.Exists(ctx, telegramDonePrefix+s.Event.TaskID).Result(); err != nil {
+	// A finished turn records when it ended. An event from before that is a late retry of the
+	// turn and is dropped; one from after it is the next turn of a session the task continues,
+	// which gets a message of its own.
+	if endedAt, err := t.Redis.Get(ctx, telegramDonePrefix+s.Event.TaskID).Result(); err == nil {
+		if !after(s.Event.Timestamp, endedAt) {
+			return nil
+		}
+		if err := t.Redis.Del(ctx, telegramDonePrefix+s.Event.TaskID, key).Err(); err != nil {
+			return fmt.Errorf("live message state: %w", err)
+		}
+	} else if !errors.Is(err, redis.Nil) {
 		return fmt.Errorf("live message state: %w", err)
-	} else if over > 0 {
-		return nil
 	}
 	state, err := t.Redis.HGetAll(ctx, key).Result()
 	if err != nil {
@@ -176,7 +184,7 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 		}
 	}
 	if end {
-		if err := t.Redis.Set(ctx, telegramDonePrefix+s.Event.TaskID, "1", telegramStateTTL).Err(); err != nil {
+		if err := t.Redis.Set(ctx, telegramDonePrefix+s.Event.TaskID, endMark(s.Event.Timestamp), telegramStateTTL).Err(); err != nil {
 			return err
 		}
 		return t.Redis.Del(ctx, key).Err()
@@ -249,3 +257,25 @@ func raiseFor(status int, body []byte, permanent []string) error {
 
 var _ Sender = TelegramLive{}
 var _ Sender = HTTPReply{}
+
+// endMark is what the end of a turn records: its time, or "1" when the event has none, which no
+// later event is after.
+func endMark(ts string) string {
+	if _, err := time.Parse(time.RFC3339Nano, ts); err != nil {
+		return "1"
+	}
+	return ts
+}
+
+// after is whether ts is a time strictly later than the recorded end; an unknown time is not.
+func after(ts, endedAt string) bool {
+	at, err := time.Parse(time.RFC3339Nano, ts)
+	if err != nil {
+		return false
+	}
+	end, err := time.Parse(time.RFC3339Nano, endedAt)
+	if err != nil {
+		return false
+	}
+	return at.After(end)
+}
