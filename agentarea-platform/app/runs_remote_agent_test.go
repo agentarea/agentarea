@@ -11,13 +11,25 @@ import (
 )
 
 type fakeRemoteAgents struct {
-	saw    connectionsapi.RemoteAgentCall
-	answer connectionsapi.RemoteAgentResult
+	saw       connectionsapi.RemoteAgentCall
+	sawTask   connectionsapi.RemoteTaskCall
+	cancelled []connectionsapi.RemoteTaskCall
+	answer    connectionsapi.RemoteAgentResult
 }
 
-func (f *fakeRemoteAgents) CallRemoteAgent(_ context.Context, c connectionsapi.RemoteAgentCall) (connectionsapi.RemoteAgentResult, error) {
+func (f *fakeRemoteAgents) SendRemoteAgent(_ context.Context, c connectionsapi.RemoteAgentCall) (connectionsapi.RemoteAgentResult, error) {
 	f.saw = c
 	return f.answer, nil
+}
+
+func (f *fakeRemoteAgents) GetRemoteAgentTask(_ context.Context, c connectionsapi.RemoteTaskCall) (connectionsapi.RemoteAgentResult, error) {
+	f.sawTask = c
+	return f.answer, nil
+}
+
+func (f *fakeRemoteAgents) CancelRemoteAgentTask(_ context.Context, c connectionsapi.RemoteTaskCall) error {
+	f.cancelled = append(f.cancelled, c)
+	return nil
 }
 
 func remoteInvocation() runsservice.ToolInvocation {
@@ -37,9 +49,37 @@ func TestRemoteAgentCallerDelegatesAsTheRunsAgent(t *testing.T) {
 	}
 	want := connectionsapi.RemoteAgentCall{WorkspaceID: "w1", UserID: "u1", AgentID: "a1", AgentName: "Docs", ToolName: "delegate_to_Docs",
 		ToolCallID: "call-1", A2AURL: "https://remote.test", AuthSecretName: "remote-key", Message: "write the docs",
-		Paid: connectionsapi.PaidCall{ExecutionID: "e1", CallRef: "ref"}}
-	if f.saw != want {
+		MessageID: remoteMessageID("e1", "call-1"), Paid: connectionsapi.PaidCall{ExecutionID: "e1", CallRef: "ref"}}
+	if f.saw != want || len(want.MessageID) != 32 {
 		t.Fatalf("call = %+v", f.saw)
+	}
+	if _, _ = (remoteAgentCaller{t: f}).Call(context.Background(), remoteInvocation()); f.saw.MessageID != want.MessageID {
+		t.Fatalf("a second attempt sent message id %q, the first %q", f.saw.MessageID, want.MessageID)
+	}
+	if remoteMessageID("e1", "call-2") == want.MessageID {
+		t.Fatal("two calls share a message id")
+	}
+}
+
+func TestRemoteAgentCallerHandsTheRunningTaskToTheRun(t *testing.T) {
+	task := connectionsapi.RemoteTask{ID: "rt1", Endpoint: "https://remote.test/rpc", Legacy: true}
+	f := &fakeRemoteAgents{answer: connectionsapi.RemoteAgentResult{Pending: &task}}
+	c := remoteAgentCaller{t: f}
+	out, err := c.Call(context.Background(), remoteInvocation())
+	want := runsapi.RemoteAgentTask{TaskID: "rt1", Endpoint: "https://remote.test/rpc", Legacy: true}
+	if err != nil || !out.Success || out.RemoteTask == nil || *out.RemoteTask != want {
+		t.Fatalf("out = %+v %v", out, err)
+	}
+	out, err = c.GetTask(context.Background(), remoteInvocation(), want)
+	if err != nil || out.RemoteTask == nil || f.sawTask.Task != task || f.sawTask.AuthSecretName != "remote-key" || f.sawTask.UserID != "u1" {
+		t.Fatalf("get = %+v %v, saw %+v", out, err, f.sawTask)
+	}
+	f.answer = connectionsapi.RemoteAgentResult{Success: true, Result: "the docs"}
+	if out, _ = c.GetTask(context.Background(), remoteInvocation(), want); !out.Success || out.Result != "the docs" || out.RemoteTask != nil {
+		t.Fatalf("done = %+v", out)
+	}
+	if err := c.CancelTask(context.Background(), remoteInvocation(), want); err != nil || len(f.cancelled) != 1 || f.cancelled[0].Task != task {
+		t.Fatalf("cancel = %v, %+v", err, f.cancelled)
 	}
 }
 

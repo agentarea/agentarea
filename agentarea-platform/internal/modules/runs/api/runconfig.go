@@ -283,6 +283,15 @@ type RemoteAgentBinding struct {
 	AuthSecretName string `json:"auth_secret_name"`
 }
 
+// RemoteAgentTask is a task a remote delegate is still working on: the run waits
+// for it and asks Endpoint about TaskID until it ends.
+type RemoteAgentTask struct {
+	TaskID   string `json:"task_id"`
+	Endpoint string `json:"endpoint"`
+	// Legacy is an A2A 0.3 agent (tasks/get).
+	Legacy bool `json:"legacy"`
+}
+
 // ToolCost is what a connector declares a call costs and who pays.
 type ToolCost struct {
 	// Payer is platform or workspace.

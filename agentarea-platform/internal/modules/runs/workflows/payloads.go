@@ -221,6 +221,46 @@ type ToolCallResult struct {
 	StructuredContentDropped bool       `json:"structured_content_dropped"`
 	MCPAppTool               string     `json:"mcp_app_tool"`
 	Images                   []ImageRef `json:"images"`
+	// RemoteTask is the task a remote delegate still runs; the answer is not known yet.
+	RemoteTask *api.RemoteAgentTask `json:"remote_task"`
+}
+
+// RemoteTaskRequest reads or stops the task a remote delegate call started.
+type RemoteTaskRequest struct {
+	Principal   Principal           `json:"principal"`
+	TaskID      string              `json:"task_id"`
+	ExecutionID string              `json:"execution_id"`
+	ToolCallID  string              `json:"tool_call_id"`
+	ToolName    string              `json:"tool_name"`
+	Binding     api.ToolBinding     `json:"binding"`
+	Task        api.RemoteAgentTask `json:"task"`
+}
+
+// RemoteDelegationRequest starts RemoteDelegationWorkflow: the call to send, and when to
+// stop waiting for its task. State carries a wait into its next run (continue-as-new).
+type RemoteDelegationRequest struct {
+	Call     ToolCallRequest        `json:"call"`
+	Deadline time.Time              `json:"deadline"`
+	State    *RemoteDelegationState `json:"state"`
+}
+
+// RemoteDelegationState is a wait under way: what the send answered, the task, how often
+// it was read (Reads every attempt, Polls those answered, Failures those failed in a row)
+// and how long the next pause is.
+type RemoteDelegationState struct {
+	Sent     ToolCallResult      `json:"sent"`
+	Task     api.RemoteAgentTask `json:"task"`
+	Started  time.Time           `json:"started"`
+	Reads    int                 `json:"reads"`
+	Polls    int                 `json:"polls"`
+	Failures int                 `json:"failures"`
+	Delay    time.Duration       `json:"delay"`
+}
+
+// RemoteDelegationResult is the remote delegate's answer and the task it ran ("" for none).
+type RemoteDelegationResult struct {
+	Answer ToolCallResult `json:"answer"`
+	TaskID string         `json:"task_id"`
 }
 
 // Event is one run event; its ID is assigned by the workflow and keys every write.

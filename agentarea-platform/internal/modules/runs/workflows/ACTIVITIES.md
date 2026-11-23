@@ -270,6 +270,11 @@ billing installed and no hold is an error.
   (`cost_metered`); wallet payments (x402, MPP) and their records; outputs
   over 8000 chars and images offloaded to blob; sandbox shell runs.
 - 40 min, heartbeat 30 s, 3 attempts, waits for cancellation.
+- A remote A2A delegate's call runs from `RemoteDelegationWorkflow`, a child
+  of the run: this activity only sends the message and answers `remote_task`
+  while the task runs. The child then waits on timers and reads the task with
+  `get_remote_task_activity`, and stops it with `cancel_remote_task_activity`
+  (both 5 min, 3 attempts; Go only, no Python counterpart).
 - Deps: `connections/api` (MCP client, auth headers, OAuth refresh under the
   advisory lock, OpenAPI execution), `sandbox/api`, `wallet/api`,
   `governance/api` (PDP, audit), `models/api` (media models), every module

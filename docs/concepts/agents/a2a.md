@@ -297,11 +297,17 @@ when it is revoked or when its issuer leaves the workspace.
 
 ### Delegating over A2A
 
-When the binding is `a2a`, `A2AAgentTool` uses the official SDK client: it
-sends `SendMessage` with `returnImmediately: true`, then polls `GetTask` on the
-same endpoint every 2 seconds until terminal or until its budget runs out — 110
-seconds, kept under the 120-second HTTP timeout. Each request stays short;
-waiting is a series of polls rather than one long-held connection.
+When the binding is `a2a`, each call runs as its own child workflow of the
+run. It sends `SendMessage` with `returnImmediately: true` through the tool
+activity, so the policy check, spend caps and wallet payments apply as for any
+tool. The `messageId` is derived from the run and the call, so a retried send
+never starts a second remote task. While the task runs, the child waits on
+durable timers and asks `GetTask` on the same endpoint, every 2 seconds at
+first and every 30 seconds at most. No request is held open, and the wait
+survives worker restarts. It ends when the task ends, or after 6 hours (sooner
+if the run itself must end sooner), when the child sends `CancelTask`. Stopping
+the run also sends `CancelTask`. Calls made in one turn wait side by side, and
+their answers reach the model in the order it made them.
 
 The configured `a2a_url` is the agent's address. Each call reads the card at
 `/.well-known/agent-card.json` there and sends the message to the endpoint the
@@ -355,10 +361,6 @@ a connection to our own API, re-authenticating a subject we already
 authenticated, and re-resolving a workspace we never left. None of those steps
 changes the outcome.
 
-There is also a behavioural difference that argues against it. The A2A
-delegation budget is 110 seconds, bounded by the HTTP activity timeout; the
-local binding's is 600 seconds. A same-platform delegation forced through A2A
-abandons sub-agents that are still working, five times sooner, for no benefit.
 
 What A2A earns is the trust boundary. When the target is someone else's agent,
 there is no shared session to reuse, the wire format has to be a published
@@ -387,9 +389,11 @@ mapping in one case and the task row in the other.
   (`pageSize`, `pageToken`) works.
 - **Push authentication schemes are not supported.** A push config must carry a
   `token`; one with `authentication` is refused.
-- **A2A delegation gives up after 110 seconds.** A remote task still running
-  then is reported as a failure carrying its `task_id`; the remote task keeps
-  running, and its result never reaches the caller.
+- **A2A delegation gives up after 6 hours.** A remote task still running then
+  is reported as a failure carrying its `task_id`, and `CancelTask` is sent.
+- **Push notifications are not used yet.** The waiting child already wakes on
+  a `remote_task_update` signal, but nothing receives a delegate's pushes, so
+  the result is read by polling.
 - **A delegated A2A task is not linked to the task that delegated it.** On the
   receiving side it is an ordinary task started by whoever issued the key, so
   the caller's task view does not show it as a child.
