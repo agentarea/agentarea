@@ -250,12 +250,20 @@ func (b *clientBackend) operation(name string) (clientOperation, bool) {
 	return b.openapi[i], true
 }
 
-// discover lists a member's tools once per request; a failure lists none.
+// discover lists a member's tools once per request: the catalog its last verification
+// stored, else the server's own list. A server asleep after its idle timeout takes longer
+// to start than a listing may wait, so asking it live dropped the member's tools from
+// whole turns; a call still starts it, with the call's own timeout. A failure lists none.
 func (b *clientBackend) discover(ctx context.Context, m *member) []map[string]any {
 	if m.discovered {
 		return m.tools
 	}
 	m.discovered = true
+	if stored := storedTools(m.inst.Tools); len(stored) > 0 {
+		m.tools = stored
+		b.noteApp(m)
+		return stored
+	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	tools, err := withClient(ctx, m.up, func(c *mcpclient.Client) ([]map[string]any, error) { return c.ListTools(ctx) })
@@ -773,4 +781,15 @@ func (missingClient) ListResources(context.Context) ([]json.RawMessage, error) {
 
 func (missingClient) ReadResource(context.Context, string) (json.RawMessage, bool, error) {
 	return nil, false, errClientNotFound
+}
+
+// storedTools is the tool definitions of an instance's stored catalog.
+func storedTools(raw []any) []map[string]any {
+	out := make([]map[string]any, 0, len(raw))
+	for _, t := range raw {
+		if def, ok := t.(map[string]any); ok && toolName(def) != "" {
+			out = append(out, def)
+		}
+	}
+	return out
 }
