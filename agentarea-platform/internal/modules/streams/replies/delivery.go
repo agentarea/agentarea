@@ -79,6 +79,8 @@ type Deps struct {
 	// Dedup is the dedup cache of delivered targets (prefix DedupPrefix, TTL Config.DedupTTL).
 	Dedup events.Dedup
 	Tasks runsapi.TaskOutcomes
+	// Turns is where a task's current turn replies when a follow-up was routed into it (Turns).
+	Turns TurnAddresses
 	// Replies is the catalog entries' reply blocks, read at send time.
 	Replies Replies
 	// Senders by the name a target gives (http, telegram_live, smtp, task_webhook, a2a_webhook).
@@ -114,8 +116,8 @@ func DeadLetterTopic() string { return events.DeadLetterTopic(events.TaskEvents,
 // New builds a Delivery.
 func New(d Deps) (*Delivery, error) {
 	switch {
-	case d.Broker == nil, d.Dedup == nil, d.Tasks == nil, d.Replies == nil, len(d.Senders) == 0:
-		return nil, errors.New("task reply delivery needs a broker, dedup, task reads, reply blocks and senders")
+	case d.Broker == nil, d.Dedup == nil, d.Tasks == nil, d.Turns == nil, d.Replies == nil, len(d.Senders) == 0:
+		return nil, errors.New("task reply delivery needs a broker, dedup, task reads, turn addresses, reply blocks and senders")
 	case d.Consumer == "":
 		return nil, errors.New("task reply delivery needs a consumer name")
 	}
@@ -239,6 +241,18 @@ func (x *Delivery) Handle(ctx context.Context, m events.Message) error {
 	targets, malformed := Targets(task)
 	for _, why := range malformed {
 		x.d.Log.ErrorContext(ctx, "task has a malformed reply target", "task_id", task.ID, "problem", why)
+	}
+	for i := range targets {
+		if targets[i].Key != AddressTarget {
+			continue
+		}
+		turn, ok, err := x.d.Turns.Address(ctx, task.ID)
+		if err != nil {
+			return err
+		}
+		if ok {
+			targets[i].Config = turn
+		}
 	}
 	only, replay := m.Fields[TargetField]
 	exhausted := m.DeliveryCount > x.d.Config.MaxAttempts
