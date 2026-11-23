@@ -50,6 +50,7 @@ x-platform-env: &platform-env
   TEMPORAL_NAMESPACE: default
   AGENTAREA_TEMPORAL_QUEUE: agent-tasks
   AGENTAREA_MCP_MANAGER_URL: http://agentarea-mcp-manager:80
+  AGENTAREA_MCP_STORAGE_URL: http://agentarea-mcp-manager:80
   AGENTAREA_MCP_GATEWAY_SECRET: ${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
   AGENTAREA_MCP_OAUTH_APPS: ${AGENTAREA_MCP_OAUTH_APPS:-[]}
   # MCP workloads run on this host's Docker daemon, on the segregated MCP
