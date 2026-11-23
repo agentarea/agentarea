@@ -150,7 +150,6 @@ without them, and refuses them while RustFS is enabled.
 | `AGENTAREA_MCP_MANAGER_URL` | the MCP Manager service and `mcpManager.service.port` | derived |
 | `AGENTAREA_MCP_TIMEOUT` | fixed | `30` |
 | `AGENTAREA_S3_PUBLIC_ENDPOINT` | `global.storage.publicEndpoint` | `""` |
-| `AGENTAREA_ENV` | `global.deploymentEnv` | `production` |
 | `AGENTAREA_ANALYTICS_ENABLED` | `global.analytics.enabled` | `true` |
 | `AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY` | Secret `global.analytics.signupHookSecret`, key `signup-hook-key` | unset (no sign-up hook) |
 | `AGENTAREA_ANALYTICS_OWN_DOMAINS` | `global.analytics.ownDomains` (a list) | empty (no own domains) |
@@ -220,7 +219,6 @@ it, the worker to refresh tokens.
 | `AGENTAREA_TEMPORAL_MAX_ACTIVITIES` | fixed in `config.yaml` | `10` |
 | `AGENTAREA_TEMPORAL_MAX_WORKFLOWS` | fixed in `config.yaml` | `5` |
 | `AGENTAREA_DEBUG` | fixed | `false` |
-| `AGENTAREA_ENV` | `global.deploymentEnv` | `production` |
 | `AGENTAREA_MCP_MANAGER_URL` | derived | — |
 | `AGENTAREA_MCP_OAUTH_APPS` | same Secret as the backend | unset |
 | `AGENTAREA_TASK_OUTAGE_RETRY_WINDOW` | `worker.outageWait.retryWindow` | `5m` |
@@ -479,10 +477,13 @@ Rendered into backend, worker, mcp-manager and event-service by the
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `telemetry.otlpEndpoint`, required when enabled | unset |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | fixed | `http/protobuf` |
 | `OTEL_SEMCONV_STABILITY_OPT_IN` | fixed | `http` |
+| `OTEL_TRACES_EXPORTER` | `none` while `telemetry.traces.enabled` is false | unset (`otlp`) |
 | `OTEL_RESOURCE_ATTRIBUTES` | fixed, from the Downward API `POD_NAME` and `POD_NAMESPACE` and the Deployment's image tag | `k8s.pod.name=$(POD_NAME),k8s.namespace.name=$(POD_NAMESPACE),service.version=<tag>` |
 
 `AGENTAREA_OTEL_ENABLED=true` with no `OTEL_EXPORTER_OTLP_ENDPOINT` (or no
-per-signal endpoints) stops the process at startup. `OTEL_METRICS_EXPORTER`
+per-signal endpoints) stops the process at startup. `OTEL_TRACES_EXPORTER`
+picks `otlp` (the default) or `none`, which exports no spans and needs no traces
+endpoint; set it for a collector with no traces pipeline. `OTEL_METRICS_EXPORTER`
 picks `otlp` (the default), `prometheus` (a scrape endpoint on
 `OTEL_EXPORTER_PROMETHEUS_HOST`:`OTEL_EXPORTER_PROMETHEUS_PORT`, default
 `localhost:9464`) or `none`; `OTEL_METRIC_EXPORT_INTERVAL` sets the push interval
@@ -539,16 +540,18 @@ included. `AGENTAREA_HTTP_ALLOW_PRIVATE=true` admits every private address and
 belongs only on a single-tenant install. `docker-compose.dev.yaml` allows
 `localhost,host.docker.internal`; `docker-compose.yaml` allows nothing.
 
-### Edition and spend currency (group `application`)
+### Environment, edition and spend currency (group `application`)
 
 Rendered into every platform role (backend, worker, event service, mcp-manager,
 operator, the registry-reconcile Job).
 
 | Variable | Helm value | Default |
 |---|---|---|
+| `AGENTAREA_ENV` | `global.deploymentEnv` | `production` |
 | `AGENTAREA_EDITION` | `global.edition` | `oss` |
 | `AGENTAREA_SPEND_CURRENCY` | `global.spendCurrency` | `USD` |
 
+`AGENTAREA_ENV` is the telemetry resource's `deployment.environment.name`.
 `AGENTAREA_EDITION` is `oss` or `enterprise`; usage analytics report it.
 
 The one currency spend caps count and tool costs are declared in, as an ISO 4217

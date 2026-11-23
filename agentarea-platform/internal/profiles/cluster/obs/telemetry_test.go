@@ -159,3 +159,67 @@ func TestSetupExportsOverOTLPHTTP(t *testing.T) {
 		t.Fatalf("exported to %v", paths)
 	}
 }
+
+func TestTracesExporter(t *testing.T) {
+	for raw, want := range map[string]string{"": "otlp", "otlp": "otlp", " None ": "none"} {
+		got, err := TracesExporter(func(string) string { return raw })
+		if err != nil || got != want {
+			t.Errorf("%q: %q %v, want %q", raw, got, err, want)
+		}
+	}
+	_, err := TracesExporter(func(string) string { return "zipkin" })
+	if err == nil || err.Error() != "OTEL_TRACES_EXPORTER='zipkin' is not supported; use one of otlp, none" {
+		t.Fatalf("error %v", err)
+	}
+}
+
+func TestNoTracesNeedNoTracesEndpoint(t *testing.T) {
+	cases := []struct {
+		env  map[string]string
+		want string
+	}{
+		{map[string]string{"OTEL_TRACES_EXPORTER": "none", "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "http://gw:4318/v1/metrics"}, ""},
+		{map[string]string{"OTEL_TRACES_EXPORTER": "none", "OTEL_METRICS_EXPORTER": "none"}, ""},
+		{map[string]string{"OTEL_TRACES_EXPORTER": "none", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://gw:4318/v1/traces"},
+			"AGENTAREA_OTEL_ENABLED is true but OTEL_EXPORTER_OTLP_ENDPOINT is not set (nor OTEL_EXPORTER_OTLP_METRICS_ENDPOINT)"},
+	}
+	for _, c := range cases {
+		cfg, err := LoadConfig(func(k string) string { return c.env[k] }, "agentarea-api")
+		switch {
+		case c.want == "" && (err != nil || cfg.TracesExporter != "none" || cfg.TracesProtocol != ""):
+			t.Errorf("%v: %+v %v", c.env, cfg, err)
+		case c.want != "" && (err == nil || err.Error() != c.want):
+			t.Errorf("%v: got %v, want %q", c.env, err, c.want)
+		}
+	}
+}
+
+func TestSetupWithoutTracesExportsOnlyMetrics(t *testing.T) {
+	var mu sync.Mutex
+	paths := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		paths[r.URL.Path]++
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	env := map[string]string{"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": srv.URL + "/v1/metrics", "OTEL_TRACES_EXPORTER": "none"}
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", srv.URL+"/v1/metrics")
+	ctx := context.Background()
+	tel, err := Setup(ctx, Options{Enabled: true, Service: "agentarea-test", Version: "0", Environment: "test",
+		Getenv: func(k string) string { return env[k] }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, span := otel.Tracer("test").Start(ctx, "op")
+	span.End()
+	if err := tel.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if paths["/v1/traces"] != 0 || paths["/v1/metrics"] == 0 {
+		t.Fatalf("exported to %v", paths)
+	}
+}

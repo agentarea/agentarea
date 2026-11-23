@@ -557,6 +557,10 @@ image's tag. Empty while telemetry.enabled is off.
   value: "http/protobuf"
 - name: OTEL_SEMCONV_STABILITY_OPT_IN
   value: "http"
+{{- if not .Values.telemetry.traces.enabled }}
+- name: OTEL_TRACES_EXPORTER
+  value: "none"
+{{- end }}
 - name: OTEL_RESOURCE_ATTRIBUTES
   value: {{ printf "k8s.pod.name=$(POD_NAME),k8s.namespace.name=$(POD_NAMESPACE),service.version=%s" (default .Chart.AppVersion $.image.tag) | quote }}
 {{- end }}

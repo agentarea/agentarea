@@ -269,7 +269,7 @@ func TestFileToolsRunInTheSandbox(t *testing.T) {
 	call := func(method string, args map[string]any) string {
 		t.Helper()
 		in := ToolCall{TaskID: "t1", ToolName: method, Args: args, Binding: api.ToolBinding{Source: "code", Code: &api.CodeBinding{Namespace: "agentarea/files", Method: method}}}
-		out, err := s.dispatch(context.Background(), testPrincipal(), in)
+		out, err := s.dispatch(context.Background(), testPrincipal(), in, nil)
 		if err != nil || !out.Success {
 			t.Fatalf("%s: %+v %v", method, out, err)
 		}
@@ -307,7 +307,7 @@ func TestBashGoesToTheSandboxWithTheRunsProject(t *testing.T) {
 	s := New(Deps{Runtime: rt, Log: quiet()})
 	in := ToolCall{TaskID: "t1", WorkflowID: "wf", ToolName: "bash", Args: map[string]any{"command": "ls", "timeout_seconds": float64(5)},
 		RunMetadata: map[string]any{"project_id": "p1"}, Binding: api.ToolBinding{Source: "code", Code: &api.CodeBinding{Namespace: "agentarea/shell", Method: "bash"}}}
-	out, err := s.dispatch(context.Background(), testPrincipal(), in)
+	out, err := s.dispatch(context.Background(), testPrincipal(), in, nil)
 	if err != nil || out.Result != "ran ls" || out.Source != "builtin" {
 		t.Fatalf("%+v %v", out, err)
 	}

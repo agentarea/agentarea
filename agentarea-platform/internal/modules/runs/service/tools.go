@@ -153,6 +153,13 @@ type before struct {
 // policy verdict, the cost known before it, a hold on the platform's key, the
 // spend gate, the call, the meter. A refusal is audited and answered, not raised.
 func (s *Service) ExecuteTool(ctx context.Context, p Principal, in ToolCall) (ToolResult, error) {
+	call := s.d.ToolMetrics.begin(ctx, toolKind(in.Binding), toolPathWorker)
+	res, err := s.executeTool(ctx, p, in, call)
+	call.end(ctx, err)
+	return res, err
+}
+
+func (s *Service) executeTool(ctx context.Context, p Principal, in ToolCall, call *toolCall) (ToolResult, error) {
 	ws, err := workspace(p)
 	if err != nil {
 		return ToolResult{}, err
@@ -160,8 +167,10 @@ func (s *Service) ExecuteTool(ctx context.Context, p Principal, in ToolCall) (To
 	action, reason := domain.DecideToolPolicy(in.Policy, in.ToolName, toolNamesOf(in.Binding))
 	switch {
 	case action == domain.ToolDeny:
+		call.set(toolOutcomeDenied)
 		return s.auditedDenial(ctx, p, in, reason)
 	case action == domain.ToolRequireApproval && !in.PolicyApprovalGranted:
+		call.set(toolOutcomeHeld)
 		return s.auditedDenial(ctx, p, in, reason+"; approval must be resolved before activity execution")
 	}
 	conn, refusal, err := s.callConnection(ctx, ws, in)
@@ -169,6 +178,7 @@ func (s *Service) ExecuteTool(ctx context.Context, p Principal, in ToolCall) (To
 		return ToolResult{}, err
 	}
 	if refusal != "" {
+		call.set(toolOutcomeDenied)
 		return s.auditedDenial(ctx, p, in, refusal)
 	}
 	b, refusal := s.beforeCall(ctx, p, in, conn)
@@ -187,13 +197,15 @@ func (s *Service) ExecuteTool(ctx context.Context, p Principal, in ToolCall) (To
 		}
 	}
 	if refusal != "" {
+		call.set(toolOutcomeDenied)
 		return s.auditedDenial(ctx, p, in, refusal)
 	}
-	out, err := s.dispatch(ctx, p, in)
+	out, err := s.dispatch(ctx, p, in, call)
 	if err != nil {
 		s.voidHold(ctx, b.holdID, "the call raised")
 		return ToolResult{}, err
 	}
+	call.answered(out.Success)
 	if !out.Success {
 		s.voidHold(ctx, b.holdID, "the call failed")
 	}
@@ -388,7 +400,7 @@ func connTool(c *connection) string {
 }
 
 // dispatch runs the call on its binding source's caller; a failure is the tool's answer.
-func (s *Service) dispatch(ctx context.Context, p Principal, in ToolCall) (ToolOutput, error) {
+func (s *Service) dispatch(ctx context.Context, p Principal, in ToolCall, call *toolCall) (ToolOutput, error) {
 	caller, ok := s.d.Tools[in.Binding.Source]
 	if sb := s.sandboxCaller(in); sb != nil {
 		caller, ok = sb, true
@@ -421,6 +433,7 @@ func (s *Service) dispatch(ctx context.Context, p Principal, in ToolCall) (ToolO
 		return ToolOutput{}, err
 	}
 	s.d.Log.ErrorContext(ctx, "tool execution failed", "tool", in.ToolName, "error", err)
+	call.failed(err)
 	source := in.Binding.Source
 	if source == "code" || source == "" {
 		source = "builtin"

@@ -80,9 +80,10 @@ type coreDeps struct {
 	// MCPRuntime starts and retires MCP workloads in process; nil in a role
 	// that calls no MCP tool (events).
 	MCPRuntime *runtime.Runtime
-	// RunSettings and Telemetry are the run activities' settings and metrics.
+	// RunSettings, Telemetry and ToolMetrics are the run activities' settings and metrics.
 	RunSettings runsservice.RunSettings
 	Telemetry   runsservice.RunTelemetry
+	ToolMetrics *runsservice.ToolTelemetry
 	Streams     streamsPlumbing
 }
 
@@ -338,7 +339,7 @@ func runsDeps(d coreDeps, m *moduleSet, store kblob.Store) runs.Deps {
 			"code":         platformCaller{t: m.connections.PlatformTools()},
 			"remote_agent": remoteAgentCaller{t: m.connections.RemoteAgents()},
 		},
-		Settings: d.RunSettings, Telemetry: d.Telemetry, Log: d.Log,
+		Settings: d.RunSettings, Telemetry: d.Telemetry, ToolMetrics: d.ToolMetrics, Log: d.Log,
 		Definitions: newRunDefinitions(runTools{t: m.connections.RunTools()}, runSkillsPort{s: m.agents.RunSkills()},
 			runInstructionsPort{p: m.projects.RunInstructions()}, runInputsPort{i: m.sandbox.RunInputs()}),
 		Skills: skillPackages{s: m.agents.RunSkills()},

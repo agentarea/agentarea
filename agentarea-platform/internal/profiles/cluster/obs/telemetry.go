@@ -1,7 +1,7 @@
 // Package obs is the process's OpenTelemetry setup (observability/
 // telemetry.py setup_telemetry, ADR-0048): AGENTAREA_OTEL_ENABLED is the
 // gate, the rest is the specification's own OTEL_* variables. Traces go
-// over OTLP; metrics over OTLP, a Prometheus endpoint, or nowhere; every
+// over OTLP or nowhere; metrics over OTLP, a Prometheus endpoint, or nowhere; every
 // instrument not in kernel/obs.Instruments is dropped.
 package obs
 
@@ -37,6 +37,7 @@ const (
 	metricsEndpointEnv = "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"
 	protocolEnv        = "OTEL_EXPORTER_OTLP_PROTOCOL"
 	metricsExporterEnv = "OTEL_METRICS_EXPORTER"
+	tracesExporterEnv  = "OTEL_TRACES_EXPORTER"
 	intervalEnv        = "OTEL_METRIC_EXPORT_INTERVAL"
 	serviceNameEnv     = "OTEL_SERVICE_NAME"
 	semconvOptInEnv    = "OTEL_SEMCONV_STABILITY_OPT_IN"
@@ -73,6 +74,7 @@ var _ kernel.Telemetry = (*Telemetry)(nil)
 // environment, as setup_telemetry checks it before installing anything.
 type Config struct {
 	MetricsExporter string
+	TracesExporter  string
 	TracesProtocol  string
 	MetricsProtocol string
 	ExportInterval  time.Duration
@@ -101,6 +103,18 @@ func MetricsExporter(getenv func(string) string) (string, error) {
 	return v, nil
 }
 
+// TracesExporter is OTEL_TRACES_EXPORTER: otlp, or none for no span exporter.
+func TracesExporter(getenv func(string) string) (string, error) {
+	v := strings.ToLower(env(getenv, tracesExporterEnv))
+	if v == "" {
+		v = "otlp"
+	}
+	if v != "otlp" && v != "none" {
+		return "", fmt.Errorf("%s=%s is not supported; use one of otlp, none", tracesExporterEnv, pyRepr(v))
+	}
+	return v, nil
+}
+
 // Protocol is otlp_protocol for signal TRACES or METRICS.
 func Protocol(getenv func(string) string, signal string) (string, error) {
 	name := "OTEL_EXPORTER_OTLP_" + signal + "_PROTOCOL"
@@ -119,14 +133,17 @@ func Protocol(getenv func(string) string, signal string) (string, error) {
 
 // MissingEndpoint is missing_otlp_endpoint: why an exporting signal has no
 // endpoint, empty when each has one.
-func MissingEndpoint(getenv func(string) string, metricsOTLP bool) string {
+func MissingEndpoint(getenv func(string) string, tracesOTLP, metricsOTLP bool) string {
 	if env(getenv, endpointEnv) != "" {
 		return ""
 	}
 	traces := env(getenv, tracesEndpointEnv) != ""
 	metrics := env(getenv, metricsEndpointEnv) != ""
-	if traces && (metrics || !metricsOTLP) {
+	if (traces || !tracesOTLP) && (metrics || !metricsOTLP) {
 		return ""
+	}
+	if !tracesOTLP {
+		return "AGENTAREA_OTEL_ENABLED is true but OTEL_EXPORTER_OTLP_ENDPOINT is not set (nor OTEL_EXPORTER_OTLP_METRICS_ENDPOINT)"
 	}
 	if traces {
 		return "AGENTAREA_OTEL_ENABLED is true and OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is set, but " +
@@ -181,12 +198,18 @@ func LoadConfig(getenv func(string) string, service string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	if msg := MissingEndpoint(getenv, exporter == "otlp"); msg != "" {
+	traces, err := TracesExporter(getenv)
+	if err != nil {
+		return Config{}, err
+	}
+	if msg := MissingEndpoint(getenv, traces == "otlp", exporter == "otlp"); msg != "" {
 		return Config{}, errors.New(msg)
 	}
-	c := Config{MetricsExporter: exporter, ServiceName: service}
-	if c.TracesProtocol, err = Protocol(getenv, "TRACES"); err != nil {
-		return Config{}, err
+	c := Config{MetricsExporter: exporter, TracesExporter: traces, ServiceName: service}
+	if traces == "otlp" {
+		if c.TracesProtocol, err = Protocol(getenv, "TRACES"); err != nil {
+			return Config{}, err
+		}
 	}
 	if exporter == "otlp" {
 		if c.MetricsProtocol, err = Protocol(getenv, "METRICS"); err != nil {
@@ -222,15 +245,23 @@ func Setup(ctx context.Context, opts Options) (*Telemetry, error) {
 	if err != nil {
 		return nil, err
 	}
-	spans, err := spanExporter(ctx, cfg.TracesProtocol)
-	if err != nil {
-		return nil, fmt.Errorf("create span exporter: %w", err)
+	traceOpts := []sdktrace.TracerProviderOption{sdktrace.WithResource(res)}
+	var spans sdktrace.SpanExporter
+	if cfg.TracesExporter == "otlp" {
+		if spans, err = spanExporter(ctx, cfg.TracesProtocol); err != nil {
+			return nil, fmt.Errorf("create span exporter: %w", err)
+		}
+		traceOpts = append(traceOpts, sdktrace.WithBatcher(spans))
 	}
 	reader, err := metricReader(ctx, cfg)
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("create metric reader: %w", err), spans.Shutdown(ctx))
+		err = fmt.Errorf("create metric reader: %w", err)
+		if spans != nil {
+			err = errors.Join(err, spans.Shutdown(ctx))
+		}
+		return nil, err
 	}
-	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithBatcher(spans), sdktrace.WithResource(res))
+	tracerProvider := sdktrace.NewTracerProvider(traceOpts...)
 	meterOpts := []sdkmetric.Option{sdkmetric.WithResource(res), sdkmetric.WithView(View)}
 	if reader != nil {
 		meterOpts = append(meterOpts, sdkmetric.WithReader(reader))
