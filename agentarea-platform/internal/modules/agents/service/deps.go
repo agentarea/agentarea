@@ -84,9 +84,12 @@ type Deps struct {
 	Models      Models
 	Approvals   Approvals
 	Connections Connections
-	Presence    Presence
-	CodeTools   CodeTools
-	Triggers    AgentTriggers
+	// Attachable tells the connections the platform manages, which every
+	// workspace may attach; nil treats none as the platform's.
+	Attachable ClientConnections
+	Presence   Presence
+	CodeTools  CodeTools
+	Triggers   AgentTriggers
 	// Wallets deletes a deleted agent's wallet keys; nil leaves them.
 	Wallets WalletCredentials
 	// Secrets finds the secret a remote delegate is bound to; nil answers 501 for binding one.
