@@ -789,7 +789,16 @@ class CodexTurn implements TurnControl {
 				: {}),
 			config: {
 				mcp_servers: {
-					[MCP_SERVER_NAME]: {url: this.server.relay.url(assign.task_id)},
+					// required: Codex otherwise starts the turn while the server is
+					// still connecting and leaves the whole tool set out of it.
+					// approve: the platform's policy engine already decides every
+					// call on this server; a second prompt from Codex only parks
+					// the task in waiting_for_approval.
+					[MCP_SERVER_NAME]: {
+						url: this.server.relay.url(assign.task_id),
+						required: true,
+						default_tools_approval_mode: 'approve',
+					},
 				},
 			},
 		};
