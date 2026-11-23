@@ -2717,3 +2717,21 @@ export const getAnalyticsConfig = async () => {
   const result = await sdk.getAnalyticsV1AnalyticsGet({ client: serverClient });
   return withStatus(result);
 };
+
+export const listTaskDefinitions = async () => {
+  const result = await sdk.listTaskDefinitionsV1TaskDefinitionsGet({
+    client: serverClient,
+  });
+  return withStatus(result);
+};
+
+export const runTaskDefinition = async (definitionId: string) => {
+  const result = await sdk.runTaskDefinitionV1TaskDefinitionsDefinitionIdRunPost(
+    {
+      client: serverClient,
+      path: { definition_id: definitionId },
+      body: {},
+    }
+  );
+  return withStatus(result);
+};

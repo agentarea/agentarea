@@ -86,6 +86,8 @@ export const PAGE_ROUTES = [
   "/tasks/*/artifacts",
   "/tasks/*/events",
   "/tasks/*/files",
+  "/tasks/saved",
+  "/tasks/upcoming",
   "/triggers",
   "/triggers/*",
   "/triggers/*/edit",

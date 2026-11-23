@@ -1701,6 +1701,20 @@
     "runnerOffline": "{name} is offline: the task waits up to 10 minutes for it to come back."
   },
   "TasksPage": {
+    "sectionExpected": "Expected",
+    "sectionRuns": "Started",
+    "sectionTemplates": "Templates",
+    "runNow": "Run now",
+    "runFailed": "Could not start",
+    "open": "Open",
+    "expectedWhen": "When",
+    "expectedEmptyTitle": "Nothing expected",
+    "expectedEmptyDescription": "Enabled schedules and tasks booked for later show up here.",
+    "expectedLoadFailed": "Could not load what is expected",
+    "savedTitle": "Saved tasks",
+    "savedName": "Task",
+    "savedEmptyTitle": "No saved tasks",
+    "savedEmptyDescription": "Saved tasks come from a deployed folder's tasks/ or the API.",
     "title": "Tasks",
     "description": "Description",
     "agent": "Agent",
@@ -3453,12 +3467,13 @@
     "stopped": "Stopped",
     "activity": "Activity",
     "scheduleView": {
+      "upcoming": "Upcoming",
       "today": "Today",
       "week": "Week",
       "month": "Month"
     },
     "nextRun": "Next run: {title}, {when}",
-    "nothingInView": "{view, select, today {Nothing scheduled today} week {Nothing scheduled this week} other {Nothing scheduled this month}}"
+    "nothingInView": "{view, select, upcoming {Nothing coming up} today {Nothing scheduled today} week {Nothing scheduled this week} other {Nothing scheduled this month}}"
   },
   "BudgetsPage": {
     "couldntLoadTitle": "Couldn't load budget data",
@@ -3733,7 +3748,6 @@
     "title": "Apps",
     "description": "Interactive interfaces from your MCP connections.",
     "connection": "Connection",
-    "open": "Open app",
     "emptyTitle": "No MCP Apps available",
     "emptyDescription": "Connect an MCP server that exposes an interactive app to see it here.",
     "connectAction": "Browse connections",

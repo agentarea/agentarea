@@ -220,6 +220,8 @@ interface FullChatProps {
   placeholder?: string;
   welcomeComponent?: React.ReactNode;
   badgeSuggestions?: BadgeSuggestion[] | Promise<BadgeSuggestion[]>;
+  /** Text the composer opens with, e.g. a saved task's. */
+  initialInput?: string;
 }
 
 export default function FullChat({
@@ -239,6 +241,7 @@ export default function FullChat({
   availableProjects = [],
   availableTaskPolicies = [],
   runOptions,
+  initialInput = "",
 }: FullChatProps) {
   const t = useTranslations("Chat");
 
@@ -293,15 +296,20 @@ export default function FullChat({
   const activeStreamRef =
     React.useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
 
-  // Clear conversation when agent changes
+  // Clear conversation when agent changes. Not on mount: the composer may open
+  // with initialInput, and the first agent is not a change.
+  const shownAgentRef = React.useRef(agent.id);
   React.useEffect(() => {
-    eventStateRef.current = initialState();
-    setEventState(eventStateRef.current);
-    setUserEntries([]);
-    setInput("");
-    setInputDisplay("");
-    setComposerError(null);
-    clearFilesRef.current();
+    if (shownAgentRef.current !== agent.id) {
+      shownAgentRef.current = agent.id;
+      eventStateRef.current = initialState();
+      setEventState(eventStateRef.current);
+      setUserEntries([]);
+      setInput("");
+      setInputDisplay("");
+      setComposerError(null);
+      clearFilesRef.current();
+    }
     return () => {
       const reader = activeStreamRef.current;
       activeStreamRef.current = null;
@@ -356,8 +364,8 @@ export default function FullChat({
   const [taskLifecycleStatus, setTaskLifecycleStatus] = React.useState<
     string | null
   >(null);
-  const [input, setInput] = React.useState(""); // Stores @[agentId:agentName] format
-  const [inputDisplay, setInputDisplay] = React.useState(""); // Stores @agentName for display
+  const [input, setInput] = React.useState(initialInput); // Stores @[agentId:agentName] format
+  const [inputDisplay, setInputDisplay] = React.useState(initialInput); // Stores @agentName for display
   const [selectedProjectId, setSelectedProjectId] = React.useState<
     string | null
   >(null);
