@@ -10649,6 +10649,214 @@
         "title": "OAuthAuthorizeResponse",
         "type": "object"
       },
+      "OAuthInstallation": {
+        "properties": {
+          "account": {
+            "title": "Account",
+            "type": "string"
+          },
+          "account_type": {
+            "description": "Organization or User",
+            "title": "Account Type",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "repository_selection": {
+            "description": "all or selected: what the installation itself reaches",
+            "title": "Repository Selection",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "account",
+          "account_type",
+          "repository_selection"
+        ],
+        "title": "OAuthInstallation",
+        "type": "object"
+      },
+      "OAuthInstallationsResponse": {
+        "properties": {
+          "installations": {
+            "items": {
+              "$ref": "#/components/schemas/OAuthInstallation"
+            },
+            "title": "Installations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "installations"
+        ],
+        "title": "OAuthInstallationsResponse",
+        "type": "object"
+      },
+      "OAuthInstallationRepository": {
+        "properties": {
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "private": {
+            "title": "Private",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "full_name",
+          "private"
+        ],
+        "title": "OAuthInstallationRepository",
+        "type": "object"
+      },
+      "OAuthInstallationRepositoriesResponse": {
+        "properties": {
+          "repositories": {
+            "items": {
+              "$ref": "#/components/schemas/OAuthInstallationRepository"
+            },
+            "title": "Repositories",
+            "type": "array"
+          }
+        },
+        "required": [
+          "repositories"
+        ],
+        "title": "OAuthInstallationRepositoriesResponse",
+        "type": "object"
+      },
+      "OAuthInstallationBinding": {
+        "description": "The installation a connection's calls are limited to.",
+        "properties": {
+          "account": {
+            "description": "Login of the account (organization or user) the installation belongs to",
+            "title": "Account",
+            "type": "string"
+          },
+          "installation_id": {
+            "title": "Installation Id",
+            "type": "integer"
+          },
+          "repositories": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repositories",
+            "description": "Names of the repositories the token is limited to; null for every repository of the installation"
+          }
+        },
+        "required": [
+          "installation_id",
+          "account",
+          "repositories"
+        ],
+        "title": "OAuthInstallationBinding",
+        "type": "object"
+      },
+      "OAuthInstallationBindingRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "installation_id": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Installation Id",
+            "description": "Installation to bind to; null returns the connection to the user's token"
+          },
+          "instance_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instance Id",
+            "description": "MCP instance to bind"
+          },
+          "openapi_connection_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openapi Connection Id",
+            "description": "API connection to bind"
+          },
+          "repositories": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 100,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repositories",
+            "description": "Repository names to limit the token to; null or empty for every repository of the installation"
+          }
+        },
+        "required": [
+          "installation_id"
+        ],
+        "title": "OAuthInstallationBindingRequest",
+        "type": "object"
+      },
+      "OAuthInstallationBindingResponse": {
+        "properties": {
+          "installation_binding": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OAuthInstallationBinding"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Installation Binding"
+          }
+        },
+        "required": [
+          "installation_binding"
+        ],
+        "title": "OAuthInstallationBindingResponse",
+        "type": "object"
+      },
       "OAuthFinishRequest": {
         "additionalProperties": false,
         "properties": {
@@ -10858,6 +11066,24 @@
             ],
             "description": "Install page of the platform OAuth app the connection's credential was minted through, where the user picks what the app may reach (a GitHub App's repositories). Null for any other credential.",
             "title": "Install Url"
+          },
+          "installation_binding": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OAuthInstallationBinding"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Installation Binding",
+            "description": "The GitHub App installation the connection's calls are limited to; null when it uses the user's token."
+          },
+          "installation_binding_available": {
+            "default": false,
+            "description": "The connection signed in through a platform GitHub App with installation tokens, so it can be bound to one of its installations.",
+            "title": "Installation Binding Available",
+            "type": "boolean"
           },
           "issuer": {
             "anyOf": [
@@ -34102,6 +34328,264 @@
           }
         ],
         "summary": "Oauth Preflight",
+        "tags": [
+          "v1",
+          "protected",
+          "oauth-connect"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/oauth/installations": {
+      "get": {
+        "description": "List the installations of the GitHub App a connection signed in through that the connection's GitHub user can access.\n\nOnly for a connection whose credential was minted through a platform OAuth app with installation tokens (preflight's ``installation_binding_available``); 409 otherwise.",
+        "operationId": "oauth_installations_v1_oauth_installations_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "description": "MCP instance whose sign-in to use",
+            "in": "query",
+            "name": "instance_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "MCP instance whose sign-in to use",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "description": "API connection whose sign-in to use",
+            "in": "query",
+            "name": "openapi_connection_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "API connection whose sign-in to use",
+              "title": "Openapi Connection Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthInstallationsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Oauth Installations",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "v1",
+          "protected",
+          "oauth-connect"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/oauth/installations/{installation_id}/repositories": {
+      "get": {
+        "description": "List the repositories of one of those installations the connection's GitHub user can access.",
+        "operationId": "oauth_installation_repositories_v1_oauth_installations__installation_id__repositories_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "installation_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Installation Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "MCP instance whose sign-in to use",
+            "in": "query",
+            "name": "instance_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "MCP instance whose sign-in to use",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "description": "API connection whose sign-in to use",
+            "in": "query",
+            "name": "openapi_connection_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "API connection whose sign-in to use",
+              "title": "Openapi Connection Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthInstallationRepositoriesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Oauth Installation Repositories",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "v1",
+          "protected",
+          "oauth-connect"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/oauth/installation": {
+      "put": {
+        "description": "Bind a connection to one installation of its GitHub App, and optionally to some of its repositories: its calls then carry an installation access token limited to them instead of the user's token. A null ``installation_id`` returns it to the user's token.\n\nOnly an installation, and repositories of it, that the connection's GitHub user can access are accepted. Whoever may sign the connection in again may bind it.",
+        "operationId": "oauth_bind_installation_v1_oauth_installation_put",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthInstallationBindingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthInstallationBindingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Oauth Bind Installation",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "tags": [
           "v1",
           "protected",

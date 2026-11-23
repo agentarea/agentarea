@@ -190,6 +190,19 @@ func TestOAuthConnectValidation(t *testing.T) {
 		{"POST", "/oauth/authorize", `{"instance_id":"` + id + `","credential_mode":"custom","client_id":"x"}`, 422, "Custom OAuth client secret must be entered"},
 		{"POST", "/oauth/authorize", `{"instance_id":"` + id + `","credential_mode":"custom","client_secret":"x"}`, 422, "Custom OAuth client ID must be entered"},
 		{"POST", "/oauth/authorize", `{"instance_id":"` + id + `"}`, 503, "MCP server specs are not available"},
+		{"GET", "/oauth/installations", "", 422, "Pass exactly one of instance_id or openapi_connection_id."},
+		{"GET", "/oauth/installations?instance_id=nope", "", 422, `"loc":["query","instance_id"]`},
+		{"GET", "/oauth/installations?instance_id=" + id, "", 503, "MCP server specs are not available"},
+		{"GET", "/oauth/installations/0/repositories?instance_id=" + id, "", 422, `"loc":["path","installation_id"]`},
+		{"GET", "/oauth/installations/7/repositories?openapi_connection_id=" + id, "", 404, "Connection not found"},
+		{"PUT", "/oauth/installation", `{"instance_id":"` + id + `"}`, 422, `"type":"missing"`},
+		{"PUT", "/oauth/installation", `{"instance_id":"` + id + `","installation_id":1.5}`, 422, `"type":"int_from_float"`},
+		{"PUT", "/oauth/installation", `{"instance_id":"` + id + `","installation_id":"7"}`, 422, `"type":"int_type"`},
+		{"PUT", "/oauth/installation", `{"instance_id":"` + id + `","installation_id":7,"repositories":[""]}`, 422, "A repository is named by its name"},
+		{"PUT", "/oauth/installation", `{"instance_id":"` + id + `","installation_id":null,"repositories":["a"]}`, 422, "Repositories need an installation_id."},
+		{"PUT", "/oauth/installation", `{"installation_id":7,"x":1}`, 422, `"type":"extra_forbidden"`},
+		{"PUT", "/oauth/installation", `{"installation_id":7}`, 422, "Pass exactly one of instance_id or openapi_connection_id."},
+		{"PUT", "/oauth/installation", `{"instance_id":"` + id + `","installation_id":null}`, 503, "MCP server specs are not available"},
 	}
 	for _, c := range cases {
 		status, body := call(t, s, c.method, c.path, c.body)

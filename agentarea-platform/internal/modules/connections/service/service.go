@@ -84,6 +84,8 @@ type Service struct {
 	d         Deps
 	perms     authz.Permissions
 	discovery hydraDiscoveryCache
+	// installTokens caches the installation tokens of bound connections.
+	installTokens *installationTokens
 }
 
 // New builds the service.
@@ -100,7 +102,7 @@ func New(d Deps) *Service {
 	if d.NewID == nil {
 		d.NewID = uuid.New
 	}
-	s := &Service{d: d}
+	s := &Service{d: d, installTokens: &installationTokens{}}
 	if d.Graph != nil {
 		s.perms = authz.NewPermissions(d.Graph, d.Log)
 	}
