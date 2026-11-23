@@ -432,7 +432,7 @@ A token carries what the user granted on the consent screen, and the API enforce
 | `mcp` | Any client registered through `/oauth2/register` or Hydra's admin API | MCP only (`/mcp`, `/mcp/w/{workspace}`, `/mcp/clients/{id}`), in the workspaces the user ticked on the consent screen |
 | `api` | The first-party clients `agentarea-cli` and `agentarea-desktop` | The REST API and MCP, in every workspace the user reaches, including creating API keys and workspaces |
 
-The grant depends on which client asks, not on the scopes it requests: a third-party client that requests `api` is granted `mcp`. The protocol scopes it requested (`openid`, `offline_access`, `offline`) are granted alongside. The ticked workspaces go into the access token as the `workspace_ids` claim; at least one is required. To change them, the user connects the client again.
+The grant depends on which client asks, not on the scopes it requests: a third-party client that requests `api` is granted `mcp`. The protocol scopes it requested (`openid`, `offline_access`, `offline`, `email`, `profile`) are granted alongside. Under `email` and `profile` the ID token and userinfo carry the user's standard claims, read from their Kratos identity: `email` and `email_verified`; `name`, `given_name`, `family_name`, `preferred_username` and `picture`. The ticked workspaces go into the access token as the `workspace_ids` claim; at least one is required. To change them, the user connects the client again.
 
 - An `mcp` token on the REST API gets `403` with `WWW-Authenticate: Bearer ..., error="insufficient_scope", scope="api"`.
 - An `mcp` token on a workspace it was not granted gets `403`.

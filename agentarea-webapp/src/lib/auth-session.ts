@@ -77,14 +77,6 @@ export function loginRedirectPath(pathname: string, search: string): string {
 interface WhoamiResult {
   tokenized: boolean;
   identityId: string | null;
-  identity?: SessionIdentity;
-}
-
-/** The Kratos identity of a live session: its id, traits and verified addresses. */
-export interface SessionIdentity {
-  id: string;
-  traits: Record<string, unknown>;
-  verifiedEmails: string[];
 }
 
 /**
@@ -127,23 +119,9 @@ async function fetchWhoami(
 
     const data = await response.json();
     const identityId = data?.identity?.id;
-    const id = typeof identityId === "string" && identityId ? identityId : null;
-    const addresses: { via?: unknown; verified?: unknown; value?: unknown }[] =
-      Array.isArray(data?.identity?.verifiable_addresses)
-        ? data.identity.verifiable_addresses
-        : [];
     return {
       tokenized: Boolean(data?.tokenized),
-      identityId: id,
-      identity: id
-        ? {
-            id,
-            traits: data?.identity?.traits ?? {},
-            verifiedEmails: addresses
-              .filter((a) => a?.via === "email" && a?.verified === true && typeof a?.value === "string")
-              .map((a) => String(a.value).toLowerCase()),
-          }
-        : undefined,
+      identityId: typeof identityId === "string" && identityId ? identityId : null,
     };
   } catch (error) {
     console.error(
@@ -165,13 +143,4 @@ export async function getLiveSessionIdentityId(
 ): Promise<string | null> {
   const { tokenized, identityId } = await fetchWhoami(cookieHeader, opts);
   return tokenized ? identityId : null;
-}
-
-/** As getLiveSessionIdentityId, with the identity's traits for OIDC claims. */
-export async function getLiveSessionIdentity(
-  cookieHeader: string | null,
-  opts: { orySdkUrl: string; fetchImpl?: typeof fetch }
-): Promise<SessionIdentity | null> {
-  const { tokenized, identity } = await fetchWhoami(cookieHeader, opts);
-  return tokenized ? (identity ?? null) : null;
 }

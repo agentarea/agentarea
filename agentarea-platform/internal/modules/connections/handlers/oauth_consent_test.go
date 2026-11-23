@@ -70,7 +70,7 @@ func consentHarness(t *testing.T) (*httptest.Server, scope.Workspace, *map[strin
 			})
 		},
 	}
-	svc := service.New(service.Deps{
+	svc := service.New(service.Deps{Stamps: service.NewStamps(), Verdicts: service.NewVerdicts(),
 		DB: memDB{}, Auth: w, Links: worldLinks{w}, Connections: worldConns{w}, Instances: worldInstances{w: w},
 		Secrets: worldSecrets{w}, Catalog: func(scope.Workspace, ksecrets.Actor) ksecrets.Catalog { return worldCatalog{} },
 		Graph: worldGraph{w}, Out: oauthOut{}, KV: oauthKV{}, OAuthStore: oauthStore{},

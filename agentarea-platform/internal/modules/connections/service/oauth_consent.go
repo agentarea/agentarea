@@ -37,8 +37,11 @@ func isFirstParty(clientID string) bool {
 }
 
 // protocolScopes grant nothing on their own; a consent passes on those the
-// client asked for.
-func protocolScopes() []string { return []string{"openid", "offline_access", "offline"} }
+// client asked for. email and profile add the user's OIDC claims to the ID
+// token and userinfo.
+func protocolScopes() []string {
+	return []string{"openid", "offline_access", "offline", "email", "profile"}
+}
 
 // ConsentGrant is what a consent gives client: api to a first-party client,
 // mcp to any other, plus the protocol scopes it requested. What a client
@@ -134,11 +137,24 @@ func (s *Service) AcceptConsent(ctx context.Context, userID, challenge string, w
 		"grant_access_token_audience": grantedAudience(req.RequestedAudience, req.Client.Audience),
 		"remember":                    false,
 	}
+	session := map[string]any{}
 	if access == authn.OAuthScopeMCP {
 		if len(workspaceIDs) == 0 {
 			return "", ErrConsentNeedsWorkspace
 		}
-		body["session"] = map[string]any{"access_token": map[string]any{"workspace_ids": workspaceIDs}}
+		session["access_token"] = map[string]any{"workspace_ids": workspaceIDs}
+	}
+	if slices.Contains(scopes, "email") || slices.Contains(scopes, "profile") {
+		claims, err := s.identityClaims(ctx, userID, scopes)
+		if err != nil {
+			return "", err
+		}
+		if len(claims) > 0 {
+			session["id_token"] = claims
+		}
+	}
+	if len(session) > 0 {
+		body["session"] = session
 	}
 	if err := s.allowClientScopes(ctx, req.Client, scopes); err != nil {
 		return "", err
@@ -306,4 +322,68 @@ func hydraClientWrite(ctx context.Context, hc *http.Client, method, target strin
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxOAuthBody))
 	_ = resp.Body.Close()
 	return resp.StatusCode, nil
+}
+
+// identityClaims are the OIDC standard claims the granted scopes give, read
+// from the user's Kratos identity: email and email_verified under email;
+// name, given_name, family_name, preferred_username and picture under
+// profile. Empty traits are left out.
+func (s *Service) identityClaims(ctx context.Context, userID string, scopes []string) (map[string]any, error) {
+	target := strings.TrimRight(s.d.Config.KratosAdminURL, "/") + "/admin/identities/" + url.PathEscape(userID)
+	status, raw, err := s.hydraAdmin(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return nil, fmt.Errorf("kratos identity: %w", err)
+	}
+	if status != http.StatusOK {
+		return nil, fmt.Errorf("kratos identity: status %d", status)
+	}
+	var identity struct {
+		Traits struct {
+			Email    any `json:"email"`
+			Username any `json:"username"`
+			Picture  any `json:"picture"`
+			Name     struct {
+				First any `json:"first"`
+				Last  any `json:"last"`
+			} `json:"name"`
+		} `json:"traits"`
+		Addresses []kratosAddress `json:"verifiable_addresses"`
+	}
+	if err := json.Unmarshal(raw, &identity); err != nil {
+		return nil, fmt.Errorf("kratos identity: %w", err)
+	}
+	text := func(v any) string {
+		str, _ := v.(string)
+		return strings.TrimSpace(str)
+	}
+	claims := map[string]any{}
+	if slices.Contains(scopes, "email") {
+		if email := text(identity.Traits.Email); email != "" {
+			claims["email"] = email
+			claims["email_verified"] = slices.ContainsFunc(identity.Addresses, func(a kratosAddress) bool {
+				return a.Via == "email" && a.Verified && strings.EqualFold(a.Value, email)
+			})
+		}
+	}
+	if slices.Contains(scopes, "profile") {
+		given, family := text(identity.Traits.Name.First), text(identity.Traits.Name.Last)
+		if full := strings.TrimSpace(given + " " + family); full != "" {
+			claims["name"] = full
+		}
+		for key, v := range map[string]string{
+			"given_name": given, "family_name": family,
+			"preferred_username": text(identity.Traits.Username), "picture": text(identity.Traits.Picture),
+		} {
+			if v != "" {
+				claims[key] = v
+			}
+		}
+	}
+	return claims, nil
+}
+
+type kratosAddress struct {
+	Value    string `json:"value"`
+	Via      string `json:"via"`
+	Verified bool   `json:"verified"`
 }

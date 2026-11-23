@@ -214,7 +214,7 @@ func TestEnsureFirstPartyClientsCreatesThenRewrites(t *testing.T) {
 		t.Fatalf("calls %v", calls)
 	}
 	cli := stored["agentarea-cli"]
-	if cli["scope"] != "api openid offline_access offline" || cli["token_endpoint_auth_method"] != "none" ||
+	if cli["scope"] != "api openid offline_access offline email profile" || cli["token_endpoint_auth_method"] != "none" ||
 		!reflect.DeepEqual(cli["audience"], []any{"https://api.example"}) || cli["skip_consent"] != false ||
 		!reflect.DeepEqual(cli["redirect_uris"], []any{"http://127.0.0.1/callback"}) {
 		t.Fatalf("cli client %v", cli)
