@@ -11,6 +11,7 @@ import {
   Plug,
   Server,
   Wallet,
+  X,
 } from "lucide-react";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import SearchInput from "@/components/SearchInput";
@@ -159,6 +160,21 @@ export function ExploreConnectionFilters({
 
   return (
     <>
+      {/* Reset leads the filters, as on the audit log. */}
+      {anyFilter && (
+        <ToolbarButton
+          aria-label={t("clear")}
+          className="text-muted-foreground"
+          onClick={() => {
+            void setProtocol(null);
+            void setHosting(null);
+            void setPricing(null);
+          }}
+        >
+          <X className={GLYPH} />
+          <span className="max-sm:sr-only">{t("clear")}</span>
+        </ToolbarButton>
+      )}
       {select(
         "protocol",
         t("protocol"),
@@ -200,17 +216,6 @@ export function ExploreConnectionFilters({
           ) : (
             <Gift className={GLYPH} />
           )
-      )}
-      {anyFilter && (
-        <ToolbarButton
-          onClick={() => {
-            void setProtocol(null);
-            void setHosting(null);
-            void setPricing(null);
-          }}
-        >
-          {t("clear")}
-        </ToolbarButton>
       )}
     </>
   );

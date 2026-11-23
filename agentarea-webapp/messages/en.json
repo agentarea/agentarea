@@ -4206,7 +4206,6 @@
       "skills": "All skills",
       "connections": "All connections"
     },
-    "inCatalog": "{count} in the catalog.",
     "display": {
       "ordering": "Ordering",
       "recommended": "Recommended",
@@ -4288,7 +4287,7 @@
       "all": "All",
       "protocol": "Protocol",
       "hosting": "Runs",
-      "clear": "Clear",
+      "clear": "Reset",
       "hostings": {
         "vendor": "Hosted by vendor",
         "agentarea": "Runs on AgentArea"

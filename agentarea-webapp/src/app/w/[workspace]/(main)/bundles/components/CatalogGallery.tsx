@@ -29,6 +29,7 @@ import {
   Sparkles,
   Star,
   Telescope,
+  TrendingUp,
 } from "lucide-react";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { Streamdown } from "streamdown";
@@ -50,6 +51,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+import { GroupHeader } from "@/components/ui/group-header";
 import { HoverLink } from "@/components/ui/hover-link";
 import { MenuRow, MenuSectionLabel } from "@/components/ui/menu-row";
 import ModelBadge from "@/components/ui/model-badge";
@@ -127,7 +129,7 @@ import {
   formatVcpu,
   monthlyFromHourly,
 } from "./catalog-pricing";
-import type { CatalogSection } from "./catalog-sections";
+import type { CatalogSection, CatalogSectionKey } from "./catalog-sections";
 import { PriceChip, PricingBadge, usePriceLabel } from "./PricingBadge";
 
 // ── Registry types ──────────────────────────────────────────────────────────
@@ -918,6 +920,7 @@ export default function CatalogGallery({
               initialSections.map((sec) => (
                 <section key={sec.key} className="space-y-2">
                   <CatalogShelfHeading
+                    icon={SHELF_ICONS[sec.key]}
                     title={sec.title}
                     description={sec.description}
                   />
@@ -946,10 +949,9 @@ export default function CatalogGallery({
               initialSections.length > 0 &&
               paging.entries.length > 0 && (
                 <CatalogShelfHeading
+                  icon={LayoutGrid}
                   title={tCatalog(`allOfType.${type}`)}
-                  description={tCatalog("inCatalog", {
-                    count: paging.total.toLocaleString(),
-                  })}
+                  count={paging.total}
                 />
               )}
 
@@ -1012,18 +1014,45 @@ export default function CatalogGallery({
   );
 }
 
+const SHELF_ICONS: Record<CatalogSectionKey, LucideIcon> = {
+  recommended: Sparkles,
+  popular: TrendingUp,
+};
+
+/**
+ * A shelf's heading, in the same plain GroupHeader the grouped lists use
+ * (Automation, Connections): icon, name, count. A shelf's note follows,
+ * muted, on screens wide enough to hold it.
+ */
 function CatalogShelfHeading({
+  icon,
   title,
   description,
+  count,
 }: {
+  icon: LucideIcon;
   title: string;
-  description: string;
+  description?: string;
+  /** The whole list's size; a shelf is a short pick, so it has none. */
+  count?: number;
 }) {
   return (
-    <div className="flex items-baseline gap-2 pt-2">
-      <h2 className="text-sm font-semibold">{title}</h2>
-      <p className="truncate text-xs text-muted-foreground">{description}</p>
-    </div>
+    <GroupHeader
+      variant="plain"
+      className="h-6"
+      icon={React.createElement(icon)}
+      label={
+        <span className="flex min-w-0 items-baseline gap-2">
+          {title}
+          {description && (
+            <span className="truncate font-normal text-muted-foreground max-sm:hidden">
+              {description}
+            </span>
+          )}
+        </span>
+      }
+      count={count}
+    />
   );
 }
 
