@@ -325,12 +325,7 @@ export function OAuthConnectPanel({
         {scopePicker}
         {bare && button}
         {state.installUrl && (
-          <AppInstallAction
-            url={state.installUrl}
-            prominent={installNext}
-            size={buttonSize}
-            className={bare ? "w-full" : undefined}
-          />
+          <AppInstallAction url={state.installUrl} prominent={installNext} />
         )}
         {canUseOwnApp(preflight) && (
           <Button

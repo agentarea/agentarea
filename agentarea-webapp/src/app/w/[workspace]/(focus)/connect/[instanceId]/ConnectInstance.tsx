@@ -88,14 +88,7 @@ export default function ConnectInstance({
   );
   const installUrl = preflight?.install_url;
   const install = (prominent: boolean) =>
-    installUrl && (
-      <AppInstallAction
-        url={installUrl}
-        prominent={prominent}
-        size="lg"
-        className="w-full"
-      />
-    );
+    installUrl && <AppInstallAction url={installUrl} prominent={prominent} />;
 
   const finish = useCallback(
     (save?: () => Promise<string | null>) => {
