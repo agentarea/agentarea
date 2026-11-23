@@ -517,6 +517,25 @@ func (s *Service) DiscoverInstanceTools(ctx context.Context, ws scope.Workspace,
 	return tools, v, nil
 }
 
+// RediscoverInBackground verifies the instance again, detached from the
+// request, and stores the tools it serves now; a process that dies leaves a
+// stale in_progress for the monitor.
+func (s *Service) RediscoverInBackground(ctx context.Context, ws scope.Workspace, id uuid.UUID) error {
+	inst, err := s.instanceIn(ctx, ws, id)
+	if err != nil {
+		return err
+	}
+	if inst.PlatformManaged() {
+		return &domain.Forbidden{Msg: inst.Name + " is managed by the platform"}
+	}
+	go func() {
+		if _, err := s.verifyInstance(context.Background(), ws, inst, true); err != nil {
+			s.d.Log.Error("background re-discovery failed", "instance_id", id, "error", err)
+		}
+	}()
+	return nil
+}
+
 // VerifyInBackground starts a verification detached from the request (the
 // create of a container instance); a process that dies leaves never_attempted
 // or a stale in_progress for the monitor.
