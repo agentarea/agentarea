@@ -13,6 +13,10 @@ import type {
   ModelKind,
   ModelSpecCreate,
   OAuthAuthorizeRequest,
+  OAuthInstallation,
+  OAuthInstallationBinding,
+  OAuthInstallationBindingRequest,
+  OAuthInstallationRepository,
   OAuthPreflightResponse,
   OpenApiConnectionResponse,
   PaginatedResponseSkillResponse,
@@ -33,6 +37,9 @@ import {
   zModelSpecCreate,
   zOAuthAuthorizeResponse,
   zOAuthFinishResponse,
+  zOAuthInstallationBindingResponse,
+  zOAuthInstallationRepositoriesResponse,
+  zOAuthInstallationsResponse,
   zOAuthPreflightResponse,
   zProjectCreate,
   zProjectUpdate,
@@ -764,6 +771,97 @@ export async function oauthAuthorizeAction(body: OAuthAuthorizeRequest) {
     };
   }
   return { data: parsed.data, error: null, code: null };
+}
+
+type InstallationTarget =
+  | { instance_id: string }
+  | { openapi_connection_id: string };
+
+function installationURL(path: string, target: InstallationTarget): string {
+  const [key, id] = Object.entries(target)[0] as [string, string];
+  const base = new URL(env.AGENTAREA_API_URL);
+  base.pathname = `/v1/workspaces/{workspace}/oauth/${path}`;
+  base.search = new URLSearchParams({ [key]: id }).toString();
+  return base.href;
+}
+
+/**
+ * The installations of the GitHub App a connection signed in through that
+ * its GitHub user can access.
+ */
+export async function listOAuthInstallationsAction(
+  target: InstallationTarget
+): Promise<{ data: OAuthInstallation[] | null; error: string | null }> {
+  // Validate UUID to prevent SSRF/path injection in downstream fetch URL
+  if (!isUUID(Object.values(target)[0])) {
+    return { data: null, error: "Invalid ID" };
+  }
+  const res = await workspaceFetch(installationURL("installations", target), {
+    method: "GET",
+  });
+  if (!res.ok) return { data: null, error: await readApiError(res) };
+  const parsed = zOAuthInstallationsResponse.safeParse(await res.json());
+  if (!parsed.success) {
+    return { data: null, error: "Unexpected installations response" };
+  }
+  return { data: parsed.data.installations, error: null };
+}
+
+/** The repositories of one of those installations the user can access. */
+export async function listOAuthInstallationRepositoriesAction(
+  target: InstallationTarget,
+  installationId: number
+): Promise<{
+  data: OAuthInstallationRepository[] | null;
+  error: string | null;
+}> {
+  if (
+    !isUUID(Object.values(target)[0]) ||
+    !Number.isSafeInteger(installationId) ||
+    installationId < 1
+  ) {
+    return { data: null, error: "Invalid ID" };
+  }
+  const url = installationURL(
+    `installations/${installationId}/repositories`,
+    target
+  );
+  const res = await workspaceFetch(url, { method: "GET" });
+  if (!res.ok) return { data: null, error: await readApiError(res) };
+  const parsed = zOAuthInstallationRepositoriesResponse.safeParse(
+    await res.json()
+  );
+  if (!parsed.success) {
+    return { data: null, error: "Unexpected repositories response" };
+  }
+  return { data: parsed.data.repositories, error: null };
+}
+
+/**
+ * Bind a connection to one installation (and some of its repositories), or
+ * back to the user's token with a null installation.
+ */
+export async function bindOAuthInstallationAction(
+  body: OAuthInstallationBindingRequest
+): Promise<
+  | { data: OAuthInstallationBinding | null; error: null }
+  | { data: null; error: string }
+> {
+  const id = body.instance_id ?? body.openapi_connection_id;
+  if (!id || !isUUID(id)) return { data: null, error: "Invalid ID" };
+  const base = new URL(env.AGENTAREA_API_URL);
+  base.pathname = "/v1/workspaces/{workspace}/oauth/installation";
+  const res = await workspaceFetch(base.href, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) return { data: null, error: await readApiError(res) };
+  const parsed = zOAuthInstallationBindingResponse.safeParse(await res.json());
+  if (!parsed.success) {
+    return { data: null, error: "Unexpected installation binding response" };
+  }
+  return { data: parsed.data.installation_binding, error: null };
 }
 
 /**

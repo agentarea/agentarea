@@ -5854,6 +5854,127 @@ export type OAuthAuthorizeResponse = {
     connection_id: string;
 };
 /**
+ * OAuthInstallation
+ */
+export type OAuthInstallation = {
+    /**
+     * Account
+     */
+    account: string;
+    /**
+     * Account Type
+     *
+     * Organization or User
+     */
+    account_type: string;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Repository Selection
+     *
+     * all or selected: what the installation itself reaches
+     */
+    repository_selection: string;
+};
+/**
+ * OAuthInstallationsResponse
+ */
+export type OAuthInstallationsResponse = {
+    /**
+     * Installations
+     */
+    installations: Array<OAuthInstallation>;
+};
+/**
+ * OAuthInstallationRepository
+ */
+export type OAuthInstallationRepository = {
+    /**
+     * Full Name
+     */
+    full_name: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Private
+     */
+    private: boolean;
+};
+/**
+ * OAuthInstallationRepositoriesResponse
+ */
+export type OAuthInstallationRepositoriesResponse = {
+    /**
+     * Repositories
+     */
+    repositories: Array<OAuthInstallationRepository>;
+};
+/**
+ * OAuthInstallationBinding
+ *
+ * The installation a connection's calls are limited to.
+ */
+export type OAuthInstallationBinding = {
+    /**
+     * Account
+     *
+     * Login of the account (organization or user) the installation belongs to
+     */
+    account: string;
+    /**
+     * Installation Id
+     */
+    installation_id: number;
+    /**
+     * Repositories
+     *
+     * Names of the repositories the token is limited to; null for every repository of the installation
+     */
+    repositories: Array<string> | null;
+};
+/**
+ * OAuthInstallationBindingRequest
+ */
+export type OAuthInstallationBindingRequest = {
+    /**
+     * Installation Id
+     *
+     * Installation to bind to; null returns the connection to the user's token
+     */
+    installation_id: number | null;
+    /**
+     * Instance Id
+     *
+     * MCP instance to bind
+     */
+    instance_id?: string | null;
+    /**
+     * Openapi Connection Id
+     *
+     * API connection to bind
+     */
+    openapi_connection_id?: string | null;
+    /**
+     * Repositories
+     *
+     * Repository names to limit the token to; null or empty for every repository of the installation
+     */
+    repositories?: Array<string> | null;
+};
+/**
+ * OAuthInstallationBindingResponse
+ */
+export type OAuthInstallationBindingResponse = {
+    /**
+     * Installation Binding
+     */
+    installation_binding: OAuthInstallationBinding | null;
+};
+/**
  * OAuthFinishRequest
  */
 export type OAuthFinishRequest = {
@@ -5983,6 +6104,18 @@ export type OAuthPreflightResponse = {
      * Install page of the platform OAuth app the connection's credential was minted through, where the user picks what the app may reach (a GitHub App's repositories). Null for any other credential.
      */
     install_url?: string | null;
+    /**
+     * Installation Binding
+     *
+     * The GitHub App installation the connection's calls are limited to; null when it uses the user's token.
+     */
+    installation_binding?: OAuthInstallationBinding | null;
+    /**
+     * Installation Binding Available
+     *
+     * The connection signed in through a platform GitHub App with installation tokens, so it can be bound to one of its installations.
+     */
+    installation_binding_available?: boolean;
     /**
      * Issuer
      */
@@ -16664,6 +16797,97 @@ export type OauthPreflightV1OauthPreflightGetResponses = {
     200: OAuthPreflightResponse;
 };
 export type OauthPreflightV1OauthPreflightGetResponse = OauthPreflightV1OauthPreflightGetResponses[keyof OauthPreflightV1OauthPreflightGetResponses];
+export type OauthInstallationsV1OauthInstallationsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Instance Id
+         *
+         * MCP instance whose sign-in to use
+         */
+        instance_id?: string | null;
+        /**
+         * Openapi Connection Id
+         *
+         * API connection whose sign-in to use
+         */
+        openapi_connection_id?: string | null;
+    };
+    url: '/v1/workspaces/{workspace}/oauth/installations';
+};
+export type OauthInstallationsV1OauthInstallationsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type OauthInstallationsV1OauthInstallationsGetError = OauthInstallationsV1OauthInstallationsGetErrors[keyof OauthInstallationsV1OauthInstallationsGetErrors];
+export type OauthInstallationsV1OauthInstallationsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthInstallationsResponse;
+};
+export type OauthInstallationsV1OauthInstallationsGetResponse = OauthInstallationsV1OauthInstallationsGetResponses[keyof OauthInstallationsV1OauthInstallationsGetResponses];
+export type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetData = {
+    body?: never;
+    path: {
+        /**
+         * Installation Id
+         */
+        installation_id: number;
+    };
+    query?: {
+        /**
+         * Instance Id
+         *
+         * MCP instance whose sign-in to use
+         */
+        instance_id?: string | null;
+        /**
+         * Openapi Connection Id
+         *
+         * API connection whose sign-in to use
+         */
+        openapi_connection_id?: string | null;
+    };
+    url: '/v1/workspaces/{workspace}/oauth/installations/{installation_id}/repositories';
+};
+export type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetError = OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetErrors[keyof OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetErrors];
+export type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthInstallationRepositoriesResponse;
+};
+export type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponse = OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponses[keyof OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponses];
+export type OauthBindInstallationV1OauthInstallationPutData = {
+    body: OAuthInstallationBindingRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/oauth/installation';
+};
+export type OauthBindInstallationV1OauthInstallationPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type OauthBindInstallationV1OauthInstallationPutError = OauthBindInstallationV1OauthInstallationPutErrors[keyof OauthBindInstallationV1OauthInstallationPutErrors];
+export type OauthBindInstallationV1OauthInstallationPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthInstallationBindingResponse;
+};
+export type OauthBindInstallationV1OauthInstallationPutResponse = OauthBindInstallationV1OauthInstallationPutResponses[keyof OauthBindInstallationV1OauthInstallationPutResponses];
 export type ListConnectionsV1OpenapiConnectionsGetData = {
     body?: never;
     path?: never;

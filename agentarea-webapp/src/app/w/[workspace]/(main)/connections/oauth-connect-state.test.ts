@@ -97,6 +97,37 @@ describe("deriveOAuthConnectState", () => {
       })
     ).not.toHaveProperty("installUrl");
   });
+  it("offers an installation binding only for a signed-in connection that can have one", () => {
+    const binding = { installation_id: 7, account: "acme", repositories: null };
+    expect(
+      deriveOAuthConnectState({
+        isUrlType: true,
+        preflight: preflight({
+          connected: true,
+          installation_binding_available: true,
+          installation_binding: binding,
+        }),
+      })
+    ).toMatchObject({ kind: "ready", installation: { binding } });
+    expect(
+      deriveOAuthConnectState({
+        isUrlType: true,
+        preflight: preflight({
+          connected: true,
+          installation_binding_available: true,
+        }),
+      })
+    ).toMatchObject({ installation: { binding: null } });
+    expect(
+      deriveOAuthConnectState({
+        isUrlType: true,
+        preflight: preflight({
+          connected: false,
+          installation_binding_available: true,
+        }),
+      })
+    ).not.toHaveProperty("installation");
+  });
   it("offers nothing until the preflight answer arrives", () => {
     expect(
       deriveOAuthConnectState({ isUrlType: true, preflight: null })

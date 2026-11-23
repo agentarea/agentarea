@@ -9,6 +9,7 @@ import { verifyInstance } from "@/app/w/[workspace]/(main)/connections/[id]/acti
 import { AppInstallAction } from "@/app/w/[workspace]/(main)/connections/components/AppInstallAction";
 import { ConnectKeyForm } from "@/app/w/[workspace]/(main)/connections/components/ConnectKeyForm";
 import { CredentialEncryptionNote } from "@/app/w/[workspace]/(main)/connections/components/CredentialFields";
+import { InstallationAccess } from "@/app/w/[workspace]/(main)/connections/components/InstallationAccess";
 import {
   credentialUpdateSpec,
   type CredentialFieldSpec,
@@ -205,6 +206,13 @@ export default function ConnectInstance({
         detail={t("connectedDetail", { name })}
       >
         {install(installNext)}
+        {preflight?.installation_binding_available && (
+          <InstallationAccess
+            target={{ instance_id: instanceId }}
+            binding={preflight.installation_binding ?? null}
+            onBound={() => router.refresh()}
+          />
+        )}
       </FocusStep>
     );
   } else if (step.kind === "unverified") {

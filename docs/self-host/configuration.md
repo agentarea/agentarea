@@ -210,6 +210,18 @@ An app may also set `install_url` (https), such as a GitHub App's
 reaches only the repositories the app is installed on, so once a user has
 signed in through the app the connection offers a "Choose repositories"
 button that opens this page.
+A GitHub App may also set `app_id`, `private_key` (the app's PEM private key)
+and `api_url` (https, such as `https://api.github.com`), all three or none.
+A user token reaches every installation of the app its user can access, so
+one person's connections in two workspaces reach the same repositories. With
+these fields set, a connection signed in through the app can be bound to one
+installation the signed-in user can access, and optionally to some of its
+repositories. A bound connection sends the MCP server an installation access
+token minted with the app's key (`POST {api_url}/app/installations/{id}/access_tokens`)
+instead of the user's token, so it reaches only that installation. The token
+is cached until shortly before it expires, and each new one is minted only
+after checking that the connection's user still has access to the installation.
+Clearing the binding returns the connection to the user's token.
 The same list serves one-click catalog API connections (Google Search Console,
 Yandex Metrica and the like): a catalog connection uses the app whose
 `authorization_endpoint` and `token_endpoint` equal its own and whose

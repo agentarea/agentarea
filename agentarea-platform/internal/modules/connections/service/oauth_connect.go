@@ -80,6 +80,11 @@ type Preflight struct {
 	// InstallURL is the install page of the platform app the connection's
 	// credential was minted through, where the user picks what it reaches.
 	InstallURL *string
+	// InstallationBindingAvailable says the connection signed in through a
+	// GitHub App whose installations it can be bound to; InstallationBinding
+	// is the one it is bound to, nil when it uses the user's token.
+	InstallationBindingAvailable bool
+	InstallationBinding          *InstallationBinding
 }
 
 // CustomOAuthApp is CustomOAuthAppFields, already validated (one source per credential).
@@ -660,10 +665,12 @@ func (s *Service) OAuthPreflight(ctx context.Context, c authn.Caller, ref OAuthT
 	if err != nil {
 		return Preflight{}, err
 	}
+	available, binding := s.installationBindingView(t.current)
 	p, err := t.profile(ctx)
 	var na *notAuthorizable
 	if errors.As(err, &na) {
-		return Preflight{Status: "unsupported", Connected: t.connected, Detail: na.detail, Scopes: []string{}, DefaultScopes: []string{}}, nil
+		return Preflight{Status: "unsupported", Connected: t.connected, Detail: na.detail, Scopes: []string{}, DefaultScopes: []string{},
+			InstallationBindingAvailable: available, InstallationBinding: binding}, nil
 	}
 	if err != nil {
 		return Preflight{}, err
@@ -690,6 +697,7 @@ func (s *Service) OAuthPreflight(ctx context.Context, c authn.Caller, ref OAuthT
 	def, _ := p.requestedScopes(nil, false)
 	out.DefaultScopes = oaNonNil(def)
 	out.InstallURL = oaOptional(s.installURL(t.current))
+	out.InstallationBindingAvailable, out.InstallationBinding = available, binding
 	return out, nil
 }
 
@@ -785,6 +793,9 @@ func (s *Service) OAuthAuthorize(ctx context.Context, c authn.Caller, req Author
 		}
 		for k, v := range r.config {
 			cfg[k] = v
+		}
+		if cfg["credential_mode"] == domain.CredentialModeManaged {
+			carryInstallationBinding(t.current, oaPyStr(cfg["platform_oauth_issuer"]), cfg)
 		}
 		a, err := s.mintAuthConfig(ctx, c, t.authName(connID), cfg, r.credentials, kind, connID)
 		if err != nil {
