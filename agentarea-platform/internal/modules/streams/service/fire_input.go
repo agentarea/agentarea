@@ -42,7 +42,9 @@ type TriggerEvent struct {
 	Key        *string
 	ReceivedAt *time.Time
 	StreamName *string
-	Data       map[string]any
+	// Conversation: its source keys sessions, so a text it carries is a chat message.
+	Conversation bool
+	Data         map[string]any
 }
 
 // StreamTriggerEvent is TriggerEvent.from_stream_event; body, when not nil, is a body the event
@@ -57,7 +59,8 @@ func StreamTriggerEvent(e domain.Event, streamName string, body any) TriggerEven
 		data["body"] = body
 	}
 	kind, key, at, name := e.Kind, e.EventKey, e.ReceivedAt, streamName
-	return TriggerEvent{Kind: &kind, Key: &key, ReceivedAt: &at, StreamName: &name, Data: data}
+	return TriggerEvent{Kind: &kind, Key: &key, ReceivedAt: &at, StreamName: &name,
+		Conversation: e.SessionKey != nil, Data: data}
 }
 
 // carriedEvent is TriggerEvent.from_trigger_data: the scrubbed events a channel, poller or replay
@@ -197,6 +200,10 @@ func composeTaskInput(t domain.Trigger, triggerData map[string]any, ev *TriggerE
 	if ev == nil {
 		return taskInput{ask: ask, message: ask}, true, nil
 	}
+	if said := eventText(triggerData); ev.Conversation && said != "" {
+		return taskInput{ask: ask, message: renderMessage(ask, said), eventFile: triggerEventFileName,
+			eventData: ev.Data, followUp: said}, true, nil
+	}
 	text, file, err := renderEventBlock(t.Name, t.Type, *ev, EventInlineLimitBytes)
 	if err != nil {
 		return taskInput{}, false, err
@@ -263,6 +270,15 @@ func renderEventBlock(triggerName, triggerType string, ev TriggerEvent, limit in
 		"Event data: %d bytes of JSON, too large to quote here. The complete data is in "+
 			"the task input file `inputs/attachments/%s`; read it from there.", size, triggerEventFileName))
 	return strings.Join(lines, "\n"), triggerEventFileName, nil
+}
+
+// renderMessage is a chat message as its task reads it: the text alone, or after the trigger's own
+// ask under a label. The whole event stays with the task as its input file, unmentioned.
+func renderMessage(ask, said string) string {
+	if ask == said {
+		return said
+	}
+	return ask + "\n\n## Message\n\n" + said
 }
 
 // TaskDelivery is FiringDelivery: what a stream firing stamps on its task beside the trigger's parameters.
