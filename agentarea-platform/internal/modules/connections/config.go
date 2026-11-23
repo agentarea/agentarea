@@ -20,6 +20,7 @@ func LoadConfig(l *config.Loader) Config {
 		HydraURL:        l.StringEnv("AGENTAREA_AUTH_HYDRA_URL", "http://hydra:4444"),
 		HydraAdminURL:   l.StringEnv("AGENTAREA_AUTH_HYDRA_ADMIN_URL", "http://hydra:4445"),
 		HydraBrowserURL: l.StringEnv("AGENTAREA_AUTH_HYDRA_BROWSER_URL", "http://localhost:4444"),
+		KratosAdminURL:  l.StringEnv("AGENTAREA_AUTH_KRATOS_ADMIN_URL", "http://kratos:4434"),
 		OAuthScopes:     strings.Fields(l.StringEnv("AGENTAREA_MCP_OAUTH_SCOPES", "openid offline_access offline email profile")),
 	}
 	c.GatewaySecret, _ = l.OptionalEnv("AGENTAREA_MCP_GATEWAY_SECRET")

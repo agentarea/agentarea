@@ -165,7 +165,20 @@ func (g *Gate) Authenticate(ctx context.Context, r *http.Request) (port.Principa
 	if !ok {
 		return port.Principal{}, g.unauthorized(port.DetailMissingCredentials)
 	}
-	return g.Verify(ctx, token)
+	p, err := g.Verify(ctx, token)
+	if err != nil {
+		return port.Principal{}, err
+	}
+	if p.Credential != nil && !p.Credential.Reaches(port.SurfaceAPI) {
+		return port.Principal{}, g.insufficientScope(port.OAuthScopeAPI)
+	}
+	return p, nil
+}
+
+// insufficientScope is RFC 6750's 403 for a valid token that lacks scope.
+func (g *Gate) insufficientScope(scope string) *port.Error {
+	challenge := g.challenge + `, error="insufficient_scope", scope="` + scope + `"`
+	return &port.Error{Status: http.StatusForbidden, Detail: port.DetailInsufficientScope, WWWAuthenticate: challenge}
 }
 
 // Verify is _verify_token.
@@ -432,11 +445,15 @@ func (g *Gate) resolveAccess(ctx context.Context, p *port.Principal, slug, id st
 			accessible = append(accessible, w.ID)
 		}
 	}
+	bound := p.GrantedWorkspaceIDs
 	if p.BoundWorkspaceID != "" {
+		bound = []string{p.BoundWorkspaceID}
+	}
+	if bound != nil {
 		keep := func(ids []string) []string {
 			out := []string{}
 			for _, w := range ids {
-				if w == p.BoundWorkspaceID {
+				if slices.Contains(bound, w) {
 					out = append(out, w)
 				}
 			}
@@ -562,7 +579,7 @@ func (g *Gate) Caller(ctx context.Context, p port.Principal, route port.Route) (
 
 // Optional is resolve_principal_from_token: refusals read as nobody; only
 // internal failures are errors.
-func (g *Gate) Optional(ctx context.Context, token string, admitTurn bool) (*port.Principal, error) {
+func (g *Gate) Optional(ctx context.Context, token string, on port.Surface, admitTurn bool) (*port.Principal, error) {
 	if token == "" {
 		return nil, nil
 	}
@@ -574,6 +591,10 @@ func (g *Gate) Optional(ctx context.Context, token string, admitTurn bool) (*por
 			return nil, nil
 		}
 		return nil, err
+	}
+	if p.Credential != nil && !p.Credential.Reaches(on) {
+		g.log.Info("Refused an OAuth token not granted this surface", "surface", on, "granted", p.Credential.Granted)
+		return nil, nil
 	}
 	if p.BoundClientID != "" {
 		g.log.Info("Refused a runner's key here", "client_id", p.BoundClientID)

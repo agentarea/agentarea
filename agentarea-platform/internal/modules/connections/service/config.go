@@ -2,8 +2,11 @@ package service
 
 // Config is what the module reads from the environment (connections.LoadConfig).
 type Config struct {
-	HydraURL        string
-	HydraAdminURL   string
+	HydraURL      string
+	HydraAdminURL string
+	// KratosAdminURL is where a consent reads the user's traits for the
+	// email and profile claims.
+	KratosAdminURL  string
 	HydraBrowserURL string
 	// OAuthScopes is AGENTAREA_MCP_OAUTH_SCOPES split on whitespace.
 	OAuthScopes []string

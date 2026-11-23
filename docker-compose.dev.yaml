@@ -679,7 +679,7 @@ services:
       LOG_LEVEL: debug
       LOG_LEAK_SENSITIVE_VALUES: true
       # Enable Dynamic Client Registration
-      OAUTH2_ALLOWED_TOP_LEVEL_CLAIMS: workspace_id
+      OAUTH2_ALLOWED_TOP_LEVEL_CLAIMS: workspace_ids
     command: serve all -c /etc/config/hydra/hydra.yml --dev
     volumes:
       - ./config/auth/hydra:/etc/config/hydra

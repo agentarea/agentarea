@@ -77,6 +77,7 @@ func Mount(r chi.Router, errs *httpx.Errors, e Edge, s *Server, ports Ports) {
 	mountVerify(g)
 	mountOAuthConnect(g)
 	mountOAuthAS(g)
+	mountOAuthConsent(g)
 	mountProxy(g)
 	mountMCP(g)
 	mountSpecs(g)

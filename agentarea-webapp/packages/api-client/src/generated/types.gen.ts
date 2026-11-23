@@ -12167,6 +12167,89 @@ export type AgentareaApiApiV1RegistriesSyncResponse = {
     updates_flagged: number;
 };
 
+/**
+ * OAuthConsentClient
+ */
+export type OAuthConsentClient = {
+    /**
+     * Client Id
+     */
+    client_id: string;
+    /**
+     * Client Name
+     */
+    client_name: string;
+    /**
+     * Client Uri
+     */
+    client_uri: string;
+    /**
+     * Logo Uri
+     */
+    logo_uri: string;
+    /**
+     * Redirect Uris
+     */
+    redirect_uris: Array<string>;
+};
+
+/**
+ * OAuthConsentResponse
+ *
+ * A consent request of this API's authorization server: the client, and what accepting grants it. `api` reaches the whole account and is granted only to first-party clients; `mcp` reaches MCP in one workspace the user picks.
+ */
+export type OAuthConsentResponse = {
+    client: OAuthConsentClient;
+    /**
+     * Redirect Uri
+     *
+     * Where accepting sends the authorization code; empty when the request names none and the client registered several.
+     */
+    redirect_uri: string;
+    /**
+     * First Party
+     */
+    first_party: boolean;
+    /**
+     * Access
+     */
+    access: 'mcp' | 'api';
+    /**
+     * Scopes
+     */
+    scopes: Array<string>;
+};
+
+/**
+ * OAuthConsentDecision
+ */
+export type OAuthConsentDecision = {
+    /**
+     * Challenge
+     */
+    challenge: string;
+    /**
+     * Action
+     */
+    action: 'accept' | 'reject';
+    /**
+     * Workspaces
+     *
+     * Slugs or ids of the workspaces an `mcp` grant reaches; at least one to accept one.
+     */
+    workspaces?: Array<string> | null;
+};
+
+/**
+ * OAuthConsentRedirect
+ */
+export type OAuthConsentRedirect = {
+    /**
+     * Redirect To
+     */
+    redirect_to: string;
+};
+
 export type HydraJwksProxyWellKnownJwksJsonGetData = {
     body?: never;
     path?: never;
@@ -22729,3 +22812,58 @@ export type HandleWebhookWebhooksWebhookIdPostResponses = {
      */
     200: unknown;
 };
+
+export type OauthConsentV1OauthConsentGetData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Challenge
+         */
+        challenge: string;
+    };
+    url: '/v1/oauth/consent';
+};
+
+export type OauthConsentV1OauthConsentGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type OauthConsentV1OauthConsentGetError = OauthConsentV1OauthConsentGetErrors[keyof OauthConsentV1OauthConsentGetErrors];
+
+export type OauthConsentV1OauthConsentGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthConsentResponse;
+};
+
+export type OauthConsentV1OauthConsentGetResponse = OauthConsentV1OauthConsentGetResponses[keyof OauthConsentV1OauthConsentGetResponses];
+
+export type OauthConsentDecideV1OauthConsentPostData = {
+    body: OAuthConsentDecision;
+    path?: never;
+    query?: never;
+    url: '/v1/oauth/consent';
+};
+
+export type OauthConsentDecideV1OauthConsentPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type OauthConsentDecideV1OauthConsentPostError = OauthConsentDecideV1OauthConsentPostErrors[keyof OauthConsentDecideV1OauthConsentPostErrors];
+
+export type OauthConsentDecideV1OauthConsentPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthConsentRedirect;
+};
+
+export type OauthConsentDecideV1OauthConsentPostResponse = OauthConsentDecideV1OauthConsentPostResponses[keyof OauthConsentDecideV1OauthConsentPostResponses];

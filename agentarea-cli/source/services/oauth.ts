@@ -4,9 +4,10 @@ import {type AuthToken} from '../types/index.js';
 /**
  * OAuth 2.1 authorization-code + PKCE against the Agentarea API.
  *
- * The API serves Hydra's RFC 8414 metadata at `/.well-known/oauth-authorization-server`;
- * its registration endpoint is the API's, so the CLI registers itself as a
- * public loopback client and never needs a pre-provisioned key.
+ * The API serves Hydra's RFC 8414 metadata at `/.well-known/oauth-authorization-server`.
+ * The CLI is a first-party public client the platform registers in Hydra
+ * (`agentarea-cli`, loopback redirects on any port), so it is granted `api`:
+ * the whole account, REST and MCP.
  */
 
 export interface AuthServerMetadata {
@@ -23,7 +24,9 @@ export type FetchLike = (
 	init?: RequestInit,
 ) => Promise<Response>;
 
-export const OAUTH_SCOPE = 'offline_access openid';
+export const CLI_CLIENT_ID = 'agentarea-cli';
+
+export const OAUTH_SCOPE = 'api offline_access openid';
 
 interface TokenPayload {
 	access_token?: string;
@@ -113,51 +116,6 @@ export async function discoverAuthServer(
 	}
 
 	return metadata;
-}
-
-export async function registerClient(
-	options: {
-		metadata: AuthServerMetadata;
-		redirectUri: string;
-		clientName: string;
-	},
-	fetchImpl: FetchLike = fetch,
-): Promise<string> {
-	const endpoint = options.metadata.registration_endpoint;
-	if (!endpoint) {
-		throw new Error(
-			`Authorization server ${options.metadata.issuer} advertises no registration_endpoint; cannot register the CLI as an OAuth client`,
-		);
-	}
-
-	const response = await fetchImpl(endpoint, {
-		method: 'POST',
-		headers: {'Content-Type': 'application/json'},
-		body: JSON.stringify({
-			client_name: options.clientName,
-			redirect_uris: [options.redirectUri],
-			grant_types: ['authorization_code', 'refresh_token'],
-			response_types: ['code'],
-			token_endpoint_auth_method: 'none',
-			scope: OAUTH_SCOPE,
-		}),
-	});
-
-	const payload = await readJson(response);
-	if (!response.ok) {
-		throw new Error(
-			`Dynamic client registration failed (${response.status}): ${describeError(
-				payload,
-			)}`,
-		);
-	}
-
-	const clientId = payload['client_id'];
-	if (typeof clientId !== 'string' || !clientId) {
-		throw new Error('Dynamic client registration returned no client_id');
-	}
-
-	return clientId;
 }
 
 export function buildAuthorizeUrl(options: {
