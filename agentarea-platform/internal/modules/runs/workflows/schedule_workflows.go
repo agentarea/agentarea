@@ -16,6 +16,7 @@ import (
 func AgentQueueWorkflows() []durable.Workflow {
 	return []durable.Workflow{
 		AgentWorkflow(),
+		{Name: api.WorkflowRemoteDelegation, Fn: RemoteDelegationWorkflow},
 		{Name: api.WorkflowUndispatchedTasks, Fn: UndispatchedTaskReconcilerWorkflow},
 	}
 }

@@ -120,7 +120,8 @@ func TestActivitySpecs(t *testing.T) {
 	names := []string{
 		api.ActivityResolveRunConfig, api.ActivityCheckMonthlySpendCap, api.ActivityRecord,
 		api.ActivityUpdateGovernanceSnapshot, api.ActivityCreateDelegationTask, api.ActivityDelegatedTaskSpend,
-		api.ActivityCallLLM, api.ActivityCompactMessages, api.ActivityExecuteTool, api.ActivityValidateArtifacts,
+		api.ActivityCallLLM, api.ActivityCompactMessages, api.ActivityExecuteTool, api.ActivityGetRemoteTask,
+		api.ActivityCancelRemoteTask, api.ActivityValidateArtifacts,
 		api.ActivityActivateSkill, api.ActivityRecallHistory, api.ActivityStoreContextOutput,
 		api.ActivityReadContextOutput, api.ActivitySearchHistory, api.ActivityRunRunnerTurn,
 		api.ActivityDeliverToRunner, api.ActivityStartUndispatchedTasks, api.ActivitySyncCronSchedules,

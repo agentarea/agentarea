@@ -38,6 +38,9 @@ type fakeRun struct {
 	toolCalls []ToolCallRequest
 	tool      func(ToolCallRequest) (ToolCallResult, error)
 	created   []CreateDelegationTaskRequest
+	remoteGet func(RemoteTaskRequest) (ToolCallResult, error)
+	gets      []RemoteTaskRequest
+	cancels   []RemoteTaskRequest
 }
 
 func newFakeRun() *fakeRun {
@@ -109,6 +112,24 @@ func (f *fakeRun) executeTool(_ context.Context, req ToolCallRequest) (ToolCallR
 	f.toolCalls = append(f.toolCalls, req)
 	f.mu.Unlock()
 	return f.tool(req)
+}
+
+func (f *fakeRun) getRemoteTask(_ context.Context, req RemoteTaskRequest) (ToolCallResult, error) {
+	f.mu.Lock()
+	f.gets = append(f.gets, req)
+	get := f.remoteGet
+	f.mu.Unlock()
+	if get == nil {
+		return ToolCallResult{}, errors.New("no remote agent in this test")
+	}
+	return get(req)
+}
+
+func (f *fakeRun) cancelRemoteTask(_ context.Context, req RemoteTaskRequest) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cancels = append(f.cancels, req)
+	return nil
 }
 
 func (f *fakeRun) validate(_ context.Context, req ArtifactValidationRequest) (ArtifactValidationResult, error) {
@@ -193,12 +214,14 @@ func newEnv(t *testing.T, f *fakeRun) *testsuite.TestWorkflowEnvironment {
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
 	env.RegisterWorkflowWithOptions(AgentExecutionWorkflow, workflow.RegisterOptions{Name: api.WorkflowAgentExecution})
+	env.RegisterWorkflowWithOptions(RemoteDelegationWorkflow, workflow.RegisterOptions{Name: api.WorkflowRemoteDelegation})
 	for name, fn := range map[string]any{
 		api.ActivityResolveRunConfig: f.resolve, api.ActivityRecord: f.record, api.ActivityCallLLM: f.callLLM,
 		api.ActivityExecuteTool: f.executeTool, api.ActivityValidateArtifacts: f.validate,
 		api.ActivityCheckMonthlySpendCap: f.spendCap, api.ActivityCompactMessages: f.compact,
 		api.ActivityCreateDelegationTask: f.createDelegation, api.ActivityDelegatedTaskSpend: f.delegatedSpend,
 		api.ActivityUpdateGovernanceSnapshot: f.updateSnapshot,
+		api.ActivityGetRemoteTask:            f.getRemoteTask, api.ActivityCancelRemoteTask: f.cancelRemoteTask,
 	} {
 		env.RegisterActivityWithOptions(fn, activity.RegisterOptions{Name: name})
 	}
