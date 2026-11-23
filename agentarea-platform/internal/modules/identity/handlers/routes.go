@@ -39,6 +39,8 @@ func MountRest(r chi.Router, errs *httpx.Errors, edge Edge, svc *service.Service
 	p.Post("/v1/invitations/preview", h(s.previewInvitation))
 	p.Get("/v1/me/external-identities", h(s.listLinks))
 	p.Post("/v1/me/external-identities/telegram/link", h(s.startTelegramLink))
+	p.Post("/v1/me/external-identities/telegram/offer/preview", h(s.previewTelegramOffer))
+	p.Post("/v1/me/external-identities/telegram/offer/accept", h(s.acceptTelegramOffer))
 	p.Delete("/v1/me/external-identities/{identity_id}", h(s.unlink))
 
 	w := r.With(edge.Workspace)
@@ -504,12 +506,66 @@ func (s *Server) listLinks(w http.ResponseWriter, r *http.Request) error {
 	}
 	out := make([]wirejson.Object, 0, len(links))
 	for _, l := range links {
-		out = append(out, wirejson.Object{
-			{Key: "id", Value: l.ID}, {Key: "provider", Value: l.Provider},
-			{Key: "external_id", Value: l.ExternalID}, {Key: "linked_at", Value: naiveISO(l.CreatedAt)},
-		})
+		out = append(out, linkOut(l))
 	}
 	return writeList(w, out)
+}
+
+func linkOut(l domain.ExternalIdentity) wirejson.Object {
+	return wirejson.Object{
+		{Key: "id", Value: l.ID}, {Key: "provider", Value: l.Provider},
+		{Key: "external_id", Value: l.ExternalID}, {Key: "linked_at", Value: naiveISO(l.CreatedAt)},
+		{Key: "username", Value: strOrNil(l.Username)}, {Key: "display_name", Value: strOrNil(l.DisplayName)},
+	}
+}
+
+// offerCode reads {code} after checking the caller may link a messenger account.
+func offerCode(r *http.Request) (authn.Principal, string, error) {
+	p, err := principal(r.Context())
+	if err != nil {
+		return p, "", err
+	}
+	if err := authn.EnsureScope(p, authn.ScopeCredentials, "link a messenger account"); err != nil {
+		return p, "", err
+	}
+	var code string
+	err = body(r, func(o wirejson.Object, errs *[]httpx.FieldError) { code = requiredStr(o, "code", errs) })
+	return p, code, err
+}
+
+func (s *Server) previewTelegramOffer(w http.ResponseWriter, r *http.Request) error {
+	p, code, err := offerCode(r)
+	if err != nil {
+		return err
+	}
+	o, linkedTo, err := s.svc.TelegramOffer(r.Context(), p, code)
+	if err != nil {
+		return err
+	}
+	return writeJSON(w, http.StatusOK, wirejson.Object{
+		{Key: "provider", Value: o.Provider}, {Key: "external_id", Value: o.ExternalID},
+		{Key: "username", Value: emptyNil(o.Username)}, {Key: "display_name", Value: emptyNil(o.Name)},
+		{Key: "bot", Value: emptyNil(o.Bot)}, {Key: "linked_to", Value: emptyNil(linkedTo)},
+	})
+}
+
+func (s *Server) acceptTelegramOffer(w http.ResponseWriter, r *http.Request) error {
+	p, code, err := offerCode(r)
+	if err != nil {
+		return err
+	}
+	l, err := s.svc.AcceptTelegramOffer(r.Context(), p, code)
+	if err != nil {
+		return err
+	}
+	return writeJSON(w, http.StatusOK, linkOut(l))
+}
+
+func emptyNil(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func (s *Server) unlink(w http.ResponseWriter, r *http.Request) error {

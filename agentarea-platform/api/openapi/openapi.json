@@ -6684,7 +6684,19 @@
         "type": "object"
       },
       "ExternalIdentityResponse": {
+        "description": "A messenger account linked to the caller. username and display_name are how the\nmessenger named the account when it was linked; null for links made before they were kept.",
         "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
           "external_id": {
             "title": "External Id",
             "type": "string"
@@ -6702,13 +6714,26 @@
           "provider": {
             "title": "Provider",
             "type": "string"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
           }
         },
         "required": [
           "id",
           "provider",
           "external_id",
-          "linked_at"
+          "linked_at",
+          "username",
+          "display_name"
         ],
         "title": "ExternalIdentityResponse",
         "type": "object"
@@ -17159,6 +17184,14 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "source_types": {
+            "description": "The source types of the stream's sources, the first added first.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Types",
+            "type": "array"
           }
         },
         "required": [
@@ -17167,7 +17200,8 @@
           "description",
           "kind",
           "created_by",
-          "created_at"
+          "created_at",
+          "source_types"
         ],
         "title": "StreamResponse",
         "type": "object"
@@ -18571,6 +18605,91 @@
           "bot"
         ],
         "title": "TelegramLinkRequest",
+        "type": "object"
+      },
+      "TelegramLinkOfferRequest": {
+        "properties": {
+          "code": {
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "TelegramLinkOfferRequest",
+        "type": "object"
+      },
+      "TelegramLinkOfferResponse": {
+        "description": "The Telegram account a bot offered a link for, as Telegram named it when the bot\nanswered. linked_to is who already holds it: \"you\", \"another_account\", or null.",
+        "properties": {
+          "bot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bot"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "external_id": {
+            "title": "External Id",
+            "type": "string"
+          },
+          "linked_to": {
+            "anyOf": [
+              {
+                "enum": [
+                  "you",
+                  "another_account"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked To"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "required": [
+          "provider",
+          "external_id",
+          "username",
+          "display_name",
+          "bot",
+          "linked_to"
+        ],
+        "title": "TelegramLinkOfferResponse",
         "type": "object"
       },
       "TelegramLinkResponse": {
@@ -22641,6 +22760,104 @@
           }
         ],
         "summary": "Start Telegram Link",
+        "tags": [
+          "v1",
+          "protected",
+          "external-identities"
+        ]
+      }
+    },
+    "/v1/me/external-identities/telegram/offer/accept": {
+      "post": {
+        "description": "Links the Telegram account a bot offered the code to to the caller, who confirmed it.\nThe code is spent; 404 when it expired or was used, 409 when another account holds the Telegram account.",
+        "operationId": "accept_telegram_link_offer_v1_me_external_identities_telegram_offer_accept_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelegramLinkOfferRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalIdentityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Accept Telegram Link Offer",
+        "tags": [
+          "v1",
+          "protected",
+          "external-identities"
+        ]
+      }
+    },
+    "/v1/me/external-identities/telegram/offer/preview": {
+      "post": {
+        "description": "The Telegram account a bot offered the code to, shown before the caller confirms; the code stays unspent.",
+        "operationId": "preview_telegram_link_offer_v1_me_external_identities_telegram_offer_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelegramLinkOfferRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelegramLinkOfferResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Telegram Link Offer",
         "tags": [
           "v1",
           "protected",

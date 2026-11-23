@@ -101,7 +101,9 @@ func (Streams) GetStream(ctx context.Context, s db.Session, id uuid.UUID) (domai
 	if err != nil {
 		return domain.Stream{}, false, err
 	}
-	return toStream(r.ID, r.WorkspaceID, r.CreatedBy, r.CreatedAt, r.Name, r.Description, r.Kind), true, nil
+	st := toStream(r.ID, r.WorkspaceID, r.CreatedBy, r.CreatedAt, r.Name, r.Description, r.Kind)
+	st.SourceTypes = r.SourceTypes
+	return st, true, nil
 }
 
 // GetStreamByName returns the stream named name, false when none.
@@ -137,7 +139,9 @@ func (Streams) ListStreams(ctx context.Context, s db.Session, ids []string, limi
 	}
 	out := make([]domain.Stream, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, toStream(r.ID, r.WorkspaceID, r.CreatedBy, r.CreatedAt, r.Name, r.Description, r.Kind))
+		st := toStream(r.ID, r.WorkspaceID, r.CreatedBy, r.CreatedAt, r.Name, r.Description, r.Kind)
+		st.SourceTypes = r.SourceTypes
+		out = append(out, st)
 	}
 	return out, nil
 }

@@ -125,6 +125,12 @@ func TestAGithubSourceStoresItsCredentialAndListsWithItsURL(t *testing.T) {
 	if err != nil || len(list) != 1 || list[0].ID != src.ID {
 		t.Fatalf("list %v %v", list, err)
 	}
+	if _, _, err := f.svc.AddSource(f.ctx, f.stream, service.NewSource{SourceType: "generic_webhook", Kind: "webhook"}); err != nil {
+		t.Fatal(err)
+	}
+	if st, err := f.svc.GetStream(f.ctx, f.stream); err != nil || strings.Join(st.SourceTypes, ",") != "github,generic_webhook" {
+		t.Fatalf("stream %+v %v", st, err)
+	}
 	if err := f.svc.DeleteSource(f.ctx, f.stream, src.ID); err != nil {
 		t.Fatal(err)
 	}

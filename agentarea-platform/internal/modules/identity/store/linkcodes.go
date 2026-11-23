@@ -6,14 +6,17 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"time"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/identity/domain"
 )
 
-// KV is the Redis commands link codes need: SET key value EX ttl, and GETDEL.
+// KV is the Redis commands link codes need: SET key value EX ttl, GET and GETDEL.
 type KV interface {
 	SetEX(ctx context.Context, key, value string, ttl time.Duration) error
+	// Get is "" when key is not set.
+	Get(ctx context.Context, key string) (string, error)
 	// GetDel is "" when key is not set.
 	GetDel(ctx context.Context, key string) (string, error)
 }
@@ -27,6 +30,7 @@ type LinkCodes struct{ KV KV }
 const (
 	LinkCodePrefix    = "identity:link:code"
 	LinkPendingPrefix = "identity:link:pending"
+	LinkOfferPrefix   = "identity:link:offer"
 )
 
 func digest(code string) string {
@@ -34,14 +38,57 @@ func digest(code string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// Issue stores a fresh code for userID and returns it.
-func (l LinkCodes) Issue(ctx context.Context, userID string) (string, error) {
+func newCode() (string, error) {
 	raw := make([]byte, 24)
 	if _, err := rand.Read(raw); err != nil {
 		return "", err
 	}
-	code := base64.RawURLEncoding.EncodeToString(raw)
+	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+// Issue stores a fresh code for userID and returns it.
+func (l LinkCodes) Issue(ctx context.Context, userID string) (string, error) {
+	code, err := newCode()
+	if err != nil {
+		return "", err
+	}
 	return code, l.KV.SetEX(ctx, LinkCodePrefix+":"+digest(code), userID, domain.LinkTTLSeconds*time.Second)
+}
+
+// Offer stores a fresh code, good for ttl, that names the account a bot offered it to.
+func (l LinkCodes) Offer(ctx context.Context, o domain.LinkOffer, ttl time.Duration) (string, error) {
+	code, err := newCode()
+	if err != nil {
+		return "", err
+	}
+	raw, err := json.Marshal(o)
+	if err != nil {
+		return "", err
+	}
+	return code, l.KV.SetEX(ctx, LinkOfferPrefix+":"+digest(code), string(raw), ttl)
+}
+
+// PeekOffer is the account code was offered to, leaving the code in place.
+func (l LinkCodes) PeekOffer(ctx context.Context, code string) (domain.LinkOffer, bool, error) {
+	raw, err := l.KV.Get(ctx, LinkOfferPrefix+":"+digest(code))
+	return offer(raw, err)
+}
+
+// TakeOffer spends code and returns the account it was offered to.
+func (l LinkCodes) TakeOffer(ctx context.Context, code string) (domain.LinkOffer, bool, error) {
+	raw, err := l.KV.GetDel(ctx, LinkOfferPrefix+":"+digest(code))
+	return offer(raw, err)
+}
+
+func offer(raw string, err error) (domain.LinkOffer, bool, error) {
+	var o domain.LinkOffer
+	if err != nil || raw == "" {
+		return o, false, err
+	}
+	if err := json.Unmarshal([]byte(raw), &o); err != nil {
+		return o, false, err
+	}
+	return o, true, nil
 }
 
 // Redeem spends code from externalID; the user it was issued to then waits for the account's

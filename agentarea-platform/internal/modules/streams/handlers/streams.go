@@ -44,10 +44,16 @@ type streamJSON struct {
 	Kind        string    `json:"kind"`
 	CreatedBy   string    `json:"created_by"`
 	CreatedAt   time.Time `json:"created_at"`
+	SourceTypes []string  `json:"source_types"`
 }
 
 func streamOut(s domain.Stream) streamJSON {
-	return streamJSON{ID: s.ID, Name: s.Name, Description: s.Description, Kind: s.Kind, CreatedBy: s.CreatedBy, CreatedAt: s.CreatedAt.UTC()}
+	types := s.SourceTypes
+	if types == nil {
+		types = []string{}
+	}
+	return streamJSON{ID: s.ID, Name: s.Name, Description: s.Description, Kind: s.Kind, CreatedBy: s.CreatedBy,
+		CreatedAt: s.CreatedAt.UTC(), SourceTypes: types}
 }
 
 type subscriptionJSON struct {

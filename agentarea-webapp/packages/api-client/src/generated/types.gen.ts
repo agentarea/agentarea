@@ -3798,8 +3798,15 @@ export type ExistingBundleInstall = {
 
 /**
  * ExternalIdentityResponse
+ *
+ * A messenger account linked to the caller. username and display_name are how the
+ * messenger named the account when it was linked; null for links made before they were kept.
  */
 export type ExternalIdentityResponse = {
+    /**
+     * Display Name
+     */
+    display_name: string | null;
     /**
      * External Id
      */
@@ -3816,6 +3823,10 @@ export type ExternalIdentityResponse = {
      * Provider
      */
     provider: string;
+    /**
+     * Username
+     */
+    username: string | null;
 };
 
 /**
@@ -9778,6 +9789,12 @@ export type StreamResponse = {
      * Name
      */
     name: string;
+    /**
+     * Source Types
+     *
+     * The source types of the stream's sources, the first added first.
+     */
+    source_types: Array<string>;
 };
 
 /**
@@ -10540,6 +10557,49 @@ export type TelegramLinkRequest = {
      * The bot to open the link in
      */
     bot: string;
+};
+
+/**
+ * TelegramLinkOfferRequest
+ */
+export type TelegramLinkOfferRequest = {
+    /**
+     * Code
+     */
+    code: string;
+};
+
+/**
+ * TelegramLinkOfferResponse
+ *
+ * The Telegram account a bot offered a link for, as Telegram named it when the bot
+ * answered. linked_to is who already holds it: "you", "another_account", or null.
+ */
+export type TelegramLinkOfferResponse = {
+    /**
+     * Bot
+     */
+    bot: string | null;
+    /**
+     * Display Name
+     */
+    display_name: string | null;
+    /**
+     * External Id
+     */
+    external_id: string;
+    /**
+     * Linked To
+     */
+    linked_to: 'you' | 'another_account' | null;
+    /**
+     * Provider
+     */
+    provider: string;
+    /**
+     * Username
+     */
+    username: string | null;
 };
 
 /**
@@ -12846,6 +12906,56 @@ export type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses = {
 };
 
 export type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponse = StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses[keyof StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses];
+
+export type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostData = {
+    body: TelegramLinkOfferRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/me/external-identities/telegram/offer/accept';
+};
+
+export type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostError = AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostErrors[keyof AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostErrors];
+
+export type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ExternalIdentityResponse;
+};
+
+export type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponse = AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponses[keyof AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponses];
+
+export type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostData = {
+    body: TelegramLinkOfferRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/me/external-identities/telegram/offer/preview';
+};
+
+export type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostError = PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostErrors[keyof PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostErrors];
+
+export type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: TelegramLinkOfferResponse;
+};
+
+export type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponse = PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponses[keyof PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponses];
 
 export type UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteData = {
     body?: never;

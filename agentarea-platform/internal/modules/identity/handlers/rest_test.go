@@ -45,8 +45,19 @@ func (database) Write(ctx context.Context, ws scope.Workspace, fn func(context.C
 
 type rows struct {
 	service.Store
-	keys  []domain.APIKey
-	links []domain.ExternalIdentity
+	keys    []domain.APIKey
+	links   []domain.ExternalIdentity
+	holders map[string]string
+}
+
+func (r *rows) ExternalIdentityHolder(_ context.Context, _ db.Querier, _, id string) (string, bool, error) {
+	u, ok := r.holders[id]
+	return u, ok, nil
+}
+
+func (r *rows) InsertExternalIdentity(_ context.Context, _ db.Querier, userID string, a domain.MessengerAccount, _ string, now time.Time) (domain.ExternalIdentity, error) {
+	r.holders[a.ExternalID] = userID
+	return domain.ExternalIdentity{ID: "new", Provider: a.Provider, ExternalID: a.ExternalID, Username: &a.Username, DisplayName: &a.Name, CreatedAt: now}, nil
 }
 
 func (r *rows) ListAPIKeys(_ context.Context, _ db.Session, by *string, _ *uuid.UUID) ([]domain.APIKey, error) {
@@ -67,7 +78,7 @@ func (r *rows) RevokeExternalIdentity(context.Context, db.Querier, string, uuid.
 	return false, nil
 }
 
-type codes struct{}
+type codes struct{ offers map[string]domain.LinkOffer }
 
 func (codes) Issue(context.Context, string) (string, error) { return "CODE", nil }
 
@@ -76,6 +87,21 @@ func (codes) Redeem(context.Context, string, string, string) (string, bool, erro
 }
 
 func (codes) Confirm(context.Context, string, string) (string, bool, error) { return "", false, nil }
+
+func (codes) Offer(context.Context, domain.LinkOffer, time.Duration) (string, error) {
+	return "OFFER", nil
+}
+
+func (c codes) PeekOffer(_ context.Context, code string) (domain.LinkOffer, bool, error) {
+	o, ok := c.offers[code]
+	return o, ok, nil
+}
+
+func (c codes) TakeOffer(_ context.Context, code string) (domain.LinkOffer, bool, error) {
+	o, ok := c.offers[code]
+	delete(c.offers, code)
+	return o, ok, nil
+}
 
 type noLogos struct{}
 
@@ -226,15 +252,55 @@ func TestAPIKeyListShowsAMemberOnlyTheirOwn(t *testing.T) {
 
 func TestExternalIdentities(t *testing.T) {
 	id := uuid.NewString()
-	st := &rows{links: []domain.ExternalIdentity{{ID: id, Provider: "telegram", ExternalID: "42", CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)}}}
+	alice := "alice"
+	st := &rows{links: []domain.ExternalIdentity{
+		{ID: id, Provider: "telegram", ExternalID: "42", CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)},
+		{ID: id, Provider: "telegram", ExternalID: "43", Username: &alice, CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)},
+	}}
 	s := rest(t, authn.KindSession, true, service.Deps{Store: st, LinkCodes: codes{}})
 	status, body := jsonDo(t, s, "GET", "/v1/me/external-identities", "")
-	if status != 200 || body != `[{"id":"`+id+`","provider":"telegram","external_id":"42","linked_at":"2026-01-02T03:04:05"}]` {
+	if status != 200 || body != `[{"id":"`+id+`","provider":"telegram","external_id":"42","linked_at":"2026-01-02T03:04:05","username":null,"display_name":null},`+
+		`{"id":"`+id+`","provider":"telegram","external_id":"43","linked_at":"2026-01-02T03:04:05","username":"alice","display_name":null}]` {
 		t.Fatalf("%d %s", status, body)
 	}
 	status, body = jsonDo(t, s, "POST", "/v1/me/external-identities/telegram/link", `{"bot":"agentarea_bot"}`)
 	if status != 200 || body != `{"url":"https://t.me/agentarea_bot?start=link_CODE","expires_in":600}` {
 		t.Fatalf("%d %s", status, body)
+	}
+}
+
+func TestATelegramLinkOfferIsAcceptedOnceByTheSignedInUser(t *testing.T) {
+	account := func(id string) domain.LinkOffer {
+		return domain.LinkOffer{MessengerAccount: domain.MessengerAccount{Provider: "telegram", ExternalID: id, Username: "alice", Name: "Alice Liddell"}, Bot: "door_bot"}
+	}
+	st := &rows{holders: map[string]string{"7": "someone-else"}}
+	offers := map[string]domain.LinkOffer{"A": account("42"), "TAKEN": account("7")}
+	s := rest(t, authn.KindSession, true, service.Deps{Store: st, LinkCodes: codes{offers: offers}})
+	key := rest(t, authn.KindAPIKey, true, service.Deps{Store: st, LinkCodes: codes{offers: offers}})
+
+	for _, c := range []struct {
+		s            *httptest.Server
+		path, body   string
+		status       int
+		want         string
+		exactlyEqual bool
+	}{
+		{key, "preview", `{"code":"A"}`, 403, "This credential cannot link a messenger account", false},
+		{s, "preview", `{}`, 422, `"loc":["body","code"]`, false},
+		{s, "preview", `{"code":"NOPE"}`, 404, "This link has expired or was already used", false},
+		{s, "preview", `{"code":"A"}`, 200, `{"provider":"telegram","external_id":"42","username":"alice","display_name":"Alice Liddell","bot":"door_bot","linked_to":null}`, true},
+		{s, "preview", `{"code":"TAKEN"}`, 200, `"linked_to":"another_account"`, false},
+		{s, "accept", `{"code":"TAKEN"}`, 409, "already linked to another AgentArea account", false},
+		{s, "accept", `{"code":"A"}`, 200, `"external_id":"42","linked_at":"`, false},
+		{s, "accept", `{"code":"A"}`, 404, "This link has expired or was already used", false},
+	} {
+		status, body := jsonDo(t, c.s, "POST", "/v1/me/external-identities/telegram/offer/"+c.path, c.body)
+		if status != c.status || (c.exactlyEqual && body != c.want) || !strings.Contains(body, c.want) {
+			t.Errorf("%s %s: %d %s", c.path, c.body, status, body)
+		}
+	}
+	if st.holders["42"] != "me" || st.holders["7"] != "someone-else" {
+		t.Fatalf("holders %v", st.holders)
 	}
 }
 

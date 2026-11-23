@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/identity/domain"
 )
 
 func TestKratosDirectory(t *testing.T) {
@@ -63,7 +65,7 @@ type kv struct {
 }
 
 func (k *kv) SetEX(_ context.Context, key, value string, ttl time.Duration) error {
-	if ttl != 600*time.Second {
+	if ttl != 600*time.Second && !strings.HasPrefix(key, LinkOfferPrefix) {
 		return errors.New("ttl")
 	}
 	k.key, k.value = key, value
@@ -72,6 +74,36 @@ func (k *kv) SetEX(_ context.Context, key, value string, ttl time.Duration) erro
 	}
 	k.all[key] = value
 	return nil
+}
+
+func (k *kv) Get(_ context.Context, key string) (string, error) { return k.all[key], nil }
+
+func TestALinkOfferNamesItsAccountUntilItIsTakenOnce(t *testing.T) {
+	ctx := context.Background()
+	store := &kv{}
+	codes := LinkCodes{KV: store}
+	o := domain.LinkOffer{MessengerAccount: domain.MessengerAccount{Provider: "telegram", ExternalID: "42", Username: "alice", Name: "Alice"}, Bot: "door_bot"}
+	code, err := codes.Offer(ctx, o, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(store.key, code) || !strings.HasPrefix(store.key, LinkOfferPrefix+":") {
+		t.Fatalf("stored under %q", store.key)
+	}
+	for range 2 {
+		if got, ok, err := codes.PeekOffer(ctx, code); err != nil || !ok || got != o {
+			t.Fatalf("peek %+v %v %v", got, ok, err)
+		}
+	}
+	if _, ok, _ := codes.TakeOffer(ctx, "other"); ok {
+		t.Fatal("an unknown code taken")
+	}
+	if got, ok, err := codes.TakeOffer(ctx, code); err != nil || !ok || got != o {
+		t.Fatalf("take %+v %v %v", got, ok, err)
+	}
+	if _, ok, _ := codes.TakeOffer(ctx, code); ok {
+		t.Fatal("taken twice")
+	}
 }
 
 func (k *kv) GetDel(_ context.Context, key string) (string, error) {

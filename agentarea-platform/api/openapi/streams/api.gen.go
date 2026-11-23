@@ -733,6 +733,9 @@ type StreamResponse struct {
 	Id          openapi_types.UUID `json:"id"`
 	Kind        string             `json:"kind"`
 	Name        string             `json:"name"`
+
+	// SourceTypes The source types of the stream's sources, the first added first.
+	SourceTypes []string `json:"source_types"`
 }
 
 // StreamSourceResponse defines model for StreamSourceResponse.

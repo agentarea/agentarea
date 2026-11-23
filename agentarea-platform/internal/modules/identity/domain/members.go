@@ -109,6 +109,8 @@ var (
 	ErrAPIKeyNotFound         = &Refusal{Status: 404, Detail: "API key not found"}
 	ErrLinkNotFound           = &Refusal{Status: 404, Detail: "No such linked account"}
 	ErrLinkingNeedsRedis      = &Refusal{Status: 503, Detail: "Account linking needs the Redis broker"}
+	ErrLinkOfferGone          = &Refusal{Status: 404, Detail: "This link has expired or was already used"}
+	ErrMessengerAccountTaken  = &Refusal{Status: 409, Detail: "This Telegram account is already linked to another AgentArea account"}
 	ErrRemovalNeedsDirectory  = &Refusal{Status: 500, Detail: "Member removal needs the identity directory"}
 	ErrLogoTooLarge           = &Refusal{Status: 413, Detail: "Logo exceeds the 1048576-byte limit"}
 	ErrLogoType               = &Refusal{Status: 422, Detail: "Logo must be a PNG, JPEG or WebP image"}
@@ -133,13 +135,38 @@ func LogoContentType(data []byte) (string, bool) {
 	return "", false
 }
 
-// ExternalIdentity is a live user_external_identities row.
+// ExternalIdentity is a live user_external_identities row; Username and
+// DisplayName are how the messenger named the account when it was linked,
+// nil for a row linked before they were kept.
 type ExternalIdentity struct {
-	ID         string
-	Provider   string
-	ExternalID string
-	CreatedAt  time.Time
+	ID          string
+	Provider    string
+	ExternalID  string
+	Username    *string
+	DisplayName *string
+	CreatedAt   time.Time
 }
 
 // LinkTTLSeconds is LINK_TTL_SECONDS.
 const LinkTTLSeconds = 600
+
+// MessengerAccount is a messenger account and how the messenger named it
+// when it was linked; Username and Name are "" when it named nothing.
+type MessengerAccount struct {
+	Provider   string `json:"provider"`
+	ExternalID string `json:"external_id"`
+	Username   string `json:"username,omitempty"`
+	Name       string `json:"name,omitempty"`
+}
+
+// LinkOffer is the account a bot offered a link code for, and the bot's @username.
+type LinkOffer struct {
+	MessengerAccount
+	Bot string `json:"bot,omitempty"`
+}
+
+// Who already holds an offered account, as an offer's preview names it.
+const (
+	OfferHeldByYou     = "you"
+	OfferHeldByAnother = "another_account"
+)

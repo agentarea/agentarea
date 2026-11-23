@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -55,7 +56,12 @@ type Admitted struct {
 
 type telegramSender struct {
 	externalID, chatID, text string
+	username, name           string
 	private, isBot           bool
+}
+
+func (t telegramSender) account() identityapi.Account {
+	return identityapi.Account{Provider: Telegram, ExternalID: t.externalID, Username: t.username, Name: t.name}
 }
 
 func senderOf(a domain.Admission, data map[string]any) (telegramSender, bool) {
@@ -79,8 +85,12 @@ func senderOf(a domain.Admission, data map[string]any) (telegramSender, bool) {
 	private, _ := domain.RenderFirst(a.Private, c)
 	isBot, _ := domain.RenderFirst(a.IsBot, c)
 	text, _ := domain.RenderFirst(a.Text, c)
+	username, _ := domain.RenderFirst(a.Username, c)
+	first, _ := domain.RenderFirst(a.FirstName, c)
+	last, _ := domain.RenderFirst(a.LastName, c)
 	return telegramSender{
 		externalID: externalID, chatID: chatID, text: strings.TrimSpace(text),
+		username: username, name: strings.TrimSpace(first + " " + last),
 		private: private == a.PrivateValue, isBot: isBot == "true",
 	}, true
 }
@@ -129,8 +139,7 @@ func (s *Service) Admit(ctx context.Context, ws scope.Workspace, t domain.Trigge
 			return Admitted{}, "", err
 		}
 		if !linked {
-			return Admitted{}, "the sender has not linked their Telegram account",
-				s.notifyOnce(ctx, t, bot, sender, "unlinked", s.unlinkedText(ctx, bot))
+			return Admitted{}, "the sender has not linked their Telegram account", s.offerLink(ctx, t, bot, sender)
 		}
 		if door.Senders.Allow == domain.SendersOwner && holder != door.OwnerID {
 			return Admitted{}, fmt.Sprintf("only the source's owner may write; %s is not", holder),
@@ -179,7 +188,7 @@ func (s *Service) redeem(ctx context.Context, bot botOf, sender telegramSender, 
 }
 
 func (s *Service) confirm(ctx context.Context, bot botOf, sender telegramSender) error {
-	userID, ok, err := s.d.Links.Confirm(ctx, Telegram, sender.externalID)
+	userID, ok, err := s.d.Links.Confirm(ctx, sender.account())
 	if errors.Is(err, identityapi.ErrAccountTaken) {
 		bot.reply(ctx, sender, "This Telegram account is already linked to another AgentArea account. Unlink it there first.")
 		return nil
@@ -195,17 +204,37 @@ func (s *Service) confirm(ctx context.Context, bot botOf, sender telegramSender)
 	return nil
 }
 
-func (s *Service) unlinkedText(ctx context.Context, bot botOf) string {
-	url := strings.TrimRight(s.d.AppURL, "/") + "/link/telegram"
-	if name := bot.username(ctx); name != "" {
-		url += "?bot=" + name
+// offerLink answers an unlinked sender with a link that already names their account: opened
+// while signed in to AgentArea, it links the account after one confirmation. A sender hears it
+// once per link's life; writing after the link expired brings a fresh one.
+func (s *Service) offerLink(ctx context.Context, t domain.Trigger, bot botOf, sender telegramSender) error {
+	key := noticeKey(t, sender, "unlinked")
+	first, err := s.d.Notices.Claim(ctx, key, identityapi.OfferTTL)
+	if err != nil || !first {
+		return err
 	}
-	return "This bot answers only people who linked their Telegram account to AgentArea " +
-		"and were given access. Link yours here: " + url
+	name := bot.username(ctx)
+	code, err := s.d.Links.Offer(ctx, sender.account(), name)
+	if err != nil {
+		return errors.Join(err, s.d.Notices.Release(ctx, key))
+	}
+	q := url.Values{"code": {code}}
+	if name != "" {
+		q.Set("bot", name)
+	}
+	link := strings.TrimRight(s.d.AppURL, "/") + "/link/telegram?" + q.Encode()
+	bot.reply(ctx, sender, fmt.Sprintf("This bot answers only people who linked their Telegram account to AgentArea "+
+		"and were given access. Link this Telegram account here (the link works for %d minutes): %s",
+		int(identityapi.OfferTTL/time.Minute), link))
+	return nil
+}
+
+func noticeKey(t domain.Trigger, sender telegramSender, kind string) string {
+	return t.ID + ":" + sender.externalID + ":" + kind
 }
 
 func (s *Service) notifyOnce(ctx context.Context, t domain.Trigger, bot botOf, sender telegramSender, kind, text string) error {
-	first, err := s.d.Notices.Claim(ctx, t.ID+":"+sender.externalID+":"+kind, NoticeInterval)
+	first, err := s.d.Notices.Claim(ctx, noticeKey(t, sender, kind), NoticeInterval)
 	if err != nil {
 		return err
 	}

@@ -58,7 +58,8 @@ const BeforeStartReason = "received before the subscription started"
 // EnvelopeVersion is the version of the event envelope this code writes (ADR-0040 §2).
 const EnvelopeVersion = 1
 
-// Stream is a streams row.
+// Stream is a streams row. SourceTypes are the source types of its sources, first added first;
+// only a read of the stream or of the list fills them.
 type Stream struct {
 	ID          string
 	WorkspaceID string
@@ -67,6 +68,7 @@ type Stream struct {
 	Kind        string
 	CreatedBy   string
 	CreatedAt   time.Time
+	SourceTypes []string
 }
 
 // Senders is who may write to a source of a type that admits senders ({allow, ids, by}).
