@@ -1,6 +1,6 @@
 {
 	"name": "@agentarea/cli",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Interactive CLI for AgentArea — authenticate, discover agents, submit tasks, and monitor real-time execution via SSE.",
 	"license": "Apache-2.0",
 	"author": "AgentArea",
