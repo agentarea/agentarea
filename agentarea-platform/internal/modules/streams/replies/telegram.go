@@ -192,7 +192,49 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 	return nil
 }
 
-const unlockScript = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) end return 0`
+// TelegramRefused is the Bot API refusing a message: its HTTP status and description.
+type TelegramRefused struct {
+	Status      int
+	Description string
+}
+
+func (e *TelegramRefused) Error() string {
+	return fmt.Sprintf("telegram refused the message (%d): %s", e.Status, e.Description)
+}
+
+// Message sends text to chatID as a new message of its own, plain text cut at Telegram's limit
+// as a reply's text is. It answers the message's id and whether the text was cut; a refusal is
+// a *TelegramRefused.
+func (t TelegramLive) Message(ctx context.Context, token string, chatID any, text string) (int64, bool, error) {
+	plain, err := MarkupNamed("plain")
+	if err != nil {
+		return 0, false, err
+	}
+	limit := telegramLimit
+	cut := Limited(plain, text, &limit)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	status, body, err := t.call(ctx, token, "sendMessage", map[string]any{"chat_id": chatID, "text": cut})
+	if err != nil {
+		return 0, false, err
+	}
+	var answer struct {
+		Description string `json:"description"`
+		Result      struct {
+			MessageID int64 `json:"message_id"`
+		} `json:"result"`
+	}
+	_ = json.Unmarshal(body, &answer)
+	if err := raiseFor(status, body, nil); err != nil {
+		if answer.Description == "" {
+			answer.Description = err.Error()
+		}
+		return 0, false, &TelegramRefused{Status: status, Description: answer.Description}
+	}
+	return answer.Result.MessageID, cut != text, nil
+}
+
+const unlockScript =`if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) end return 0`
 
 // lock serializes the sends of one task across replicas, so a retried progress update cannot
 // interleave with the end; the returned func frees it.

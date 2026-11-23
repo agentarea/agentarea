@@ -248,6 +248,16 @@ func (Store) ExternalIdentityHolder(ctx context.Context, q db.Querier, provider,
 	return u, err == nil, err
 }
 
+// LinkedExternalIDs are the external ids of the user's live accounts of provider, the most
+// recently linked first.
+func (Store) LinkedExternalIDs(ctx context.Context, q db.Querier, userID, provider string) ([]string, error) {
+	ids, err := New(q).LinkedExternalIDs(ctx, LinkedExternalIDsParams{UserID: userID, Provider: provider})
+	if ids == nil {
+		ids = []string{}
+	}
+	return ids, err
+}
+
 // InsertExternalIdentity links an account to a user.
 func (Store) InsertExternalIdentity(ctx context.Context, q db.Querier, userID string, a domain.MessengerAccount, method string, now time.Time) (domain.ExternalIdentity, error) {
 	r, err := New(q).InsertExternalIdentity(ctx, InsertExternalIdentityParams{

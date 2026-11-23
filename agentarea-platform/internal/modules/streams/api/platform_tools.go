@@ -156,3 +156,29 @@ type PlatformStreamEvents interface {
 	// sequence after, oldest first; since keeps those received from then on.
 	Read(ctx context.Context, c authn.Caller, stream string, after int64, limit int, since *time.Time) (StreamEventsRead, error)
 }
+
+// MessageSend is messages_send_message's arguments with its recipient resolved to a member.
+type MessageSend struct {
+	// UserID is the workspace member the message is for; Recipient is how the answer names them.
+	UserID    string
+	Recipient string
+	// Stream is a stream name or id; "" for the only messenger stream that reaches the member.
+	Stream string
+	Text   string
+}
+
+// MessageSent is messages_send_message's output.
+type MessageSent struct {
+	Sent      bool      `json:"sent"`
+	To        string    `json:"to"`
+	Stream    StreamRef `json:"stream"`
+	Messenger string    `json:"messenger"`
+	MessageID *int64    `json:"message_id"`
+	Truncated bool      `json:"truncated"`
+}
+
+// PlatformMessages is what the platform messages toolset calls: a message a run starts with a
+// member, through the bot of a messenger stream, to the account the member linked.
+type PlatformMessages interface {
+	Send(ctx context.Context, c authn.Caller, in MessageSend) (MessageSent, error)
+}

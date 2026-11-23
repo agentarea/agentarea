@@ -253,4 +253,11 @@ func TestExternalIdentitiesLiveOnly(t *testing.T) {
 	if err != nil || !ok || holder != user {
 		t.Fatalf("holder %q %v %v", holder, ok, err)
 	}
+	ids, err := st.LinkedExternalIDs(ctx, pool, user, "telegram")
+	if err != nil || len(ids) != 1 || ids[0] != second.ExternalID {
+		t.Fatalf("linked ids %v %v", ids, err)
+	}
+	if ids, err := st.LinkedExternalIDs(ctx, pool, user, "slack"); err != nil || len(ids) != 0 {
+		t.Fatalf("another provider's ids %v %v", ids, err)
+	}
 }

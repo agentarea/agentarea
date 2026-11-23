@@ -597,3 +597,16 @@ func (p PlatformStreamEvents) Read(ctx context.Context, c authn.Caller, stream s
 	out, err := p.svc.ReadStreamEvents(authn.WithCaller(ctx, c), stream, after, limit, since)
 	return out, toolText(err)
 }
+
+// PlatformMessages is api.PlatformMessages over the streams service.
+type PlatformMessages struct{ svc *service.Service }
+
+var _ api.PlatformMessages = PlatformMessages{}
+
+// NewPlatformMessages builds the messages toolset's provider.
+func NewPlatformMessages(svc *service.Service) PlatformMessages { return PlatformMessages{svc: svc} }
+
+func (p PlatformMessages) Send(ctx context.Context, c authn.Caller, in api.MessageSend) (api.MessageSent, error) {
+	out, err := p.svc.SendMessage(authn.WithCaller(ctx, c), in)
+	return out, toolText(err)
+}

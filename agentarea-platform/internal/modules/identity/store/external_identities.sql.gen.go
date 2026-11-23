@@ -78,6 +78,38 @@ func (q *Queries) InsertExternalIdentity(ctx context.Context, arg InsertExternal
 	return i, err
 }
 
+const linkedExternalIDs = `-- name: LinkedExternalIDs :many
+SELECT external_id FROM user_external_identities
+WHERE user_id = $1 AND provider = $2 AND revoked_at IS NULL
+ORDER BY created_at DESC, id
+`
+
+type LinkedExternalIDsParams struct {
+	UserID   string
+	Provider string
+}
+
+// LinkedExternalIDs reads only the columns user_external_identities has had from the baseline.
+func (q *Queries) LinkedExternalIDs(ctx context.Context, arg LinkedExternalIDsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, linkedExternalIDs, arg.UserID, arg.Provider)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var external_id string
+		if err := rows.Scan(&external_id); err != nil {
+			return nil, err
+		}
+		items = append(items, external_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listExternalIdentities = `-- name: ListExternalIdentities :many
 SELECT id, provider, external_id, username, display_name, created_at FROM user_external_identities
 WHERE user_id = $1 AND revoked_at IS NULL ORDER BY created_at

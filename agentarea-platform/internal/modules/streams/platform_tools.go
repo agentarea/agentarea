@@ -17,3 +17,6 @@ func (m *Module) PlatformStreams() api.PlatformStreams {
 func (m *Module) PlatformStreamEvents() api.PlatformStreamEvents {
 	return handlers.NewPlatformStreamEvents(m.svc)
 }
+
+// PlatformMessages is what the platform messages toolset calls.
+func (m *Module) PlatformMessages() api.PlatformMessages { return handlers.NewPlatformMessages(m.svc) }
