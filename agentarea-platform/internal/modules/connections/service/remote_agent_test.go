@@ -95,7 +95,7 @@ func remoteService(secrets map[string]string) *Service {
 func remoteCall(url, secret string) api.RemoteAgentCall {
 	return api.RemoteAgentCall{WorkspaceID: uuid.NewString(), UserID: "u1", AgentID: uuid.NewString(), AgentName: "Docs",
 		ToolName: "delegate_to_Docs", ToolCallID: "call-1", A2AURL: url, AuthSecretName: secret, Message: "write the docs",
-		MessageID: "0123456789abcdef0123456789abcdef"}
+		MessageID: "message-of-call-1"}
 }
 
 func taskCall(url, secret string, task api.RemoteTask) api.RemoteTaskCall {
@@ -123,7 +123,7 @@ func TestRemoteAgentSendsTheMessageAndLeavesTheRunningTaskPending(t *testing.T) 
 	parts, _ := msg["parts"].([]any)
 	cfg, _ := send.Params["configuration"].(map[string]any)
 	if send.Method != "SendMessage" || send.Auth != "Bearer tok" || send.Version != "1.0" || msg["role"] != "ROLE_USER" ||
-		msg["messageId"] != "0123456789abcdef0123456789abcdef" || len(parts) != 1 || parts[0].(map[string]any)["text"] != "write the docs" ||
+		msg["messageId"] != "message-of-call-1" || len(parts) != 1 || parts[0].(map[string]any)["text"] != "write the docs" ||
 		cfg["returnImmediately"] != true {
 		t.Fatalf("send = %+v", send)
 	}

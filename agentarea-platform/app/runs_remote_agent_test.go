@@ -71,7 +71,7 @@ func TestRemoteAgentCallerHandsTheRunningTaskToTheRun(t *testing.T) {
 		t.Fatalf("out = %+v %v", out, err)
 	}
 	out, err = c.GetTask(context.Background(), remoteInvocation(), want)
-	if err != nil || out.RemoteTask == nil || f.sawTask.Task != task || f.sawTask.AuthSecretName != "remote-key" || f.sawTask.UserID != "u1" {
+	if err != nil || out.RemoteTask == nil || f.sawTask.Task != task || f.sawTask.AuthSecretName != remoteInvocation().Binding.RemoteAgent.AuthSecretName || f.sawTask.UserID != "u1" {
 		t.Fatalf("get = %+v %v, saw %+v", out, err, f.sawTask)
 	}
 	f.answer = connectionsapi.RemoteAgentResult{Success: true, Result: "the docs"}
