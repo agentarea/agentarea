@@ -77,6 +77,7 @@ The following table lists configurable parameters of the chart and their default
 | fullnameOverride | string | `""` |  |
 | telemetry.enabled | bool | `false` | Install tracing and metrics in every first-party process (AGENTAREA_OTEL_ENABLED). Off, nothing is emitted and nothing is required. |
 | telemetry.otlpEndpoint | string | `""` | OTLP/HTTP base URL of the collector, without a /v1/... path, e.g. http://otel-gateway.monitoring:4318. Required when telemetry.enabled. |
+| telemetry.traces.enabled | bool | `true` | Export spans over OTLP. Off sets OTEL_TRACES_EXPORTER=none, for a collector with no traces pipeline; metrics still go out. |
 | global.edition | string | `"oss"` | Edition the platform reports (AGENTAREA_EDITION): oss or enterprise. |
 | global.spendCurrency | string | `"USD"` | Currency spend caps count and tool costs are declared in (ISO 4217, AGENTAREA_SPEND_CURRENCY). Enterprise: billing's ledger currency. |
 | global.version | string | `"0.0.3"` |  |

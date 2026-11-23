@@ -21,6 +21,10 @@ telemetry:
   # -- OTLP/HTTP base URL of the collector, without a /v1/... path, e.g.
   # http://otel-gateway.monitoring:4318. Required when telemetry.enabled.
   otlpEndpoint: ""
+  traces:
+    # -- Export spans over OTLP. Off sets OTEL_TRACES_EXPORTER=none, for a
+    # collector with no traces pipeline; metrics still go out.
+    enabled: true
 
 # Global configuration shared across all components
 global:

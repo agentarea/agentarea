@@ -144,6 +144,10 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 	if err != nil {
 		return fmt.Errorf("run telemetry: %w", err)
 	}
+	toolMetrics, err := runsservice.NewToolTelemetry(otel.Meter(kobs.MeterScope))
+	if err != nil {
+		return err
+	}
 
 	consumer := name
 	settings := streamsservice.DefaultSettings()
@@ -174,7 +178,7 @@ func (b *Build) runParts(ctx context.Context, name string, p parts) (err error) 
 		DB: profile.DB, Graph: profile.Graph, APIURL: cfg.Edge.APIURL, AppURL: cfg.AppURL, Log: log, Lookup: b.lookup, Connections: connectionsCfg,
 		Broker: profile.Broker, Redis: profile.Redis, Blob: profile.Blob, Secrets: profile.Secrets,
 		Durable: dur, Extensions: exts, Directory: directory, Mailer: mailer, Counter: &analytics.Handle{}, Sandbox: sandboxCfg, Outbound: outbound, Agents: agentsCfg, Insights: insightsCfg,
-		LiveTurns: profile.LiveTurns, TurnTokens: profile.TurnTokens, RunSettings: runSettings, Telemetry: telemetry,
+		LiveTurns: profile.LiveTurns, TurnTokens: profile.TurnTokens, RunSettings: runSettings, Telemetry: telemetry, ToolMetrics: toolMetrics,
 		Streams: streamsPlumbing{Bus: bus, Dedup: streamDedup, Notices: senderNotices, Quota: writeQuota, Settings: settings, WebhookURL: webhookURL, Consume: p.events},
 	}
 	g := rb.group()

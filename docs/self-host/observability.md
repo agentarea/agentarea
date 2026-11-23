@@ -152,6 +152,7 @@ a fixed attribute allowlist enforced by the SDK.
     | `AGENTAREA_OTEL_ENABLED` | `false` | AgentArea's own gate. Nothing is installed unless this is true. |
     | `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | Required when enabled (or both `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` and `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`); the process refuses to start without it. |
     | `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | Or `grpc`. |
+    | `OTEL_TRACES_EXPORTER` | `otlp` | Or `none`: no spans are exported and no traces endpoint is required. The chart sets it while `telemetry.traces.enabled` is false. |
     | `OTEL_METRICS_EXPORTER` | `otlp` | `otlp`, `prometheus` (a scrape endpoint on `OTEL_EXPORTER_PROMETHEUS_HOST`:`OTEL_EXPORTER_PROMETHEUS_PORT`, default `localhost:9464`, one process per pod), or `none`. |
     | `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | Push interval in milliseconds. |
     | `OTEL_SEMCONV_STABILITY_OPT_IN` | unset | The process sets `http` itself when unset. A value without `http`, or with `http/dup`, stops it at startup. |
@@ -191,6 +192,7 @@ a fixed attribute allowlist enforced by the SDK.
     |---|---|---|
     | `OTEL_EXPORTER_OTLP_ENDPOINT` | required | The service refuses to start while the gate is on and a signal exported over OTLP has neither this nor its own `OTEL_EXPORTER_OTLP_{TRACES,METRICS}_ENDPOINT`. |
     | `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | The SDK default, port 4318. Set `grpc` for a collector on 4317. The event service defaulted to `grpc` before; see [Changed defaults](/self-host/env-migration#changed-defaults). |
+    | `OTEL_TRACES_EXPORTER` | `otlp` | `none` exports no spans; for a collector with no traces pipeline. |
     | `OTEL_METRICS_EXPORTER` | `otlp` | `prometheus` or `none` hand metrics to the SDK's own exporter instead. |
     | `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | Push interval in milliseconds. |
 

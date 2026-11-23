@@ -80,7 +80,6 @@ groups:
   backend:
     configVars:
       PORT: '8000'
-      AGENTAREA_ENV: '{{ .Values.global.deploymentEnv }}'
       AGENTAREA_LOG_LEVEL: 'INFO'
       AGENTAREA_MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
       AGENTAREA_API_URL: '{{ include "agentarea.backend.apiUrl" . }}'
@@ -171,7 +170,6 @@ groups:
     configVars:
       AGENTAREA_TEMPORAL_MAX_ACTIVITIES: '10'
       AGENTAREA_TEMPORAL_MAX_WORKFLOWS: '5'
-      AGENTAREA_ENV: '{{ .Values.global.deploymentEnv }}'
       AGENTAREA_MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
       AGENTAREA_WORKER_HEALTH_PORT: '{{ .Values.worker.healthPort }}'
       AGENTAREA_TASK_OUTAGE_RETRY_WINDOW: '{{ .Values.worker.outageWait.retryWindow }}'
@@ -186,6 +184,7 @@ groups:
   # when the spend currency differs from billing's ledger currency.
   application:
     configVars:
+      AGENTAREA_ENV: '{{ .Values.global.deploymentEnv }}'
       AGENTAREA_EDITION: '{{ .Values.global.edition }}'
       AGENTAREA_SPEND_CURRENCY: '{{ .Values.global.spendCurrency }}'
     secrets:

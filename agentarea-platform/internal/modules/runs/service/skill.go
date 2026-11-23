@@ -34,7 +34,12 @@ type SkillActivated struct {
 
 // ActivateSkill puts a skill's SKILL.md into the task log, never into history
 // (files.py activate_skill_activity). Only an unreachable service is retried.
-func (s *Service) ActivateSkill(ctx context.Context, p Principal, in SkillActivation) (SkillActivated, error) {
+func (s *Service) ActivateSkill(ctx context.Context, p Principal, in SkillActivation) (_ SkillActivated, err error) {
+	call := s.d.ToolMetrics.begin(ctx, toolKindSkill, toolPathWorker)
+	defer func() {
+		call.set(skillOutcome(err))
+		call.end(ctx, err)
+	}()
 	ws, err := workspace(p)
 	if err != nil {
 		return SkillActivated{}, err

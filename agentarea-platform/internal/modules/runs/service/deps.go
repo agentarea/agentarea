@@ -284,6 +284,8 @@ type Deps struct {
 	Settings    RunSettings
 	Entitlement EntitlementGate
 	Telemetry   RunTelemetry
+	// ToolMetrics records the run's tool calls; nil records none.
+	ToolMetrics *ToolTelemetry
 	// Vendor reads what a settled tool call cost from its vendor (connections);
 	// the settlement worker needs it.
 	Vendor VendorCosts
