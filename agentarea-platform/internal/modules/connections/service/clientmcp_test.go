@@ -351,3 +351,15 @@ func TestClientEndpointJudgesAndAuditsOpenAPICalls(t *testing.T) {
 		}
 	}
 }
+
+func TestAMemberListsItsStoredToolsWithoutWakingTheServer(t *testing.T) {
+	b := &clientBackend{}
+	m := &member{inst: domain.Instance{Tools: []any{
+		map[string]any{"name": "show_pipeline", "inputSchema": map[string]any{"type": "object"}},
+		"not a tool",
+	}}}
+	tools := b.discover(context.Background(), m)
+	if len(tools) != 1 || tools[0]["name"] != "show_pipeline" {
+		t.Fatalf("got %v", tools)
+	}
+}
