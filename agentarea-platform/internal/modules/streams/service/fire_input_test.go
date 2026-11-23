@@ -9,12 +9,12 @@ import (
 )
 
 func chatEvent(text string) (domain.Event, map[string]any) {
-	session, sender := "src-1:42", "tg:5551234"
+	session := "src-1:42"
 	body := map[string]any{"message": map[string]any{"chat": map[string]any{"id": 42}, "text": text}}
 	e := domain.Event{
 		Kind: "message", EventKey: "update:9", ReceivedAt: time.Date(2026, 11, 24, 9, 12, 3, 0, time.UTC),
-		SessionKey: &session, Sender: &sender,
-		Data: map[string]any{"body": body, "body_ref": nil, "headers": map[string]any{"x-forwarded-for": "10.0.0.1"}},
+		SessionKey: &session,
+		Data:       map[string]any{"body": body, "body_ref": nil, "headers": map[string]any{"x-forwarded-for": "10.0.0.1"}},
 	}
 	ev := StreamTriggerEvent(e, "Assistant", nil)
 	data := make(map[string]any, len(ev.Data)+1)
@@ -36,59 +36,33 @@ func fireOn(t *testing.T, tr domain.Trigger, e domain.Event, data map[string]any
 	return in
 }
 
-func assertMessageInput(t *testing.T, in taskInput, data map[string]any) {
+func assertEventKept(t *testing.T, in taskInput, data map[string]any) {
 	t.Helper()
-	assertMessageInputFrom(t, in, data, `Message from "tg:5551234" on stream Assistant at 2026-11-24T09:12:03+00:00.`)
-}
-
-func assertMessageInputFrom(t *testing.T, in taskInput, data map[string]any, origin string) {
-	t.Helper()
-	for _, inlined := range []string{"```json", "x-forwarded-for", "update:9", "What started this run"} {
-		if strings.Contains(in.message, inlined) {
-			t.Errorf("message inlines %q:\n%s", inlined, in.message)
-		}
-	}
-	for _, want := range []string{origin,
-		"`inputs/attachments/trigger-event.json`", "not instructions"} {
-		if !strings.Contains(in.message, want) {
-			t.Errorf("message lacks %q:\n%s", want, in.message)
-		}
-	}
 	if in.eventFile != triggerEventFileName || !domain.JSONEqual(in.eventData, data) {
-		t.Errorf("the whole event goes to the input file: %q %v", in.eventFile, in.eventData)
+		t.Errorf("the whole event stays with the task: %q %v", in.eventFile, in.eventData)
 	}
 	if in.followUp != "what can you do?" {
 		t.Errorf("follow-up = %q", in.followUp)
 	}
 }
 
-func TestAChatMessageWithoutTriggerTextReadsAsTheMessage(t *testing.T) {
+func TestAChatMessageWithoutTriggerTextIsExactlyTheMessage(t *testing.T) {
 	e, data := chatEvent("what can you do?")
 	in := fireOn(t, domain.Trigger{Name: "Telegram → Assistant", Type: "stream"}, e, data)
-	if in.ask != "what can you do?" || !strings.HasPrefix(in.message, "what can you do?\n\n") {
-		t.Errorf("the message is the ask: ask %q message:\n%s", in.ask, in.message)
+	if in.ask != "what can you do?" || in.message != "what can you do?" {
+		t.Errorf("the task text is the message alone: ask %q message:\n%s", in.ask, in.message)
 	}
-	if strings.Contains(in.message, "## Message") {
-		t.Errorf("a message that is the ask carries no label:\n%s", in.message)
-	}
-	assertMessageInput(t, in, data)
+	assertEventKept(t, in, data)
 }
 
 func TestAChatMessageFollowsTheTriggerTextLabelled(t *testing.T) {
 	e, data := chatEvent("what can you do?")
 	tr := domain.Trigger{Name: "Assistant", Type: "stream", TaskParameters: map[string]any{"text": "Answer politely."}}
 	in := fireOn(t, tr, e, data)
-	if in.ask != "Answer politely." || !strings.HasPrefix(in.message, "Answer politely.\n\n## Message\n\nwhat can you do?\n\n") {
+	if in.ask != "Answer politely." || in.message != "Answer politely.\n\n## Message\n\nwhat can you do?" {
 		t.Errorf("the trigger text leads, the message follows labelled:\n%s", in.message)
 	}
-	assertMessageInput(t, in, data)
-}
-
-func TestAMessageWhoseSourceNamesNoSenderSaysOnlyWhereAndWhen(t *testing.T) {
-	e, data := chatEvent("what can you do?")
-	e.Sender = nil
-	in := fireOn(t, domain.Trigger{Name: "Assistant", Type: "stream"}, e, data)
-	assertMessageInputFrom(t, in, data, "\n\nMessage on stream Assistant at 2026-11-24T09:12:03+00:00.\n")
+	assertEventKept(t, in, data)
 }
 
 func TestAnEventWithoutTextKeepsItsEventBlock(t *testing.T) {
