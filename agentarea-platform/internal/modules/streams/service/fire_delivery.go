@@ -170,8 +170,17 @@ func (s *Service) FiringDelivery(ctx context.Context, ws scope.Workspace, e doma
 	if err != nil {
 		return base, err
 	}
+	overrides, err := domain.ParseEventOverrides(src.EventTemplates)
+	if err != nil {
+		return base, err
+	}
+	withBody := e.Data
+	if body != nil {
+		withBody = map[string]any{"headers": e.Data["headers"], "body": body}
+	}
 	return TaskDelivery{SourceType: &slug, StreamEventID: &eventID, Session: session,
-		Address: s.deliveryAddress(ctx, entry, src, triggerID, e.SessionKey, body, headers)}, nil
+		Address: s.deliveryAddress(ctx, entry, src, triggerID, e.SessionKey, body, headers),
+		Text:    domain.EventText(entry, overrides, withBody)}, nil
 }
 
 // deliveryAddress is build_delivery_address; nil when the entry has no reply or the event no target.
