@@ -47,6 +47,7 @@ type Store interface {
 	ListExternalIdentities(ctx context.Context, q db.Querier, userID string) ([]domain.ExternalIdentity, error)
 	RevokeExternalIdentity(ctx context.Context, q db.Querier, userID string, id uuid.UUID, now time.Time) (bool, error)
 	ExternalIdentityHolder(ctx context.Context, q db.Querier, provider, externalID string) (string, bool, error)
+	LinkedExternalIDs(ctx context.Context, q db.Querier, userID, provider string) ([]string, error)
 	InsertExternalIdentity(ctx context.Context, q db.Querier, userID string, a domain.MessengerAccount, method string, now time.Time) (domain.ExternalIdentity, error)
 	RenameExternalIdentity(ctx context.Context, q db.Querier, userID string, a domain.MessengerAccount, now time.Time) (domain.ExternalIdentity, error)
 }

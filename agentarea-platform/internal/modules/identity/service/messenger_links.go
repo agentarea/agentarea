@@ -30,6 +30,16 @@ func (s *Service) Holder(ctx context.Context, provider, externalID string) (stri
 	return s.d.Store.ExternalIdentityHolder(ctx, q, provider, externalID)
 }
 
+// Accounts are the user's live accounts of provider, the most recently linked first.
+func (s *Service) Accounts(ctx context.Context, userID, provider string) ([]string, error) {
+	q, release, err := s.d.DB.Global().Read(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return s.d.Store.LinkedExternalIDs(ctx, q, userID, provider)
+}
+
 // Redeem spends a link code from the messenger account.
 func (s *Service) Redeem(ctx context.Context, code, provider, externalID string) (string, bool, error) {
 	if s.d.LinkCodes == nil {

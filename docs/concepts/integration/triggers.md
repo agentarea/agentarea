@@ -127,6 +127,11 @@ configured the trigger. Everyone else is refused and the reaction is
 or was used brings a fresh one), a linked sender without access is told they have
 none, and group chats and other bots are ignored.
 
+**An agent can write first.** With the `agentarea/messages` toolset a run sends
+a member a message through the bot, to the Telegram account that member linked;
+their answer arrives as a chat message and continues the session like any
+other. See [Platform toolsets](/reference/platform-toolsets).
+
 **A trigger's run acts as its agent.** The run reaches what the agent was
 granted, not what the person who configured the trigger can reach, so that
 person leaving the workspace stops nothing. Pointing a trigger at an agent,

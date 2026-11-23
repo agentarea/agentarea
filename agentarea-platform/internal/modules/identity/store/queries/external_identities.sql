@@ -22,3 +22,9 @@ SET username = COALESCE(sqlc.narg(username), username),
     updated_at = @now
 WHERE user_id = @user_id AND provider = @provider AND external_id = @external_id AND revoked_at IS NULL
 RETURNING id, provider, external_id, username, display_name, created_at;
+
+-- LinkedExternalIDs reads only the columns user_external_identities has had from the baseline.
+-- name: LinkedExternalIDs :many
+SELECT external_id FROM user_external_identities
+WHERE user_id = @user_id AND provider = @provider AND revoked_at IS NULL
+ORDER BY created_at DESC, id;

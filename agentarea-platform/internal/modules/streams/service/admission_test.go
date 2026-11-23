@@ -67,6 +67,8 @@ type links struct {
 	offers  []identityapi.OfferingBot
 	live    map[string]bool
 	linked  identityapi.Account
+	// accounts are each user's linked Telegram ids.
+	accounts map[string][]string
 }
 
 func (l *links) Offer(_ context.Context, a identityapi.Account, bot identityapi.OfferingBot) (string, bool, error) {
@@ -108,6 +110,13 @@ func (l *links) Confirm(_ context.Context, a identityapi.Account) (string, bool,
 }
 
 func (l *links) Describe(context.Context, string) string { return "o***@example.com" }
+
+func (l *links) Accounts(_ context.Context, userID, provider string) ([]string, error) {
+	if provider != "telegram" {
+		return nil, nil
+	}
+	return l.accounts[userID], nil
+}
 
 type owners struct{ owner string }
 

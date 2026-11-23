@@ -50,4 +50,7 @@ type MessengerLinks interface {
 	// Describe names the user's account to the sender: the masked email, or
 	// "your AgentArea account" when it cannot be read.
 	Describe(ctx context.Context, userID string) string
+	// Accounts are the external ids of the user's live accounts of provider, the most recently
+	// linked first; none when the user linked none.
+	Accounts(ctx context.Context, userID, provider string) ([]string, error)
 }
