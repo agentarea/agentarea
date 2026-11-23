@@ -651,10 +651,13 @@ func (in *bundleInstaller) redeployMCP(ctx context.Context, m BundleMCP, id, nam
 	return e, nil
 }
 
-// rediscoverMCPs discovers again the tools of the MCPs this deploy created or
-// updated, and of the unchanged ones the caller may edit, once the install
-// committed: agents see the tools each serves now. The outcome is each MCP's
-// detail in result, never the install's: the writes are done.
+// rediscoverMCPs starts discovering again the tools of the MCPs this deploy
+// created or updated, and of the unchanged ones the caller may edit, once the
+// install committed: agents see the tools each serves now. Discovery runs in
+// the background, since a container MCP's cold start outlasts the request.
+// The outcome is each MCP's detail in result, never the install's: the writes are done.
+const rediscoveryStarted = "tools are being re-discovered; the MCP's page shows the result"
+
 func (in *bundleInstaller) rediscoverMCPs(ctx context.Context, result *InstallResult) {
 	w := in.w
 	refused := "tools not re-discovered: you may not edit it"
@@ -679,24 +682,17 @@ func (in *bundleInstaller) rediscoverMCPs(ctx context.Context, result *InstallRe
 		case ActionOrphaned, ActionReused, ActionSkipped:
 			continue
 		}
-		found, err := w.b.d.MCPs.Rediscover(ctx, w.c, *e.ID)
+		err := w.b.d.MCPs.Rediscover(ctx, w.c, *e.ID)
 		if _, isRefusal := refusalOf(err); isRefusal {
 			set(refused)
 			continue
 		}
-		switch {
-		case err != nil:
+		if err != nil {
 			w.b.d.Log.ErrorContext(ctx, "Could not re-discover the tools of a bundle's MCP", "mcp", e.Key, "instance_id", *e.ID, "error", err)
 			set("tools not re-discovered: " + err.Error())
-		case found.Status != "succeeded":
-			d := "tools not re-discovered: verification " + found.Status
-			if found.Error != nil && *found.Error != "" {
-				d += ": " + *found.Error
-			}
-			set(d)
-		default:
-			set(fmt.Sprintf("tools re-discovered: %d", found.Tools))
+			continue
 		}
+		set(rediscoveryStarted)
 	}
 }
 

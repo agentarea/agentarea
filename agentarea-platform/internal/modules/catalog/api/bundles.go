@@ -120,14 +120,6 @@ type BundleMCPUpdate struct {
 	SetContextSecret bool
 }
 
-// BundleDiscovery is a verification of an instance: its status, how many
-// tools it serves now, and why it failed.
-type BundleDiscovery struct {
-	Status string
-	Tools  int
-	Error  *string
-}
-
 // BundleMCPs is what a bundle deploy reads and writes of MCP connections
 // (connections module). A refusal of the input is a *BundleRefusal.
 type BundleMCPs interface {
@@ -143,8 +135,9 @@ type BundleMCPs interface {
 	CreateWithSpec(ctx context.Context, c authn.Caller, spec MCPSpecNew, in BundleInstance) (BundleMCPCreated, error)
 	// UpdateMCP applies a redeploy to the instance id and its spec.
 	UpdateMCP(ctx context.Context, c authn.Caller, id string, u BundleMCPUpdate) error
-	// Rediscover verifies the instance again and stores the tools it serves now.
-	Rediscover(ctx context.Context, c authn.Caller, id string) (BundleDiscovery, error)
+	// Rediscover starts a verification of the instance detached from the
+	// request; once it finishes the instance stores the tools it serves now.
+	Rediscover(ctx context.Context, c authn.Caller, id string) error
 	DeleteInstance(ctx context.Context, c authn.Caller, id string) error
 	DeleteSpec(ctx context.Context, c authn.Caller, id string) error
 	// SecretProblem is the refusal of the caller referencing the workspace secret, "" when it may.

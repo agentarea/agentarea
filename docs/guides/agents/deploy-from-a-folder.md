@@ -582,8 +582,11 @@ plan's first line names the bundle it updates; read it before you confirm.
   `--set` value it uses changed, and left alone otherwise.
 - An MCP server this bundle created is updated in place: its spec, its
   environment and its headers. A secret binding you do not pass again keeps
-  the value already stored. Every redeploy re-discovers each server's tools;
-  the result shows `tools re-discovered: <n>`, or why discovery failed.
+  the value already stored. Every redeploy starts re-discovering each server's
+  tools and returns without waiting for it, since a server that has to start
+  can take longer than the request. The result shows `tools are being
+  re-discovered`; the server's page shows the tools it found, or why discovery
+  failed.
 - An MCP server cannot switch between `catalog` and `json_spec`, change its
   catalog id, or change transport (for example from `docker` to `url`) on
   redeploy. The plan blocks with `give it a new key`: change the server's
