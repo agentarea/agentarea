@@ -34,22 +34,18 @@ const (
 	a2aVersionField = "A2A-Version"
 )
 
-// a2aPolling is how long GetTask is polled for a task still running: under the tool activity's 120 s.
-type a2aPolling struct{ every, budget time.Duration }
-
-// CallRemoteAgent is A2AAgentTool.execute: the message sent to the delegate's A2A agent, the
-// task it starts polled until it ends, its answer returned as the tool's.
-func (s *Service) CallRemoteAgent(ctx context.Context, call api.RemoteAgentCall) (api.RemoteAgentResult, error) {
-	return s.callRemoteAgent(ctx, call, a2aPolling{every: 2 * time.Second, budget: 110 * time.Second})
-}
-
-func (s *Service) callRemoteAgent(ctx context.Context, call api.RemoteAgentCall, poll a2aPolling) (api.RemoteAgentResult, error) {
+// SendRemoteAgent is A2AAgentTool.execute up to the send: the message sent to the delegate's
+// A2A agent without waiting for the task it starts; a task still running answers Pending.
+func (s *Service) SendRemoteAgent(ctx context.Context, call api.RemoteAgentCall) (api.RemoteAgentResult, error) {
 	ws, err := scope.NewWorkspace(call.WorkspaceID, "")
 	if err != nil {
 		return api.RemoteAgentResult{}, err
 	}
 	if s.d.Out == nil {
 		return api.RemoteAgentResult{}, errors.New("calling a remote delegate needs the outbound clients")
+	}
+	if call.MessageID == "" {
+		return api.RemoteAgentResult{}, errors.New("calling a remote delegate needs the call's message id")
 	}
 	if call.Message == "" {
 		return raisedResult("message is required"), nil
@@ -62,13 +58,12 @@ func (s *Service) callRemoteAgent(ctx context.Context, call api.RemoteAgentCall,
 	}
 	pay := s.paying(ws, call.UserID, call.AgentID, call.ToolName, call.ToolCallID, call.Paid)
 	out := s.d.Out.Transport(netguard.Member)
-	noRedirect := func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	d := remoteDelegate{
-		name: call.AgentName, address: call.A2AURL, token: token, poll: poll,
+		name: call.AgentName, address: call.A2AURL, token: token,
 		card: &http.Client{Transport: out, Timeout: a2aCallTimeout, CheckRedirect: noRedirect},
 		rpc:  &http.Client{Transport: pay.Wrap(out), Timeout: a2aCallTimeout, CheckRedirect: noRedirect},
 	}
-	res := d.delegate(ctx, call.Message)
+	res := d.delegate(ctx, call.MessageID, call.Message)
 	if err := ctx.Err(); err != nil {
 		return api.RemoteAgentResult{}, err
 	}
@@ -82,6 +77,100 @@ func (s *Service) callRemoteAgent(ctx context.Context, call api.RemoteAgentCall,
 		res.Error = "A2A payment failed: " + reason
 	}
 	return res, nil
+}
+
+// GetRemoteAgentTask reads a task the delegate runs once (GetTask). A network failure or an
+// agent answering 5xx or 429 leaves the task pending, to be asked about again.
+func (s *Service) GetRemoteAgentTask(ctx context.Context, call api.RemoteTaskCall) (api.RemoteAgentResult, error) {
+	d, refused, err := s.taskDelegate(ctx, call)
+	if err != nil || refused != nil {
+		return deref(refused), err
+	}
+	t, err := d.getTask(ctx, call.Task.ID)
+	switch {
+	case err != nil && ctx.Err() != nil:
+		return api.RemoteAgentResult{}, ctx.Err()
+	case err != nil && a2aTransient(err):
+		return api.RemoteAgentResult{Pending: &call.Task}, nil
+	case err != nil:
+		return d.failure(err), nil
+	}
+	if t.id == "" {
+		t.id = call.Task.ID
+	}
+	return d.outcome(t), nil
+}
+
+// CancelRemoteAgentTask asks the delegate to stop a task (CancelTask). A JSON-RPC error, the
+// task already ended or not cancelable, leaves nothing to stop.
+func (s *Service) CancelRemoteAgentTask(ctx context.Context, call api.RemoteTaskCall) error {
+	d, refused, err := s.taskDelegate(ctx, call)
+	if err != nil {
+		return err
+	}
+	if refused != nil {
+		return errors.New(refused.Error)
+	}
+	method := "CancelTask"
+	if d.legacy {
+		method = "tasks/cancel"
+	}
+	_, err = d.call(ctx, method, map[string]any{"id": call.Task.ID})
+	var rpc *a2aRPCError
+	if errors.As(err, &rpc) {
+		return nil
+	}
+	return err
+}
+
+// taskDelegate is the delegate a task call reaches: the task's endpoint, which must be on the
+// address's own origin, called with the bound credential.
+func (s *Service) taskDelegate(ctx context.Context, call api.RemoteTaskCall) (*remoteDelegate, *api.RemoteAgentResult, error) {
+	ws, err := scope.NewWorkspace(call.WorkspaceID, "")
+	if err != nil {
+		return nil, nil, err
+	}
+	if s.d.Out == nil {
+		return nil, nil, errors.New("calling a remote delegate needs the outbound clients")
+	}
+	if call.Task.ID == "" || a2aOrigin(call.Task.Endpoint) != a2aOrigin(call.A2AURL) {
+		r := raisedResult(fmt.Sprintf("The task of '%s' is not on %s: %s", call.AgentName, a2aOrigin(call.A2AURL), call.Task.Endpoint))
+		return nil, &r, nil
+	}
+	token := ""
+	if call.AuthSecretName != "" {
+		if token, err = s.delegateToken(ctx, ws, call.UserID, call.AuthSecretName); err != nil {
+			r := raisedResult(fmt.Sprintf("Could not resolve the credential for '%s': %v", call.AgentName, err))
+			return nil, &r, nil
+		}
+	}
+	return &remoteDelegate{
+		name: call.AgentName, address: call.A2AURL, token: token, legacy: call.Task.Legacy,
+		endpoint: a2aInterface{url: call.Task.Endpoint},
+		rpc:      &http.Client{Transport: s.d.Out.Transport(netguard.Member), Timeout: a2aCallTimeout, CheckRedirect: noRedirect},
+	}, nil, nil
+}
+
+func deref(r *api.RemoteAgentResult) api.RemoteAgentResult {
+	if r == nil {
+		return api.RemoteAgentResult{}
+	}
+	return *r
+}
+
+func noRedirect(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
+// a2aTransient is a failure worth asking again about: no answer, or 5xx and 429.
+func a2aTransient(err error) bool {
+	var network *a2aNetError
+	var status *a2aHTTPError
+	switch {
+	case errors.As(err, &network):
+		return true
+	case errors.As(err, &status):
+		return status.status >= 500 || status.status == http.StatusTooManyRequests
+	}
+	return false
 }
 
 // delegateToken is _secret_token_provider: the bound workspace secret, read as the run's user when the call runs.
@@ -116,7 +205,6 @@ func failedResult(msg string) api.RemoteAgentResult { return api.RemoteAgentResu
 // remoteDelegate is one call of an A2A agent known by its address.
 type remoteDelegate struct {
 	name, address, token string
-	poll                 a2aPolling
 	card, rpc            *http.Client
 	endpoint             a2aInterface
 	legacy               bool
@@ -154,23 +242,22 @@ type a2aNetError struct {
 
 func (e *a2aNetError) Error() string { return "Network communication error: " + e.err.Error() }
 
-func (d *remoteDelegate) delegate(ctx context.Context, message string) api.RemoteAgentResult {
+func (d *remoteDelegate) delegate(ctx context.Context, messageID, message string) api.RemoteAgentResult {
 	if err := d.resolve(ctx); err != nil {
 		return raisedResult(err.Error())
 	}
-	answer, err := d.send(ctx, message)
+	answer, err := d.send(ctx, messageID, message)
 	if err != nil {
 		return d.failure(err)
 	}
 	if answer.message != nil {
 		return d.success(strings.Join(answer.message, "\n"))
 	}
-	t := answer.task
-	if !a2aTerminal(t.state) && !a2aInterrupted(t.state) {
-		if t, err = d.pollTask(ctx, t); err != nil {
-			return d.failure(err)
-		}
-	}
+	return d.outcome(answer.task)
+}
+
+// outcome is what a task answers: its result once it ended or stopped for input, else Pending.
+func (d *remoteDelegate) outcome(t a2aTask) api.RemoteAgentResult {
 	switch {
 	case t.state == "TASK_STATE_COMPLETED":
 		return d.success(t.result())
@@ -178,8 +265,10 @@ func (d *remoteDelegate) delegate(ctx context.Context, message string) api.Remot
 		return failedResult(fmt.Sprintf("'%s' ended the task as %s: %s", d.name, t.state, t.result()))
 	case a2aInterrupted(t.state):
 		return failedResult(fmt.Sprintf("'%s' stopped at %s on task %s: %s", d.name, t.state, t.id, t.result()))
+	case t.id == "":
+		return raisedResult(fmt.Sprintf("'%s' answered a running task without an id", d.name))
 	}
-	return failedResult(fmt.Sprintf("'%s' is still working on task %s; no result within the delegation time limit", d.name, t.id))
+	return api.RemoteAgentResult{Pending: &api.RemoteTask{ID: t.id, Endpoint: d.endpoint.url, Legacy: d.legacy}}
 }
 
 func (d *remoteDelegate) success(text string) api.RemoteAgentResult {
@@ -222,34 +311,6 @@ func a2aTerminal(state string) bool {
 
 func a2aInterrupted(state string) bool {
 	return state == "TASK_STATE_INPUT_REQUIRED" || state == "TASK_STATE_AUTH_REQUIRED"
-}
-
-func (d *remoteDelegate) pollTask(ctx context.Context, t a2aTask) (a2aTask, error) {
-	for elapsed := time.Duration(0); elapsed < d.poll.budget; elapsed += d.poll.every {
-		timer := time.NewTimer(d.poll.every)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return t, ctx.Err()
-		case <-timer.C:
-		}
-		next, err := d.getTask(ctx, t.id)
-		var raised *a2aRaisedError
-		switch {
-		case errors.As(err, &raised):
-			return t, err
-		case err != nil:
-			if ctx.Err() != nil {
-				return t, ctx.Err()
-			}
-			continue
-		}
-		t = next
-		if a2aTerminal(t.state) || a2aInterrupted(t.state) {
-			return t, nil
-		}
-	}
-	return t, nil
 }
 
 // resolve reads the agent's card and picks the JSON-RPC endpoint to call: it must be on the
@@ -463,8 +524,7 @@ type a2aAnswer struct {
 }
 
 // send is SendMessage (message/send to a 0.3 agent) without waiting for the task to end.
-func (d *remoteDelegate) send(ctx context.Context, message string) (a2aAnswer, error) {
-	id := strings.ReplaceAll(uuid.NewString(), "-", "")
+func (d *remoteDelegate) send(ctx context.Context, id, message string) (a2aAnswer, error) {
 	method := "SendMessage"
 	params := map[string]any{
 		"message":       map[string]any{"messageId": id, "role": "ROLE_USER", "parts": []any{map[string]any{"text": message}}},
