@@ -8,12 +8,8 @@ import {
   describeToolCall,
   type ToolMeta,
 } from "@/components/Chat/utils/describeToolCall";
-import {
-  FileChip,
-  fileBasename,
-} from "@/components/Chat/utils/fileIcon";
+import { fileBasename, FileChip } from "@/components/Chat/utils/fileIcon";
 import { SiteLink } from "@/components/Chat/utils/SiteLink";
-import { ToolIcon } from "@/components/Chat/utils/toolIcon";
 import {
   containsUnavailableToolValue,
   hasAvailableToolValue,
@@ -21,9 +17,11 @@ import {
   stripUnavailableToolValues,
   TOOL_DETAILS_UNAVAILABLE,
 } from "@/components/Chat/utils/toolDetails";
+import { ToolIcon } from "@/components/Chat/utils/toolIcon";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import type { StatusKind } from "@/lib/status";
 import type { Part } from "../contract";
+import { readableToolText } from "../toolText";
 import { ArtifactMedia } from "./ArtifactMedia";
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -101,7 +99,11 @@ function CopyToolDetailsButton({ value }: { value: string }) {
       title={copied ? "Copied" : "Copy tool details"}
       className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? (
+        <Check className="h-3.5 w-3.5" />
+      ) : (
+        <Copy className="h-3.5 w-3.5" />
+      )}
     </button>
   );
 }
@@ -210,7 +212,12 @@ export const ToolPart: React.FC<{
   )
     ? pickString(displayArgsRecord, ["path", "file", "filename", "file_path"])
     : undefined;
-  const urlTarget = pickString(displayArgsRecord, ["url", "href", "uri", "link"]);
+  const urlTarget = pickString(displayArgsRecord, [
+    "url",
+    "href",
+    "uri",
+    "link",
+  ]);
   const reachableUrl =
     urlTarget && /^(https?:\/\/|\/)/i.test(urlTarget) ? urlTarget : undefined;
   const queryTarget = pickString(displayArgsRecord, [
@@ -225,11 +232,12 @@ export const ToolPart: React.FC<{
     "integration_name",
   ]);
   const fileLabel = fileTarget ? fileBasename(fileTarget) : undefined;
-  const actionVerb = fileLabel && text.endsWith(fileLabel)
-    ? text.slice(0, -fileLabel.length).trim()
-    : reachableUrl && /^(fetch|browse|open)/i.test(text)
-      ? text.split(" ")[0]
-      : text;
+  const actionVerb =
+    fileLabel && text.endsWith(fileLabel)
+      ? text.slice(0, -fileLabel.length).trim()
+      : reachableUrl && /^(fetch|browse|open)/i.test(text)
+        ? text.split(" ")[0]
+        : text;
   const hasSummarySubject = Boolean(
     fileTarget || reachableUrl || code || queryTarget || serviceName
   );
@@ -398,7 +406,7 @@ export const ToolPart: React.FC<{
                     {formatValue(result)}
                   </pre>
                 ) : typeof result === "string" ? (
-                  <MessageMarkdown content={result} />
+                  <MessageMarkdown content={readableToolText(result)} />
                 ) : (
                   <pre className="min-w-max whitespace-pre font-mono text-[12px] leading-5 text-foreground">
                     {formatValue(result)}

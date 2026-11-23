@@ -15,6 +15,8 @@ import FullChat, {
 
 interface WorkplaceChatProps {
   initialAgent: Agent;
+  /** Text the composer opens with. */
+  initialInput?: string;
   availableAgents: Agent[];
   availableProjects?: ProjectOption[];
   availableTaskPolicies?: TaskPolicyOption[];
@@ -28,6 +30,7 @@ interface WorkplaceChatProps {
  */
 export function WorkplaceChat({
   initialAgent,
+  initialInput,
   availableAgents,
   availableProjects,
   availableTaskPolicies,
@@ -63,6 +66,7 @@ export function WorkplaceChat({
   return (
     <FullChat
       agent={selectedAgent}
+      initialInput={initialInput}
       availableAgents={availableAgents}
       onAgentChange={setSelectedAgent}
       availableProjects={availableProjects}

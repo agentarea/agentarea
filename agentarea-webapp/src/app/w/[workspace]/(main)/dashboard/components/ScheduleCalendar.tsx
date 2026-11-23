@@ -13,6 +13,7 @@ import {
   addDays,
   buildMonthWeeks,
   buildTodayAgenda,
+  buildUpcoming,
   buildWeekDays,
   dayKey,
   firstRunFrom,
@@ -20,7 +21,9 @@ import {
 import { DayGrid, UpcomingList } from "./DayGrid";
 import { TimeGrid, type TimeGridFormats } from "./TimeGrid";
 
-const VIEWS = ["today", "week", "month"] as const;
+const VIEWS = ["upcoming", "today", "week", "month"] as const;
+/** How many runs the upcoming view lists before Week and Month take over. */
+const UPCOMING_RUNS = 10;
 type View = (typeof VIEWS)[number];
 
 const noopSubscribe = () => () => {};
@@ -144,6 +147,28 @@ function ScheduleBody({
       ? formats.dayLabel(new Date(item.next_run_at))
       : null;
 
+  if (view === "upcoming") {
+    return (
+      <>
+        <FrequentStrip items={schedule.frequent} firstDate={laterFrequent} />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <UpcomingList
+            days={buildUpcoming(schedule.runs, now, UPCOMING_RUNS)}
+            formats={formats}
+            empty={
+              <EmptyNote
+                view="upcoming"
+                hasSchedule={hasSchedule}
+                next={null}
+                formats={formats}
+              />
+            }
+          />
+        </div>
+      </>
+    );
+  }
+
   if (view === "today") {
     const agenda = buildTodayAgenda(schedule.runs, schedule.frequent, now);
     const empty = agenda.runs.length === 0 && agenda.frequent.length === 0;
@@ -158,7 +183,7 @@ function ScheduleBody({
               <EmptyNote
                 view="today"
                 hasSchedule={hasSchedule}
-                next={agenda.next}
+                next={null}
                 formats={formats}
               />
             ) : null
@@ -233,7 +258,7 @@ export function ScheduleCalendar({ schedule }: { schedule: Schedule }) {
   const isClient = useIsClient();
   const [view, setView] = useQueryState(
     "schedule",
-    parseAsStringLiteral(VIEWS).withDefault("today")
+    parseAsStringLiteral(VIEWS).withDefault("upcoming")
   );
 
   const timeFmt = new Intl.DateTimeFormat(locale, {

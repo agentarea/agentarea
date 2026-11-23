@@ -1702,6 +1702,20 @@
     "runnerOffline": "{name} не в сети: задача подождёт его до 10 минут."
   },
   "TasksPage": {
+    "sectionExpected": "Ожидаемые",
+    "sectionRuns": "Запущенные",
+    "sectionTemplates": "Шаблоны",
+    "runNow": "Запустить сейчас",
+    "runFailed": "Не удалось запустить",
+    "open": "Открыть",
+    "expectedWhen": "Когда",
+    "expectedEmptyTitle": "Ничего не ожидается",
+    "expectedEmptyDescription": "Здесь появятся включённые расписания и задачи, отложенные на потом.",
+    "expectedLoadFailed": "Не удалось загрузить ожидаемые задачи",
+    "savedTitle": "Сохранённые задачи",
+    "savedName": "Задача",
+    "savedEmptyTitle": "Сохранённых задач нет",
+    "savedEmptyDescription": "Они появляются из папки tasks/ при деплое или через API.",
     "title": "Задачи",
     "description": "Описание",
     "agent": "Агент",
@@ -3454,12 +3468,13 @@
     "stopped": "Остановлены",
     "activity": "Активность",
     "scheduleView": {
+      "upcoming": "Ближайшие",
       "today": "Сегодня",
       "week": "Неделя",
       "month": "Месяц"
     },
     "nextRun": "Следующий запуск: {title}, {when}",
-    "nothingInView": "{view, select, today {На сегодня ничего не запланировано} week {На этой неделе ничего не запланировано} other {В этом месяце ничего не запланировано}}"
+    "nothingInView": "{view, select, upcoming {Ближайших запусков нет} today {На сегодня ничего не запланировано} week {На этой неделе ничего не запланировано} other {В этом месяце ничего не запланировано}}"
   },
   "BudgetsPage": {
     "couldntLoadTitle": "Не удалось загрузить данные бюджета",
@@ -3734,7 +3749,6 @@
     "title": "Приложения",
     "description": "Интерактивные интерфейсы из подключений MCP.",
     "connection": "Подключение",
-    "open": "Открыть приложение",
     "emptyTitle": "Нет доступных MCP-приложений",
     "emptyDescription": "Подключите MCP-сервер с интерактивным приложением, чтобы оно появилось здесь.",
     "connectAction": "Открыть подключения",
