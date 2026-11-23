@@ -56,6 +56,12 @@ type Tasks = runsapi.Tasks
 // TaskOutcomes is runs' read of the task a task event names.
 type TaskOutcomes = runsapi.TaskOutcomes
 
+// Turns records the delivery address of a follow-up routed into a running task: the turn it
+// starts is answered there (replies.Turns).
+type Turns interface {
+	Begin(ctx context.Context, taskID string, address map[string]any) error
+}
+
 // Deps are the service's ports. A nil port leaves the routes that need it unmounted.
 type Deps struct {
 	DB    db.Database
@@ -88,6 +94,9 @@ type Deps struct {
 	Quota WriteQuota
 	// Tasks starts a trigger's task; nil leaves firing unmounted.
 	Tasks Tasks
+	// Turns records where a routed follow-up is answered; nil answers every turn of a session
+	// at the message that started its task.
+	Turns Turns
 	// TaskReads is the task statuses and costs the feed and history show; nil shows none.
 	TaskReads api.TaskReads
 	// FiringTasks is the task reads a firing needs (retry, overlap, saved task); nil fails a firing that needs one.

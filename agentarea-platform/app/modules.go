@@ -36,6 +36,7 @@ import (
 	runsservice "github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/service"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/replies"
 	streamsservice "github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/service"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/wallet"
 	clusterauthn "github.com/agentarea/agentarea/agentarea-platform/internal/profiles/cluster/authn"
@@ -315,6 +316,7 @@ func streamsDeps(e *edge, d coreDeps, m *moduleSet) streams.Deps {
 	}
 	if d.Redis != nil {
 		sd.RateLimiter = clusterhttpx.NewRateLimiter(d.Redis)
+		sd.Turns = replies.Turns{Redis: d.Redis}
 	}
 	if p.Bus != nil {
 		sd.Bus, sd.Dedup, sd.Quota, sd.Notices = p.Bus, p.Dedup, p.Quota, p.Notices

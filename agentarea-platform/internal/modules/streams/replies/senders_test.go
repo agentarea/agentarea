@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -14,8 +15,10 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/events"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
 	runsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/domain"
@@ -320,7 +323,7 @@ func TestTelegramLiveSendsThenEditsThenForgets(t *testing.T) {
 		return tg.Send(context.Background(), replies.Send{
 			Event: replies.Event{Type: kind, TaskID: "t1"}, Reply: &domain.Reply{Markup: "telegram"},
 			Target: replies.Target{Config: map[string]any{"credential_type": "telegram", "credential_key": "k",
-				"target": map[string]any{"chat_id": 5, "message_id": 9}}},
+				"target": map[string]any{"chat_id": -5, "message_id": 9}}},
 		}, msg)
 	}
 	ctx := context.Background()
@@ -575,5 +578,100 @@ func TestTelegramLiveAnswersEachTurnOfASession(t *testing.T) {
 	send("task.completed", "2026-11-23T14:57:28Z", "Second answer")
 	if n := strings.Count(strings.Join(methods, ","), "sendMessage"); n != 2 {
 		t.Fatalf("the next turn of the session was not posted: %v", methods)
+	}
+}
+
+// telegramChat runs task deliveries into a fake Bot API and records what each sendMessage quoted.
+type telegramChat struct {
+	mu     sync.Mutex
+	quoted []any
+}
+
+func (c *telegramChat) server(t *testing.T) *httptest.Server {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var p map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&p)
+		if strings.HasSuffix(r.URL.Path, "/sendMessage") {
+			c.mu.Lock()
+			c.quoted = append(c.quoted, p["reply_to_message_id"])
+			c.mu.Unlock()
+		}
+		_, _ = io.WriteString(w, `{"ok":true,"result":{"message_id":77}}`)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func telegramAddress(chatID, messageID int) map[string]any {
+	return map[string]any{"type": "telegram", "sender": "telegram_live", "credential_type": "telegram", "credential_key": "k",
+		"target": map[string]any{"chat_id": chatID, "message_id": messageID}}
+}
+
+func TestTelegramLiveAnswersAFollowUpAtTheMessageThatStartedItsTurn(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	chat := &telegramChat{}
+	srv := chat.server(t)
+	ws, task := uuid.NewString(), uuid.NewString()
+	turns := replies.Turns{Redis: rdb}
+	x, err := replies.New(replies.Deps{
+		Broker: &broker{}, Dedup: &dedup{keys: map[string]bool{}}, Consumer: "c1", Turns: turns,
+		Log:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Tasks: tasks{task: {ID: task, Owner: "u1", Parameters: map[string]any{"delivery_address": telegramAddress(-100, 1)}}},
+		Replies: func(context.Context, string) (*domain.Reply, bool, error) {
+			return &domain.Reply{Markup: "telegram"}, true, nil
+		},
+		Senders: map[string]replies.Sender{"telegram_live": replies.TelegramLive{
+			Credentials: creds(map[string]string{"bot_token": "TOKEN"}), Redis: rdb, Client: srv.Client(), API: srv.URL}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	answer := func(at time.Time) {
+		t.Helper()
+		fields, err := events.Encode(events.IntegrationEvent{ID: uuid.NewString(), Type: "task.completed", Source: "runs", Time: at,
+			Subject: task, Data: map[string]any{"task_id": task, "result": "Answer"}, Extensions: map[string]string{"workspace": ws}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := x.Handle(ctx, events.Message{ID: uuid.NewString(), Fields: fields, DeliveryCount: 1}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first := time.Date(2026, 11, 23, 14, 56, 13, 0, time.UTC)
+	answer(first)
+	if err := turns.Begin(ctx, task, telegramAddress(-100, 2)); err != nil {
+		t.Fatal(err)
+	}
+	answer(first.Add(time.Minute))
+	if err := turns.Begin(ctx, task, telegramAddress(-100, 3)); err != nil {
+		t.Fatal(err)
+	}
+	answer(first.Add(2 * time.Minute))
+	if len(chat.quoted) != 3 || chat.quoted[0] != float64(1) || chat.quoted[1] != float64(2) || chat.quoted[2] != float64(3) {
+		t.Fatalf("the answers quoted %v, not the message of each turn", chat.quoted)
+	}
+}
+
+func TestTelegramLiveQuotesOnlyInGroups(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	chat := &telegramChat{}
+	srv := chat.server(t)
+	tg := replies.TelegramLive{Credentials: creds(map[string]string{"bot_token": "TOKEN"}), Redis: rdb, Client: srv.Client(), API: srv.URL}
+	for i, chatID := range []int{5, -100} {
+		err := tg.Send(context.Background(), replies.Send{
+			Event: replies.Event{Type: "task.completed", TaskID: uuid.NewString()}, Reply: &domain.Reply{Markup: "telegram"},
+			Target: replies.Target{Config: telegramAddress(chatID, 9+i)},
+		}, "Answer")
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(chat.quoted) != 2 || chat.quoted[0] != nil || chat.quoted[1] != float64(10) {
+		t.Fatalf("quoted %v: a private chat is not quoted, a group is", chat.quoted)
 	}
 }

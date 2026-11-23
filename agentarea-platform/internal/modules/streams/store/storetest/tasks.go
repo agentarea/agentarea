@@ -22,6 +22,8 @@ type Tasks struct {
 	mu       sync.Mutex
 	Requests []runsapi.TaskRequest
 	Err      error
+	// RouteTo answers every request as a follow-up routed into that running task.
+	RouteTo string
 }
 
 var _ runsapi.Tasks = (*Tasks)(nil)
@@ -33,6 +35,9 @@ func (f *Tasks) Submit(_ context.Context, _ scope.Workspace, req runsapi.TaskReq
 	f.Requests = append(f.Requests, req)
 	if f.Err != nil {
 		return runsapi.TaskSubmitted{}, f.Err
+	}
+	if f.RouteTo != "" {
+		return runsapi.TaskSubmitted{TaskID: f.RouteTo, Status: "routed", ExecutionID: "exec-" + f.RouteTo, Routed: true}, nil
 	}
 	return runsapi.TaskSubmitted{TaskID: req.TaskID, Status: "running", ExecutionID: "exec-" + req.TaskID}, nil
 }

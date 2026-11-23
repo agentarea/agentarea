@@ -126,7 +126,7 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 	defer cancel()
 	if msgID := state["message_id"]; msgID == "" {
 		payload := map[string]any{"chat_id": chatID, "text": text, "parse_mode": "MarkdownV2"}
-		if replyTo := target["message_id"]; truthy(replyTo) {
+		if replyTo := target["message_id"]; truthy(replyTo) && !privateChat(chatID) {
 			payload["reply_to_message_id"] = replyTo
 			payload["allow_sending_without_reply"] = true
 		}
@@ -257,6 +257,16 @@ func raiseFor(status int, body []byte, permanent []string) error {
 
 var _ Sender = TelegramLive{}
 var _ Sender = HTTPReply{}
+
+// privateChat is whether chatID is a user's own chat with the bot, where a quote of the message
+// answered is noise: Telegram gives users positive ids, groups and channels negative ones.
+func privateChat(chatID any) bool {
+	if f, ok := chatID.(float64); ok {
+		return f > 0
+	}
+	id, err := strconv.ParseInt(fmt.Sprint(chatID), 10, 64)
+	return err == nil && id > 0
+}
 
 // endMark is what the end of a turn records: its time, or "1" when the event has none, which no
 // later event is after.

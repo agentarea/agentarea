@@ -26,6 +26,14 @@ type fireRig struct {
 	firing *storetest.FiringTasks
 	known  map[string]bool
 	agent  string
+	turns  turnLog
+}
+
+type turnLog map[string]map[string]any
+
+func (l turnLog) Begin(_ context.Context, taskID string, address map[string]any) error {
+	l[taskID] = address
+	return nil
 }
 
 func newFireRig(t *testing.T) *fireRig {
@@ -33,14 +41,38 @@ func newFireRig(t *testing.T) *fireRig {
 	pool := storetest.Pool(t)
 	ws := storetest.Workspace(t, pool)
 	ctx, _ := storetest.Caller(context.Background(), ws, "u1")
-	g := &fireRig{ctx: ctx, ws: ws, tasks: &storetest.Tasks{}, firing: &storetest.FiringTasks{}, agent: uuid.NewString()}
+	g := &fireRig{ctx: ctx, ws: ws, tasks: &storetest.Tasks{}, firing: &storetest.FiringTasks{}, agent: uuid.NewString(), turns: turnLog{}}
 	g.known = map[string]bool{g.agent: true}
 	g.svc = service.New(service.Deps{
 		DB: storetest.DB{Pool: pool}, Graph: &storetest.Graph{AllowAll: true}, Agents: storetest.Agents{Known: g.known},
-		Schedules: &storetest.Schedules{}, TriggerQueue: "trigger-schedules", Tasks: g.tasks, FiringTasks: g.firing,
+		Schedules: &storetest.Schedules{}, TriggerQueue: "trigger-schedules", Tasks: g.tasks, Turns: g.turns, FiringTasks: g.firing,
 		Broker: &storetest.Broker{}, Settings: service.DefaultSettings(),
 	})
 	return g
+}
+
+func TestARoutedFollowUpIsAnsweredAtItsOwnMessage(t *testing.T) {
+	g := newFireRig(t)
+	tr := g.cron(t, true, 5)
+	fire := func(messageID int) service.Firing {
+		t.Helper()
+		f, err := g.svc.Fire(g.ctx, g.ws, service.FireRequest{TriggerID: tr.ID, Delivery: &service.TaskDelivery{
+			Address: map[string]any{"type": "telegram", "sender": "telegram_live", "target": map[string]any{"chat_id": -100, "message_id": messageID}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	if f := fire(1); f.Outcome != service.OutcomeReacted || len(g.turns) != 0 {
+		t.Fatalf("a task that started recorded a turn: %+v %v", f, g.turns)
+	}
+	running := uuid.NewString()
+	g.tasks.RouteTo = running
+	f := fire(2)
+	target, _ := g.turns[running]["target"].(map[string]any)
+	if f.TaskID != running || len(g.turns) != 1 || target["message_id"] != 2 {
+		t.Fatalf("the routed follow-up's turn = %v (firing %+v)", g.turns, f)
+	}
 }
 
 func (g *fireRig) cron(t *testing.T, enabled bool, threshold int) domain.Trigger {
