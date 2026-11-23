@@ -77,6 +77,10 @@ spec:
             {{- include "agentarea.authz.envs" . | nindent 12 }}
             - name: AGENTAREA_API_URL
               value: {{ include "agentarea.backend.apiUrl" . | quote }}
+            # Where a messenger sender links their account: the bot's reply to an
+            # unlinked sender carries <app>/link/telegram.
+            - name: AGENTAREA_APP_URL
+              value: {{ include "agentarea.frontendUrl" . | quote }}
             - name: PORT
               value: {{ .Values.eventService.port | quote }}
             - name: AGENTAREA_EVENT_POLL_INTERVAL
