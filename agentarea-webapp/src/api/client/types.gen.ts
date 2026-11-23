@@ -10639,7 +10639,8 @@ export type TelegramLinkOfferRequest = {
  * TelegramLinkOfferResponse
  *
  * The Telegram account a bot offered a link for, as Telegram named it when the bot
- * answered. linked_to is who already holds it: "you", "another_account", or null.
+ * answered, and the workspace whose bot offered it; only a member of that workspace
+ * sees or accepts it. linked_to is who already holds it: "you", "another_account", or null.
  */
 export type TelegramLinkOfferResponse = {
   /**
@@ -10666,6 +10667,10 @@ export type TelegramLinkOfferResponse = {
    * Username
    */
   username: string | null;
+  /**
+   * Workspace Name
+   */
+  workspace_name: string;
 };
 
 /**

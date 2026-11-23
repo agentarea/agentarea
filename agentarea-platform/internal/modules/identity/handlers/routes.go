@@ -538,14 +538,16 @@ func (s *Server) previewTelegramOffer(w http.ResponseWriter, r *http.Request) er
 	if err != nil {
 		return err
 	}
-	o, linkedTo, err := s.svc.TelegramOffer(r.Context(), p, code)
+	v, err := s.svc.TelegramOffer(r.Context(), p, code)
 	if err != nil {
 		return err
 	}
+	o := v.Offer
 	return writeJSON(w, http.StatusOK, wirejson.Object{
 		{Key: "provider", Value: o.Provider}, {Key: "external_id", Value: o.ExternalID},
 		{Key: "username", Value: emptyNil(o.Username)}, {Key: "display_name", Value: emptyNil(o.Name)},
-		{Key: "bot", Value: emptyNil(o.Bot)}, {Key: "linked_to", Value: emptyNil(linkedTo)},
+		{Key: "bot", Value: emptyNil(o.Bot)}, {Key: "workspace_name", Value: v.WorkspaceName},
+		{Key: "linked_to", Value: emptyNil(v.LinkedTo)},
 	})
 }
 

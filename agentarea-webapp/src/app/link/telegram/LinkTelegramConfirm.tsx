@@ -54,6 +54,14 @@ export default function LinkTelegramConfirm({
           detail={t("takenDetail")}
         />
       );
+    case "foreign":
+      return (
+        <FocusStep
+          kind="attention"
+          title={t("foreignTitle")}
+          detail={t("foreignDetail")}
+        />
+      );
   }
 
   return (
@@ -63,7 +71,6 @@ export default function LinkTelegramConfirm({
       <Button type="submit" isLoading={pending} className="w-full">
         {t("confirm")}
       </Button>
-      <p className="text-center text-xs text-muted-foreground">{t("notYou")}</p>
     </form>
   );
 }

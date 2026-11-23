@@ -276,6 +276,9 @@ func (s *Server) ListStreamsV1StreamsGet(ctx context.Context, req gen.ListStream
 	if err != nil {
 		return nil, err
 	}
+	if err := s.svc.WithSourceTypes(ctx, rows); err != nil {
+		return nil, err
+	}
 	out := make([]streamJSON, len(rows))
 	for i, r := range rows {
 		out[i] = streamOut(r)
@@ -319,7 +322,11 @@ func (s *Server) GetStreamV1StreamsStreamIdGet(ctx context.Context, req gen.GetS
 	if err != nil {
 		return nil, err
 	}
-	return response{status: http.StatusOK, body: streamOut(st)}, nil
+	one := []domain.Stream{st}
+	if err := s.svc.WithSourceTypes(ctx, one); err != nil {
+		return nil, err
+	}
+	return response{status: http.StatusOK, body: streamOut(one[0])}, nil
 }
 
 func (s *Server) DeleteStreamV1StreamsStreamIdDelete(ctx context.Context, req gen.DeleteStreamV1StreamsStreamIdDeleteRequestObject) (gen.DeleteStreamV1StreamsStreamIdDeleteResponseObject, error) {

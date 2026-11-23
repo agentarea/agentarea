@@ -83,8 +83,9 @@ type LinkCodes interface {
 	Redeem(ctx context.Context, code, provider, externalID string) (string, bool, error)
 	// Confirm consumes what the account redeemed; false when nothing waits.
 	Confirm(ctx context.Context, provider, externalID string) (string, bool, error)
-	// Offer issues a code, good for ttl, that names the account a bot offered it to.
-	Offer(ctx context.Context, o domain.LinkOffer, ttl time.Duration) (string, error)
+	// Offer issues a code, good for ttl, that names the account a bot offered it to; issued is
+	// false, and no code returned, while one offered to the account through the source is unspent.
+	Offer(ctx context.Context, o domain.LinkOffer, ttl time.Duration) (code string, issued bool, err error)
 	// PeekOffer is what code was offered for, the code left in place; false when it is gone.
 	PeekOffer(ctx context.Context, code string) (domain.LinkOffer, bool, error)
 	// TakeOffer spends code; false when it is gone.

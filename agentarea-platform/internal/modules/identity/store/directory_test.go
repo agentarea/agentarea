@@ -78,17 +78,39 @@ func (k *kv) SetEX(_ context.Context, key, value string, ttl time.Duration) erro
 
 func (k *kv) Get(_ context.Context, key string) (string, error) { return k.all[key], nil }
 
+func (k *kv) SetNX(_ context.Context, key, value string, _ time.Duration) (bool, error) {
+	if _, set := k.all[key]; set {
+		return false, nil
+	}
+	k.all[key] = value
+	return true, nil
+}
+
+func (k *kv) Del(_ context.Context, key string) error {
+	delete(k.all, key)
+	return nil
+}
+
 func TestALinkOfferNamesItsAccountUntilItIsTakenOnce(t *testing.T) {
 	ctx := context.Background()
 	store := &kv{}
 	codes := LinkCodes{KV: store}
-	o := domain.LinkOffer{MessengerAccount: domain.MessengerAccount{Provider: "telegram", ExternalID: "42", Username: "alice", Name: "Alice"}, Bot: "door_bot"}
-	code, err := codes.Offer(ctx, o, time.Minute)
-	if err != nil {
-		t.Fatal(err)
+	o := domain.LinkOffer{MessengerAccount: domain.MessengerAccount{Provider: "telegram", ExternalID: "42", Username: "alice", Name: "Alice"},
+		WorkspaceID: "ws", SourceID: "src", Bot: "door_bot"}
+	code, issued, err := codes.Offer(ctx, o, time.Minute)
+	if err != nil || !issued {
+		t.Fatal(issued, err)
 	}
 	if strings.Contains(store.key, code) || !strings.HasPrefix(store.key, LinkOfferPrefix+":") {
 		t.Fatalf("stored under %q", store.key)
+	}
+	if again, issued, err := codes.Offer(ctx, o, time.Minute); err != nil || issued || again != "" {
+		t.Fatalf("a second code while the first lives: %q %v %v", again, issued, err)
+	}
+	other := o
+	other.SourceID = "another-bot"
+	if _, issued, _ := codes.Offer(ctx, other, time.Minute); !issued {
+		t.Fatal("another bot may not offer while this one's code lives")
 	}
 	for range 2 {
 		if got, ok, err := codes.PeekOffer(ctx, code); err != nil || !ok || got != o {
@@ -103,6 +125,9 @@ func TestALinkOfferNamesItsAccountUntilItIsTakenOnce(t *testing.T) {
 	}
 	if _, ok, _ := codes.TakeOffer(ctx, code); ok {
 		t.Fatal("taken twice")
+	}
+	if fresh, issued, err := codes.Offer(ctx, o, time.Minute); err != nil || !issued || fresh == code {
+		t.Fatalf("no fresh code once the first was spent: %v %v", issued, err)
 	}
 }
 

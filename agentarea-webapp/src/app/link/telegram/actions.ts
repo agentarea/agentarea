@@ -10,6 +10,7 @@ export type LinkTelegramState =
   | { status: "linked" }
   | { status: "gone" }
   | { status: "taken" }
+  | { status: "foreign" }
   | { status: "failed"; message: string };
 
 /** Link the Telegram account the bot offered the code to, the person having confirmed it. */
@@ -27,6 +28,7 @@ export async function acceptTelegramLinkAction(
   if (!result.error) return { status: "linked" };
   if (result.status === 404) return { status: "gone" };
   if (result.status === 409) return { status: "taken" };
+  if (result.status === 403) return { status: "foreign" };
   console.error("[link/telegram] accept refused:", result.error);
   const t = await getTranslations("LinkTelegram");
   return { status: "failed", message: apiErrorMessage(result, t("failed")) };

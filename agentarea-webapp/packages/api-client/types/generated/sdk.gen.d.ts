@@ -204,14 +204,14 @@ export declare const startTelegramLinkV1MeExternalIdentitiesTelegramLinkPost: <T
 /**
  * Accept Telegram Link Offer
  *
- * Links the Telegram account a bot offered the code to to the caller, who confirmed it.
- * The code is spent; 404 when it expired or was used, 409 when another account holds the Telegram account.
+ * Links the Telegram account a bot offered the code to to the caller, a member of the bot's workspace, who confirmed it.
+ * The code is spent; 404 when it expired or was used, 409 when another account holds the Telegram account. 403 for a caller outside the bot's workspace.
  */
 export declare const acceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost: <ThrowOnError extends boolean = false>(options: Options<AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostData, ThrowOnError>) => RequestResult<AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponses, AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostErrors, ThrowOnError>;
 /**
  * Preview Telegram Link Offer
  *
- * The Telegram account a bot offered the code to, shown before the caller confirms; the code stays unspent.
+ * The Telegram account a bot offered the code to, shown before the caller, a member of the bot's workspace, confirms; the code stays unspent. 403 for a caller outside the bot's workspace.
  */
 export declare const previewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost: <ThrowOnError extends boolean = false>(options: Options<PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostData, ThrowOnError>) => RequestResult<PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponses, PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostErrors, ThrowOnError>;
 /**

@@ -18622,7 +18622,7 @@
         "type": "object"
       },
       "TelegramLinkOfferResponse": {
-        "description": "The Telegram account a bot offered a link for, as Telegram named it when the bot\nanswered. linked_to is who already holds it: \"you\", \"another_account\", or null.",
+        "description": "The Telegram account a bot offered a link for, as Telegram named it when the bot\nanswered, and the workspace whose bot offered it; only a member of that workspace\nsees or accepts it. linked_to is who already holds it: \"you\", \"another_account\", or null.",
         "properties": {
           "bot": {
             "anyOf": [
@@ -18679,6 +18679,10 @@
               }
             ],
             "title": "Username"
+          },
+          "workspace_name": {
+            "title": "Workspace Name",
+            "type": "string"
           }
         },
         "required": [
@@ -18687,6 +18691,7 @@
           "username",
           "display_name",
           "bot",
+          "workspace_name",
           "linked_to"
         ],
         "title": "TelegramLinkOfferResponse",
@@ -22769,7 +22774,7 @@
     },
     "/v1/me/external-identities/telegram/offer/accept": {
       "post": {
-        "description": "Links the Telegram account a bot offered the code to to the caller, who confirmed it.\nThe code is spent; 404 when it expired or was used, 409 when another account holds the Telegram account.",
+        "description": "Links the Telegram account a bot offered the code to to the caller, a member of the bot's workspace, who confirmed it.\nThe code is spent; 404 when it expired or was used, 409 when another account holds the Telegram account. 403 for a caller outside the bot's workspace.",
         "operationId": "accept_telegram_link_offer_v1_me_external_identities_telegram_offer_accept_post",
         "requestBody": {
           "content": {
@@ -22818,7 +22823,7 @@
     },
     "/v1/me/external-identities/telegram/offer/preview": {
       "post": {
-        "description": "The Telegram account a bot offered the code to, shown before the caller confirms; the code stays unspent.",
+        "description": "The Telegram account a bot offered the code to, shown before the caller, a member of the bot's workspace, confirms; the code stays unspent. 403 for a caller outside the bot's workspace.",
         "operationId": "preview_telegram_link_offer_v1_me_external_identities_telegram_offer_preview_post",
         "requestBody": {
           "content": {

@@ -1,10 +1,6 @@
 -- name: GetStream :one
-SELECT st.id, st.workspace_id, st.created_by, st.created_at, st.name, st.description, st.kind,
-    ARRAY(SELECT src.webhook_type FROM stream_sources src
-          WHERE src.workspace_id = st.workspace_id AND src.stream_id = st.id AND src.webhook_type IS NOT NULL
-          GROUP BY src.webhook_type ORDER BY min(src.created_at), src.webhook_type)::text[] AS source_types
-FROM streams st
-WHERE st.workspace_id = @workspace_id AND st.id = @id;
+SELECT id, workspace_id, created_by, created_at, name, description, kind FROM streams
+WHERE workspace_id = @workspace_id AND id = @id;
 
 -- name: GetStreamByName :one
 SELECT id, workspace_id, created_by, created_at, name, description, kind FROM streams
@@ -21,14 +17,10 @@ ON CONFLICT ON CONSTRAINT uq_streams_workspace_name DO NOTHING
 RETURNING id, workspace_id, created_by, created_at, name, description, kind;
 
 -- name: ListStreams :many
-SELECT st.id, st.workspace_id, st.created_by, st.created_at, st.name, st.description, st.kind,
-    ARRAY(SELECT src.webhook_type FROM stream_sources src
-          WHERE src.workspace_id = st.workspace_id AND src.stream_id = st.id AND src.webhook_type IS NOT NULL
-          GROUP BY src.webhook_type ORDER BY min(src.created_at), src.webhook_type)::text[] AS source_types
-FROM streams st
-WHERE st.workspace_id = @workspace_id
-  AND (NOT @filter_ids::bool OR st.id = ANY(@ids::uuid[]))
-ORDER BY st.created_at, st.id
+SELECT id, workspace_id, created_by, created_at, name, description, kind FROM streams
+WHERE workspace_id = @workspace_id
+  AND (NOT @filter_ids::bool OR id = ANY(@ids::uuid[]))
+ORDER BY created_at, id
 LIMIT @lim OFFSET @off;
 
 -- name: LockStreamForDelete :one
@@ -44,6 +36,12 @@ FOR KEY SHARE;
 
 -- name: StreamNames :many
 SELECT id, name FROM streams WHERE workspace_id = @workspace_id AND id = ANY(@ids::uuid[]);
+
+-- name: StreamSourceTypes :many
+SELECT stream_id, webhook_type::text AS source_type FROM stream_sources
+WHERE workspace_id = @workspace_id AND stream_id = ANY(@ids::uuid[]) AND webhook_type IS NOT NULL
+GROUP BY stream_id, webhook_type
+ORDER BY stream_id, min(created_at), webhook_type;
 
 -- name: DeleteStream :execrows
 DELETE FROM streams WHERE workspace_id = @workspace_id AND id = @id;

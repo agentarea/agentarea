@@ -111,6 +111,7 @@ var (
 	ErrLinkingNeedsRedis      = &Refusal{Status: 503, Detail: "Account linking needs the Redis broker"}
 	ErrLinkOfferGone          = &Refusal{Status: 404, Detail: "This link has expired or was already used"}
 	ErrMessengerAccountTaken  = &Refusal{Status: 409, Detail: "This Telegram account is already linked to another AgentArea account"}
+	ErrLinkOfferForeign       = &Refusal{Status: 403, Detail: "Only a member of the bot's workspace can link this account"}
 	ErrRemovalNeedsDirectory  = &Refusal{Status: 500, Detail: "Member removal needs the identity directory"}
 	ErrLogoTooLarge           = &Refusal{Status: 413, Detail: "Logo exceeds the 1048576-byte limit"}
 	ErrLogoType               = &Refusal{Status: 422, Detail: "Logo must be a PNG, JPEG or WebP image"}
@@ -159,10 +160,13 @@ type MessengerAccount struct {
 	Name       string `json:"name,omitempty"`
 }
 
-// LinkOffer is the account a bot offered a link code for, and the bot's @username.
+// LinkOffer is the account a bot offered a link code for, and the bot: the workspace and
+// source it belongs to, and its @username. Only a member of that workspace may take the code.
 type LinkOffer struct {
 	MessengerAccount
-	Bot string `json:"bot,omitempty"`
+	WorkspaceID string `json:"workspace_id"`
+	SourceID    string `json:"source_id"`
+	Bot         string `json:"bot,omitempty"`
 }
 
 // Who already holds an offered account, as an offer's preview names it.

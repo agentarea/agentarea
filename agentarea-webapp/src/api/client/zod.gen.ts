@@ -4285,7 +4285,8 @@ export const zTelegramLinkOfferRequest = z.object({
  * TelegramLinkOfferResponse
  *
  * The Telegram account a bot offered a link for, as Telegram named it when the bot
- * answered. linked_to is who already holds it: "you", "another_account", or null.
+ * answered, and the workspace whose bot offered it; only a member of that workspace
+ * sees or accepts it. linked_to is who already holds it: "you", "another_account", or null.
  */
 export const zTelegramLinkOfferResponse = z.object({
   bot: z.string().nullable(),
@@ -4294,6 +4295,7 @@ export const zTelegramLinkOfferResponse = z.object({
   linked_to: z.enum(["you", "another_account"]).nullable(),
   provider: z.string(),
   username: z.string().nullable(),
+  workspace_name: z.string(),
 });
 
 /**

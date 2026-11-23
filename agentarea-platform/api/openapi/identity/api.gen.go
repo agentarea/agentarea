@@ -454,14 +454,16 @@ type TelegramLinkOfferRequest struct {
 }
 
 // TelegramLinkOfferResponse The Telegram account a bot offered a link for, as Telegram named it when the bot
-// answered. linked_to is who already holds it: "you", "another_account", or null.
+// answered, and the workspace whose bot offered it; only a member of that workspace
+// sees or accepts it. linked_to is who already holds it: "you", "another_account", or null.
 type TelegramLinkOfferResponse struct {
-	Bot         *string                            `json:"bot"`
-	DisplayName *string                            `json:"display_name"`
-	ExternalId  string                             `json:"external_id"`
-	LinkedTo    *TelegramLinkOfferResponseLinkedTo `json:"linked_to"`
-	Provider    string                             `json:"provider"`
-	Username    *string                            `json:"username"`
+	Bot           *string                            `json:"bot"`
+	DisplayName   *string                            `json:"display_name"`
+	ExternalId    string                             `json:"external_id"`
+	LinkedTo      *TelegramLinkOfferResponseLinkedTo `json:"linked_to"`
+	Provider      string                             `json:"provider"`
+	Username      *string                            `json:"username"`
+	WorkspaceName string                             `json:"workspace_name"`
 }
 
 // TelegramLinkOfferResponseLinkedTo defines model for TelegramLinkOfferResponse.LinkedTo.

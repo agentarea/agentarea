@@ -139,7 +139,7 @@ func (s *Service) Admit(ctx context.Context, ws scope.Workspace, t domain.Trigge
 			return Admitted{}, "", err
 		}
 		if !linked {
-			return Admitted{}, "the sender has not linked their Telegram account", s.offerLink(ctx, t, bot, sender)
+			return Admitted{}, "the sender has not linked their Telegram account", s.offerLink(ctx, bot, sender)
 		}
 		if door.Senders.Allow == domain.SendersOwner && holder != door.OwnerID {
 			return Admitted{}, fmt.Sprintf("only the source's owner may write; %s is not", holder),
@@ -204,37 +204,25 @@ func (s *Service) confirm(ctx context.Context, bot botOf, sender telegramSender)
 	return nil
 }
 
-// offerLink answers an unlinked sender with a link that already names their account: opened
-// while signed in to AgentArea, it links the account after one confirmation. A sender hears it
-// once per link's life; writing after the link expired brings a fresh one.
-func (s *Service) offerLink(ctx context.Context, t domain.Trigger, bot botOf, sender telegramSender) error {
-	key := noticeKey(t, sender, "unlinked")
-	first, err := s.d.Notices.Claim(ctx, key, identityapi.OfferTTL)
-	if err != nil || !first {
+// offerLink answers an unlinked sender with a link that already names their account: opened by
+// a signed-in member of the bot's workspace, it links the account after one confirmation. A
+// sender hears it while no earlier link of this bot's is unspent: writing after the link expired
+// or was used brings a fresh one.
+func (s *Service) offerLink(ctx context.Context, bot botOf, sender telegramSender) error {
+	code, issued, err := s.d.Links.Offer(ctx, sender.account(), identityapi.OfferingBot{
+		WorkspaceID: bot.ws.ID(), SourceID: bot.door.Source.ID, Username: bot.username(ctx)})
+	if err != nil || !issued {
 		return err
 	}
-	name := bot.username(ctx)
-	code, err := s.d.Links.Offer(ctx, sender.account(), name)
-	if err != nil {
-		return errors.Join(err, s.d.Notices.Release(ctx, key))
-	}
-	q := url.Values{"code": {code}}
-	if name != "" {
-		q.Set("bot", name)
-	}
-	link := strings.TrimRight(s.d.AppURL, "/") + "/link/telegram?" + q.Encode()
+	link := strings.TrimRight(s.d.AppURL, "/") + "/link/telegram?" + url.Values{"code": {code}}.Encode()
 	bot.reply(ctx, sender, fmt.Sprintf("This bot answers only people who linked their Telegram account to AgentArea "+
 		"and were given access. Link this Telegram account here (the link works for %d minutes): %s",
 		int(identityapi.OfferTTL/time.Minute), link))
 	return nil
 }
 
-func noticeKey(t domain.Trigger, sender telegramSender, kind string) string {
-	return t.ID + ":" + sender.externalID + ":" + kind
-}
-
 func (s *Service) notifyOnce(ctx context.Context, t domain.Trigger, bot botOf, sender telegramSender, kind, text string) error {
-	first, err := s.d.Notices.Claim(ctx, noticeKey(t, sender, kind), NoticeInterval)
+	first, err := s.d.Notices.Claim(ctx, t.ID+":"+sender.externalID+":"+kind, NoticeInterval)
 	if err != nil {
 		return err
 	}

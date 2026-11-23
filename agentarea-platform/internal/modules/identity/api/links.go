@@ -21,6 +21,14 @@ type Account struct {
 	Name       string
 }
 
+// OfferingBot is the bot that offers a link: the workspace and source it belongs to, and its
+// @username ("" when unknown).
+type OfferingBot struct {
+	WorkspaceID string
+	SourceID    string
+	Username    string
+}
+
 // MessengerLinks is the link handshake a messenger bot runs for its senders
 // (identity/linking.py, ExternalIdentityRepository): a code the signed-in
 // user asked for, redeemed from the messenger account and confirmed by it;
@@ -34,9 +42,11 @@ type MessengerLinks interface {
 	// Confirm links the account to the user it redeemed a code for; false when
 	// nothing waits, ErrAccountTaken when another user holds the account.
 	Confirm(ctx context.Context, account Account) (string, bool, error)
-	// Offer issues a code, good for OfferTTL, that links account to the
-	// signed-in user who accepts it in the webapp; bot is the bot's @username.
-	Offer(ctx context.Context, account Account, bot string) (string, error)
+	// Offer issues a code, good for OfferTTL, that links account to a signed-in
+	// member of the bot's workspace who accepts it in the webapp. While a code
+	// offered to the account through the same source is unspent, none is issued
+	// and issued is false.
+	Offer(ctx context.Context, account Account, bot OfferingBot) (code string, issued bool, err error)
 	// Describe names the user's account to the sender: the masked email, or
 	// "your AgentArea account" when it cannot be read.
 	Describe(ctx context.Context, userID string) string

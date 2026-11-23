@@ -2,7 +2,12 @@ import type { ReactNode } from "react";
 import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { AuthLayout } from "@/components/auth/auth-layout";
-import { FocusCard, FocusHeader, FocusStep } from "@/components/FocusCard";
+import {
+  FocusCard,
+  FocusDetail,
+  FocusHeader,
+  FocusStep,
+} from "@/components/FocusCard";
 import { TelegramTile } from "@/components/TelegramTile";
 import { previewTelegramLinkOffer } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
@@ -35,8 +40,7 @@ export default async function LinkTelegramPage({
     getServerSession(),
     getPersonalWorkspacePath("/settings#messengers"),
   ]);
-  const botName = offer.data?.bot ?? bot;
-  const botLabel = botName ? `@${botName}` : t("theBot");
+  const botLabel = offer.data?.bot ? `@${offer.data.bot}` : t("theBot");
 
   if (!offer.data) {
     return (
@@ -46,6 +50,12 @@ export default async function LinkTelegramPage({
             kind="off"
             title={t("goneTitle")}
             detail={t("goneDetail", { bot: botLabel })}
+          />
+        ) : offer.status === 403 ? (
+          <FocusStep
+            kind="attention"
+            title={t("foreignTitle")}
+            detail={t("foreignDetail")}
           />
         ) : (
           <FocusStep
@@ -80,11 +90,24 @@ export default async function LinkTelegramPage({
           detail={t("takenDetail")}
         />
       ) : (
-        <LinkTelegramConfirm
-          code={code}
-          bot={botName ? botLabel : ""}
-          settingsHref={settingsHref}
-        />
+        <>
+          <dl className="space-y-3 text-sm">
+            <FocusDetail label={t("bot")}>{botLabel}</FocusDetail>
+            <FocusDetail label={t("workspace")}>
+              {offer.data.workspace_name}
+            </FocusDetail>
+          </dl>
+          <FocusStep
+            kind="attention"
+            title={t("warningTitle")}
+            detail={t("warningDetail", { account })}
+          />
+          <LinkTelegramConfirm
+            code={code}
+            bot={offer.data.bot ? botLabel : ""}
+            settingsHref={settingsHref}
+          />
+        </>
       )}
     </LinkCard>
   );

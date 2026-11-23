@@ -60,12 +60,8 @@ func (q *Queries) GetPlatformStream(ctx context.Context, workspaceID string) (Ge
 }
 
 const getStream = `-- name: GetStream :one
-SELECT st.id, st.workspace_id, st.created_by, st.created_at, st.name, st.description, st.kind,
-    ARRAY(SELECT src.webhook_type FROM stream_sources src
-          WHERE src.workspace_id = st.workspace_id AND src.stream_id = st.id AND src.webhook_type IS NOT NULL
-          GROUP BY src.webhook_type ORDER BY min(src.created_at), src.webhook_type)::text[] AS source_types
-FROM streams st
-WHERE st.workspace_id = $1 AND st.id = $2
+SELECT id, workspace_id, created_by, created_at, name, description, kind FROM streams
+WHERE workspace_id = $1 AND id = $2
 `
 
 type GetStreamParams struct {
@@ -81,7 +77,6 @@ type GetStreamRow struct {
 	Name        string
 	Description string
 	Kind        string
-	SourceTypes []string
 }
 
 func (q *Queries) GetStream(ctx context.Context, arg GetStreamParams) (GetStreamRow, error) {
@@ -95,7 +90,6 @@ func (q *Queries) GetStream(ctx context.Context, arg GetStreamParams) (GetStream
 		&i.Name,
 		&i.Description,
 		&i.Kind,
-		&i.SourceTypes,
 	)
 	return i, err
 }
@@ -186,14 +180,10 @@ func (q *Queries) InsertStream(ctx context.Context, arg InsertStreamParams) (Ins
 }
 
 const listStreams = `-- name: ListStreams :many
-SELECT st.id, st.workspace_id, st.created_by, st.created_at, st.name, st.description, st.kind,
-    ARRAY(SELECT src.webhook_type FROM stream_sources src
-          WHERE src.workspace_id = st.workspace_id AND src.stream_id = st.id AND src.webhook_type IS NOT NULL
-          GROUP BY src.webhook_type ORDER BY min(src.created_at), src.webhook_type)::text[] AS source_types
-FROM streams st
-WHERE st.workspace_id = $1
-  AND (NOT $2::bool OR st.id = ANY($3::uuid[]))
-ORDER BY st.created_at, st.id
+SELECT id, workspace_id, created_by, created_at, name, description, kind FROM streams
+WHERE workspace_id = $1
+  AND (NOT $2::bool OR id = ANY($3::uuid[]))
+ORDER BY created_at, id
 LIMIT $5 OFFSET $4
 `
 
@@ -213,7 +203,6 @@ type ListStreamsRow struct {
 	Name        string
 	Description string
 	Kind        string
-	SourceTypes []string
 }
 
 func (q *Queries) ListStreams(ctx context.Context, arg ListStreamsParams) ([]ListStreamsRow, error) {
@@ -239,7 +228,6 @@ func (q *Queries) ListStreams(ctx context.Context, arg ListStreamsParams) ([]Lis
 			&i.Name,
 			&i.Description,
 			&i.Kind,
-			&i.SourceTypes,
 		); err != nil {
 			return nil, err
 		}
@@ -368,6 +356,43 @@ func (q *Queries) StreamNames(ctx context.Context, arg StreamNamesParams) ([]Str
 	for rows.Next() {
 		var i StreamNamesRow
 		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const streamSourceTypes = `-- name: StreamSourceTypes :many
+SELECT stream_id, webhook_type::text AS source_type FROM stream_sources
+WHERE workspace_id = $1 AND stream_id = ANY($2::uuid[]) AND webhook_type IS NOT NULL
+GROUP BY stream_id, webhook_type
+ORDER BY stream_id, min(created_at), webhook_type
+`
+
+type StreamSourceTypesParams struct {
+	WorkspaceID string
+	Ids         []uuid.UUID
+}
+
+type StreamSourceTypesRow struct {
+	StreamID   uuid.UUID
+	SourceType string
+}
+
+func (q *Queries) StreamSourceTypes(ctx context.Context, arg StreamSourceTypesParams) ([]StreamSourceTypesRow, error) {
+	rows, err := q.db.Query(ctx, streamSourceTypes, arg.WorkspaceID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []StreamSourceTypesRow
+	for rows.Next() {
+		var i StreamSourceTypesRow
+		if err := rows.Scan(&i.StreamID, &i.SourceType); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

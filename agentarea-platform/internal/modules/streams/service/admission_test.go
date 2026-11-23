@@ -64,13 +64,18 @@ type links struct {
 	holders map[string]string
 	codes   map[string]string
 	pending map[string]string
-	offers  []identityapi.Account
+	offers  []identityapi.OfferingBot
+	live    map[string]bool
 	linked  identityapi.Account
 }
 
-func (l *links) Offer(_ context.Context, a identityapi.Account, bot string) (string, error) {
-	l.offers = append(l.offers, a)
-	return fmt.Sprintf("OFFER%d-%s", len(l.offers), bot), nil
+func (l *links) Offer(_ context.Context, a identityapi.Account, bot identityapi.OfferingBot) (string, bool, error) {
+	if l.live[a.ExternalID] {
+		return "", false, nil
+	}
+	l.live[a.ExternalID] = true
+	l.offers = append(l.offers, bot)
+	return fmt.Sprintf("OFFER%d", len(l.offers)), true, nil
 }
 
 func (l *links) Holder(_ context.Context, _, id string) (string, bool, error) {
@@ -125,7 +130,7 @@ func newDoor(t *testing.T) door {
 	ctx, _ := storetest.Caller(context.Background(), ws, "owner")
 	secrets := storetest.NewSecrets()
 	d := door{ws: ws, bot: &botAPI{}, graph: &storetest.Graph{}, notices: &storetest.Dedup{},
-		links: &links{holders: map[string]string{}, codes: map[string]string{"CODE": "owner"}, pending: map[string]string{}}}
+		links: &links{holders: map[string]string{}, codes: map[string]string{"CODE": "owner"}, pending: map[string]string{}, live: map[string]bool{}}}
 	d.graph.AllowAll = true
 	d.svc = service.New(service.Deps{
 		DB: storetest.DB{Pool: pool}, Graph: d.graph, SourceTypes: storetest.ShippedSourceTypes(t),
@@ -173,20 +178,21 @@ func TestATelegramSenderLinksFromInsideTheChatThenReachesTheAgent(t *testing.T) 
 	if _, refused := d.admit(t, 42, "private", "hello"); refused != "the sender has not linked their Telegram account" {
 		t.Fatalf("refused %q", refused)
 	}
-	if sent := d.bot.take(); len(sent) != 1 || !strings.Contains(sent[0], "https://app.example.test/link/telegram?bot=door_bot&code=OFFER1-door_bot") {
+	if sent := d.bot.take(); len(sent) != 1 || !strings.Contains(sent[0], "https://app.example.test/link/telegram?code=OFFER1") ||
+		strings.Contains(sent[0], "bot=") {
 		t.Fatalf("sent %q", sent)
 	}
-	want := identityapi.Account{Provider: "telegram", ExternalID: "42", Username: "alice", Name: "Alice Liddell"}
-	if len(d.links.offers) != 1 || d.links.offers[0] != want {
+	bot := identityapi.OfferingBot{WorkspaceID: d.ws.ID(), SourceID: d.src.ID, Username: "door_bot"}
+	if len(d.links.offers) != 1 || d.links.offers[0] != bot {
 		t.Fatalf("offered %+v", d.links.offers)
 	}
 	d.admit(t, 42, "private", "again")
 	if sent := d.bot.take(); len(sent) != 0 {
 		t.Fatalf("told twice while the link lives: %q", sent)
 	}
-	delete(d.notices.Keys, "trig:42:unlinked")
-	d.admit(t, 42, "private", "after the link expired")
-	if sent := d.bot.take(); len(sent) != 1 || !strings.Contains(sent[0], "code=OFFER2-door_bot") {
+	delete(d.links.live, "42")
+	d.admit(t, 42, "private", "after the link expired or was used")
+	if sent := d.bot.take(); len(sent) != 1 || !strings.Contains(sent[0], "code=OFFER2") {
 		t.Fatalf("no fresh link: %q", sent)
 	}
 
@@ -202,7 +208,7 @@ func TestATelegramSenderLinksFromInsideTheChatThenReachesTheAgent(t *testing.T) 
 	if sent := d.bot.take(); len(sent) != 1 || sent[0] != "Done: this Telegram account is linked to o***@example.com." {
 		t.Fatalf("sent %q", sent)
 	}
-	if d.links.linked != want {
+	if want := (identityapi.Account{Provider: "telegram", ExternalID: "42"}); d.links.linked != want {
 		t.Fatalf("linked %+v", d.links.linked)
 	}
 

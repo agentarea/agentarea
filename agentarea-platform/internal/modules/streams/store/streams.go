@@ -101,9 +101,7 @@ func (Streams) GetStream(ctx context.Context, s db.Session, id uuid.UUID) (domai
 	if err != nil {
 		return domain.Stream{}, false, err
 	}
-	st := toStream(r.ID, r.WorkspaceID, r.CreatedBy, r.CreatedAt, r.Name, r.Description, r.Kind)
-	st.SourceTypes = r.SourceTypes
-	return st, true, nil
+	return toStream(r.ID, r.WorkspaceID, r.CreatedBy, r.CreatedAt, r.Name, r.Description, r.Kind), true, nil
 }
 
 // GetStreamByName returns the stream named name, false when none.
@@ -139,9 +137,7 @@ func (Streams) ListStreams(ctx context.Context, s db.Session, ids []string, limi
 	}
 	out := make([]domain.Stream, 0, len(rows))
 	for _, r := range rows {
-		st := toStream(r.ID, r.WorkspaceID, r.CreatedBy, r.CreatedAt, r.Name, r.Description, r.Kind)
-		st.SourceTypes = r.SourceTypes
-		out = append(out, st)
+		out = append(out, toStream(r.ID, r.WorkspaceID, r.CreatedBy, r.CreatedAt, r.Name, r.Description, r.Kind))
 	}
 	return out, nil
 }
@@ -186,6 +182,23 @@ func (Streams) StreamNames(ctx context.Context, s db.Session, ids []string) (map
 	}
 	for _, r := range rows {
 		out[r.ID.String()] = r.Name
+	}
+	return out, nil
+}
+
+// StreamSourceTypes are the source types of each stream's sources, the first added first.
+func (Streams) StreamSourceTypes(ctx context.Context, s db.Session, ids []string) (map[string][]string, error) {
+	out := map[string][]string{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := New(s.Q()).StreamSourceTypes(ctx, StreamSourceTypesParams{WorkspaceID: s.Workspace().ID(), Ids: uuids(ids)})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		id := r.StreamID.String()
+		out[id] = append(out[id], r.SourceType)
 	}
 	return out, nil
 }

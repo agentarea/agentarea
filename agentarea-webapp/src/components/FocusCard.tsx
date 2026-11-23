@@ -59,6 +59,22 @@ export function FocusHeader({
   );
 }
 
+/** One labelled fact of what the link is about, inside a `<dl>`. */
+export function FocusDetail({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-1">
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 break-words">{children}</dd>
+    </div>
+  );
+}
+
 /** Where the page's one action stands, with what to do next under it. */
 export function FocusStep({
   kind,

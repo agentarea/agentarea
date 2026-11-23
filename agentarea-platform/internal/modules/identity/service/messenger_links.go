@@ -58,11 +58,12 @@ func (s *Service) Confirm(ctx context.Context, account api.Account) (string, boo
 }
 
 // Offer issues the code a bot hands an unlinked sender.
-func (s *Service) Offer(ctx context.Context, account api.Account, bot string) (string, error) {
+func (s *Service) Offer(ctx context.Context, account api.Account, bot api.OfferingBot) (string, bool, error) {
 	if s.d.LinkCodes == nil {
-		return "", domain.ErrLinkingNeedsRedis
+		return "", false, domain.ErrLinkingNeedsRedis
 	}
-	return s.d.LinkCodes.Offer(ctx, domain.LinkOffer{MessengerAccount: messengerAccount(account), Bot: bot}, api.OfferTTL)
+	return s.d.LinkCodes.Offer(ctx, domain.LinkOffer{MessengerAccount: messengerAccount(account),
+		WorkspaceID: bot.WorkspaceID, SourceID: bot.SourceID, Bot: bot.Username}, api.OfferTTL)
 }
 
 // link links the account to userID, or renames it when userID already holds

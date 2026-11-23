@@ -333,10 +333,7 @@
         "chat": "{body:message.chat.id|edited_message.chat.id|channel_post.chat.id|edited_channel_post.chat.id|callback_query.message.chat.id|my_chat_member.chat.id|chat_member.chat.id|chat_join_request.chat.id}",
         "text": "{body:message.text|edited_message.text|message.caption}",
         "private": "{body:message.chat.type|edited_message.chat.type|callback_query.message.chat.type}",
-        "is_bot": "{body:message.from.is_bot|edited_message.from.is_bot|callback_query.from.is_bot}",
-        "username": "{body:message.from.username|edited_message.from.username|callback_query.from.username}",
-        "first_name": "{body:message.from.first_name|edited_message.from.first_name|callback_query.from.first_name}",
-        "last_name": "{body:message.from.last_name|edited_message.from.last_name|callback_query.from.last_name}"
+        "is_bot": "{body:message.from.is_bot|edited_message.from.is_bot|callback_query.from.is_bot}"
       },
       "reply": {
         "sender": "telegram_live",
