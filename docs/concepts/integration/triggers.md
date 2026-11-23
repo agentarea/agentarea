@@ -154,6 +154,24 @@ cut: the block names a task input file, `inputs/attachments/trigger-event.json`,
 which the run writes into the task's own workspace before the agent starts. A
 schedule tick carries no event, so its message is the task text alone.
 
+**A chat message arrives as its text; the event is kept with the task.** When
+the event belongs to a conversation (its source type has a `session_key`
+template, as messengers and mail do) and carries a text by the source's
+`summary` templates, there is no block: a trigger without task text gives the
+agent exactly the message, and a trigger with one leads with it and puts the
+message under a `## Message` heading. Which channel it came through does not
+matter to the agent; the reply goes back through the delivery address. The
+whole event stays with the task as data, in its parameters and the input file
+`inputs/attachments/trigger-event.json`, for tools that need it.
+
+```text
+Answer politely.
+
+## Message
+
+what can you do?
+```
+
 ### Channels carry the output back
 
 **A task an event started replies through its delivery address.** When a
