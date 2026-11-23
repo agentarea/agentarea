@@ -650,3 +650,8 @@ The authorization graph every agentarea process reads.
   value: {{ .Values.openfga.accessControl.storeName | default "agentarea" | quote }}
 {{- end }}
 {{- end }}
+
+{{/* Where MCP instance containers reach the MCP role: mcpManager.workloadUrl, else the in-cluster service. */}}
+{{- define "agentarea.mcpManager.workloadUrl" -}}
+{{- .Values.mcpManager.workloadUrl | default (printf "http://%s-mcp-manager:%v" (include "agentarea.fullname" .) .Values.mcpManager.service.port) -}}
+{{- end }}

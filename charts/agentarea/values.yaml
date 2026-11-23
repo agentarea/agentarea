@@ -695,6 +695,12 @@ platformNetworkPolicy:
 mcpManager:
   enabled: true
   replicaCount: 1
+  # Where MCP instance containers reach the MCP role (instance storage). Empty is
+  # the in-cluster service, right when instances run in this cluster. With a data
+  # plane in another cluster, set the address that cluster reaches, e.g. the
+  # mcpStorageGateway load balancer. The backend and worker start instances
+  # themselves and hand them this address.
+  workloadUrl: ""
   service:
     type: ClusterIP
     port: 80

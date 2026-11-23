@@ -81,7 +81,7 @@ groups:
     configVars:
       PORT: '8000'
       AGENTAREA_LOG_LEVEL: 'INFO'
-      AGENTAREA_MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
+      AGENTAREA_MCP_MANAGER_URL: '{{ include "agentarea.mcpManager.workloadUrl" . }}'
       AGENTAREA_API_URL: '{{ include "agentarea.backend.apiUrl" . }}'
       AGENTAREA_S3_PUBLIC_ENDPOINT: '{{ .Values.global.storage.publicEndpoint }}'
       AGENTAREA_ANALYTICS_ENABLED: '{{ .Values.global.analytics.enabled }}'
@@ -170,7 +170,7 @@ groups:
     configVars:
       AGENTAREA_TEMPORAL_MAX_ACTIVITIES: '10'
       AGENTAREA_TEMPORAL_MAX_WORKFLOWS: '5'
-      AGENTAREA_MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
+      AGENTAREA_MCP_MANAGER_URL: '{{ include "agentarea.mcpManager.workloadUrl" . }}'
       AGENTAREA_WORKER_HEALTH_PORT: '{{ .Values.worker.healthPort }}'
       AGENTAREA_TASK_OUTAGE_RETRY_WINDOW: '{{ .Values.worker.outageWait.retryWindow }}'
       AGENTAREA_TASK_OUTAGE_WAIT_BACKOFF: '{{ .Values.worker.outageWait.backoff }}'
