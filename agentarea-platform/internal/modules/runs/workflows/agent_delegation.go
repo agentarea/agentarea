@@ -300,7 +300,7 @@ func (r *agentRun) runChild(ctx workflow.Context, c ToolCall, target api.Delegat
 		},
 	}
 	if created.RunnerClientID != "" {
-		child.WorkflowMetadata[runnerClientKey] = created.RunnerClientID
+		child.WorkflowMetadata[runnerClientKey] = created.RunnerClientID // pragma: allowlist secret
 	}
 	var res AgentRunResult
 	err := workflow.ExecuteChildWorkflow(r.childOptions(ctx, childID), api.WorkflowAgentExecution, child).Get(ctx, &res)
