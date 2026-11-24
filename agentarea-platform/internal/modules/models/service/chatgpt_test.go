@@ -177,7 +177,7 @@ func TestFinishingTheSignInStoresTheTokenSetOnTheConfiguration(t *testing.T) {
 		t.Fatalf("done=%v err=%v", done, err)
 	}
 	c := e.st.configs[e.config.ID]
-	if c.APIKey == nil || *c.APIKey != e.secret || c.APIKeySecretID == nil {
+	if c.APIKey == nil || *c.APIKey != e.secret || c.APIKeySecretID == nil { // pragma: allowlist secret
 		t.Errorf("config = %+v", c)
 	}
 	if tok := e.stored(t); tok.RefreshToken != "r1" || tok.AccountID != "acc-1" {
