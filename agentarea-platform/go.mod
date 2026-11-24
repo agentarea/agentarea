@@ -2,7 +2,7 @@ module github.com/agentarea/agentarea/agentarea-platform
 
 go 1.27.0
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	github.com/jackc/pgx/v5 v5.12.0

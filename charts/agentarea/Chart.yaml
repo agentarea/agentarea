@@ -41,25 +41,25 @@ annotations:
     - name: agentarea/agentarea-mcp-runner
       image: agentarea/agentarea-mcp-runner:0.2.0
     - name: amazon/aws-cli
-      image: amazon/aws-cli:2.38.2
+      image: amazon/aws-cli:2.42.2
     - name: busybox
       image: busybox:1.38.0
     - name: valkey/valkey
-      image: docker.io/valkey/valkey:9.1.2
+      image: docker.io/valkey/valkey:9.1.4
     - name: openfga/openfga
-      image: openfga/openfga:v1.22.0
+      image: openfga/openfga:v1.23.0
     - name: oryd/kratos
       image: oryd/kratos:v26.2.0
     - name: postgres
-      image: postgres:16.15-alpine
+      image: postgres:16.16-alpine
     - name: pause
       image: registry.k8s.io/pause:3.10.2
     - name: rustfs/rustfs
-      image: rustfs/rustfs:1.0.3
+      image: rustfs/rustfs:1.0.6
     - name: temporalio/admin-tools
-      image: temporalio/admin-tools:1.32.1
+      image: temporalio/admin-tools:1.32.2
     - name: temporalio/server
-      image: temporalio/server:1.32.1
+      image: temporalio/server:1.32.2
 
 # External dependencies - users can disable these and use their own infrastructure
 # For production, we recommend using managed services (RDS, ElastiCache, etc.)

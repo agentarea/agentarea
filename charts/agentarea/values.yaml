@@ -1168,14 +1168,14 @@ temporal:
   replicaCount: 1
   image:
     repository: temporalio/server
-    tag: "1.32.1"
+    tag: "1.32.2"
   # Runs the schema init container (creates and migrates the temporal and
   # temporal_visibility databases) and the namespace job. Keep its tag equal
   # to image.tag: the schema it applies is the one that server version needs.
   adminTools:
     image:
       repository: temporalio/admin-tools
-      tag: "1.32.1"
+      tag: "1.32.2"
   # Retention of global.temporal.namespace when the namespace job creates it.
   namespaceRetention: 24h
 
@@ -1195,7 +1195,7 @@ postgresql:
   enabled: true
   image:
     repository: postgres
-    tag: "16.15-alpine"
+    tag: "16.16-alpine"
   resources:
     limits:
       cpu: 500m
@@ -1215,6 +1215,8 @@ redis:
 
 # Valkey subchart passthrough — forwarded verbatim to valkey-io/valkey-helm.
 valkey:
+  image:
+    tag: "9.1.4"
   auth:
     enabled: true
     usersExistingSecret: "agentarea-redis-secret"
@@ -1254,7 +1256,7 @@ rustfs:
   enabled: true
   image:
     repository: "rustfs/rustfs"
-    tag: "1.0.3"
+    tag: "1.0.6"
   auth:
     existingSecret: "agentarea-rustfs-secret"
   # Optional bootstrap override. Empty means global.storage.bucket, keeping
@@ -1370,7 +1372,7 @@ openfga:
   replicaCount: 1
   image:
     repository: openfga/openfga
-    tag: "v1.22.0"
+    tag: "v1.23.0"
   database:
     name: "openfga"
     createJob:

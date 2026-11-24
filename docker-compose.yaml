@@ -234,7 +234,7 @@ services:
       - auth-network
 
   rustfs:
-    image: rustfs/rustfs:1.0.3
+    image: rustfs/rustfs:1.0.6
     volumes:
       - ./data/rustfs:/data
     environment:
@@ -286,7 +286,7 @@ services:
       - auth-network
 
   valkey:
-    image: valkey/valkey:9.1.2
+    image: valkey/valkey:9.1.4
     container_name: agentarea-valkey
     restart: always
     volumes:
@@ -394,7 +394,7 @@ services:
   # Creates and migrates the temporal and temporal_visibility databases; the
   # server image does neither. Keep its tag equal to the server's.
   temporal-schema:
-    image: temporalio/admin-tools:1.32.1
+    image: temporalio/admin-tools:1.32.2
     depends_on:
       db:
         condition: service_healthy
@@ -424,7 +424,7 @@ services:
         sql --db temporal_visibility update-schema --schema-name postgresql/v12/visibility
 
   temporal:
-    image: temporalio/server:1.32.1
+    image: temporalio/server:1.32.2
     container_name: agentarea-temporal
     restart: unless-stopped
     depends_on:
@@ -455,7 +455,7 @@ services:
 
   # Registers the namespace the platform runs in; the server image does not.
   temporal-namespace:
-    image: temporalio/admin-tools:1.32.1
+    image: temporalio/admin-tools:1.32.2
     depends_on:
       temporal:
         condition: service_healthy
@@ -599,7 +599,7 @@ services:
 
   # OpenFGA schema migration. Tag matches the Helm chart's openfga.image.tag.
   openfga-migrate:
-    image: ${OPENFGA_IMAGE:-openfga/openfga:v1.22.0}
+    image: ${OPENFGA_IMAGE:-openfga/openfga:v1.23.0}
     command: migrate
     environment:
       OPENFGA_DATASTORE_ENGINE: postgres
@@ -614,7 +614,7 @@ services:
 
   # OpenFGA authorization server (the ReBAC graph behind every permission check)
   openfga:
-    image: ${OPENFGA_IMAGE:-openfga/openfga:v1.22.0}
+    image: ${OPENFGA_IMAGE:-openfga/openfga:v1.23.0}
     command: run
     environment:
       OPENFGA_DATASTORE_ENGINE: postgres

@@ -5,10 +5,10 @@
 # runs a stdio MCP server (`npx -y <pkg>`, `uvx <pkg>`, or a command baked into
 # an image built FROM this one) behind a bridge that serves Streamable HTTP on
 # $PORT at /mcp for protocol 2026-07-28 and 2025 clients.
-FROM node:24.22.0-trixie-slim AS node
+FROM node:24.22.3-trixie-slim AS node
 FROM ghcr.io/astral-sh/uv:0.13.3 AS uv
 
-FROM python:3.14.8-slim-trixie
+FROM python:3.14.10-slim-trixie
 
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
@@ -16,8 +16,14 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 COPY --from=uv /uv /uvx /usr/local/bin/
 
+# The npm and pip the base images ship vendor undici and certifi releases with
+# known CVEs; these releases carry the fixed ones.
+RUN npm install -g --no-audit --no-fund npm@11.21.3 && npm cache clean --force \
+    && pip install --no-cache-dir --upgrade pip==26.3
+
 # git for git-sourced npm/uvx packages.
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 
