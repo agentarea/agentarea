@@ -320,7 +320,7 @@ func TestStoreAndReadOutputThroughTheContextStore(t *testing.T) {
 	if err := s.StoreOutput(context.Background(), p, "t1", "o1", "alpha\nbeta\ngamma"); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.ReadOutput(context.Background(), p, "t1", "o1", "beta", nil, nil)
+	got, err := s.ReadOutput(context.Background(), p, "t1", "", "o1", "beta", nil, nil)
 	if err != nil || !strings.Contains(got, "beta") || strings.Contains(got, "alpha") {
 		t.Fatalf("read %q %v", got, err)
 	}
@@ -448,6 +448,45 @@ func TestReadFileReadsPDFPages(t *testing.T) {
 	if out := read(map[string]any{"file_name": "notes.txt", "offset": float64(9)}); out.Result != "Error reading file: notes.txt: offset 9 is past the last line, 5" {
 		t.Fatalf("offset past the end %q", out.Result)
 	}
+}
+
+func TestASubtasksShellAndFilesAreItsParentsSandbox(t *testing.T) {
+	rt := &shareRuntime{}
+	s := New(Deps{Runtime: rt, Log: quiet()})
+	shared := map[string]any{WorkspaceTaskKey: "parent"}
+	bash := ToolCall{TaskID: "child", WorkflowID: "wf", ToolName: "bash", Args: map[string]any{"command": "ls"}, RunMetadata: shared,
+		Binding: api.ToolBinding{Source: "code", Code: &api.CodeBinding{Namespace: "agentarea/shell", Method: "bash"}}}
+	save := ToolCall{TaskID: "child", WorkflowID: "wf", ToolName: "save_file", Args: map[string]any{"file_name": "outputs/x.md", "contents": "x"},
+		RunMetadata: shared, Binding: api.ToolBinding{Source: "code", Code: &api.CodeBinding{Namespace: "agentarea/files", Method: "save_file"}}}
+	for _, in := range []ToolCall{bash, save} {
+		if _, err := s.dispatch(context.Background(), testPrincipal(), in, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(rt.tasks) != 2 || rt.tasks[0] != "parent" || rt.tasks[1] != "parent" {
+		t.Fatalf("sandbox tasks = %v", rt.tasks)
+	}
+	own := save
+	own.RunMetadata = map[string]any{}
+	if _, err := s.dispatch(context.Background(), testPrincipal(), own, nil); err != nil || rt.tasks[2] != "child" {
+		t.Fatalf("a run on its own wrote to %v: %v", rt.tasks, err)
+	}
+}
+
+// shareRuntime records the task of each sandbox call.
+type shareRuntime struct {
+	sandboxapi.Runtime
+	tasks []string
+}
+
+func (r *shareRuntime) Bash(_ context.Context, c sandboxapi.BashCall) (sandboxapi.ToolOutcome, error) {
+	r.tasks = append(r.tasks, c.TaskID)
+	return sandboxapi.ToolOutcome{Success: true, Outcome: "exit"}, nil
+}
+
+func (r *shareRuntime) PutFile(_ context.Context, _, task, path string, data []byte) (sandboxapi.StoredFile, error) {
+	r.tasks = append(r.tasks, task)
+	return sandboxapi.StoredFile{Path: path, Size: int64(len(data))}, nil
 }
 
 func TestBashGoesToTheSandboxWithTheRunsProject(t *testing.T) {

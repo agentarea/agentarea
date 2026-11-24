@@ -13,7 +13,11 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/domain"
 )
 
-const delegationStopped = "Stopped by the user while the delegated agent was running."
+const (
+	delegationStopped = "Stopped by the user while the delegated agent was running."
+	// workspaceTaskKey names, in a subtask's metadata, the task whose files it works on.
+	workspaceTaskKey = "workspace_task_id"
+)
 
 // delegation is one call handed to another agent: a local one runs as a child run, a
 // remote one as a RemoteDelegationWorkflow.
@@ -284,6 +288,7 @@ func (r *agentRun) runChild(ctx workflow.Context, c ToolCall, target api.Delegat
 	req := CreateDelegationTaskRequest{
 		Principal: r.principal, ParentTaskID: r.taskID, TargetAgentID: target.AgentID, TargetAgentName: target.AgentName,
 		Message: message, ParentPolicy: r.cfg.Policy, RunBudget: &budget, ExecutionID: childID,
+		WorkspaceTaskID: r.filesTask(),
 	}
 	var created CreateDelegationTaskResult
 	if err := workflow.ExecuteActivity(activityCtx(ctx, api.ActivityCreateDelegationTask, "", 0), api.ActivityCreateDelegationTask, req).Get(ctx, &created); err != nil {
@@ -298,7 +303,7 @@ func (r *agentRun) runChild(ctx workflow.Context, c ToolCall, target api.Delegat
 		TaskQuery: message, Policy: created.Policy,
 		WorkflowMetadata: map[string]any{
 			"source": "agent_delegation", "parent_execution_id": r.executionID,
-			"parent_agent_id": r.principal.AgentID, "parent_task_id": r.taskID,
+			"parent_agent_id": r.principal.AgentID, "parent_task_id": r.taskID, workspaceTaskKey: r.filesTask(),
 		},
 	}
 	if created.RunnerClientID != "" {

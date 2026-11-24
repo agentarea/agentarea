@@ -198,7 +198,7 @@ func (r *agentRun) validateArtifacts(ctx workflow.Context, paths []string) (Arti
 	if err := r.publish(ctx); err != nil {
 		return ArtifactValidationResult{}, err
 	}
-	req := ArtifactValidationRequest{Principal: r.principal, TaskID: r.taskID, ExecutionID: r.executionID, DeclaredPaths: paths}
+	req := ArtifactValidationRequest{Principal: r.principal, TaskID: r.filesTask(), ExecutionID: r.executionID, DeclaredPaths: paths}
 	var res ArtifactValidationResult
 	if err := workflow.ExecuteActivity(activityCtx(ctx, api.ActivityValidateArtifacts, "", 0), api.ActivityValidateArtifacts, req).Get(ctx, &res); err != nil {
 		if isCancellation(err) || ctx.Err() != nil {

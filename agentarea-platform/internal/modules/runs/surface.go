@@ -160,3 +160,6 @@ func (l lazyExecutor) Update(ctx context.Context, workflowID, update string, out
 
 // HeldCalls passes calls outside a run that the policy holds through their approval.
 func (m *Surface) HeldCalls() api.HeldCalls { return m.s }
+
+// TaskFileURLs signs downloads of the files a runner's turn works on.
+func (m *Surface) TaskFileURLs() api.TaskFileURLs { return m.s }

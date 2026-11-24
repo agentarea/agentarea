@@ -161,7 +161,7 @@ func (a *Activities) StoreContextOutput(ctx context.Context, req StoreOutputRequ
 
 // ReadContextOutput is read_context_output.
 func (a *Activities) ReadContextOutput(ctx context.Context, req ReadOutputRequest) (ContextResult, error) {
-	content, err := a.svc.ReadOutput(ctx, principal(req.Principal), req.TaskID, req.OutputID, req.Grep, req.Head, req.Tail)
+	content, err := a.svc.ReadOutput(ctx, principal(req.Principal), req.TaskID, req.FilesTaskID, req.OutputID, req.Grep, req.Head, req.Tail)
 	return contextResult(content, err), nil
 }
 
@@ -284,7 +284,7 @@ func (a *Activities) Record(ctx context.Context, req RecordRequest) (RecordResul
 func (a *Activities) ActivateSkill(ctx context.Context, req ActivateSkillRequest) (ActivateSkillResult, error) {
 	defer heartbeating(ctx)()
 	out, err := a.svc.ActivateSkill(ctx, principal(req.Principal), service.SkillActivation{
-		TaskID: req.TaskID, ExecutionID: req.ExecutionID, ToolCallID: req.ToolCallID, Skill: req.Skill,
+		TaskID: req.TaskID, FilesTaskID: req.FilesTaskID, ExecutionID: req.ExecutionID, ToolCallID: req.ToolCallID, Skill: req.Skill,
 		WorkflowID: activity.GetInfo(ctx).WorkflowExecution.ID, Seq: req.Seq, EventID: req.EventID, Iteration: req.Iteration, MaxTokens: req.MaxTokens,
 	})
 	return ActivateSkillResult(out), err
@@ -295,6 +295,7 @@ func (a *Activities) CreateDelegationTask(ctx context.Context, req CreateDelegat
 	out, err := a.svc.CreateDelegationTask(ctx, principal(req.Principal), service.DelegationInput{
 		ParentTaskID: req.ParentTaskID, TargetAgentID: req.TargetAgentID, TargetAgentName: req.TargetAgentName,
 		Message: req.Message, ParentPolicy: req.ParentPolicy, RunBudget: req.RunBudget, ExecutionID: req.ExecutionID,
+		WorkspaceTaskID: req.WorkspaceTaskID,
 	})
 	return CreateDelegationTaskResult(out), err
 }

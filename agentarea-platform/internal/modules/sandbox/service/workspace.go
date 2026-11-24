@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -937,6 +938,45 @@ func (w *Workspaces) Stream(ctx context.Context, workspaceID, taskID, path strin
 		return Verified{}, err
 	}
 	return Verified{Body: body, ContentType: e.ContentType, Size: e.Size}, nil
+}
+
+// DownloadURLs presigns the objects of the live entries at path, or under it.
+func (w *Workspaces) DownloadURLs(ctx context.Context, workspaceID, taskID, path string, ttl time.Duration) ([]api.FileURL, error) {
+	clean, err := normalize(strings.TrimSuffix(path, "/"))
+	if err != nil {
+		return nil, err
+	}
+	_, entries, _, err := w.snapshot(ctx, workspaceID, taskID)
+	if err != nil {
+		return nil, err
+	}
+	var picked []entry
+	if e, ok := entries[clean]; ok && !e.Deleted {
+		picked = append(picked, e)
+	} else {
+		for p, e := range entries {
+			if !e.Deleted && strings.HasPrefix(p, clean+"/") {
+				picked = append(picked, e)
+			}
+		}
+	}
+	if len(picked) == 0 {
+		return nil, ErrFileNotFound
+	}
+	slices.SortFunc(picked, func(a, b entry) int { return strings.Compare(a.RelativePath, b.RelativePath) })
+	out := make([]api.FileURL, 0, len(picked))
+	for _, e := range picked {
+		key, err := w.validateURI(workspaceID, taskID, e.ObjectURI)
+		if err != nil {
+			return nil, err
+		}
+		signed, err := w.Blob.PresignGet(ctx, key, ttl)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, api.FileURL{Path: e.RelativePath, URL: signed.URL, SHA256: e.SHA256, Size: e.Size})
+	}
+	return out, nil
 }
 
 // Get reads a committed file whole.

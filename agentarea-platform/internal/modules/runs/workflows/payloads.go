@@ -381,6 +381,8 @@ type CreateDelegationTaskRequest struct {
 	RunBudget       *money.Decimal `json:"run_budget"`
 	// ExecutionID is the child's workflow id, stored on its task row.
 	ExecutionID string `json:"execution_id"`
+	// WorkspaceTaskID is the task whose files the child works on, the parent's.
+	WorkspaceTaskID string `json:"workspace_task_id,omitempty"`
 }
 
 // CreateDelegationTaskResult: Status created with TaskID and the child's
@@ -433,6 +435,7 @@ type ArtifactValidationResult struct {
 type ActivateSkillRequest struct {
 	Principal   Principal `json:"principal"`
 	TaskID      string    `json:"task_id"`
+	FilesTaskID string    `json:"files_task_id,omitempty"`
 	ExecutionID string    `json:"execution_id"`
 	ToolCallID  string    `json:"tool_call_id"`
 	Skill       api.Skill `json:"skill"`
@@ -482,10 +485,12 @@ type StoreOutputRequest struct {
 type ReadOutputRequest struct {
 	Principal Principal `json:"principal"`
 	TaskID    string    `json:"task_id"`
-	OutputID  string    `json:"output_id"`
-	Grep      string    `json:"grep"`
-	Head      *int      `json:"head"`
-	Tail      *int      `json:"tail"`
+	// FilesTaskID is the task whose files the run works on, when not its own.
+	FilesTaskID string `json:"files_task_id,omitempty"`
+	OutputID    string `json:"output_id"`
+	Grep        string `json:"grep"`
+	Head        *int   `json:"head"`
+	Tail        *int   `json:"tail"`
 }
 
 type SearchHistoryRequest struct {

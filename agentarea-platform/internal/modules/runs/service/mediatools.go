@@ -173,7 +173,7 @@ func (t mediaTools) generateImage(ctx context.Context, inv ToolInvocation) (Tool
 	}
 	out := ToolOutput{ModelCost: charge.Amount, ModelBilling: &charge, CostUnknown: charge.CostUnknown, Source: "builtin"}
 	path := mediaDir + "/image-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:12] + mediaExtension(image.MediaType)
-	if _, err := s.d.Runtime.PutFile(ctx, p.WorkspaceID, inv.TaskID, path, image.Content); err != nil {
+	if _, err := s.d.Runtime.PutFile(ctx, p.WorkspaceID, filesTask(inv), path, image.Content); err != nil {
 		// The provider was paid for the image; the charge stands though the file is lost.
 		s.d.Log.ErrorContext(ctx, "generated image could not be saved", "task_id", inv.TaskID, "error", err)
 		out.Result, out.Error = "The image was generated but could not be saved: "+err.Error(), err.Error()
@@ -346,7 +346,7 @@ func (t mediaTools) getVideo(ctx context.Context, inv ToolInvocation) (ToolOutpu
 		return ToolOutput{}, err
 	}
 	path := mediaDir + "/video-" + jobID + mediaExtension(video.MediaType)
-	if _, err := s.d.Runtime.PutFile(ctx, p.WorkspaceID, inv.TaskID, path, video.Content); err != nil {
+	if _, err := s.d.Runtime.PutFile(ctx, p.WorkspaceID, filesTask(inv), path, video.Content); err != nil {
 		return ToolOutput{}, fmt.Errorf("the finished video could not be saved: %w", err)
 	}
 	billing, err := json.Marshal(storedBillingOf(charge))

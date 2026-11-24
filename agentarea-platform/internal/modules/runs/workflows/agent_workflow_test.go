@@ -38,6 +38,9 @@ type fakeRun struct {
 	toolCalls []ToolCallRequest
 	tool      func(ToolCallRequest) (ToolCallResult, error)
 	created   []CreateDelegationTaskRequest
+	// files is each task's store when a test keeps one: validation then finds only what is there.
+	files     map[string]map[string]bool
+	validated []ArtifactValidationRequest
 	client    string
 	remoteGet func(RemoteTaskRequest) (ToolCallResult, error)
 	gets      []RemoteTaskRequest
@@ -133,7 +136,31 @@ func (f *fakeRun) cancelRemoteTask(_ context.Context, req RemoteTaskRequest) err
 	return nil
 }
 
+func (f *fakeRun) write(task, path string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.files[task] == nil {
+		f.files[task] = map[string]bool{}
+	}
+	f.files[task][path] = true
+}
+
 func (f *fakeRun) validate(_ context.Context, req ArtifactValidationRequest) (ArtifactValidationResult, error) {
+	f.mu.Lock()
+	f.validated = append(f.validated, req)
+	store := f.files
+	f.mu.Unlock()
+	if store != nil {
+		var issues []ArtifactIssue
+		for _, p := range req.DeclaredPaths {
+			if !store[req.TaskID][p] {
+				issues = append(issues, ArtifactIssue{Path: p, Validator: "published_artifact", Code: "artifact_missing", Message: "file not found: " + p})
+			}
+		}
+		if len(issues) > 0 {
+			return ArtifactValidationResult{State: "failed", Generation: 1, Issues: issues}, nil
+		}
+	}
 	ev := make([]ArtifactEvidence, 0, len(req.DeclaredPaths))
 	for _, p := range req.DeclaredPaths {
 		ev = append(ev, ArtifactEvidence{Path: p, Validator: "exists"})

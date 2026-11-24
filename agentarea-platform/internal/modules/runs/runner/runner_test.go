@@ -40,6 +40,8 @@ const (
 	agentID    = "11111111-1111-4111-8111-111111111111"
 	turnTaskID = "22222222-2222-4222-8222-222222222222"
 	otherTask  = "33333333-3333-4333-8333-333333333333"
+	subTask    = "44444444-4444-4444-8444-444444444444"
+	parentTask = "55555555-5555-4555-8555-555555555555"
 )
 
 var clientID = uuid.NewSHA1(uuid.NameSpaceOID, []byte("client")).String()
@@ -197,6 +199,19 @@ func (f *fakeArtifacts) PublishArtifact(_ context.Context, workspaceID, taskID, 
 	return sandboxapi.TaskArtifact{Path: p}, nil
 }
 
+// fakeShared is the parent task's store a subtask works on.
+type fakeShared struct {
+	mu   sync.Mutex
+	puts []string
+}
+
+func (s *fakeShared) PutFile(_ context.Context, _, taskID, p string, data []byte) (sandboxapi.StoredFile, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.puts = append(s.puts, taskID+":"+p+"="+string(data))
+	return sandboxapi.StoredFile{Path: p, Size: int64(len(data))}, nil
+}
+
 type fakeWorker struct {
 	queue  string
 	limits durable.Limits
@@ -279,6 +294,7 @@ type rig struct {
 	broker   *fakeBroker
 	files    *fakeFiles
 	outputs  *fakeArtifacts
+	shared   *fakeShared
 	workers  *fakeWorkers
 	tasks    *fakeTasks
 	live     *fakeLiveTurns
@@ -298,6 +314,7 @@ func newRig(t *testing.T) *rig {
 		broker:   &fakeBroker{notes: make(chan notified, 64), deliveries: make(chan map[string]string, 4)},
 		files:    &fakeFiles{},
 		outputs:  &fakeArtifacts{},
+		shared:   &fakeShared{},
 		workers:  &fakeWorkers{},
 		live:     &fakeLiveTurns{alive: map[string]bool{}},
 		tokens:   fakeTokens{claims: make(chan authn.TurnClaims, 4)},
@@ -306,6 +323,9 @@ func newRig(t *testing.T) *rig {
 		tasks: &fakeTasks{sessions: map[string]string{}, tasks: map[string]store.RunnerTask{
 			turnTaskID: {ID: turnTaskID, AgentID: agentID, CreatedBy: "creator", SourceIdentity: "user:u1",
 				Parameters: map[string]any{}, Metadata: map[string]any{runnerClientKey: clientID}},
+			subTask: {ID: subTask, AgentID: agentID, CreatedBy: "creator", Parameters: map[string]any{}, Metadata: map[string]any{
+				runnerClientKey: clientID, workspaceTaskKey: parentTask,
+			}},
 			otherTask: {ID: otherTask, AgentID: agentID, CreatedBy: "creator",
 				Parameters: map[string]any{}, Metadata: map[string]any{runnerClientKey: "another"}},
 		}},
@@ -321,7 +341,7 @@ func newRig(t *testing.T) *rig {
 	mux := chi.NewRouter()
 	Mount(mux, errs, Deps{
 		Tasks: r.tasks, Gate: gate, Clients: r.clients, Slugs: fakeSlugs{}, Broker: r.broker, Presence: r.presence,
-		Files: r.files, Artifacts: r.outputs, Workers: r.workers, Tokens: r.tokens, Live: r.live, Log: log,
+		Files: r.files, Artifacts: r.outputs, Store: r.shared, Workers: r.workers, Tokens: r.tokens, Live: r.live, Log: log,
 		register: func(_ durable.Worker, turns workflows.RunnerTurns, _ durable.Executor) { r.turns <- turns },
 	})
 	r.srv = httptest.NewServer(mux)
@@ -448,6 +468,24 @@ func TestTaskRelativeTurnsTheRunnersTaskFolderIntoTaskPaths(t *testing.T) {
 		if got := taskRelative(c.in, turnTaskID); got != c.want {
 			t.Errorf("taskRelative(%q) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+func TestASubtasksOutputsGoToTheTaskItWorksOn(t *testing.T) {
+	r := newRig(t)
+	status, body := r.do(t, http.MethodPut, "/v1/runner/tasks/"+subTask+"/files/outputs/x.png", runnerKey, strings.NewReader("png"))
+	if status != http.StatusNoContent {
+		t.Fatalf("upload: %d %s", status, body)
+	}
+	if len(r.shared.puts) != 1 || r.shared.puts[0] != parentTask+":outputs/x.png=png" || len(r.files.puts) != 0 || len(r.outputs.pubs) != 0 {
+		t.Fatalf("shared %v, own %v, published %v", r.shared.puts, r.files.puts, r.outputs.pubs)
+	}
+	status, body = r.do(t, http.MethodPut, "/v1/runner/tasks/"+subTask+"/files/inputs/attachments/IMG.MOV", runnerKey, strings.NewReader("mov"))
+	if status != http.StatusNoContent {
+		t.Fatalf("upload: %d %s", status, body)
+	}
+	if len(r.shared.puts) != 1 || len(r.files.puts) != 1 || r.files.puts[0].key != "harness-files/"+wsID+"/"+subTask+"/inputs/attachments/IMG.MOV" {
+		t.Fatalf("a file outside outputs/ went to the shared task: shared %v, own %v", r.shared.puts, r.files.puts)
 	}
 }
 

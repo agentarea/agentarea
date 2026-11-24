@@ -28,6 +28,7 @@ import (
 
 const (
 	runnerClientKey  = "runner_client_id"
+	workspaceTaskKey = "workspace_task_id"
 	runnerSessionKey = "runner_session_id"
 	modelParameter   = "model"
 	effortParameter  = "reasoning_effort"
