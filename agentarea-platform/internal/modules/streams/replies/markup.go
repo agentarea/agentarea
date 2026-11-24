@@ -105,10 +105,15 @@ func FormatEvent(m Markup, e Event, presentation string) string {
 			return fmt.Sprintf("%s %s%s%s%s", em["wrench"], m.esc("Using "), i0, m.esc(pyStr(get(d, "tool_name"), "tool")), i1+m.esc("..."))
 		case "delegation.started", "delegation.completed":
 			action := "Received from"
-			if CanonicalType(e.Type) == "delegation.started" {
+			switch {
+			case CanonicalType(e.Type) == "delegation.completed":
+			case d["remote"] == true:
+				action = "Asking"
+			default:
 				action = "Delegating to"
 			}
-			return fmt.Sprintf("%s %s %s%s%s", em["robot"], action, i0, m.esc(pyStr(get(d, "agent_name"), "sub-agent")), i1)
+			name := pyStr(firstTruthy(d, "target_agent_name", "agent_name", "tool_name"), "sub-agent")
+			return fmt.Sprintf("%s %s %s%s%s", em["robot"], action, i0, m.esc(name), i1)
 		}
 	}
 	return em["info"] + " " + m.esc(e.Type)

@@ -206,10 +206,21 @@ target, starts a task that does not reply.
 | Reply sender | Used by | Shows |
 |---|---|---|
 | `http` | Slack, Discord, from the entry's `reply.request` | `concise`: result, questions to the user, status |
-| `telegram_live` | Telegram: one message edited in place as the run goes | `concise` |
+| `telegram_live` | Telegram: one message per turn, quoting the message it answers, edited in place as the run goes; the answer ends with a link to the task's page in the web app | `concise` |
 | `smtp` | email and IMAP sources | `summary`: result and questions, at the end |
 | `task_webhook` | the webhook a caller gave when starting a task | |
 | `a2a_webhook` | A2A push notification configs | |
+
+**A Telegram reply carries the files the turn published.** When a turn ends
+with `task.completed`, `telegram_live` sends the chat each file the task
+published (everything under `outputs/` and the artifacts it declared) that it
+has not sent before, each as a message of its own after the answer: an mp4 as a
+video, a JPEG, PNG or WebP up to 10 MB as a photo, anything else as a document.
+A file over the 50 MB a bot uploads, or one Telegram refuses, is named in a
+short note in the chat instead. Files of an earlier turn are not sent again,
+and a turn sends at most ten. The event service reads the files through the
+sandbox manager, so it needs `AGENTAREA_SANDBOX_FILE_SECRET` as the worker
+does.
 
 **Delivery is a consumer group, not an inline call.** A run publishes its
 events once to `tasks.events` and does not know who reads them. The `delivery`

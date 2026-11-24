@@ -4436,7 +4436,7 @@
    },
    {
     "name": "messages_send_message",
-    "description": "Send a message to a workspace member through a messenger stream (Telegram), so you can start the conversation.\n\nThe member must have linked their Telegram account to AgentArea; there is no chat id to give. ``to`` defaults to the person this run acts for and ``stream`` to the only messenger stream\nthat reaches them. The text is sent as plain text, cut at the messenger's limit. When they\nanswer, the reply reaches the stream like any message they send, and its trigger runs as usual.",
+    "description": "Send a message to a workspace member through a messenger stream (Telegram), so you can start the conversation.\n\nThe member must have linked their Telegram account to AgentArea; there is no chat id to give. ``to`` defaults to the person this run acts for and ``stream`` to the only messenger stream\nthat reaches them. The text is sent as plain text, cut at the messenger's limit; ``files`` are paths of\nthis run's own files sent after it. When they\nanswer, the reply reaches the stream like any message they send, and its trigger runs as usual.",
     "inputSchema": {
      "properties": {
       "workspace": {
@@ -4445,9 +4445,10 @@
        "type": "string"
       },
       "text": {
-       "description": "The message, as plain text.",
+       "description": "The message, as plain text; may be empty when files are given.",
        "title": "Text",
-       "type": "string"
+       "type": "string",
+       "default": ""
       },
       "to": {
        "default": "",
@@ -4460,11 +4461,19 @@
        "description": "Messenger stream name or id, from `streams_list`; empty for the only one that reaches the member.",
        "title": "Stream",
        "type": "string"
+      },
+      "files": {
+       "default": [],
+       "description": "Paths of this run's files to send after the text, each as a file of its own, e.g. outputs/clip.subtitled.mp4: an mp4 as a video, a jpeg/png/webp up to 10 MB as a photo, anything else as a document, each at most 50 MB; at most 10 files.",
+       "items": {
+        "type": "string"
+       },
+       "title": "Files",
+       "type": "array"
       }
      },
      "required": [
-      "workspace",
-      "text"
+      "workspace"
      ],
      "title": "send_messageArguments",
      "type": "object"
@@ -9746,13 +9755,14 @@
    },
    {
     "name": "messages_send_message",
-    "description": "Send a message to a workspace member through a messenger stream (Telegram), so you can start the conversation.\n\nThe member must have linked their Telegram account to AgentArea; there is no chat id to give. ``to`` defaults to the person this run acts for and ``stream`` to the only messenger stream\nthat reaches them. The text is sent as plain text, cut at the messenger's limit. When they\nanswer, the reply reaches the stream like any message they send, and its trigger runs as usual.",
+    "description": "Send a message to a workspace member through a messenger stream (Telegram), so you can start the conversation.\n\nThe member must have linked their Telegram account to AgentArea; there is no chat id to give. ``to`` defaults to the person this run acts for and ``stream`` to the only messenger stream\nthat reaches them. The text is sent as plain text, cut at the messenger's limit; ``files`` are paths of\nthis run's own files sent after it. When they\nanswer, the reply reaches the stream like any message they send, and its trigger runs as usual.",
     "inputSchema": {
      "properties": {
       "text": {
-       "description": "The message, as plain text.",
+       "description": "The message, as plain text; may be empty when files are given.",
        "title": "Text",
-       "type": "string"
+       "type": "string",
+       "default": ""
       },
       "to": {
        "default": "",
@@ -9765,11 +9775,18 @@
        "description": "Messenger stream name or id, from `streams_list`; empty for the only one that reaches the member.",
        "title": "Stream",
        "type": "string"
+      },
+      "files": {
+       "default": [],
+       "description": "Paths of this run's files to send after the text, each as a file of its own, e.g. outputs/clip.subtitled.mp4: an mp4 as a video, a jpeg/png/webp up to 10 MB as a photo, anything else as a document, each at most 50 MB; at most 10 files.",
+       "items": {
+        "type": "string"
+       },
+       "title": "Files",
+       "type": "array"
       }
      },
-     "required": [
-      "text"
-     ],
+     "required": [],
      "title": "send_messageArguments",
      "type": "object"
     },

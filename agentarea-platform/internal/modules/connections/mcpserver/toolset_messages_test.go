@@ -35,6 +35,7 @@ func TestMessagesToolsetWritesOnlyToMembers(t *testing.T) {
 		{"messages_send_message", `{"text":"hi","to":"123456789"}`, "", "123456789 is not a member of this workspace", true},
 		{"messages_send_message", `{"text":"hi","to":"stranger@example.com"}`, "", "stranger@example.com is not a member of this workspace", true},
 		{"messages_send_message", `{"text":"  "}`, "", "text must not be empty", true},
+		{"messages_send_message", `{"files":["outputs/a.mp4"]}`, "", "files can be sent only from a run", true},
 	})
 }
 

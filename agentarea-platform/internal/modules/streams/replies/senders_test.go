@@ -89,6 +89,11 @@ func TestFormatEvent(t *testing.T) {
 		{slack, ev("tool.call", map[string]any{"tool_name": "shell"}), replies.Concise, ":wrench: Using _shell_..."},
 		{slack, ev("tool.call", map[string]any{"tool_name": "shell"}), replies.Verbose, ":information_source: tool.call"},
 		{tg, ev("task.completed", map[string]any{"result": "1.5 (ok)!"}), replies.Concise, `1\.5 \(ok\)\!`},
+		{slack, ev("delegation.started", map[string]any{"target_agent_name": "Codex", "tool_name": "delegate_codex"}), replies.Concise, ":robot_face: Delegating to _Codex_"},
+		{slack, ev("delegation.started", map[string]any{"target_agent_name": "aadocs-ceo", "remote": true}), replies.Concise, ":robot_face: Asking _aadocs-ceo_"},
+		{slack, ev("delegation.started", map[string]any{"target_agent_name": nil, "remote": true, "tool_name": "ask_ceo"}), replies.Concise, ":robot_face: Asking _ask_ceo_"},
+		{slack, ev("delegation.completed", map[string]any{"target_agent_name": "Codex"}), replies.Concise, ":robot_face: Received from _Codex_"},
+		{slack, ev("delegation.started", map[string]any{}), replies.Concise, ":robot_face: Delegating to _sub-agent_"},
 	} {
 		if got := replies.FormatEvent(c.m, c.e, c.pres); got != c.want {
 			t.Errorf("%s %v = %q want %q", c.e.Type, c.e.Data, got, c.want)
@@ -655,7 +660,7 @@ func TestTelegramLiveAnswersAFollowUpAtTheMessageThatStartedItsTurn(t *testing.T
 	}
 }
 
-func TestTelegramLiveQuotesOnlyInGroups(t *testing.T) {
+func TestTelegramLiveQuotesTheMessageItAnswers(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
@@ -671,7 +676,7 @@ func TestTelegramLiveQuotesOnlyInGroups(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if len(chat.quoted) != 2 || chat.quoted[0] != nil || chat.quoted[1] != float64(10) {
-		t.Fatalf("quoted %v: a private chat is not quoted, a group is", chat.quoted)
+	if len(chat.quoted) != 2 || chat.quoted[0] != float64(9) || chat.quoted[1] != float64(10) {
+		t.Fatalf("quoted %v: a private chat and a group both quote the message answered", chat.quoted)
 	}
 }

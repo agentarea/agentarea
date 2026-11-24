@@ -15,6 +15,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+
+	identityapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/identity/api"
+	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 )
 
 // TelegramAPI is where the Telegram Bot API answers.
@@ -39,6 +42,15 @@ type TelegramLive struct {
 	// Client calls the Bot API (netguard.Vendor); API is its base, TelegramAPI when empty.
 	Client *http.Client
 	API    string
+	// Files reads the files a task published; at the end of a turn the chat gets each new one.
+	// Nil sends text only.
+	Files sandboxapi.TaskFiles
+	// AppURL is the webapp (AGENTAREA_APP_URL) and Slugs the workspaces' URL slugs: the end of a
+	// turn links the task's page. Either empty leaves the link out.
+	AppURL string
+	Slugs  identityapi.WorkspaceSlugs
+	// LockTTL is how long the per-task lock lives between renewals; zero is 30s.
+	LockTTL time.Duration
 }
 
 func (t TelegramLive) Format(s Send) (string, error) { return formatInMarkup(s) }
@@ -115,6 +127,21 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 	if text == "" {
 		return nil
 	}
+	link, plainLink := "", ""
+	if end {
+		if link, plainLink, err = t.taskLink(ctx, s); err != nil {
+			return err
+		}
+		if link != "" {
+			text += "\n\n" + link
+		}
+	}
+	plain := func(text string) string {
+		if link == "" {
+			return StripMarkup(text)
+		}
+		return strings.Replace(StripMarkup(text), StripMarkup(link), plainLink, 1)
+	}
 	if r := []rune(text); len(r) > telegramLimit {
 		text = "…\n" + string(r[len(r)-(telegramLimit-3):])
 	}
@@ -122,17 +149,18 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 	if err != nil {
 		return err
 	}
+	outer := ctx
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if msgID := state["message_id"]; msgID == "" {
 		payload := map[string]any{"chat_id": chatID, "text": text, "parse_mode": "MarkdownV2"}
-		if replyTo := target["message_id"]; truthy(replyTo) && !privateChat(chatID) {
+		if replyTo := target["message_id"]; truthy(replyTo) {
 			payload["reply_to_message_id"] = replyTo
 			payload["allow_sending_without_reply"] = true
 		}
 		status, body, err := t.call(ctx, token, "sendMessage", payload)
 		if err == nil && status == http.StatusBadRequest && strings.Contains(strings.ToLower(string(body)), "parse") {
-			payload["text"] = StripMarkup(text)
+			payload["text"] = plain(text)
 			delete(payload, "parse_mode")
 			status, body, err = t.call(ctx, token, "sendMessage", payload)
 		}
@@ -168,7 +196,7 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 		lower := strings.ToLower(string(body))
 		notModified := status == http.StatusBadRequest && strings.Contains(lower, "not modified")
 		if !notModified && status == http.StatusBadRequest && strings.Contains(lower, "parse") {
-			payload["text"] = StripMarkup(text)
+			payload["text"] = plain(text)
 			delete(payload, "parse_mode")
 			if status, body, err = t.call(ctx, token, "editMessageText", payload); err != nil {
 				return err
@@ -183,13 +211,37 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 			return err
 		}
 	}
-	if end {
-		if err := t.Redis.Set(ctx, telegramDonePrefix+s.Event.TaskID, endMark(s.Event.Timestamp), telegramStateTTL).Err(); err != nil {
+	if end && CanonicalType(s.Event.Type) == "task.completed" {
+		if err := t.sendOutputs(outer, s, token, chatID); err != nil {
 			return err
 		}
-		return t.Redis.Del(ctx, key).Err()
+	}
+	if end {
+		mark, cancel := context.WithTimeout(outer, 10*time.Second)
+		defer cancel()
+		if err := t.Redis.Set(mark, telegramDonePrefix+s.Event.TaskID, endMark(s.Event.Timestamp), telegramStateTTL).Err(); err != nil {
+			return err
+		}
+		return t.Redis.Del(mark, key).Err()
 	}
 	return nil
+}
+
+// taskLink is the line that links the task's page in the webapp, as MarkdownV2 and as plain
+// text; empty when the webapp or the workspace's slug is unknown.
+func (t TelegramLive) taskLink(ctx context.Context, s Send) (string, string, error) {
+	if t.AppURL == "" || t.Slugs == nil || s.Workspace.ID() == "" || s.Event.TaskID == "" {
+		return "", "", nil
+	}
+	slug, err := t.Slugs.Slug(ctx, s.Workspace.ID())
+	if errors.Is(err, identityapi.ErrWorkspaceNotFound) {
+		return "", "", nil
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("slug of workspace %s: %w", s.Workspace.ID(), err)
+	}
+	page := strings.TrimRight(t.AppURL, "/") + "/w/" + url.PathEscape(slug) + "/tasks/" + url.PathEscape(s.Event.TaskID)
+	return "[Open in AgentArea](" + strings.NewReplacer(`\`, `\\`, `)`, `\)`).Replace(page) + ")", "Open in AgentArea: " + page, nil
 }
 
 // TelegramRefused is the Bot API refusing a message: its HTTP status and description.
@@ -234,23 +286,48 @@ func (t TelegramLive) Message(ctx context.Context, token string, chatID any, tex
 	return answer.Result.MessageID, cut != text, nil
 }
 
-const unlockScript =`if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) end return 0`
+const renewScript = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("pexpire", KEYS[1], ARGV[2]) end return 0`
+
+const unlockScript = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) end return 0`
 
 // lock serializes the sends of one task across replicas, so a retried progress update cannot
-// interleave with the end; the returned func frees it.
+// interleave with the end. It is renewed while held, however long the files of a turn take to
+// upload; the returned func frees it.
 func (t TelegramLive) lock(ctx context.Context, taskID string) (func(), error) {
 	key, token := telegramLockPrefix+taskID, uuid.NewString()
+	ttl := t.LockTTL
+	if ttl <= 0 {
+		ttl = telegramLockTTL
+	}
 	wait, cancel := context.WithTimeout(ctx, telegramLockWait)
 	defer cancel()
 	for {
-		ok, err := t.Redis.SetNX(wait, key, token, telegramLockTTL).Result()
+		ok, err := t.Redis.SetNX(wait, key, token, ttl).Result()
 		if err != nil {
 			return nil, fmt.Errorf("live message lock of task %s: %w", taskID, err)
 		}
 		if ok {
+			stop, stopped := make(chan struct{}), make(chan struct{})
+			go func() {
+				defer close(stopped)
+				tick := time.NewTicker(ttl / 3)
+				defer tick.Stop()
+				for {
+					select {
+					case <-stop:
+						return
+					case <-tick.C:
+						renew, done := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+						_ = redis.NewScript(renewScript).Run(renew, t.Redis, []string{key}, token, ttl.Milliseconds()).Err()
+						done()
+					}
+				}
+			}()
 			return func() {
-				free, stop := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-				defer stop()
+				close(stop)
+				<-stopped
+				free, done := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+				defer done()
 				_ = redis.NewScript(unlockScript).Run(free, t.Redis, []string{key}, token).Err()
 			}, nil
 		}
@@ -299,16 +376,6 @@ func raiseFor(status int, body []byte, permanent []string) error {
 
 var _ Sender = TelegramLive{}
 var _ Sender = HTTPReply{}
-
-// privateChat is whether chatID is a user's own chat with the bot, where a quote of the message
-// answered is noise: Telegram gives users positive ids, groups and channels negative ones.
-func privateChat(chatID any) bool {
-	if f, ok := chatID.(float64); ok {
-		return f > 0
-	}
-	id, err := strconv.ParseInt(fmt.Sprint(chatID), 10, 64)
-	return err == nil && id > 0
-}
 
 // endMark is what the end of a turn records: its time, or "1" when the event has none, which no
 // later event is after.
