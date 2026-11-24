@@ -121,7 +121,7 @@ func New(d Deps) *Module {
 		TaskReads: d.TaskReads, FiringTasks: d.FiringTasks, TaskOutcomes: d.TaskOutcomes, Executor: d.Executor,
 		APIURL: d.APIURL, WebhookURL: d.WebhookURL, Settings: d.Settings, Now: d.Now, Log: d.Log,
 		Out: d.Out, MCPEventSources: d.MCPEventSources, ModelKinds: d.ModelKinds, Models: d.Models, AgentModels: d.AgentModels,
-		Links: d.Links, Owners: d.Owners, Notices: d.Notices, AppURL: d.AppURL, TaskFiles: d.TaskFiles,
+		Links: d.Links, Owners: d.Owners, Notices: d.Notices, AppURL: d.AppURL, TaskFiles: d.TaskFiles, Slugs: d.Slugs,
 	})}
 }
 

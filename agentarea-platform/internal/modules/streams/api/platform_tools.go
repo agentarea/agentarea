@@ -182,6 +182,8 @@ type MessageSent struct {
 	MessageID *int64    `json:"message_id"`
 	Truncated bool      `json:"truncated"`
 	Files     []string  `json:"files,omitempty"`
+	// Linked are files too large to send, sent as links to the task's files in the webapp.
+	Linked []string `json:"linked,omitempty"`
 }
 
 // PlatformMessages is what the platform messages toolset calls: a message a run starts with a

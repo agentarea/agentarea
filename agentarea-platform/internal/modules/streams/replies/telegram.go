@@ -230,18 +230,44 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 // taskLink is the line that links the task's page in the webapp, as MarkdownV2 and as plain
 // text; empty when the webapp or the workspace's slug is unknown.
 func (t TelegramLive) taskLink(ctx context.Context, s Send) (string, string, error) {
+	page, err := t.taskPage(ctx, s)
+	if err != nil || page == "" {
+		return "", "", err
+	}
+	return "[Open in AgentArea](" + strings.NewReplacer(`\`, `\\`, `)`, `\)`).Replace(page) + ")", "Open in AgentArea: " + page, nil
+}
+
+// taskPage is the task's page in the webapp; empty when the webapp or the workspace's slug is unknown.
+func (t TelegramLive) taskPage(ctx context.Context, s Send) (string, error) {
 	if t.AppURL == "" || t.Slugs == nil || s.Workspace.ID() == "" || s.Event.TaskID == "" {
-		return "", "", nil
+		return "", nil
 	}
 	slug, err := t.Slugs.Slug(ctx, s.Workspace.ID())
 	if errors.Is(err, identityapi.ErrWorkspaceNotFound) {
-		return "", "", nil
+		return "", nil
 	}
 	if err != nil {
-		return "", "", fmt.Errorf("slug of workspace %s: %w", s.Workspace.ID(), err)
+		return "", fmt.Errorf("slug of workspace %s: %w", s.Workspace.ID(), err)
 	}
-	page := strings.TrimRight(t.AppURL, "/") + "/w/" + url.PathEscape(slug) + "/tasks/" + url.PathEscape(s.Event.TaskID)
-	return "[Open in AgentArea](" + strings.NewReplacer(`\`, `\\`, `)`, `\)`).Replace(page) + ")", "Open in AgentArea: " + page, nil
+	return TaskPageURL(t.AppURL, slug, s.Event.TaskID), nil
+}
+
+// TaskPageURL is a task's page in the webapp; behind sign-in, so a forwarded link opens nothing.
+func TaskPageURL(appURL, slug, taskID string) string {
+	return strings.TrimRight(appURL, "/") + "/w/" + url.PathEscape(slug) + "/tasks/" + url.PathEscape(taskID)
+}
+
+// TaskFileURL is one file of a task in the webapp's files view.
+func TaskFileURL(taskPage, filePath string) string {
+	return taskPage + "/files?file=" + url.QueryEscape(filePath)
+}
+
+// LinkedFile is the line a chat gets instead of a file too large to send: its name, size and link.
+func LinkedFile(name string, size int64, link string) string {
+	if size < 0 {
+		return fmt.Sprintf("%s (over 50 MB): %s", name, link)
+	}
+	return fmt.Sprintf("%s (%.1f MB): %s", name, float64(size)/(1<<20), link)
 }
 
 // TelegramRefused is the Bot API refusing a message: its HTTP status and description.
