@@ -186,6 +186,25 @@
       display: none;
     }
   }
+
+  /* ---- Explore subheader (container-query driven) ---- */
+  /* Type tabs, search, three connection filters and the display controls
+     share one row. Their labels give way to icons by the band's own width,
+     not the viewport's, so a collapsed sidebar keeps them. */
+  .explore-cq {
+    container-type: inline-size;
+    container-name: explore;
+  }
+  @container explore (max-width: 880px) {
+    .explore-filter-label {
+      @apply sr-only;
+    }
+  }
+  @container explore (max-width: 720px) {
+    .explore-display-label {
+      @apply sr-only;
+    }
+  }
 }
 
 @layer base {
@@ -281,9 +300,11 @@
     --layout-background: 240 5.9% 10%;
     --background: 0 0% 3.9%;
     --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
+    /* Cards and section blocks wear the sidebar's colour too. */
+    --card: 240 5.9% 10%;
     --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
+    /* Menus and popovers wear the sidebar's colour, not the near-black page. */
+    --popover: 240 5.9% 10%;
     --popover-foreground: 0 0% 98%;
     --text: 0 0% 100%;
     /* --primary: 0 0% 98%;

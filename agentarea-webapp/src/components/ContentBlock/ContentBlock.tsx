@@ -1,5 +1,4 @@
 import React from "react";
-import Link from "@/components/WorkspaceLink";
 import { ArrowLeft } from "lucide-react";
 import {
   Breadcrumb,
@@ -10,6 +9,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import Link from "@/components/WorkspaceLink";
 import { cn } from "@/lib/utils";
 
 type ContentBlockProps = {
@@ -28,7 +28,11 @@ type ContentBlockProps = {
         controls?: React.ReactNode;
       }
     | {
-        breadcrumb: { label: string; href?: string }[];
+        /**
+         * `onClick` makes a crumb a button, for a "page" that is URL state on
+         * the same route (an item open over a list) rather than a link.
+         */
+        breadcrumb: { label: string; href?: string; onClick?: () => void }[];
         controls?: React.ReactNode;
         description?: string;
       };
@@ -100,6 +104,16 @@ export default function ContentBlock({
                               >
                                 {item.label}
                               </h1>
+                            ) : item.onClick ? (
+                              <BreadcrumbLink asChild>
+                                <button
+                                  type="button"
+                                  onClick={item.onClick}
+                                  className="block min-w-0 max-w-[30vw] truncate"
+                                >
+                                  {item.label}
+                                </button>
+                              </BreadcrumbLink>
                             ) : item.href ? (
                               <BreadcrumbLink asChild>
                                 <Link

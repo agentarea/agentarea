@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import ContentBlock from "@/components/ContentBlock";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { browseCatalog } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
@@ -26,11 +25,16 @@ import {
   showsSections,
 } from "../bundles/components/catalog-sections";
 import CatalogGallery, {
-  ExplorePendingProvider,
   ExploreSortSelect,
   ExploreTypeTabs,
   ExploreViewToggle,
 } from "../bundles/components/CatalogGallery";
+import { ExplorePendingProvider } from "../bundles/components/explore-pending";
+import ExploreContentBlock from "../bundles/components/ExploreContentBlock";
+import {
+  ExploreConnectionFilters,
+  ExploreSearch,
+} from "../bundles/components/ExploreFilters";
 
 export const metadata: Metadata = {
   title: "Catalog",
@@ -111,7 +115,6 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       : null,
   ]);
   const tBundle = await getTranslations("BundleInstall");
-  const t = await getTranslations("CatalogPage");
   const entries: CatalogEntry[] = (items as RegistryItem[]).map((it) =>
     normalize(type, it)
   );
@@ -130,21 +133,41 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     // Provider wraps both the subheader (type tabs trigger the transition) and
     // the content (gallery skeletons on isPending) so the switch is flash-free.
     <ExplorePendingProvider>
-      <ContentBlock
-        header={{
-          breadcrumb: [{ label: t("title") }],
-          description: t("description"),
-        }}
+      <ExploreContentBlock
         subheader={
-          <SubheaderToolbar
-            categories={<ExploreTypeTabs initialType={type} />}
-            controls={
-              <>
-                <ExploreSortSelect initialSort={sort} />
-                <ExploreViewToggle initialView={initialView} />
-              </>
-            }
-          />
+          // A size container, so the labels fold by the band's own width.
+          <div className="explore-cq flex h-full min-w-0 flex-1 items-center">
+            <SubheaderToolbar
+              categories={<ExploreTypeTabs initialType={type} />}
+              // On a phone the search moves to the strip under the subheader
+              // and the three filters fold into one Filters button.
+              search={<ExploreSearch initialType={type} />}
+              searchClassName="max-sm:hidden"
+              controls={
+                <>
+                  <div className="flex items-center gap-3 max-sm:hidden">
+                    <ExploreConnectionFilters
+                      initialType={type}
+                      protocols={protocols ?? []}
+                      hostings={hostings ?? []}
+                      pricings={pricings ?? []}
+                    />
+                  </div>
+                  <div className="flex items-center sm:hidden">
+                    <ExploreConnectionFilters
+                      initialType={type}
+                      protocols={protocols ?? []}
+                      hostings={hostings ?? []}
+                      pricings={pricings ?? []}
+                      compact
+                    />
+                  </div>
+                  <ExploreSortSelect initialSort={sort} />
+                  <ExploreViewToggle initialView={initialView} />
+                </>
+              }
+            />
+          </div>
         }
       >
         <CatalogGallery
@@ -163,7 +186,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
           initialView={initialView}
           initialSections={sections}
         />
-      </ContentBlock>
+      </ExploreContentBlock>
     </ExplorePendingProvider>
   );
 }

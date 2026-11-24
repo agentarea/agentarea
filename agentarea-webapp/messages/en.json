@@ -4271,7 +4271,6 @@
       "skills": "All skills",
       "connections": "All connections"
     },
-    "inCatalog": "{count} in the catalog.",
     "display": {
       "ordering": "Ordering",
       "recommended": "Recommended",
@@ -4341,7 +4340,31 @@
       "computePerMonth": "Per month if always on",
       "vendorCost": "{price}, the vendor's cost without markup",
       "priceUnavailable": "{price} · price unavailable, vendor cost without markup"
-    }
+    },
+    "loading": "Loading…",
+    "card": {
+      "verified": "Verified",
+      "featured": "Featured"
+    },
+    "filters": {
+      "category": "Category",
+      "all": "All",
+      "protocol": "Protocol",
+      "hosting": "Runs",
+      "clear": "Reset",
+      "hostings": {
+        "vendor": "Hosted by vendor",
+        "agentarea": "Runs on AgentArea"
+      },
+      "title": "Filters"
+    },
+    "columns": {
+      "name": "Name",
+      "source": "Source",
+      "category": "Category",
+      "description": "Description"
+    },
+    "found": "Found"
   },
   "BundleInstall": {
     "modelsLoadFailed": "Couldn't load workspace models",

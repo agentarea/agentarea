@@ -49,6 +49,8 @@ export interface ToolbarSelectProps<T extends string = string> {
    * For long lists that would otherwise run down the page.
    */
   collapsible?: boolean;
+  /** Class for the button label, e.g. to drop it below a wider breakpoint. */
+  labelClassName?: string;
 }
 
 /**
@@ -64,6 +66,7 @@ export default function ToolbarSelect<T extends string>({
   value,
   onChange,
   collapsible = false,
+  labelClassName,
 }: ToolbarSelectProps<T>) {
   const [open, setOpen] = useState(false);
   const sections = groups
@@ -106,7 +109,7 @@ export default function ToolbarSelect<T extends string>({
       <PopoverTrigger asChild>
         <ToolbarButton active={open}>
           {selected?.icon ?? icon}
-          <span className="max-sm:sr-only">
+          <span className={cn("max-sm:sr-only", labelClassName)}>
             {selected?.triggerLabel ?? selected?.label ?? label}
           </span>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/70" />

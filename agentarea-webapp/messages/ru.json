@@ -4272,7 +4272,6 @@
       "skills": "Все навыки",
       "connections": "Все соединения"
     },
-    "inCatalog": "{count} в каталоге.",
     "display": {
       "ordering": "Сортировка",
       "recommended": "Рекомендуемые",
@@ -4342,7 +4341,31 @@
       "computePerMonth": "В месяц, если работает постоянно",
       "vendorCost": "{price} — стоимость у поставщика, без наценки",
       "priceUnavailable": "{price} · цена недоступна, стоимость у поставщика без наценки"
-    }
+    },
+    "loading": "Загрузка…",
+    "card": {
+      "verified": "Проверено",
+      "featured": "Избранное"
+    },
+    "filters": {
+      "category": "Категория",
+      "all": "Все",
+      "protocol": "Протокол",
+      "hosting": "Где работает",
+      "clear": "Сбросить",
+      "hostings": {
+        "vendor": "У вендора",
+        "agentarea": "На AgentArea"
+      },
+      "title": "Фильтры"
+    },
+    "columns": {
+      "name": "Название",
+      "source": "Источник",
+      "category": "Категория",
+      "description": "Описание"
+    },
+    "found": "Найдено"
   },
   "BundleInstall": {
     "modelsLoadFailed": "Не удалось загрузить модели воркспейса",

@@ -9,6 +9,7 @@ import {
   ExploreTypeTabs,
   ExploreViewToggle,
 } from "../bundles/components/CatalogGallery";
+import { ExploreSearch } from "../bundles/components/ExploreFilters";
 
 // Route-level Suspense fallback for /explore. The page is an async Server
 // Component that awaits the first catalog page, so without this the nearest
@@ -31,18 +32,23 @@ export default async function Loading() {
     <ContentBlock
       header={{
         breadcrumb: [{ label: t("title") }],
-        description: t("description"),
       }}
       subheader={
-        <SubheaderToolbar
-          categories={<ExploreTypeTabs initialType="bundles" />}
-          controls={
-            <>
-              <ExploreSortSelect />
-              <ExploreViewToggle initialView={initialView} />
-            </>
-          }
-        />
+        // Same size container as the page, so the labels fold alike.
+        <div className="explore-cq flex h-full min-w-0 flex-1 items-center">
+          <SubheaderToolbar
+            categories={<ExploreTypeTabs initialType="bundles" />}
+            // On a phone the search moves to the strip under the subheader.
+            search={<ExploreSearch initialType="bundles" />}
+            searchClassName="max-sm:hidden"
+            controls={
+              <>
+                <ExploreSortSelect />
+                <ExploreViewToggle initialView={initialView} />
+              </>
+            }
+          />
+        </div>
       }
     >
       <CatalogGallerySkeleton initialView={initialView} />

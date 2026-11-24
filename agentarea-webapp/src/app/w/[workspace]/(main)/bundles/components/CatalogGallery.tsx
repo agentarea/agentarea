@@ -1,15 +1,13 @@
 "use client";
 
 import React, {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
   useState,
-  useTransition,
 } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
@@ -17,17 +15,18 @@ import {
   BadgeCheck,
   Blocks,
   Bot,
-  ChevronLeft,
   Compass,
   ExternalLink,
   FileText,
   Globe,
+  LayoutGrid,
   Plug,
   Puzzle,
   Search,
   Sparkles,
   Star,
   Telescope,
+  TrendingUp,
 } from "lucide-react";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { Streamdown } from "streamdown";
@@ -36,6 +35,7 @@ import EmptyState from "@/components/EmptyState";
 import EntityMark from "@/components/EntityMark";
 import FormError from "@/components/FormError";
 import HeaderTabs from "@/components/HeaderTabs";
+import LoadMoreSentinel from "@/components/LoadMoreSentinel";
 import { RegistryBadge } from "@/components/RegistryBadge";
 import Table, { type Column } from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
@@ -49,8 +49,8 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+import { GroupHeader } from "@/components/ui/group-header";
 import { HoverLink } from "@/components/ui/hover-link";
-import { Input } from "@/components/ui/input";
 import { MenuRow, MenuSectionLabel } from "@/components/ui/menu-row";
 import ModelBadge from "@/components/ui/model-badge";
 import {
@@ -115,7 +115,6 @@ import {
   type SortMode,
 } from "./catalog-data";
 import {
-  canFetchMore,
   catalogPagingReducer,
   hasMore as hasMoreItems,
   initialPaging,
@@ -127,7 +126,9 @@ import {
   formatVcpu,
   monthlyFromHourly,
 } from "./catalog-pricing";
-import type { CatalogSection } from "./catalog-sections";
+import type { CatalogSection, CatalogSectionKey } from "./catalog-sections";
+import { useExplorePending } from "./explore-pending";
+import { ExploreSearch } from "./ExploreFilters";
 import { PriceChip, PricingBadge, usePriceLabel } from "./PricingBadge";
 
 // ── Registry types ──────────────────────────────────────────────────────────
@@ -208,73 +209,6 @@ async function fetchPage(params: BrowseParams) {
   });
 }
 
-// ── Shared "type switch in flight" signal ──
-// The type tabs live in the ContentBlock subheader while the gallery lives in
-// the content area, so the transition that wraps the SSR round-trip is owned
-// here and consumed by both: the tabs trigger it, the gallery skeletons its
-// content on `isPending` for the whole round-trip. This keeps the persistent
-// chrome mounted and — crucially — avoids any flash of the previous type's data
-// mid-switch (React holds the old tree during a transition, so a type-vs-seed
-// comparison would briefly read stale; `isPending` doesn't).
-//
-// The kind of switch matters for how the wait is shown. Changing type makes the
-// current results wrong, so they're replaced by a skeleton. Changing a filter
-// within a type only narrows them, and search round-trips on every debounced
-// keystroke — skeletoning there would strobe the whole list while you type — so
-// the previous results stay on screen, dimmed, until the new page lands.
-type PendingKind = "type" | "filters" | null;
-
-type ExplorePending = {
-  isPending: boolean;
-  pendingKind: PendingKind;
-  startTypeTransition: React.TransitionStartFunction;
-  startFilterTransition: React.TransitionStartFunction;
-};
-const ExplorePendingContext = createContext<ExplorePending | null>(null);
-
-export function ExplorePendingProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const [isPending, startTransition] = useTransition();
-  const [pendingKind, setPendingKind] = useState<PendingKind>(null);
-
-  const startTypeTransition = useCallback<React.TransitionStartFunction>(
-    (fn) => {
-      setPendingKind("type");
-      startTransition(fn);
-    },
-    [startTransition]
-  );
-  const startFilterTransition = useCallback<React.TransitionStartFunction>(
-    (fn) => {
-      setPendingKind("filters");
-      startTransition(fn);
-    },
-    [startTransition]
-  );
-
-  const value = useMemo(
-    () => ({
-      isPending,
-      pendingKind,
-      startTypeTransition,
-      startFilterTransition,
-    }),
-    [isPending, pendingKind, startTypeTransition, startFilterTransition]
-  );
-  return (
-    <ExplorePendingContext.Provider value={value}>
-      {children}
-    </ExplorePendingContext.Provider>
-  );
-}
-
-function useExplorePending() {
-  return useContext(ExplorePendingContext);
-}
-
 // ── Type switcher (lives in the ContentBlock subheader) ──
 // Lifted out of the gallery into the standard bordered subheader band — same
 // pattern as the agents / connections pages — so it no longer sits inside the
@@ -307,9 +241,13 @@ export function ExploreTypeTabs({ initialType }: { initialType: CatalogType }) {
       items={TYPES.map(({ key, icon: Icon }) => ({
         value: key,
         label: (
-          <span className="flex items-center gap-1.5 whitespace-nowrap">
+          <span
+            className="flex items-center gap-1.5 whitespace-nowrap"
+            title={t(key)}
+          >
             <Icon className="h-4 w-4" />
-            {t(key)}
+            {/* A phone has room for the four icons, not their names. */}
+            <span className="max-sm:sr-only">{t(key)}</span>
           </span>
         ),
       }))}
@@ -401,7 +339,7 @@ export function ExploreSortSelect({
   if (itemId) return null;
 
   return (
-    <DisplayMenu>
+    <DisplayMenu labelClassName="explore-display-label">
       <MenuSectionLabel>{t("ordering")}</MenuSectionLabel>
       <MenuRow
         icon={<Sparkles className="h-3.5 w-3.5" />}
@@ -540,16 +478,6 @@ export default function CatalogGallery({
     })
   );
 
-  // Typing shouldn't round-trip the server on every keystroke, so the input is
-  // local and the URL follows it on a short debounce.
-  const [draftQuery, setDraftQuery] = useState(query);
-  useEffect(() => setDraftQuery(query), [query]);
-  useEffect(() => {
-    if (draftQuery === query) return;
-    const t = setTimeout(() => void setQuery(draftQuery || null), 300);
-    return () => clearTimeout(t);
-  }, [draftQuery, query, setQuery]);
-
   // Deep-link fallback for ?item= that points outside the loaded page(s).
   const [deepItem, setDeepItem] = useState<CatalogEntry | null>(null);
   const [deepLoading, setDeepLoading] = useState(false);
@@ -559,7 +487,6 @@ export default function CatalogGallery({
   const tBundle = useTranslations("BundleInstall");
   const tCommon = useTranslations("Common");
   const tCatalog = useTranslations("CatalogPage");
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Re-seed whenever a server round-trip lands with a different page. The props
   // object identity changes on every SSR render, so a ref comparison is what
@@ -640,22 +567,6 @@ export default function CatalogGallery({
     tBundle,
   ]);
 
-  // Infinite scroll: auto-load the next page when the sentinel nears the
-  // viewport. `canFetchMore` is the in-flight guard — a short page leaves the
-  // sentinel inside the viewport, so without it this fires page after page.
-  useEffect(() => {
-    const node = sentinelRef.current;
-    if (!node || !canFetchMore(paging)) return;
-    const io = new IntersectionObserver(
-      (obs) => {
-        if (obs[0]?.isIntersecting) void loadMore();
-      },
-      { rootMargin: "600px" }
-    );
-    io.observe(node);
-    return () => io.disconnect();
-  }, [paging, loadMore]);
-
   // Deep-link fallback: if ?item= points at an entry that isn't in the loaded
   // page(s) (e.g. a shared link to something deep in the catalog), fetch that
   // one item by id so the detail still opens instead of silently falling back
@@ -718,6 +629,12 @@ export default function CatalogGallery({
           .find((e) => e.id === itemId) ??
         null)
       : null) ?? (deepItem?.id === itemId ? deepItem : null);
+  // The page header names the open item ("Catalog › GitHub").
+  const setActiveTitle = explorePending?.setActiveTitle;
+  const activeTitle = active?.title ?? null;
+  useEffect(() => {
+    setActiveTitle?.(activeTitle);
+  }, [setActiveTitle, activeTitle]);
   // Drives the empty-state copy + "Clear filters" affordance.
   const hasFilters =
     query.trim() !== "" ||
@@ -737,25 +654,6 @@ export default function CatalogGallery({
     () => paging.categories.map((c) => [c.value, c.count] as [string, number]),
     [paging.categories]
   );
-  const protocols = useMemo(
-    () => paging.protocols.map((p) => [p.value, p.count] as [string, number]),
-    [paging.protocols]
-  );
-  const hostings = useMemo(
-    () =>
-      (paging.hostings ?? []).map(
-        (h) => [h.value, h.count] as [string, number]
-      ),
-    [paging.hostings]
-  );
-  const pricings = useMemo(
-    () =>
-      (paging.pricings ?? []).map(
-        (p) => [p.value, p.count] as [string, number]
-      ),
-    [paging.pricings]
-  );
-  const tPricing = useTranslations("CatalogPage.pricing");
 
   // A detail replaces the list, so the list's scroll position is kept here and
   // put back on return: "Back to catalog" lands where the user left, with the
@@ -763,22 +661,27 @@ export default function CatalogGallery({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const listScroll = useRef<number | null>(null);
   const openItem = useCallback(
-    (id: string) => {
-      const scroller = scrollContainerOf(rootRef.current);
-      listScroll.current = scroller.scrollTop;
-      void setItemId(id);
-      scroller.scrollTop = 0;
+    (entry: CatalogEntry) => {
+      listScroll.current = scrollContainerOf(rootRef.current).scrollTop;
+      // The title goes in with the item, so the header never paints
+      // "Catalog › Loading…" for a card that was right there.
+      setActiveTitle?.(entry.title);
+      void setItemId(entry.id);
     },
-    [setItemId]
+    [setItemId, setActiveTitle]
   );
-  const closeItem = useCallback(() => void setItemId(null), [setItemId]);
-  useEffect(() => {
-    if (itemId || listScroll.current == null) return;
-    const top = listScroll.current;
+  // Scroll moves in a layout effect, after the swap and before paint: moved
+  // at click time, the list jumped to the top for a frame before the detail
+  // replaced it, and restored a frame late, the list flashed at the top.
+  useLayoutEffect(() => {
+    const scroller = scrollContainerOf(rootRef.current);
+    if (itemId) {
+      scroller.scrollTop = 0;
+      return;
+    }
+    if (listScroll.current == null) return;
+    scroller.scrollTop = listScroll.current;
     listScroll.current = null;
-    requestAnimationFrame(() => {
-      scrollContainerOf(rootRef.current).scrollTop = top;
-    });
   }, [itemId]);
   const moreAvailable = hasMoreItems(paging);
 
@@ -799,52 +702,9 @@ export default function CatalogGallery({
           <FacetSkeleton />
         ) : (
           <>
-            {/* Connections are not all MCP — an entry may be a plain HTTP API —
-                so the split leads the sidebar when there is one to make. */}
-            {protocols.length > 1 && (
-              <FacetGroup
-                label="Protocol"
-                options={protocols}
-                labels={PROTOCOL_LABELS}
-                selected={protocol}
-                onSelect={(v) => {
-                  void setProtocol(v === ALL ? null : v);
-                  void setItemId(null);
-                }}
-              />
-            )}
-            {/* Where an MCP connection runs: connecting means an OAuth sign-in
-                for one and keys for a process we start for the other. */}
-            {hostings.length > 1 && (
-              <FacetGroup
-                label="Runs"
-                options={hostings}
-                labels={HOSTING_LABELS}
-                selected={hosting}
-                onSelect={(v) => {
-                  void setHosting(v === ALL ? null : v);
-                  void setItemId(null);
-                }}
-              />
-            )}
-            {pricings.length > 1 && (
-              <FacetGroup
-                label={tPricing("facet")}
-                options={pricings}
-                labels={{
-                  paid: tPricing("kinds.paid"),
-                  own_key: tPricing("kinds.own_key"),
-                  free: tPricing("kinds.free"),
-                }}
-                selected={pricing}
-                onSelect={(v) => {
-                  void setPricing(v === ALL ? null : v);
-                  void setItemId(null);
-                }}
-              />
-            )}
             <FacetGroup
-              label="Category"
+              label={tCatalog("filters.category")}
+              allLabel={tCatalog("filters.all")}
               options={categories}
               icons={getCategoryIcon}
               selected={category}
@@ -860,12 +720,12 @@ export default function CatalogGallery({
       {/* Main */}
       <div className="min-w-0 flex-1 space-y-4">
         {active ? (
-          <DetailView entry={active} onBack={closeItem} />
+          <DetailView entry={active} />
         ) : itemId ? (
-          <DeepItemStatus onBack={closeItem}>
+          <div className="space-y-6">
             {deepLoading ? (
               <StatusIndicator kind="running" size="sm">
-                Loading…
+                {tCatalog("loading")}
               </StatusIndicator>
             ) : deepError && !deepNotFound ? (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
@@ -893,19 +753,31 @@ export default function CatalogGallery({
                 }}
               />
             )}
-          </DeepItemStatus>
+          </div>
         ) : (
           <>
             {/* Below lg the facet sidebar is hidden; the categories ride along
-                as a strip pinned to the top of the scroll area instead. */}
-            {categories.length > 0 && (
-              <div className="sticky -top-5 z-10 -mx-4 -mt-5 border-b border-zinc-200 bg-white px-2 py-1 dark:border-zinc-700 dark:bg-zinc-800 lg:hidden">
+                as a strip pinned to the top of the scroll area instead. On a
+                phone the subheader keeps the type tabs, filters, ordering and
+                view switch; search joins the strip as a row of its own. */}
+            <div
+              className={cn(
+                "sticky -top-5 z-10 -mx-4 -mt-5 border-b border-zinc-200 bg-white py-1 dark:border-zinc-700 dark:bg-zinc-800 lg:hidden",
+                categories.length === 0 && "sm:hidden"
+              )}
+            >
+              <div className="px-4 pb-1 sm:hidden">
+                <ExploreSearch initialType={type} />
+              </div>
+              {categories.length > 0 && (
                 <CountSegmentedControl
                   layoutId="explore-category-strip"
-                  className="w-full"
+                  // The padding sits inside the scroller, so the categories
+                  // run out under the strip's edge rather than its inset.
+                  className="w-full px-2"
                   itemClassName="capitalize"
                   items={[
-                    { value: ALL, label: "All" },
+                    { value: ALL, label: tCatalog("filters.all") },
                     ...categories.map(([value, count]) => ({
                       value,
                       label: value,
@@ -918,35 +790,15 @@ export default function CatalogGallery({
                     void setItemId(null);
                   }}
                 />
-              </div>
-            )}
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={draftQuery}
-                onChange={(e) => setDraftQuery(e.target.value)}
-                placeholder={tCatalog(`search.${type}`)}
-                aria-label={tCatalog(`search.${type}`)}
-                className="pl-9"
-              />
+              )}
             </div>
-
-            {paging.error && (
-              <div className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
+            {/* A first page that failed to load. A later page's failure is
+                the sentinel's to show, with its retry, at the end of the list. */}
+            {paging.error && !moreAvailable && (
+              <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
                 <StatusIndicator kind="failed" size="sm" className="text-sm">
                   {paging.error}
                 </StatusIndicator>
-                {/* A failed page used to end infinite scroll for good. It's a
-                  retry, not the end of the catalog. */}
-                {moreAvailable && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void loadMore()}
-                  >
-                    {tCommon("retry")}
-                  </Button>
-                )}
               </div>
             )}
             {busy && <ContentSkeleton view={view} />}
@@ -977,7 +829,6 @@ export default function CatalogGallery({
                       ? {
                           label: tCatalog("empty.clearFilters"),
                           onClick: () => {
-                            setDraftQuery("");
                             void setQuery(null);
                             void setCategory(null);
                             void setProtocol(null);
@@ -1002,84 +853,80 @@ export default function CatalogGallery({
               initialSections.map((sec) => (
                 <section key={sec.key} className="space-y-2">
                   <CatalogShelfHeading
+                    icon={SHELF_ICONS[sec.key]}
                     title={sec.title}
                     description={sec.description}
                   />
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                    {sec.entries.map((e) => (
-                      <CatalogCard
-                        key={e.id}
-                        entry={e}
-                        onOpen={() => openItem(e.id)}
-                      />
-                    ))}
-                  </div>
+                  {/* Shelves follow the chosen view like the list below them. */}
+                  {view === "grid" ? (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                      {sec.entries.map((e) => (
+                        <CatalogCard
+                          key={e.id}
+                          entry={e}
+                          onOpen={() => openItem(e)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <CatalogTable entries={sec.entries} onOpen={openItem} />
+                  )}
                 </section>
               ))}
-            {!busy &&
-              !hasFilters &&
-              sort === DEFAULT_SORT &&
-              initialSections.length > 0 &&
-              paging.entries.length > 0 && (
-                <CatalogShelfHeading
-                  title={tCatalog(`allOfType.${type}`)}
-                  description={tCatalog("inCatalog", {
-                    count: paging.total.toLocaleString(),
-                  })}
-                />
-              )}
-
             {!busy && paging.entries.length > 0 && (
               <div
                 className={cn(
-                  "transition-opacity",
+                  "space-y-2 transition-opacity",
                   refreshing && "pointer-events-none opacity-50"
                 )}
                 aria-busy={refreshing}
               >
+                {/* The list's heading sits as close to it as a shelf's does:
+                    under the shelves it is the whole list, and a search or
+                    filter says how much it found. */}
+                {!hasFilters &&
+                  sort === DEFAULT_SORT &&
+                  initialSections.length > 0 && (
+                    <CatalogShelfHeading
+                      icon={LayoutGrid}
+                      title={tCatalog(`allOfType.${type}`)}
+                    />
+                  )}
+                {hasFilters && (
+                  <CatalogShelfHeading
+                    icon={Search}
+                    title={tCatalog("found")}
+                    count={paging.total}
+                  />
+                )}
                 {view === "grid" ? (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                     {paging.entries.map((e) => (
                       <CatalogCard
                         key={e.id}
                         entry={e}
-                        onOpen={() => openItem(e.id)}
+                        onOpen={() => openItem(e)}
                       />
                     ))}
                   </div>
                 ) : (
-                  <CatalogTable
-                    entries={paging.entries}
-                    onOpen={(e) => openItem(e.id)}
-                  />
+                  <CatalogTable entries={paging.entries} onOpen={openItem} />
                 )}
               </div>
             )}
 
-            {/* Infinite-scroll sentinel + manual fallback. Mounted whenever the
-              catalog has more, including when this page rendered nothing — a
-              filter whose matches all sit further in used to render "No matches"
-              here and strand the rest of the catalog. */}
-            {!busy && !refreshing && moreAvailable && (
-              <>
-                <div ref={sentinelRef} className="h-px" aria-hidden />
-                <div className="flex justify-center pt-2">
-                  {paging.status === "appending" ? (
-                    <StatusIndicator
-                      kind="running"
-                      size="sm"
-                      aria-label="Loading…"
-                      title="Loading…"
-                    />
-                  ) : (
-                    !paging.error && (
-                      <Button variant="outline" onClick={() => void loadMore()}>
-                        Load more
-                      </Button>
-                    )
-                  )}
-                </div>
-              </>
+            {/* The shared infinite-list end (Tasks, Audit log): loads the next
+              page as it nears the viewport, and after a failure waits for a
+              retry. Mounted whenever the catalog has more, including when
+              this page rendered nothing — a filter whose matches all sit
+              further in must not strand the rest of the catalog. */}
+            {!busy && !refreshing && (
+              <LoadMoreSentinel
+                hasMore={moreAvailable}
+                pending={paging.status !== "idle"}
+                error={paging.error}
+                onLoadMore={() => void loadMore()}
+              />
             )}
           </>
         )}
@@ -1088,18 +935,45 @@ export default function CatalogGallery({
   );
 }
 
+const SHELF_ICONS: Record<CatalogSectionKey, LucideIcon> = {
+  recommended: Sparkles,
+  popular: TrendingUp,
+};
+
+/**
+ * A shelf's heading, in the same plain GroupHeader the grouped lists use
+ * (Automation, Connections): icon, name, count. A shelf's note follows,
+ * muted, on screens wide enough to hold it.
+ */
 function CatalogShelfHeading({
+  icon,
   title,
   description,
+  count,
 }: {
+  icon: LucideIcon;
   title: string;
-  description: string;
+  description?: string;
+  /** How many matched; only a filtered list shows it. */
+  count?: number;
 }) {
   return (
-    <div className="flex items-baseline gap-2 pt-2">
-      <h2 className="text-sm font-semibold">{title}</h2>
-      <p className="truncate text-xs text-muted-foreground">{description}</p>
-    </div>
+    <GroupHeader
+      variant="plain"
+      className="h-6"
+      icon={React.createElement(icon)}
+      label={
+        <span className="flex min-w-0 items-baseline gap-2">
+          {title}
+          {description && (
+            <span className="truncate font-normal text-muted-foreground max-sm:hidden">
+              {description}
+            </span>
+          )}
+        </span>
+      }
+      count={count}
+    />
   );
 }
 
@@ -1109,7 +983,7 @@ function CatalogShelfHeading({
 // landed wherever the name ended, so no two rows lined up.
 const CATALOG_COLUMNS: Column<CatalogEntry>[] = [
   {
-    header: "Name",
+    header: <ColumnTitle column="name" />,
     accessor: "title",
     headerClassName: "w-[40%] md:w-[32%]",
     render: (_, e) =>
@@ -1134,7 +1008,7 @@ const CATALOG_COLUMNS: Column<CatalogEntry>[] = [
       ) : null,
   },
   {
-    header: "Source",
+    header: <ColumnTitle column="source" />,
     accessor: "source",
     headerClassName: "hidden w-[200px] lg:table-cell",
     cellClassName: "hidden lg:table-cell",
@@ -1144,7 +1018,7 @@ const CATALOG_COLUMNS: Column<CatalogEntry>[] = [
       ) : null,
   },
   {
-    header: "Category",
+    header: <ColumnTitle column="category" />,
     accessor: "category",
     headerClassName: "hidden w-[200px] sm:table-cell",
     cellClassName: "hidden sm:table-cell",
@@ -1152,7 +1026,7 @@ const CATALOG_COLUMNS: Column<CatalogEntry>[] = [
       e?.category ? <CategoryBadge category={e.category} /> : null,
   },
   {
-    header: "Description",
+    header: <ColumnTitle column="description" />,
     accessor: "description",
     headerClassName: "hidden md:table-cell",
     cellClassName: "hidden md:table-cell",
@@ -1201,8 +1075,10 @@ function FacetGroup({
   icons,
   selected,
   onSelect,
+  allLabel,
 }: {
   label: string;
+  allLabel: string;
   options: [string, number][];
   /** Display names for machine values ("mcp" reads as "Mcp" otherwise). */
   labels?: Record<string, string>;
@@ -1219,9 +1095,13 @@ function FacetGroup({
       </div>
       <div className="space-y-0.5">
         {rows.map(([value, count]) => {
-          // "All" is the absence of a filter, not a topic, so it stays bare —
-          // but it still takes the icon's width so the labels line up.
-          const Icon = icons && value !== ALL ? icons(value) : null;
+          // "All" is the absence of a filter, not a topic, so it gets a
+          // neutral grid glyph rather than a category's own.
+          const Icon = icons
+            ? value === ALL
+              ? LayoutGrid
+              : icons(value)
+            : null;
           return (
             <button
               key={value}
@@ -1229,18 +1109,15 @@ function FacetGroup({
               className={cn(
                 "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
                 selected === value
-                  ? "bg-muted font-medium text-foreground"
-                  : "text-muted-foreground hover:bg-muted/50"
+                  ? // bg-muted is the dark content background itself, so the
+                    // dark theme lifts the selection a step to stay visible.
+                    "bg-muted font-medium text-foreground dark:bg-zinc-700/70"
+                  : "text-muted-foreground hover:bg-muted/50 dark:hover:bg-zinc-700/40"
               )}
             >
-              {icons &&
-                (Icon ? (
-                  <Icon className="h-3.5 w-3.5 shrink-0" />
-                ) : (
-                  <span className="h-3.5 w-3.5 shrink-0" />
-                ))}
+              {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
               <span className="min-w-0 flex-1 truncate text-left capitalize">
-                {value === ALL ? "All" : (labels?.[value] ?? value)}
+                {value === ALL ? allLabel : (labels?.[value] ?? value)}
               </span>
               {count !== null && (
                 <span className="text-[10px] tabular-nums text-muted-foreground">
@@ -1325,24 +1202,26 @@ function CatalogCard({
   entry: CatalogEntry;
   onOpen: () => void;
 }) {
+  const t = useTranslations("CatalogPage.card");
+  const tCommon = useTranslations("Common");
   return (
     <button
       onClick={onOpen}
-      className="group flex flex-col overflow-hidden rounded-lg border border-border/60 bg-white text-left transition-shadow hover:shadow-md dark:border-zinc-700/60 dark:bg-zinc-900"
+      className="group flex flex-col overflow-hidden rounded-lg border border-border/60 bg-white text-left transition-[box-shadow,border-color] hover:border-border hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700/60 dark:bg-zinc-900 dark:hover:border-zinc-600"
     >
-      <div className="relative flex h-20 items-center justify-center gap-1.5 border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
+      <div className="relative flex h-[72px] items-center justify-center gap-1.5 border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
         {entry.verified ? (
           <span className="absolute left-2 top-2">
             <Badge variant="blue" size="sm" className="gap-1">
               <BadgeCheck className="h-3 w-3" />
-              Verified
+              {t("verified")}
             </Badge>
           </span>
         ) : entry.featured ? (
           <span className="absolute left-2 top-2">
             <Badge variant="blue" size="sm" className="gap-1">
               <Star className="h-3 w-3 fill-current" />
-              Featured
+              {t("featured")}
             </Badge>
           </span>
         ) : null}
@@ -1363,25 +1242,30 @@ function CatalogCard({
           <EntityMark
             identity={entry.identity}
             brandFallback={false}
-            className="h-[52px] w-[52px] rounded-xl border border-border/60 bg-white p-1.5 text-xs shadow-sm dark:bg-zinc-800"
+            className="h-12 w-12 rounded-xl border border-border/60 bg-white p-1.5 text-xs shadow-sm dark:bg-zinc-800"
           />
         )}
         <span className="absolute right-2 top-2">
-          <HoverLink text="View" />
+          <HoverLink text={tCommon("view")} />
         </span>
       </div>
 
       <div className="flex flex-1 flex-col gap-1 p-3">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-semibold">{entry.title}</span>
-          {entry.category && <CategoryBadge category={entry.category} />}
-        </div>
-        <p className="table-description line-clamp-2">{entry.description}</p>
-        {(entry.source ||
+        {/* The title gets the whole row: next to the category badge a long
+            name was cut to a few letters. */}
+        <span className="truncate text-sm font-semibold" title={entry.title}>
+          {entry.title}
+        </span>
+        <p className="table-description line-clamp-2 min-h-[2lh]">
+          {entry.description}
+        </p>
+        {(entry.category ||
+          entry.source ||
           entry.protocol ||
           entry.meta.length > 0 ||
           entry.connections.length > 0) && (
           <div className="mt-auto flex flex-wrap items-center gap-1 pt-1.5">
+            {entry.category && <CategoryBadge category={entry.category} />}
             {entry.source && (
               <RegistryBadge
                 name={entry.source.name}
@@ -1428,16 +1312,11 @@ type SetupTier =
   | "needs_tenant_config"
   | "unverified";
 
-function DetailView({
-  entry,
-  onBack,
-}: {
-  entry: CatalogEntry;
-  onBack: () => void;
-}) {
+function DetailView({ entry }: { entry: CatalogEntry }) {
   const [state, setState] = useState<InstallState>({ phase: "idle" });
   const tBundle = useTranslations("BundleInstall");
   const tConnected = useTranslations("CatalogPage.connected");
+  const tCatalog = useTranslations("CatalogPage");
   const catalogFetchError = useCatalogFetchError();
   // Bundles open an inline configure-then-install step rather than installing on
   // the first click (pick model, skip connections, tune policies, then commit).
@@ -1504,15 +1383,12 @@ function DetailView({
   const isBundle = entry.type === "bundles";
 
   return (
-    <div className={cn("space-y-8", isBundle ? "max-w-[1120px]" : "max-w-2xl")}>
-      <button
-        onClick={onBack}
-        className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        Back to catalog
-      </button>
-
+    <div
+      className={cn(
+        "mx-auto space-y-8",
+        isBundle ? "max-w-[1120px]" : "max-w-2xl"
+      )}
+    >
       {/* header — icon, title/badges, description, primary action */}
       <div className="flex flex-col gap-4 md:flex-row md:items-start">
         <div className="flex min-w-0 flex-1 items-start gap-4">
@@ -1529,7 +1405,7 @@ function DetailView({
               {entry.verified && (
                 <Badge variant="blue" size="sm" className="gap-1">
                   <BadgeCheck className="h-3 w-3" />
-                  Verified
+                  {tCatalog("card.verified")}
                 </Badge>
               )}
               {entry.source && (
@@ -2369,8 +2245,8 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
                   className={cn(
                     "flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition-colors",
                     selected === f.path
-                      ? "bg-muted font-medium text-foreground"
-                      : "text-muted-foreground hover:bg-muted/50"
+                      ? "bg-muted font-medium text-foreground dark:bg-zinc-700/70"
+                      : "text-muted-foreground hover:bg-muted/50 dark:hover:bg-zinc-700/40"
                   )}
                 >
                   <FileText className="h-3.5 w-3.5 shrink-0" />
@@ -2812,10 +2688,6 @@ export function CatalogGallerySkeleton({
 }: {
   initialView?: ViewMode;
 }) {
-  const [type] = useQueryState(
-    "type",
-    parseAsStringLiteral(TYPE_KEYS).withDefault("bundles")
-  );
   // Match the view the page will actually restore (URL param > persisted cookie
   // > server-seeded default), read on the client via a lazy initializer. The
   // server seed alone is unreliable (a cached RSC / auth-gated SSR can serve a
@@ -2829,46 +2701,58 @@ export function CatalogGallerySkeleton({
     const saved = fromUrl ?? getUiView(EXPLORE_VIEW_KEY);
     return saved === "table" || saved === "grid" ? saved : initialView;
   });
-  const t = useTranslations("CatalogPage.search");
   return (
     <div className="flex gap-6">
       <aside className="hidden w-52 shrink-0 lg:block">
         <FacetSkeleton />
       </aside>
       <div className="min-w-0 flex-1 space-y-4">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input disabled placeholder={t(type)} aria-hidden className="pl-9" />
-        </div>
         <ContentSkeleton view={view} />
       </div>
     </div>
   );
 }
 
-// Mirrors CatalogCard: h-20 logo header + padded title/description body.
+// Mirrors CatalogCard: logo header, title, two-line description, badge row.
 function CatalogCardSkeleton() {
   return (
     <div
       className="flex flex-col overflow-hidden rounded-lg border border-border/60 bg-white dark:border-zinc-700/60 dark:bg-zinc-900"
       aria-hidden="true"
     >
-      <div className="flex h-20 items-center justify-center border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
-        <div className="h-10 w-10 animate-pulse rounded-lg bg-muted" />
+      <div className="flex h-[72px] items-center justify-center border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
+        <div className="h-12 w-12 animate-pulse rounded-xl bg-muted" />
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3">
-        <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
-        <div className="h-3 w-full animate-pulse rounded bg-muted/60" />
-        <div className="h-3 w-2/3 animate-pulse rounded bg-muted/60" />
+        <div className="h-5 w-1/2 animate-pulse rounded bg-muted" />
+        <div className="flex min-h-[2lh] flex-col justify-center gap-1.5 text-xs">
+          <div className="h-3 w-full animate-pulse rounded bg-muted/60" />
+          <div className="h-3 w-2/3 animate-pulse rounded bg-muted/60" />
+        </div>
+        <div className="mt-auto flex flex-wrap items-center gap-1 pt-1.5">
+          <div className="h-5 w-24 animate-pulse rounded-md bg-muted/50" />
+          <div className="h-5 w-36 animate-pulse rounded-md bg-muted/50" />
+          <div className="h-5 w-14 animate-pulse rounded-md bg-muted/50" />
+        </div>
       </div>
     </div>
   );
 }
 
+/** A catalog table header, in the active locale. */
+function ColumnTitle({
+  column,
+}: {
+  column: "name" | "source" | "category" | "description";
+}) {
+  const t = useTranslations("CatalogPage.columns");
+  return t(column);
+}
+
 // Mirrors CATALOG_COLUMNS so the table does not shift when entries arrive.
 const SKELETON_COLUMNS: Column<{ id: number }>[] = [
   {
-    header: "Name",
+    header: <ColumnTitle column="name" />,
     accessor: "title",
     headerClassName: "w-[40%] md:w-[32%]",
     render: () => (
@@ -2879,7 +2763,16 @@ const SKELETON_COLUMNS: Column<{ id: number }>[] = [
     ),
   },
   {
-    header: "Category",
+    header: <ColumnTitle column="source" />,
+    accessor: "source",
+    headerClassName: "hidden w-[200px] lg:table-cell",
+    cellClassName: "hidden lg:table-cell",
+    render: () => (
+      <div className="h-5 w-32 animate-pulse rounded-md bg-muted/60" />
+    ),
+  },
+  {
+    header: <ColumnTitle column="category" />,
     accessor: "category",
     headerClassName: "hidden w-[200px] sm:table-cell",
     cellClassName: "hidden sm:table-cell",
@@ -2888,7 +2781,7 @@ const SKELETON_COLUMNS: Column<{ id: number }>[] = [
     ),
   },
   {
-    header: "Description",
+    header: <ColumnTitle column="description" />,
     accessor: "description",
     headerClassName: "hidden md:table-cell",
     cellClassName: "hidden md:table-cell",
@@ -2906,29 +2799,6 @@ function CatalogTableSkeleton() {
         data={Array.from({ length: 8 }, (_, id) => ({ id }))}
         columns={SKELETON_COLUMNS}
       />
-    </div>
-  );
-}
-
-// Back-button shell for the deep-link states (loading / not-found), so an
-// ?item= link that isn't in the loaded page still shows chrome to return.
-function DeepItemStatus({
-  onBack,
-  children,
-}: {
-  onBack: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-6">
-      <button
-        onClick={onBack}
-        className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        Back to catalog
-      </button>
-      {children}
     </div>
   );
 }
