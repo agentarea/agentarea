@@ -166,6 +166,8 @@ type ToolProgress struct {
 type ToolImage struct {
 	Data     []byte
 	MimeType string
+	// Pages is a PDF's page count; a PDF goes to the model as a file.
+	Pages int
 }
 
 // ToolInvocation is one tool call for a binding.

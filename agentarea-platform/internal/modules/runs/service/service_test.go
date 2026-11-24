@@ -1,10 +1,13 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	modelsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/api"
 	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
+	"image"
+	"image/png"
 	"strings"
 	"testing"
 
@@ -118,6 +121,31 @@ func TestCallLLMShowsStoredToolImagesToAVisionModel(t *testing.T) {
 	}
 }
 
+func TestCallLLMLeavesOutAnImageTheProviderDoesNotTake(t *testing.T) {
+	b := newMemBlob()
+	p := testPrincipal()
+	b.m[domain.ImageKey(p.WorkspaceID, "t1", "big")] = []byte("PNG")
+	b.m[domain.ImageKey(p.WorkspaceID, "t1", "small")] = []byte("PNG")
+	models := &fakeModels{reply: modelsapi.Reply{Usage: modelsapi.Usage{Total: 1}}}
+	s := New(Deps{Blob: b, Pricing: eurPricing{}, Models: models, Log: quiet()})
+	model := api.ResolvedModel{ModelID: "m", SupportsVision: true, Provider: modelsapi.ProviderProfile{MaxImageBytes: 5 << 20}}
+	_, err := s.CallLLM(context.Background(), p, LLMCall{TaskID: "t1", Model: model, Policy: policy(), Pending: []domain.Entry{
+		{Role: "assistant", ToolCalls: []domain.ToolCall{{ID: "c1", Name: "read_file"}}},
+		{Role: "tool", ToolCallID: "c1", Name: "read_file", Content: "two", Attachments: []domain.ImageRef{
+			{ID: "big", MimeType: "image/jpeg", Size: 12 << 20, Width: 4000, Height: 3000},
+			{ID: "small", MimeType: "image/png", Size: 3},
+		}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs := models.calls[0].Messages
+	if len(msgs) != 3 || len(msgs[2].Parts) != 2 || msgs[2].Parts[1].ImageURL != "data:image/png;base64,UE5H" ||
+		!strings.Contains(msgs[1].Content, "[image big not shown: 12.0 MB is over the 5.0 MB this model takes in one image;") {
+		t.Fatalf("messages %+v", msgs)
+	}
+}
+
 func TestExecuteToolDeniedByPolicyIsAnswered(t *testing.T) {
 	tool := &fakeTool{}
 	s := New(Deps{Pricing: eurPricing{}, Tools: map[string]ToolCaller{"code": tool}, Log: quiet()})
@@ -185,7 +213,8 @@ func TestAMessageToAPersonGoesThroughThePolicyLikeAnyPlatformTool(t *testing.T) 
 func TestExecuteToolOffloadsLargeOutputStoresImagesAndRelaysProgress(t *testing.T) {
 	b, ev := newMemBlob(), &fakeEvents{}
 	big := strings.Repeat("x", domain.OutputOffloadChars+1)
-	tool := &fakeTool{out: ToolOutput{Success: true, Result: big, Images: []ToolImage{{Data: []byte("PNG"), MimeType: "image/png"}}}}
+	shot := pngBytes(t, 6, 4)
+	tool := &fakeTool{out: ToolOutput{Success: true, Result: big, Images: []ToolImage{{Data: shot, MimeType: "image/png"}, {Data: []byte("PNG"), MimeType: "image/png"}}}}
 	s := New(Deps{Blob: b, Events: ev, Pricing: eurPricing{}, Tools: map[string]ToolCaller{"mcp": tool}, Log: quiet()})
 	p := testPrincipal()
 	out, err := s.ExecuteTool(context.Background(), p, ToolCall{
@@ -195,11 +224,15 @@ func TestExecuteToolOffloadsLargeOutputStoresImagesAndRelaysProgress(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out.Images) != 1 || out.Images[0].ID != "mcp_tool_7_image_1" || string(b.m[domain.ImageKey(p.WorkspaceID, "t1", "mcp_tool_7_image_1")]) != "PNG" {
+	if len(out.Images) != 1 || out.Images[0] != (domain.ImageRef{ID: "mcp_tool_7_image_1", MimeType: "image/png", Size: int64(len(shot)), Width: 6, Height: 4}) ||
+		!bytes.Equal(b.m[domain.ImageKey(p.WorkspaceID, "t1", "mcp_tool_7_image_1")], shot) {
 		t.Fatalf("images %+v", out.Images)
 	}
+	if notes := string(b.m[domain.OutputKey(p.WorkspaceID, "t1", "mcp_tool_7")]); !strings.Contains(notes, "[image 2 not kept: image/png is not PNG, JPEG, GIF or WebP]") {
+		t.Fatalf("a broken image was not named: %.200q", notes[len(notes)-120:])
+	}
 	stored := string(b.m[domain.OutputKey(p.WorkspaceID, "t1", "mcp_tool_7")])
-	if stored != big || !strings.Contains(out.Out.Result, "mcp_tool_7") || out.Out.Result == big {
+	if !strings.HasPrefix(stored, big) || !strings.Contains(out.Out.Result, "mcp_tool_7") || out.Out.Result == big {
 		t.Fatalf("offload: stored %d chars, result %.80q", len(stored), out.Out.Result)
 	}
 	if out.Attempt == nil || *out.Attempt != 2 || out.Payer != "workspace" {
@@ -331,6 +364,88 @@ func TestFileToolsRunInTheSandbox(t *testing.T) {
 	}
 	if got := call("search_files", map[string]any{"pattern": " "}); got != "Error: Pattern cannot be empty" {
 		t.Fatalf("search %q", got)
+	}
+}
+
+func TestReadFileShowsAnImageToTheModel(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 3000, 1500))
+	var b bytes.Buffer
+	if err := png.Encode(&b, img); err != nil {
+		t.Fatal(err)
+	}
+	rt := &fakeRuntime{files: map[string][]byte{"inputs/plan.png": b.Bytes(), "inputs/blob.bin": {0xff, 0xfe, 0x00},
+		"inputs/plan.pdf": append([]byte("%PDF-1.7\n"), 0xff, 0xfe)}}
+	s := New(Deps{Runtime: rt, Log: quiet()})
+	read := func(name string) ToolOutput {
+		t.Helper()
+		in := ToolCall{TaskID: "t1", ToolName: "read_file", Args: map[string]any{"file_name": name},
+			Binding: api.ToolBinding{Source: "code", Code: &api.CodeBinding{Namespace: "agentarea/files", Method: "read_file"}}}
+		out, err := s.dispatch(context.Background(), testPrincipal(), in, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	out := read("inputs/plan.png")
+	if !out.Success || len(out.Images) != 1 || out.Images[0].MimeType != "image/png" {
+		t.Fatalf("%+v", out)
+	}
+	if want := "inputs/plan.png is an image (image/png, 3000x1500 px, 0.1 MB); it is attached."; out.Result != want || !bytes.Equal(out.Images[0].Data, b.Bytes()) {
+		t.Fatalf("result %q, want %q", out.Result, want)
+	}
+	if out := read("inputs/blob.bin"); len(out.Images) != 0 || !strings.Contains(out.Result, "can't decode") {
+		t.Fatalf("binary %+v", out)
+	}
+	if out := read("inputs/plan.pdf"); len(out.Images) != 0 || !strings.HasPrefix(out.Result, "Error reading file: inputs/plan.pdf: not a readable PDF:") {
+		t.Fatalf("broken pdf %+v", out)
+	}
+}
+
+func TestReadFileReadsPDFPages(t *testing.T) {
+	rt := &fakeRuntime{files: map[string][]byte{"inputs/short.pdf": pdfOf(4), "inputs/plan.pdf": pdfOf(42), "notes.txt": []byte("a\nb\nc\nd\ne")}}
+	s := New(Deps{Runtime: rt, Log: quiet()})
+	read := func(args map[string]any) ToolOutput {
+		t.Helper()
+		in := ToolCall{TaskID: "t1", ToolName: "read_file", Args: args,
+			Binding: api.ToolBinding{Source: "code", Code: &api.CodeBinding{Namespace: "agentarea/files", Method: "read_file"}}}
+		out, err := s.dispatch(context.Background(), testPrincipal(), in, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	out := read(map[string]any{"file_name": "inputs/short.pdf"})
+	if len(out.Images) != 1 || out.Images[0].MimeType != "application/pdf" || out.Images[0].Pages != 4 ||
+		out.Result != "inputs/short.pdf: pages 1-4 of 4 (PDF); it is attached." {
+		t.Fatalf("short %+v", out)
+	}
+	if out := read(map[string]any{"file_name": "inputs/plan.pdf"}); len(out.Images) != 0 ||
+		out.Result != "inputs/plan.pdf has 42 pages; read up to 20 at a time with pages, e.g. pages: \"1-5\"." {
+		t.Fatalf("long without pages %+v", out)
+	}
+	out = read(map[string]any{"file_name": "inputs/plan.pdf", "pages": "3-5"})
+	if len(out.Images) != 1 || out.Images[0].Pages != 3 || out.Result != "inputs/plan.pdf: pages 3-5 of 42 (PDF); it is attached." {
+		t.Fatalf("pages %+v", out)
+	}
+	for args, want := range map[string]string{
+		"1-21":  "Error reading file: inputs/plan.pdf: pages 1-21 is 21 pages; read up to 20 at a time",
+		"40-45": "Error reading file: inputs/plan.pdf: pages 40-45 is past the last page, 42",
+	} {
+		if out := read(map[string]any{"file_name": "inputs/plan.pdf", "pages": args}); out.Result != want || len(out.Images) != 0 {
+			t.Fatalf("pages %s: %q", args, out.Result)
+		}
+	}
+	if out := read(map[string]any{"file_name": "notes.txt", "pages": "1"}); out.Result != "Error reading file: notes.txt: pages is for PDF files" {
+		t.Fatalf("pages on text %q", out.Result)
+	}
+	if out := read(map[string]any{"file_name": "notes.txt", "offset": float64(2), "limit": float64(2)}); out.Result != "b\nc\n[lines 2-3 of 5; read on with offset: 4]" {
+		t.Fatalf("offset %q", out.Result)
+	}
+	if out := read(map[string]any{"file_name": "notes.txt", "offset": float64(4)}); out.Result != "d\ne" {
+		t.Fatalf("offset to the end %q", out.Result)
+	}
+	if out := read(map[string]any{"file_name": "notes.txt", "offset": float64(9)}); out.Result != "Error reading file: notes.txt: offset 9 is past the last line, 5" {
+		t.Fatalf("offset past the end %q", out.Result)
 	}
 }
 

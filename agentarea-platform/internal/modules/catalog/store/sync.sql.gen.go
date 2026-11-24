@@ -997,25 +997,30 @@ func (q *Queries) UpsertPlatformModelSpec(ctx context.Context, arg UpsertPlatfor
 const upsertProviderSpec = `-- name: UpsertProviderSpec :one
 INSERT INTO provider_specs (id, provider_key, name, description, provider_type, icon, is_builtin, is_first_party,
     workspace_id, created_by, created_at, updated_at,
-    base_url, transport, auth, models_path, list_shape, models_query, reasoning_param, reasoning_efforts, cache_breakpoints)
+    base_url, transport, auth, models_path, list_shape, models_query, reasoning_param, reasoning_efforts, cache_breakpoints,
+    max_image_bytes, max_image_edge, pdf_input)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
     'platform', 'platform', $9, $9,
     $10, COALESCE($11, 'openai'), COALESCE($12, 'bearer'),
     $13, COALESCE($14, 'data_id'), $15,
     COALESCE($16, 'reasoning_effort'), $17::jsonb,
-    COALESCE($18::bool, false))
+    COALESCE($18::bool, false), $19::int, $20::int,
+    COALESCE($21::bool, false))
 ON CONFLICT (provider_key) DO UPDATE SET
     name = EXCLUDED.name, description = EXCLUDED.description, provider_type = EXCLUDED.provider_type,
     icon = EXCLUDED.icon, is_builtin = EXCLUDED.is_builtin, is_first_party = EXCLUDED.is_first_party,
-    base_url = CASE WHEN $19::bool THEN EXCLUDED.base_url ELSE provider_specs.base_url END,
-    transport = CASE WHEN $20::bool THEN EXCLUDED.transport ELSE provider_specs.transport END,
-    auth = CASE WHEN $21::bool THEN EXCLUDED.auth ELSE provider_specs.auth END,
-    models_path = CASE WHEN $22::bool THEN EXCLUDED.models_path ELSE provider_specs.models_path END,
-    list_shape = CASE WHEN $23::bool THEN EXCLUDED.list_shape ELSE provider_specs.list_shape END,
-    models_query = CASE WHEN $24::bool THEN EXCLUDED.models_query ELSE provider_specs.models_query END,
-    reasoning_param = CASE WHEN $25::bool THEN EXCLUDED.reasoning_param ELSE provider_specs.reasoning_param END,
-    reasoning_efforts = CASE WHEN $26::bool THEN EXCLUDED.reasoning_efforts ELSE provider_specs.reasoning_efforts END,
-    cache_breakpoints = CASE WHEN $27::bool THEN EXCLUDED.cache_breakpoints ELSE provider_specs.cache_breakpoints END,
+    base_url = CASE WHEN $22::bool THEN EXCLUDED.base_url ELSE provider_specs.base_url END,
+    transport = CASE WHEN $23::bool THEN EXCLUDED.transport ELSE provider_specs.transport END,
+    auth = CASE WHEN $24::bool THEN EXCLUDED.auth ELSE provider_specs.auth END,
+    models_path = CASE WHEN $25::bool THEN EXCLUDED.models_path ELSE provider_specs.models_path END,
+    list_shape = CASE WHEN $26::bool THEN EXCLUDED.list_shape ELSE provider_specs.list_shape END,
+    models_query = CASE WHEN $27::bool THEN EXCLUDED.models_query ELSE provider_specs.models_query END,
+    reasoning_param = CASE WHEN $28::bool THEN EXCLUDED.reasoning_param ELSE provider_specs.reasoning_param END,
+    reasoning_efforts = CASE WHEN $29::bool THEN EXCLUDED.reasoning_efforts ELSE provider_specs.reasoning_efforts END,
+    cache_breakpoints = CASE WHEN $30::bool THEN EXCLUDED.cache_breakpoints ELSE provider_specs.cache_breakpoints END,
+    max_image_bytes = CASE WHEN $31::bool THEN EXCLUDED.max_image_bytes ELSE provider_specs.max_image_bytes END,
+    max_image_edge = CASE WHEN $32::bool THEN EXCLUDED.max_image_edge ELSE provider_specs.max_image_edge END,
+    pdf_input = CASE WHEN $33::bool THEN EXCLUDED.pdf_input ELSE provider_specs.pdf_input END,
     updated_at = $9
 RETURNING id
 `
@@ -1039,6 +1044,9 @@ type UpsertProviderSpecParams struct {
 	ReasoningParam      interface{}
 	ReasoningEfforts    []byte
 	CacheBreakpoints    pgtype.Bool
+	MaxImageBytes       pgtype.Int4
+	MaxImageEdge        pgtype.Int4
+	PdfInput            pgtype.Bool
 	SetBaseUrl          bool
 	SetTransport        bool
 	SetAuth             bool
@@ -1048,6 +1056,9 @@ type UpsertProviderSpecParams struct {
 	SetReasoningParam   bool
 	SetReasoningEfforts bool
 	SetCacheBreakpoints bool
+	SetMaxImageBytes    bool
+	SetMaxImageEdge     bool
+	SetPdfInput         bool
 }
 
 // UpsertProviderSpec is upsert_by_provider_key: a contract column the
@@ -1072,6 +1083,9 @@ func (q *Queries) UpsertProviderSpec(ctx context.Context, arg UpsertProviderSpec
 		arg.ReasoningParam,
 		arg.ReasoningEfforts,
 		arg.CacheBreakpoints,
+		arg.MaxImageBytes,
+		arg.MaxImageEdge,
+		arg.PdfInput,
 		arg.SetBaseUrl,
 		arg.SetTransport,
 		arg.SetAuth,
@@ -1081,6 +1095,9 @@ func (q *Queries) UpsertProviderSpec(ctx context.Context, arg UpsertProviderSpec
 		arg.SetReasoningParam,
 		arg.SetReasoningEfforts,
 		arg.SetCacheBreakpoints,
+		arg.SetMaxImageBytes,
+		arg.SetMaxImageEdge,
+		arg.SetPdfInput,
 	)
 	var id uuid.UUID
 	err := row.Scan(&id)

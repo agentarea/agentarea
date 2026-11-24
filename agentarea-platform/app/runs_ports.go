@@ -52,7 +52,7 @@ func (c mcpCaller) Call(ctx context.Context, inv runsservice.ToolInvocation) (ru
 	}
 	out.Payments, out.ServiceCost = toolPayments(r.Payments)
 	for _, img := range r.Images {
-		out.Images = append(out.Images, runsservice.ToolImage{Data: []byte(img.Data), MimeType: img.MimeType})
+		out.Images = append(out.Images, runsservice.ToolImage{Data: img.Data, MimeType: img.MimeType})
 	}
 	return out, nil
 }

@@ -31,6 +31,10 @@ type ImageRef struct {
 	ID       string `json:"id"`
 	MimeType string `json:"mime_type"`
 	Size     int64  `json:"size"`
+	Width    int    `json:"width,omitempty"`
+	Height   int    `json:"height,omitempty"`
+	// Pages is a PDF's page count; a PDF is sent as a file, not an image.
+	Pages int `json:"pages,omitempty"`
 }
 
 // Entry is one row of a task's log (ConversationEntry).

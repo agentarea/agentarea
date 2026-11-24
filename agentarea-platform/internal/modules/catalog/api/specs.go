@@ -33,8 +33,13 @@ type ProviderSpec struct {
 	ReasoningParam   string
 	ReasoningEfforts []string
 	CacheBreakpoints bool
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	// MaxImageBytes and MaxImageEdge are what the provider takes in one image:
+	// the file's bytes and the longer edge in pixels; nil is unstated.
+	MaxImageBytes, MaxImageEdge *int
+	// PDFInput is whether the provider reads a PDF sent as a file.
+	PDFInput  bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // ModelSpec is a model_specs row.

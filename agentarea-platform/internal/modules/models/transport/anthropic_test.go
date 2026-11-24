@@ -256,6 +256,22 @@ func TestAnthropicReasoningSettingsAreRefusedBeforeAnyIO(t *testing.T) {
 	}
 }
 
+func TestAnthropicSendsAPDFAsADocument(t *testing.T) {
+	srv, c := serveRaw(t, 200, anthropicSSE(t, `{"type":"message_stop"}`))
+	r := Request{Messages: []api.Message{{Role: "user", Parts: []api.ContentPart{
+		{Type: "text", Text: "Files returned by read_file (call c1):"},
+		{Type: "file", FileData: "data:application/pdf;base64,JVBERi0=", Filename: "plan.pdf"},
+	}}}}
+	if _, err := runStream(context.Background(), claude(t, srv.URL), r); err != nil {
+		t.Fatalf("Stream: %v", err)
+	}
+	_, _, _, body := c.snapshot()
+	assertJSON(t, "messages", body["messages"], `[{"role": "user", "content": [
+		{"type": "text", "text": "Files returned by read_file (call c1):"},
+		{"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": "JVBERi0="}}
+	]}]`)
+}
+
 func TestAnthropicRequestBody(t *testing.T) {
 	srv, c := serveRaw(t, 200, anthropicSSE(t, `{"type":"message_stop"}`))
 	temp := 0.5

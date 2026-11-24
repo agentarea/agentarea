@@ -870,14 +870,39 @@ func providerRow(it domain.Item, spec map[string]any) (store.ProviderRow, error)
 			c.ReasoningEfforts = &store.Opt[[]byte]{Value: b}
 		}
 	}
-	if v, has := spec["cache_breakpoints"]; has {
+	for _, f := range []struct {
+		name string
+		dst  **store.Opt[bool]
+	}{{"cache_breakpoints", &c.CacheBreakpoints}, {"pdf_input", &c.PDFInput}} {
+		v, has := spec[f.name]
+		if !has {
+			continue
+		}
 		switch b := v.(type) {
 		case nil:
-			c.CacheBreakpoints = &store.Opt[bool]{Value: false}
+			*f.dst = &store.Opt[bool]{Value: false}
 		case bool:
-			c.CacheBreakpoints = &store.Opt[bool]{Value: b}
+			*f.dst = &store.Opt[bool]{Value: b}
 		default:
-			return p, entryErr("cache_breakpoints must be true or false")
+			return p, entryErr("%s must be true or false", f.name)
+		}
+	}
+	for _, f := range []struct {
+		name string
+		dst  **store.Opt[int]
+	}{{"max_image_bytes", &c.MaxImageBytes}, {"max_image_edge", &c.MaxImageEdge}} {
+		v, has := spec[f.name]
+		if !has {
+			continue
+		}
+		n, err := optInt(v)
+		if err != nil || (n != nil && *n <= 0) {
+			return p, entryErr("%s must be a positive integer or null", f.name)
+		}
+		if n == nil {
+			*f.dst = &store.Opt[int]{Null: true}
+		} else {
+			*f.dst = &store.Opt[int]{Value: *n}
 		}
 	}
 	return p, nil

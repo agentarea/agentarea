@@ -51,8 +51,8 @@ func str(desc string) map[string]any { return map[string]any{"type": "string", "
 // (file_toolset.py, shell_toolset.py).
 func sandboxToolsets() []CodeToolset {
 	return []CodeToolset{
-		{Namespace: "agentarea/files", Description: "Read, write and list text files in this task's working directory, " +
-			"the same files the shell sees. Use the shell for binary files.", Methods: []CodeMethod{
+		{Namespace: "agentarea/files", Description: "Read, write and list files in this task's working directory, " +
+			"the same files the shell sees; read_file also shows images and PDFs. Use the shell for other binary files.", Methods: []CodeMethod{
 			{Method: "save_file", Description: "Write text to a file in the working directory. Text only: " +
 				"produce .pdf, .xlsx, images and other binary files with a program in the shell.",
 				Parameters: obj(map[string]any{
@@ -60,8 +60,15 @@ func sandboxToolsets() []CodeToolset {
 					"file_name": str("Path relative to the working directory, e.g. outputs/summary.md."),
 					"overwrite": map[string]any{"type": "boolean", "default": true, "description": "Replace an existing file; false refuses to."},
 				}, "contents", "file_name")},
-			{Method: "read_file", Description: "Read a text file from the working directory.",
-				Parameters: obj(map[string]any{"file_name": str("Path relative to the working directory, e.g. inputs/brief.txt.")}, "file_name")},
+			{Method: "read_file", Description: "Read a file from the working directory. Text comes back as text (offset and limit " +
+				"read a range of lines); an image (PNG, JPEG, GIF, WebP) is shown to you; a PDF is attached as the pages themselves, " +
+				"at most 20 at a time, and pages is required for one over 10 pages.",
+				Parameters: obj(map[string]any{
+					"file_name": str("Path relative to the working directory, e.g. inputs/brief.txt."),
+					"pages":     str(`PDF pages to read, one page or a range, e.g. "3" or "1-5"; at most 20.`),
+					"offset":    map[string]any{"type": "integer", "description": "Text: the line to start from, 1-based."},
+					"limit":     map[string]any{"type": "integer", "description": "Text: how many lines to read."},
+				}, "file_name")},
 			{Method: "list_files", Description: "List the files in the working directory.",
 				Parameters: obj(map[string]any{"pattern": map[string]any{"type": "string", "default": "*",
 					"description": "Glob over paths relative to the working directory, e.g. *.csv; * lists all."}})},

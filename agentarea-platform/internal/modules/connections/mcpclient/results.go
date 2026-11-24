@@ -2,6 +2,7 @@ package mcpclient
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 )
@@ -57,10 +58,10 @@ func SerializeTool(t map[string]any) map[string]any {
 	return out
 }
 
-// Image is an image a tool result carried, base64 as the server sent it.
+// Image is an image a tool result carried, decoded from the base64 the server sent.
 type Image struct {
 	MimeType string
-	Data     string
+	Data     []byte
 }
 
 // Image limits of split_tool_content.
@@ -82,11 +83,14 @@ func supportedImageType(mime string) bool {
 func SplitContent(blocks []map[string]any) (string, []Image) {
 	var parts []string
 	var images []Image
-	image := func(mime, data, uri string) {
+	image := func(mime, encoded, uri string) {
+		data, decodeErr := base64.StdEncoding.DecodeString(encoded)
 		switch {
 		case !supportedImageType(mime):
 			parts = append(parts, fmt.Sprintf("[image omitted: %s is not a supported image type]", mime))
-		case len(data)*3/4 > MaxToolImageBytes:
+		case decodeErr != nil:
+			parts = append(parts, fmt.Sprintf("[image omitted: %s data is not base64]", mime))
+		case len(data) > MaxToolImageBytes:
 			parts = append(parts, fmt.Sprintf("[image omitted: %s is larger than %d bytes]", mime, MaxToolImageBytes))
 		case len(images) >= MaxToolImages:
 			parts = append(parts, fmt.Sprintf("[image omitted: more than %d images in one result]", MaxToolImages))
