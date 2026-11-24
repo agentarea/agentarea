@@ -80,7 +80,7 @@ func TestLostOutputsAreKeptOnTheTaskUntilTaken(t *testing.T) {
 		t.Fatalf("taken twice %v %v", again, err)
 	}
 	task, err := tasks.Task(ctx, ws, taskID)
-	if err != nil || task.Metadata[runnerClientKey] != "client-1" {
+	if err != nil || task.Metadata[runnerClientKey] != "client-1" { // pragma: allowlist secret
 		t.Fatalf("the task's other metadata changed: %v %v", task.Metadata, err)
 	}
 }
