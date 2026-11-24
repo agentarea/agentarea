@@ -182,6 +182,19 @@ func (in taskInput) stamp(p map[string]any) map[string]any {
 	return p
 }
 
+// noted is the input with the notes about files that did not come after its message and follow-up.
+func (in taskInput) noted(notes []string) taskInput {
+	if len(notes) == 0 {
+		return in
+	}
+	text := strings.Join(notes, "\n")
+	in.message += "\n\n" + text
+	if in.followUp != "" {
+		in.followUp += "\n\n" + text
+	}
+	return in
+}
+
 var errEventDataMismatch = errors.New("the event a trigger fired on must carry the trigger data it was given")
 
 // composeTaskInput is compose_task_input; false when nothing asks.

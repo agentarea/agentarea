@@ -55,6 +55,8 @@ type FireRequest struct {
 	// RaiseRetryable: only a permanent failure is an error outcome; anything else is returned.
 	RaiseRetryable bool
 	Event          *TriggerEvent
+	// StreamEvent is the stream event fired on: its files go into the task as inputs/attachments.
+	StreamEvent *domain.Event
 	// Caller is the admitted sender a messenger event came from; the task is theirs.
 	Caller   string
 	Delivery *TaskDelivery
@@ -299,6 +301,14 @@ func (f firer) submit(ctx context.Context, def *TaskDefinitionText) (Firing, err
 		ex, err := f.record(ctx, ExecFailed, NoTaskText, "", time.Since(began))
 		return Firing{Outcome: OutcomeError, Reason: NoTaskText, Execution: ex}, err
 	}
+	var files []runsapi.TaskAttachment
+	if r.StreamEvent != nil {
+		var notes []string
+		if files, notes, err = f.s.eventFiles(ctx, f.ws, *r.StreamEvent); err != nil {
+			return Firing{}, err
+		}
+		in = in.noted(notes)
+	}
 	params := buildTaskParameters(t, r.Data, r.FiredBy, r.Delivery, def, f.s.now())
 	f.s.extractParameters(ctx, f.ws, t, askedParameters(t, def), r.Data, params)
 	params = in.stamp(params)
@@ -322,6 +332,7 @@ func (f firer) submit(ctx context.Context, def *TaskDefinitionText) (Firing, err
 	sub, err := f.s.d.Tasks.Submit(ctx, f.ws, runsapi.TaskRequest{
 		TaskID: taskID, AgentID: t.AgentID, Description: in.message,
 		UserID: firstOf(r.FiredBy, r.Caller, t.CreatedBy), Parameters: params, Provenance: prov, Claim: r.Claim,
+		Attachments: files,
 	})
 	if err != nil {
 		return Firing{}, err

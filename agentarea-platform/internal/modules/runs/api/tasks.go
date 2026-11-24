@@ -31,6 +31,16 @@ type TaskRequest struct {
 	ScheduledAt           *time.Time
 	// Claim, when set, makes a routed follow-up go out at most once per delivery.
 	Claim FollowUpClaim
+	// Attachments are workspace files the task receives as inputs/attachments/<Name>; a
+	// follow-up routed into a running task adds them there and names them in its message.
+	Attachments []TaskAttachment
+}
+
+// TaskAttachment is a file of the workspace's files (Key) a task receives, with the digest and
+// size the store recorded for it.
+type TaskAttachment struct {
+	Key, Name, SHA256, ContentType string
+	Size                           int64
 }
 
 // TaskProvenance is why a task exists (TaskProvenance).

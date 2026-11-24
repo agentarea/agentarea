@@ -114,6 +114,9 @@ type Deps struct {
 	// Out is the outbound HTTP clients: api_lookup reads a provider's API through netguard.Vendor.
 	// Nil makes an api_lookup delivery unverifiable now (503).
 	Out netguard.Clients
+	// Fetchers bring the files an event names by reference, by its source type's
+	// event.attachments.fetch; nil is the built-in ones over Out.
+	Fetchers map[string]AttachmentFetcher
 	// MCPEventSources reads an MCP server instance for an MCP Events source; nil refuses those sources.
 	MCPEventSources MCPEventSources
 	// Links is identity's messenger link handshake; with Owners and Notices it admits the senders

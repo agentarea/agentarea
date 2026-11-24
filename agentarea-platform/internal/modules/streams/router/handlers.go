@@ -152,22 +152,28 @@ func (h *TriggerHandler) handle(ctx context.Context, sub domain.Subscription, e 
 	if err != nil {
 		return store.Result{}, err
 	}
-	if delivery.Text != nil {
+	text := delivery.Text
+	if (text == nil || *text == "") && len(e.Attachments) > 0 {
+		line := service.FilesLine(e.Attachments)
+		text = &line
+	}
+	if text != nil {
 		if _, has := te.Data["text"]; !has {
 			withText := make(map[string]any, len(te.Data)+1)
 			for k, v := range te.Data {
 				withText[k] = v
 			}
-			withText["text"] = *delivery.Text
+			withText["text"] = *text
 			te.Data = withText
 		}
 	}
 	cause := store.CauseOf(sub, e)
 	firing, err := svc.Fire(ctx, ws, service.FireRequest{
-		TriggerID: t.ID,
-		Data:      te.Data,
-		Event:     &te,
-		TaskID:    domain.TaskIDFor(sub.ID, e.ID),
+		TriggerID:   t.ID,
+		Data:        te.Data,
+		Event:       &te,
+		StreamEvent: &e,
+		TaskID:      domain.TaskIDFor(sub.ID, e.ID),
 		Provenance: &runsapi.TaskProvenance{
 			OriginType: "trigger", OriginID: t.ID, CorrelationID: cause.CorrelationID,
 			CausationID: cause.CausationID, Depth: e.Depth,
