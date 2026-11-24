@@ -606,7 +606,9 @@ func (c *Checker) contentSafety(v any, loc []any) *ContentSafety {
 	if x, pr := get(m, "answer_check"); pr && x != nil {
 		cs.AnswerCheck = c.AnswerCheck(x, at(loc, "answer_check"))
 	}
-	c.Extra(m, []string{"prompt_injection_detection_enabled", "answer_check", "output_sanitizer_enabled"}, loc)
+	x, pr = get(m, "fetch_seen_links_only")
+	cs.FetchSeenLinksOnly = c.OptBool(x, pr, at(loc, "fetch_seen_links_only"))
+	c.Extra(m, []string{"prompt_injection_detection_enabled", "answer_check", "output_sanitizer_enabled", "fetch_seen_links_only"}, loc)
 	return &cs
 }
 

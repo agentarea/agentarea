@@ -9,7 +9,7 @@ related:
   - /reference/limits
   - /guides/governance/authorize-a-tool-call
   - /guides/governance/set-a-budget
-last_updated: 2026-10-20
+last_updated: 2026-11-24
 ---
 
 One `PolicyRule` row expresses one governance intent for one subject. Rules are
@@ -140,6 +140,7 @@ which is not unique either, so a delegate is allowed as
 | `approval` | `*`, `tool:*` | `approvers` | array of subject refs | Optional. Empty means any caller may approve. |
 | `approval` | `tool:<name>` | `approvers` | array of subject refs | Optional. Stored under `approvers_by_tool[<name>]`. |
 | `safety` | `content` | `prompt_injection` | boolean | Coerced with `bool()`. |
+| `safety` | `content` | `fetch_seen_links_only` | boolean | Off by default. When on, `web_fetch_webpage` opens only a link already seen in the task: the request, search results or a page fetched earlier. Coerced with `bool()`. |
 | `safety` | `content` | `answer_check` | object | `{enabled?: bool = true, language?: string, rewrite_instruction?: string (≤4000)}`; unknown keys are refused. See [Answer check](#answer-check). |
 | `egress` | `mcp:<id>` | `allowed_hosts` | array of strings | A non-list value skips the rule. |
 
@@ -189,6 +190,7 @@ Applied per layer in order. A lower layer may only tighten.
 | `approval.approvers` | union | — |
 | `approval.approvers_by_tool` | union per tool key | — |
 | `content_safety.prompt_injection_detection_enabled` | logical OR | sets `false` where a higher layer set `true` |
+| `content_safety.fetch_seen_links_only` | logical OR | sets `false` where a higher layer set `true` |
 | `content_safety.answer_check` | the lowest layer that sets it wins (an agent's over the workspace's); any rule that sets it overrides the agent's own setting | — |
 
 A rejected chain raises a validation error, surfaced as HTTP 422.
@@ -271,7 +273,7 @@ and the API returns it while the runtime never sees it.
 | `deny` on `tool:<name>` | Enforced |
 | `allow` on `tool:<name>` | Enforced |
 | `approval` on `*`, `tool:*`, `tool:<name>` | Enforced in the agent workflow only |
-| `safety` on `content` | `prompt_injection` by the registered content filter; `answer_check` by the agent workflow on its final answer |
+| `safety` on `content` | `prompt_injection` by the registered content filter; `answer_check` by the agent workflow on its final answer; `fetch_seen_links_only` by the agent workflow's tool gate |
 | `condition` on any rule | **Inert.** No resolver, compiler or gate reads it. |
 | `subject_type: group` | **Inert.** The resolver reads workspace, agent and user layers only. |
 | `priority` | **Inert.** Stored and returned; not used in ordering. |

@@ -193,3 +193,19 @@ func TestPublicIgnoresMemberAllowlist(t *testing.T) {
 		t.Fatalf("public reached an allowlisted private host: %v", err)
 	}
 }
+
+func TestPublicRefusesPrivateLoopbackLinkLocalAndClusterHosts(t *testing.T) {
+	o := newOutbound(t, kernel.Config{AllowPrivate: true}, resolver{
+		"kubernetes.default.svc.cluster.local": {netip.MustParseAddr("10.43.0.1")},
+		"metadata.google.internal":             {netip.MustParseAddr("169.254.169.254")},
+	}, noProxy)
+	for _, u := range []string{
+		"http://127.0.0.1/", "http://[::1]/", "http://10.0.0.5/", "http://192.168.1.1/", "http://172.16.0.1/",
+		"http://169.254.169.254/latest/meta-data/", "http://[fd00:ec2::254]/",
+		"https://kubernetes.default.svc.cluster.local/", "http://metadata.google.internal/",
+	} {
+		if _, err := o.Client(kernel.Public, 0).Get(u); !errors.Is(err, kernel.ErrUnsafe) {
+			t.Errorf("%s: %v", u, err)
+		}
+	}
+}

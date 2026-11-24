@@ -61,10 +61,8 @@ func sandboxCodeToolsets() []CodeToolset {
 		{Name: webNamespace, DisplayName: "Web Tools", Category: "information", Plane: ref("runtime"),
 			Description:              "Search the web and read web pages into the conversation.",
 			RequiresUserConfirmation: true, Methods: []CodeToolMethod{
-				method("fetch_webpage", "read", "Read a web page (HTML, text or JSON) and return its text and links. Opens only "+
-					"links already seen in this task: in the request, search results or pages read "+
-					"before. Binary content (images, PDFs, archives) is refused; download it with "+
-					"the shell."),
+				method("fetch_webpage", "read", "Read a public web page (HTML, text or JSON) and return its text and links. "+
+					"Binary content (images, PDFs, archives) is refused; download it with the shell."),
 				method("search_web", "read", "Search the public web; returns titles, links and snippets."),
 			}},
 		{Name: "agentarea/media", DisplayName: "Media Generation", Category: "media", Plane: ref("runtime"),

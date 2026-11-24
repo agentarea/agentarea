@@ -96,6 +96,8 @@ func (a Approval) ByTool() map[string][]string {
 type ContentSafety struct {
 	PromptInjectionDetectionEnabled *bool
 	AnswerCheck                     *AnswerCheck
+	// FetchSeenLinksOnly holds a page fetch to links the task has already seen.
+	FetchSeenLinksOnly *bool
 }
 
 // AnswerCheck is AnswerCheckPolicy.
@@ -301,6 +303,7 @@ func (e emit) contentSafety(c *ContentSafety) wirejson.Object {
 		e.str(&ac, "rewrite_instruction", c.AnswerCheck.RewriteInstruction)
 		e.put(&o, "answer_check", ac, false)
 	}
+	e.bool(&o, "fetch_seen_links_only", c.FetchSeenLinksOnly)
 	return o
 }
 

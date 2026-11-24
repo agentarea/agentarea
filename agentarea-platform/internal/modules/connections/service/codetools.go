@@ -104,9 +104,8 @@ func runtimeToolsets() []CodeToolset {
 				Parameters: obj(map[string]any{"path": str("Path as list_org_files returns it.")}, "path")},
 		}},
 		{Namespace: "agentarea/web", Description: "Search the web and read web pages into the conversation.", Methods: []CodeMethod{
-			{Method: "fetch_webpage", Description: "Read a web page (HTML, text or JSON) and return its text and links. Opens only " +
-				"links already seen in this task: in the request, search results or pages read before. Binary content " +
-				"(images, PDFs, archives) is refused; download it with the shell.",
+			{Method: "fetch_webpage", Description: "Read a public web page (HTML, text or JSON) and return its text and links. " +
+				"Binary content (images, PDFs, archives) is refused; download it with the shell.",
 				Parameters: obj(map[string]any{
 					"url":             str("Full http(s) URL of the page."),
 					"timeout_seconds": map[string]any{"type": "number", "default": 15.0, "description": "Seconds to wait for the page."},
