@@ -2,6 +2,7 @@ package workflows
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 
@@ -80,6 +81,41 @@ func TestRunnerLostTurnIsAssignedAgain(t *testing.T) {
 	}
 	if len(runner.turns) != 2 || runner.turns[1].TurnKey != "1.2" || runner.turns[1].Message != "Find the answer" {
 		t.Fatalf("turns = %+v", runner.turns)
+	}
+}
+
+func TestDelegatedAgentOnAClientRunsItsTurnOnTheRunner(t *testing.T) {
+	f := newFakeRun()
+	f.client = "client-1"
+	f.cfg.Tools = append(f.cfg.Tools, api.ToolDefinition{Name: "delegate_to_coder", Parameters: map[string]any{"type": "object"}})
+	f.cfg.Delegates = map[string]api.Delegate{"delegate_to_coder": {AgentID: "agent-2", AgentName: "coder"}}
+	f.llm[parentTask] = turns(
+		calls(ToolCall{ID: "call-1", Name: "delegate_to_coder", Arguments: `{"message": "draw a logo"}`}),
+		calls(complete("call-2", "done")),
+	)
+	runner := &fakeRunner{reply: func(int) (RunnerTurnResult, error) {
+		return RunnerTurnResult{Status: "completed", Response: "Drew it."}, nil
+	}}
+	env := newEnv(t, f)
+	env.RegisterActivityWithOptions(runner.run, activity.RegisterOptions{Name: api.ActivityRunRunnerTurn})
+	env.RegisterActivityWithOptions(runner.deliver, activity.RegisterOptions{Name: api.ActivityDeliverToRunner})
+	env.ExecuteWorkflow(AgentExecutionWorkflow, request(nil))
+
+	if res := result(t, env); !res.Success {
+		t.Fatalf("result = %+v", res)
+	}
+	if len(runner.turns) != 1 || runner.turns[0].TaskID != childTask || runner.turns[0].AgentID != "agent-2" || runner.turns[0].Message != "draw a logo" {
+		t.Fatalf("runner turns = %+v", runner.turns)
+	}
+	if f.llmCalls[childTask] != 0 {
+		t.Fatalf("the delegated run called the platform model %d times", f.llmCalls[childTask])
+	}
+	if d := f.eventData(parentTask, domain.EventDelegationCompleted); len(d) != 1 || d[0]["success"] != true {
+		t.Fatalf("delegation.completed = %+v", d)
+	}
+	tools := f.messages(parentTask, "tool")
+	if len(tools) == 0 || !strings.Contains(tools[0].Content, "Drew it.") {
+		t.Fatalf("tool rows = %+v", tools)
 	}
 }
 

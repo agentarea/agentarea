@@ -299,6 +299,9 @@ func (r *agentRun) runChild(ctx workflow.Context, c ToolCall, target api.Delegat
 			"parent_agent_id": r.principal.AgentID, "parent_task_id": r.taskID,
 		},
 	}
+	if created.RunnerClientID != "" {
+		child.WorkflowMetadata[runnerClientKey] = created.RunnerClientID
+	}
 	var res AgentRunResult
 	err := workflow.ExecuteChildWorkflow(r.childOptions(ctx, childID), api.WorkflowAgentExecution, child).Get(ctx, &res)
 	return res, err
