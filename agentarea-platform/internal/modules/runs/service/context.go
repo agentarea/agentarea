@@ -27,7 +27,8 @@ func (s *Service) StoreOutput(ctx context.Context, p Principal, taskID, outputID
 
 // ReadOutput reads a stored output, or one of the task's input files by its
 // inputs/attachments/<name> path, through grep, head or tail.
-func (s *Service) ReadOutput(ctx context.Context, p Principal, taskID, outputID, grep string, head, tail *int) (string, error) {
+// filesTaskID is the task whose files the run works on; "" is taskID's own.
+func (s *Service) ReadOutput(ctx context.Context, p Principal, taskID, filesTaskID, outputID, grep string, head, tail *int) (string, error) {
 	if _, err := workspace(p); err != nil {
 		return "", err
 	}
@@ -35,7 +36,11 @@ func (s *Service) ReadOutput(ctx context.Context, p Principal, taskID, outputID,
 	var err error
 	switch {
 	case domain.IsTaskInputPath(outputID):
-		content, err = s.readTaskInput(ctx, p, taskID, outputID)
+		files := taskID
+		if filesTaskID != "" {
+			files = filesTaskID
+		}
+		content, err = s.readTaskInput(ctx, p, files, outputID)
 	case domain.IsOutputID(outputID):
 		content, err = s.getText(ctx, domain.OutputKey(p.WorkspaceID, taskID, outputID))
 		if errors.Is(err, blob.ErrNotFound) {

@@ -15,6 +15,9 @@ import (
 // UseHeldCalls sets runs' approval gate of held calls; runs is built after connections.
 func (s *Service) UseHeldCalls(h runsapi.HeldCalls) { s.d.HeldCalls = h }
 
+// UseTaskFiles sets runs' signed downloads of a turn's task files.
+func (s *Service) UseTaskFiles(f runsapi.TaskFileURLs) { s.d.TaskFiles = f }
+
 // toolAudit is where one tool call's verdict is filed: the resource it went through.
 type toolAudit struct {
 	resourceType, resourceID, actorType, name string

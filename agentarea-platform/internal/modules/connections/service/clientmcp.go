@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"slices"
 	"sort"
 	"strings"
@@ -37,6 +39,9 @@ type EnterWorkspace func(ctx context.Context, p authn.Principal, reference strin
 
 // ActivateSkillTool is the client endpoint's skill loader.
 const ActivateSkillTool = "activate_skill"
+
+// DownloadURLTool gives a runner's turn short-lived URLs of its task's files, to fetch with curl.
+const DownloadURLTool = "agentarea_files_download_url"
 
 const uiScheme = "ui://"
 
@@ -382,6 +387,9 @@ func (b *clientBackend) ListTools(ctx context.Context) ([]mcpserver.Tool, error)
 		}
 		tools = append(tools, mcpserver.Tool{Tool: mcpserve.Tool{Name: op.name, Description: op.description, InputSchema: schema}})
 	}
+	if b.servesTaskFiles() {
+		tools = append(tools, downloadURLTool())
+	}
 	out := make([]mcpserver.Tool, 0, len(tools)+1)
 	for _, t := range tools {
 		if b.decide(t.Name).Action != governanceapi.ToolDeny {
@@ -499,6 +507,46 @@ func (b *clientBackend) decide(name string) governanceapi.ToolDecision {
 	return b.pdp.Decide(name, b.names(name))
 }
 
+// servesTaskFiles: a runner's turn may fetch the files of the task it works on.
+func (b *clientBackend) servesTaskFiles() bool {
+	return b.c.BoundTaskID != "" && b.s.d.TaskFiles != nil
+}
+
+func downloadURLTool() mcpserver.Tool {
+	schema, _ := json.Marshal(map[string]any{
+		"type": "object",
+		"properties": map[string]any{"path": map[string]any{
+			"type": "string", "description": "A file or folder of the task, e.g. inputs/attachments/IMG_6110.MOV or inputs/photos/.",
+		}},
+		"required": []string{"path"},
+	})
+	return mcpserver.Tool{Tool: mcpserve.Tool{Name: DownloadURLTool, InputSchema: schema, Description: "Get short-lived download URLs " +
+		"of a file, or of every file in a folder, of the task you work on, then fetch each into the same path with " +
+		"curl -fsSL -o <path> <url>. Only the task's files are reachable; each URL expires in minutes."}}
+}
+
+// downloadURLs answers DownloadURLTool for the turn's task.
+func (b *clientBackend) downloadURLs(ctx context.Context, args json.RawMessage) (mcpserve.Result, error) {
+	var in struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(args, &in); err != nil || in.Path == "" {
+		return textResult("path is required", true), nil
+	}
+	urls, err := b.s.d.TaskFiles.TaskFileURLs(ctx, b.c.Workspace, b.c.BoundTaskID, in.Path)
+	if errors.Is(err, runsapi.ErrNoTaskFile) {
+		return textResult("The task has no file at "+in.Path+".", true), nil
+	}
+	if err != nil {
+		return mcpserve.Result{}, err
+	}
+	lines := make([]string, 0, len(urls))
+	for _, u := range urls {
+		lines = append(lines, fmt.Sprintf("%s (%d bytes, sha256 %s, expires in %ds)\n%s", u.Path, u.Size, u.SHA256, u.ExpiresInSeconds, u.URL))
+	}
+	return textResult(strings.Join(lines, "\n\n"), false), nil
+}
+
 func textResult(text string, isError bool) mcpserve.Result {
 	return mcpserve.Result{Content: []mcpserve.Content{{Type: "text", Text: text}}, IsError: isError}
 }
@@ -510,6 +558,12 @@ func (b *clientBackend) CallTool(ctx context.Context, name string, args json.Raw
 		}
 		_ = json.Unmarshal(args, &in)
 		return textResult(b.activateSkill(in.SkillName), false), nil
+	}
+	if name == DownloadURLTool && b.servesTaskFiles() {
+		if d := b.decide(name); !d.Allowed() {
+			return textResult("Tool call refused: "+d.Reason, true), nil
+		}
+		return b.downloadURLs(ctx, args)
 	}
 	if op, ok := b.operation(name); ok {
 		return b.governed(ctx, name, args, map[string]any{"openapi_connection_id": op.connectionID}, func() (any, error) {

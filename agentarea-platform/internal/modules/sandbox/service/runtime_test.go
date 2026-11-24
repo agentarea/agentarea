@@ -278,6 +278,10 @@ func TestValidateArtifacts(t *testing.T) {
 			}
 			_, _ = io.WriteString(w, `{"paths":["outputs/r.md","notes.txt"]}`)
 		case "/sandbox/artifacts":
+			if r.Method == http.MethodGet {
+				_, _ = io.WriteString(w, `{"items":[]}`)
+				return true
+			}
 			var body map[string]string
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			switch body["path"] {
@@ -316,6 +320,39 @@ func TestValidateArtifacts(t *testing.T) {
 	v, _ = g.svc.Runtime().ValidateArtifacts(ctx, wsID, taskID, []string{"a"})
 	if v.State != "unavailable" || v.Capability != "published_artifact_store" {
 		t.Fatalf("unconfigured = %+v", v)
+	}
+}
+
+func TestValidateArtifactsTakesAFilePublishedWithoutASandbox(t *testing.T) {
+	m := &manager{handler: func(w http.ResponseWriter, r *http.Request) bool {
+		switch {
+		case r.URL.Path == "/sandbox/files":
+			w.WriteHeader(http.StatusGone)
+		case r.URL.Path == "/sandbox/artifacts" && r.Method == http.MethodPost:
+			w.WriteHeader(http.StatusGone)
+		case r.URL.Path == "/sandbox/artifacts" && r.Method == http.MethodGet:
+			if r.URL.Query().Get("task_id") != taskID {
+				w.WriteHeader(http.StatusBadRequest)
+				return true
+			}
+			_, _ = io.WriteString(w, `{"items":[{"id":"art_1","path":"outputs/x.png","name":"x.png","size":4,"sha256":"`+sha("x")+`"}]}`)
+		default:
+			return false
+		}
+		return true
+	}}
+	f, _ := runtimeFixture(t, m)
+	ctx := context.Background()
+	v, err := f.svc.Runtime().ValidateArtifacts(ctx, wsID, taskID, []string{"outputs/x.png"})
+	if err != nil || v.State != "passed" || len(v.Evidence) != 1 || v.Evidence[0].Path != "outputs/x.png" || v.Evidence[0].SHA256 != sha("x") || v.Evidence[0].Size != 4 {
+		t.Fatalf("published = %+v, %v", v, err)
+	}
+	v, err = f.svc.Runtime().ValidateArtifacts(ctx, wsID, taskID, []string{"outputs/x.png", "outputs/cat.png"})
+	if err != nil || v.State != "failed" || v.Capability != "" || len(v.Issues) != 1 {
+		t.Fatalf("missing = %+v, %v", v, err)
+	}
+	if i := v.Issues[0]; i.Path != "outputs/cat.png" || i.Code != "artifact_missing" || !strings.HasPrefix(i.Message, "file not found: outputs/cat.png") {
+		t.Fatalf("issue = %+v", i)
 	}
 }
 

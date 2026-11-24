@@ -35,13 +35,25 @@ func (s *Service) sandboxCaller(in ToolCall) ToolCaller {
 	return sandboxTools{rt: s.d.Runtime}
 }
 
+// WorkspaceTaskKey names, in a run's metadata, the task whose files the run works on: a
+// subtask works on its parent's.
+const WorkspaceTaskKey = "workspace_task_id"
+
+// filesTask is the task whose sandbox and files a call works on.
+func filesTask(inv ToolInvocation) string {
+	if t, _ := inv.RunMetadata[WorkspaceTaskKey].(string); t != "" {
+		return t
+	}
+	return inv.TaskID
+}
+
 func (t sandboxTools) Call(ctx context.Context, inv ToolInvocation) (ToolOutput, error) {
 	ns, method := inv.Binding.Code.Namespace, inv.Binding.Code.Method
 	if ns == shellToolset && method == "bash" {
 		return t.bash(ctx, inv)
 	}
 	if ns == filesToolset {
-		ws, task := inv.Principal.WorkspaceID, inv.TaskID
+		ws, task := inv.Principal.WorkspaceID, filesTask(inv)
 		if method == "read_file" {
 			return t.readFile(ctx, ws, task, inv.Args)
 		}
@@ -70,7 +82,7 @@ func unknownTool(name string) ToolOutput {
 }
 
 func (t sandboxTools) bash(ctx context.Context, inv ToolInvocation) (ToolOutput, error) {
-	call := sandboxapi.BashCall{WorkspaceID: inv.Principal.WorkspaceID, TaskID: inv.TaskID, WorkflowID: inv.WorkflowID}
+	call := sandboxapi.BashCall{WorkspaceID: inv.Principal.WorkspaceID, TaskID: filesTask(inv), WorkflowID: inv.WorkflowID}
 	call.Command, _ = inv.Args["command"].(string)
 	if v, ok := inv.Args["timeout_seconds"].(float64); ok {
 		n := int(v)

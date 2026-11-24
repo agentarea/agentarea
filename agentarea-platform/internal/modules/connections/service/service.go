@@ -57,6 +57,8 @@ type Deps struct {
 	HeldCalls runsapi.HeldCalls
 	// ClientCalls prices, caps and meters calls outside a run; nil runs them unmetered.
 	ClientCalls runsapi.ClientToolCalls
+	// TaskFiles signs downloads of a runner turn's task files; nil offers no download tool.
+	TaskFiles runsapi.TaskFileURLs
 	// EgressExits is governance's binding check; nil where the edition has
 	// no egress exits, so no instance binds one and no server requires one.
 	EgressExits EgressExitBinding

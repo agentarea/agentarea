@@ -82,6 +82,18 @@ until its agent is saved with the delegate chosen again.
 The tool name is derived from that name, sanitized to `delegate_to_<name>`, and
 both bindings produce the same one-parameter schema: a `message` string.
 
+A local delegate is a subtask: it keeps its own task (its events, cost and
+answer) but works on the delegating task's files. Its file and shell tools read
+and write the delegating task's sandbox, so a file it writes under `outputs/`
+is the delegating task's own file when it answers, ready to declare and to
+deliver. Name the files it should use in the message
+(`inputs/attachments/IMG_6110.MOV`). A delegate on a registered client's runner
+fetches them itself: its turn gets the `agentarea_files_download_url` tool,
+which answers a five-minute download URL for a file, or for each file of a
+folder, of the task it works on (committed files: inputs and uploads); what the
+runner writes under `outputs/` goes back to that task. A remote (A2A) delegate
+shares no files.
+
 ### The local binding
 
 `AgentDelegationTool` builds an `AgentTask` addressed to the target agent id and

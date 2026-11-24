@@ -242,12 +242,13 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 		}(), Counter: d.Counter, Collector: vendorTransport(d.Outbound), Version: buildVersion()})
 	m.runsSurface = newRunsSurface(e, d, runsProviders{Agents: m.agents, Governance: m.governance, Models: m.models, Sandbox: m.sandbox})
 	m.connections.UseHeldCalls(m.runsSurface.HeldCalls())
+	m.connections.UseTaskFiles(m.runsSurface.TaskFileURLs())
 	m.agents.UseA2A(m.runsSurface.A2A(), a2aPushSecrets{db: d.DB, f: d.Secrets}, func(ctx context.Context, rawURL string) error {
 		_, err := d.Outbound.Guard().CheckURL(ctx, rawURL)
 		return err
 	})
 	m.runner = runs.NewRunnerSurface(runs.RunnerDeps{DB: d.DB, Gate: e.gate, Clients: m.agents.RunnerClients(), Slugs: m.identity.WorkspaceSlugs(),
-		Broker: d.Broker, Redis: d.Redis, Files: harness, Artifacts: m.sandbox.TaskFiles(), Workers: d.Durable, Tokens: d.TurnTokens, Live: d.LiveTurns, Log: d.Log})
+		Broker: d.Broker, Redis: d.Redis, Files: harness, Artifacts: m.sandbox.TaskFiles(), Store: m.sandbox.Runtime(), Workers: d.Durable, Tokens: d.TurnTokens, Live: d.LiveTurns, Log: d.Log})
 	m.streamsDeps = streamsDeps(e, d, m)
 	m.streams = streams.New(m.streamsDeps)
 	m.catalog.UseBundles(catalogBundles(d, m))
