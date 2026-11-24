@@ -1,14 +1,10 @@
-import { getTranslations } from "next-intl/server";
-import ContentBlock from "@/components/ContentBlock";
 import FeedSkeleton from "../components/feed/FeedSkeleton";
 
-export default async function Loading() {
-  const t = await getTranslations("EventsPage");
+// The tab's content while it loads; the header and the tabs stay (layout).
+export default function Loading() {
   return (
-    <ContentBlock
-      header={{ breadcrumb: [{ label: t("title"), href: "/events" }] }}
-    >
+    <div className="min-w-0 flex-1 px-4 py-5">
       <FeedSkeleton />
-    </ContentBlock>
+    </div>
   );
 }

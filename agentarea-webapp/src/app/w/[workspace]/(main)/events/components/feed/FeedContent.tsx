@@ -5,10 +5,10 @@ import {
   type FeedState,
 } from "@/lib/eventFeed";
 import type { SourceType } from "@/lib/sourceTypes";
+import { feedPage } from "./feedData";
 import FeedList from "./FeedList";
-import { readFeedPage } from "./feedPage";
 
-/** The rows of the feed's first page. */
+/** The rows of the feed: the first page of it under the view's filters. */
 export default async function FeedContent({
   state,
   streams,
@@ -22,7 +22,7 @@ export default async function FeedContent({
 }) {
   const showPlatform = showsPlatform(state, platformStreams);
   const [page, agentsResult] = await Promise.all([
-    readFeedPage(state, showPlatform),
+    feedPage(state, showPlatform),
     listAgents(),
   ]);
   const agents = (agentsResult.data ?? []).map((a) => ({

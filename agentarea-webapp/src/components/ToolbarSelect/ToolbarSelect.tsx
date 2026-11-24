@@ -106,10 +106,14 @@ export default function ToolbarSelect<T extends string>({
       <PopoverTrigger asChild>
         <ToolbarButton active={open}>
           {selected?.icon ?? icon}
-          <span className="max-sm:sr-only">
+          {/* `data-toolbar-label`: a page may cap its width in a tight toolbar. */}
+          <span data-toolbar-label className="max-sm:sr-only">
             {selected?.triggerLabel ?? selected?.label ?? label}
           </span>
-          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/70" />
+          <ChevronDown
+            data-toolbar-chevron
+            className="h-3.5 w-3.5 text-muted-foreground/70"
+          />
         </ToolbarButton>
       </PopoverTrigger>
       <PopoverContent

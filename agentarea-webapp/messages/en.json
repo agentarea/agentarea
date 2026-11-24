@@ -156,7 +156,9 @@
       "title": "Leave without saving?",
       "description": "The changes on this page are not saved yet. If you leave, they are lost.",
       "leave": "Leave"
-    }
+    },
+    "removeFilter": "Remove filter: {label}",
+    "clearAll": "Clear all"
   },
   "admin": {
     "title": "Admin Dashboard",
@@ -2676,16 +2678,25 @@
       "created": "Created",
       "platformName": "Platform",
       "platformLabel": "Written by the platform",
-      "platformDescription": "What happened to this workspace's tasks: completed, failed, cancelled, or waiting for an approval or an answer. Put a trigger on it to react to another agent's outcome."
+      "platformDescription": "What happened to this workspace's tasks: completed, failed, cancelled, or waiting for an approval or an answer. Put a trigger on it to react to another agent's outcome.",
+      "writtenBy": "Written by",
+      "platformWriter": "The platform",
+      "sourcesWriter": "Its sources"
     },
     "noStreams": "No streams yet",
     "noStreamsDescription": "A stream collects the events of its sources. Create one, then add a source to it.",
     "noMatchingStreams": "No matching streams",
     "feed": {
       "received": "Received",
-      "kind": "Event"
+      "kind": "Event",
+      "key": "Key",
+      "outcome": "Outcome",
+      "older": "Older events",
+      "empty": "Nothing has arrived on this stream yet.",
+      "noneMatching": "No events on this page have that outcome."
     },
     "filter": {
+      "all": "All",
       "reacted": "Reacted",
       "skipped": "Skipped",
       "error": "Error",
@@ -2694,10 +2705,24 @@
       "batched": "In a batch"
     },
     "detail": {
+      "title": "Event {sequence}",
       "data": "Payload",
+      "subscribers": "Subscribers",
+      "trigger": "Trigger",
+      "forward": "Forward",
+      "task": "Task",
+      "score": "Score",
+      "derived": "Forwarded as",
+      "noOutcomes": "No subscription took this event.",
       "causedBy": "Caused by",
+      "close": "Close",
+      "gone": "This event is no longer kept.",
+      "triggersLoadFailed": "Could not load trigger names",
+      "subscriptionsLoadFailed": "Could not load forward links",
+      "streamsLoadFailed": "Could not load stream names",
       "source": "Source",
       "noSource": "No source",
+      "kind": "Kind",
       "key": "Delivery key",
       "session": "Session",
       "noSession": "None",
@@ -2707,6 +2732,7 @@
       "openAttachment": "Open",
       "fetchedByTask": "Fetched when a task opens it",
       "bodyStored": "Body stored as a file",
+      "processor": "Processor",
       "headers": "Headers ({count})",
       "details": "Details",
       "keyHint": "Retries with the same key are dropped.",
@@ -2714,27 +2740,7 @@
       "emptyBody": "Empty body"
     },
     "sources": {
-      "senders": {
-        "label": "Who may write to the bot",
-        "choices": {
-          "owner": "Only me",
-          "ownerOther": "Only whoever set it",
-          "ids": "Telegram IDs",
-          "members": "Members with access"
-        },
-        "hints": {
-          "owner": "The bot answers only you. Write to it once: it sends a link that ties your Telegram to your account.",
-          "ownerOther": "The bot answers only the person who chose this. Choose it yourself to make it you.",
-          "ids": "The bot answers only these Telegram accounts; they need no AgentArea account. Their runs count as yours, checked against what you may run.",
-          "idsOther": "The bot answers only these Telegram accounts; their runs count as whoever made the list. Save the list yourself to answer for it.",
-          "members": "The bot answers anyone who linked their Telegram and may run the agent."
-        },
-        "idsLabel": "Telegram IDs",
-        "idsPlaceholder": "123456789, 987654321",
-        "invalidIds": "Not a numeric Telegram ID: {ids}",
-        "save": "Save",
-        "saveFailed": "Could not change who may write to the bot"
-      },
+      "title": "Sources",
       "empty": "No sources yet. Add one to collect events here without a trigger.",
       "add": "Add source",
       "signedWith": "Signature",
@@ -2767,10 +2773,10 @@
           "keyPlaceholder": "'{body:id}'",
           "session_key": "Session",
           "session_keyPlaceholder": "'{body:conversation.id}'",
-          "summary": "Summary",
-          "summaryPlaceholder": "'{body:title}'",
           "hint": "Templates read the request: '{body:a.b}' for a field of the body, '{header:name}' for a header; text between them is kept as is.",
-          "noKeyHint": "Without a key, a resent request runs the agent again."
+          "noKeyHint": "Without a key, a resent request runs the agent again.",
+          "summary": "Summary",
+          "summaryPlaceholder": "'{body:title}'"
         },
         "events": "Events this provider can send",
         "eventsHint": "Enable these at the provider; every event it sends arrives in the stream.",
@@ -2821,9 +2827,29 @@
       "polledAt": "Polled <time></time>",
       "notPolledYet": "Not polled yet",
       "pollError": "Last poll failed: {error}",
+      "senders": {
+        "label": "Who may write to the bot",
+        "choices": {
+          "owner": "Only me",
+          "ownerOther": "Only whoever set it",
+          "ids": "Telegram IDs",
+          "members": "Members with access"
+        },
+        "hints": {
+          "owner": "The bot answers only you. Write to it once: it sends a link that ties your Telegram to your account.",
+          "ownerOther": "The bot answers only the person who chose this. Choose it yourself to make it you.",
+          "ids": "The bot answers only these Telegram accounts; they need no AgentArea account. Their runs count as yours, checked against what you may run.",
+          "idsOther": "The bot answers only these Telegram accounts; their runs count as whoever made the list. Save the list yourself to answer for it.",
+          "members": "The bot answers anyone who linked their Telegram and may run the agent."
+        },
+        "idsLabel": "Telegram IDs",
+        "idsPlaceholder": "123456789, 987654321",
+        "invalidIds": "Not a numeric Telegram ID: {ids}",
+        "save": "Save",
+        "saveFailed": "Could not change who may write to the bot"
+      },
       "pollFailed": "Last poll failed"
     },
-    "streamsTitle": "Streams",
     "streamsDescription": "Named event streams, their sources and forwards",
     "result": {
       "all": "All",
@@ -2836,8 +2862,9 @@
       "unknown": "Unknown"
     },
     "list": {
+      "filters": "Filters",
       "stream": "Stream",
-      "provider": "Provider",
+      "provider": "Source",
       "kind": "Kind",
       "kindPlaceholder": "order.* or order.paid",
       "result": "Result",
@@ -2851,7 +2878,6 @@
       "newEvents": "{count, plural, one {# new event} other {# new events}}",
       "empty": "Nothing has arrived in this workspace yet.",
       "noneMatching": "No events match these filters.",
-      "onlyPlatform": "Only the platform's own events have arrived here.",
       "older": "Older events",
       "queuedFor": "queued · {age}",
       "tasks": "{count, plural, one {# task} other {# tasks}}",
@@ -2860,16 +2886,19 @@
       "skippedOf": "skipped {done}/{total}",
       "filterSession": "Show the whole session",
       "unknownStream": "Deleted stream",
-      "showPlatform": "Show platform events",
-      "display": "Display",
-      "emptyDescription": "Connect a channel or send to a stream's webhook URL to see events here.",
-      "emptyChannel": "Connect a channel",
-      "emptyStreams": "Browse streams",
+      "platformHidden": "Platform events are hidden.",
+      "emptyTitle": "No events yet",
+      "emptyAction": "Open streams",
+      "noneMatchingTitle": "No matching events",
+      "showPlatformAction": "Show platform events",
+      "onlyPlatformTitle": "Nothing from outside yet",
+      "onlyPlatform": "Only platform events have arrived, and they are hidden from the feed.",
       "loadingOlder": "Loading…"
     },
     "panel": {
       "handlers": "Handlers",
       "pending": "{count, plural, one {# subscriber still to react} other {# subscribers still to react}}",
+      "noHandlers": "No subscription on this stream takes this event.",
       "queued": "Not routed yet.",
       "trigger": "Trigger",
       "forward": "Forward",
@@ -2880,16 +2909,55 @@
       "close": "Close",
       "gone": "This event is no longer kept.",
       "title": "Event",
-      "processor": "Processor"
+      "processor": "Processor",
+      "details": "Details",
+      "received": "Received",
+      "loadFailed": "Could not load the event"
     },
     "processors": {
       "title": "Processors",
       "writesTo": "Writes to",
       "kinds": "on {kinds}",
       "everyEvent": "on every event",
-      "createdAt": "Added <time></time>",
-      "code": "Code (processor.py)",
-      "chip": "{count, plural, one {# processor} other {# processors}}"
+      "createdAt": "Added {time}",
+      "code": "Code (processor.py)"
+    },
+    "sections": {
+      "label": "Events sections",
+      "events": "Events",
+      "streams": "Streams"
+    },
+    "toolbar": {
+      "kindPlaceholder": "Filter by kind: order.* or order.paid",
+      "sourcesCount": "{count, plural, one {# source} other {# sources}}",
+      "origin": "Origin",
+      "origins": {
+        "outside": "From outside",
+        "all": "Outside and platform",
+        "platform": "Platform only"
+      },
+      "allEvents": "All events"
+    },
+    "streamPage": {
+      "label": "Stream sections",
+      "events": "Events",
+      "sources": "Sources",
+      "processors": "Processors",
+      "noSources": "No sources yet",
+      "noProcessors": "No processors read this stream",
+      "deliveries": {
+        "webhook": "Webhook",
+        "poll": "Polling",
+        "platform": "The platform"
+      },
+      "receiving": "Receiving",
+      "pollFailed": "Last poll failed",
+      "takes": "Takes",
+      "source": "Source",
+      "delivery": "Delivery",
+      "address": "Address",
+      "state": "State",
+      "senders": "Senders"
     },
     "row": {
       "attachments": "Has attachments",

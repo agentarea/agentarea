@@ -2,19 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { ArrowUp, MessagesSquare } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import type { FeedEventResponse, Processing } from "@/api/client/types.gen";
-import EmptyState from "@/components/EmptyState";
 import { useViewerZone } from "@/components/EventTime";
 import { Button } from "@/components/ui/button";
-import WorkspaceLink from "@/components/WorkspaceLink";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { ENTITY_ICONS } from "@/lib/entity-icons";
 import {
   applyProcessing,
   applyRecorded,
   dayGroups,
-  feedHref,
   foldRuns,
   matchesResult,
   neighbourEvent,
@@ -23,6 +19,7 @@ import {
 } from "@/lib/eventFeed";
 import type { SourceType } from "@/lib/sourceTypes";
 import { readOlderEventsAction } from "./actions";
+import FeedEmptyState from "./FeedEmptyState";
 import { useFeedLive } from "./FeedLive";
 import FeedRow, { type FeedAgent } from "./FeedRow";
 import { useFeedSelection } from "./FeedSelection";
@@ -227,17 +224,8 @@ export default function FeedList({
   const streamNames = new Map(streams.map((s) => [s.id, s.name]));
   const agentsById = new Map(agents.map((a) => [a.id, a]));
   const streamName = (id: string) => streamNames.get(id) ?? t("unknownStream");
-  const narrowed = Boolean(
-    state.stream ||
-      state.source_type ||
-      state.kind ||
-      state.result ||
-      state.session ||
-      state.sender
-  );
-
   return (
-    <div ref={listRef} className="min-w-0 space-y-5">
+    <div ref={listRef} className="min-w-0 space-y-4">
       {waiting.length > 0 && (
         <div className="sticky top-0 z-10 flex justify-center">
           <Button
@@ -252,33 +240,7 @@ export default function FeedList({
         </div>
       )}
       {rows.length === 0 ? (
-        narrowed ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">
-            {t("noneMatching")}
-          </div>
-        ) : hidesPlatform ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">
-            {t("onlyPlatform")}{" "}
-            <WorkspaceLink
-              href={feedHref(state, { platform: undefined, event: undefined })}
-              scroll={false}
-              className="text-primary hover:underline"
-            >
-              {t("showPlatform")}
-            </WorkspaceLink>
-          </div>
-        ) : (
-          <EmptyState
-            title={t("empty")}
-            description={t("emptyDescription")}
-            icons={[MessagesSquare, ENTITY_ICONS.stream, ENTITY_ICONS.trigger]}
-            action={{ label: t("emptyChannel"), href: "/channels/new" }}
-            additionAction={{
-              label: t("emptyStreams"),
-              href: "/events/streams",
-            }}
-          />
-        )
+        <FeedEmptyState state={state} hidesPlatform={hidesPlatform} />
       ) : (
         <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 [&>div:last-child>div]:border-b-0">
           {groups.map((group) => (

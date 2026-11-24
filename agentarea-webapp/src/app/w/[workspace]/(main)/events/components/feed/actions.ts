@@ -3,7 +3,7 @@
 import type { FeedEventResponse } from "@/api/client/types.gen";
 import { listWorkspaceEvents } from "@/lib/api";
 import { feedApiQuery, type FeedState } from "@/lib/eventFeed";
-import { FEED_PAGE } from "./feedPage";
+import { FEED_PAGE } from "./feedData";
 
 /** The feed's events before `before`, a page of them; null when they could not be read. */
 export async function readOlderEventsAction(

@@ -8,19 +8,21 @@ import {
   eventFate,
   feedApiQuery,
   feedHref,
+  feedOrigin,
   foldRuns,
   formatEventTime,
   legacyStreamQuery,
   liveQuery,
   matchesResult,
   neighbourEvent,
+  originPatch,
   parseFeedState,
-  platformForced,
   platformOutcome,
   processingProgress,
   rowStatusQuiet,
   shortAge,
   showsPlatform,
+  streamFeedHref,
   utcTitle,
 } from "./eventFeed";
 
@@ -71,29 +73,59 @@ describe("the feed's URL state", () => {
         kind: "order.*",
         result: "error",
         session: "src:alice",
-        event: "e1",
+        event: "0f8c2a1e-5b7d-4c3a-9e21-6d4b8a7c9f10",
         tab: "grid",
-        source_type: ["a", "b"],
       })
     ).toEqual({
       stream: "s1",
       kind: "order.*",
       result: "error",
       session: "src:alice",
-      event: "e1",
+      event: "0f8c2a1e-5b7d-4c3a-9e21-6d4b8a7c9f10",
     });
+  });
+
+  it("reads one source and writes it back", () => {
+    expect(parseFeedState({ source_type: "slack" })).toEqual({
+      source_type: "slack",
+    });
+    expect(parseFeedState({ source_type: ["slack", "github"] })).toEqual({});
+    expect(feedHref({ source_type: "slack" })).toBe(
+      "/events?source_type=slack"
+    );
+  });
+
+  it("opens an event only by its id; an old link's sequence opens nothing", () => {
+    const id = "97193960-b93c-4d71-b67f-1937d4ea293f";
+    expect(parseFeedState({ event: id })).toEqual({ event: id });
+    expect(parseFeedState({ event: "2" })).toEqual({});
   });
 
   it("ignores a result the API does not have", () => {
     expect(parseFeedState({ result: "maybe" })).toEqual({});
   });
 
-  it("reads the platform switch only as 1", () => {
-    expect(parseFeedState({ platform: "0" })).toEqual({ platform: "0" });
+  it("a stream's feed lives under its page and leaves its stream out", () => {
+    const path = { base: "/events/s1", pinned: ["stream"] as const };
+    expect(feedHref({ stream: "s1" }, { result: "error" }, path)).toBe(
+      "/events/s1?result=error"
+    );
+    expect(feedHref({ stream: "s1" }, {}, path)).toBe("/events/s1");
+    expect(streamFeedHref("s 1", "e1")).toBe("/events/s%201?event=e1");
+  });
+
+  it("reads the origin it knows, and an old link's platform=0 as outside", () => {
+    expect(parseFeedState({ origin: "outside" })).toEqual({
+      origin: "outside",
+    });
+    expect(parseFeedState({ origin: "platform" })).toEqual({
+      origin: "platform",
+    });
+    expect(parseFeedState({ origin: "all" })).toEqual({});
+    expect(parseFeedState({ platform: "0" })).toEqual({ origin: "outside" });
     expect(parseFeedState({ platform: "1" })).toEqual({});
-    expect(parseFeedState({ platform: "true" })).toEqual({});
-    expect(feedHref({ platform: "0" }, { stream: "s1" })).toBe(
-      "/events/s1?platform=0"
+    expect(feedHref({ origin: "outside" }, { stream: "s1" })).toBe(
+      "/events?stream=s1&origin=outside"
     );
   });
 
@@ -104,15 +136,6 @@ describe("the feed's URL state", () => {
       "/events?kind=order.*"
     );
     expect(feedHref({})).toBe("/events");
-  });
-
-  it("puts the stream in the path and keeps the other filters in the query", () => {
-    const state = { stream: "s 1", result: "error" as const, event: "e1" };
-    expect(feedHref(state)).toBe("/events/s%201?result=error&event=e1");
-    expect(feedHref({ stream: "s1" })).toBe("/events/s1");
-    expect(feedHref(state, { stream: undefined, event: undefined })).toBe(
-      "/events?result=error"
-    );
   });
 
   it("links an event by its id", () => {
@@ -154,21 +177,57 @@ describe("the feed's URL state", () => {
 describe("the platform's own events", () => {
   const platformStreams = ["p1"];
 
-  it("are shown unless the switch is off", () => {
-    expect(showsPlatform({}, platformStreams)).toBe(true);
+  it("are shown unless the origin leaves them out", () => {
+    expect(feedOrigin({}, platformStreams)).toBe("all");
     expect(showsPlatform({ stream: "s1" }, platformStreams)).toBe(true);
-    expect(showsPlatform({ platform: "0" }, platformStreams)).toBe(false);
+    expect(feedOrigin({ origin: "outside" }, platformStreams)).toBe("outside");
+    expect(showsPlatform({ origin: "outside" }, platformStreams)).toBe(false);
+    expect(feedOrigin({ origin: "platform" }, platformStreams)).toBe(
+      "platform"
+    );
   });
 
-  it("are shown whatever the switch says when the view is the platform's", () => {
+  it("are what the view holds when its filter is the platform's", () => {
     for (const state of [
-      { stream: "p1", platform: "0" as const },
-      { source_type: "platform", platform: "0" as const },
+      { stream: "p1", origin: "outside" as const },
+      { source_type: "platform", origin: "outside" as const },
     ]) {
-      expect(platformForced(state, platformStreams)).toBe(true);
+      expect(feedOrigin(state, platformStreams)).toBe("platform");
       expect(showsPlatform(state, platformStreams)).toBe(true);
     }
-    expect(platformForced({ platform: "0" }, platformStreams)).toBe(false);
+  });
+
+  it("only the platform's asks the API for its source alone", () => {
+    expect(
+      feedApiQuery({ origin: "platform", source_type: "slack" }, true)
+    ).toMatchObject({ source_type: "platform", platform: undefined });
+    expect(feedApiQuery({ source_type: "slack" }, false).source_type).toBe(
+      "slack"
+    );
+  });
+
+  it("switching origin drops the filters that contradict it", () => {
+    expect(
+      originPatch(
+        { stream: "p1", source_type: "platform" },
+        platformStreams,
+        "outside"
+      )
+    ).toEqual({ origin: "outside", stream: undefined, source_type: undefined });
+    expect(
+      originPatch({ source_type: "slack" }, platformStreams, "platform")
+    ).toEqual({
+      origin: "platform",
+      stream: undefined,
+      source_type: undefined,
+    });
+    expect(
+      originPatch(
+        { stream: "s1", source_type: "slack" },
+        platformStreams,
+        "all"
+      )
+    ).toEqual({ origin: undefined, stream: "s1", source_type: "slack" });
   });
 });
 

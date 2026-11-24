@@ -1,16 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import type { StreamEventResponse } from "@/api/client/types.gen";
 import CopyContentsButton from "@/components/CopyContentsButton";
-import EventTime from "@/components/EventTime";
 import { TextPreview } from "@/components/files/text-preview";
-import SourceTypeMark from "@/components/SourceTypeMark";
-import WorkspaceLink from "@/components/WorkspaceLink";
-import { eventByIdHref } from "@/lib/eventFeed";
-import type { SourceType } from "@/lib/sourceTypes";
-import { formatFileSize } from "@/utils/fileUtils";
 
 const DETAILS = "group rounded-md border border-zinc-200 dark:border-zinc-700";
 const SUMMARY =
@@ -94,133 +87,6 @@ export function EventHeaders({ event }: { event: StreamEventResponse }) {
           <div key={name} className="break-all font-mono text-xs">
             <dt className="inline text-muted-foreground">{name}:</dt>{" "}
             <dd className="inline">{String(value)}</dd>
-          </div>
-        ))}
-      </dl>
-    </details>
-  );
-}
-
-/** The files that came with the event. */
-export function EventAttachments({ event }: { event: StreamEventResponse }) {
-  const t = useTranslations("EventsPage.detail");
-  if (event.attachments.length === 0) return null;
-  return (
-    <div>
-      <h3 className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
-        {t("attachments")}
-      </h3>
-      <ul className="space-y-1">
-        {event.attachments.map((file, index) => (
-          <li
-            key={`${file.sha256}-${index}`}
-            className="card-item flex items-center justify-between gap-3 px-3 py-2"
-          >
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{file.name}</p>
-              <p className="note truncate">
-                {[file.mime, file.size != null && formatFileSize(file.size)]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-            </div>
-            {file.url ? (
-              <a
-                href={file.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="shrink-0 text-xs text-primary hover:underline"
-              >
-                {t("openAttachment")}
-              </a>
-            ) : (
-              <span className="note shrink-0">{t("fetchedByTask")}</span>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-/**
- * The envelope every event has, whatever sent it (ADR-0040 §2), folded: which
- * catalog entry it came through, its key, session and sender, when it
- * happened and what caused it. Nothing is parsed out of the provider's body.
- */
-export function EventFacts({
-  event,
-  sourceType,
-}: {
-  event: StreamEventResponse;
-  sourceType: SourceType | undefined;
-}) {
-  const t = useTranslations("EventsPage.detail");
-  const mono = (value: string) => (
-    <span className="break-all font-mono text-xs">{value}</span>
-  );
-  const facts: { label: string; value: ReactNode; title?: string }[] = [
-    {
-      label: t("source"),
-      value: event.source_type ? (
-        <span className="flex min-w-0 items-center gap-1.5">
-          <SourceTypeMark type={sourceType} inline className="h-3.5 w-3.5" />
-          <span className="truncate">
-            {sourceType?.name ?? event.source_type}
-          </span>
-        </span>
-      ) : (
-        t("noSource")
-      ),
-    },
-    { label: t("key"), value: mono(event.key), title: t("keyHint") },
-    {
-      label: t("session"),
-      value: event.session_key ? (
-        mono(event.session_key)
-      ) : (
-        <span title={t("noSessionHint")}>{t("noSession")}</span>
-      ),
-    },
-    ...(event.sender
-      ? [{ label: t("sender"), value: mono(event.sender) }]
-      : []),
-    ...(event.occurred_at
-      ? [
-          {
-            label: t("occurredAt"),
-            value: <EventTime value={event.occurred_at} style="full" />,
-          },
-        ]
-      : []),
-    ...(event.causation_id
-      ? [
-          {
-            label: t("causedBy"),
-            value: (
-              <WorkspaceLink
-                href={eventByIdHref(event.causation_id)}
-                className="font-mono text-xs text-primary hover:underline"
-                title={event.causation_id}
-              >
-                {event.causation_id.slice(0, 8)}
-              </WorkspaceLink>
-            ),
-          },
-        ]
-      : []),
-  ];
-
-  return (
-    <details className={DETAILS}>
-      <summary className={SUMMARY}>{t("details")}</summary>
-      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 border-t border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700">
-        {facts.map((fact) => (
-          <div key={fact.label} className="contents">
-            <dt className="text-muted-foreground" title={fact.title}>
-              {fact.label}
-            </dt>
-            <dd className="min-w-0">{fact.value}</dd>
           </div>
         ))}
       </dl>

@@ -1,7 +1,7 @@
-// An event by its id, whichever stream holds it: what a forward or a cause links to.
+// An event by its id, whichever stream holds it: opened in its stream's feed.
 import { redirect } from "next/navigation";
 import { getStreamEventById } from "@/lib/api";
-import { feedHref } from "@/lib/eventFeed";
+import { streamFeedHref } from "@/lib/eventFeed";
 import { requireApiData } from "@/lib/server-resource";
 import { workspacePath } from "@/lib/workspace-routes";
 
@@ -16,9 +16,6 @@ export default async function StreamEventByIdPage({ params }: Props) {
     "stream event"
   );
   redirect(
-    workspacePath(
-      workspace,
-      feedHref({ stream: event.stream_id, event: event.event_id })
-    )
+    workspacePath(workspace, streamFeedHref(event.stream_id, event.event_id))
   );
 }
