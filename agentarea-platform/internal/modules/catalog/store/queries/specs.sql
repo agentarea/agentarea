@@ -1,19 +1,19 @@
 -- name: ProviderSpecByID :one
 SELECT id, provider_key, provider_type, name, description, icon, is_builtin, is_first_party, requires_api_key,
     base_url, transport, auth, models_path, list_shape, models_query, reasoning_param, reasoning_efforts,
-    cache_breakpoints, workspace_id, created_by, created_at, updated_at
+    cache_breakpoints, max_image_bytes, max_image_edge, pdf_input, workspace_id, created_by, created_at, updated_at
 FROM provider_specs WHERE id = @id;
 
 -- name: ProviderSpecByKey :one
 SELECT id, provider_key, provider_type, name, description, icon, is_builtin, is_first_party, requires_api_key,
     base_url, transport, auth, models_path, list_shape, models_query, reasoning_param, reasoning_efforts,
-    cache_breakpoints, workspace_id, created_by, created_at, updated_at
+    cache_breakpoints, max_image_bytes, max_image_edge, pdf_input, workspace_id, created_by, created_at, updated_at
 FROM provider_specs WHERE provider_key = @provider_key;
 
 -- name: ProviderSpecsByIDs :many
 SELECT id, provider_key, provider_type, name, description, icon, is_builtin, is_first_party, requires_api_key,
     base_url, transport, auth, models_path, list_shape, models_query, reasoning_param, reasoning_efforts,
-    cache_breakpoints, workspace_id, created_by, created_at, updated_at
+    cache_breakpoints, max_image_bytes, max_image_edge, pdf_input, workspace_id, created_by, created_at, updated_at
 FROM provider_specs WHERE id = ANY(@ids::uuid[]);
 
 -- name: ModelSpecsByIDs :many
@@ -130,7 +130,7 @@ WHERE r.registry_type = 'llm_models' AND ri.registry_active AND ri.id = @id;
 -- name: OfferedProviderSpecs :many
 SELECT id, provider_key, provider_type, name, description, icon, is_builtin, is_first_party, requires_api_key,
     base_url, transport, auth, models_path, list_shape, models_query, reasoning_param, reasoning_efforts,
-    cache_breakpoints, workspace_id, created_by, created_at, updated_at
+    cache_breakpoints, max_image_bytes, max_image_edge, pdf_input, workspace_id, created_by, created_at, updated_at
 FROM provider_specs ps
 WHERE (NOT EXISTS (SELECT 1 FROM registry_items ri WHERE ri.installed_entity_id = ps.id AND ri.registry_type = 'llm_providers')
     OR EXISTS (SELECT 1 FROM registry_items ri WHERE ri.installed_entity_id = ps.id AND ri.registry_type = 'llm_providers' AND ri.in_source IS TRUE)

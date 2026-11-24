@@ -106,7 +106,7 @@ export function buildNetworkGraph(
 
   const roster = people?.people ?? [];
   for (const decision of people?.access ?? []) {
-    if (!known.has(decision.agent_id)) continue;
+    if (!decision.allowed || !known.has(decision.agent_id)) continue;
     if (!roster.some((person) => person.user_id === decision.user_id)) continue;
     const id = `person_access:${decision.user_id}:${decision.agent_id}`;
     if (seen.has(id)) continue;
@@ -124,8 +124,12 @@ export function buildNetworkGraph(
   const degree = new Map<string, number>();
   const consumed = new Set<string>();
   for (const edge of edges) {
-    degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1);
-    degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
+    // People load later and only for admins; counting them would resize
+    // agents after the first draw.
+    if (edge.relation !== "person_access") {
+      degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1);
+      degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
+    }
     if (edge.relation !== "has_trigger" && edge.relation !== "member_of") {
       consumed.add(edge.target);
     }

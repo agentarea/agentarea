@@ -2,8 +2,11 @@ version: "3.8"
 
 # The platform roles build from agentarea-platform: `agentarea all` (app: the
 # API, the Temporal worker and the event consumers in one process), `mcp`
-# (mcp-manager), `migrate`, `reconcile` and `init-buckets`. Rebuild after a
-# change: `docker compose -f docker-compose.dev.yaml up -d --build app`.
+# (mcp-manager), `migrate`, `reconcile` and `init-buckets`. app hot-reloads:
+# it runs air over the mounted source (agentarea-platform/.air.toml) and
+# rebuilds on save; `docker compose logs -f app` shows the builds. The other
+# roles run the built image; rebuild them after a change with
+# `docker compose -f docker-compose.dev.yaml up -d --build mcp-manager`.
 x-platform: &platform
   image: agentarea/agentarea-platform:dev
   build:
@@ -124,9 +127,12 @@ x-platform-env: &platform-env
 
 services:
   app:
-    <<: *platform
+    image: agentarea/agentarea-platform:hot
+    build:
+      context: agentarea-platform
+      dockerfile: Dockerfile
+      target: dev
     container_name: agentarea-backend
-    command: ["all"]
     # Root for the mounted docker socket: the API and the worker run the MCP runtime in process.
     user: "0"
     ports:
@@ -135,12 +141,19 @@ services:
     environment:
       <<: *platform-env
       PORT: "8000"
+      # Hot reload restarts the process on every save: stop well inside air's
+      # kill_delay so the next binary finds :8000 free. Open SSE streams would
+      # otherwise hold the default 30s.
+      AGENTAREA_SHUTDOWN_TIMEOUT: 3s
       AGENTAREA_TEMPORAL_MAX_ACTIVITIES: "10"
       AGENTAREA_TEMPORAL_MAX_WORKFLOWS: "5"
       AGENTAREA_EVENT_POLL_INTERVAL: 30s
       AGENTAREA_EVENT_MAX_POLLERS: "10"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./agentarea-platform:/src/agentarea/agentarea-platform
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -159,6 +172,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 30
+      # The first build compiles every dependency into an empty cache.
+      start_period: 5m
     networks:
       - default
       - temporal-network
@@ -754,6 +769,9 @@ volumes:
   postgres_data:
   valkey_data:
   rustfs_data:
+  # app's Go module and build caches, so a rebuild compiles only what changed.
+  go-mod-cache:
+  go-build-cache:
 
 networks:
   mcp-network:

@@ -793,7 +793,7 @@ func copyWith(m map[string]any, k string, v any) map[string]any {
 // ProviderContractFields are PROVIDER_CONTRACT_FIELDS.
 func ProviderContractFields() []string {
 	return []string{"base_url", "transport", "auth", "models_path", "list_shape", "models_query",
-		"reasoning_param", "reasoning_efforts", "cache_breakpoints"}
+		"reasoning_param", "reasoning_efforts", "cache_breakpoints", "max_image_bytes", "max_image_edge", "pdf_input"}
 }
 
 func parseProviders(m map[string]any) ([]Entry, error) {

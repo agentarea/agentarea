@@ -23,6 +23,17 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
     GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /out/agentarea ./cmd/agentarea
 
+# The development stack's hot-reload image (docker-compose.dev.yaml `app`): the
+# Go toolchain and air, which rebuild and restart `agentarea` from the mounted
+# source (.air.toml). Not a release image; the default target stays the last stage.
+FROM ${GO_IMAGE} AS dev
+ENV CGO_ENABLED=0 GOTOOLCHAIN=auto GOFLAGS=-mod=readonly
+RUN apk add --no-cache ca-certificates tzdata docker-cli
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    go install github.com/air-verse/air@v1.67.4
+WORKDIR /src
+ENTRYPOINT ["air", "-c", "/src/agentarea/agentarea-platform/.air.toml"]
+
 FROM ${RUNTIME_IMAGE}
 RUN apk add --no-cache ca-certificates tzdata docker-cli \
     && adduser -D -H -u 10001 agentarea

@@ -3637,11 +3637,14 @@ export const zCollectionDetailResponse = z.object({
  * Skill response model.
  */
 export const zSkillResponse = z.object({
+  agent_count: z.int().optional().default(0),
+  bundle: z.string().nullish().default(null),
   created_at: z.string(),
   customized: z.boolean().optional().default(false),
   description: z.string().nullable(),
   id: z.string(),
   is_catalog: z.boolean().optional().default(false),
+  latest_version: z.string().nullish().default(null),
   name: z.string(),
   network_scope: z.string(),
   registry_item_id: z.string().nullish(),
@@ -3651,11 +3654,13 @@ export const zSkillResponse = z.object({
     .enum(["official", "verified", "community", "private"])
     .nullish(),
   removed_upstream: z.boolean().optional().default(false),
+  revision: z.int().optional().default(0),
   slug: z.string(),
   source_type: z.string(),
   source_url: z.string().nullable(),
   update_available: z.boolean().optional().default(false),
   updated_at: z.string(),
+  version: z.string().nullish().default(null),
   workspace_id: z.string(),
 });
 
@@ -6291,7 +6296,7 @@ export const zGetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetRespo
 
 export const zGetInboxItemsV1InboxGetQuery = z.object({
   status: z
-    .enum(["waiting_for_approval", "waiting_for_input", "completed", "failed"])
+    .enum(["waiting_for_approval", "waiting_for_input", "blocked"])
     .nullish(),
   agent_id: z.uuid().nullish(),
   page: z.int().gte(1).lte(1000000).optional().default(1),

@@ -123,3 +123,15 @@ SELECT concat('skills/', workspace_id, '/', id::text, '/')::text AS prefix FROM 
 WHERE id IN (SELECT v.skill_id FROM skill_versions v WHERE v.reason = 'migrate' AND v.created_at < sqlc.arg(moved_before)::timestamp)
   AND s3_path IS DISTINCT FROM concat('skills/', workspace_id, '/', id::text, '/')
 ORDER BY workspace_id, id;
+
+-- name: SkillAgentCounts :many
+SELECT a.skill_id, count(*)::bigint AS agents
+FROM agent_skills a JOIN agents g ON g.id = a.agent_id
+WHERE g.workspace_id = @workspace_id AND g.status <> 'archived' AND a.skill_id = ANY(@ids::uuid[])
+GROUP BY a.skill_id;
+
+-- name: SkillRevisions :many
+SELECT skill_id, count(*)::bigint AS revisions
+FROM skill_versions
+WHERE workspace_id = @workspace_id AND skill_id = ANY(@ids::uuid[])
+GROUP BY skill_id;

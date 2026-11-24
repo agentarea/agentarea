@@ -4394,8 +4394,7 @@
          "enum": [
           "waiting_for_approval",
           "waiting_for_input",
-          "completed",
-          "failed"
+          "blocked"
          ],
          "type": "string"
         },
@@ -9670,8 +9669,7 @@
          "enum": [
           "waiting_for_approval",
           "waiting_for_input",
-          "completed",
-          "failed"
+          "blocked"
          ],
          "type": "string"
         },

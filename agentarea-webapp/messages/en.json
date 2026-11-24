@@ -237,7 +237,6 @@
     "network": "Network",
     "members": "Members",
     "budgets": "Budgets",
-    "accessControl": "Access control",
     "secrets": "Secrets",
     "policies": "Policies",
     "settings": "Settings",
@@ -402,7 +401,6 @@
       "automationsOutlive": "These act as their agents, not as {member}: they keep running after {member} leaves, and the tasks they start stay attributed to them.",
       "automationsOutliveSelf": "These act as their agents, not as you: they keep running if you leave, and the tasks they start stay attributed to you.",
       "directAccess": "Direct access",
-      "accessView": "Access view",
       "grantsUnavailable": "Couldn’t load access grants",
       "noGrants": "Nothing is granted to this person directly.",
       "moreGrants": "and {count} more",
@@ -417,7 +415,8 @@
         "owner": "Owner",
         "editor": "Editor",
         "user": "User"
-      }
+      },
+      "openInNetwork": "Open in network"
     }
   },
   "InvitationDialog": {
@@ -1701,6 +1700,20 @@
     "runnerOffline": "{name} is offline: the task waits up to 10 minutes for it to come back."
   },
   "TasksPage": {
+    "sectionExpected": "Expected",
+    "sectionRuns": "Started",
+    "sectionTemplates": "Templates",
+    "runNow": "Run now",
+    "runFailed": "Could not start",
+    "open": "Open",
+    "expectedWhen": "When",
+    "expectedEmptyTitle": "Nothing expected",
+    "expectedEmptyDescription": "Enabled schedules and tasks booked for later show up here.",
+    "expectedLoadFailed": "Could not load what is expected",
+    "savedTitle": "Saved tasks",
+    "savedName": "Task",
+    "savedEmptyTitle": "No saved tasks",
+    "savedEmptyDescription": "Saved tasks come from a deployed folder's tasks/ or the API.",
     "title": "Tasks",
     "description": "Description",
     "agent": "Agent",
@@ -1785,7 +1798,6 @@
     "title": "Skills",
     "description": "Manage reusable skills that can be assigned to agents",
     "rowActions": {
-      "favorite": "Favorite skill",
       "duplicate": "Duplicate skill"
     },
     "addSkill": "Add Skill",
@@ -1827,19 +1839,7 @@
       "pageStatus": "Page {page} of {totalPages}"
     },
     "filters": {
-      "source": "Source",
-      "allSources": "All sources",
-      "scope": "Scope",
-      "allScopes": "All scopes",
-      "all": "All",
-      "clear": "Clear",
-      "scopeValues": {
-        "private": "Private",
-        "ingress": "Ingress",
-        "egress": "Egress"
-      },
-      "filter": "Filter",
-      "accessibleLabel": "Filter skills"
+      "clear": "Clear"
     },
     "table": {
       "name": "Name",
@@ -1869,7 +1869,10 @@
       "editable": "Editable",
       "catalogTemplate": "Catalog template",
       "customize": "Customize",
-      "installing": "Adding..."
+      "installing": "Adding...",
+      "duplicate": "Duplicate",
+      "managedByBundle": "Managed by bundle {bundle}",
+      "managedByBundleHint": "Change it in the bundle and redeploy; an edit made here would be overwritten. To change it here, duplicate it as a workspace skill."
     },
     "source": {
       "github": "GitHub",
@@ -1959,10 +1962,6 @@
       "chipSkillInside": "SKILL.md inside"
     },
     "display": {
-      "grouping": "Grouping",
-      "source": "Source",
-      "scope": "Scope",
-      "none": "No grouping",
       "ordering": "Ordering",
       "name": "Name",
       "created": "Created",
@@ -2003,8 +2002,11 @@
         "failed": "Failed"
       },
       "removedUpstream": "Removed upstream",
-      "removedUpstreamHint": "The registry no longer publishes this skill. The installed copy keeps working."
-    }
+      "removedUpstreamHint": "The registry no longer publishes this skill. The installed copy keeps working.",
+      "bundle": "Bundle · {name}",
+      "bundleHint": "Deployed by this bundle. Change it in the bundle and redeploy."
+    },
+    "agentCount": "{count, plural, =0 {No agents} one {# agent} other {# agents}}"
   },
   "TaskArtifactsPage": {
     "treeLabel": "Artifacts",
@@ -2327,8 +2329,6 @@
     "searchPlaceholder": "Search triggers & agents…",
     "onStreamEvents": "On stream events",
     "filter": {
-      "all": "All",
-      "channels": "Channels",
       "events": "Events",
       "schedules": "Schedules"
     },
@@ -2344,9 +2344,6 @@
     "noTriggersHintHistory": "Every fire is recorded, so you can see what ran and why",
     "noMatchingTriggers": "No triggers match your search",
     "noMatchingTriggersDescription": "No triggers match your search \"{query}\"",
-    "noTriggersOfType": "No triggers of this type",
-    "noTriggersOfTypeDescription": "The rest of your triggers are under All.",
-    "showAllTriggers": "Show all",
     "table": {
       "name": "Name",
       "type": "Type",
@@ -2359,8 +2356,8 @@
       "when": "When"
     },
     "type": {
-      "cron": "Cron",
-      "stream": "Stream"
+      "cron": "Schedule",
+      "stream": "Stream events"
     },
     "status": {
       "active": "Active",
@@ -2625,6 +2622,15 @@
       "weekly": "Every {day, select, 0 {Sunday} 1 {Monday} 2 {Tuesday} 3 {Wednesday} 4 {Thursday} 5 {Friday} 6 {Saturday} other {day}} at {time}",
       "daily": "Every day at {time}",
       "monthly": "Monthly on the {day, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} at {time}"
+    },
+    "groups": {
+      "channel": "Channel conversations",
+      "event": "On events",
+      "schedule": "On a schedule"
+    },
+    "switch": {
+      "turnOn": "Turn on “{name}”",
+      "turnOff": "Turn off “{name}”"
     }
   },
   "EventsPage": {
@@ -2910,7 +2916,8 @@
         "has_trigger": "Starts",
         "has_skill": "Has skill",
         "uses_mcp": "Uses server",
-        "uses_openapi": "Calls API"
+        "uses_openapi": "Calls API",
+        "member_of": "Part of"
       }
     },
     "accessDetails": {
@@ -2954,7 +2961,8 @@
       "refreshError": "Could not refresh the network. Showing the last loaded map.",
       "retry": "Try again",
       "emptyTitle": "Your network starts with an agent",
-      "emptyDescription": "Add an agent, trigger or connection. Configured relationships will appear here."
+      "emptyDescription": "Add an agent, trigger or connection. Configured relationships will appear here.",
+      "emptyAction": "Create an agent"
     },
     "people": {
       "title": "Members",
@@ -2998,7 +3006,8 @@
         "uses_mcp": "This MCP resource is connected to the source agent. Access to a specific tool depends on the execution rules.",
         "uses_openapi": "This API connection is attached to the source agent. Access to a specific operation depends on the execution rules.",
         "has_skill": "This skill is attached to the source agent configuration.",
-        "person_access": "Request access to this agent was evaluated against the current admission rules."
+        "person_access": "Request access to this agent was evaluated against the current admission rules.",
+        "member_of": "This skill is part of the selected skill."
       },
       "unknownRelation": "This connection is present in the network configuration.",
       "scope": {
@@ -3064,14 +3073,13 @@
       },
       "legend": {
         "agent": "Agent",
-        "internal": "Internal resource",
-        "external": "External system",
         "trigger": "Trigger",
         "delegates": "Delegates",
         "uses": "Uses",
         "starts": "Starts",
         "inbound": "Data in",
-        "outbound": "Data out"
+        "outbound": "Data out",
+        "resource": "Resource"
       },
       "isolated": "Not connected · {count}",
       "modes": {
@@ -3453,12 +3461,13 @@
     "stopped": "Stopped",
     "activity": "Activity",
     "scheduleView": {
+      "upcoming": "Upcoming",
       "today": "Today",
       "week": "Week",
       "month": "Month"
     },
     "nextRun": "Next run: {title}, {when}",
-    "nothingInView": "{view, select, today {Nothing scheduled today} week {Nothing scheduled this week} other {Nothing scheduled this month}}"
+    "nothingInView": "{view, select, upcoming {Nothing coming up} today {Nothing scheduled today} week {Nothing scheduled this week} other {Nothing scheduled this month}}"
   },
   "BudgetsPage": {
     "couldntLoadTitle": "Couldn't load budget data",
@@ -3637,8 +3646,7 @@
       "all": "All",
       "pending": "Needs approval",
       "input": "Needs input",
-      "completed": "Completed",
-      "failed": "Failed",
+      "blocked": "Blocked",
       "decided": "Decided"
     },
     "row": {
@@ -3646,9 +3654,9 @@
       "unknownAgent": "Unknown agent",
       "request": "Request {tool}",
       "waiting": "Waiting for approval",
-      "resultAvailable": "Result available",
-      "taskFailed": "Task failed",
-      "taskActivity": "Task activity",
+      "needsInput": "Waiting for your answer",
+      "blocked": "Blocked: needs you",
+      "resuming": "Moving on",
       "select": "Select task"
     },
     "selection": {
@@ -3674,8 +3682,8 @@
     },
     "emptyList": {
       "all": {
-        "title": "No inbox decisions yet",
-        "description": "When an agent needs approval, completes a governed action, or fails a controlled step, it will appear here for review."
+        "title": "Nothing waits on you",
+        "description": "When an agent needs an approval, asks a question, or is blocked on something only you can supply, it lands here. Finished and failed runs stay in task history."
       },
       "pending": {
         "title": "Approval queue is clear",
@@ -3685,13 +3693,9 @@
         "title": "No agent is waiting for input",
         "description": "When an agent stops to ask a question, it will appear here until someone answers it."
       },
-      "completed": {
-        "title": "No completed approvals",
-        "description": "Approved actions will appear here after operators release them, so you can audit what moved forward."
-      },
-      "failed": {
-        "title": "No rejected or failed approvals",
-        "description": "Rejected actions and failed escalations will appear here when a governed path is stopped."
+      "blocked": {
+        "title": "No agent is blocked",
+        "description": "When an agent stops on a prerequisite only you can supply, it appears here. Reply in the task to give it what it needs."
       },
       "viewAll": "View all",
       "taskHistory": "Open task history",
@@ -3754,10 +3758,6 @@
         "title": "Policies need a workspace admin",
         "description": "Only a workspace admin can view and change the policies that govern agents here."
       },
-      "accessControl": {
-        "title": "Access control needs a workspace admin",
-        "description": "Only a workspace admin can view and change who has access to what in this workspace."
-      },
       "policyEditor": {
         "title": "Editing policies needs a workspace admin",
         "description": "Only a workspace admin can create or edit policies in this workspace."
@@ -3808,21 +3808,9 @@
     "title": "Policies",
     "newPolicy": "New policy",
     "newRule": "New rule",
-    "tabs": {
-      "policies": "Policies",
-      "access": "Access"
-    },
     "empty": {
       "title": "No policies yet — agents run unrestricted",
       "description": "A policy governs what agents may do: which tools they call, what they spend, what needs approval."
-    },
-    "accessControl": {
-      "loadFailedTitle": "Couldn't load access control",
-      "loadFailed": "Failed to load access control",
-      "graphLoadFailed": "Failed to load the access-control graph",
-      "rulesLoadFailed": "Failed to load access-control rules",
-      "collectionsLoadFailed": "Failed to load skill collections",
-      "noData": "Access-control API returned no data"
     },
     "editor": {
       "loadFailedTitle": "Couldn't load policy",
@@ -3830,9 +3818,7 @@
       "breadcrumbPolicies": "Policies",
       "titles": {
         "edit": "Edit policy rule",
-        "newPolicy": "New policy rule",
-        "newAgent": "New agent policy",
-        "newWorkspace": "New workspace rule"
+        "newPolicy": "New policy rule"
       },
       "actions": {
         "addRule": "Add rule",
@@ -3841,17 +3827,17 @@
         "delete": "Delete",
         "deleteFailed": "Delete failed",
         "saveFailed": "Save failed",
-        "saveRule": "Save rule"
+        "saveRule": "Save rule",
+        "deleteTitle": "Delete this rule?",
+        "deleteText": "Agents stop following it right away. This can't be undone."
       },
       "sections": {
-        "controlPlane": "Policy control plane",
         "rules": "Policy Rules",
         "configuration": "Rule Config",
         "ruleType": "Rule type",
         "ruleTypeFixed": "The rule type is fixed once a rule is created.",
         "enabled": "Enabled",
-        "disabled": "Disabled",
-        "impactRail": "Impact Rail"
+        "disabled": "Disabled"
       },
       "effects": {
         "allow": "Allow",
@@ -3862,20 +3848,16 @@
         "install": "Installs"
       },
       "scope": {
-        "policyDescription": "This policy applies to {scope}. Tool access grants are managed in the <accessView>Access view</accessView>.",
+        "policyDescription": "This policy applies to {scope}.",
         "allAgentsInWorkspace": "every agent in this workspace",
         "selectedAgent": "the selected agent",
         "selectedAgents": "the selected agents",
-        "target": "Target",
-        "workspace": "Workspace",
         "allAgentsOption": "All agents",
         "selectedAgentsOption": "Selected agents",
         "selectAgentPlaceholder": "Select an agent",
         "addAgent": "Add agent",
         "removeAgent": "Remove {agent}",
         "addAgentsPrompt": "Add agents to scope this policy.",
-        "toolAccessManaged": "Granting tool access is managed in the",
-        "accessView": "Access view",
         "affectedAgents": "Affected agents",
         "workspaceAgentCount": "{count, plural, one {# workspace agent} other {# workspace agents}}",
         "selectedAgentCount": "{count, plural, one {# selected agent} other {# selected agents}}",
@@ -3883,9 +3865,9 @@
         "agent": "Agent",
         "noAgentsInWorkspace": "No agents in this workspace yet.",
         "selectAgentPreview": "Select an agent to preview the affected scope.",
-        "moreAgents": "{count, plural, one {+# more agent} other {+# more agents}}"
+        "moreAgents": "{count, plural, one {+# more agent} other {+# more agents}}",
+        "appliesTo": "Applies to"
       },
-      "ruleIndex": "Rule {number}",
       "removeRule": "Remove rule {number}",
       "budget": {
         "type": "Budget type",
@@ -3949,20 +3931,10 @@
         "installWorkspaceOnly": "Install rules apply to the whole workspace, not to agents. Switch the scope to all agents."
       },
       "summary": {
-        "agentScopePending": "agent scope pending",
-        "workspaceScopeMissing": "workspace scope missing",
         "scope": "Scope",
-        "workspace": "Workspace",
         "agentCount": "{count, plural, one {# agent} other {# agents}}",
-        "drafts": "Drafts",
-        "active": "Active",
-        "activeCount": "{enabled}/{total} enabled",
-        "selected": "Selected",
-        "target": "Target",
-        "params": "Params",
         "rules": "Rules",
-        "pending": "pending",
-        "compiledOutput": "Compiled output"
+        "title": "Summary"
       },
       "install": {
         "effect": "Rule",
@@ -3975,6 +3947,15 @@
         "githubImportType": "skill URL",
         "workspaceOnly": "Applies to every install in this workspace.",
         "manageRegistries": "Manage registries"
+      },
+      "describe": {
+        "notSet": "Not set up yet",
+        "tokens": "Up to {count} tokens",
+        "perMonth": "{amount} per month",
+        "perTask": "{amount} per task",
+        "perTaskWallet": "{amount} in wallet payments per task",
+        "tools": "{count, plural, one {# tool} other {# tools}}",
+        "sources": "{count, plural, one {# source} other {# sources}}"
       }
     }
   },
@@ -4052,7 +4033,7 @@
     "columnHarness": "Harness",
     "columnSkills": "Skills",
     "emptyTitle": "No harnesses yet",
-    "emptyDescription": "A harness is a coding agent running outside this workspace, such as Claude Code or Codex, that you let reach in for tools.",
+    "emptyDescription": "Connect Claude Code, Codex or another coding agent on your machine. AgentArea can send it tasks, and you choose which skills and connections it may use.",
     "emptyHintRegister": "Register the harness to get its connection command",
     "emptyHintPick": "Pick the skills and connections it may use",
     "emptyHintScope": "It gets that bundle and nothing else",

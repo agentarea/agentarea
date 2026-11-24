@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sort"
 	"unicode/utf8"
 
@@ -41,13 +42,14 @@ func (t sandboxTools) Call(ctx context.Context, inv ToolInvocation) (ToolOutput,
 	}
 	if ns == filesToolset {
 		ws, task := inv.Principal.WorkspaceID, inv.TaskID
+		if method == "read_file" {
+			return t.readFile(ctx, ws, task, inv.Args)
+		}
 		var text string
 		var err error
 		switch method {
 		case "save_file":
 			text, err = t.saveFile(ctx, ws, task, inv.Args)
-		case "read_file":
-			text, err = t.readFile(ctx, ws, task, inv.Args)
 		case "list_files":
 			text, err = t.listFiles(ctx, ws, task, inv.Args, false)
 		case "search_files":
@@ -126,25 +128,65 @@ func (t sandboxTools) saveFile(ctx context.Context, ws, task string, args map[st
 	return name, nil
 }
 
-func (t sandboxTools) readFile(ctx context.Context, ws, task string, args map[string]any) (string, error) {
+// readFile is read_file: a text file as text (offset and limit by line), an
+// image as the image itself, a PDF's pages as a PDF file.
+func (t sandboxTools) readFile(ctx context.Context, ws, task string, args map[string]any) (ToolOutput, error) {
+	text := func(s string) (ToolOutput, error) {
+		return ToolOutput{Success: true, Result: s, Source: "builtin"}, nil
+	}
 	name, err := stringArg(args, "file_name")
 	if err != nil {
-		return "", err
+		return ToolOutput{}, err
 	}
+	pages, _ := args["pages"].(string)
+	offset, limit := intArg(args, "offset"), intArg(args, "limit")
 	if refusal := domain.FilePathRefusal(name); refusal != "" {
-		return "Error reading file: " + refusal, nil
+		return text("Error reading file: " + refusal)
 	}
 	data, _, err := t.rt.ReadFile(ctx, ws, task, name)
 	if errors.Is(err, sandboxapi.ErrFileNotFound) {
-		return "Error: File " + name + " does not exist", nil
+		return text("Error: File " + name + " does not exist")
 	}
 	if err != nil {
-		return "Error reading file: " + err.Error(), nil
+		return text("Error reading file: " + err.Error())
+	}
+	failed := func(why string) (ToolOutput, error) { return text("Error reading file: " + name + ": " + why) }
+	if http.DetectContentType(data) == pdfMimeType {
+		out, why := readPDF(ctx, name, data, pages)
+		if why != "" {
+			return failed(why)
+		}
+		return out, nil
+	}
+	if pages != "" {
+		return failed("pages is for PDF files")
+	}
+	info, isImage, err := inspectImage(data)
+	if err != nil {
+		return failed(err.Error())
+	}
+	if isImage {
+		return ToolOutput{Success: true, Result: imageReadNote(name, info, len(data)), Source: "builtin",
+			Images: []ToolImage{{Data: data, MimeType: info.MimeType}}}, nil
 	}
 	if !utf8.Valid(data) {
-		return "Error reading file: 'utf-8' codec can't decode the file", nil
+		return text("Error reading file: 'utf-8' codec can't decode the file")
 	}
-	return string(data), nil
+	if offset == 0 && limit == 0 {
+		return text(string(data))
+	}
+	lines, why := readLines(string(data), offset, limit)
+	if why != "" {
+		return failed(why)
+	}
+	return text(lines)
+}
+
+func intArg(args map[string]any, name string) int {
+	if v, ok := args[name].(float64); ok && v > 0 {
+		return int(v)
+	}
+	return 0
 }
 
 func (t sandboxTools) listFiles(ctx context.Context, ws, task string, args map[string]any, search bool) (string, error) {

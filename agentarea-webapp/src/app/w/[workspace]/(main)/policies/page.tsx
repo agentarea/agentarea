@@ -3,52 +3,31 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { AdminOnlyState } from "@/components/AdminOnlyState";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { getViewerCapabilities } from "@/lib/workspace-context";
-import AccessControlData from "./components/access/AccessControlData";
-import AccessControlHeaderControls from "./components/access/AccessControlHeaderControls";
 import { PoliciesData } from "./components/PoliciesData";
 import PoliciesHeaderControls from "./components/PoliciesHeaderControls";
 import PoliciesSkeleton from "./components/PoliciesSkeleton";
-import { PoliciesViewTabs } from "./components/PoliciesViewTabs";
 
 export const metadata: Metadata = {
   title: "Policies",
 };
 
-export default async function PoliciesPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ view?: string }>;
-}) {
+export default async function PoliciesPage() {
   const t = await getTranslations("PoliciesPage");
-  const resolved = await searchParams;
-  const view = resolved.view === "access" ? "access" : "policies";
   const { canAdminister } = await getViewerCapabilities();
 
   return (
     <ContentBlock
       header={{
         breadcrumb: [{ label: t("title") }],
-        controls: !canAdminister ? undefined : view === "access" ? (
-          <AccessControlHeaderControls />
-        ) : (
-          <PoliciesHeaderControls />
-        ),
+        controls: canAdminister ? <PoliciesHeaderControls /> : undefined,
       }}
-      subheader={
-        <SubheaderToolbar
-          categories={<PoliciesViewTabs current={view} />}
-        />
-      }
     >
       {!canAdminister ? (
-        <AdminOnlyState
-          what={view === "access" ? "accessControl" : "policies"}
-        />
+        <AdminOnlyState what="policies" />
       ) : (
-        <Suspense fallback={<PoliciesSkeleton view={view} />}>
-          {view === "access" ? <AccessControlData /> : <PoliciesData />}
+        <Suspense fallback={<PoliciesSkeleton />}>
+          <PoliciesData />
         </Suspense>
       )}
     </ContentBlock>

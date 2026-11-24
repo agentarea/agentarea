@@ -21,6 +21,11 @@ export interface Skill {
   registry_trust?: SkillResponse["registry_trust"];
   registry_scope?: SkillResponse["registry_scope"];
   removed_upstream?: SkillResponse["removed_upstream"];
+  version?: SkillResponse["version"];
+  latest_version?: SkillResponse["latest_version"];
+  agent_count?: SkillResponse["agent_count"];
+  revision?: SkillResponse["revision"];
+  bundle?: SkillResponse["bundle"];
 }
 
 export interface PaginatedSkills {

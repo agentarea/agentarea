@@ -13,6 +13,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authz"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/blob"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/agents/domain"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/agents/store"
 )
@@ -42,6 +43,25 @@ type SkillView struct {
 	RegistryScope   *string
 	RegistryTrust   *string
 	RemovedUpstream bool
+	// Version is the catalog version an install runs, LatestVersion its item's
+	// current one; both nil for a skill that did not come from the catalog.
+	Version       *string
+	LatestVersion *string
+	// Agents is how many live agents have the skill attached; Revision how
+	// many versions it has saved, the current one included.
+	Agents   int
+	Revision int
+	// Bundle is the bundle install that created the skill and still manages
+	// it; its source is that bundle, so people do not edit it here.
+	Bundle *string
+}
+
+// SkillBundleManagedError refuses a person's edit of a skill a bundle manages:
+// the next deploy would overwrite it (409 skill_bundle_managed).
+type SkillBundleManagedError struct{ Bundle string }
+
+func (e *SkillBundleManagedError) Error() string {
+	return fmt.Sprintf("This skill is managed by bundle '%s'. Change it in the bundle and redeploy, or duplicate it to edit a copy here.", e.Bundle)
 }
 
 // SkillVersionView is a version and whether the skill runs it now.
@@ -129,6 +149,15 @@ func (k *Skills) List(ctx context.Context, c authn.Caller, q SkillListQuery) ([]
 	for i, r := range rows {
 		out[i] = view(r)
 	}
+	if err := k.withUsage(ctx, c.Workspace, out); err != nil {
+		return nil, 0, err
+	}
+	if err := k.withBundles(ctx, c.Workspace, out); err != nil {
+		return nil, 0, err
+	}
+	if err := k.withCatalogVersions(ctx, c.Workspace, out); err != nil {
+		return nil, 0, err
+	}
 	return out, total, nil
 }
 
@@ -149,7 +178,129 @@ func (k *Skills) Get(ctx context.Context, c authn.Caller, id uuid.UUID) (SkillVi
 	if err := k.s.Require(ctx, c, "read", id); err != nil {
 		return SkillView{}, err
 	}
-	return view(sk), nil
+	out := []SkillView{view(sk)}
+	if err := k.withUsage(ctx, c.Workspace, out); err != nil {
+		return SkillView{}, err
+	}
+	if err := k.withBundles(ctx, c.Workspace, out); err != nil {
+		return SkillView{}, err
+	}
+	if err := k.withCatalogVersions(ctx, c.Workspace, out); err != nil {
+		return SkillView{}, err
+	}
+	return out[0], nil
+}
+
+// withBundles marks the skills a bundle install manages, one read for the page.
+func (k *Skills) withBundles(ctx context.Context, ws scope.Workspace, views []SkillView) error {
+	if k.items == nil || len(views) == 0 {
+		return nil
+	}
+	ids := make([]string, len(views))
+	for i, v := range views {
+		ids[i] = v.ID
+	}
+	owners, err := k.items.BundleOwned(ctx, ws, skillKind, ids)
+	if err != nil {
+		return fmt.Errorf("bundles managing skills: %w", err)
+	}
+	for i := range views {
+		if name, ok := owners[views[i].ID]; ok {
+			views[i].Bundle = &name
+		}
+	}
+	return nil
+}
+
+// skillKind is a skill's entity kind in a bundle install's record.
+const skillKind = "skill"
+
+// RequireUnmanaged refuses when a bundle install manages skill id. Every way
+// a person edits a skill asks it; the bundle's own deploy does not.
+func (k *Skills) RequireUnmanaged(ctx context.Context, ws scope.Workspace, id uuid.UUID) error {
+	if k.items == nil {
+		return nil
+	}
+	owners, err := k.items.BundleOwned(ctx, ws, skillKind, []string{id.String()})
+	if err != nil {
+		return fmt.Errorf("bundle managing skill %s: %w", id, err)
+	}
+	if name, ok := owners[id.String()]; ok {
+		return &SkillBundleManagedError{Bundle: name}
+	}
+	return nil
+}
+
+// withUsage fills in each skill's live agents and saved revisions, one read of
+// each for the whole page.
+func (k *Skills) withUsage(ctx context.Context, ws scope.Workspace, views []SkillView) error {
+	if len(views) == 0 {
+		return nil
+	}
+	ids := make([]uuid.UUID, 0, len(views))
+	for _, v := range views {
+		id, err := uuid.Parse(v.ID)
+		if err != nil {
+			return fmt.Errorf("skill id %q: %w", v.ID, err)
+		}
+		ids = append(ids, id)
+	}
+	var agents, revisions map[string]int
+	if err := k.s.read(ctx, ws, func(sess db.Session) error {
+		var err error
+		if agents, err = skills().AgentCounts(ctx, sess, ids); err != nil {
+			return err
+		}
+		revisions, err = skills().Revisions(ctx, sess, ids)
+		return err
+	}); err != nil {
+		return err
+	}
+	for i := range views {
+		views[i].Agents, views[i].Revision = agents[views[i].ID], revisions[views[i].ID]
+	}
+	return nil
+}
+
+// withCatalogVersions fills in what the catalog knows of each install: the
+// trust of its registry, the version it runs, its item's current one, and
+// whether an update waits. One read of each for the whole page.
+func (k *Skills) withCatalogVersions(ctx context.Context, ws scope.Workspace, views []SkillView) error {
+	if k.items == nil {
+		return nil
+	}
+	var ids []string
+	for _, v := range views {
+		if v.RegistryItemID != nil {
+			ids = append(ids, *v.RegistryItemID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	versions, err := k.items.SkillVersions(ctx, ws, ids)
+	if err != nil {
+		return fmt.Errorf("catalog versions of installed skills: %w", err)
+	}
+	sources, err := k.items.SkillProvenance(ctx, ws, ids)
+	if err != nil {
+		return fmt.Errorf("catalog sources of installed skills: %w", err)
+	}
+	for i := range views {
+		if views[i].RegistryItemID == nil {
+			continue
+		}
+		id := *views[i].RegistryItemID
+		if src, ok := sources[id]; ok && src.Trust != "" {
+			trust := src.Trust
+			views[i].RegistryTrust = &trust
+		}
+		if v, ok := versions[id]; ok {
+			views[i].Version, views[i].LatestVersion = v.Installed, v.Current
+			views[i].UpdateAvailable = updateWaits(v)
+		}
+	}
+	return nil
 }
 
 func (k *Skills) uniqueSlug(ctx context.Context, sess db.Session, name string) (string, error) {

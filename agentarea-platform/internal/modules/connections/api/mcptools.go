@@ -23,10 +23,10 @@ type MCPCall struct {
 	Paid PaidCall
 }
 
-// MCPImage is an image a tool returned, base64 as the server sent it.
+// MCPImage is an image a tool returned, as raw bytes.
 type MCPImage struct {
 	MimeType string
-	Data     string
+	Data     []byte
 }
 
 // MCPResult is the call's outcome; a failed call is Success false, not an error.

@@ -177,12 +177,7 @@
 
   /* Row meta columns drop off progressively as space tightens. */
   @container skills (max-width: 620px) {
-    .skill-col-date {
-      display: none;
-    }
-  }
-  @container skills (max-width: 520px) {
-    .skill-col-scope {
+    .skill-col-agents {
       display: none;
     }
   }

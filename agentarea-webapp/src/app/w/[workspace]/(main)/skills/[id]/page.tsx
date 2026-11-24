@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import YAML from "js-yaml";
 import {
+  Copy,
   Eye,
   FileText,
   FileX,
@@ -35,6 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import FormError from "@/components/FormError";
+import NoticeBanner from "@/components/NoticeBanner";
 import { useCatalogFetchError } from "@/hooks/useCatalogFetchError";
 import type {
   Skill,
@@ -56,7 +58,7 @@ import {
   updateSkillAction as updateSkill,
 } from "@/lib/server-actions";
 import SkillProvenance from "../components/SkillProvenance";
-import UpdateSkillButton from "../components/UpdateSkillButton";
+import SkillVersion from "../components/SkillVersion";
 
 // The page title is the document's only h1, so SKILL.md headings render one
 // level below it.
@@ -467,9 +469,12 @@ export default function SkillDetailPage() {
   }
 
   const isCatalog = Boolean(skill.is_catalog);
+  // A bundle's skill is changed in the bundle and redeployed; the API refuses edits here.
+  const managedBy = skill.bundle ?? null;
+  const readOnly = isCatalog || managedBy !== null;
   const isContentEditable = skill.source_type === "content";
   const canEditFile =
-    !isCatalog && isContentEditable && selectedFile === "SKILL.md";
+    !readOnly && isContentEditable && selectedFile === "SKILL.md";
   const editModeTab = isEditing ? "edit" : "view";
 
   // Parse frontmatter for display
@@ -502,43 +507,55 @@ export default function SkillDetailPage() {
             ) : (
               <>
                 <SkillProvenance skill={skill} />
-                <UpdateSkillButton
+                <SkillVersion
                   skill={skill}
-                  onError={setActionError}
                   onUpdated={() => {
                     hasChangesRef.current = false;
                     setReloadKey((key) => key + 1);
                   }}
                 />
-                {saved && !hasChanges && (
-                  <span className="text-xs text-muted-foreground">
-                    {tCommon("saved")}
-                  </span>
+                {managedBy !== null ? (
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => router.push(`/skills/create?from=${skillId}`)}
+                  >
+                    <Copy className="mr-2" />
+                    {tDetail("duplicate")}
+                  </Button>
+                ) : (
+                  <>
+                    {saved && !hasChanges && (
+                      <span className="text-xs text-muted-foreground">
+                        {tCommon("saved")}
+                      </span>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      onClick={handleSave}
+                      disabled={!hasChanges || saving}
+                    >
+                      {saving ? (
+                        <Loader2 className="mr-2 animate-spin" />
+                      ) : (
+                        <Save className="mr-2" />
+                      )}
+                      {tDetail("save")}
+                    </Button>
+                    <DeleteButton
+                      size="xs"
+                      itemId={skillId}
+                      itemName={skill.name}
+                      onDelete={deleteSkill}
+                      redirectPath="/skills"
+                      title={t("confirm.deleteSkillTitle") || tDetail("delete")}
+                      description={t("confirm.deleteSkill", {
+                        skillName: skill.name,
+                      })}
+                    />
+                  </>
                 )}
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={handleSave}
-                  disabled={!hasChanges || saving}
-                >
-                  {saving ? (
-                    <Loader2 className="mr-2 animate-spin" />
-                  ) : (
-                    <Save className="mr-2" />
-                  )}
-                  {tDetail("save")}
-                </Button>
-                <DeleteButton
-                  size="xs"
-                  itemId={skillId}
-                  itemName={skill.name}
-                  onDelete={deleteSkill}
-                  redirectPath="/skills"
-                  title={t("confirm.deleteSkillTitle") || tDetail("delete")}
-                  description={t("confirm.deleteSkill", {
-                    skillName: skill.name,
-                  })}
-                />
               </>
             )}
           </div>
@@ -549,6 +566,13 @@ export default function SkillDetailPage() {
         {/* Main Content Area */}
         <div className="flex-1 overflow-auto p-4 md:p-6">
           <div className="h-full max-w-4xl mx-auto flex flex-col gap-3">
+            {managedBy !== null && (
+              <NoticeBanner
+                title={tDetail("managedByBundle", { bundle: managedBy })}
+              >
+                {tDetail("managedByBundleHint")}
+              </NoticeBanner>
+            )}
             {actionError && <FormError>{actionError}</FormError>}
             {filesError && <FormError>{filesError}</FormError>}
             <Card className="h-full flex flex-col overflow-hidden p-0 cursor-default hover:shadow-none">
@@ -557,7 +581,7 @@ export default function SkillDetailPage() {
                   {selectedFile || tDetail("selectFile")}
                 </CardTitle>
                 <div className="flex items-center gap-2">
-                  {hasChanges && !isCatalog && (
+                  {hasChanges && !readOnly && (
                     <Button
                       variant="outline"
                       size="xs"
@@ -697,7 +721,7 @@ export default function SkillDetailPage() {
       </div>
 
       {/* Child Skills Section */}
-      {!isCatalog && (
+      {!readOnly && (
         <div className="border-t px-6 py-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium">

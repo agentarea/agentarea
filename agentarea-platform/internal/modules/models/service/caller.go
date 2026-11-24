@@ -114,7 +114,15 @@ func providerProfile(p catalogapi.ProviderSpec) api.ProviderProfile {
 	return api.ProviderProfile{
 		BaseURL: str(p.BaseURL), Transport: p.Transport, Auth: p.Auth, ReasoningParam: p.ReasoningParam,
 		ReasoningLevels: p.ReasoningEfforts, CacheBreakpoints: p.CacheBreakpoints,
+		MaxImageBytes: deref(p.MaxImageBytes), MaxImageEdge: deref(p.MaxImageEdge), PDFInput: p.PDFInput,
 	}
+}
+
+func deref(p *int) int {
+	if p == nil {
+		return 0
+	}
+	return *p
 }
 
 // domainProfile is the full contract of a provider spec, models listing included.

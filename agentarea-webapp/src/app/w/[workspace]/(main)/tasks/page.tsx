@@ -9,6 +9,7 @@ import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { statusesForFilter } from "@/lib/taskStatusFilter";
 import { readUiPrefs } from "@/lib/ui-prefs-server";
 import { TasksData } from "./components/TasksData";
+import TasksSectionTabs from "./components/TasksSectionTabs";
 import TasksSkeleton from "./components/TasksSkeleton";
 import TasksStatusFilter from "./components/TasksStatusFilter";
 
@@ -65,6 +66,7 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
       }}
       subheader={
         <SubheaderToolbar
+          categories={<TasksSectionTabs />}
           search={<SearchInput urlParamName="search" urlPath="/tasks" />}
           controls={
             <>

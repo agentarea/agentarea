@@ -424,3 +424,30 @@ func (Skills) OutsidePlatform(ctx context.Context, q db.Querier, platformWorkspa
 	}
 	return out, nil
 }
+
+// AgentCounts is how many of the workspace's live agents each of ids is attached to;
+// a skill on none is absent.
+func (Skills) AgentCounts(ctx context.Context, s db.Session, ids []uuid.UUID) (map[string]int, error) {
+	rows, err := New(s.Q()).SkillAgentCounts(ctx, SkillAgentCountsParams{WorkspaceID: s.Workspace().ID(), Ids: ids})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]int, len(rows))
+	for _, r := range rows {
+		out[r.SkillID.String()] = int(r.Agents)
+	}
+	return out, nil
+}
+
+// Revisions is how many versions each of ids has saved, the current one included.
+func (Skills) Revisions(ctx context.Context, s db.Session, ids []uuid.UUID) (map[string]int, error) {
+	rows, err := New(s.Q()).SkillRevisions(ctx, SkillRevisionsParams{WorkspaceID: s.Workspace().ID(), Ids: ids})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]int, len(rows))
+	for _, r := range rows {
+		out[r.SkillID.String()] = int(r.Revisions)
+	}
+	return out, nil
+}

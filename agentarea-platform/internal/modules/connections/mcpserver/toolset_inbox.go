@@ -11,11 +11,6 @@ import (
 	runsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/api"
 )
 
-// inboxStatuses is INBOX_STATUSES in order.
-func inboxStatuses() []string {
-	return []string{"waiting_for_approval", "waiting_for_input", "completed", "failed"}
-}
-
 // inboxTools is tools/inbox_toolset.py.
 func inboxTools(i runsapi.PlatformInbox) map[string]toolDef {
 	return map[string]toolDef{
@@ -32,9 +27,9 @@ func inboxTools(i runsapi.PlatformInbox) map[string]toolDef {
 			if in.Status != nil && *in.Status == "" {
 				in.Status = nil
 			}
-			if in.Status != nil && !slices.Contains(inboxStatuses(), *in.Status) {
+			if in.Status != nil && !slices.Contains(runsapi.InboxStatuses(), *in.Status) {
 				quoted := make([]string, 0, 4)
-				for _, s := range inboxStatuses() {
+				for _, s := range runsapi.InboxStatuses() {
 					quoted = append(quoted, "'"+s+"'")
 				}
 				return nil, &toolError{fmt.Sprintf("Unknown inbox status '%s'; expected one of [%s]", *in.Status, strings.Join(quoted, ", "))}

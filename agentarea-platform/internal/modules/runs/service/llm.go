@@ -133,7 +133,7 @@ func messagesOf(entries []domain.Entry) []domain.ChatMessage {
 }
 
 // withToolImages attaches the newest images tools returned, read from the task's context store.
-func (s *Service) withToolImages(ctx context.Context, p Principal, taskID string, messages []domain.ChatMessage, vision bool) ([]domain.ModelMessage, error) {
+func (s *Service) withToolImages(ctx context.Context, p Principal, taskID string, messages []domain.ChatMessage, vision bool, fits domain.ImageLimits) ([]domain.ModelMessage, error) {
 	urls := map[string]*string{}
 	has := slices.ContainsFunc(messages, func(m domain.ChatMessage) bool { return len(m.Attachments) > 0 })
 	if has && taskID == "" {
@@ -146,7 +146,7 @@ func (s *Service) withToolImages(ctx context.Context, p Principal, taskID string
 				mime[ref.ID] = ref.MimeType
 			}
 		}
-		for _, id := range domain.ImagesToAttach(messages, domain.MaxImagesPerModelCall) {
+		for _, id := range domain.ImagesToAttach(messages, domain.MaxImagesPerModelCall, fits) {
 			body, err := s.getText(ctx, domain.ImageKey(p.WorkspaceID, taskID, id))
 			if err != nil {
 				s.d.Log.WarnContext(ctx, "tool image could not be read", "image_id", id, "error", err)
@@ -157,7 +157,7 @@ func (s *Service) withToolImages(ctx context.Context, p Principal, taskID string
 			urls[id] = &url
 		}
 	}
-	return domain.AttachToolImages(messages, urls, vision), nil
+	return domain.AttachToolImages(messages, urls, vision, fits), nil
 }
 
 // CallLLM makes one model call of a run, funded, held and priced by billing,
@@ -191,7 +191,8 @@ func (s *Service) callLLM(ctx context.Context, p Principal, in LLMCall) (LLMResu
 	if err := checkEffort(in.ReasoningEffort, in.Model); err != nil {
 		return LLMResult{}, err
 	}
-	messages, err := s.withToolImages(ctx, p, in.TaskID, messagesOf(entries), in.Model.SupportsVision)
+	messages, err := s.withToolImages(ctx, p, in.TaskID, messagesOf(entries), in.Model.SupportsVision,
+		domain.ImageLimits{MaxBytes: in.Model.Provider.MaxImageBytes, MaxEdge: in.Model.Provider.MaxImageEdge, PDF: in.Model.Provider.PDFInput})
 	if err != nil {
 		return LLMResult{}, err
 	}

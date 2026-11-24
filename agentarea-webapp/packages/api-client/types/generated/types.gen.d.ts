@@ -8650,6 +8650,18 @@ export type SkillRef = {
  */
 export type SkillResponse = {
     /**
+     * Agent Count
+     *
+     * Live agents the skill is attached to.
+     */
+    agent_count?: number;
+    /**
+     * Bundle
+     *
+     * Name of the bundle install that manages the skill; such a skill is edited in the bundle and redeployed, not here.
+     */
+    bundle?: string | null;
+    /**
      * Created At
      */
     created_at: string;
@@ -8669,6 +8681,12 @@ export type SkillResponse = {
      * Is Catalog
      */
     is_catalog?: boolean;
+    /**
+     * Latest Version
+     *
+     * The catalog item's current version; an update waits when it differs from version.
+     */
+    latest_version?: string | null;
     /**
      * Name
      */
@@ -8698,6 +8716,12 @@ export type SkillResponse = {
      */
     removed_upstream?: boolean;
     /**
+     * Revision
+     *
+     * Versions the skill has saved, the current one included.
+     */
+    revision?: number;
+    /**
      * Slug
      */
     slug: string;
@@ -8717,6 +8741,12 @@ export type SkillResponse = {
      * Updated At
      */
     updated_at: string;
+    /**
+     * Version
+     *
+     * Catalog version this install runs; null for a skill that did not come from the catalog.
+     */
+    version?: string | null;
     /**
      * Workspace Id
      */
@@ -14914,7 +14944,7 @@ export type GetInboxItemsV1InboxGetData = {
          *
          * Filter to a specific inbox status
          */
-        status?: 'waiting_for_approval' | 'waiting_for_input' | 'completed' | 'failed' | null;
+        status?: 'waiting_for_approval' | 'waiting_for_input' | 'blocked' | null;
         /**
          * Agent Id
          *

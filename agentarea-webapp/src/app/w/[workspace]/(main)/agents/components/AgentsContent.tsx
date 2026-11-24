@@ -3,6 +3,7 @@ import CatalogSuggestions from "@/components/CatalogSuggestions";
 import EmptyState from "@/components/EmptyState";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import FormError from "@/components/FormError";
+import AgentsScene from "@/components/illustrations/AgentsScene";
 import {
   getAllTasks,
   listAgents,
@@ -160,12 +161,12 @@ export default async function AgentsContent({
         {partialErrorBlock}
         <EmptyState
           title={t("noAgentsTitle")}
+          visual={<AgentsScene />}
           description={t("noAgentsDescription")}
           hints={[
             { text: t("noAgentsHintBuild"), href: "/agents/create" },
             { text: t("noAgentsHintInstall"), href: "/explore?type=agents" },
           ]}
-          iconsType="agent"
           action={{ label: t("createAgent"), href: "/agents/create" }}
         />
         <CatalogSuggestions type="agents" />

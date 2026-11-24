@@ -5,10 +5,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -116,6 +118,34 @@ func TestProviderAndModelChecks(t *testing.T) {
 	}
 	if _, err := modelRow(domain.Item{}, map[string]any{"model_name": "i", "kind": "image"}, [16]byte{}); err != nil {
 		t.Fatalf("image model: %v", err)
+	}
+}
+
+func TestProviderRowReadsImageLimits(t *testing.T) {
+	v, err := DecodeJSON([]byte(`{"providers": [{"provider_key": "p", "max_image_bytes": 7864320, "max_image_edge": 8000, "pdf_input": true}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := ParseSource(domain.TypeLLMProviders, v)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("%+v %v", entries, err)
+	}
+	p, err := providerRow(domain.Item{Name: "P"}, entries[0].Spec)
+	if err != nil || p.Contract.MaxImageBytes.Value != 7864320 || p.Contract.MaxImageEdge.Value != 8000 || !p.Contract.PDFInput.Value {
+		t.Fatalf("%+v %v", p.Contract, err)
+	}
+	p, err = providerRow(domain.Item{Name: "P"}, map[string]any{"provider_key": "p", "max_image_bytes": nil})
+	if err != nil || !p.Contract.MaxImageBytes.Null || p.Contract.MaxImageEdge != nil {
+		t.Fatalf("null clears, absent keeps: %+v %v", p.Contract, err)
+	}
+	for _, bad := range []any{0, -1, "big", 1.5} {
+		n := bad
+		if i, ok := bad.(int); ok {
+			n = json.Number(strconv.Itoa(i))
+		}
+		if _, err := providerRow(domain.Item{Name: "P"}, map[string]any{"provider_key": "p", "max_image_edge": n}); err == nil {
+			t.Fatalf("max_image_edge %v accepted", bad)
+		}
 	}
 }
 

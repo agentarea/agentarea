@@ -22,6 +22,7 @@ import (
 
 type catalogFakeItems struct {
 	CatalogItems
+	bundles   map[string]string
 	items     map[string]catalogapi.CatalogItem
 	installed map[string]*string
 	folder    catalogapi.GitHubFolder
@@ -47,6 +48,26 @@ func (f *catalogFakeItems) SkillVersions(_ context.Context, _ scope.Workspace, i
 	for _, id := range ids {
 		if it, ok := f.items[id]; ok {
 			out[id] = catalogapi.ItemVersions{Current: it.Version, Installed: f.installed[id]}
+		}
+	}
+	return out, nil
+}
+
+func (f *catalogFakeItems) SkillProvenance(_ context.Context, _ scope.Workspace, ids []string) (map[string]catalogapi.ItemSource, error) {
+	out := map[string]catalogapi.ItemSource{}
+	for _, id := range ids {
+		if it, ok := f.items[id]; ok {
+			out[id] = catalogapi.ItemSource{RegistryID: it.RegistryID, Trust: it.RegistryTrust}
+		}
+	}
+	return out, nil
+}
+
+func (f *catalogFakeItems) BundleOwned(_ context.Context, _ scope.Workspace, _ string, ids []string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, id := range ids {
+		if b, ok := f.bundles[id]; ok {
+			out[id] = b
 		}
 	}
 	return out, nil
@@ -396,5 +417,94 @@ func TestRefreshStubsReadsTheOriginalFromGitHub(t *testing.T) {
 	}
 	if again, _ := cat.RefreshStubs(ctx, false); len(jobResults(again, ws)) != 0 {
 		t.Fatalf("a refreshed skill is still a stub: %+v", jobResults(again, ws))
+	}
+}
+
+func TestListAndGetShowTheInstalledVersionAndAWaitingUpdate(t *testing.T) {
+	ctx := context.Background()
+	f := catalogSetup(t)
+	k, c, items := f.k, f.c, f.items
+	item, v := installHelper(t, k, c, items, helperBody("old"))
+
+	listed := func() SkillView {
+		t.Helper()
+		views, _, err := k.List(ctx, c, SkillListQuery{Limit: 50})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, view := range views {
+			if view.ID == v.ID {
+				return view
+			}
+		}
+		t.Fatalf("skill %s not listed", v.ID)
+		return SkillView{}
+	}
+	str := func(p *string) string {
+		if p == nil {
+			return "<nil>"
+		}
+		return *p
+	}
+
+	got := listed()
+	if got.UpdateAvailable || str(got.Version) != "1.2.0" || str(got.LatestVersion) != "1.2.0" || str(got.RegistryTrust) != "verified" {
+		t.Fatalf("fresh install: update=%v version=%s latest=%s trust=%s", got.UpdateAvailable, str(got.Version), str(got.LatestVersion), str(got.RegistryTrust))
+	}
+
+	items.bump(item.ID, "2", helperBody("new"))
+	got = listed()
+	if !got.UpdateAvailable || str(got.Version) != "1.2.0" || str(got.LatestVersion) != "2" {
+		t.Fatalf("listed after bump: update=%v version=%s latest=%s", got.UpdateAvailable, str(got.Version), str(got.LatestVersion))
+	}
+	one, err := k.Get(ctx, c, uuid.MustParse(v.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !one.UpdateAvailable || str(one.LatestVersion) != "2" {
+		t.Fatalf("got after bump: update=%v latest=%s", one.UpdateAvailable, str(one.LatestVersion))
+	}
+}
+
+func TestABundlesSkillIsReadOnlyToPeopleAndWritableToItsDeploy(t *testing.T) {
+	ctx := context.Background()
+	f := catalogSetup(t)
+	k, c := f.k, f.c
+	id := newRunSkill(t, RunSkills{K: k}, c, helperBody("from the bundle"))
+	f.items.bundles = map[string]string{id: "growth"}
+
+	v, err := k.Get(ctx, c, uuid.MustParse(id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Bundle == nil || *v.Bundle != "growth" {
+		t.Fatalf("bundle = %v", v.Bundle)
+	}
+
+	var managed *SkillBundleManagedError
+	if err := k.RequireUnmanaged(ctx, c.Workspace, uuid.MustParse(id)); !errors.As(err, &managed) || managed.Bundle != "growth" {
+		t.Fatalf("person's edit: %v", err)
+	}
+	tools := SkillToolset{K: k}
+	name := "Renamed"
+	if _, err := tools.EditMetadata(ctx, c, id, &name, nil); !errors.As(err, &managed) {
+		t.Fatalf("tool metadata edit: %v", err)
+	}
+	if _, err := tools.SetContent(ctx, c, id, helperBody("by hand")); !errors.As(err, &managed) {
+		t.Fatalf("tool content edit: %v", err)
+	}
+	if _, err := tools.ReplaceFiles(ctx, c, id, nil); !errors.As(err, &managed) {
+		t.Fatalf("tool file replace: %v", err)
+	}
+
+	deploy := BundleAgents{K: k}
+	if err := deploy.ReplaceSkillFiles(ctx, c, id, []catalogapi.BundleFile{{Path: "SKILL.md", Text: helperBody("redeployed")}}); err != nil {
+		t.Fatalf("deploy replace: %v", err)
+	}
+	if err := deploy.RenameSkill(ctx, c, id, "Renamed by deploy"); err != nil {
+		t.Fatalf("deploy rename: %v", err)
+	}
+	if !strings.HasSuffix(skillMD(t, k, c, id), "redeployed") {
+		t.Fatal("the deploy did not write the skill")
 	}
 }

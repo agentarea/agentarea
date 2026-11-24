@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildMonthWeeks,
   buildTodayAgenda,
+  buildUpcoming,
   buildWeekDays,
   dayKey,
   initialScrollHour,
@@ -163,5 +164,48 @@ describe("layoutLanes", () => {
         items: [run(2, 9, 5), run(2, 9, 10)],
       },
     ]);
+  });
+});
+
+describe("buildUpcoming", () => {
+  it("groups the next runs by day, skipping empty days and past runs", () => {
+    const days = buildUpcoming(
+      [run(5, 9), run(2, 9), run(2, 16), run(3, 10), run(5, 11)],
+      now,
+      10
+    );
+    expect(days.map((d) => dayKey(d.date))).toEqual([
+      "2026-10-02",
+      "2026-10-03",
+      "2026-10-05",
+    ]);
+    expect(days.map((d) => d.items.length)).toEqual([1, 1, 2]);
+    expect(days[0].isToday).toBe(true);
+  });
+
+  it("stops after the limit but finishes the day it stopped in", () => {
+    const days = buildUpcoming(
+      [run(3, 9), run(4, 9), run(4, 10), run(4, 11), run(6, 9)],
+      now,
+      2
+    );
+    expect(days.map((d) => [dayKey(d.date), d.items.length])).toEqual([
+      ["2026-10-03", 1],
+      ["2026-10-04", 3],
+    ]);
+  });
+
+  it("lists every run of a repeating trigger", () => {
+    const daily = (d: number) => ({ ...run(d, 8), trigger_id: "daily" });
+    const days = buildUpcoming([daily(3), daily(4), daily(5)], now, 10);
+    expect(days.map((d) => dayKey(d.date))).toEqual([
+      "2026-10-03",
+      "2026-10-04",
+      "2026-10-05",
+    ]);
+  });
+
+  it("is empty when nothing is ahead", () => {
+    expect(buildUpcoming([run(1, 9)], now, 10)).toEqual([]);
   });
 });

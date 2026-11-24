@@ -143,7 +143,7 @@ export function InboxClient({
   }
 
   // Jump to the first task still waiting on a decision; a filter that hides
-  // it (completed / failed / decided) switches to the approval queue first.
+  // it (input / blocked / decided) switches to the approval queue first.
   // A held tool call is decided on its own page, so it is next only when no
   // task is waiting.
   function openNextPending() {

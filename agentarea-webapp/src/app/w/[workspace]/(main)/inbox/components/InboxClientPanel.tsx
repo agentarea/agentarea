@@ -2,7 +2,6 @@
 
 import { useFormatter, useLocale, useNow, useTranslations } from "next-intl";
 import { ChevronRight, Clock, ExternalLink, Wallet, X } from "lucide-react";
-import type { ApprovalDecisionResult } from "@/components/Approvals/ApprovalDecisionCard";
 import {
   fmtCost,
   formatRelative,
@@ -10,10 +9,11 @@ import {
   type InboxTask,
 } from "@/app/w/[workspace]/(main)/inbox/components/inboxShared";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import type { ApprovalDecisionResult } from "@/components/Approvals/ApprovalDecisionCard";
 import { TaskConversation } from "@/components/Chat/TaskConversation";
 import { TaskStatus } from "@/components/TaskStatus";
-import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Button } from "@/components/ui/button";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import Link from "@/components/WorkspaceLink";
 import { useCurrency } from "@/hooks/useCurrency";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
@@ -52,6 +52,7 @@ export function InboxClientPanel({
   const agentName = task.agent_name || t("row.unknownAgent");
   const hasResult = extractInboxResult(task.result).kind !== "empty";
   const failureText = task.error || task.failure_reason;
+  const failureKind = status === "blocked" ? "attention" : "failed";
 
   // Shown only when the transcript carries no assistant answer of its own —
   // an approval still waiting to run, or a task whose output lives in the
@@ -67,7 +68,7 @@ export function InboxClientPanel({
       />
       {!hasResult && failureText && (
         <StatusIndicator
-          kind="failed"
+          kind={failureKind}
           size="sm"
           className="max-w-3xl whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere]"
         >
@@ -81,7 +82,7 @@ export function InboxClientPanel({
       )}
       {hasResult && failureText && (
         <StatusIndicator
-          kind="failed"
+          kind={failureKind}
           size="sm"
           className="mt-4 break-words text-sm leading-relaxed [overflow-wrap:anywhere]"
         >

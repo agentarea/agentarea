@@ -1,10 +1,9 @@
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { getAuthContext } from "@/lib/getAuthContext";
 import NetworkClient, {
-  NetworkHeaderControls,
+  NetworkGraphSkeleton,
   NetworkToolbar,
 } from "./NetworkClient";
 import { NetworkProvider } from "./NetworkProvider";
@@ -19,18 +18,11 @@ export default async function NetworkPage() {
       <ContentBlock
         header={{
           breadcrumb: [{ label: t("title") }],
-          controls: <NetworkHeaderControls />,
         }}
         subheader={<NetworkToolbar />}
         className="p-0"
       >
-        <Suspense
-          fallback={
-            <div className="flex h-full items-center justify-center">
-              <LoadingSpinner />
-            </div>
-          }
-        >
+        <Suspense fallback={<NetworkGraphSkeleton />}>
           <NetworkClient />
         </Suspense>
       </ContentBlock>

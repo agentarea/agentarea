@@ -16,6 +16,7 @@ import {
   HarnessIcon,
 } from "@/components/harnesses";
 import { ViewModeTabs } from "@/components/HeaderTabs";
+import HarnessesScene from "@/components/illustrations/HarnessesScene";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -222,12 +223,7 @@ export default function ClientsClient({
               <EmptyState
                 title={t("emptyTitle")}
                 description={t("emptyDescription")}
-                hints={[
-                  { text: t("emptyHintRegister") },
-                  { text: t("emptyHintPick") },
-                  { text: t("emptyHintScope") },
-                ]}
-                iconsType="mcp"
+                visual={<HarnessesScene />}
                 action={{
                   label: t("add"),
                   onClick: openCreate,

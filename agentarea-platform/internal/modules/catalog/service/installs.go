@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -109,6 +110,46 @@ func (x Installs) SkillVersions(ctx context.Context, ws scope.Workspace, itemIDs
 		return err
 	})
 	return out, err
+}
+
+func (x Installs) BundleOwned(ctx context.Context, ws scope.Workspace, kind string, ids []string) (map[string]string, error) {
+	out := map[string]string{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	want := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		want[id] = true
+	}
+	var results []store.BundleResult
+	if err := x.read(ctx, ws, func(s db.Session) error {
+		var err error
+		results, err = store.Bundles{}.Results(ctx, s)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	for _, r := range results {
+		if len(r.InstallResult) == 0 {
+			continue
+		}
+		var recorded struct {
+			Entities []struct {
+				Kind   string  `json:"kind"`
+				ID     *string `json:"id"`
+				Action string  `json:"action"`
+			} `json:"entities"`
+		}
+		if err := json.Unmarshal(r.InstallResult, &recorded); err != nil {
+			return nil, fmt.Errorf("installed bundle %s: install_result: %w", r.ID, err)
+		}
+		for _, e := range recorded.Entities {
+			if e.Kind == kind && e.ID != nil && want[*e.ID] && ownedAction(InstallAction(e.Action)) {
+				out[*e.ID] = r.Name
+			}
+		}
+	}
+	return out, nil
 }
 
 func (x Installs) SkillProvenance(ctx context.Context, ws scope.Workspace, itemIDs []string) (out map[string]api.ItemSource, err error) {

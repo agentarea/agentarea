@@ -2,6 +2,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import type { StreamResponse } from "@/api/client/types.gen";
 import EmptyState from "@/components/EmptyState";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
+import EventsScene from "@/components/illustrations/EventsScene";
 import { listStreams } from "@/lib/api";
 import { EntityIcon } from "@/lib/entity-icons";
 import { isPlatformStream } from "@/lib/platformStream";
@@ -46,8 +47,8 @@ export default async function StreamsContent({
     return (
       <EmptyState
         title={t("noStreams")}
+        visual={<EventsScene />}
         description={t("noStreamsDescription")}
-        iconsType="triggers"
         action={{ label: tTriggers("createTrigger"), href: "/triggers/create" }}
       />
     );

@@ -455,3 +455,19 @@ func TestAnExistingMCPTakesOnlyItsName(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestAnExistingMCPAnotherBundleOwnsIsLinked(t *testing.T) {
+	f, _ := existingFixture(t)
+	b := mustParse(t, existingBundle)
+	owner := otherInstall{id: "inst-9", name: "stubs", result: InstallResult{BundleName: "stubs", Entities: []InstalledEntity{
+		{Kind: KindMCP, Key: "s", Name: "cx-sentry", Action: ActionCreated, ID: strp("inst-sentry")}}}}
+	p, err := (&bundleAnalyzer{existence: f.w, checks: f.w, shapes: fakeShapes{}, others: []otherInstall{owner}}).analyze(context.Background(), &b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, i := range p.Issues {
+		if i.Severity == SeverityBlock {
+			t.Fatalf("blocked: %+v", i)
+		}
+	}
+}

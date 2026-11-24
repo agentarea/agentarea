@@ -56,8 +56,6 @@ import type {
   ProviderConfigUpdate,
   ProviderSpecResponse,
   ProviderSpecWithModelsResponse,
-  RelationshipWriteRequest,
-  ResolveRequest,
   ScheduleTaskCreate,
   SkillContentResponse,
   SkillCreateRequest,
@@ -2412,13 +2410,6 @@ export const previewEffectivePolicy = async (body?: {
   return withStatus(result);
 };
 
-export const getAccessControlGraph = async () => {
-  const { data, error } = await sdk.getGraphV1AccessControlGraphGet({
-    client: serverClient,
-  });
-  return { data, error };
-};
-
 export const listAccessControlRelationships = async (
   params?: ListRelationshipsV1AccessControlRelationshipsGetData["query"]
 ) => {
@@ -2426,36 +2417,6 @@ export const listAccessControlRelationships = async (
     await sdk.listRelationshipsV1AccessControlRelationshipsGet({
       client: serverClient,
       query: params,
-    });
-  return { data, error };
-};
-
-export const resolveAccessControl = async (body: ResolveRequest) => {
-  const { data, error } = await sdk.resolveAccessV1AccessControlResolvePost({
-    client: serverClient,
-    body,
-  });
-  return { data, error };
-};
-
-export const createAccessControlRelationship = async (
-  body: RelationshipWriteRequest
-) => {
-  const { data, error } =
-    await sdk.createRelationshipV1AccessControlRelationshipsPost({
-      client: serverClient,
-      body,
-    });
-  return { data, error };
-};
-
-export const deleteAccessControlRelationship = async (
-  body: RelationshipWriteRequest
-) => {
-  const { data, error } =
-    await sdk.deleteRelationshipV1AccessControlRelationshipsDelete({
-      client: serverClient,
-      body,
     });
   return { data, error };
 };
@@ -2715,5 +2676,23 @@ export const unlinkExternalIdentity = async (identityId: string) => {
 
 export const getAnalyticsConfig = async () => {
   const result = await sdk.getAnalyticsV1AnalyticsGet({ client: serverClient });
+  return withStatus(result);
+};
+
+export const listTaskDefinitions = async () => {
+  const result = await sdk.listTaskDefinitionsV1TaskDefinitionsGet({
+    client: serverClient,
+  });
+  return withStatus(result);
+};
+
+export const runTaskDefinition = async (definitionId: string) => {
+  const result = await sdk.runTaskDefinitionV1TaskDefinitionsDefinitionIdRunPost(
+    {
+      client: serverClient,
+      path: { definition_id: definitionId },
+      body: {},
+    }
+  );
   return withStatus(result);
 };

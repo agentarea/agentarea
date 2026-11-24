@@ -406,6 +406,18 @@ func TestSplitContentKeepsSupportedImages(t *testing.T) {
 	if !strings.Contains(text, "a") || !strings.Contains(text, "b") || len(imgs) != 1 || imgs[0].MimeType != "image/png" {
 		t.Fatalf("text %q images %+v", text, imgs)
 	}
+	if string(imgs[0].Data) != "hi" {
+		t.Fatalf("image data %q, want the decoded bytes %q", imgs[0].Data, "hi")
+	}
+}
+
+func TestSplitContentOmitsAnImageThatIsNotBase64(t *testing.T) {
+	text, imgs := SplitContent([]map[string]any{
+		{"type": "image", "mimeType": "image/png", "data": "not base64!"},
+	})
+	if len(imgs) != 0 || !strings.Contains(text, "image omitted") {
+		t.Fatalf("text %q images %+v", text, imgs)
+	}
 }
 
 func TestErrorsLeaveOutTheURLQuery(t *testing.T) {

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
+import TasksScene from "@/components/illustrations/TasksScene";
 import { listStreamSourceTypes } from "@/lib/api";
 import { fetchTasksPage, type TasksQuery } from "../actions";
 import TasksInfiniteList from "./TasksInfiniteList";
@@ -59,13 +60,13 @@ export async function TasksData({
     return (
       <EmptyState
         title={t("noTasks")}
+        visual={<TasksScene />}
         description={t("noTasksDescription")}
         hints={[
           { text: t("noTasksHintStart"), href: "/agents" },
           { text: t("noTasksHintTrigger"), href: "/triggers" },
           { text: t("noTasksHintElsewhere") },
         ]}
-        iconsType="tasks"
         // Tasks are started from an agent, so the way out of an empty list is
         // the agent picker -- which carries its own "create an agent" empty
         // state when the workspace has none.
