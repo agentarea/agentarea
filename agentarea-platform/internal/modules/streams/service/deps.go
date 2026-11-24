@@ -131,6 +131,8 @@ type Deps struct {
 	Notices events.Dedup
 	// AppURL is the webapp's public base (AGENTAREA_APP_URL): where a sender links their account.
 	AppURL string
+	// Slugs is the workspaces' URL slugs: a file too large to send is linked under AppURL instead.
+	Slugs identityapi.WorkspaceSlugs
 	// Executor starts and cancels trigger batch workflows (signal-with-start); nil leaves batched
 	// triggers erroring and open batches uncancelled.
 	Executor durable.Executor

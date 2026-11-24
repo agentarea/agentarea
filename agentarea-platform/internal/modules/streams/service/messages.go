@@ -16,6 +16,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/netguard"
+	identityapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/identity/api"
 	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/domain"
@@ -87,6 +88,19 @@ func (s *Service) SendMessage(ctx context.Context, in api.MessageSend) (api.Mess
 	if err != nil {
 		return api.MessageSent{}, err
 	}
+	page := ""
+	for _, f := range files {
+		if f.size <= replies.TelegramUploadLimit {
+			continue
+		}
+		if page, err = s.taskPage(ctx, c, in.TaskID); err != nil {
+			return api.MessageSent{}, err
+		}
+		if page == "" {
+			return api.MessageSent{}, tooLargeToSend(f.path)
+		}
+		break
+	}
 	tg := replies.TelegramLive{Client: &http.Client{Transport: s.d.Out.Transport(netguard.Vendor)}}
 	var id int64
 	var cut bool
@@ -104,26 +118,60 @@ func (s *Service) SendMessage(ctx context.Context, in api.MessageSend) (api.Mess
 	if err != nil {
 		return api.MessageSent{}, err
 	}
-	var sent []string
+	var sent, linked []string
+	link := func(f runFileRef, size int64) error {
+		if page == "" {
+			var err error
+			if page, err = s.taskPage(ctx, c, in.TaskID); err != nil {
+				return err
+			}
+		}
+		if page == "" {
+			return tooLargeToSend(f.path)
+		}
+		if _, _, err := tg.Message(ctx, creds["bot_token"], accounts[0], replies.LinkedFile(path.Base(f.path), size, replies.TaskFileURL(page, f.path))); err != nil {
+			return err
+		}
+		linked = append(linked, f.path)
+		return nil
+	}
 	for _, f := range files {
-		data, ct, err := s.readRunFile(ctx, c, in.TaskID, f)
+		if f.size > replies.TelegramUploadLimit {
+			if err := link(f, f.size); err != nil {
+				return api.MessageSent{}, err
+			}
+			continue
+		}
+		data, ct, err := s.readRunFile(ctx, c, in.TaskID, f.path)
+		if errors.Is(err, errRunFileTooLarge) {
+			if err := link(f, f.size); err != nil {
+				return api.MessageSent{}, err
+			}
+			continue
+		}
 		if err != nil {
 			return api.MessageSent{}, err
 		}
-		err = tg.File(ctx, creds["bot_token"], accounts[0], path.Base(f), ct, data)
+		err = tg.File(ctx, creds["bot_token"], accounts[0], path.Base(f.path), ct, data)
 		var refusedFile *replies.FileRefused
+		if errors.As(err, &refusedFile) && refusedFile.TooLarge {
+			if err := link(f, int64(len(data))); err != nil {
+				return api.MessageSent{}, err
+			}
+			continue
+		}
 		if errors.As(err, &refusedFile) {
-			return api.MessageSent{}, domain.Refused(fmt.Sprintf("Telegram refused %s: %s (sent before it: %v)", f, refusedFile.Description, sent))
+			return api.MessageSent{}, domain.Refused(fmt.Sprintf("Telegram refused %s: %s (sent before it: %v)", f.path, refusedFile.Description, sent))
 		}
 		if err != nil {
 			return api.MessageSent{}, err
 		}
-		sent = append(sent, f)
+		sent = append(sent, f.path)
 	}
 	s.log.InfoContext(ctx, "Message sent to a workspace member", "stream_id", bot.stream.ID, "source_id", bot.source.ID,
 		"user_id", in.UserID, "agent_id", agentOf(c))
 	out := api.MessageSent{Sent: true, To: in.Recipient, Stream: api.StreamRef{ID: bot.stream.ID, Name: bot.stream.Name},
-		Messenger: Telegram, Truncated: cut, Files: sent}
+		Messenger: Telegram, Truncated: cut, Files: sent, Linked: linked}
 	if id != 0 {
 		out.MessageID = &id
 	}
@@ -133,10 +181,17 @@ func (s *Service) SendMessage(ctx context.Context, in api.MessageSend) (api.Mess
 // MaxMessageFiles is how many files one send_message sends.
 const MaxMessageFiles = 10
 
+// runFileRef is a checked file of the run; size is what the sandbox reports, -1 when it does not.
+type runFileRef struct {
+	path string
+	size int64
+}
+
+var errRunFileTooLarge = errors.New("run file is larger than a Telegram bot sends")
+
 // runFiles checks the files in.Files names before anything is sent: each a path in the run's
-// workspace, there, and not over Telegram's upload limit when its size is known. It answers
-// the normalized paths; nothing is read yet.
-func (s *Service) runFiles(ctx context.Context, c authn.Caller, in api.MessageSend) ([]string, error) {
+// workspace, and there. It answers the normalized paths with their sizes; nothing is read yet.
+func (s *Service) runFiles(ctx context.Context, c authn.Caller, in api.MessageSend) ([]runFileRef, error) {
 	if len(in.Files) == 0 {
 		return nil, nil
 	}
@@ -149,7 +204,7 @@ func (s *Service) runFiles(ctx context.Context, c authn.Caller, in api.MessageSe
 	if s.d.TaskFiles == nil {
 		return nil, ErrMessagesUnwired
 	}
-	out := make([]string, 0, len(in.Files))
+	out := make([]runFileRef, 0, len(in.Files))
 	for _, raw := range in.Files {
 		p := strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(raw), "/workspace/"), "./")
 		clean := path.Clean(p)
@@ -161,16 +216,37 @@ func (s *Service) runFiles(ctx context.Context, c authn.Caller, in api.MessageSe
 			return nil, err
 		}
 		_ = d.Body.Close()
-		if n, err := strconv.ParseInt(d.Header.Get("Content-Length"), 10, 64); err == nil && n > replies.TelegramUploadLimit {
-			return nil, tooLargeToSend(clean)
+		size := int64(-1)
+		if n, err := strconv.ParseInt(d.Header.Get("Content-Length"), 10, 64); err == nil {
+			size = n
 		}
-		out = append(out, clean)
+		out = append(out, runFileRef{path: clean, size: size})
 	}
 	return out, nil
 }
 
 func tooLargeToSend(p string) error {
 	return domain.Refused(fmt.Sprintf("%s is larger than the 50 MB a Telegram bot sends", p))
+}
+
+// taskPage is the run's page in the webapp; empty when the webapp or the workspace's slug is unknown.
+func (s *Service) taskPage(ctx context.Context, c authn.Caller, taskID string) (string, error) {
+	if s.d.AppURL == "" {
+		return "", nil
+	}
+	slug := c.Workspace.Slug()
+	if slug == "" || slug == c.Workspace.ID() {
+		if s.d.Slugs == nil {
+			return "", nil
+		}
+		var err error
+		if slug, err = s.d.Slugs.Slug(ctx, c.Workspace.ID()); errors.Is(err, identityapi.ErrWorkspaceNotFound) {
+			return "", nil
+		} else if err != nil {
+			return "", err
+		}
+	}
+	return replies.TaskPageURL(s.d.AppURL, slug, taskID), nil
 }
 
 func (s *Service) openRunFile(ctx context.Context, c authn.Caller, taskID, p string) (sandboxapi.Download, error) {
@@ -194,7 +270,7 @@ func (s *Service) readRunFile(ctx context.Context, c authn.Caller, taskID, p str
 		return nil, "", err
 	}
 	if len(data) > replies.TelegramUploadLimit {
-		return nil, "", tooLargeToSend(p)
+		return nil, "", errRunFileTooLarge
 	}
 	ct := d.Header.Get("Content-Type")
 	if ct == "" || strings.HasPrefix(ct, "application/octet-stream") {

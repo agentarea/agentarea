@@ -222,8 +222,11 @@ with `task.completed`, `telegram_live` sends the chat each file the task
 published (everything under `outputs/` and the artifacts it declared) that it
 has not sent before, each as a message of its own after the answer: an mp4 as a
 video, a JPEG, PNG or WebP up to 10 MB as a photo, anything else as a document.
-A file over the 50 MB a bot uploads, or one Telegram refuses, is named in a
-short note in the chat instead. Files of an earlier turn are not sent again,
+A file over the 50 MB a bot uploads, or one Telegram refuses as too large
+(413), comes as a line `<name> (<size> MB): <link>` instead, linking the file in
+the task's files view of the web app (`/w/<slug>/tasks/<id>/files?file=<path>`),
+which asks for sign-in, never a raw storage URL that would open for anyone the
+message is forwarded to. Another refusal is named in a short note. Files of an earlier turn are not sent again,
 and a turn sends at most ten. The event service reads the files through the
 sandbox manager, so it needs `AGENTAREA_SANDBOX_FILE_SECRET` as the worker
 does.

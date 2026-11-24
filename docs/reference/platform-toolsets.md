@@ -66,7 +66,7 @@ member linked to AgentArea; there is no chat id to give.
 | `text` | string | `""` | The message, sent as plain text. Longer than 4096 characters is cut and ends with `(truncated)`. Required unless `files` is given |
 | `to` | string | `""` | The member: their user id or email. Empty is the person the run acts for |
 | `stream` | string | `""` | A stream name or id. Empty is the only messenger stream the caller may read |
-| `files` | string[] | `[]` | Paths of the run's own files, such as `outputs/clip.subtitled.mp4`, sent after the text, each as a message of its own: an mp4 as a video, a JPEG, PNG or WebP up to 10 MB as a photo, anything else as a document. At most 10 files, 50 MB each |
+| `files` | string[] | `[]` | Paths of the run's own files, such as `outputs/clip.subtitled.mp4`, sent after the text, each as a message of its own: an mp4 as a video, a JPEG, PNG or WebP up to 10 MB as a photo, anything else as a document. At most 10 files. A file over 50 MB, or one Telegram refuses as too large, is sent as a line `<name> (<size> MB): <link>` to the file in the web app instead |
 
 A messenger stream is one with a source whose type admits Telegram senders;
 the first such source of the stream sends.
@@ -82,6 +82,7 @@ the first such source of the stream sends.
 | `message_id` | integer | Telegram's id of the message; absent when only files were sent |
 | `truncated` | boolean | Whether the text was cut |
 | `files` | string[] | The files sent, as normalized paths; absent when none |
+| `linked` | string[] | The files too large to send, sent as links to the task's files in the web app; absent when none |
 
 When the member answers, the update reaches the stream like any message they
 send: its session key is their chat, so a trigger with `session.continue`
@@ -100,7 +101,7 @@ carries the conversation on.
 | `files can be sent only from a run` | `files` was given outside a run | Send files from the run that made them |
 | `'<path>' is not a path in the run's workspace` | The path is absolute outside `/workspace/` or climbs out | Pass a path such as `outputs/report.pdf` |
 | `<path> cannot be read: …` | The file is not in the run's sandbox, or the sandbox expired | Write it first; check the path |
-| `<path> is larger than the 50 MB a Telegram bot sends` | A bot cannot upload it | Compress or split the file |
+| `<path> is larger than the 50 MB a Telegram bot sends` | A bot cannot upload it and the deployment has no web app URL to link it | Set `AGENTAREA_APP_URL`, or compress or split the file |
 | `at most 10 files go in one message` | More than ten paths | Send them in several messages |
 
 Every file is checked before anything is sent, so a refused path or a size the sandbox reports over the limit sends nothing; files are then read and sent one at a time.

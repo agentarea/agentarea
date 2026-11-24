@@ -57,7 +57,7 @@ type botUploads struct {
 func (b *botUploads) serve(w http.ResponseWriter, r *http.Request) {
 	method := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
 	call := method
-	refuse := false
+	refuse, tooLarge := false, false
 	if ct, params, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct == "multipart/form-data" {
 		mr := multipart.NewReader(r.Body, params["boundary"])
 		for {
@@ -69,6 +69,7 @@ func (b *botUploads) serve(w http.ResponseWriter, r *http.Request) {
 				body, _ := io.ReadAll(part)
 				call += " " + part.FormName() + "=" + part.FileName() + ":" + string(body)
 				refuse = part.FileName() == "broken.mp4"
+				tooLarge = part.FileName() == "huge.mp4"
 			}
 		}
 	} else {
@@ -80,6 +81,11 @@ func (b *botUploads) serve(w http.ResponseWriter, r *http.Request) {
 	b.mu.Lock()
 	b.calls = append(b.calls, call)
 	b.mu.Unlock()
+	if tooLarge {
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
+		_, _ = io.WriteString(w, `{"ok":false,"description":"Request Entity Too Large"}`)
+		return
+	}
 	if refuse {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = io.WriteString(w, `{"ok":false,"description":"Bad Request: wrong file"}`)
@@ -202,5 +208,33 @@ func TestTheAnswerLinksTheTaskPage(t *testing.T) {
 	send("task.completed", "t2", "(parse me)")
 	if len(texts) != 2 || texts[1] != "(parse me)\n\nOpen in AgentArea: https://app.example.test/w/acme/tasks/t2" {
 		t.Fatalf("a plain resend keeps the link readable: %q", texts)
+	}
+}
+
+func TestAFileTooLargeForTheChatIsLinkedInTheWebapp(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	bot := &botUploads{}
+	srv := httptest.NewServer(http.HandlerFunc(bot.serve))
+	t.Cleanup(srv.Close)
+	files := &publishedFiles{data: map[string]string{}}
+	files.add("outputs/raw.mp4", "video/mp4", "big", 60<<20)
+	files.add("outputs/huge.mp4", "video/mp4", "refused", 30<<20)
+	ws, _ := scope.NewWorkspace(uuid.NewString(), "")
+	tg := replies.TelegramLive{Credentials: creds(map[string]string{"bot_token": "TOKEN"}), Redis: rdb, Client: srv.Client(), API: srv.URL,
+		Files: files, AppURL: "https://app.example.test", Slugs: slugs{ws.ID(): "acme"}}
+	if err := tg.Send(context.Background(), replies.Send{
+		Event: replies.Event{Type: "task.completed", TaskID: "t1", Timestamp: "2026-11-24T10:01:00Z"}, Reply: &domain.Reply{Markup: "telegram"},
+		Workspace: ws, Target: replies.Target{Config: map[string]any{"credential_type": "telegram", "credential_key": "k",
+			"target": map[string]any{"chat_id": 42, "message_id": 9}}},
+	}, "Done"); err != nil {
+		t.Fatal(err)
+	}
+	got := bot.take()
+	want := "sendMessage raw.mp4 (60.0 MB): https://app.example.test/w/acme/tasks/t1/files?file=outputs%2Fraw.mp4\\n" +
+		"huge.mp4 (30.0 MB): https://app.example.test/w/acme/tasks/t1/files?file=outputs%2Fhuge.mp4"
+	if len(got) != 3 || got[1] != "sendVideo video=huge.mp4:refused" || got[2] != want {
+		t.Fatalf("calls %q\nwant last %q", got, want)
 	}
 }
