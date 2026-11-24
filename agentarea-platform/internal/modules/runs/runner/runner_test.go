@@ -489,6 +489,15 @@ func TestASubtasksOutputsGoToTheTaskItWorksOn(t *testing.T) {
 	}
 }
 
+func TestARunnersAgentIsToldWhatOfItsOutputsComesBack(t *testing.T) {
+	if !strings.Contains(outputsLimitNote, "up to 50 MB each") || !strings.Contains(outputsLimitNote, "ffmpeg") {
+		t.Fatalf("note = %q", outputsLimitNote)
+	}
+	if withOutputsLimit("") != outputsLimitNote || withOutputsLimit("Be brief.") != "Be brief.\n\n"+outputsLimitNote {
+		t.Fatal("the note does not follow the agent's instructions")
+	}
+}
+
 func TestRelativePathIsPurePosixPath(t *testing.T) {
 	for in, want := range map[string]string{"a//b": "a/b", "./a/./b/": "a/b", "a": "a"} {
 		if got, ok := relativePath(in); !ok || got != want {
@@ -643,7 +652,7 @@ func TestSocketRoundTripOfATurn(t *testing.T) {
 	want := map[string]any{
 		"type": "turn.assign", "task_id": turnTaskID, "agent_id": agentID, "iteration": 1.0, "message": "do it",
 		"session_id": nil, "requested_by": "u1", "model": "gpt-5", "reasoning_effort": "high",
-		"instructions": "Be brief.\n\n## Skill: s\n\nbody", "sandbox": true, "token": "turn-token",
+		"instructions": "Be brief.\n\n## Skill: s\n\nbody\n\n" + outputsLimitNote, "sandbox": true, "token": "turn-token",
 		"mcp_path": "/mcp/clients/" + clientID,
 	}
 	for k, v := range want {
