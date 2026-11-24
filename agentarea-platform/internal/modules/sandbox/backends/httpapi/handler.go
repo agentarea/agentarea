@@ -80,6 +80,7 @@ func (h *Handler) Routes(mux *http.ServeMux) {
 	handle("PUT /sandbox/file-content", h.sandboxFileContent)
 	handle("GET /sandbox/file-content", h.sandboxFileContent)
 	handle("POST /sandbox/artifacts", h.sandboxArtifactsCollection)
+	handle("PUT /sandbox/artifacts", h.sandboxArtifactsCollection)
 	handle("GET /sandbox/artifacts", h.sandboxArtifactsCollection)
 	handle("GET /sandbox/artifacts/{id}", h.getSandboxArtifact)
 	handle("DELETE /sandbox/task/{id}", h.deleteSandboxTask)

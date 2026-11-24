@@ -247,7 +247,7 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 		return err
 	})
 	m.runner = runs.NewRunnerSurface(runs.RunnerDeps{DB: d.DB, Gate: e.gate, Clients: m.agents.RunnerClients(), Slugs: m.identity.WorkspaceSlugs(),
-		Broker: d.Broker, Redis: d.Redis, Files: harness, Workers: d.Durable, Tokens: d.TurnTokens, Live: d.LiveTurns, Log: d.Log})
+		Broker: d.Broker, Redis: d.Redis, Files: harness, Artifacts: m.sandbox.TaskFiles(), Workers: d.Durable, Tokens: d.TurnTokens, Live: d.LiveTurns, Log: d.Log})
 	m.streamsDeps = streamsDeps(e, d, m)
 	m.streams = streams.New(m.streamsDeps)
 	m.catalog.UseBundles(catalogBundles(d, m))
