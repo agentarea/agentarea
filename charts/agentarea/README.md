@@ -329,7 +329,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.serviceAccount.create | bool | `true` |  |
 | mcpManager.serviceAccount.name | string | `""` |  |
 | mcpManager.serviceAccount.annotations | object | `{}` |  |
-| mcpManager.tmpVolume.sizeLimit | string | `"1Gi"` |  |
+| mcpManager.tmpVolume.sizeLimit | string | `"2Gi"` |  |
 | mcpManager.serverless.enabled | bool | `true` |  |
 | mcpManager.serverless.idleTimeout | string | `"10m"` |  |
 | mcpManager.serverless.sweepInterval | string | `"60s"` |  |
@@ -453,7 +453,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpSandboxRunner.serviceAccount.create | bool | `true` |  |
 | mcpSandboxRunner.serviceAccount.name | string | `""` |  |
 | mcpSandboxRunner.serviceAccount.annotations | object | `{}` |  |
-| mcpSandboxRunner.tmpVolume.sizeLimit | string | `"512Mi"` |  |
+| mcpSandboxRunner.tmpVolume.sizeLimit | string | `"1536Mi"` |  |
 | mcpSandboxRunner.consumerGroup | string | `"agentarea-sandbox-runners"` |  |
 | mcpSandboxRunner.batchSize | int | `1` |  |
 | mcpSandboxRunner.resources.requests.cpu | string | `"50m"` |  |

@@ -727,10 +727,11 @@ mcpManager:
   # Scratch /tmp for artifact/upload spool files under readOnlyRootFilesystem
   # (os.CreateTemp("", ...) in internal/artifactstore, internal/api and
   # internal/sandboxruntime). Bounded so concurrent uploads/downloads can't
-  # exhaust node ephemeral storage; raise it if artifacts routinely approach
-  # this size.
+  # exhaust node ephemeral storage. Holds at least one spool of
+  # sandboxRuntime.workspace.maxFileBytes (1 GiB) with room beside it; raise
+  # both together.
   tmpVolume:
-    sizeLimit: 1Gi
+    sizeLimit: 2Gi
 
   # Serverless MCP instances: a container-backed instance is started on its
   # first call and reclaimed once it has gone idle, instead of running from
@@ -1147,9 +1148,9 @@ mcpSandboxRunner:
   # readOnlyRootFilesystem (os.CreateTemp("", ...) in
   # internal/sandboxruntime/manager.go SandboxFileUpload). Smaller than
   # mcp-manager's: the runner only ever spools one sandbox file at a time,
-  # bounded by sandboxRuntime.workspace.maxFileBytes.
+  # bounded by sandboxRuntime.workspace.maxFileBytes (1 GiB), plus headroom.
   tmpVolume:
-    sizeLimit: 512Mi
+    sizeLimit: 1536Mi
 
   consumerGroup: agentarea-sandbox-runners
   batchSize: 1
