@@ -195,7 +195,10 @@ copy of an event still in the feed to its stream under a new key, received now:
 the same source, sender, session, body and files. Every subscription reacts to
 it as to a new arrival, so a trigger admits the same sender, answers the same
 chat and continues the same session. The copy names the original in its
-causation id and the tool's `replay_of`. Replaying needs edit on the stream.
+causation id and the tool's `replay_of`. Because the copy runs as its sender,
+replaying needs edit on the stream and either being that sender (the member who
+linked the messenger account the event came from) or administering the
+workspace; anyone else is refused.
 
 **Retention is one setting for the deployment.** The feed keeps events by day.
 A day older than `AGENTAREA_EVENT_RETENTION` (7 days by default) is dropped

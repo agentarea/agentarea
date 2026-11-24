@@ -4006,7 +4006,7 @@
    },
    {
     "name": "streams_replay_event",
-    "description": "Replay a stored stream event: append a copy of it to its stream as a new arrival.\n\nEvery subscription of the stream reacts to the copy as to a new event: a trigger fires\n(admitting the same sender, replying to the same chat, continuing the same session), with the\nsame body and files, received now. Use it to re-run what an event started, e.g. after a fix.\nThe copy's ``replay_of`` names the original. Find event ids with ``streams_list_events``.\nThe caller must be able to edit the stream.",
+    "description": "Replay a stored stream event: append a copy of it to its stream as a new arrival.\n\nEvery subscription of the stream reacts to the copy as to a new event: a trigger fires\n(admitting the same sender, replying to the same chat, continuing the same session), with the\nsame body and files, received now. Use it to re-run what an event started, e.g. after a fix.\nThe copy's ``replay_of`` names the original. Find event ids with ``streams_list_events``.\nThe copy runs as its sender: the caller must be able to edit the stream and be that\nsender (the member who linked the messenger account) or administer the workspace.",
     "inputSchema": {
      "properties": {
       "workspace": {
@@ -9420,7 +9420,7 @@
    },
    {
     "name": "streams_replay_event",
-    "description": "Replay a stored stream event: append a copy of it to its stream as a new arrival.\n\nEvery subscription of the stream reacts to the copy as to a new event: a trigger fires\n(admitting the same sender, replying to the same chat, continuing the same session), with the\nsame body and files, received now. Use it to re-run what an event started, e.g. after a fix.\nThe copy's ``replay_of`` names the original. Find event ids with ``streams_list_events``.\nThe caller must be able to edit the stream.",
+    "description": "Replay a stored stream event: append a copy of it to its stream as a new arrival.\n\nEvery subscription of the stream reacts to the copy as to a new event: a trigger fires\n(admitting the same sender, replying to the same chat, continuing the same session), with the\nsame body and files, received now. Use it to re-run what an event started, e.g. after a fix.\nThe copy's ``replay_of`` names the original. Find event ids with ``streams_list_events``.\nThe copy runs as its sender: the caller must be able to edit the stream and be that\nsender (the member who linked the messenger account) or administer the workspace.",
     "inputSchema": {
      "properties": {
       "event_id": {
