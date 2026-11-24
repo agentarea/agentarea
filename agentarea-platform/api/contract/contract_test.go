@@ -80,10 +80,10 @@ func TestMCPTools(t *testing.T) {
 		t.Fatal(err)
 	}
 	spanning, pinned := m.PlatformSpanning, m.PlatformPinned
-	if spanning.Mount != "/mcp" || len(spanning.Tools) != 138 {
+	if spanning.Mount != "/mcp" || len(spanning.Tools) != 139 {
 		t.Fatalf("spanning: %s %d tools", spanning.Mount, len(spanning.Tools))
 	}
-	if pinned.Mount != "/mcp/w/{workspace}" || len(pinned.Tools) != 135 {
+	if pinned.Mount != "/mcp/w/{workspace}" || len(pinned.Tools) != 136 {
 		t.Fatalf("pinned: %s %d tools", pinned.Mount, len(pinned.Tools))
 	}
 	if len(m.ClientMCP.Tools) != 0 || len(m.ConnectionMCP.Tools) != 0 {

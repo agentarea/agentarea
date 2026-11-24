@@ -135,7 +135,7 @@ func TestRegistryMatchesContract(t *testing.T) {
 		server   contract.MCPServer
 		spanning bool
 		count    int
-	}{{c.PlatformSpanning, true, 138}, {c.PlatformPinned, false, 135}} {
+	}{{c.PlatformSpanning, true, 139}, {c.PlatformPinned, false, 136}} {
 		if len(mount.server.Tools) != mount.count {
 			t.Fatalf("%s: contract lists %d tools, want %d", mount.server.Mount, len(mount.server.Tools), mount.count)
 		}
