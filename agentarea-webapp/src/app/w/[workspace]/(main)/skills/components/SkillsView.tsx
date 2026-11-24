@@ -1,126 +1,75 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import { ArrowDownAZ, Clock, Rows3, Tag } from "lucide-react";
+import { ArrowDownAZ, Clock } from "lucide-react";
 import CatalogSuggestions from "@/components/CatalogSuggestions";
 import ContentBlock from "@/components/ContentBlock";
 import DisplayMenu from "@/components/DisplayMenu";
 import EmptyState from "@/components/EmptyState";
 import HeaderTabs from "@/components/HeaderTabs";
+import SkillsScene from "@/components/illustrations/SkillsScene";
 import SearchInput from "@/components/SearchInput";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
-import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
-import { GroupHeader } from "@/components/ui/group-header";
-import {
-  MenuRow,
-  MenuSectionLabel,
-  MenuSeparator,
-} from "@/components/ui/menu-row";
+import { MenuRow, MenuSectionLabel } from "@/components/ui/menu-row";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import {
   useWorkspacePathname,
   useWorkspaceRouter,
 } from "@/hooks/useWorkspaceNavigation";
-import { listSkillsAction } from "@/lib/server-actions";
 import { setUiView } from "@/lib/ui-prefs-client";
-import type { PaginatedSkills, Skill } from "@/types/skill";
+import type { Skill } from "@/types/skill";
 import { getValidTimestamp } from "@/utils/dateUtils";
 import CreateSkillButton from "./CreateSkillButton";
 import SkillRow from "./SkillRow";
 import SkillsCard from "./SkillsCard";
-import SkillsContentSkeleton from "./SkillsContentSkeleton";
-import { SCOPE_META, SCOPE_ORDER, scopeMeta } from "./skillsMeta";
 import {
   UpdateAllSkillsButton,
   UpdateAllSkillsResults,
   useUpdateAllSkills,
 } from "./UpdateAllSkills";
 
-type GroupKey = "scope" | "none";
 type OrderKey = "name" | "created";
 type ViewKey = "list" | "grid";
 
 interface InitialState {
   view: ViewKey;
-  group: GroupKey;
   order: OrderKey;
-  scope: string; // "" | private | ingress | egress
 }
 
 // URL params the page keeps in sync, with the value that leaves them out.
 const URL_DEFAULTS = {
   view: "list",
-  group: "none",
   order: "name",
-  network_scope: "",
   search: "",
 };
 type UrlKey = keyof typeof URL_DEFAULTS;
 
-async function fetchAllSkills(): Promise<Skill[]> {
-  const all: Skill[] = [];
-  let page = 1;
-  // Linear-style grouping needs the full set; page through with a hard cap.
-  for (; page <= 20; page++) {
-    const { data } = await listSkillsAction({
-      page,
-      page_size: 100,
-      paginated: true,
-      // Only your own skills here, installed ones included — the catalog
-      // lives in Explore.
-      include_catalog: false,
-    });
-    const res = data as PaginatedSkills | null;
-    if (!res?.items?.length) break;
-    all.push(...res.items);
-    if (!res.has_next) break;
-  }
-  return all;
-}
-
-export default function SkillsView({ initial }: { initial: InitialState }) {
+export default function SkillsView({
+  initial,
+  skills,
+  loadFailed,
+}: {
+  initial: InitialState;
+  skills: Skill[];
+  loadFailed: boolean;
+}) {
   const router = useWorkspaceRouter();
   const pathname = useWorkspacePathname();
   const searchParams = useSearchParams();
   const t = useTranslations("SkillsPage");
   const { canAdminister } = useViewerCapabilities();
 
-  const [skills, setSkills] = useState<Skill[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  // view/grouping state (URL-shareable)
+  // view state (URL-shareable)
   const [view, setView] = useState<ViewKey>(initial.view);
-  const [group, setGroup] = useState<GroupKey>(initial.group);
   const [order, setOrder] = useState<OrderKey>(initial.order);
-  const [scope, setScope] = useState(initial.scope);
   // The SearchInput in the subheader owns `?search=`; the list reads it back.
   const search = searchParams.get("search") ?? "";
 
-  // local-only UI state
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    let active = true;
-    setIsLoading(true);
-    setError(false);
-    fetchAllSkills()
-      .then((items) => active && setSkills(items))
-      .catch(() => active && setError(true))
-      .finally(() => active && setIsLoading(false));
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const updateAll = useUpdateAllSkills(() => {
-    fetchAllSkills()
-      .then(setSkills)
-      .catch(() => setError(true));
-  });
+  // The server renders the list; after an update it renders it again.
+  const reload = useCallback(() => router.refresh(), [router]);
+  const updateAll = useUpdateAllSkills(reload);
   const hasUpdates = skills.some((s) => s.update_available);
 
   // Sync the shareable bits of state into the URL without a navigation.
@@ -139,39 +88,13 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
     [searchParams, router, pathname]
   );
 
-  const toggleFavorite = useCallback((id: string) => {
-    setFavorites((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const toggleGroup = useCallback((key: string) => {
-    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
-  }, []);
-
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return skills.filter((s) => {
-      if (scope && s.network_scope !== scope) return false;
-      if (q) {
-        const hay = `${s.name} ${s.description ?? ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [skills, scope, search]);
-
-  // Counts describe the whole list, independent of the search.
-  const scopeCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: skills.length };
-    for (const s of skills) {
-      counts[s.network_scope] = (counts[s.network_scope] ?? 0) + 1;
-    }
-    return counts;
-  }, [skills]);
+    if (!q) return skills;
+    return skills.filter((s) =>
+      `${s.name} ${s.description ?? ""}`.toLowerCase().includes(q)
+    );
+  }, [skills, search]);
 
   const sortItems = useCallback(
     (arr: Skill[]) => {
@@ -190,16 +113,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
     [order]
   );
 
-  const groups = useMemo(() => {
-    if (group === "none") {
-      return [{ key: "none", label: "", color: "", items: sortItems(visible) }];
-    }
-    return SCOPE_ORDER.map((key) => {
-      const items = sortItems(visible.filter((s) => s.network_scope === key));
-      const m = scopeMeta(key);
-      return { key, label: m.label, color: m.color, items };
-    }).filter((g) => g.items.length > 0);
-  }, [group, visible, sortItems]);
+  const sorted = useMemo(() => sortItems(visible), [sortItems, visible]);
 
   // ---- toolbar control helpers ----
   const onView = (value: ViewKey) => {
@@ -207,23 +121,11 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
     setUiView("view_skills", value);
     syncUrl({ view: value });
   };
-  const onGroup = (value: GroupKey) => {
-    setGroup(value);
-    syncUrl({ group: value });
-  };
   const onOrder = (value: OrderKey) => {
     setOrder(value);
     syncUrl({ order: value });
   };
-  const onScope = (value: string) => {
-    const v = value === "all" ? "" : value;
-    setScope(v);
-    syncUrl({ network_scope: v });
-  };
-  const clearFilters = () => {
-    setScope("");
-    syncUrl({ network_scope: "", search: "" });
-  };
+  const clearSearch = () => syncUrl({ search: "" });
 
   return (
     <ContentBlock
@@ -243,31 +145,6 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
       }}
       subheader={
         <SubheaderToolbar
-          categories={
-            <CountSegmentedControl
-              items={[
-                { value: "all", label: t("filters.all") },
-                ...SCOPE_ORDER.map((key) => {
-                  const Icon = SCOPE_META[key].icon;
-                  return {
-                    value: key,
-                    label: (
-                      <span className="flex items-center gap-1.5 whitespace-nowrap">
-                        <Icon className="h-4 w-4" strokeWidth={1.8} />
-                        {t(`filters.scopeValues.${key}`)}
-                      </span>
-                    ),
-                  };
-                }),
-              ].map((item) => ({
-                ...item,
-                count: isLoading ? undefined : (scopeCounts[item.value] ?? 0),
-              }))}
-              value={scope || "all"}
-              onChange={onScope}
-              layoutId="skills-scope-filter"
-            />
-          }
           search={
             <SearchInput
               urlParamName="search"
@@ -278,20 +155,6 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
           controls={
             <>
               <DisplayMenu accessibleLabel={t("display.accessibleLabel")}>
-                <MenuSectionLabel>{t("display.grouping")}</MenuSectionLabel>
-                <MenuRow
-                  icon={<Tag className="h-3.5 w-3.5" />}
-                  label={t("display.scope")}
-                  selected={group === "scope"}
-                  onClick={() => onGroup("scope")}
-                />
-                <MenuRow
-                  icon={<Rows3 className="h-3.5 w-3.5" />}
-                  label={t("display.none")}
-                  selected={group === "none"}
-                  onClick={() => onGroup("none")}
-                />
-                <MenuSeparator />
                 <MenuSectionLabel>{t("display.ordering")}</MenuSectionLabel>
                 <MenuRow
                   icon={<ArrowDownAZ className="h-3.5 w-3.5" />}
@@ -331,10 +194,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
             />
           </div>
         )}
-        {/* Keep Skills' collapsible groups and row/card actions local; the shared view contract does not model that combination. */}
-        {isLoading ? (
-          <SkillsContentSkeleton view={view} />
-        ) : error ? (
+        {loadFailed ? (
           <div className="flex h-64 items-center justify-center text-destructive">
             {t("error.loadSkills")}
           </div>
@@ -342,6 +202,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
           <div className="space-y-4 p-4">
             <EmptyState
               title={t("noSkills")}
+              visual={<SkillsScene />}
               description={t("noSkillsDescription")}
               hints={[
                 { text: t("noSkillsHintWrite"), href: "/skills/create" },
@@ -351,7 +212,6 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
                   href: "/explore?type=skills",
                 },
               ]}
-              iconsType="skills"
               action={{
                 label: t("addSkill"),
                 onClick: () => router.push("/skills/create"),
@@ -365,7 +225,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
               title={t("emptyHere")}
               description={t("emptyHereDescription")}
               iconsType="skills"
-              action={{ label: t("filters.clear"), onClick: clearFilters }}
+              action={{ label: t("filters.clear"), onClick: clearSearch }}
             />
           </div>
         ) : view === "grid" ? (
@@ -375,38 +235,14 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
               gridTemplateColumns: "repeat(auto-fill, minmax(264px, 1fr))",
             }}
           >
-            {sortItems(visible).map((skill) => (
-              <SkillsCard
-                key={skill.id}
-                skill={skill}
-                isFavorite={favorites.has(skill.id)}
-                onToggleFavorite={toggleFavorite}
-              />
+            {sorted.map((skill) => (
+              <SkillsCard key={skill.id} skill={skill} onUpdated={reload} />
             ))}
           </div>
         ) : (
           <div>
-            {groups.map((g) => (
-              <div key={g.key}>
-                {group !== "none" && (
-                  <GroupHeader
-                    label={g.label}
-                    count={g.items.length}
-                    color={g.color}
-                    collapsed={collapsed[g.key]}
-                    onToggle={() => toggleGroup(g.key)}
-                  />
-                )}
-                {!collapsed[g.key] &&
-                  g.items.map((skill) => (
-                    <SkillRow
-                      key={skill.id}
-                      skill={skill}
-                      isFavorite={favorites.has(skill.id)}
-                      onToggleFavorite={toggleFavorite}
-                    />
-                  ))}
-              </div>
+            {sorted.map((skill) => (
+              <SkillRow key={skill.id} skill={skill} onUpdated={reload} />
             ))}
           </div>
         )}

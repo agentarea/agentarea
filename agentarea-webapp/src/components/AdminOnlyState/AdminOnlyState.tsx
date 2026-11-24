@@ -6,7 +6,6 @@ import EmptyState from "@/components/EmptyState";
 
 export type AdminOnlyArea =
   | "policies"
-  | "accessControl"
   | "policyEditor"
   | "auditLog"
   | "networkPeopleAccess"

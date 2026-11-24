@@ -16,6 +16,7 @@ import {
   TriggerSourceMark,
   type EnrichedTrigger,
 } from "./triggerDisplay";
+import TriggerSwitch from "./TriggerSwitch";
 
 interface TriggersTableProps {
   triggers: EnrichedTrigger[];
@@ -163,15 +164,31 @@ export default function TriggersTable({
     {
       header: t("status"),
       accessor: "status",
-      headerClassName: "w-[120px]",
+      headerClassName: "w-[170px]",
+      // On or off is the switch; words only for what the switch cannot say.
       render: (_value, trigger) => {
         if (!trigger) return null;
         const health = getTriggerHealth(trigger);
         const status = getTriggerStatusPresentation(health);
         return (
-          <StatusIndicator size="sm" kind={status.kind}>
-            {tStatus(health)}
-          </StatusIndicator>
+          <span className="flex min-w-0 items-center gap-2">
+            <TriggerSwitch
+              key={`${trigger.id}-${trigger.is_active}`}
+              triggerId={trigger.id}
+              name={trigger.name}
+              active={Boolean(trigger.is_active)}
+              disabled={health === "needs_owner"}
+            />
+            {(health === "error" || health === "needs_owner") && (
+              <StatusIndicator
+                size="sm"
+                kind={status.kind}
+                className="min-w-0 truncate"
+              >
+                {tStatus(health)}
+              </StatusIndicator>
+            )}
+          </span>
         );
       },
     },

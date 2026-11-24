@@ -144,6 +144,9 @@ func (t SkillToolset) EditMetadata(ctx context.Context, c authn.Caller, id strin
 	if err != nil {
 		return api.SkillSummary{}, err
 	}
+	if err := t.K.RequireUnmanaged(ctx, c.Workspace, u); err != nil {
+		return api.SkillSummary{}, err
+	}
 	v, err := t.K.Update(ctx, c, u, name, description, nil)
 	if errors.Is(err, ErrSkillNotFound) {
 		err = api.ErrSkillNotFound
@@ -158,6 +161,9 @@ func (t SkillToolset) SetContent(ctx context.Context, c authn.Caller, id, conten
 		return api.SkillSummary{}, err
 	}
 	if err := t.K.s.Require(ctx, c, "edit", u); err != nil {
+		return api.SkillSummary{}, err
+	}
+	if err := t.K.RequireUnmanaged(ctx, c.Workspace, u); err != nil {
 		return api.SkillSummary{}, err
 	}
 	err = t.K.s.write(ctx, c.Workspace, func(sess db.Session) error {
@@ -179,10 +185,18 @@ func (t SkillToolset) ReplaceFiles(ctx context.Context, c authn.Caller, id strin
 	if err != nil {
 		return api.SkillSummary{}, err
 	}
+	if err := t.K.RequireUnmanaged(ctx, c.Workspace, u); err != nil {
+		return api.SkillSummary{}, err
+	}
+	return t.replaceFiles(ctx, c, id, u, files)
+}
+
+// replaceFiles writes a skill's package; a bundle's deploy writes its own skills through it.
+func (t SkillToolset) replaceFiles(ctx context.Context, c authn.Caller, id string, u uuid.UUID, files []api.SkillFileText) (api.SkillSummary, error) {
 	if err := t.K.s.Require(ctx, c, "edit", u); err != nil {
 		return api.SkillSummary{}, err
 	}
-	err = t.K.s.write(ctx, c.Workspace, func(sess db.Session) error {
+	err := t.K.s.write(ctx, c.Workspace, func(sess db.Session) error {
 		sk, ok, err := t.K.get(ctx, sess, u)
 		if err != nil {
 			return err

@@ -121,10 +121,16 @@ describe("buildNetworkGraph", () => {
     const access = graph.edges.filter(
       (item) => item.relation === "person_access"
     );
-    expect(access.map((item) => [item.source, item.off])).toEqual([
-      [personNodeId("u1"), false],
-      [personNodeId("u2"), true],
-    ]);
+    // A refusal is the absence of a link; the People panel lists it.
+    expect(access.map((item) => item.source)).toEqual([personNodeId("u1")]);
+  });
+
+  it("sizes agents by their own links, not by who may reach them", () => {
+    const withPeople = buildNetworkGraph(sample, people);
+    const without = buildNetworkGraph(sample, null);
+    const degreeOf = (graph: typeof withPeople) =>
+      graph.nodes.find((item) => item.id === "lead")?.degree;
+    expect(degreeOf(withPeople)).toBe(degreeOf(without));
   });
 });
 

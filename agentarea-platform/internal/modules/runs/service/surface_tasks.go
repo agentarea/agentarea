@@ -306,11 +306,6 @@ func (s *Surface) Summary(ctx context.Context, agentID, taskID string) (wirejson
 	}, nil
 }
 
-// InboxStatuses is INBOX_STATUSES in order.
-func InboxStatuses() []string {
-	return []string{"waiting_for_approval", "waiting_for_input", "completed", "failed"}
-}
-
 const escalationQueryConcurrency = 8
 
 // Inbox is get_inbox_items.
@@ -319,7 +314,7 @@ func (s *Surface) Inbox(ctx context.Context, status *string, agentID *string, pa
 	if err != nil {
 		return nil, err
 	}
-	statuses := InboxStatuses()
+	statuses := api.InboxStatuses()
 	if status != nil {
 		statuses = []string{*status}
 	}

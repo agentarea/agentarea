@@ -2,10 +2,14 @@
 
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { CircleAlert, ShieldOff, Unplug } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+import {
+  useWorkspacePathname,
+  useWorkspaceRouter,
+} from "@/hooks/useWorkspaceNavigation";
+import { usefulFilterTabs } from "@/lib/filterTabs";
 import { LIST_FILTERS, type ListFilter } from "../list-sections";
 
 const FILTER_ICON: Record<ListFilter, LucideIcon | undefined> = {
@@ -17,14 +21,17 @@ const FILTER_ICON: Record<ListFilter, LucideIcon | undefined> = {
 
 /**
  * Segmented filter over the connections list. Drives the `filter` URL param;
- * "all" clears it.
+ * "all" clears it. Only the tabs that narrow the list show, and "attention"
+ * not while the list is already split by state.
  */
 export default function ConnectionsFilter({
   currentFilter,
   counts,
+  groupedByState,
 }: {
   currentFilter: ListFilter;
   counts: Record<ListFilter, number>;
+  groupedByState: boolean;
 }) {
   const t = useTranslations("MCPServersPage.listFilters");
   const router = useWorkspaceRouter();
@@ -42,11 +49,19 @@ export default function ConnectionsFilter({
     router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
 
+  const tabs = usefulFilterTabs(
+    LIST_FILTERS.filter(
+      (key) => !(groupedByState && key === "attention" && currentFilter !== key)
+    ).map((key) => ({ value: key, count: counts[key] })),
+    currentFilter
+  );
+  if (tabs.length === 0) return null;
+
   // The subtle (grey) pill, same as the automation and inbox filters: this
   // narrows the list rather than navigating the page.
   return (
     <CountSegmentedControl<ListFilter>
-      items={LIST_FILTERS.map((key) => {
+      items={tabs.map(({ value: key }) => {
         const Icon = FILTER_ICON[key];
         return {
           value: key,

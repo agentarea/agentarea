@@ -9,7 +9,6 @@ import CreateTriggerButton from "./components/CreateTriggerButton";
 import TriggersContent from "./components/TriggersContent";
 import TriggersDisplayMenu from "./components/TriggersDisplayMenu";
 import TriggersSkeleton from "./components/TriggersSkeleton";
-import TriggersTypeFilterSection from "./components/TriggersTypeFilterSection";
 
 export const metadata = {
   title: "Automation",
@@ -36,11 +35,6 @@ export default async function TriggersPage({
       ? resolvedSearchParams.search
       : "";
 
-  const typeFilter =
-    typeof resolvedSearchParams.type === "string"
-      ? resolvedSearchParams.type
-      : "all";
-
   const groupBy =
     resolvedSearchParams.group === "none"
       ? ("none" as const)
@@ -54,11 +48,6 @@ export default async function TriggersPage({
       }}
       subheader={
         <SubheaderToolbar
-          categories={
-            <Suspense fallback={<div className="h-7" />}>
-              <TriggersTypeFilterSection currentType={typeFilter} />
-            </Suspense>
-          }
           search={
             <SearchInput
               urlParamName="search"
@@ -76,13 +65,12 @@ export default async function TriggersPage({
       }
     >
       <Suspense
-        key={`${viewMode}-${searchQuery}-${typeFilter}-${groupBy}`}
+        key={`${viewMode}-${searchQuery}-${groupBy}`}
         fallback={<TriggersSkeleton viewMode={viewMode} />}
       >
         <TriggersContent
           viewMode={viewMode}
           searchQuery={searchQuery}
-          typeFilter={typeFilter}
           groupBy={groupBy}
         />
       </Suspense>

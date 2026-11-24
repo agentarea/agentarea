@@ -119,6 +119,13 @@ type InboxPage struct {
 	ToolCallApprovals []HeldToolCall `json:"tool_call_approvals"`
 }
 
+// InboxStatuses are the task statuses that wait on a person: an approval, an
+// answer, or a prerequisite only they can supply. A finished or failed run asks
+// nothing of anyone, so it stays in the task list.
+func InboxStatuses() []string {
+	return []string{"waiting_for_approval", "waiting_for_input", "blocked"}
+}
+
 // PlatformInbox is what the platform inbox toolset calls (tools/inbox_toolset.py).
 type PlatformInbox interface {
 	// List is the runs of the inbox statuses (status nil for all of them) and,

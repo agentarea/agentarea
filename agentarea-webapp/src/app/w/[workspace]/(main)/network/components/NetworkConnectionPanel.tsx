@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
-  AlertTriangle,
   ArrowDownLeft,
   ArrowUpRight,
   ExternalLink,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 import type { EffectivePolicy } from "@/api/client/types.gen";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import Link from "@/components/WorkspaceLink";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { EntityIcon, type EntityKind } from "@/lib/entity-icons";
@@ -109,10 +109,10 @@ export default function NetworkConnectionPanel({
   return (
     <aside
       aria-label={t("panel")}
-      className="z-10 flex max-h-[45%] w-full shrink-0 flex-col overflow-hidden border-t border-border bg-background md:h-full md:max-h-none md:w-80 md:border-l md:border-t-0 xl:w-96"
+      className="z-10 flex max-h-[45%] w-full shrink-0 flex-col overflow-hidden border-t border-border bg-white dark:bg-zinc-800 md:absolute md:inset-y-0 md:right-0 md:max-h-none md:w-80 md:border-l md:border-t-0 md:shadow-lg xl:w-96"
     >
       <header className="flex shrink-0 items-start gap-3 border-b border-border px-4 py-4">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground/75">
           <EntityIcon kind={kinds[node.type]} />
         </span>
         <div className="min-w-0 flex-1">
@@ -132,14 +132,12 @@ export default function NetworkConnectionPanel({
       </header>
       <div className="flex-1 space-y-5 overflow-auto p-4">
         {issues.length > 0 && (
-          <ul className="space-y-1.5 rounded-md border border-destructive/30 bg-destructive/5 p-3">
+          <ul className="space-y-1.5">
             {issues.map((issue) => (
-              <li
-                key={issue}
-                className="flex items-start gap-2 text-xs text-destructive"
-              >
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                {issue}
+              <li key={issue} className="text-xs">
+                <StatusIndicator kind="attention" size="sm">
+                  {issue}
+                </StatusIndicator>
               </li>
             ))}
           </ul>

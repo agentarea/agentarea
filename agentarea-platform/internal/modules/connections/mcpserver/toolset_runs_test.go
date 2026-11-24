@@ -84,7 +84,7 @@ func (f fakeInbox) List(_ context.Context, _ authn.Caller, status *string, agent
 		s = *status
 	}
 	f.saw("inbox %s %q %d %d", s, agentID, page, size)
-	return runsapi.InboxPage{Items: []runsapi.InboxItem{{ID: "r1", Status: "failed"}}, Total: 1, Page: page, PageSize: size}, nil
+	return runsapi.InboxPage{Items: []runsapi.InboxItem{{ID: "r1", Status: "blocked"}}, Total: 1, Page: page, PageSize: size}, nil
 }
 
 func TestRunsToolset(t *testing.T) {
@@ -121,7 +121,7 @@ func TestInboxToolset(t *testing.T) {
 	runToolCases(t, ts, rec, []toolCase{
 		{"inbox_list", `{}`, `inbox <all> "" 1 50`, `"page_size":50`, false},
 		{"inbox_list", `{"status":"","agent_id":"a1","page":2,"page_size":10}`, `inbox <all> "a1" 2 10`, `"page":2`, false},
-		{"inbox_list", `{"status":"failed"}`, `inbox failed "" 1 50`, `"r1"`, false},
-		{"inbox_list", `{"status":"lost"}`, "", "Unknown inbox status 'lost'; expected one of ['waiting_for_approval', 'waiting_for_input', 'completed', 'failed']", true},
+		{"inbox_list", `{"status":"blocked"}`, `inbox blocked "" 1 50`, `"r1"`, false},
+		{"inbox_list", `{"status":"completed"}`, "", "Unknown inbox status 'completed'; expected one of ['waiting_for_approval', 'waiting_for_input', 'blocked']", true},
 	})
 }

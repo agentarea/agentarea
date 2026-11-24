@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { Clock } from "lucide-react";
+import { Clock, MessagesSquare, Webhook, type LucideIcon } from "lucide-react";
 import type { TriggerResponse } from "@/api/client/types.gen";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { deterministicHue } from "@/lib/avatar-hue";
@@ -44,6 +44,15 @@ export interface TriggerLike {
  * business and never decides the lane.
  */
 export type TriggerLane = "channel" | "event" | "schedule";
+
+/** The lanes in the order the list shows them. */
+export const TRIGGER_LANES: TriggerLane[] = ["channel", "event", "schedule"];
+
+export const LANE_ICON: Record<TriggerLane, LucideIcon> = {
+  channel: MessagesSquare,
+  event: Webhook,
+  schedule: Clock,
+};
 
 export function getTriggerLane(trigger: TriggerLike): TriggerLane {
   if (trigger.trigger_type === "cron") return "schedule";

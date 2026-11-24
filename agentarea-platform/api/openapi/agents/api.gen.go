@@ -956,11 +956,19 @@ type SkillRef struct {
 
 // SkillResponse Skill response model.
 type SkillResponse struct {
-	CreatedAt       string                      `json:"created_at"`
-	Customized      *bool                       `json:"customized,omitempty"`
-	Description     *string                     `json:"description"`
-	Id              string                      `json:"id"`
-	IsCatalog       *bool                       `json:"is_catalog,omitempty"`
+	// AgentCount Live agents the skill is attached to.
+	AgentCount *int `json:"agent_count,omitempty"`
+
+	// Bundle Name of the bundle install that manages the skill; such a skill is edited in the bundle and redeployed, not here.
+	Bundle      *string `json:"bundle"`
+	CreatedAt   string  `json:"created_at"`
+	Customized  *bool   `json:"customized,omitempty"`
+	Description *string `json:"description"`
+	Id          string  `json:"id"`
+	IsCatalog   *bool   `json:"is_catalog,omitempty"`
+
+	// LatestVersion The catalog item's current version; an update waits when it differs from version.
+	LatestVersion   *string                     `json:"latest_version"`
 	Name            string                      `json:"name"`
 	NetworkScope    string                      `json:"network_scope"`
 	RegistryItemId  *string                     `json:"registry_item_id"`
@@ -968,12 +976,18 @@ type SkillResponse struct {
 	RegistryScope   *SkillResponseRegistryScope `json:"registry_scope"`
 	RegistryTrust   *SkillResponseRegistryTrust `json:"registry_trust"`
 	RemovedUpstream *bool                       `json:"removed_upstream,omitempty"`
-	Slug            string                      `json:"slug"`
-	SourceType      string                      `json:"source_type"`
-	SourceUrl       *string                     `json:"source_url"`
-	UpdateAvailable *bool                       `json:"update_available,omitempty"`
-	UpdatedAt       string                      `json:"updated_at"`
-	WorkspaceId     string                      `json:"workspace_id"`
+
+	// Revision Versions the skill has saved, the current one included.
+	Revision        *int    `json:"revision,omitempty"`
+	Slug            string  `json:"slug"`
+	SourceType      string  `json:"source_type"`
+	SourceUrl       *string `json:"source_url"`
+	UpdateAvailable *bool   `json:"update_available,omitempty"`
+	UpdatedAt       string  `json:"updated_at"`
+
+	// Version Catalog version this install runs; null for a skill that did not come from the catalog.
+	Version     *string `json:"version"`
+	WorkspaceId string  `json:"workspace_id"`
 }
 
 // SkillResponseRegistryScope defines model for SkillResponse.RegistryScope.

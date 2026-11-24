@@ -15994,6 +15994,25 @@
       "SkillResponse": {
         "description": "Skill response model.",
         "properties": {
+          "agent_count": {
+            "default": 0,
+            "description": "Live agents the skill is attached to.",
+            "title": "Agent Count",
+            "type": "integer"
+          },
+          "bundle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Name of the bundle install that manages the skill; such a skill is edited in the bundle and redeployed, not here.",
+            "title": "Bundle"
+          },
           "created_at": {
             "title": "Created At",
             "type": "string"
@@ -16022,6 +16041,19 @@
             "default": false,
             "title": "Is Catalog",
             "type": "boolean"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The catalog item's current version; an update waits when it differs from version.",
+            "title": "Latest Version"
           },
           "name": {
             "title": "Name",
@@ -16090,6 +16122,12 @@
             "title": "Removed Upstream",
             "type": "boolean"
           },
+          "revision": {
+            "default": 0,
+            "description": "Versions the skill has saved, the current one included.",
+            "title": "Revision",
+            "type": "integer"
+          },
           "slug": {
             "title": "Slug",
             "type": "string"
@@ -16117,6 +16155,19 @@
           "updated_at": {
             "title": "Updated At",
             "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Catalog version this install runs; null for a skill that did not come from the catalog.",
+            "title": "Version"
           },
           "workspace_id": {
             "title": "Workspace Id",
@@ -30129,8 +30180,7 @@
                   "enum": [
                     "waiting_for_approval",
                     "waiting_for_input",
-                    "completed",
-                    "failed"
+                    "blocked"
                   ],
                   "type": "string"
                 },

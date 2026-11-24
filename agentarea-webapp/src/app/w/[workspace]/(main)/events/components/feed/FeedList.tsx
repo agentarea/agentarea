@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { ArrowUp, MessagesSquare } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import type { FeedEventResponse, Processing } from "@/api/client/types.gen";
 import EmptyState from "@/components/EmptyState";
 import { useViewerZone } from "@/components/EventTime";
+import EventsScene from "@/components/illustrations/EventsScene";
 import { Button } from "@/components/ui/button";
 import WorkspaceLink from "@/components/WorkspaceLink";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { ENTITY_ICONS } from "@/lib/entity-icons";
 import {
   applyProcessing,
   applyRecorded,
@@ -270,8 +270,8 @@ export default function FeedList({
         ) : (
           <EmptyState
             title={t("empty")}
+            visual={<EventsScene />}
             description={t("emptyDescription")}
-            icons={[MessagesSquare, ENTITY_ICONS.stream, ENTITY_ICONS.trigger]}
             action={{ label: t("emptyChannel"), href: "/channels/new" }}
             additionAction={{
               label: t("emptyStreams"),

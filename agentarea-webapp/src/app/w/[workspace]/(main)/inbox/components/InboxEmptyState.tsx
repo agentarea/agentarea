@@ -3,13 +3,12 @@
 import { useTranslations } from "next-intl";
 import {
   Bot,
-  CheckCircle2,
+  CircleSlash,
   History,
   MessageCircleQuestion,
   ScrollText,
   ShieldAlert,
   ShieldCheck,
-  XCircle,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -32,8 +31,7 @@ const ICONS: Record<FilterValue, LucideIcon[]> = {
   all: [Bot, ShieldCheck, ScrollText],
   pending: [Bot, ShieldAlert, ScrollText],
   input: [Bot, MessageCircleQuestion, ScrollText],
-  completed: [CheckCircle2, ShieldCheck, ScrollText],
-  failed: [XCircle, ShieldAlert, ScrollText],
+  blocked: [Bot, CircleSlash, ScrollText],
   decided: [ShieldCheck, History, ScrollText],
 };
 

@@ -106,8 +106,7 @@ func (e ToolCallApprovalStatus) Valid() bool {
 
 // Defines values for GetInboxItemsV1InboxGetParamsStatus.
 const (
-	GetInboxItemsV1InboxGetParamsStatusCompleted          GetInboxItemsV1InboxGetParamsStatus = "completed"
-	GetInboxItemsV1InboxGetParamsStatusFailed             GetInboxItemsV1InboxGetParamsStatus = "failed"
+	GetInboxItemsV1InboxGetParamsStatusBlocked            GetInboxItemsV1InboxGetParamsStatus = "blocked"
 	GetInboxItemsV1InboxGetParamsStatusWaitingForApproval GetInboxItemsV1InboxGetParamsStatus = "waiting_for_approval"
 	GetInboxItemsV1InboxGetParamsStatusWaitingForInput    GetInboxItemsV1InboxGetParamsStatus = "waiting_for_input"
 )
@@ -115,9 +114,7 @@ const (
 // Valid indicates whether the value is a known member of the GetInboxItemsV1InboxGetParamsStatus enum.
 func (e GetInboxItemsV1InboxGetParamsStatus) Valid() bool {
 	switch e {
-	case GetInboxItemsV1InboxGetParamsStatusCompleted:
-		return true
-	case GetInboxItemsV1InboxGetParamsStatusFailed:
+	case GetInboxItemsV1InboxGetParamsStatusBlocked:
 		return true
 	case GetInboxItemsV1InboxGetParamsStatusWaitingForApproval:
 		return true

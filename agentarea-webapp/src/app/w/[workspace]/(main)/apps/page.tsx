@@ -7,6 +7,7 @@ import EmptyState from "@/components/EmptyState/EmptyState";
 import EntityMark from "@/components/EntityMark";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
 import { ViewModeTabs } from "@/components/HeaderTabs";
+import AppsScene from "@/components/illustrations/AppsScene";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
 import {
   CollectionSkeleton,
@@ -164,8 +165,8 @@ async function AppsList({
       emptyState={
         <EmptyState
           title={labels.emptyTitle}
+          visual={<AppsScene />}
           description={labels.emptyDescription}
-          iconsType="mcp"
           action={{ label: labels.connectAction, href: "/connections" }}
         />
       }

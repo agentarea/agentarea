@@ -13,6 +13,7 @@ import type {
   EffectivePolicy,
   NetworkPeopleAccessResponse,
 } from "@/api/client/types.gen";
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -195,27 +196,30 @@ export default function NetworkGraphView({
     links: visible.edges.length,
   };
 
+  // Only what this lens draws, in the canvas's own neutral palette: colour
+  // there means status, so the legend carries none for scope.
   const legend = (
     <>
-      <Legend swatch="h-2.5 w-2.5 rounded-full bg-primary">
+      <Legend swatch="h-2.5 w-2.5 rounded-full bg-foreground">
         {t("legend.agent")}
       </Legend>
-      <Legend swatch="h-2.5 w-2.5 rounded-full border-2 border-emerald-600 dark:border-emerald-400">
-        {t("legend.internal")}
-      </Legend>
-      <Legend swatch="h-2.5 w-2.5 rounded-full border-2 border-amber-600 dark:border-amber-400">
-        {t("legend.external")}
-      </Legend>
-      <Legend swatch="h-2 w-2 rotate-45 bg-violet-600 dark:bg-violet-400">
+      {lens !== "delegation" && (
+        <Legend swatch="h-2.5 w-2.5 rounded-full border-2 border-border bg-background">
+          {t("legend.resource")}
+        </Legend>
+      )}
+      <Legend swatch="h-2 w-2 rounded-full border-2 border-border bg-background">
         {t("legend.trigger")}
       </Legend>
       <Legend swatch="w-5 border-t-2 border-primary">
         {t("legend.delegates")}
       </Legend>
-      <Legend swatch="w-5 border-t-2 border-dashed border-muted-foreground">
-        {t("legend.uses")}
-      </Legend>
-      <Legend swatch="w-5 border-t-2 border-dotted border-violet-600 dark:border-violet-400">
+      {lens !== "delegation" && (
+        <Legend swatch="w-5 border-t-2 border-dashed border-muted-foreground">
+          {t("legend.uses")}
+        </Legend>
+      )}
+      <Legend swatch="w-5 border-t-2 border-dotted border-muted-foreground">
         {t("legend.starts")}
       </Legend>
       {lens === "flow" && (
@@ -223,7 +227,7 @@ export default function NetworkGraphView({
           <Legend swatch="w-5 border-t-2 border-muted-foreground">
             {t("legend.inbound")}
           </Legend>
-          <Legend swatch="w-5 border-t-2 border-amber-600 dark:border-amber-400">
+          <Legend swatch="w-5 border-t-2 border-foreground">
             {t("legend.outbound")}
           </Legend>
         </>
@@ -233,7 +237,8 @@ export default function NetworkGraphView({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-layoutBackground">
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+      {/* On wide screens a panel overlays the canvas instead of narrowing it. */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
         <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
           {mode === "list" ? (
             <NetworkSelectionList
@@ -245,7 +250,7 @@ export default function NetworkGraphView({
               onSelectEdge={selectEdge}
             />
           ) : visible.nodes.length === 0 ? (
-            <div className="flex h-full items-center justify-center px-6 text-center text-sm font-medium">
+            <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
               {t(`lenses.${lens}.empty`)}
             </div>
           ) : (
@@ -264,28 +269,37 @@ export default function NetworkGraphView({
             />
           )}
           {mode === "graph" && pathNode && (
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="xs"
               onClick={() => setPathOf(null)}
-              className="absolute left-4 top-4 flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs shadow-sm hover:bg-muted"
+              className="absolute left-4 top-4 max-w-[calc(100%-2rem)] gap-2 bg-background"
               aria-label={accessText("clearFocus")}
             >
               <span className="truncate">
                 {accessText("focusedOn", { name: pathNode.label })}
               </span>
-              <X className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            </button>
+              <X className="shrink-0 text-muted-foreground" />
+            </Button>
+          )}
+          {mode === "graph" && visible.nodes.length > 0 && !pathNode && (
+            <p className="pointer-events-none absolute left-4 top-4 m-0 max-w-[min(28rem,calc(100%-10rem))] text-[12px] leading-snug text-muted-foreground">
+              {t(`lenses.${lens}.description`)}
+            </p>
           )}
           {mode === "graph" && visible.nodes.length > 0 && (
             <Popover>
               <PopoverTrigger asChild>
-                <button
+                <Button
                   type="button"
-                  className="absolute right-4 top-4 flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  variant="outline"
+                  size="xs"
+                  className="absolute right-4 top-4 gap-1.5 bg-background text-muted-foreground"
                 >
-                  <Info className="h-3.5 w-3.5" />
+                  <Info />
                   {t("legendTitle")}
-                </button>
+                </Button>
               </PopoverTrigger>
               <PopoverContent
                 align="end"

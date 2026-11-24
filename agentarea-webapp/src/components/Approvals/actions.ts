@@ -5,13 +5,14 @@ import { getInboxItemsV1InboxGet } from "@/api/client/sdk.gen";
 import { listToolCallApprovals, resolvePrincipals } from "@/lib/api";
 
 /**
- * How many decisions are waiting in this workspace: tasks held on an approval
- * and client tool calls held on an approval link.
+ * How much waits on a person in this workspace: every inbox task (an
+ * approval, a question, a block) and client tool calls held on an approval
+ * link.
  */
-export async function getPendingApprovalCountAction() {
+export async function getInboxCountAction() {
   const tasks = await getInboxItemsV1InboxGet({
     client: serverClient,
-    query: { status: "waiting_for_approval", page_size: 1 },
+    query: { page_size: 1 },
   });
   const toolCalls = await listToolCallApprovals({
     status: "pending",

@@ -1,13 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Link as LinkIcon, Plus, UsersRound, X } from "lucide-react";
+import { Link as LinkIcon, ListChecks, Plus, UsersRound, X } from "lucide-react";
 import { AgentIdentity } from "@/components/AgentIdentity";
 import { AgentSelect } from "@/components/AgentSelect";
+import BaseModal from "@/components/BaseModal";
+import FormError from "@/components/FormError";
+import {
+  EmptyRow,
+  FactRow,
+  SectionCard,
+  SectionCardHead,
+  SoftTile,
+} from "@/components/Overview/OverviewCard";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -16,17 +26,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Switch } from "@/components/ui/switch";
 import Link from "@/components/WorkspaceLink";
 import { RegistryBadge } from "@/components/RegistryBadge";
 import { useCurrency } from "@/hooks/useCurrency";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
+import { ENTITY_ICONS } from "@/lib/entity-icons";
 import {
   resolveMcpRef,
   type McpInstance,
   type McpServer,
 } from "@/lib/mcp/resolveMcpRef";
 import {
+  formatMoney,
   getCurrencySymbol,
   isNegativeMoneyInput,
   isPositiveMoneyInput,
@@ -603,52 +617,37 @@ function buildRuleBodies(
 function EffectSegmented({
   value,
   onChange,
-  disabled,
 }: {
   value: RuleKind;
   onChange: (effect: RuleKind) => void;
-  disabled?: boolean;
 }) {
   const t = useTranslations("PoliciesPage.editor");
   return (
-    <div className="inline-flex flex-wrap items-center gap-px border border-border/70 bg-muted/30 p-px">
-      {EDITABLE_KINDS.map((effect) => {
-        const style = kindStyle(effect);
-        const Icon = style.icon;
-        const active = effect === value;
-        return (
-          <button
-            key={effect}
-            type="button"
-            disabled={disabled}
-            onClick={() => onChange(effect)}
-            className={cn(
-              "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60",
-              active
-                ? "bg-background text-foreground shadow-[inset_0_-2px_0_hsl(var(--primary))]"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Icon
-              className="h-3.5 w-3.5 shrink-0"
-              strokeWidth={1.8}
-              aria-hidden
-            />
-            {effect === "cap"
-              ? t("effects.cap")
-              : effect === "deny"
-                ? t("effects.deny")
-                : effect === "approval"
-                  ? t("effects.approval")
-                  : effect === "install"
-                    ? t("effects.install")
-                    : t("effects.safety")}
-          </button>
-        );
+    <SegmentedControl<RuleKind>
+      value={value}
+      onChange={onChange}
+      layoutId="policy-effect-control"
+      className="max-w-full flex-wrap"
+      itemClassName="min-w-0 px-3"
+      items={EDITABLE_KINDS.map((effect) => {
+        const Icon = kindStyle(effect).icon;
+        return {
+          value: effect,
+          label: (
+            <span className="flex items-center gap-1.5 whitespace-nowrap">
+              <Icon className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+              {t(`effects.${effect}`)}
+            </span>
+          ),
+        };
       })}
-    </div>
+    />
   );
 }
+
+const OPTION_TILE =
+  "flex min-h-[58px] cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2 text-left transition-colors hover:bg-muted/40";
+const OPTION_TILE_SELECTED = "border-primary/40 bg-primary/5";
 
 function TagInput({
   values,
@@ -676,7 +675,7 @@ function TagInput({
           {values.map((value) => (
             <span
               key={value}
-              className="inline-flex items-center gap-1 border border-border/70 bg-muted/30 px-2 py-0.5 font-mono text-xs"
+              className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 font-mono text-xs"
             >
               {value}
               <button
@@ -805,11 +804,7 @@ function ToolSelector({
                     toggle(tool.id);
                   }
                 }}
-                className={cn(
-                  "cursor-pointer",
-                  "flex min-h-[58px] items-start gap-2 border border-border/70 bg-background px-3 py-2 text-left transition-colors hover:bg-muted/30",
-                  selected && "shadow-[inset_2px_0_0_hsl(var(--primary))]"
-                )}
+                className={cn(OPTION_TILE, selected && OPTION_TILE_SELECTED)}
               >
                 <Checkbox
                   checked={selected}
@@ -821,7 +816,7 @@ function ToolSelector({
                   <span className="block truncate text-sm font-medium text-foreground">
                     {tool.label}
                   </span>
-                  <span className="mt-1 flex flex-wrap gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                  <span className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-muted-foreground">
                     <span>{sourceLabel}</span>
                     <span>{agentLabel}</span>
                   </span>
@@ -835,13 +830,13 @@ function ToolSelector({
                       {tool.parameterKeys.slice(0, 4).map((param) => (
                         <span
                           key={param}
-                          className="border border-border/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                          className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10.5px] text-muted-foreground"
                         >
                           {param}
                         </span>
                       ))}
                       {tool.parameterKeys.length > 4 && (
-                        <span className="px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                        <span className="px-1.5 py-0.5 text-[10.5px] text-muted-foreground">
                           +{tool.parameterKeys.length - 4}
                         </span>
                       )}
@@ -853,13 +848,13 @@ function ToolSelector({
           })}
         </div>
       ) : (
-        <p className="border border-dashed border-border/70 px-3 py-3 text-sm text-muted-foreground">
+        <p className="m-0 text-[12px] text-muted-foreground">
           {emptyText}
         </p>
       )}
 
       <details className="border-t border-border/60 pt-3">
-        <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+        <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">
           {t("tools.advancedSelector")}
         </summary>
         <div className="mt-3">
@@ -914,10 +909,10 @@ function ApproverSelector({
               <span
                 key={ref}
                 className={cn(
-                  "inline-flex items-center gap-1 border px-2 py-0.5 text-xs",
+                  "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs",
                   unsupported
-                    ? "border-destructive/50 bg-destructive/10 text-destructive"
-                    : "border-border/70 bg-muted/30"
+                    ? "bg-destructive/10 text-destructive"
+                    : "bg-muted"
                 )}
               >
                 {approverLabel(ref, members)}
@@ -960,10 +955,7 @@ function ApproverSelector({
                   toggle(ref);
                 }
               }}
-              className={cn(
-                "flex min-h-[58px] cursor-pointer items-start gap-2 border border-border/70 bg-background px-3 py-2 text-left transition-colors hover:bg-muted/30",
-                selected && "shadow-[inset_2px_0_0_hsl(var(--primary))]"
-              )}
+              className={cn(OPTION_TILE, selected && OPTION_TILE_SELECTED)}
             >
               <Checkbox
                 checked={selected}
@@ -1047,83 +1039,45 @@ function NumberField({
   );
 }
 
-function BlueprintSection({
-  code,
-  title,
-  children,
-  className,
-}: {
-  code: string;
-  title: string;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <section
-      className={cn(
-        "grid gap-3 border-t border-border/70 py-4 md:grid-cols-[104px_minmax(0,1fr)]",
-        className
-      )}
-    >
-      <div className="flex items-start gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-        <span className="font-mono text-foreground/70">{code}</span>
-        <span>{title}</span>
-      </div>
-      <div className="min-w-0">{children}</div>
-    </section>
-  );
-}
-
-function previewTarget(effect: RuleKind, form: FormState): string {
-  if (effect === "cap") return form.capKind;
-  if (effect === "install") {
-    return form.installTargets.length === 1
-      ? form.installTargets[0]
-      : form.installTargets.length === 0
-        ? "registry:<pending>"
-        : "registry";
+/** One line of what a rule does, in words, for the rule list and summary. */
+function describeDraft(
+  effect: RuleKind,
+  form: FormState,
+  t: (key: string, values?: Record<string, string | number>) => string,
+  money: (amount: number) => string
+): string {
+  const amount = Number(form.amountUsd);
+  const amountText =
+    form.amountUsd.trim() && Number.isFinite(amount) ? money(amount) : null;
+  switch (effect) {
+    case "cap":
+      if (form.capKind === "tokens") {
+        return form.maxTokens || form.maxTokensPerCall
+          ? t("describe.tokens", {
+              count: Number(form.maxTokens || form.maxTokensPerCall),
+            })
+          : t("describe.notSet");
+      }
+      if (!amountText) return t("describe.notSet");
+      return form.capKind === "service"
+        ? t("describe.perTaskWallet", { amount: amountText })
+        : form.period === "month"
+          ? t("describe.perMonth", { amount: amountText })
+          : t("describe.perTask", { amount: amountText });
+    case "deny":
+    case "approval":
+      return form.tools.length > 0
+        ? t("describe.tools", { count: form.tools.length })
+        : t("describe.notSet");
+    case "install":
+      return form.installTargets.length > 0
+        ? t("describe.sources", { count: form.installTargets.length })
+        : t("describe.notSet");
+    default:
+      return form.promptInjection
+        ? t("safety.promptInjection")
+        : t("describe.notSet");
   }
-  if (effect === "deny") {
-    return form.tools.length === 0 ? "tool:<pending>" : "tool";
-  }
-  if (effect === "approval") {
-    return form.tools.length === 0 ? "tool:<pending>" : "tool";
-  }
-  return "content";
-}
-
-function previewParams(effect: RuleKind, form: FormState): string {
-  if (effect === "install") {
-    const targets = form.installTargets.length || "pending";
-    return `effect=${form.installEffect} targets=${targets}`;
-  }
-  if (effect === "cap") {
-    if (form.capKind === "tokens") {
-      const parts: string[] = [];
-      if (form.maxTokens) parts.push(`max=${form.maxTokens}`);
-      if (form.maxTokensPerCall) parts.push(`call=${form.maxTokensPerCall}`);
-      return parts.length > 0 ? parts.join(" ") : "tokens=pending";
-    }
-    return `amount=${form.amountUsd || "pending"}${
-      form.capKind === "spend" ? ` period=${form.period}` : ""
-    }${
-      form.capKind === "spend" && form.spendCategory !== "all"
-        ? ` category=${form.spendCategory}`
-        : ""
-    }`;
-  }
-  if (effect === "deny") {
-    return form.tools.length > 0
-      ? `tools=${form.tools.length}`
-      : "tools=pending";
-  }
-  if (effect === "approval") {
-    const scope = `tools=${form.tools.length || "pending"}`;
-    const approvers =
-      form.approvers.length > 0 ? ` approvers=${form.approvers.length}` : "";
-    return `${scope}${approvers}`;
-  }
-  return form.promptInjection ? "prompt_injection" : "checks=pending";
 }
 
 // --- editor ---------------------------------------------------------------
@@ -1463,11 +1417,9 @@ export default function PolicyEditor({
     }
   };
 
-  const title = isEdit
-    ? t("titles.edit")
-    : subjectType === "agent"
-      ? t("titles.newAgent")
-      : t("titles.newWorkspace");
+  const money = (amount: number) => formatMoney(amount, currency, locale);
+  const describe = (draft: PolicyDraft) =>
+    describeDraft(draft.effect, draft.form, t, money);
   const hasAgentScopeEditor = subjectType === "agent" && !isEdit;
   const compiledSubjects = resolveSubjects();
   const compiledDrafts = drafts.map((draft) => ({
@@ -1480,20 +1432,20 @@ export default function PolicyEditor({
   const compiledError =
     compiledSubjects === null
       ? subjectType === "agent"
-        ? t("summary.agentScopePending")
-        : t("summary.workspaceScopeMissing")
+        ? t("validation.agentRequired")
+        : t("validation.workspaceRequired")
       : installOnAgents
         ? t("validation.installWorkspaceOnly")
         : firstInvalidDraft && "error" in firstInvalidDraft.result
-        ? t("validation.ruleInvalid", {
-            number:
-              drafts.findIndex(
-                (draft) => draft.id === firstInvalidDraft.draft.id
-              ) + 1,
-            effect: effectLabel(firstInvalidDraft.draft.effect),
-            error: ruleErrorLabel(firstInvalidDraft.result.error),
-          })
-        : null;
+          ? t("validation.ruleInvalid", {
+              number:
+                drafts.findIndex(
+                  (draft) => draft.id === firstInvalidDraft.draft.id
+                ) + 1,
+              effect: effectLabel(firstInvalidDraft.draft.effect),
+              error: ruleErrorLabel(firstInvalidDraft.result.error),
+            })
+          : null;
   const compiledRuleCount =
     compiledSubjects && !firstInvalidDraft && !installOnAgents
       ? compiledSubjects.length *
@@ -1503,56 +1455,41 @@ export default function PolicyEditor({
           0
         )
       : null;
-  const enabledDraftCount = drafts.filter((draft) => draft.form.enabled).length;
-  const compiledRows = [
-    {
-      label: t("summary.scope"),
-      value:
-        subjectType === "workspace"
-          ? t("summary.workspace")
-          : t("summary.agentCount", { count: selectedAgentIds.length }),
-    },
-    { label: t("summary.drafts"), value: String(drafts.length) },
-    {
-      label: t("summary.active"),
-      value: t("summary.activeCount", {
-        enabled: enabledDraftCount,
-        total: drafts.length,
-      }),
-    },
-    { label: t("summary.selected"), value: effectLabel(effect) },
-    { label: t("summary.target"), value: previewTarget(effect, form) },
-    { label: t("summary.params"), value: previewParams(effect, form) },
-    {
-      label: t("summary.rules"),
-      value:
-        compiledRuleCount === null
-          ? t("summary.pending")
-          : String(compiledRuleCount),
-    },
-  ];
+  const EffectIcon = kindStyle(effect).icon;
+  const scopeLabel =
+    subjectType === "workspace"
+      ? t("scope.allAgentsOption")
+      : isEdit
+        ? selectedAgents[0]?.name || target.policy.subject_id
+        : t("summary.agentCount", { count: selectedAgentIds.length });
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-      <section className="relative overflow-hidden border border-border/70 bg-background">
-        <div
-          className="pointer-events-none absolute inset-0 opacity-[0.025]"
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)",
-            backgroundSize: "18px 18px",
-          }}
-          aria-hidden="true"
-        />
-        <div className="relative border-b border-border/70 bg-muted/20 px-5 py-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 space-y-1">
-              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                {t("sections.controlPlane")}
-              </p>
-              <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-              <p className="max-w-2xl text-sm text-muted-foreground">
-                {t.rich("scope.policyDescription", {
+    <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-4">
+      {error && <FormError>{error}</FormError>}
+
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <SectionCard>
+            <SectionCardHead
+              icon={<UsersRound />}
+              title={t("scope.appliesTo")}
+            />
+            <div className="space-y-3 px-[15px] py-3">
+              {isEdit ? (
+                <p className="m-0 text-[13px] font-medium">{scopeLabel}</p>
+              ) : (
+                <SegmentedControl<ScopeMode>
+                  value={scopeMode}
+                  onChange={setScopeMode}
+                  layoutId="policy-scope-control"
+                  items={[
+                    { value: "workspace", label: t("scope.allAgentsOption") },
+                    { value: "agents", label: t("scope.selectedAgentsOption") },
+                  ]}
+                />
+              )}
+              <p className="m-0 text-[12px] text-muted-foreground">
+                {t("scope.policyDescription", {
                   scope: t(
                     subjectType === "workspace"
                       ? "scope.allAgentsInWorkspace"
@@ -1560,227 +1497,168 @@ export default function PolicyEditor({
                         ? "scope.selectedAgent"
                         : "scope.selectedAgents"
                   ),
-                  accessView: (chunks) => (
-                    <Link
-                      href="/policies?view=access"
-                      className="text-primary underline-offset-4 hover:underline"
-                    >
-                      {chunks}
-                    </Link>
-                  ),
                 })}
               </p>
-            </div>
-            <div className="min-w-[220px] border border-border/70 bg-background px-3 py-2">
-              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                {t("scope.target")}
-              </p>
-              {isEdit ? (
-                <p className="mt-1 text-sm font-medium text-foreground">
-                  {subjectType === "workspace"
-                    ? t("scope.workspace")
-                    : selectedAgents[0]?.name || target.policy.subject_id}
-                </p>
-              ) : (
-                <div className="mt-2 inline-flex flex-wrap items-center gap-px border border-border/70 bg-muted/30 p-px">
-                  {[
-                    { value: "workspace" as const, label: t("scope.allAgentsOption") },
-                    { value: "agents" as const, label: t("scope.selectedAgentsOption") },
-                  ].map((option) => {
-                    const active = scopeMode === option.value;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => setScopeMode(option.value)}
-                        className={cn(
-                          "px-2.5 py-1 text-xs transition",
-                          active
-                            ? "bg-background text-foreground shadow-[inset_0_-2px_0_hsl(var(--primary))]"
-                            : "text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-          {hasAgentScopeEditor && (
-            <div className="mt-4 grid gap-3 border-t border-border/70 pt-4 lg:grid-cols-[minmax(240px,360px)_minmax(0,1fr)]">
-              <div className="flex items-end gap-2">
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <Label htmlFor="policy-agent">{t("scope.agent")}</Label>
-                  <AgentSelect
-                    id="policy-agent"
-                    agents={addableAgents}
-                    value={agentToAddId}
-                    onChange={setAgentToAddId}
-                    placeholder={t("scope.selectAgentPlaceholder")}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  disabled={!agentToAddId}
-                  onClick={addSelectedAgent}
-                  aria-label={t("scope.addAgent")}
-                >
-                  <Plus />
-                </Button>
-              </div>
-
-              <div className="min-w-0 space-y-2">
-                {selectedAgents.length > 0 ? (
-                  selectedAgents.map((agent) => (
-                    <div
-                      key={agent.id}
-                      className="flex items-center gap-2 border border-border/70 bg-background px-3 py-2"
-                    >
-                      <AgentIdentity
-                        agent={agent}
-                        size="xs"
-                        className="flex-1"
+              {hasAgentScopeEditor && (
+                <div className="space-y-2">
+                  <div className="flex items-end gap-2">
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <Label htmlFor="policy-agent">{t("scope.agent")}</Label>
+                      <AgentSelect
+                        id="policy-agent"
+                        agents={addableAgents}
+                        value={agentToAddId}
+                        onChange={setAgentToAddId}
+                        placeholder={t("scope.selectAgentPlaceholder")}
                       />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeSelectedAgent(agent.id)}
-                        aria-label={t("scope.removeAgent", {
-                          agent: agent.name,
-                        })}
-                      >
-                        <X />
-                      </Button>
                     </div>
-                  ))
-                ) : (
-                  <p className="border border-dashed border-border/70 px-3 py-3 text-sm text-muted-foreground">
-                    {t("scope.addAgentsPrompt")}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="relative px-5">
-          <BlueprintSection code="01" title={t("sections.rules")}>
-            <div className="space-y-3">
-              <div className="grid gap-2 md:grid-cols-2">
-                {drafts.map((draft, index) => {
-                  const active = draft.id === activeDraftId;
-                  const style = kindStyle(draft.effect);
-                  const Icon = style.icon;
-                  return (
-                    <div
-                      key={draft.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setActiveDraftId(draft.id)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setActiveDraftId(draft.id);
-                        }
-                      }}
-                      className={cn(
-                        "cursor-pointer border border-border/70 bg-muted/20 px-3 py-2 transition-colors hover:bg-muted/30",
-                        active && "shadow-[inset_2px_0_0_hsl(var(--primary))]"
-                      )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      disabled={!agentToAddId}
+                      onClick={addSelectedAgent}
+                      aria-label={t("scope.addAgent")}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                            {t("ruleIndex", { number: index + 1 })}
-                          </p>
-                          <div className="mt-1 flex items-center gap-2">
-                            <Icon
-                              className="h-4 w-4 text-muted-foreground"
-                              strokeWidth={1.8}
-                              aria-hidden
-                            />
-                            <span className="text-sm font-medium text-foreground">
-                              {effectLabel(draft.effect)}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {draft.form.enabled
-                                ? t("sections.enabled")
-                                : t("sections.disabled")}
-                            </span>
-                          </div>
-                          <p className="mt-1 truncate text-xs text-muted-foreground">
-                            {previewParams(draft.effect, draft.form)}
-                          </p>
-                        </div>
-                        {!isEdit && drafts.length > 1 && (
+                      <Plus />
+                    </Button>
+                  </div>
+                  {selectedAgents.length > 0 ? (
+                    <div className="space-y-1">
+                      {selectedAgents.map((agent) => (
+                        <div
+                          key={agent.id}
+                          className="card-item flex items-center gap-2 py-1.5 pl-3"
+                        >
+                          <AgentIdentity
+                            agent={agent}
+                            size="xs"
+                            className="flex-1"
+                          />
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              removeDraft(draft.id);
-                            }}
-                            aria-label={t("removeRule", {
-                              number: index + 1,
+                            onClick={() => removeSelectedAgent(agent.id)}
+                            aria-label={t("scope.removeAgent", {
+                              agent: agent.name,
                             })}
                           >
                             <X />
                           </Button>
-                        )}
-                      </div>
+                        </div>
+                      ))}
                     </div>
-                  );
-                })}
-              </div>
-
-              {!isEdit && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addDraft}
-                >
-                  <Plus className="mr-1.5" />
-                  {t("actions.addRule")}
-                </Button>
-              )}
-
-              <div className="flex flex-wrap items-center justify-between gap-3 border border-border/70 bg-background px-3 py-3">
-                <div className="min-w-0 space-y-2">
-                  <Label>{t("sections.ruleType")}</Label>
-                  <EffectSegmented
-                    value={effect}
-                    onChange={updateActiveEffect}
-                    disabled={isEdit}
-                  />
-                  {isEdit && (
-                    <p className="text-xs text-muted-foreground">
-                      {t("sections.ruleTypeFixed")}
+                  ) : (
+                    <p className="m-0 text-[12px] text-muted-foreground">
+                      {t("scope.addAgentsPrompt")}
                     </p>
                   )}
                 </div>
-                <div className="flex items-center gap-3">
-                  <Label htmlFor="policy-enabled">{t("sections.enabled")}</Label>
+              )}
+            </div>
+          </SectionCard>
+
+          {!isEdit && (
+            <SectionCard>
+              <SectionCardHead
+                icon={<ListChecks />}
+                title={t("sections.rules")}
+                count={drafts.length}
+                action={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={addDraft}
+                  >
+                    <Plus />
+                    {t("actions.addRule")}
+                  </Button>
+                }
+              />
+              {drafts.map((draft, index) => {
+                const active = draft.id === activeDraftId;
+                const Icon = kindStyle(draft.effect).icon;
+                return (
+                  <InteractiveListRow
+                    key={draft.id}
+                    selected={active}
+                    onClick={() => setActiveDraftId(draft.id)}
+                    className="px-[15px] py-[10px]"
+                    dividerClassName="border-b border-border/60 last:border-b-0"
+                    start={<SoftTile icon={<Icon />} />}
+                    end={
+                      drafts.length > 1 ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            removeDraft(draft.id);
+                          }}
+                          aria-label={t("removeRule", { number: index + 1 })}
+                        >
+                          <X />
+                        </Button>
+                      ) : undefined
+                    }
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[12.5px] font-medium">
+                        {effectLabel(draft.effect)}
+                        {!draft.form.enabled && (
+                          <span className="ml-2 text-[11px] font-normal text-muted-foreground">
+                            {t("sections.disabled")}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-px truncate text-[11px] text-muted-foreground">
+                        {describe(draft)}
+                      </div>
+                    </div>
+                  </InteractiveListRow>
+                );
+              })}
+            </SectionCard>
+          )}
+
+          <SectionCard>
+            <SectionCardHead
+              icon={<EffectIcon />}
+              title={isEdit ? effectLabel(effect) : t("sections.configuration")}
+              action={
+                <span className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                  <Label htmlFor="policy-enabled" className="font-normal">
+                    {t("sections.enabled")}
+                  </Label>
                   <Switch
                     id="policy-enabled"
                     checked={form.enabled}
                     onCheckedChange={(v) => update("enabled", v)}
                   />
+                </span>
+              }
+            />
+            <div className="space-y-4 px-[15px] py-4">
+              {isEdit ? (
+                <p className="m-0 text-[12px] text-muted-foreground">
+                  {t("sections.ruleTypeFixed")}
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label>{t("sections.ruleType")}</Label>
+                  <EffectSegmented
+                    value={effect}
+                    onChange={updateActiveEffect}
+                  />
                 </div>
-              </div>
-            </div>
-          </BlueprintSection>
-
+              )}
           {/* Effect-specific fields */}
           {effect === "cap" && (
-            <BlueprintSection code="02" title={t("sections.configuration")}>
-              <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
+            <>
+              <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="cap-kind">{t("budget.type")}</Label>
                   <Select
@@ -1864,12 +1742,12 @@ export default function PolicyEditor({
                   </div>
                 )}
               </div>
-            </BlueprintSection>
+            </>
           )}
 
           {effect === "deny" && (
-            <BlueprintSection code="02" title={t("sections.configuration")}>
-              <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
+            <>
+              <div className="space-y-3">
                 <Label>{t("tools.deniedTools")}</Label>
                 <ToolSelector
                   options={toolCatalog}
@@ -1881,24 +1759,13 @@ export default function PolicyEditor({
                 <p className="text-xs text-muted-foreground">
                   {t("tools.everyCallHint")}
                 </p>
-                <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <LinkIcon className="h-3 w-3" />
-                  {t("scope.toolAccessManaged")}{" "}
-                  <Link
-                    href="/policies?view=access"
-                    className="text-primary underline-offset-4 hover:underline"
-                  >
-                    {t("scope.accessView")}
-                  </Link>
-                  .
-                </p>
               </div>
-            </BlueprintSection>
+            </>
           )}
 
           {effect === "approval" && (
-            <BlueprintSection code="02" title={t("sections.configuration")}>
-              <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
+            <>
+              <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label>{t("tools.approvalRequiredTools")}</Label>
                   <ToolSelector
@@ -1924,12 +1791,12 @@ export default function PolicyEditor({
                   </p>
                 </div>
               </div>
-            </BlueprintSection>
+            </>
           )}
 
           {effect === "install" && (
-            <BlueprintSection code="02" title={t("sections.configuration")}>
-              <div className="space-y-4 border border-border/70 bg-muted/20 p-4">
+            <>
+              <div className="space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="install-effect">{t("install.effect")}</Label>
                   <Select
@@ -1990,7 +1857,7 @@ export default function PolicyEditor({
                       return (
                         <label
                           key={registry.id}
-                          className="flex cursor-pointer items-center gap-2 border border-border/70 bg-background px-3 py-2 text-sm"
+                          className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm transition-colors hover:bg-muted/40"
                         >
                           <Checkbox
                             checked={form.installTargets.includes(target)}
@@ -2022,12 +1889,12 @@ export default function PolicyEditor({
                   </Link>
                 </p>
               </div>
-            </BlueprintSection>
+            </>
           )}
 
           {effect === "safety" && (
-            <BlueprintSection code="02" title={t("sections.configuration")}>
-              <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
+            <>
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="prompt-injection" className="font-normal">
                     {t("safety.promptInjection")}
@@ -2039,151 +1906,123 @@ export default function PolicyEditor({
                   />
                 </div>
               </div>
-            </BlueprintSection>
+            </>
           )}
+            </div>
+          </SectionCard>
         </div>
 
-        {error && (
-          <p
-            className="relative mx-5 border-t border-destructive/30 py-3 text-sm text-destructive"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
+        <div className="flex min-w-0 flex-col gap-4">
+          <SectionCard className="[&>div:last-child]:border-b-0">
+            <SectionCardHead
+              icon={<ENTITY_ICONS.agent />}
+              title={t("scope.affectedAgents")}
+              count={affectedAgents.length}
+            />
+            {affectedAgents.length > 0 ? (
+              <>
+                {affectedAgents.slice(0, 8).map((agent) => (
+                  <div
+                    key={agent.id}
+                    className="border-b border-border/60 px-[15px] py-[9px]"
+                  >
+                    <AgentIdentity agent={agent} size="xs" />
+                  </div>
+                ))}
+                {affectedAgents.length > 8 && (
+                  <FactRow
+                    title={t("scope.moreAgents", {
+                      count: affectedAgents.length - 8,
+                    })}
+                  />
+                )}
+              </>
+            ) : (
+              <EmptyRow
+                text={
+                  subjectType === "workspace"
+                    ? t("scope.noAgentsInWorkspace")
+                    : t("scope.selectAgentPreview")
+                }
+              />
+            )}
+          </SectionCard>
 
-        <div className="relative flex items-center justify-between gap-2 border-t border-border/70 bg-muted/20 px-5 py-4">
-          {isEdit ? (
+          <SectionCard className="[&>div:last-child]:border-b-0">
+            <SectionCardHead icon={<ListChecks />} title={t("summary.title")} />
+            <FactRow title={t("summary.scope")} trailing={scopeLabel} />
+            {isEdit ? (
+              <FactRow
+                title={effectLabel(effect)}
+                sub={describe(activeDraft)}
+                trailing={
+                  <StatusIndicator
+                    kind={form.enabled ? "active" : "off"}
+                    size="sm"
+                  >
+                    {form.enabled
+                      ? t("sections.enabled")
+                      : t("sections.disabled")}
+                  </StatusIndicator>
+                }
+              />
+            ) : (
+              <FactRow
+                title={t("summary.rules")}
+                sub={compiledError ?? undefined}
+                trailing={
+                  compiledRuleCount === null ? "—" : String(compiledRuleCount)
+                }
+              />
+            )}
+          </SectionCard>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-2 border-t border-border/70 pt-4">
+        {isEdit ? (
+          <BaseModal
+            type="delete"
+            title={t("actions.deleteTitle")}
+            description={t("actions.deleteText")}
+            confirmLabel={t("actions.delete")}
+            onConfirm={remove}
+          >
             <Button
               type="button"
               variant="destructiveOutline"
               size="sm"
               disabled={saving}
-              onClick={remove}
             >
               {t("actions.delete")}
             </Button>
-          ) : (
-            <span />
-          )}
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={saving}
-              onClick={() => router.push(returnHref)}
-            >
-              {t("actions.cancel")}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              isLoading={saving}
-              disabled={saving}
-              onClick={save}
-            >
-              {isEdit
-                ? t("actions.saveRule")
-                : t("actions.createRule", { count: drafts.length })}
-            </Button>
-          </div>
+          </BaseModal>
+        ) : (
+          <span />
+        )}
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={saving}
+            onClick={() => router.push(returnHref)}
+          >
+            {t("actions.cancel")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            isLoading={saving}
+            disabled={saving}
+            onClick={save}
+          >
+            {isEdit
+              ? t("actions.saveRule")
+              : t("actions.createRule", { count: drafts.length })}
+          </Button>
         </div>
-      </section>
-
-      <aside className="h-fit border border-border/70 bg-background">
-        <div className="border-b border-border/70 bg-muted/20 px-4 py-3">
-          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            {t("sections.impactRail")}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 border-b border-border/70 px-4 py-3">
-          <span className="grid h-8 w-8 place-items-center border border-border/70 bg-muted/40">
-            <UsersRound className="h-4 w-4 text-muted-foreground" />
-          </span>
-          <div>
-            <h3 className="text-sm font-medium text-foreground">
-              {t("scope.affectedAgents")}
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              {subjectType === "workspace"
-                ? t("scope.workspaceAgentCount", { count: affectedAgents.length })
-                : affectedAgents.length > 0
-                  ? t("scope.selectedAgentCount", {
-                      count: affectedAgents.length,
-                    })
-                  : t("scope.noAgentsSelected")}
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-2 p-4">
-          {affectedAgents.length > 0 ? (
-            affectedAgents.slice(0, 8).map((agent) => (
-              <div
-                key={agent.id}
-                className="border border-border/70 bg-muted/20 px-3 py-2"
-              >
-                <AgentIdentity
-                  agent={agent}
-                  size="xs"
-                  right={
-                    <span className="text-[11px] text-muted-foreground">
-                      {t("scope.agent")}
-                    </span>
-                  }
-                />
-              </div>
-            ))
-          ) : (
-            <p className="border border-dashed border-border/70 px-3 py-3 text-sm text-muted-foreground">
-              {subjectType === "workspace"
-                ? t("scope.noAgentsInWorkspace")
-                : t("scope.selectAgentPreview")}
-            </p>
-          )}
-          {affectedAgents.length > 8 && (
-            <p className="text-xs text-muted-foreground">
-              {t("scope.moreAgents", {
-                count: affectedAgents.length - 8,
-              })}
-            </p>
-          )}
-        </div>
-
-        <div className="border-t border-border/70 p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              {t("summary.compiledOutput")}
-            </p>
-            {compiledError && (
-              <span className="border border-dashed border-border/70 px-1.5 py-0.5 font-mono text-[10px] uppercase text-muted-foreground">
-                {t("summary.pending")}
-              </span>
-            )}
-          </div>
-          <dl className="border border-border/70 bg-muted/20 font-mono text-[11px]">
-            {compiledRows.map((row) => (
-              <div
-                key={row.label}
-                className="grid grid-cols-[72px_minmax(0,1fr)] border-b border-border/60 last:border-b-0"
-              >
-                <dt className="border-r border-border/60 px-2 py-1.5 uppercase tracking-[0.12em] text-muted-foreground">
-                  {row.label}
-                </dt>
-                <dd className="truncate px-2 py-1.5 text-foreground/85">
-                  {row.value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-          {compiledError && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {compiledError}
-            </p>
-          )}
-        </div>
-      </aside>
+      </div>
     </div>
   );
 }

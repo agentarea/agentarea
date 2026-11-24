@@ -2,31 +2,24 @@
 
 import { useId } from "react";
 import { useTranslations } from "next-intl";
-import { ArrowUpRight, Copy, Star } from "lucide-react";
+import { ArrowUpRight, Copy } from "lucide-react";
 import { SkillTile } from "@/components/SkillTile";
 import WorkspaceLink from "@/components/WorkspaceLink";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { cn } from "@/lib/utils";
 import type { Skill } from "@/types/skill";
 import SkillProvenance from "./SkillProvenance";
-import { scopeMeta } from "./skillsMeta";
+import SkillVersion from "./SkillVersion";
 
 interface SkillsCardProps {
   skill: Skill;
-  isFavorite: boolean;
-  onToggleFavorite: (id: string) => void;
+  onUpdated: () => void;
 }
 
-export default function SkillsCard({
-  skill,
-  isFavorite,
-  onToggleFavorite,
-}: SkillsCardProps) {
+export default function SkillsCard({ skill, onUpdated }: SkillsCardProps) {
   const router = useWorkspaceRouter();
   const skillNameId = useId();
   const t = useTranslations("SkillsPage");
-  const scope = scopeMeta(skill.network_scope);
-  const ScopeIcon = scope.icon;
 
   return (
     <div
@@ -59,13 +52,14 @@ export default function SkillsCard({
         {skill.description || ""}
       </p>
 
-      {/* footer: network scope */}
-      <div className="pointer-events-none relative z-[1] flex items-center gap-2">
-        <span className="inline-flex items-center gap-1 text-[11.5px] text-muted-foreground">
-          <ScopeIcon className="h-3 w-3" strokeWidth={1.7} />
-          {scope.label}
+      <div className="relative z-[1] flex flex-wrap items-center gap-2 pr-6">
+        <span className="pointer-events-none">
+          <SkillProvenance skill={skill} />
         </span>
-        <SkillProvenance skill={skill} />
+        <SkillVersion skill={skill} onUpdated={onUpdated} />
+        <span className="pointer-events-none text-[11.5px] tabular-nums text-muted-foreground">
+          {t("agentCount", { count: skill.agent_count ?? 0 })}
+        </span>
       </div>
 
       {/* Hidden actions become available on hover, keyboard focus, and touch. */}
@@ -75,20 +69,6 @@ export default function SkillsCard({
           "invisible pointer-events-none opacity-0 group-hover:visible group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:opacity-100 max-[767px]:visible max-[767px]:pointer-events-auto max-[767px]:opacity-100 [@media(hover:none)]:visible [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100"
         )}
       >
-        <button
-          type="button"
-          title={t("rowActions.favorite")}
-          aria-label={t("rowActions.favorite")}
-          aria-pressed={isFavorite}
-          onClick={() => onToggleFavorite(skill.id)}
-          className="grid h-[26px] w-[26px] place-items-center rounded-md bg-background/80 text-muted-foreground backdrop-blur-sm hover:bg-zinc-200/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-zinc-700 max-[767px]:h-11 max-[767px]:w-11"
-        >
-          <Star
-            className="h-[15px] w-[15px]"
-            fill={isFavorite ? "currentColor" : "none"}
-            style={isFavorite ? { color: "#d99a00" } : undefined}
-          />
-        </button>
         <button
           type="button"
           title={t("rowActions.duplicate")}

@@ -9,8 +9,7 @@ export const FILTER_KEYS = [
   "all",
   "pending",
   "input",
-  "completed",
-  "failed",
+  "blocked",
   "decided",
 ] as const;
 export type FilterValue = (typeof FILTER_KEYS)[number];
@@ -32,8 +31,7 @@ type InboxBucket = Exclude<FilterValue, "all" | "decided">;
 const BUCKET_BY_STATUS: Record<InboxStatus, InboxBucket> = {
   waiting_for_approval: "pending",
   waiting_for_input: "input",
-  completed: "completed",
-  failed: "failed",
+  blocked: "blocked",
 };
 
 /** Approving or rejecting an escalation resumes the task, which leaves the inbox. */
@@ -43,6 +41,27 @@ export function inboxBucket(status: string): InboxBucket | null {
   return Object.hasOwn(BUCKET_BY_STATUS, status)
     ? BUCKET_BY_STATUS[status as InboxStatus]
     : null;
+}
+
+const ROW_PREVIEW = {
+  pending: "row.waiting",
+  input: "row.needsInput",
+  blocked: "row.blocked",
+} as const satisfies Record<InboxBucket, string>;
+
+/**
+ * What a row says it is waiting for. A blocked run names the prerequisite it
+ * hit; an escalation just decided here reads as moving on until it reloads.
+ */
+export function inboxRowPreview(
+  status: string,
+  reason?: string | null
+):
+  | { text: string }
+  | { key: (typeof ROW_PREVIEW)[InboxBucket] | "row.resuming" } {
+  const bucket = inboxBucket(status);
+  if (bucket === "blocked" && reason?.trim()) return { text: reason.trim() };
+  return { key: bucket ? ROW_PREVIEW[bucket] : "row.resuming" };
 }
 
 export function isPending(status: string): boolean {
@@ -106,8 +125,7 @@ export function countInbox(
     all: statuses.length + heldToolCalls,
     pending: heldToolCalls,
     input: 0,
-    completed: 0,
-    failed: 0,
+    blocked: 0,
     decided,
   };
   const unknown: string[] = [];
