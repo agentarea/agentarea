@@ -385,3 +385,26 @@ func (r *switchRunner) Run(_ context.Context, _, session, command string, _ time
 	r.session, r.command = session, command
 	return r.result, r.err
 }
+
+func TestAFileWithoutTextStartsATaskThatReceivesIt(t *testing.T) {
+	g := newRig(t, nil)
+	stream := g.stream
+	if _, err := g.svc.Create(g.ctx, domain.NewTrigger{Name: "on-file", AgentID: g.agent, Type: domain.TypeStream,
+		StreamID: &stream, TaskParameters: map[string]any{}, Enabled: true, FailureThreshold: 5}); err != nil {
+		t.Fatal(err)
+	}
+	e := g.event("msg", map[string]any{"body": map[string]any{}})
+	size, digest, mime := int64(5), strings.Repeat("a", 64), "application/pdf"
+	e.Attachments = []domain.Attachment{{Name: "report.pdf", Mime: &mime, Size: &size, SHA256: &digest,
+		Ref: "events/" + stream + "/" + e.ID + "/0-report.pdf", Stored: true}}
+	if err := g.handle(e); err != nil {
+		t.Fatal(err)
+	}
+	reqs := g.tasks.Submitted()
+	if len(reqs) != 1 || !strings.HasPrefix(reqs[0].Description, "(file: report.pdf)") {
+		t.Fatalf("a file with no text must still start a task naming it: %+v", reqs)
+	}
+	if a := reqs[0].Attachments; len(a) != 1 || a[0].Key != e.Attachments[0].Ref || a[0].SHA256 != digest || a[0].ContentType != mime {
+		t.Fatalf("attachments %+v", a)
+	}
+}

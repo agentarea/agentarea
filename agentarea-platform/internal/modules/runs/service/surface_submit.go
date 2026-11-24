@@ -132,7 +132,20 @@ func (s *Surface) route(ctx context.Context, ws scope.Workspace, req api.TaskReq
 				return routed, true, nil
 			}
 		}
-		if s.command(ctx, cand.ExecutionID, api.CommandQueueMessage, map[string]any{"message": message}) {
+		said := message
+		if len(req.Attachments) > 0 {
+			added, err := s.attachFiles(ctx, ws, cand.ID, req.Attachments, true)
+			if err != nil {
+				if req.Claim != nil {
+					if rerr := req.Claim.Release(ctx); rerr != nil {
+						return api.TaskSubmitted{}, false, rerr
+					}
+				}
+				return api.TaskSubmitted{}, false, err
+			}
+			said = message + "\n\n" + attachedLines(added)
+		}
+		if s.command(ctx, cand.ExecutionID, api.CommandQueueMessage, map[string]any{"message": said}) {
 			s.d.Log.InfoContext(ctx, "Routed follow-up to workflow", "execution_id", cand.ExecutionID, "agent_id", req.AgentID)
 			return routed, true, nil
 		}
@@ -165,9 +178,21 @@ func (s *Surface) Submit(ctx context.Context, ws scope.Workspace, req api.TaskRe
 	if id == "" {
 		id = uuid.NewString()
 	}
+	meta := req.Metadata
+	if len(req.Attachments) > 0 {
+		added, err := s.attachFiles(ctx, ws, id, req.Attachments, false)
+		if err != nil {
+			return api.TaskSubmitted{}, err
+		}
+		meta = map[string]any{}
+		for k, v := range req.Metadata {
+			meta[k] = v
+		}
+		params["attachments"], meta["workspace_attachments"] = added, added
+	}
 	err := s.start(ctx, ws, runSpec{
 		TaskID: id, AgentID: req.AgentID, Description: req.Description, Parameters: params, UserID: req.UserID,
-		RequiresHumanApproval: req.RequiresHumanApproval, Metadata: req.Metadata, Provenance: req.Provenance, ScheduledAt: req.ScheduledAt,
+		RequiresHumanApproval: req.RequiresHumanApproval, Metadata: meta, Provenance: req.Provenance, ScheduledAt: req.ScheduledAt,
 	})
 	if err != nil {
 		return api.TaskSubmitted{}, err

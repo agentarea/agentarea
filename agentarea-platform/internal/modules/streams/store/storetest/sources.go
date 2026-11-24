@@ -264,14 +264,15 @@ func (q *Quota) Admit(_ context.Context, ws string, limit int) (bool, error) {
 	return true, nil
 }
 
-// Blob is an in-memory object store answering Put and Get.
+// Blob is an in-memory object store answering Put, Stat and Get.
 type Blob struct {
 	kblob.Store
 	mu      sync.Mutex
 	Objects map[string][]byte
+	infos   map[string]kblob.Info
 }
 
-func (b *Blob) Put(_ context.Context, key string, body io.Reader, _ int64, _ kblob.PutOptions) error {
+func (b *Blob) Put(_ context.Context, key string, body io.Reader, _ int64, opts kblob.PutOptions) error {
 	data, err := io.ReadAll(body)
 	if err != nil {
 		return err
@@ -279,10 +280,21 @@ func (b *Blob) Put(_ context.Context, key string, body io.Reader, _ int64, _ kbl
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.Objects == nil {
-		b.Objects = map[string][]byte{}
+		b.Objects, b.infos = map[string][]byte{}, map[string]kblob.Info{}
 	}
 	b.Objects[key] = data
+	b.infos[key] = kblob.Info{Key: key, Size: int64(len(data)), ContentType: opts.ContentType, Metadata: opts.Metadata, SHA256: opts.SHA256}
 	return nil
+}
+
+func (b *Blob) Stat(_ context.Context, key string) (kblob.Info, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	info, ok := b.infos[key]
+	if !ok {
+		return kblob.Info{}, kblob.ErrNotFound
+	}
+	return info, nil
 }
 
 func (b *Blob) List(context.Context, string) iter.Seq2[kblob.Info, error] {
