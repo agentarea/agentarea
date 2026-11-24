@@ -199,17 +199,23 @@ func (f *fakeArtifacts) PublishArtifact(_ context.Context, workspaceID, taskID, 
 	return sandboxapi.TaskArtifact{Path: p}, nil
 }
 
-// fakeShared is the parent task's store a subtask works on.
+// fakeShared is the durable workspace of the parent task a subtask works on.
 type fakeShared struct {
 	mu   sync.Mutex
 	puts []string
+	err  error
 }
 
-func (s *fakeShared) PutFile(_ context.Context, _, taskID, p string, data []byte) (sandboxapi.StoredFile, error) {
+func (s *fakeShared) PutFiles(_ context.Context, _, taskID string, files []sandboxapi.WorkspaceFile, _ sandboxapi.WriteOptions) (sandboxapi.ManifestRef, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.puts = append(s.puts, taskID+":"+p+"="+string(data))
-	return sandboxapi.StoredFile{Path: p, Size: int64(len(data))}, nil
+	if s.err != nil {
+		return sandboxapi.ManifestRef{}, s.err
+	}
+	for _, f := range files {
+		s.puts = append(s.puts, taskID+":"+f.Path+"="+string(f.Data))
+	}
+	return sandboxapi.ManifestRef{}, nil
 }
 
 type fakeWorker struct {
@@ -271,6 +277,22 @@ type fakeTasks struct {
 	mu       sync.Mutex
 	tasks    map[string]store.RunnerTask
 	sessions map[string]string
+	lost     map[string][]string
+}
+
+func (f *fakeTasks) NoteLostOutput(_ context.Context, _ scope.Workspace, id, note string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lost[id] = append(f.lost[id], note)
+	return nil
+}
+
+func (f *fakeTasks) TakeLostOutputs(_ context.Context, _ scope.Workspace, id string) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := f.lost[id]
+	delete(f.lost, id)
+	return out, nil
 }
 
 func (f *fakeTasks) Task(_ context.Context, _ scope.Workspace, id string) (store.RunnerTask, error) {
@@ -320,7 +342,7 @@ func newRig(t *testing.T) *rig {
 		tokens:   fakeTokens{claims: make(chan authn.TurnClaims, 4)},
 		turns:    make(chan workflows.RunnerTurns, 1),
 		presence: fakePresence{marks: make(chan string, 64)},
-		tasks: &fakeTasks{sessions: map[string]string{}, tasks: map[string]store.RunnerTask{
+		tasks: &fakeTasks{sessions: map[string]string{}, lost: map[string][]string{}, tasks: map[string]store.RunnerTask{
 			turnTaskID: {ID: turnTaskID, AgentID: agentID, CreatedBy: "creator", SourceIdentity: "user:u1",
 				Parameters: map[string]any{}, Metadata: map[string]any{runnerClientKey: clientID}},
 			subTask: {ID: subTask, AgentID: agentID, CreatedBy: "creator", Parameters: map[string]any{}, Metadata: map[string]any{
@@ -477,8 +499,11 @@ func TestASubtasksOutputsGoToTheTaskItWorksOn(t *testing.T) {
 	if status != http.StatusNoContent {
 		t.Fatalf("upload: %d %s", status, body)
 	}
-	if len(r.shared.puts) != 1 || r.shared.puts[0] != parentTask+":outputs/x.png=png" || len(r.files.puts) != 0 || len(r.outputs.pubs) != 0 {
-		t.Fatalf("shared %v, own %v, published %v", r.shared.puts, r.files.puts, r.outputs.pubs)
+	if len(r.shared.puts) != 1 || r.shared.puts[0] != parentTask+":outputs/x.png=png" || len(r.files.puts) != 0 {
+		t.Fatalf("committed %v, own %v", r.shared.puts, r.files.puts)
+	}
+	if len(r.outputs.pubs) != 1 || r.outputs.pubs[0].taskID != parentTask || r.outputs.pubs[0].path != "outputs/x.png" {
+		t.Fatalf("published %+v", r.outputs.pubs)
 	}
 	status, body = r.do(t, http.MethodPut, "/v1/runner/tasks/"+subTask+"/files/inputs/attachments/IMG.MOV", runnerKey, strings.NewReader("mov"))
 	if status != http.StatusNoContent {
@@ -486,6 +511,44 @@ func TestASubtasksOutputsGoToTheTaskItWorksOn(t *testing.T) {
 	}
 	if len(r.shared.puts) != 1 || len(r.files.puts) != 1 || r.files.puts[0].key != "harness-files/"+wsID+"/"+subTask+"/inputs/attachments/IMG.MOV" {
 		t.Fatalf("a file outside outputs/ went to the shared task: shared %v, own %v", r.shared.puts, r.files.puts)
+	}
+}
+
+func TestAnOutputThatDoesNotReachTheTaskIsNotedAndRetryable(t *testing.T) {
+	r := newRig(t)
+	r.shared.err = errors.New("workspace_conflict")
+	status, body := r.do(t, http.MethodPut, "/v1/runner/tasks/"+subTask+"/files/outputs/deck.pptx", runnerKey, strings.NewReader("pptx"))
+	if status != http.StatusServiceUnavailable || !strings.Contains(body, "workspace_conflict") {
+		t.Fatalf("lost upload: %d %s", status, body)
+	}
+	r.shared.err = nil
+	r.outputs.err = errors.New("artifact store down")
+	if status, _ := r.do(t, http.MethodPut, "/v1/runner/tasks/"+subTask+"/files/outputs/x.png", runnerKey, strings.NewReader("png")); status != http.StatusServiceUnavailable {
+		t.Fatalf("unpublished upload: %d", status)
+	}
+	if status, _ := r.do(t, http.MethodPut, "/v1/runner/tasks/"+turnTaskID+"/files/outputs/y.png", runnerKey, strings.NewReader("png")); status != http.StatusServiceUnavailable {
+		t.Fatalf("a task's own unpublished output: %d", status)
+	}
+	lost := r.tasks.lost[subTask]
+	if len(lost) != 2 || !strings.HasPrefix(lost[0], "outputs/deck.pptx (") || !strings.HasPrefix(lost[1], "outputs/x.png (") || len(r.tasks.lost[turnTaskID]) != 1 {
+		t.Fatalf("lost = %v", r.tasks.lost)
+	}
+}
+
+func TestATurnWhoseOutputsDidNotAllArriveFailsNamingThem(t *testing.T) {
+	r := newRig(t)
+	c := &conn{d: &Deps{Tasks: r.tasks}, log: slog.New(slog.DiscardHandler)}
+	done := workflows.RunnerTurnResult{Status: "completed", Response: "Готово"}
+	if got := c.withLostOutputs(context.Background(), subTask, done); got != done {
+		t.Fatalf("a turn with all its outputs changed: %+v", got)
+	}
+	r.tasks.lost[subTask] = []string{"outputs/deck.pptx (sandbox expired)"}
+	got := c.withLostOutputs(context.Background(), subTask, done)
+	if got.Status != "failed" || got.Error != "The CLI finished, but these files it wrote did not reach the task: outputs/deck.pptx (sandbox expired). Its answer was: Готово" {
+		t.Fatalf("result = %+v", got)
+	}
+	if again := c.withLostOutputs(context.Background(), subTask, done); again != done {
+		t.Fatalf("a lost output was reported twice: %+v", again)
 	}
 }
 
