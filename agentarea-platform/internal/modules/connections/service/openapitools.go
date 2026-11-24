@@ -157,7 +157,7 @@ func (s *Service) callConnectionTool(ctx context.Context, c authn.Caller, connec
 	held := func() runsapi.HeldCall {
 		return heldCall(c, &policy, name, names, "", conn.Name, op.Operation, "", args, d.Reason)
 	}
-	out, refused, err := s.judged(ctx, c, c.ClientID, audit, d, held, openAPIBinding(conn.ID, op.Operation), func() (any, error) {
+	out, refused, err := s.judged(ctx, c, c.ClientID, audit, d, held, named(openAPIBinding(conn.ID, op.Operation), names), func() (any, error) {
 		return call()
 	})
 	if err != nil {

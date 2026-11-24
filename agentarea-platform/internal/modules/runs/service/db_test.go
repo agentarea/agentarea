@@ -193,6 +193,43 @@ func TestCreateDelegationTaskStoresTheChildUnderItsParent(t *testing.T) {
 	if err != nil || missing.Status != "failed" {
 		t.Fatalf("missing agent %+v %v", missing, err)
 	}
+	if out.RunnerClientID != "" {
+		t.Fatalf("an agent on no client reports client %q", out.RunnerClientID)
+	}
+}
+
+func TestCreateDelegationTaskToAnAgentOnAClientNamesItsRunner(t *testing.T) {
+	d := openDB(t)
+	p, parent := seed(t, d)
+	child := uuid.NewString()
+	s := New(Deps{DB: d, Pricing: eurPricing{}, Policies: fakePolicies{}, Log: quiet(), Audit: &fakeAudit{}, Agents: fakeAgents{
+		child: {Name: "coder", ClientID: "client-1"},
+	}})
+	out, err := s.CreateDelegationTask(context.Background(), p, DelegationInput{ParentTaskID: parent, TargetAgentID: child, TargetAgentName: "coder", RunBudget: dec("1")})
+	if err != nil || out.Status != "created" || out.RunnerClientID != "client-1" {
+		t.Fatalf("out %+v %v", out, err)
+	}
+	if n := count(t, d, p, `SELECT count(*) FROM tasks WHERE id = $1 AND task_metadata->>'runner_client_id' = 'client-1'`, out.TaskID); n != 1 {
+		t.Fatal("the child task does not name its runner's client")
+	}
+}
+
+func TestASubtaskIsStoredWithTheTaskItWorksOn(t *testing.T) {
+	d := openDB(t)
+	p, parent := seed(t, d)
+	child := uuid.NewString()
+	s := New(Deps{DB: d, Pricing: eurPricing{}, Policies: fakePolicies{}, Log: quiet(), Audit: &fakeAudit{}, Agents: fakeAgents{
+		child: {Name: "helper", ModelID: "m1"},
+	}})
+	in := DelegationInput{ParentTaskID: parent, TargetAgentID: child, TargetAgentName: "helper", RunBudget: dec("1"),
+		WorkspaceTaskID: parent}
+	out, err := s.CreateDelegationTask(context.Background(), p, in)
+	if err != nil || out.Status != "created" {
+		t.Fatalf("out %+v %v", out, err)
+	}
+	if n := count(t, d, p, `SELECT count(*) FROM tasks WHERE id = $1 AND task_metadata->>'workspace_task_id' = $2`, out.TaskID, parent); n != 1 {
+		t.Fatal("the subtask does not name the task it works on")
+	}
 }
 
 func TestExecuteToolMetersItsDeclaredCostOnce(t *testing.T) {

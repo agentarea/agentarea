@@ -77,6 +77,10 @@ spec:
             {{- include "agentarea.authz.envs" . | nindent 12 }}
             - name: AGENTAREA_API_URL
               value: {{ include "agentarea.backend.apiUrl" . | quote }}
+            # Where a messenger sender links their account: the bot's reply to an
+            # unlinked sender carries <app>/link/telegram.
+            - name: AGENTAREA_APP_URL
+              value: {{ include "agentarea.frontendUrl" . | quote }}
             - name: PORT
               value: {{ .Values.eventService.port | quote }}
             - name: AGENTAREA_EVENT_POLL_INTERVAL
@@ -90,6 +94,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "agentarea.mcpGatewaySecretName" . }}
                   key: {{ include "agentarea.mcpGatewaySecretKey" . }}
+            # A messenger reply sends the files a task published, read through
+            # the sandbox manager's file API.
+            - name: AGENTAREA_SANDBOX_FILE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentarea.sandboxFileSecretName" . }}
+                  key: {{ include "agentarea.sandboxFileSecretKey" . }}
             {{- include "agentarea.telemetry.envs" (dict "root" . "image" .Values.global.image) | nindent 12 }}
             {{- if .Values.eventService.extraEnv }}
             {{- toYaml .Values.eventService.extraEnv | nindent 12 }}

@@ -48,6 +48,9 @@ func (s *Service) mediaDo(ctx context.Context, p api.Principal, c mediaCall) (*h
 	if err != nil {
 		return nil, nil, err
 	}
+	if signsIn(profile.Auth) {
+		return nil, nil, chatOnly(m)
+	}
 	target := profile.APIURL(s.localEndpoint(m.EndpointURL), c.path)
 	if target == "" {
 		return nil, nil, &api.ModelCallError{Msg: fmt.Sprintf("model instance %s uses provider '%s', which has no public address, and has no endpoint_url configured", m.ModelID, m.ProviderType)}

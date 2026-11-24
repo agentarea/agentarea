@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { ChevronRight } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { CheckboxList } from "@/components/CheckboxList";
 import {
   Collapsible,
   CollapsibleContent,
@@ -26,11 +26,6 @@ export function OAuthScopePicker({
   disabled?: boolean;
 }) {
   const t = useTranslations("MCPServersPage.instanceDetail.oauth");
-  const picked = new Set(selected);
-
-  function toggle(scope: string, on: boolean) {
-    onChange(offered.filter((s) => (s === scope ? on : picked.has(s))));
-  }
 
   return (
     <Collapsible>
@@ -43,36 +38,20 @@ export function OAuthScopePicker({
       </CollapsibleTrigger>
       <CollapsibleContent className="aa-collapsible">
         <p className="mt-2 text-xs text-muted-foreground">{t("scopesHint")}</p>
-        <ul className="mt-2 space-y-1.5">
-          {offered.map((scope) => {
+        <CheckboxList
+          className="mt-2"
+          items={offered.map((scope) => {
             const name = scopeShortName(scope);
-            return (
-              <li key={scope}>
-                <label className="flex cursor-pointer items-start gap-2">
-                  <Checkbox
-                    className="mt-0.5"
-                    checked={picked.has(scope)}
-                    disabled={disabled}
-                    onCheckedChange={(checked) =>
-                      toggle(scope, checked === true)
-                    }
-                  />
-                  <span className="min-w-0">
-                    <span className="block font-mono text-xs">{name}</span>
-                    {name !== scope && (
-                      <span
-                        className="block truncate text-xs text-muted-foreground"
-                        title={scope}
-                      >
-                        {scope}
-                      </span>
-                    )}
-                  </span>
-                </label>
-              </li>
-            );
+            return {
+              value: scope,
+              label: name,
+              detail: name !== scope ? scope : undefined,
+            };
           })}
-        </ul>
+          selected={selected}
+          onChange={onChange}
+          disabled={disabled}
+        />
         {selected.length === 0 && (
           <p role="alert" className="mt-2 text-xs text-destructive">
             {t("scopesNone")}

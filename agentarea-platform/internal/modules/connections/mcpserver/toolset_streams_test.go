@@ -141,6 +141,11 @@ func (f fakeStreams) DeleteProcessor(_ context.Context, _ authn.Caller, id, sub 
 	f.saw("unprocess %s %s", id, sub)
 	return errors.New("Subscription x not found")
 }
+func (f fakeStreams) ReplayEvent(_ context.Context, _ authn.Caller, eventID string) (any, error) {
+	f.saw("replay %s", eventID)
+	return map[string]any{"event_id": "new", "replay_of": eventID}, nil
+}
+
 func (f fakeStreams) ListEvents(_ context.Context, _ authn.Caller, q streamsapi.EventQuery) (any, error) {
 	sid := "<all>"
 	if q.StreamID != nil {
@@ -177,6 +182,8 @@ func TestStreamsToolset(t *testing.T) {
 		{"streams_list_events", `{}`, "events <all> after=0 before=false since=false limit=50", `"events"`, false},
 		{"streams_list_events", `{"stream_id":"s1","after":7,"since":"2026-11-01T09:00:00Z","limit":200}`, "events s1 after=7 before=false since=true limit=200", `"events"`, false},
 		{"streams_list_events", `{"limit":201}`, "", "limit must be between 1 and 200, got 201", true},
+		{"streams_replay_event", `{"event_id":"6f1c2b9e-7a3d-4c5e-9f00-1b2c3d4e5f60"}`, "replay 6f1c2b9e-7a3d-4c5e-9f00-1b2c3d4e5f60", `"replay_of"`, false},
+		{"streams_replay_event", `{"event_id":"x"}`, "", "event_id: Input should be a valid UUID", true},
 		{"streams_list_events", `{"after":-1}`, "", "after must be at least 0, got -1", true},
 		{"streams_list_events", `{"since":"yesterday"}`, "", "since: Input should be a valid datetime", true},
 	})

@@ -598,11 +598,12 @@
       "title": "Messengers",
       "description": "Bots recognise you by these accounts. A bot answers only linked people who were given access to its agent.",
       "linkedAs": "Linked · ID {id} · {date}",
+      "linkedOn": "Linked · {date}",
       "unlink": "Unlink",
       "link": "Link in Telegram",
-      "linkAnother": "Link another Telegram account",
+      "linkAnotherHint": "To link another account, write to an agent's Telegram bot from it.",
       "linkThrough": "Opens {bot} in Telegram, which asks you to confirm.",
-      "howTo": "Write to any agent's Telegram bot: it replies with a link that brings you back here to finish.",
+      "howTo": "Nothing linked yet. Write to any agent's Telegram bot: it replies with a link that links your account in one click.",
       "linkFailed": "Could not start linking Telegram",
       "unlinkFailed": "Could not unlink the account"
     }
@@ -1085,6 +1086,8 @@
         "readyDetail": "Try signing in. If the provider refuses automatic registration, additional setup is required.",
         "authorizedTitle": "Authorized",
         "authorizedDetail": "This connection holds an access token. Reconnect to re-authorize it.",
+        "chooseRepositories": "Choose repositories",
+        "chooseRepositoriesHint": "The app can only see the repositories you pick on GitHub.",
         "needsAppTitle": "Needs an OAuth app",
         "needsAppTitleConnected": "Re-authorizing needs your OAuth app",
         "needsAppHint": "Enter a client ID and secret, or pick them from workspace secrets.",
@@ -1102,7 +1105,16 @@
         "keepOwnApp": "Keep the current app",
         "scopesSummary": "Access: {picked} of {total} scopes",
         "scopesHint": "What this connection may do at the provider. Untick what its agents do not need: the provider's consent screen asks only for what stays ticked.",
-        "scopesNone": "Pick at least one scope."
+        "scopesNone": "Pick at least one scope.",
+        "accessAllInstallations": "Access: every installation of the app your GitHub account reaches.",
+        "accessInstallation": "Access: {account}, all repositories.",
+        "accessRepositories": "Access: {account}, {count, plural, one {# repository} other {# repositories}}.",
+        "accessChange": "Change",
+        "accessHint": "Calls through this connection use a token for the installation you pick, not your own.",
+        "accessLabel": "GitHub App installation",
+        "accessUserToken": "Every installation you reach (your own token)",
+        "accessRepositoriesHint": "Tick none to allow every repository of {account}.",
+        "accessNoRepositories": "You see no repositories of this installation."
       },
       "status": {
         "stopped": "Stopped",
@@ -1579,6 +1591,18 @@
       "unexpectedError": "An unexpected error occurred",
       "modelInstancesPartial": "Saved the configuration, but {failed} of {total} model instances could not be created: {sample}",
       "saveFailed": "Couldn't save the provider configuration"
+    },
+    "chatgpt": {
+      "title": "ChatGPT sign-in",
+      "description": "This provider runs on your ChatGPT plan, no API key. Sign in with the ChatGPT account whose plan should pay.",
+      "afterCreate": "Create the configuration, then sign in with ChatGPT on its page.",
+      "signIn": "Sign in with ChatGPT",
+      "signInAgain": "Sign in again",
+      "openAndEnter": "Open {url} in a browser, sign in to ChatGPT and enter this code:",
+      "entered": "I've entered the code",
+      "pending": "Not confirmed yet. Finish in the ChatGPT tab, then press the button again.",
+      "signedIn": "Signed in. Agents on this provider now run on the ChatGPT plan.",
+      "failed": "The ChatGPT sign-in failed"
     }
   },
   "Chat": {
@@ -1701,6 +1725,20 @@
     "runnerOffline": "{name} is offline: the task waits up to 10 minutes for it to come back."
   },
   "TasksPage": {
+    "sectionExpected": "Expected",
+    "sectionRuns": "Started",
+    "sectionTemplates": "Templates",
+    "runNow": "Run now",
+    "runFailed": "Could not start",
+    "open": "Open",
+    "expectedWhen": "When",
+    "expectedEmptyTitle": "Nothing expected",
+    "expectedEmptyDescription": "Enabled schedules and tasks booked for later show up here.",
+    "expectedLoadFailed": "Could not load what is expected",
+    "savedTitle": "Saved tasks",
+    "savedName": "Task",
+    "savedEmptyTitle": "No saved tasks",
+    "savedEmptyDescription": "Saved tasks come from a deployed folder's tasks/ or the API.",
     "title": "Tasks",
     "description": "Description",
     "agent": "Agent",
@@ -2326,6 +2364,7 @@
     "createTrigger": "Create Trigger",
     "searchPlaceholder": "Search triggers & agents…",
     "onStreamEvents": "On stream events",
+    "onSourceEvents": "On {source} events",
     "filter": {
       "all": "All",
       "channels": "Channels",
@@ -3375,15 +3414,37 @@
       "approval": "Approvals"
     }
   },
+  "LinkTelegram": {
+    "title": "Link Telegram {account}?",
+    "subtitle": "To your AgentArea account {you}",
+    "titleUnknown": "Link Telegram",
+    "subtitleUnknown": "To your AgentArea account",
+    "theBot": "the bot",
+    "confirm": "Link Telegram",
+    "bot": "Bot",
+    "workspace": "Workspace",
+    "warningTitle": "Link only a Telegram account you own",
+    "warningDetail": "Whoever writes from {account} will act as you with your agents, in every workspace. If someone sent you this link, or this is not your Telegram account, close this page.",
+    "foreignTitle": "This link is not for you",
+    "foreignDetail": "It came from a bot of a workspace you are not a member of. Write to the bot from your own Telegram account for your own link.",
+    "linkedTitle": "Linked",
+    "alreadyYoursTitle": "Already linked to your account",
+    "linkedDetail": "Go back to Telegram and write to {bot} again.",
+    "openSettings": "Open messenger settings",
+    "goneTitle": "This link has expired or was already used",
+    "goneDetail": "Write to {bot} in Telegram again: it replies with a new link.",
+    "takenTitle": "Linked to another AgentArea account",
+    "takenDetail": "This Telegram account is already linked to another AgentArea account. Unlink it there first, then write to the bot again.",
+    "failed": "Could not link the account"
+  },
   "AuthConsent": {
     "title": "Authorize {clientName}",
     "description": "{clientName} is requesting access to your AgentArea account. Only approve apps you recognize and trust.",
     "permissionsHeading": "It will be able to:",
-    "fullAccess": "Act as you in all your workspaces: run agents, read and change your data",
+    "fullAccess": "Act as you in all your workspaces: run agents, read and change your data, create API keys",
+    "mcpAccess": "Use the tools of the workspaces you tick below over MCP, as you. Nothing outside them, and no API keys.",
     "scope": {
       "openid": "Verify your identity",
-      "profile": "Read your basic profile",
-      "email": "See your email address",
       "offline_access": "Stay connected on your behalf when you're offline"
     },
     "footnote": "You can revoke access any time from Settings.",
@@ -3399,7 +3460,11 @@
       "loadFailed": "We couldn't load the authorization request.",
       "acceptFailed": "Authorization didn't go through. Please try again.",
       "rejectFailed": "We couldn't cancel the request. Please try again."
-    }
+    },
+    "workspaceHeading": "Workspaces it can reach",
+    "workspaceNone": "You have no workspace to give it access to.",
+    "firstPartyWarning": "Allow only if you just started signing in from the AgentArea CLI or AgentArea Desktop yourself. Any app on this computer can open this page under their name.",
+    "workspaceHint": "It works only in the workspaces you tick. To change them, connect again."
   },
   "DashboardPage": {
     "title": "Dashboard",
@@ -3453,12 +3518,13 @@
     "stopped": "Stopped",
     "activity": "Activity",
     "scheduleView": {
+      "upcoming": "Upcoming",
       "today": "Today",
       "week": "Week",
       "month": "Month"
     },
     "nextRun": "Next run: {title}, {when}",
-    "nothingInView": "{view, select, today {Nothing scheduled today} week {Nothing scheduled this week} other {Nothing scheduled this month}}"
+    "nothingInView": "{view, select, upcoming {Nothing coming up} today {Nothing scheduled today} week {Nothing scheduled this week} other {Nothing scheduled this month}}"
   },
   "BudgetsPage": {
     "couldntLoadTitle": "Couldn't load budget data",
@@ -3733,7 +3799,6 @@
     "title": "Apps",
     "description": "Interactive interfaces from your MCP connections.",
     "connection": "Connection",
-    "open": "Open app",
     "emptyTitle": "No MCP Apps available",
     "emptyDescription": "Connect an MCP server that exposes an interactive app to see it here.",
     "connectAction": "Browse connections",

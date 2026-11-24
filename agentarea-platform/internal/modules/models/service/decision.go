@@ -85,6 +85,9 @@ func (s *Service) Decide(ctx context.Context, p api.Principal, d api.Decision) (
 	if err != nil {
 		return api.DecisionReply{}, err
 	}
+	if signsIn(profile.Auth) {
+		return api.DecisionReply{}, chatOnly(m)
+	}
 	url := profile.APIURL(s.localEndpoint(m.EndpointURL), "/systemone")
 	if url == "" {
 		return api.DecisionReply{}, &api.ModelCallError{Msg: fmt.Sprintf("model instance %s uses provider '%s', which has no public address, and has no endpoint_url configured", m.ModelID, m.ProviderType)}

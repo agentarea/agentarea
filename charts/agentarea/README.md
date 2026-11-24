@@ -323,12 +323,13 @@ The following table lists configurable parameters of the chart and their default
 | platformNetworkPolicy.extraEgress | list | `[]` |  |
 | mcpManager.enabled | bool | `true` |  |
 | mcpManager.replicaCount | int | `1` |  |
+| mcpManager.workloadUrl | string | `""` |  |
 | mcpManager.service.type | string | `"ClusterIP"` |  |
 | mcpManager.service.port | int | `80` |  |
 | mcpManager.serviceAccount.create | bool | `true` |  |
 | mcpManager.serviceAccount.name | string | `""` |  |
 | mcpManager.serviceAccount.annotations | object | `{}` |  |
-| mcpManager.tmpVolume.sizeLimit | string | `"1Gi"` |  |
+| mcpManager.tmpVolume.sizeLimit | string | `"2Gi"` |  |
 | mcpManager.serverless.enabled | bool | `true` |  |
 | mcpManager.serverless.idleTimeout | string | `"10m"` |  |
 | mcpManager.serverless.sweepInterval | string | `"60s"` |  |
@@ -405,7 +406,7 @@ The following table lists configurable parameters of the chart and their default
 | sandboxRuntime.executionQueueTimeout | string | `"5m"` |  |
 | sandboxRuntime.executionCompletionGrace | string | `"2m"` |  |
 | sandboxRuntime.workspace.maxFiles | string | `"10000"` |  |
-| sandboxRuntime.workspace.maxFileBytes | string | `"268435456"` |  |
+| sandboxRuntime.workspace.maxFileBytes | string | `"1073741824"` |  |
 | sandboxRuntime.workspace.maxBytes | string | `"2147483648"` |  |
 | sandboxRuntime.workspace.signedUrlTTL | string | `"1h"` |  |
 | sandboxRuntime.workspace.forcePathStyle | bool | `true` |  |
@@ -452,7 +453,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpSandboxRunner.serviceAccount.create | bool | `true` |  |
 | mcpSandboxRunner.serviceAccount.name | string | `""` |  |
 | mcpSandboxRunner.serviceAccount.annotations | object | `{}` |  |
-| mcpSandboxRunner.tmpVolume.sizeLimit | string | `"512Mi"` |  |
+| mcpSandboxRunner.tmpVolume.sizeLimit | string | `"1536Mi"` |  |
 | mcpSandboxRunner.consumerGroup | string | `"agentarea-sandbox-runners"` |  |
 | mcpSandboxRunner.batchSize | int | `1` |  |
 | mcpSandboxRunner.resources.requests.cpu | string | `"50m"` |  |
@@ -463,9 +464,9 @@ The following table lists configurable parameters of the chart and their default
 | temporal.enabled | bool | `true` |  |
 | temporal.replicaCount | int | `1` |  |
 | temporal.image.repository | string | `"temporalio/server"` |  |
-| temporal.image.tag | string | `"1.32.1"` |  |
+| temporal.image.tag | string | `"1.32.2"` |  |
 | temporal.adminTools.image.repository | string | `"temporalio/admin-tools"` |  |
-| temporal.adminTools.image.tag | string | `"1.32.1"` |  |
+| temporal.adminTools.image.tag | string | `"1.32.2"` |  |
 | temporal.namespaceRetention | string | `"24h"` |  |
 | temporal.database.name | string | `"temporal"` |  |
 | temporal.service.type | string | `"ClusterIP"` |  |
@@ -474,7 +475,7 @@ The following table lists configurable parameters of the chart and their default
 | temporal.extraEnv | list | `[]` |  |
 | postgresql.enabled | bool | `true` |  |
 | postgresql.image.repository | string | `"postgres"` |  |
-| postgresql.image.tag | string | `"16.15-alpine"` |  |
+| postgresql.image.tag | string | `"16.16-alpine"` |  |
 | postgresql.resources.limits.cpu | string | `"500m"` |  |
 | postgresql.resources.limits.memory | string | `"512Mi"` |  |
 | postgresql.resources.requests.cpu | string | `"250m"` |  |
@@ -483,6 +484,7 @@ The following table lists configurable parameters of the chart and their default
 | postgresql.persistence.size | string | `"8Gi"` |  |
 | postgresql.persistence.storageClass | string | `""` |  |
 | redis.enabled | bool | `true` |  |
+| valkey.image.tag | string | `"9.1.4"` |  |
 | valkey.auth.enabled | bool | `true` |  |
 | valkey.auth.usersExistingSecret | string | `"agentarea-redis-secret"` |  |
 | valkey.auth.aclUsers.default.permissions | string | `"~* &* +@all"` |  |
@@ -499,7 +501,7 @@ The following table lists configurable parameters of the chart and their default
 | valkey.resources.requests.memory | string | `"1Gi"` |  |
 | rustfs.enabled | bool | `true` |  |
 | rustfs.image.repository | string | `"rustfs/rustfs"` |  |
-| rustfs.image.tag | string | `"1.0.3"` |  |
+| rustfs.image.tag | string | `"1.0.6"` |  |
 | rustfs.auth.existingSecret | string | `"agentarea-rustfs-secret"` |  |
 | rustfs.defaultBuckets | string | `""` |  |
 | rustfs.resources.limits.cpu | string | `"500m"` |  |
@@ -556,7 +558,7 @@ The following table lists configurable parameters of the chart and their default
 | openfga.enabled | bool | `true` |  |
 | openfga.replicaCount | int | `1` |  |
 | openfga.image.repository | string | `"openfga/openfga"` |  |
-| openfga.image.tag | string | `"v1.22.0"` |  |
+| openfga.image.tag | string | `"v1.23.0"` |  |
 | openfga.database.name | string | `"openfga"` |  |
 | openfga.database.createJob.enabled | bool | `true` |  |
 | openfga.log.level | string | `"info"` |  |

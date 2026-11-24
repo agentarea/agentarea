@@ -219,10 +219,18 @@ func (Store) ListExternalIdentities(ctx context.Context, q db.Querier, userID st
 	}
 	out := make([]domain.ExternalIdentity, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, domain.ExternalIdentity{ID: r.ID.String(), Provider: r.Provider, ExternalID: r.ExternalID, CreatedAt: r.CreatedAt.Time})
+		out = append(out, externalIdentity(r.ID, r.Provider, r.ExternalID, r.Username, r.DisplayName, r.CreatedAt))
 	}
 	return out, nil
 }
+
+func externalIdentity(id uuid.UUID, provider, externalID string, username, name pgtype.Text, created pgtype.Timestamp) domain.ExternalIdentity {
+	return domain.ExternalIdentity{ID: id.String(), Provider: provider, ExternalID: externalID,
+		Username: textPtr(username), DisplayName: textPtr(name), CreatedAt: created.Time}
+}
+
+// nonEmpty is s as a nullable column: NULL when "".
+func nonEmpty(s string) pgtype.Text { return pgtype.Text{String: s, Valid: s != ""} }
 
 // RevokeExternalIdentity unlinks one of the user's live links; false when it
 // is not theirs or not live.
@@ -240,13 +248,37 @@ func (Store) ExternalIdentityHolder(ctx context.Context, q db.Querier, provider,
 	return u, err == nil, err
 }
 
+// LinkedExternalIDs are the external ids of the user's live accounts of provider, the most
+// recently linked first.
+func (Store) LinkedExternalIDs(ctx context.Context, q db.Querier, userID, provider string) ([]string, error) {
+	ids, err := New(q).LinkedExternalIDs(ctx, LinkedExternalIDsParams{UserID: userID, Provider: provider})
+	if ids == nil {
+		ids = []string{}
+	}
+	return ids, err
+}
+
 // InsertExternalIdentity links an account to a user.
-func (Store) InsertExternalIdentity(ctx context.Context, q db.Querier, userID, provider, externalID, method string, now time.Time) (domain.ExternalIdentity, error) {
+func (Store) InsertExternalIdentity(ctx context.Context, q db.Querier, userID string, a domain.MessengerAccount, method string, now time.Time) (domain.ExternalIdentity, error) {
 	r, err := New(q).InsertExternalIdentity(ctx, InsertExternalIdentityParams{
-		ID: uuid.New(), Now: naive(now), UserID: userID, Provider: provider, ExternalID: externalID, Method: method,
+		ID: uuid.New(), Now: naive(now), UserID: userID, Provider: a.Provider, ExternalID: a.ExternalID, Method: method,
+		Username: nonEmpty(a.Username), DisplayName: nonEmpty(a.Name),
 	})
 	if err != nil {
 		return domain.ExternalIdentity{}, err
 	}
-	return domain.ExternalIdentity{ID: r.ID.String(), Provider: r.Provider, ExternalID: r.ExternalID, CreatedAt: r.CreatedAt.Time}, nil
+	return externalIdentity(r.ID, r.Provider, r.ExternalID, r.Username, r.DisplayName, r.CreatedAt), nil
+}
+
+// RenameExternalIdentity keeps how the messenger names an account the user
+// already holds; a name it did not show is left as it was.
+func (Store) RenameExternalIdentity(ctx context.Context, q db.Querier, userID string, a domain.MessengerAccount, now time.Time) (domain.ExternalIdentity, error) {
+	r, err := New(q).RenameExternalIdentity(ctx, RenameExternalIdentityParams{
+		Username: nonEmpty(a.Username), DisplayName: nonEmpty(a.Name), Now: naive(now),
+		UserID: userID, Provider: a.Provider, ExternalID: a.ExternalID,
+	})
+	if err != nil {
+		return domain.ExternalIdentity{}, err
+	}
+	return externalIdentity(r.ID, r.Provider, r.ExternalID, r.Username, r.DisplayName, r.CreatedAt), nil
 }

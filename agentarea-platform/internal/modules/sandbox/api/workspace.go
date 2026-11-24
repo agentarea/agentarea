@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 // TaskWorkspace is the immutable, generation-based task workspace under
@@ -24,6 +25,19 @@ type TaskWorkspace interface {
 	Get(ctx context.Context, workspaceID, taskID, path string) ([]byte, string, error)
 	// Exists reports a live entry of the current manifest.
 	Exists(ctx context.Context, workspaceID, taskID, path string) (bool, error)
+	// Digest is the sha256 the current manifest records for a live entry;
+	// ErrFileNotFound when absent.
+	Digest(ctx context.Context, workspaceID, taskID, path string) (string, error)
+	// DownloadURLs presigns a GET of the committed file at path, or of each under it when path
+	// is a folder, valid for ttl; ErrFileNotFound when the task holds nothing there. Each URL
+	// reaches only that file's content-addressed object.
+	DownloadURLs(ctx context.Context, workspaceID, taskID, path string, ttl time.Duration) ([]FileURL, error)
+}
+
+// FileURL is a presigned GET of one committed file.
+type FileURL struct {
+	Path, URL, SHA256 string
+	Size              int64
 }
 
 // ErrWorkspaceInvalid is WorkspaceValidationError, ErrWorkspaceConflict

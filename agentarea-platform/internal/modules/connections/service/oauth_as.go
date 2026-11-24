@@ -17,6 +17,7 @@ import (
 
 	"golang.org/x/sync/singleflight"
 
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx/wirejson"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/netguard"
 )
@@ -157,9 +158,11 @@ func (s *Service) ProtectedResource(ctx context.Context, resourcePath string) (w
 	if err != nil {
 		return nil, err
 	}
-	scopes := make([]any, len(s.d.Config.OAuthScopes))
-	for i, sc := range s.d.Config.OAuthScopes {
-		scopes[i] = sc
+	scopes := []any{}
+	for _, sc := range oaDedupe(s.d.Config.OAuthScopes) {
+		if sc != authn.OAuthScopeAPI && sc != authn.OAuthScopeMCP {
+			scopes = append(scopes, sc)
+		}
 	}
 	return wirejson.Object{
 		{Key: "resource", Value: s.apiBase() + "/" + resourcePath},
@@ -204,6 +207,21 @@ type DCRRefusal struct {
 }
 
 func (e *DCRRefusal) Error() string { return e.Code + ": " + e.Description }
+
+// offeredScopes is what a client may register for: the configured protocol
+// scopes and mcp, never api, which only first-party clients hold (ADR-0058).
+// The resource metadata advertises the protocol scopes only: the grant does
+// not depend on what a client asks, and a client registered before mcp
+// existed is refused at authorize when it asks for a scope it is not allowed.
+func (s *Service) offeredScopes() []string {
+	var out []string
+	for _, sc := range oaDedupe(append(slices.Clone(s.d.Config.OAuthScopes), authn.OAuthScopeMCP)) {
+		if sc != authn.OAuthScopeAPI {
+			out = append(out, sc)
+		}
+	}
+	return out
+}
 
 // Registration is a DCR request shaped for Hydra's admin API: the
 // security-relevant fields forced, only the descriptive ones forwarded.
@@ -252,7 +270,7 @@ func (s *Service) Registration(body []byte) (map[string]any, error) {
 	}
 	data["grant_types"] = granted
 
-	offered := oaDedupe(s.d.Config.OAuthScopes)
+	offered := s.offeredScopes()
 	asked := strings.Fields(oaPyStr(data["scope"]))
 	var scopes []string
 	if len(asked) == 0 {

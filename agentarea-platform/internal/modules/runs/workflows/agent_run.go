@@ -267,6 +267,17 @@ func (r *agentRun) describe(d money.Decimal) string {
 	return d.String()
 }
 
+// sharedFilesTask is the task whose files a subtask works on (its parent's); "" for a run on its own.
+func (r *agentRun) sharedFilesTask() string {
+	t, _ := r.metadata[workspaceTaskKey].(string)
+	return t
+}
+
+// filesTask is the task whose sandbox and files the run works on.
+func (r *agentRun) filesTask() string {
+	return firstNonEmpty(r.sharedFilesTask(), r.taskID)
+}
+
 func (r *agentRun) isDelegationChild() bool { return r.metadata["source"] == "agent_delegation" }
 
 func (r *agentRun) questionsAvailable() bool {

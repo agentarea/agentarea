@@ -721,10 +721,23 @@ func TestRegistrationShaping(t *testing.T) {
 	if g := reg["grant_types"].([]any); len(g) != 1 || g[0] != "refresh_token" {
 		t.Fatalf("grant_types %v", g)
 	}
-	if reg["scope"] != "offline offline_access openid" || reg["skip_consent"] != false {
+	if reg["scope"] != "mcp offline offline_access openid" || reg["skip_consent"] != false {
 		t.Fatalf("registration %v", reg)
 	}
-	for _, body := range []string{`null`, `{"redirect_uris":["ftp://x"]}`, `{"redirect_uris":["https://x"],"grant_types":["implicit"]}`, `{"redirect_uris":["https://x"],"scope":"admin"}`} {
+	for body, want := range map[string]string{
+		`{"redirect_uris":["https://x"],"scope":"api mcp openid"}`: "mcp openid",
+		`{"redirect_uris":["https://x"],"scope":"mcp"}`:            "mcp",
+	} {
+		reg, err := f.svc.Registration([]byte(body))
+		if err != nil || reg["scope"] != want {
+			t.Fatalf("%s: %v %v", body, reg["scope"], err)
+		}
+	}
+	apiConfigured := newOAuthFixture(t, nil, Config{OAuthScopes: []string{"openid", "api"}})
+	if reg, err := apiConfigured.svc.Registration([]byte(`{"redirect_uris":["https://x"],"scope":"api openid"}`)); err != nil || reg["scope"] != "openid" {
+		t.Fatalf("api offered to a registered client: %v %v", reg["scope"], err)
+	}
+	for _, body := range []string{`null`, `{"redirect_uris":["ftp://x"]}`, `{"redirect_uris":["https://x"],"grant_types":["implicit"]}`, `{"redirect_uris":["https://x"],"scope":"admin"}`, `{"redirect_uris":["https://x"],"scope":"api"}`} {
 		var refusal *DCRRefusal
 		if _, err := f.svc.Registration([]byte(body)); !errors.As(err, &refusal) {
 			t.Fatalf("%s: err = %v", body, err)
@@ -769,5 +782,49 @@ func TestClientCredentialsTokenIsKept(t *testing.T) {
 	}
 	if f.auth.rows[id].SecretKey == nil {
 		t.Fatal("secret_key not recorded")
+	}
+}
+
+// A credential minted through a platform app with an install page leads to
+// it: preflight names the page and the finish landing asks for it next.
+func TestInstallURLFollowsThePlatformApp(t *testing.T) {
+	for _, install := range []string{"https://github.com/apps/x/installations/new", ""} {
+		t.Run("install_url="+install, func(t *testing.T) {
+			p := newOAuthProvider(t)
+			p.token = func(url.Values, *http.Request) (int, map[string]any) { return 200, map[string]any{"access_token": "at"} }
+			app := OAuthApp{Issuer: "https://gh", ClientID: "pid", ClientSecret: "psec", TokenEndpoint: p.srv.URL + "/token", InstallURL: install}
+			f := newOAuthFixture(t, p, Config{OAuthApps: []OAuthApp{app}})
+			ctx := context.Background()
+			id := f.urlInstance(p)
+			if pf, err := f.svc.OAuthPreflight(ctx, f.caller, OAuthTarget{InstanceID: &id}); err != nil || pf.InstallURL != nil {
+				t.Fatalf("not connected: %+v err %v", pf, err)
+			}
+			authID := f.oauthConfig(t, map[string]any{"credential_mode": "managed", "platform_oauth_issuer": "https://gh"}, map[string]any{})
+			aid := authID.String()
+			inst := f.inst.rows[id]
+			inst.AuthConfigID = &aid
+			f.inst.rows[id] = inst
+			pf, err := f.svc.OAuthPreflight(ctx, f.caller, OAuthTarget{InstanceID: &id})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (install == "") != (pf.InstallURL == nil) || (pf.InstallURL != nil && *pf.InstallURL != install) {
+				t.Fatalf("preflight install_url = %v, want %q", pf.InstallURL, install)
+			}
+
+			conn := uuid.New()
+			raw, _ := json.Marshal(returnedFlow{Flow: oauthState{TargetKind: kindOpenAPIConnection, ConnectionID: conn.String(),
+				AuthConfigID: aid, WorkspaceID: f.caller.Workspace.ID(), UserID: "owner", WorkspaceSlug: "acme"}, Code: "c"})
+			f.kv.m["oauth_returned:t"] = string(raw)
+			enter := func(context.Context, string) (authn.Caller, error) { return f.caller, nil }
+			done, err := f.svc.OAuthFinish(ctx, f.caller.Principal, "t", enter)
+			want := "https://app.example/w/acme/connections/openapi/" + conn.String() + "/settings?oauth=success"
+			if install != "" {
+				want += "&install=1"
+			}
+			if err != nil || done != want {
+				t.Fatalf("finish = %q err %v, want %q", done, err, want)
+			}
+		})
 	}
 }

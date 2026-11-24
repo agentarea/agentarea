@@ -116,6 +116,7 @@ func ClientPlatformToolsets() []ClientPlatformToolset {
 			{Name: "list_source_types", DisplayName: "List stream source types", Description: "Source types of the catalog, with the credentials and settings each needs.", Effect: "read"},
 			{Name: "list_sources", DisplayName: "List stream sources", Description: "List where a stream's events come from, with the public webhook URL.", Effect: "read"},
 			{Name: "list_subscriptions", DisplayName: "List stream subscriptions", Description: "List the triggers, forwards and processors that receive a stream's events.", Effect: "read"},
+			{Name: "replay_event", DisplayName: "Replay a stream event", Description: "Append a copy of a stored event to its stream as a new arrival; only its sender or a workspace admin.", Effect: "write"},
 			{Name: "update_processor", DisplayName: "Update stream processor", Description: "Change a processor's code, outputs or filter; the next event runs the change.", Effect: "write"},
 			{Name: "update_source", DisplayName: "Change who may write to a source", Description: "Change who may write to a source whose type admits senders (Telegram).", Effect: "write"},
 		}},
@@ -131,6 +132,9 @@ func ClientPlatformToolsets() []ClientPlatformToolset {
 		}},
 		{Namespace: "agentarea/inbox", Name: "inbox", DisplayName: "Inbox", Description: "Inspect agent inbox messages awaiting human input.", Methods: []ClientPlatformToolsetMethod{
 			{Name: "list", DisplayName: "List inbox items", Description: "List inbox items, optionally filtered by status or agent.", Effect: "read"},
+		}},
+		{Namespace: "agentarea/messages", Name: "messages", DisplayName: "Messages", Description: "Write first to a workspace member through a messenger stream (Telegram).", Methods: []ClientPlatformToolsetMethod{
+			{Name: "send_message", DisplayName: "Send a message to a member", Description: "Send a message to a workspace member through a messenger stream (Telegram), so you can start the conversation.", Effect: "write"},
 		}},
 		{Namespace: "agentarea/openapi_connections", Name: "openapi_connections", DisplayName: "OpenAPI Connections", Description: "Manage OpenAPI connections that expose external APIs as tools.", Methods: []ClientPlatformToolsetMethod{
 			{Name: "create", DisplayName: "Create OpenAPI connection", Description: "Create a new OpenAPI connection.", Effect: "write"},

@@ -48,7 +48,7 @@ func (t platformTools) Call(ctx context.Context, call api.PlatformCall) (api.Pla
 	}
 	c := authn.Caller{Principal: authn.Principal{
 		UserID: call.UserID, Subject: &authn.Subject{Kind: authn.SubjectAgent, ID: call.AgentID},
-		AccessibleWorkspaces: []string{call.WorkspaceID},
+		AccessibleWorkspaces: []string{call.WorkspaceID}, BoundTaskID: call.TaskID,
 	}, Workspace: ws}
 	args := call.Args
 	if len(args) == 0 {

@@ -36,6 +36,7 @@ import (
 	runsservice "github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/service"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/replies"
 	streamsservice "github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/service"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/wallet"
 	clusterauthn "github.com/agentarea/agentarea/agentarea-platform/internal/profiles/cluster/authn"
@@ -138,7 +139,7 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 		ad.Secrets = delegateSecrets{d: d}
 		ad.ClientAPIURL, ad.A2AAPIURL = d.APIURL, d.APIURL
 		ad.A2APrincipal = func(ctx context.Context, token string) (*authn.Principal, error) {
-			return e.gate.Optional(ctx, token, false)
+			return e.gate.Optional(ctx, token, authn.SurfaceAPI, false)
 		}
 		ad.TaskDefTriggers = lateTriggers{m: m}
 		ad.TaskDefRunner = lateTaskDefRunner{m: m}
@@ -241,12 +242,13 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 		}(), Counter: d.Counter, Collector: vendorTransport(d.Outbound), Version: buildVersion()})
 	m.runsSurface = newRunsSurface(e, d, runsProviders{Agents: m.agents, Governance: m.governance, Models: m.models, Sandbox: m.sandbox})
 	m.connections.UseHeldCalls(m.runsSurface.HeldCalls())
+	m.connections.UseTaskFiles(m.runsSurface.TaskFileURLs())
 	m.agents.UseA2A(m.runsSurface.A2A(), a2aPushSecrets{db: d.DB, f: d.Secrets}, func(ctx context.Context, rawURL string) error {
 		_, err := d.Outbound.Guard().CheckURL(ctx, rawURL)
 		return err
 	})
 	m.runner = runs.NewRunnerSurface(runs.RunnerDeps{DB: d.DB, Gate: e.gate, Clients: m.agents.RunnerClients(), Slugs: m.identity.WorkspaceSlugs(),
-		Broker: d.Broker, Redis: d.Redis, Files: harness, Workers: d.Durable, Tokens: d.TurnTokens, Live: d.LiveTurns, Log: d.Log})
+		Broker: d.Broker, Redis: d.Redis, Files: harness, Artifacts: m.sandbox.TaskFiles(), Store: m.sandbox.Runtime(), Workers: d.Durable, Tokens: d.TurnTokens, Live: d.LiveTurns, Log: d.Log})
 	m.streamsDeps = streamsDeps(e, d, m)
 	m.streams = streams.New(m.streamsDeps)
 	m.catalog.UseBundles(catalogBundles(d, m))
@@ -298,8 +300,9 @@ func streamsDeps(e *edge, d coreDeps, m *moduleSet) streams.Deps {
 		},
 		Out: d.Outbound, APIURL: d.APIURL, WebhookURL: p.WebhookURL, Settings: p.Settings, Processors: processorRunner{p: m.sandbox.Processors()},
 		Links: m.identity.MessengerLinks(), Owners: m.identity.WorkspaceOwners(), AppURL: d.AppURL,
-		MCPEventSources: mcpEventSources{s: m.connections.MCPEventSources()},
-		ModelKinds:      m.models.ModelKinds(), Models: lateOneShotModels{m: m}, AgentModels: agentModels{d: m.agents.Definitions()}}
+		MCPEventSources: mcpEventSources{s: m.connections.MCPEventSources()}, TaskFiles: m.sandbox.TaskFiles(),
+		Slugs:      m.identity.WorkspaceSlugs(),
+		ModelKinds: m.models.ModelKinds(), Models: lateOneShotModels{m: m}, AgentModels: agentModels{d: m.agents.Definitions()}}
 	if d.Outbound != nil {
 		sd.Guard = d.Outbound.Guard
 	}
@@ -315,6 +318,7 @@ func streamsDeps(e *edge, d coreDeps, m *moduleSet) streams.Deps {
 	}
 	if d.Redis != nil {
 		sd.RateLimiter = clusterhttpx.NewRateLimiter(d.Redis)
+		sd.Turns = replies.Turns{Redis: d.Redis}
 	}
 	if p.Bus != nil {
 		sd.Bus, sd.Dedup, sd.Quota, sd.Notices = p.Bus, p.Dedup, p.Quota, p.Notices
@@ -339,7 +343,8 @@ func runsDeps(d coreDeps, m *moduleSet, store kblob.Store) runs.Deps {
 			"code":         platformCaller{t: m.connections.PlatformTools()},
 			"remote_agent": remoteAgentCaller{t: m.connections.RemoteAgents()},
 		},
-		Settings: d.RunSettings, Telemetry: d.Telemetry, ToolMetrics: d.ToolMetrics, Log: d.Log,
+		RemoteTasks: remoteAgentCaller{t: m.connections.RemoteAgents()},
+		Settings:    d.RunSettings, Telemetry: d.Telemetry, ToolMetrics: d.ToolMetrics, Log: d.Log,
 		Definitions: newRunDefinitions(runTools{t: m.connections.RunTools()}, runSkillsPort{s: m.agents.RunSkills()},
 			runInstructionsPort{p: m.projects.RunInstructions()}, runInputsPort{i: m.sandbox.RunInputs()}),
 		Skills: skillPackages{s: m.agents.RunSkills()},
@@ -390,6 +395,22 @@ type redisSetEX struct{ c *redis.Client }
 
 func (r redisSetEX) SetEX(ctx context.Context, key, value string, ttl time.Duration) error {
 	return r.c.Set(ctx, key, value, ttl).Err()
+}
+
+func (r redisSetEX) SetNX(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
+	return r.c.SetNX(ctx, key, value, ttl).Result()
+}
+
+func (r redisSetEX) Del(ctx context.Context, key string) error {
+	return r.c.Del(ctx, key).Err()
+}
+
+func (r redisSetEX) Get(ctx context.Context, key string) (string, error) {
+	v, err := r.c.Get(ctx, key).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", nil
+	}
+	return v, err
 }
 
 func (r redisSetEX) GetDel(ctx context.Context, key string) (string, error) {

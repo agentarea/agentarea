@@ -135,6 +135,9 @@ func (m *Module) Use(l Later) {
 	m.build()
 }
 
+// UseTaskFiles sets runs' signed downloads of a turn's task files; runs is built after connections.
+func (m *Module) UseTaskFiles(f runsapi.TaskFileURLs) { m.svc.UseTaskFiles(f) }
+
 // UseHeldCalls sets runs' approval gate of held calls; runs is built after connections.
 func (m *Module) UseHeldCalls(h runsapi.HeldCalls) {
 	m.heldCalls = h

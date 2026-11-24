@@ -35,6 +35,15 @@ type Instance struct {
 	Tags                              []string
 }
 
+// SignIn is a ChatGPT sign-in a member started on a configuration and has not finished.
+type SignIn struct {
+	ConfigID     string
+	UserID       string
+	DeviceAuthID string
+	UserCode     string
+	ExpiresAt    time.Time
+}
+
 // OwnSecretName is the secret a configuration mints for its own key.
 func OwnSecretName(configID string) string { return "provider_config_" + configID }
 

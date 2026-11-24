@@ -11,12 +11,20 @@ const (
 	SignalResolveEscalation = "resolve_escalation"
 	SignalRunnerTurnUpdate  = "runner_turn_update"
 	SignalWorkflowCommand   = "workflow_command"
+	// SignalRemoteTaskUpdate wakes a RemoteDelegationWorkflow: the remote task it carries
+	// (RemoteTaskUpdate) changed, so it is read at once.
+	SignalRemoteTaskUpdate = "remote_task_update"
 
 	QueryPendingEscalation = "get_pending_escalations"
 	QueryCurrentState      = "get_current_state"
 
 	UpdateContinueExecution = "continue_execution"
 )
+
+// RemoteTaskUpdate is the remote_task_update signal: the id of the remote task that changed.
+type RemoteTaskUpdate struct {
+	TaskID string `json:"task_id"`
+}
 
 // Commands a workflow_command signal carries.
 const (

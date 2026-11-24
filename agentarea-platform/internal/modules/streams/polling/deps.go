@@ -37,6 +37,10 @@ type Source struct {
 	Entry         Entry
 	// EntrySpec is the entry as stored, to tell when it changed.
 	EntrySpec string
+	// Held is a source that exists but cannot be acted on now: its type has no valid catalog
+	// entry, its webhook type registers nothing, or its config cannot be read. It counts as
+	// present, so its webhook is not taken back, and nothing else is done with it.
+	Held bool
 }
 
 // Source kinds the pollers read.
@@ -51,6 +55,8 @@ type Sources interface {
 	Polled(ctx context.Context, sourceID, cursor string) error
 	Failed(ctx context.Context, sourceID, reason string) error
 	Registered(ctx context.Context, sourceID, url string) error
+	// Unregistered clears the URL a source was registered at, after its webhook was taken back.
+	Unregistered(ctx context.Context, sourceID string) error
 	SubscribeFailed(ctx context.Context, sourceID, reason string, retryIn time.Duration) error
 	Subscribed(ctx context.Context, sourceID, url, subscriptionID string, refreshBefore *time.Time, cursor string) error
 }

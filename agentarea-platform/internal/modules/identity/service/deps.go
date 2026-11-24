@@ -47,7 +47,9 @@ type Store interface {
 	ListExternalIdentities(ctx context.Context, q db.Querier, userID string) ([]domain.ExternalIdentity, error)
 	RevokeExternalIdentity(ctx context.Context, q db.Querier, userID string, id uuid.UUID, now time.Time) (bool, error)
 	ExternalIdentityHolder(ctx context.Context, q db.Querier, provider, externalID string) (string, bool, error)
-	InsertExternalIdentity(ctx context.Context, q db.Querier, userID, provider, externalID, method string, now time.Time) (domain.ExternalIdentity, error)
+	LinkedExternalIDs(ctx context.Context, q db.Querier, userID, provider string) ([]string, error)
+	InsertExternalIdentity(ctx context.Context, q db.Querier, userID string, a domain.MessengerAccount, method string, now time.Time) (domain.ExternalIdentity, error)
+	RenameExternalIdentity(ctx context.Context, q db.Querier, userID string, a domain.MessengerAccount, now time.Time) (domain.ExternalIdentity, error)
 }
 
 // GraphReader is what identity reads from the authorization graph: member
@@ -82,6 +84,13 @@ type LinkCodes interface {
 	Redeem(ctx context.Context, code, provider, externalID string) (string, bool, error)
 	// Confirm consumes what the account redeemed; false when nothing waits.
 	Confirm(ctx context.Context, provider, externalID string) (string, bool, error)
+	// Offer issues a code, good for ttl, that names the account a bot offered it to; issued is
+	// false, and no code returned, while one offered to the account through the source is unspent.
+	Offer(ctx context.Context, o domain.LinkOffer, ttl time.Duration) (code string, issued bool, err error)
+	// PeekOffer is what code was offered for, the code left in place; false when it is gone.
+	PeekOffer(ctx context.Context, code string) (domain.LinkOffer, bool, error)
+	// TakeOffer spends code; false when it is gone.
+	TakeOffer(ctx context.Context, code string) (domain.LinkOffer, bool, error)
 }
 
 // Named is a workspace row the access explorer shows by name.

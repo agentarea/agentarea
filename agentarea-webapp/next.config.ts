@@ -50,6 +50,11 @@ const nextConfig: NextConfig = {
           { key: "Content-Security-Policy", value: CONTENT_SECURITY_POLICY },
         ],
       },
+      {
+        // Its URL carries a Telegram link code; no request the page makes may pass it on.
+        source: "/link/telegram",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
     ];
   },
   env: {

@@ -7,7 +7,6 @@ import {
 	exchangeCode,
 	parseCallback,
 	refreshAccessToken,
-	registerClient,
 	type AuthServerMetadata,
 } from './oauth.js';
 
@@ -76,42 +75,6 @@ test('discoverAuthServer rejects an authorization server without S256', async t 
 	);
 });
 
-test('registerClient registers a public loopback client', async t => {
-	let body: Record<string, unknown> = {};
-	const clientId = await registerClient(
-		{
-			metadata: METADATA,
-			redirectUri: 'http://127.0.0.1:51789/callback',
-			clientName: 'AgentArea CLI',
-		},
-		async (url, init) => {
-			t.is(String(url), METADATA.registration_endpoint);
-			body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-			return jsonResponse({client_id: 'client-123'});
-		},
-	);
-
-	t.is(clientId, 'client-123');
-	t.is(body['token_endpoint_auth_method'], 'none');
-	t.deepEqual(body['redirect_uris'], ['http://127.0.0.1:51789/callback']);
-	t.deepEqual(body['grant_types'], ['authorization_code', 'refresh_token']);
-	t.deepEqual(body['response_types'], ['code']);
-});
-
-test('registerClient fails loudly when the server has no DCR endpoint', async t => {
-	await t.throwsAsync(
-		registerClient(
-			{
-				metadata: {...METADATA, registration_endpoint: undefined},
-				redirectUri: 'http://127.0.0.1:51789/callback',
-				clientName: 'AgentArea CLI',
-			},
-			async () => jsonResponse({}),
-		),
-		{message: /registration_endpoint/},
-	);
-});
-
 test('buildAuthorizeUrl carries PKCE, state and the resource audience', t => {
 	const url = new URL(
 		buildAuthorizeUrl({
@@ -131,7 +94,7 @@ test('buildAuthorizeUrl carries PKCE, state and the resource audience', t => {
 	t.is(url.searchParams.get('code_challenge_method'), 'S256');
 	t.is(url.searchParams.get('state'), 'state-value');
 	t.is(url.searchParams.get('audience'), 'https://api.example.test');
-	t.is(url.searchParams.get('scope'), 'offline_access openid');
+	t.is(url.searchParams.get('scope'), 'api offline_access openid');
 });
 
 test('parseCallback returns the code when state matches', t => {

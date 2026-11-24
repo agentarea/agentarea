@@ -57,6 +57,8 @@ type Deps struct {
 	HeldCalls runsapi.HeldCalls
 	// ClientCalls prices, caps and meters calls outside a run; nil runs them unmetered.
 	ClientCalls runsapi.ClientToolCalls
+	// TaskFiles signs downloads of a runner turn's task files; nil offers no download tool.
+	TaskFiles runsapi.TaskFileURLs
 	// EgressExits is governance's binding check; nil where the edition has
 	// no egress exits, so no instance binds one and no server requires one.
 	EgressExits EgressExitBinding
@@ -84,6 +86,8 @@ type Service struct {
 	d         Deps
 	perms     authz.Permissions
 	discovery hydraDiscoveryCache
+	// installTokens caches the installation tokens of bound connections.
+	installTokens *installationTokens
 }
 
 // New builds the service.
@@ -100,7 +104,7 @@ func New(d Deps) *Service {
 	if d.NewID == nil {
 		d.NewID = uuid.New
 	}
-	s := &Service{d: d}
+	s := &Service{d: d, installTokens: &installationTokens{}}
 	if d.Graph != nil {
 		s.perms = authz.NewPermissions(d.Graph, d.Log)
 	}

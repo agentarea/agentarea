@@ -9,8 +9,12 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/identity/domain"
 )
 
-// MethodPairing is how a link proven from inside the messenger is recorded.
-const MethodPairing = "pairing"
+// How a link is recorded: proven from inside the messenger, or offered by a
+// bot to the account and accepted by the signed-in user.
+const (
+	MethodPairing = "pairing"
+	MethodOffer   = "offer"
+)
 
 const unnamedAccount = "your AgentArea account"
 
@@ -26,6 +30,16 @@ func (s *Service) Holder(ctx context.Context, provider, externalID string) (stri
 	return s.d.Store.ExternalIdentityHolder(ctx, q, provider, externalID)
 }
 
+// Accounts are the user's live accounts of provider, the most recently linked first.
+func (s *Service) Accounts(ctx context.Context, userID, provider string) ([]string, error) {
+	q, release, err := s.d.DB.Global().Read(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return s.d.Store.LinkedExternalIDs(ctx, q, userID, provider)
+}
+
 // Redeem spends a link code from the messenger account.
 func (s *Service) Redeem(ctx context.Context, code, provider, externalID string) (string, bool, error) {
 	if s.d.LinkCodes == nil {
@@ -38,18 +52,37 @@ func (s *Service) Redeem(ctx context.Context, code, provider, externalID string)
 }
 
 // Confirm links the account to the user it redeemed a code for; linking it
-// again to the same user changes nothing.
-func (s *Service) Confirm(ctx context.Context, provider, externalID string) (string, bool, error) {
+// again to the same user only keeps how the messenger names it now.
+func (s *Service) Confirm(ctx context.Context, account api.Account) (string, bool, error) {
 	if s.d.LinkCodes == nil {
 		return "", false, domain.ErrLinkingNeedsRedis
 	}
-	userID, ok, err := s.d.LinkCodes.Confirm(ctx, provider, externalID)
+	userID, ok, err := s.d.LinkCodes.Confirm(ctx, account.Provider, account.ExternalID)
 	if err != nil || !ok {
 		return "", false, err
 	}
+	if _, err := s.link(ctx, userID, messengerAccount(account), MethodPairing); err != nil {
+		return "", false, err
+	}
+	return userID, true, nil
+}
+
+// Offer issues the code a bot hands an unlinked sender.
+func (s *Service) Offer(ctx context.Context, account api.Account, bot api.OfferingBot) (string, bool, error) {
+	if s.d.LinkCodes == nil {
+		return "", false, domain.ErrLinkingNeedsRedis
+	}
+	return s.d.LinkCodes.Offer(ctx, domain.LinkOffer{MessengerAccount: messengerAccount(account),
+		WorkspaceID: bot.WorkspaceID, SourceID: bot.SourceID, Bot: bot.Username}, api.OfferTTL)
+}
+
+// link links the account to userID, or renames it when userID already holds
+// it; api.ErrAccountTaken when another user does.
+func (s *Service) link(ctx context.Context, userID string, a domain.MessengerAccount, method string) (domain.ExternalIdentity, error) {
+	var out domain.ExternalIdentity
 	link := func() error {
 		return s.d.DB.Global().Write(ctx, func(ctx context.Context, q db.Querier) error {
-			holder, held, err := s.d.Store.ExternalIdentityHolder(ctx, q, provider, externalID)
+			holder, held, err := s.d.Store.ExternalIdentityHolder(ctx, q, a.Provider, a.ExternalID)
 			if err != nil {
 				return err
 			}
@@ -57,21 +90,37 @@ func (s *Service) Confirm(ctx context.Context, provider, externalID string) (str
 				if holder != userID {
 					return api.ErrAccountTaken
 				}
-				return nil
+				out, err = s.d.Store.RenameExternalIdentity(ctx, q, userID, a, s.local())
+				return err
 			}
-			_, err = s.d.Store.InsertExternalIdentity(ctx, q, userID, provider, externalID, MethodPairing, s.local())
+			out, err = s.d.Store.InsertExternalIdentity(ctx, q, userID, a, method, s.local())
 			return err
 		})
 	}
-	err = link()
+	err := link()
 	if isUniqueViolation(err) {
 		err = link()
 	}
 	if err != nil {
-		return "", false, err
+		return domain.ExternalIdentity{}, err
 	}
-	s.log.InfoContext(ctx, "Messenger account linked", "provider", provider, "user_id", userID)
-	return userID, true, nil
+	s.log.InfoContext(ctx, "Messenger account linked", "provider", a.Provider, "user_id", userID)
+	return out, nil
+}
+
+// nameLimit is the width of user_external_identities' username and display_name.
+const nameLimit = 255
+
+func messengerAccount(a api.Account) domain.MessengerAccount {
+	return domain.MessengerAccount{Provider: a.Provider, ExternalID: a.ExternalID,
+		Username: clip(strings.TrimPrefix(strings.TrimSpace(a.Username), "@")), Name: clip(strings.TrimSpace(a.Name))}
+}
+
+func clip(s string) string {
+	if r := []rune(s); len(r) > nameLimit {
+		return string(r[:nameLimit])
+	}
+	return s
 }
 
 // Describe is the user's masked email.

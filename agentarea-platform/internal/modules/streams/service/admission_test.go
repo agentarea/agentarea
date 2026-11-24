@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -63,6 +64,20 @@ type links struct {
 	holders map[string]string
 	codes   map[string]string
 	pending map[string]string
+	offers  []identityapi.OfferingBot
+	live    map[string]bool
+	linked  identityapi.Account
+	// accounts are each user's linked Telegram ids.
+	accounts map[string][]string
+}
+
+func (l *links) Offer(_ context.Context, a identityapi.Account, bot identityapi.OfferingBot) (string, bool, error) {
+	if l.live[a.ExternalID] {
+		return "", false, nil
+	}
+	l.live[a.ExternalID] = true
+	l.offers = append(l.offers, bot)
+	return fmt.Sprintf("OFFER%d", len(l.offers)), true, nil
 }
 
 func (l *links) Holder(_ context.Context, _, id string) (string, bool, error) {
@@ -79,7 +94,8 @@ func (l *links) Redeem(_ context.Context, code, _, id string) (string, bool, err
 	return u, ok, nil
 }
 
-func (l *links) Confirm(_ context.Context, _, id string) (string, bool, error) {
+func (l *links) Confirm(_ context.Context, a identityapi.Account) (string, bool, error) {
+	id := a.ExternalID
 	u, ok := l.pending[id]
 	delete(l.pending, id)
 	if !ok {
@@ -89,45 +105,54 @@ func (l *links) Confirm(_ context.Context, _, id string) (string, bool, error) {
 		return "", false, identityapi.ErrAccountTaken
 	}
 	l.holders[id] = u
+	l.linked = a
 	return u, true, nil
 }
 
 func (l *links) Describe(context.Context, string) string { return "o***@example.com" }
+
+func (l *links) Accounts(_ context.Context, userID, provider string) ([]string, error) {
+	if provider != "telegram" {
+		return nil, nil
+	}
+	return l.accounts[userID], nil
+}
 
 type owners struct{ owner string }
 
 func (o owners) Owner(context.Context, string) (string, bool, error) { return o.owner, true, nil }
 
 type door struct {
-	svc   *service.Service
-	ws    scope.Workspace
-	src   domain.Source
-	bot   *botAPI
-	links *links
-	graph *storetest.Graph
+	svc     *service.Service
+	ws      scope.Workspace
+	src     domain.Source
+	bot     *botAPI
+	links   *links
+	graph   *storetest.Graph
+	notices *storetest.Dedup
 }
 
-func newDoor(t *testing.T) door {
+func newDoor(t *testing.T, allow string) door {
 	t.Helper()
 	pool := storetest.Pool(t)
 	ws := storetest.Workspace(t, pool)
 	ctx, _ := storetest.Caller(context.Background(), ws, "owner")
 	secrets := storetest.NewSecrets()
-	d := door{ws: ws, bot: &botAPI{}, graph: &storetest.Graph{},
-		links: &links{holders: map[string]string{}, codes: map[string]string{"CODE": "owner"}, pending: map[string]string{}}}
+	d := door{ws: ws, bot: &botAPI{}, graph: &storetest.Graph{}, notices: &storetest.Dedup{},
+		links: &links{holders: map[string]string{}, codes: map[string]string{"CODE": "owner"}, pending: map[string]string{}, live: map[string]bool{}}}
 	d.graph.AllowAll = true
 	d.svc = service.New(service.Deps{
 		DB: storetest.DB{Pool: pool}, Graph: d.graph, SourceTypes: storetest.ShippedSourceTypes(t),
 		Secrets: secrets, SecretCatalog: secrets.Catalog, Blob: &storetest.Blob{}, Bus: &storetest.Bus{},
 		Dedup: &storetest.Dedup{}, Quota: &storetest.Quota{}, Out: d.bot, APIURL: "https://api.example.test",
-		Links: d.links, Owners: owners{owner: "owner"}, Notices: &storetest.Dedup{}, AppURL: "https://app.example.test/",
+		Links: d.links, Owners: owners{owner: "owner"}, Notices: d.notices, AppURL: "https://app.example.test/",
 	})
 	st, err := d.svc.CreateStream(ctx, "tg-"+uuid.NewString()[:8], "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	d.src, _, err = d.svc.AddSource(ctx, st.ID, service.NewSource{SourceType: "telegram", Kind: "webhook",
-		Credentials: map[string]service.Credential{"bot_token": value("TOKEN")}})
+		Credentials: map[string]service.Credential{"bot_token": value("TOKEN")}, Senders: &domain.Senders{Allow: allow}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +163,7 @@ func newDoor(t *testing.T) door {
 func (d door) admit(t *testing.T, from int, chat, text string) (service.Admitted, string) {
 	t.Helper()
 	body := map[string]any{"message": map[string]any{
-		"from": map[string]any{"id": from, "is_bot": false},
+		"from": map[string]any{"id": from, "is_bot": false, "username": "alice", "first_name": "Alice", "last_name": "Liddell"},
 		"chat": map[string]any{"id": from, "type": chat},
 		"text": text,
 	}}
@@ -158,16 +183,26 @@ func (d door) admit(t *testing.T, from int, chat, text string) (service.Admitted
 }
 
 func TestATelegramSenderLinksFromInsideTheChatThenReachesTheAgent(t *testing.T) {
-	d := newDoor(t)
+	d := newDoor(t, domain.SendersMembers)
 	if _, refused := d.admit(t, 42, "private", "hello"); refused != "the sender has not linked their Telegram account" {
 		t.Fatalf("refused %q", refused)
 	}
-	if sent := d.bot.take(); len(sent) != 1 || !strings.Contains(sent[0], "https://app.example.test/link/telegram?bot=door_bot") {
+	if sent := d.bot.take(); len(sent) != 1 || !strings.Contains(sent[0], "https://app.example.test/link/telegram?code=OFFER1") ||
+		strings.Contains(sent[0], "bot=") {
 		t.Fatalf("sent %q", sent)
+	}
+	bot := identityapi.OfferingBot{WorkspaceID: d.ws.ID(), SourceID: d.src.ID, Username: "door_bot"}
+	if len(d.links.offers) != 1 || d.links.offers[0] != bot {
+		t.Fatalf("offered %+v", d.links.offers)
 	}
 	d.admit(t, 42, "private", "again")
 	if sent := d.bot.take(); len(sent) != 0 {
-		t.Fatalf("told twice in a day: %q", sent)
+		t.Fatalf("told twice while the link lives: %q", sent)
+	}
+	delete(d.links.live, "42")
+	d.admit(t, 42, "private", "after the link expired or was used")
+	if sent := d.bot.take(); len(sent) != 1 || !strings.Contains(sent[0], "code=OFFER2") {
+		t.Fatalf("no fresh link: %q", sent)
 	}
 
 	if _, refused := d.admit(t, 42, "private", "/start link_CODE"); refused != "account link requested" {
@@ -182,6 +217,9 @@ func TestATelegramSenderLinksFromInsideTheChatThenReachesTheAgent(t *testing.T) 
 	if sent := d.bot.take(); len(sent) != 1 || sent[0] != "Done: this Telegram account is linked to o***@example.com." {
 		t.Fatalf("sent %q", sent)
 	}
+	if want := (identityapi.Account{Provider: "telegram", ExternalID: "42"}); d.links.linked != want {
+		t.Fatalf("linked %+v", d.links.linked)
+	}
 
 	a, refused := d.admit(t, 42, "private", "hello")
 	if refused != "" || a.UserID != "owner" || a.Sender != "" {
@@ -190,7 +228,7 @@ func TestATelegramSenderLinksFromInsideTheChatThenReachesTheAgent(t *testing.T) 
 }
 
 func TestATelegramDoorRefusesWhoItCannotAnswerFor(t *testing.T) {
-	d := newDoor(t)
+	d := newDoor(t, domain.SendersOwner)
 	d.links.holders["7"] = "stranger"
 	d.links.holders["42"] = "owner"
 	if _, refused := d.admit(t, 42, "group", "hi"); refused != "only private chats reach the agent" {
@@ -199,8 +237,8 @@ func TestATelegramDoorRefusesWhoItCannotAnswerFor(t *testing.T) {
 	if _, refused := d.admit(t, 7, "private", "hi"); !strings.HasPrefix(refused, "only the source's owner may write") {
 		t.Fatalf("stranger: %q", refused)
 	}
-	if sent := d.bot.take(); len(sent) != 1 || sent[0] != "This bot is private." {
-		t.Fatalf("sent %q", sent)
+	if sent := d.bot.take(); len(sent) != 0 {
+		t.Fatalf("a private bot answered a linked stranger: %q", sent)
 	}
 	if _, refused := d.admit(t, 42, "private", "/start link_USED"); refused != "account link requested" {
 		t.Fatalf("used code: %q", refused)
@@ -214,5 +252,18 @@ func TestATelegramDoorRefusesWhoItCannotAnswerFor(t *testing.T) {
 	}
 	if sent := d.bot.take(); len(sent) != 1 || !strings.Contains(sent[0], "doesn't have access") {
 		t.Fatalf("sent %q", sent)
+	}
+}
+
+func TestAPrivateTelegramBotSaysNothingToStrangers(t *testing.T) {
+	d := newDoor(t, domain.SendersOwner)
+	if _, refused := d.admit(t, 99, "private", "hello"); refused != "the sender has not linked their Telegram account" {
+		t.Fatalf("refused %q", refused)
+	}
+	if sent := d.bot.take(); len(sent) != 0 || len(d.links.offers) != 0 {
+		t.Fatalf("a private bot offered a link to a stranger: sent %q offered %+v", sent, d.links.offers)
+	}
+	if _, refused := d.admit(t, 99, "private", "/start link_CODE"); refused != "account link requested" {
+		t.Fatalf("the owner's own link from the app must still work: %q", refused)
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/netguard"
 	governanceapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/governance/api"
 	identityapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/identity/api"
+	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/handlers"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/router"
@@ -68,6 +69,8 @@ type Deps struct {
 	AppURL  string
 	// Tasks is runs' task creation; nil leaves run/execute and trigger firing unmounted.
 	Tasks service.Tasks
+	// Turns records where a follow-up routed into a running task is answered (replies.Turns).
+	Turns service.Turns
 	// TaskReads is runs' task statuses and costs; nil shows none.
 	TaskReads api.TaskReads
 	// FiringTasks is runs' task reads a firing needs (stored task, restart, open run, saved task).
@@ -82,6 +85,10 @@ type Deps struct {
 	Subscriber events.GroupSubscriber
 	// Processors runs processor code in the sandbox; nil retries every processor reaction.
 	Processors service.ProcessorRunner
+	// TaskFiles reads a task's files: what a messenger reply and send_message send as files.
+	TaskFiles sandboxapi.TaskFiles
+	// Slugs is the workspaces' URL slugs: a messenger reply links the task's page under AppURL.
+	Slugs identityapi.WorkspaceSlugs
 	// Audit writes the trigger audit rows.
 	Audit governanceapi.AuditWriter
 	// APIURL and WebhookURL are the public bases of webhook URLs.
@@ -110,11 +117,11 @@ func New(d Deps) *Module {
 	return &Module{d: d, svc: service.New(service.Deps{
 		DB: d.DB, Graph: d.Graph, Agents: d.Agents, Schedules: d.Schedules, TriggerQueue: d.TriggerQueue,
 		SourceTypes: d.SourceTypes, Secrets: d.Secrets, SecretCatalog: d.SecretCatalog, Blob: d.Blob,
-		Bus: d.Bus, Broker: d.Broker, Dedup: d.Dedup, Quota: d.Quota, Tasks: d.Tasks, Audit: d.Audit,
+		Bus: d.Bus, Broker: d.Broker, Dedup: d.Dedup, Quota: d.Quota, Tasks: d.Tasks, Turns: d.Turns, Audit: d.Audit,
 		TaskReads: d.TaskReads, FiringTasks: d.FiringTasks, TaskOutcomes: d.TaskOutcomes, Executor: d.Executor,
 		APIURL: d.APIURL, WebhookURL: d.WebhookURL, Settings: d.Settings, Now: d.Now, Log: d.Log,
 		Out: d.Out, MCPEventSources: d.MCPEventSources, ModelKinds: d.ModelKinds, Models: d.Models, AgentModels: d.AgentModels,
-		Links: d.Links, Owners: d.Owners, Notices: d.Notices, AppURL: d.AppURL,
+		Links: d.Links, Owners: d.Owners, Notices: d.Notices, AppURL: d.AppURL, TaskFiles: d.TaskFiles, Slugs: d.Slugs,
 	})}
 }
 

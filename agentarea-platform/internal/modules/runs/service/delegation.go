@@ -23,14 +23,18 @@ type DelegationInput struct {
 	ParentPolicy    api.Policy
 	RunBudget       *money.Decimal
 	ExecutionID     string
+	// WorkspaceTaskID is the task whose files the child works on, the parent's.
+	WorkspaceTaskID string
 }
 
 // DelegationOutput: Status created with TaskID and Policy, or failed with Error.
+// RunnerClientID is the client whose runner runs the child's turns, if any.
 type DelegationOutput struct {
-	Status string
-	TaskID string
-	Policy api.Policy
-	Error  string
+	Status         string
+	TaskID         string
+	Policy         api.Policy
+	Error          string
+	RunnerClientID string
 }
 
 // runnerClientKey names, in task metadata, the client whose runner runs the task's turns.
@@ -61,7 +65,7 @@ func (s *Service) CreateDelegationTask(ctx context.Context, p Principal, in Dele
 		return DelegationOutput{}, err
 	case def.Archived:
 		return failed(fmt.Errorf("agent %s is archived", in.TargetAgentID))
-	case agent.ModelID == "":
+	case def.ClientID == "" && agent.ModelID == "":
 		return failed(fmt.Errorf("agent %s has no model configured", in.TargetAgentID))
 	}
 	taskID := uuid.NewString()
@@ -86,6 +90,9 @@ func (s *Service) CreateDelegationTask(ctx context.Context, p Principal, in Dele
 		if def.ClientID != "" {
 			meta[runnerClientKey] = def.ClientID
 		}
+		if in.WorkspaceTaskID != "" {
+			meta[WorkspaceTaskKey] = in.WorkspaceTaskID
+		}
 		if err := s.store.CreateTask(ctx, tx, store.NewTask{
 			ID: taskID, AgentID: in.TargetAgentID, Description: "Delegated task to " + in.TargetAgentName,
 			Parameters: map[string]any{"source": "agent_delegation", "parent_agent_id": p.AgentID, "parent_task_id": in.ParentTaskID},
@@ -101,5 +108,5 @@ func (s *Service) CreateDelegationTask(ctx context.Context, p Principal, in Dele
 		return DelegationOutput{}, taskNotFound(err)
 	}
 	s.d.Log.InfoContext(ctx, "created delegation task", "task_id", taskID, "agent", in.TargetAgentName)
-	return DelegationOutput{Status: "created", TaskID: taskID, Policy: toRunPolicy(policy)}, nil
+	return DelegationOutput{Status: "created", TaskID: taskID, Policy: toRunPolicy(policy), RunnerClientID: def.ClientID}, nil
 }

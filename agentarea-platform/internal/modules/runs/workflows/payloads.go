@@ -48,6 +48,10 @@ type ImageRef struct {
 	ID       string `json:"id"`
 	MimeType string `json:"mime_type"`
 	Size     int64  `json:"size"`
+	Width    int    `json:"width,omitempty"`
+	Height   int    `json:"height,omitempty"`
+	// Pages is a PDF's page count; a PDF is sent as a file, not an image.
+	Pages int `json:"pages,omitempty"`
 }
 
 // Message is a conversation entry not yet in the task log.
@@ -221,6 +225,46 @@ type ToolCallResult struct {
 	StructuredContentDropped bool       `json:"structured_content_dropped"`
 	MCPAppTool               string     `json:"mcp_app_tool"`
 	Images                   []ImageRef `json:"images"`
+	// RemoteTask is the task a remote delegate still runs; the answer is not known yet.
+	RemoteTask *api.RemoteAgentTask `json:"remote_task"`
+}
+
+// RemoteTaskRequest reads or stops the task a remote delegate call started.
+type RemoteTaskRequest struct {
+	Principal   Principal           `json:"principal"`
+	TaskID      string              `json:"task_id"`
+	ExecutionID string              `json:"execution_id"`
+	ToolCallID  string              `json:"tool_call_id"`
+	ToolName    string              `json:"tool_name"`
+	Binding     api.ToolBinding     `json:"binding"`
+	Task        api.RemoteAgentTask `json:"task"`
+}
+
+// RemoteDelegationRequest starts RemoteDelegationWorkflow: the call to send, and when to
+// stop waiting for its task. State carries a wait into its next run (continue-as-new).
+type RemoteDelegationRequest struct {
+	Call     ToolCallRequest        `json:"call"`
+	Deadline time.Time              `json:"deadline"`
+	State    *RemoteDelegationState `json:"state"`
+}
+
+// RemoteDelegationState is a wait under way: what the send answered, the task, how often
+// it was read (Reads every attempt, Polls those answered, Failures those failed in a row)
+// and how long the next pause is.
+type RemoteDelegationState struct {
+	Sent     ToolCallResult      `json:"sent"`
+	Task     api.RemoteAgentTask `json:"task"`
+	Started  time.Time           `json:"started"`
+	Reads    int                 `json:"reads"`
+	Polls    int                 `json:"polls"`
+	Failures int                 `json:"failures"`
+	Delay    time.Duration       `json:"delay"`
+}
+
+// RemoteDelegationResult is the remote delegate's answer and the task it ran ("" for none).
+type RemoteDelegationResult struct {
+	Answer ToolCallResult `json:"answer"`
+	TaskID string         `json:"task_id"`
 }
 
 // Event is one run event; its ID is assigned by the workflow and keys every write.
@@ -337,15 +381,18 @@ type CreateDelegationTaskRequest struct {
 	RunBudget       *money.Decimal `json:"run_budget"`
 	// ExecutionID is the child's workflow id, stored on its task row.
 	ExecutionID string `json:"execution_id"`
+	// WorkspaceTaskID is the task whose files the child works on, the parent's.
+	WorkspaceTaskID string `json:"workspace_task_id,omitempty"`
 }
 
 // CreateDelegationTaskResult: Status created with TaskID and the child's
 // Policy, or failed with Error (the workflow records delegation.failed).
 type CreateDelegationTaskResult struct {
-	Status string     `json:"status"`
-	TaskID string     `json:"task_id"`
-	Policy api.Policy `json:"policy"`
-	Error  string     `json:"error"`
+	Status         string     `json:"status"`
+	TaskID         string     `json:"task_id"`
+	Policy         api.Policy `json:"policy"`
+	Error          string     `json:"error"`
+	RunnerClientID string     `json:"runner_client_id,omitempty"`
 }
 
 type ArtifactValidationRequest struct {
@@ -388,6 +435,7 @@ type ArtifactValidationResult struct {
 type ActivateSkillRequest struct {
 	Principal   Principal `json:"principal"`
 	TaskID      string    `json:"task_id"`
+	FilesTaskID string    `json:"files_task_id,omitempty"`
 	ExecutionID string    `json:"execution_id"`
 	ToolCallID  string    `json:"tool_call_id"`
 	Skill       api.Skill `json:"skill"`
@@ -437,10 +485,12 @@ type StoreOutputRequest struct {
 type ReadOutputRequest struct {
 	Principal Principal `json:"principal"`
 	TaskID    string    `json:"task_id"`
-	OutputID  string    `json:"output_id"`
-	Grep      string    `json:"grep"`
-	Head      *int      `json:"head"`
-	Tail      *int      `json:"tail"`
+	// FilesTaskID is the task whose files the run works on, when not its own.
+	FilesTaskID string `json:"files_task_id,omitempty"`
+	OutputID    string `json:"output_id"`
+	Grep        string `json:"grep"`
+	Head        *int   `json:"head"`
+	Tail        *int   `json:"tail"`
 }
 
 type SearchHistoryRequest struct {

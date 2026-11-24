@@ -87,11 +87,11 @@ func (s *Service) TestModel(ctx context.Context, configID, specID uuid.UUID, mes
 
 func (s *Service) testCall(ctx context.Context, userID string, v ConfigView, providerType, modelName string, message *string) (TestResult, error) {
 	key := ""
+	ws, _, err := caller(ctx)
+	if err != nil {
+		return TestResult{}, err
+	}
 	if v.APIKey != nil && *v.APIKey != "" {
-		ws, _, err := caller(ctx)
-		if err != nil {
-			return TestResult{}, err
-		}
 		if key, err = s.readSecret(ctx, ws, userID, *v.APIKey); err != nil {
 			return TestResult{}, err
 		}
@@ -100,7 +100,14 @@ func (s *Service) testCall(ctx context.Context, userID string, v ConfigView, pro
 	if err != nil {
 		return TestResult{}, err
 	}
-	endpoint := str(v.EndpointURL)
+	accountID, endpoint := "", str(v.EndpointURL)
+	if signsIn(profile.Auth) && key != "" {
+		t, err := s.chatGPTAccess(ctx, ws, userID, *v.APIKey, key)
+		if err != nil {
+			return TestResult{}, err
+		}
+		key, accountID, endpoint = t.AccessToken, t.AccountID, ""
+	}
 	if key == "" && profile.RequiresAPIKey() {
 		return TestResult{Message: "No API key found for this provider configuration", ErrorType: ptr("MissingAPIKey"),
 			ProviderType: ptr(providerType), ModelName: ptr(modelName)}, nil
@@ -113,7 +120,7 @@ func (s *Service) testCall(ctx context.Context, userID string, v ConfigView, pro
 	model := transport.Model{
 		ProviderType: providerType, ModelName: modelName, APIKey: key, EndpointURL: s.localEndpoint(endpoint),
 		Profile: profile, Transport: s.roundTripper(str(v.ManagedBy)),
-		Deadline: testDeadline, BodyLimit: testBodyLimit,
+		Deadline: testDeadline, BodyLimit: testBodyLimit, AccountID: accountID,
 	}
 	msg := api.Message{Role: "user"}
 	if message != nil {

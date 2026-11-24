@@ -506,13 +506,26 @@ func (s *Service) keepOutput(ctx context.Context, p Principal, in ToolCall, out 
 		notes = append(notes, fmt.Sprintf("[%d image(s) not kept: the call belongs to no task]", len(out.Images)))
 	} else {
 		for i, img := range out.Images {
+			info, isImage, err := inspectImage(img.Data)
+			if img.MimeType == pdfMimeType {
+				info, isImage, err = imageInfo{MimeType: pdfMimeType}, true, nil
+			}
+			if !isImage || err != nil {
+				reason := fmt.Sprintf("%s is not PNG, JPEG, GIF or WebP", img.MimeType)
+				if err != nil {
+					reason = err.Error()
+				}
+				notes = append(notes, fmt.Sprintf("[image %d not kept: %s]", i+1, reason))
+				continue
+			}
 			imageID := domain.StoredImageID(id, i+1)
-			if err := s.putText(ctx, domain.ImageKey(p.WorkspaceID, in.TaskID, imageID), string(img.Data), img.MimeType); err != nil {
+			if err := s.putText(ctx, domain.ImageKey(p.WorkspaceID, in.TaskID, imageID), string(img.Data), info.MimeType); err != nil {
 				s.d.Log.WarnContext(ctx, "tool image could not be stored", "image_id", imageID, "error", err)
 				notes = append(notes, fmt.Sprintf("[image %d could not be stored]", i+1))
 				continue
 			}
-			refs = append(refs, domain.ImageRef{ID: imageID, MimeType: img.MimeType, Size: int64(len(img.Data))})
+			refs = append(refs, domain.ImageRef{ID: imageID, MimeType: info.MimeType, Size: int64(len(img.Data)),
+				Width: info.Width, Height: info.Height, Pages: img.Pages})
 		}
 	}
 	content := strings.Join(append([]string{out.Result}, notes...), "\n")

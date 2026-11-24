@@ -164,6 +164,8 @@ func Classify(err error) (Failure, bool) {
 	switch {
 	case strings.Contains(text, "failed to decrypt"):
 		return Failure{"credentials_undecryptable", "The provider's API key can no longer be decrypted (the encryption key changed). Re-enter the key in the provider settings.", "CredentialsUnreadable", false}, true
+	case strings.Contains(text, "chatgptsigninerror"):
+		return Failure{"provider_auth", "The provider's ChatGPT sign-in expired or was revoked. Sign in with ChatGPT again in the provider settings.", "AuthenticationError", false}, true
 	case strings.Contains(text, "customer pricing failed"):
 		return Failure{"pricing_unavailable", billingUnavailable, "BillingUnavailable", false}, true
 	case strings.Contains(text, "usage accounting unavailable") || strings.Contains(text, "returned no usage"):

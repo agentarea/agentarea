@@ -60,6 +60,7 @@ x-platform-env: &platform-env
   TEMPORAL_NAMESPACE: default
   AGENTAREA_TEMPORAL_QUEUE: agent-tasks
   AGENTAREA_MCP_MANAGER_URL: http://mcp-manager:80
+  AGENTAREA_MCP_STORAGE_URL: http://mcp-manager:80
   AGENTAREA_MCP_GATEWAY_SECRET: ${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
   # Where MCP servers and agent sandboxes run.
   #
@@ -271,7 +272,7 @@ services:
   #   command: sh -c "npx pnpm dev"
 
   rustfs:
-    image: rustfs/rustfs:1.0.3
+    image: rustfs/rustfs:1.0.6
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -316,7 +317,7 @@ services:
       - auth-network
 
   valkey:
-    image: valkey/valkey:9.1.2
+    image: valkey/valkey:9.1.4
     container_name: agentarea-valkey
     env_file: .env
     restart: always
@@ -407,7 +408,7 @@ services:
       AGENTAREA_SANDBOX_ALLOW_INTERNET: ${AGENTAREA_SANDBOX_ALLOW_INTERNET:-true}
       AGENTAREA_SANDBOX_STORAGE: s3
       AGENTAREA_SANDBOX_MAX_FILES: "10000"
-      AGENTAREA_SANDBOX_MAX_FILE_SIZE: "268435456"
+      AGENTAREA_SANDBOX_MAX_FILE_SIZE: "1073741824"
       AGENTAREA_SANDBOX_MAX_TOTAL_SIZE: "2147483648"
       AGENTAREA_SANDBOX_S3_URL_TTL: "1h"
       AGENTAREA_SANDBOX_S3_PATH_STYLE: "true"
@@ -450,7 +451,7 @@ services:
       AGENTAREA_SANDBOX_MAX_EXEC_SECONDS: "1800"
       AGENTAREA_SANDBOX_IDLE_SHUTDOWN: "0"
       AGENTAREA_SANDBOX_MAX_FILES: "10000"
-      AGENTAREA_SANDBOX_MAX_FILE_SIZE: "268435456"
+      AGENTAREA_SANDBOX_MAX_FILE_SIZE: "1073741824"
       AGENTAREA_SANDBOX_MAX_TOTAL_SIZE: "2147483648"
       AGENTAREA_SANDBOX_ACTIVATION_SECRET: ${AGENTAREA_SANDBOX_ACTIVATION_SECRET:?AGENTAREA_SANDBOX_ACTIVATION_SECRET is required; run scripts/gen-dev-secrets.sh}
 
@@ -458,7 +459,7 @@ services:
   # Creates and migrates the temporal and temporal_visibility databases; the
   # server image does neither. Keep its tag equal to the server's.
   temporal-schema:
-    image: temporalio/admin-tools:1.32.1
+    image: temporalio/admin-tools:1.32.2
     depends_on:
       db:
         condition: service_healthy
@@ -488,7 +489,7 @@ services:
         sql --db temporal_visibility update-schema --schema-name postgresql/v12/visibility
 
   temporal:
-    image: temporalio/server:1.32.1
+    image: temporalio/server:1.32.2
     container_name: agentarea-temporal
     restart: unless-stopped
     depends_on:
@@ -521,7 +522,7 @@ services:
 
   # Registers the namespace the platform runs in; the server image does not.
   temporal-namespace:
-    image: temporalio/admin-tools:1.32.1
+    image: temporalio/admin-tools:1.32.2
     depends_on:
       temporal:
         condition: service_healthy
@@ -539,7 +540,7 @@ services:
         done
 
   temporal-admin-tools:
-    image: temporalio/admin-tools:1.32.1
+    image: temporalio/admin-tools:1.32.2
     container_name: agentarea-temporal-admin-tools
     depends_on:
       - temporal
@@ -619,7 +620,7 @@ services:
 
   # OpenFGA migration (ReBAC backend for agent/task authorization)
   openfga-migrate:
-    image: ${OPENFGA_IMAGE:-openfga/openfga:v1.22.0}
+    image: ${OPENFGA_IMAGE:-openfga/openfga:v1.23.0}
     command: migrate
     environment:
       OPENFGA_DATASTORE_ENGINE: postgres
@@ -634,7 +635,7 @@ services:
 
   # OpenFGA ReBAC permission server
   openfga:
-    image: ${OPENFGA_IMAGE:-openfga/openfga:v1.22.0}
+    image: ${OPENFGA_IMAGE:-openfga/openfga:v1.23.0}
     command: run
     ports:
       - "8088:8080" # HTTP API
@@ -678,7 +679,7 @@ services:
       LOG_LEVEL: debug
       LOG_LEAK_SENSITIVE_VALUES: true
       # Enable Dynamic Client Registration
-      OAUTH2_ALLOWED_TOP_LEVEL_CLAIMS: workspace_id
+      OAUTH2_ALLOWED_TOP_LEVEL_CLAIMS: workspace_ids
     command: serve all -c /etc/config/hydra/hydra.yml --dev
     volumes:
       - ./config/auth/hydra:/etc/config/hydra

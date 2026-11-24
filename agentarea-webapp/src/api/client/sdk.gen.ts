@@ -13,6 +13,9 @@ import type {
   AcceptInvitationV1InvitationsAcceptPostData,
   AcceptInvitationV1InvitationsAcceptPostErrors,
   AcceptInvitationV1InvitationsAcceptPostResponses,
+  AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostData,
+  AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostErrors,
+  AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponses,
   AddAgentToProjectV1ProjectsProjectIdAgentsPostData,
   AddAgentToProjectV1ProjectsProjectIdAgentsPostErrors,
   AddAgentToProjectV1ProjectsProjectIdAgentsPostResponses,
@@ -58,6 +61,9 @@ import type {
   CheckPermissionV1AccessControlCheckPostData,
   CheckPermissionV1AccessControlCheckPostErrors,
   CheckPermissionV1AccessControlCheckPostResponses,
+  CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostData,
+  CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostErrors,
+  CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponses,
   ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostData,
   ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostErrors,
   ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponses,
@@ -727,12 +733,27 @@ import type {
   OauthAuthorizeV1OauthAuthorizePostData,
   OauthAuthorizeV1OauthAuthorizePostErrors,
   OauthAuthorizeV1OauthAuthorizePostResponses,
+  OauthBindInstallationV1OauthInstallationPutData,
+  OauthBindInstallationV1OauthInstallationPutErrors,
+  OauthBindInstallationV1OauthInstallationPutResponses,
   OauthCallbackV1OauthCallbackGetData,
   OauthCallbackV1OauthCallbackGetErrors,
   OauthCallbackV1OauthCallbackGetResponses,
+  OauthConsentDecideV1OauthConsentPostData,
+  OauthConsentDecideV1OauthConsentPostErrors,
+  OauthConsentDecideV1OauthConsentPostResponses,
+  OauthConsentV1OauthConsentGetData,
+  OauthConsentV1OauthConsentGetErrors,
+  OauthConsentV1OauthConsentGetResponses,
   OauthFinishV1OauthFinishPostData,
   OauthFinishV1OauthFinishPostErrors,
   OauthFinishV1OauthFinishPostResponses,
+  OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetData,
+  OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetErrors,
+  OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponses,
+  OauthInstallationsV1OauthInstallationsGetData,
+  OauthInstallationsV1OauthInstallationsGetErrors,
+  OauthInstallationsV1OauthInstallationsGetResponses,
   OauthPreflightV1OauthPreflightGetData,
   OauthPreflightV1OauthPreflightGetErrors,
   OauthPreflightV1OauthPreflightGetResponses,
@@ -765,6 +786,9 @@ import type {
   PreviewSpecV1OpenapiConnectionsPreviewSpecPostData,
   PreviewSpecV1OpenapiConnectionsPreviewSpecPostErrors,
   PreviewSpecV1OpenapiConnectionsPreviewSpecPostResponses,
+  PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostData,
+  PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostErrors,
+  PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponses,
   ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostData,
   ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostErrors,
   ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostResponses,
@@ -881,6 +905,9 @@ import type {
   SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutData,
   SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutErrors,
   SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutResponses,
+  StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostData,
+  StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostErrors,
+  StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses,
   StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostData,
   StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostErrors,
   StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses,
@@ -1857,6 +1884,79 @@ export const startTelegramLinkV1MeExternalIdentitiesTelegramLinkPost = <
       ...options.headers,
     },
   });
+
+/**
+ * Accept Telegram Link Offer
+ *
+ * Links the Telegram account a bot offered the code to to the caller, a member of the bot's workspace, who confirmed it.
+ * The code is spent; 404 when it expired or was used, 409 when another account holds the Telegram account. 403 for a caller outside the bot's workspace.
+ */
+export const acceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponses,
+    AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).post<
+      AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponses,
+      AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/me/external-identities/telegram/offer/accept",
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
+
+/**
+ * Preview Telegram Link Offer
+ *
+ * The Telegram account a bot offered the code to, shown before the caller, a member of the bot's workspace, confirms; the code stays unspent. 403 for a caller outside the bot's workspace.
+ */
+export const previewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponses,
+    PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).post<
+      PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponses,
+      PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/me/external-identities/telegram/offer/preview",
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
 
 /**
  * Unlink External Identity
@@ -7390,6 +7490,109 @@ export const oauthPreflightV1OauthPreflightGet = <
   });
 
 /**
+ * Oauth Installations
+ *
+ * List the installations of the GitHub App a connection signed in through that the connection's GitHub user can access.
+ *
+ * Only for a connection whose credential was minted through a platform OAuth app with installation tokens (preflight's ``installation_binding_available``); 409 otherwise.
+ */
+export const oauthInstallationsV1OauthInstallationsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<OauthInstallationsV1OauthInstallationsGetData, ThrowOnError>
+): RequestResult<
+  OauthInstallationsV1OauthInstallationsGetResponses,
+  OauthInstallationsV1OauthInstallationsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    OauthInstallationsV1OauthInstallationsGetResponses,
+    OauthInstallationsV1OauthInstallationsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/oauth/installations",
+    ...options,
+  });
+
+/**
+ * Oauth Installation Repositories
+ *
+ * List the repositories of one of those installations the connection's GitHub user can access.
+ */
+export const oauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGet =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponses,
+    OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).get<
+      OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponses,
+      OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/oauth/installations/{installation_id}/repositories",
+      ...options,
+    });
+
+/**
+ * Oauth Bind Installation
+ *
+ * Bind a connection to one installation of its GitHub App, and optionally to some of its repositories: its calls then carry an installation access token limited to them instead of the user's token. A null ``installation_id`` returns it to the user's token.
+ *
+ * Only an installation, and repositories of it, that the connection's GitHub user can access are accepted. Whoever may sign the connection in again may bind it.
+ */
+export const oauthBindInstallationV1OauthInstallationPut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    OauthBindInstallationV1OauthInstallationPutData,
+    ThrowOnError
+  >
+): RequestResult<
+  OauthBindInstallationV1OauthInstallationPutResponses,
+  OauthBindInstallationV1OauthInstallationPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    OauthBindInstallationV1OauthInstallationPutResponses,
+    OauthBindInstallationV1OauthInstallationPutErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/oauth/installation",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
  * List Connections
  */
 export const listConnectionsV1OpenapiConnectionsGet = <
@@ -8824,6 +9027,71 @@ export const discoverModelsV1ProviderConfigsConfigIdDiscoverPost = <
     url: "/v1/workspaces/{workspace}/provider-configs/{config_id}/discover",
     ...options,
   });
+
+/**
+ * Start Chatgpt Sign In
+ *
+ * Start the ChatGPT device-code sign-in of a ChatGPT subscription provider: the user opens verification_uri and enters user_code. The device code itself stays on the server, bound to the caller and this configuration.
+ */
+export const startChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses,
+  StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses,
+    StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in",
+    ...options,
+  });
+
+/**
+ * Complete Chatgpt Sign In
+ *
+ * Check the caller's pending ChatGPT sign-in on this configuration; once the user entered the code, the configuration keeps the sign-in and signed_in is true. Only the member who started it can finish it.
+ */
+export const completeChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponses,
+    CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).post<
+      CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponses,
+      CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in/complete",
+      ...options,
+    });
 
 /**
  * List Provider Specs
@@ -12517,4 +12785,68 @@ export const handleWebhookWebhooksWebhookIdPost = <
     ],
     url: "/webhooks/{webhook_id}",
     ...options,
+  });
+
+/**
+ * Oauth Consent
+ *
+ * The consent request a signed-in user is asked to decide. Accepts a browser session only.
+ */
+export const oauthConsentV1OauthConsentGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<OauthConsentV1OauthConsentGetData, ThrowOnError>
+): RequestResult<
+  OauthConsentV1OauthConsentGetResponses,
+  OauthConsentV1OauthConsentGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    OauthConsentV1OauthConsentGetResponses,
+    OauthConsentV1OauthConsentGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/oauth/consent",
+    ...options,
+  });
+
+/**
+ * Oauth Consent Decide
+ *
+ * Accept or reject a consent request. Accepts a browser session only; returns where the browser goes next.
+ */
+export const oauthConsentDecideV1OauthConsentPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<OauthConsentDecideV1OauthConsentPostData, ThrowOnError>
+): RequestResult<
+  OauthConsentDecideV1OauthConsentPostResponses,
+  OauthConsentDecideV1OauthConsentPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    OauthConsentDecideV1OauthConsentPostResponses,
+    OauthConsentDecideV1OauthConsentPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/oauth/consent",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });

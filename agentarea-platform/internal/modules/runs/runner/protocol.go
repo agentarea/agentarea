@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"time"
 	"unicode/utf8"
 
@@ -293,6 +294,26 @@ func clipped(output string) string {
 		return output
 	}
 	return string([]rune(output)[:toolOutputMax]) + clippedNote
+}
+
+// outputsLimitNote tells the CLI's agent what of its outputs/ comes back (fileMaxBytes), so it can
+// shrink a file.
+const outputsLimitNote = "Files you write under outputs/ come back to the task only up to 50 MB each; " +
+	"a larger one does not. Compress or transcode it to fit (for a video, re-encode it with ffmpeg) before you finish."
+
+// withOutputsLimit is the agent's instructions with what of its outputs/ comes back.
+func withOutputsLimit(instructions string) string {
+	if instructions == "" {
+		return outputsLimitNote
+	}
+	return instructions + "\n\n" + outputsLimitNote
+}
+
+// taskRelative cuts the runner's own folder of the task from each path in
+// text, so the paths name the task's files (outputs/x.png).
+func taskRelative(text, taskID string) string {
+	folder := regexp.MustCompile("(?:file://)?(?:/[^/\\s()\\[\\]<>\"'`]+)*/tasks/" + regexp.QuoteMeta(taskID) + "/")
+	return folder.ReplaceAllString(text, "")
 }
 
 func tail(s string, n int) string {

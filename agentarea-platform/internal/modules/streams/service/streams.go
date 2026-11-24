@@ -105,6 +105,26 @@ func (s *Service) GetStream(ctx context.Context, id string) (domain.Stream, erro
 	return out, err
 }
 
+// WithSourceTypes fills each stream's SourceTypes, which the stream list and read show; one query
+// for all of them, kept off the paths that read a stream to handle an event.
+func (s *Service) WithSourceTypes(ctx context.Context, streams []domain.Stream) error {
+	c, err := callerOf(ctx)
+	if err != nil {
+		return err
+	}
+	ids := make([]string, len(streams))
+	for i, st := range streams {
+		ids[i] = st.ID
+	}
+	return s.read(ctx, c.Workspace, func(sess db.Session) error {
+		types, err := s.ss.StreamSourceTypes(ctx, sess, ids)
+		for i := range streams {
+			streams[i].SourceTypes = types[streams[i].ID]
+		}
+		return err
+	})
+}
+
 func (s *Service) getStream(ctx context.Context, sess db.Session, id string) (domain.Stream, error) {
 	u, err := parseStreamID(id)
 	if err != nil {

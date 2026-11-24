@@ -365,3 +365,40 @@ func (q *Queries) StreamNames(ctx context.Context, arg StreamNamesParams) ([]Str
 	}
 	return items, nil
 }
+
+const streamSourceTypes = `-- name: StreamSourceTypes :many
+SELECT stream_id, webhook_type::text AS source_type FROM stream_sources
+WHERE workspace_id = $1 AND stream_id = ANY($2::uuid[]) AND webhook_type IS NOT NULL
+GROUP BY stream_id, webhook_type
+ORDER BY stream_id, min(created_at), webhook_type
+`
+
+type StreamSourceTypesParams struct {
+	WorkspaceID string
+	Ids         []uuid.UUID
+}
+
+type StreamSourceTypesRow struct {
+	StreamID   uuid.UUID
+	SourceType string
+}
+
+func (q *Queries) StreamSourceTypes(ctx context.Context, arg StreamSourceTypesParams) ([]StreamSourceTypesRow, error) {
+	rows, err := q.db.Query(ctx, streamSourceTypes, arg.WorkspaceID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []StreamSourceTypesRow
+	for rows.Next() {
+		var i StreamSourceTypesRow
+		if err := rows.Scan(&i.StreamID, &i.SourceType); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

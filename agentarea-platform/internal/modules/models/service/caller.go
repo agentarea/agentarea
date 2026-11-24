@@ -74,7 +74,7 @@ func (s *Service) Model(ctx context.Context, p api.Principal, modelID string) (a
 			Input: m.InputCostPerToken, Output: m.OutputCostPerToken,
 			CachedInput: m.CachedInputCostPerToken, CacheCreation: m.CacheCreationInputCostPerToken,
 		},
-		SupportsVision: m.SupportsVision != nil && *m.SupportsVision, ReasoningLevels: m.ReasoningEfforts,
+		SupportsVision: m.SupportsVision != nil && *m.SupportsVision, ReasoningLevels: m.ReasoningEfforts, ResponsesLite: m.ResponsesLite,
 		Provider: providerProfile(*v.Provider),
 	}
 	if v.Config.APIKey != nil {
@@ -114,7 +114,15 @@ func providerProfile(p catalogapi.ProviderSpec) api.ProviderProfile {
 	return api.ProviderProfile{
 		BaseURL: str(p.BaseURL), Transport: p.Transport, Auth: p.Auth, ReasoningParam: p.ReasoningParam,
 		ReasoningLevels: p.ReasoningEfforts, CacheBreakpoints: p.CacheBreakpoints,
+		MaxImageBytes: deref(p.MaxImageBytes), MaxImageEdge: deref(p.MaxImageEdge), PDFInput: p.PDFInput,
 	}
+}
+
+func deref(p *int) int {
+	if p == nil {
+		return 0
+	}
+	return *p
 }
 
 // domainProfile is the full contract of a provider spec, models listing included.
@@ -220,12 +228,20 @@ func (s *Service) call(ctx context.Context, p api.Principal, call api.Call) (api
 	if err != nil {
 		return api.Reply{}, err
 	}
+	accountID, endpoint := "", m.EndpointURL
+	if signsIn(profile.Auth) {
+		t, err := s.chatGPTAccess(ctx, ws, p.UserID, m.APIKeySecret, key)
+		if err != nil {
+			return api.Reply{}, err
+		}
+		key, accountID, endpoint = t.AccessToken, t.AccountID, ""
+	}
 	model := transport.Model{
-		ProviderType: m.ProviderType, ModelName: m.ModelName, APIKey: key, EndpointURL: s.localEndpoint(m.EndpointURL),
+		ProviderType: m.ProviderType, ModelName: m.ModelName, APIKey: key, EndpointURL: s.localEndpoint(endpoint),
 		Prices: transport.Prices{
 			Input: m.Prices.Input, Output: m.Prices.Output, CachedInput: m.Prices.CachedInput, CacheCreation: m.Prices.CacheCreation,
 		},
-		Profile: profile, Transport: s.roundTripper(m.ManagedBy),
+		Profile: profile, Transport: s.roundTripper(m.ManagedBy), AccountID: accountID, ResponsesLite: m.ResponsesLite,
 	}
 	return Complete(ctx, model, transport.Request{
 		Messages: call.Messages, Tools: call.Tools, Temperature: call.Temperature, MaxTokens: call.MaxTokens,

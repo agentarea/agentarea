@@ -57,7 +57,7 @@ func (Polling) Sources(ctx context.Context, q db.Querier) ([]PolledSource, []err
 		}
 		if len(r.WebhookConfig) > 0 {
 			if err := json.Unmarshal(r.WebhookConfig, &src.Config); err != nil {
-				bad = append(bad, fmt.Errorf("stream source %s config is not JSON: %w", src.ID, err))
+				bad = append(bad, &UnreadableSource{ID: src.ID, Err: err})
 				continue
 			}
 		}
@@ -65,6 +65,18 @@ func (Polling) Sources(ctx context.Context, q db.Querier) ([]PolledSource, []err
 	}
 	return out, bad, nil
 }
+
+// UnreadableSource is a row Sources leaves out because its config is not JSON.
+type UnreadableSource struct {
+	ID  string
+	Err error
+}
+
+func (e *UnreadableSource) Error() string {
+	return fmt.Sprintf("stream source %s config is not JSON: %v", e.ID, e.Err)
+}
+
+func (e *UnreadableSource) Unwrap() error { return e.Err }
 
 func sourceID(id string) (uuid.UUID, error) {
 	u, err := uuid.Parse(id)
@@ -121,6 +133,15 @@ func (Polling) Registered(ctx context.Context, q db.Querier, id, url string) err
 		return err
 	}
 	return New(q).SourceRegistered(ctx, SourceRegisteredParams{Url: url, ID: u})
+}
+
+// Unregistered clears the URL a source was registered at, so the next round registers it again.
+func (Polling) Unregistered(ctx context.Context, q db.Querier, id string) error {
+	u, err := sourceID(id)
+	if err != nil {
+		return err
+	}
+	return New(q).SourceUnregistered(ctx, u)
 }
 
 // ExternalSubscription is the active, unexpired external subscription of ws, false when none.

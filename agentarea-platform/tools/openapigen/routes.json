@@ -108,6 +108,14 @@
   "router_file": "external_identities"
  },
  {
+  "operation_id": "preview_telegram_link_offer_v1_me_external_identities_telegram_offer_preview_post",
+  "router_file": "external_identities"
+ },
+ {
+  "operation_id": "accept_telegram_link_offer_v1_me_external_identities_telegram_offer_accept_post",
+  "router_file": "external_identities"
+ },
+ {
   "operation_id": "unlink_external_identity_v1_me_external_identities__identity_id__delete",
   "router_file": "external_identities"
  },
@@ -764,6 +772,18 @@
   "router_file": "oauth_connect"
  },
  {
+  "operation_id": "oauth_installations_v1_oauth_installations_get",
+  "router_file": "oauth_connect"
+ },
+ {
+  "operation_id": "oauth_installation_repositories_v1_oauth_installations__installation_id__repositories_get",
+  "router_file": "oauth_connect"
+ },
+ {
+  "operation_id": "oauth_bind_installation_v1_oauth_installation_put",
+  "router_file": "oauth_connect"
+ },
+ {
   "operation_id": "list_connections_v1_openapi_connections__get",
   "router_file": "openapi_connections"
  },
@@ -933,6 +953,14 @@
  },
  {
   "operation_id": "discover_models_v1_provider_configs__config_id__discover_post",
+  "router_file": "provider_configs"
+ },
+ {
+  "operation_id": "start_chatgpt_sign_in_v1_provider_configs__config_id__chatgpt_sign_in_post",
+  "router_file": "provider_configs"
+ },
+ {
+  "operation_id": "complete_chatgpt_sign_in_v1_provider_configs__config_id__chatgpt_sign_in_complete_post",
   "router_file": "provider_configs"
  },
  {
@@ -1370,5 +1398,13 @@
  {
   "operation_id": "handle_webhook_webhooks__webhook_id__post",
   "router_file": "webhooks"
+ },
+ {
+  "operation_id": "oauth_consent_v1_oauth_consent_get",
+  "router_file": "mcp_oauth_as"
+ },
+ {
+  "operation_id": "oauth_consent_decide_v1_oauth_consent_post",
+  "router_file": "mcp_oauth_as"
  }
 ]

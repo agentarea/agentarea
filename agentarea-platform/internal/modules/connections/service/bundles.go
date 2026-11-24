@@ -239,25 +239,17 @@ func (b BundleMCPs) SecretsMatch(ctx context.Context, c authn.Caller, id string,
 	return same, contextSame, err
 }
 
-// Rediscover verifies the instance again: the tools it stores are the ones it serves now.
-func (b BundleMCPs) Rediscover(ctx context.Context, c authn.Caller, id string) (catalogapi.BundleDiscovery, error) {
+// Rediscover starts a verification of the instance in the background: a
+// container's cold start would hold the deploy's request for its whole length.
+func (b BundleMCPs) Rediscover(ctx context.Context, c authn.Caller, id string) error {
 	iid, err := uuid.Parse(id)
 	if err != nil {
-		return catalogapi.BundleDiscovery{}, catalogapi.ErrBundleEntityGone
+		return catalogapi.ErrBundleEntityGone
 	}
 	if err := b.mayEdit(ctx, c, "mcp_instance", id, "MCP instance"); err != nil {
-		return catalogapi.BundleDiscovery{}, err
+		return err
 	}
-	tools, v, err := b.S().DiscoverInstanceTools(ctx, c.Workspace, iid)
-	if err != nil {
-		return catalogapi.BundleDiscovery{}, err
-	}
-	out := catalogapi.BundleDiscovery{Status: v.Status, Tools: len(tools)}
-	if v.Error != nil && v.Error.Message != "" {
-		msg := v.Error.Message
-		out.Error = &msg
-	}
-	return out, nil
+	return b.S().RediscoverInBackground(ctx, c.Workspace, iid)
 }
 
 func (b BundleMCPs) DeleteInstance(ctx context.Context, c authn.Caller, id string) error {

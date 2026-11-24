@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -182,6 +183,49 @@ func TestSyncStoresTheVersionedEtagAndSkipsAnUnchangedSource(t *testing.T) {
 	}
 	if _, ok, _ := svc.Specs().ProviderSpecByKey(ctx, platformWorkspace(), k+"b"); ok {
 		t.Fatal("the unused dropped provider stayed")
+	}
+}
+
+func TestASourceTypeTakesEveryContentChangeAndItsVersionStaysOutOfTheSpec(t *testing.T) {
+	svc, src, ts, _ := syncService(t)
+	ctx := context.Background()
+	slug := "tg" + uuid.NewString()[:6]
+	index := func(version, summary string) string {
+		return `{"source_types": [{"slug": "` + slug + `", "name": "TG", "delivery": "webhook"` + version +
+			`, "event": {"kind": "telegram.update"` + summary + `}}]}`
+	}
+	stored := func() map[string]any {
+		t.Helper()
+		rows, err := SourceTypes{DB: svc.d.DB}.SourceTypeRowsBySlug(ctx, slug)
+		if err != nil || len(rows) != 1 {
+			t.Fatalf("rows %+v %v", rows, err)
+		}
+		return plainSpec(rows[0].Spec)
+	}
+	src.set("/st.json", `"a"`, index("", ""))
+	r := platformRegistry(t, svc, domain.TypeSourceTypes, ts.URL+"/st.json")
+	if _, err := svc.SyncRegistry(ctx, r.ID, false); err != nil {
+		t.Fatal(err)
+	}
+
+	src.set("/st.json", `"b"`, index("", `, "summary": ["{body:message.text}"]`))
+	if _, err := svc.SyncRegistry(ctx, r.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(mapping(stored()["event"])["summary"]); got != "[{body:message.text}]" {
+		t.Fatalf("same-version change not stored: %s", got)
+	}
+
+	src.set("/st.json", `"c"`, index(`, "version": "1.1.0"`, `, "summary": ["{body:message.caption}"]`))
+	if _, err := svc.SyncRegistry(ctx, r.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	spec := stored()
+	if _, ok := spec["version"]; ok {
+		t.Fatalf("version stored in the spec: %v", spec)
+	}
+	if got := fmt.Sprint(mapping(spec["event"])["summary"]); got != "[{body:message.caption}]" {
+		t.Fatalf("bumped change not stored: %s", got)
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -939,6 +940,45 @@ func (w *Workspaces) Stream(ctx context.Context, workspaceID, taskID, path strin
 	return Verified{Body: body, ContentType: e.ContentType, Size: e.Size}, nil
 }
 
+// DownloadURLs presigns the objects of the live entries at path, or under it.
+func (w *Workspaces) DownloadURLs(ctx context.Context, workspaceID, taskID, path string, ttl time.Duration) ([]api.FileURL, error) {
+	clean, err := normalize(strings.TrimSuffix(path, "/"))
+	if err != nil {
+		return nil, err
+	}
+	_, entries, _, err := w.snapshot(ctx, workspaceID, taskID)
+	if err != nil {
+		return nil, err
+	}
+	var picked []entry
+	if e, ok := entries[clean]; ok && !e.Deleted {
+		picked = append(picked, e)
+	} else {
+		for p, e := range entries {
+			if !e.Deleted && strings.HasPrefix(p, clean+"/") {
+				picked = append(picked, e)
+			}
+		}
+	}
+	if len(picked) == 0 {
+		return nil, ErrFileNotFound
+	}
+	slices.SortFunc(picked, func(a, b entry) int { return strings.Compare(a.RelativePath, b.RelativePath) })
+	out := make([]api.FileURL, 0, len(picked))
+	for _, e := range picked {
+		key, err := w.validateURI(workspaceID, taskID, e.ObjectURI)
+		if err != nil {
+			return nil, err
+		}
+		signed, err := w.Blob.PresignGet(ctx, key, ttl)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, api.FileURL{Path: e.RelativePath, URL: signed.URL, SHA256: e.SHA256, Size: e.Size})
+	}
+	return out, nil
+}
+
 // Get reads a committed file whole.
 func (w *Workspaces) Get(ctx context.Context, workspaceID, taskID, path string) ([]byte, string, error) {
 	v, err := w.Stream(ctx, workspaceID, taskID, path)
@@ -957,6 +997,15 @@ func (w *Workspaces) Exists(ctx context.Context, workspaceID, taskID, path strin
 		return false, nil
 	}
 	return err == nil, err
+}
+
+// Digest is the recorded sha256 of a live entry, without reading its object.
+func (w *Workspaces) Digest(ctx context.Context, workspaceID, taskID, path string) (string, error) {
+	e, err := w.entry(ctx, workspaceID, taskID, path)
+	if err != nil {
+		return "", err
+	}
+	return e.SHA256, nil
 }
 
 // GetObjectRef is get_object_ref: a verified task object read by its

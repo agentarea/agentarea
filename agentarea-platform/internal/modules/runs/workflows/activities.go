@@ -57,6 +57,8 @@ func (a *Activities) byName() map[string]any {
 		api.ActivityCallLLM:                  a.CallLLM,
 		api.ActivityCompactMessages:          a.CompactMessages,
 		api.ActivityExecuteTool:              a.ExecuteTool,
+		api.ActivityGetRemoteTask:            a.GetRemoteTask,
+		api.ActivityCancelRemoteTask:         a.CancelRemoteTask,
 	}
 }
 
@@ -159,7 +161,7 @@ func (a *Activities) StoreContextOutput(ctx context.Context, req StoreOutputRequ
 
 // ReadContextOutput is read_context_output.
 func (a *Activities) ReadContextOutput(ctx context.Context, req ReadOutputRequest) (ContextResult, error) {
-	content, err := a.svc.ReadOutput(ctx, principal(req.Principal), req.TaskID, req.OutputID, req.Grep, req.Head, req.Tail)
+	content, err := a.svc.ReadOutput(ctx, principal(req.Principal), req.TaskID, req.FilesTaskID, req.OutputID, req.Grep, req.Head, req.Tail)
 	return contextResult(content, err), nil
 }
 
@@ -282,7 +284,7 @@ func (a *Activities) Record(ctx context.Context, req RecordRequest) (RecordResul
 func (a *Activities) ActivateSkill(ctx context.Context, req ActivateSkillRequest) (ActivateSkillResult, error) {
 	defer heartbeating(ctx)()
 	out, err := a.svc.ActivateSkill(ctx, principal(req.Principal), service.SkillActivation{
-		TaskID: req.TaskID, ExecutionID: req.ExecutionID, ToolCallID: req.ToolCallID, Skill: req.Skill,
+		TaskID: req.TaskID, FilesTaskID: req.FilesTaskID, ExecutionID: req.ExecutionID, ToolCallID: req.ToolCallID, Skill: req.Skill,
 		WorkflowID: activity.GetInfo(ctx).WorkflowExecution.ID, Seq: req.Seq, EventID: req.EventID, Iteration: req.Iteration, MaxTokens: req.MaxTokens,
 	})
 	return ActivateSkillResult(out), err
@@ -293,6 +295,7 @@ func (a *Activities) CreateDelegationTask(ctx context.Context, req CreateDelegat
 	out, err := a.svc.CreateDelegationTask(ctx, principal(req.Principal), service.DelegationInput{
 		ParentTaskID: req.ParentTaskID, TargetAgentID: req.TargetAgentID, TargetAgentName: req.TargetAgentName,
 		Message: req.Message, ParentPolicy: req.ParentPolicy, RunBudget: req.RunBudget, ExecutionID: req.ExecutionID,
+		WorkspaceTaskID: req.WorkspaceTaskID,
 	})
 	return CreateDelegationTaskResult(out), err
 }
@@ -414,7 +417,7 @@ func (a *Activities) ExecuteTool(ctx context.Context, req ToolCallRequest) (Tool
 		CostUnknown: o.CostUnknown, Cost: res.Cost, Payer: res.Payer, CostMetered: res.CostMetered, Replayed: res.Replayed,
 		Attempt: res.Attempt, Source: o.Source, ServerInstanceID: o.ServerInstanceID, ServerName: o.ServerName,
 		ServerIcon: o.ServerIcon, StructuredContent: o.StructuredContent, StructuredContentDropped: o.StructuredContentDropped,
-		MCPAppTool: o.MCPAppTool, Images: fromImageRefs(res.Images),
+		MCPAppTool: o.MCPAppTool, Images: fromImageRefs(res.Images), RemoteTask: o.RemoteTask,
 	}
 	if o.ModelBilling != nil {
 		c := ChargeLine(*o.ModelBilling)
@@ -426,4 +429,29 @@ func (a *Activities) ExecuteTool(ctx context.Context, req ToolCallRequest) (Tool
 		})
 	}
 	return out, nil
+}
+
+func remoteTaskCall(ctx context.Context, req RemoteTaskRequest) service.ToolCall {
+	info := activity.GetInfo(ctx)
+	return service.ToolCall{
+		TaskID: req.TaskID, ExecutionID: req.ExecutionID, ToolCallID: req.ToolCallID, ToolName: req.ToolName, Binding: req.Binding,
+		WorkflowID: info.WorkflowExecution.ID, RunID: info.WorkflowExecution.RunID, ActivityID: info.ActivityID, Attempt: int(info.Attempt),
+	}
+}
+
+// GetRemoteTask reads the task a remote delegate call started, once.
+func (a *Activities) GetRemoteTask(ctx context.Context, req RemoteTaskRequest) (ToolCallResult, error) {
+	res, err := a.svc.GetRemoteTask(ctx, principal(req.Principal), remoteTaskCall(ctx, req), req.Task)
+	if err != nil {
+		return ToolCallResult{}, err
+	}
+	o := res.Out
+	return ToolCallResult{
+		Success: o.Success, Result: o.Result, Error: o.Error, Source: o.Source, Images: fromImageRefs(res.Images), RemoteTask: o.RemoteTask,
+	}, nil
+}
+
+// CancelRemoteTask asks the remote delegate to stop the task a call started.
+func (a *Activities) CancelRemoteTask(ctx context.Context, req RemoteTaskRequest) error {
+	return a.svc.CancelRemoteTask(ctx, principal(req.Principal), remoteTaskCall(ctx, req), req.Task)
 }

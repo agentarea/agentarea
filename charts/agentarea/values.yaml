@@ -102,8 +102,17 @@ global:
   #    "client_secret": "...",
   #    "authorization_endpoint": "https://github.com/login/oauth/authorize",
   #    "token_endpoint": "https://github.com/login/oauth/access_token",
-  #    "resource_origins": ["https://api.githubcopilot.com"]}
+  #    "resource_origins": ["https://api.githubcopilot.com"],
+  #    "install_url": "https://github.com/apps/<app>/installations/new",
+  #    "app_id": 123456, "private_key": "<the GitHub App's PEM private key>",
+  #    "api_url": "https://api.github.com"}
   # Tokens minted through an app are only ever sent to its resource_origins.
+  # Optional install_url (https) is where a signed-in user picks what the app
+  # may reach; a GitHub App's user token sees only repositories it is installed on.
+  # Optional app_id, private_key (the GitHub App's PEM key) and api_url (https),
+  # all three or none, let a connection be bound to one installation of the app
+  # (and some of its repositories): it then sends an installation access token
+  # minted with the app's key instead of the user's token.
   # One-click catalog API connections use the app whose endpoints equal theirs.
   # A malformed value fails startup.
   mcpOAuthApps:
@@ -695,6 +704,12 @@ platformNetworkPolicy:
 mcpManager:
   enabled: true
   replicaCount: 1
+  # Where MCP instance containers reach the MCP role (instance storage). Empty is
+  # the in-cluster service, right when instances run in this cluster. With a data
+  # plane in another cluster, set the address that cluster reaches, e.g. the
+  # mcpStorageGateway load balancer. The backend and worker start instances
+  # themselves and hand them this address.
+  workloadUrl: ""
   service:
     type: ClusterIP
     port: 80
@@ -712,10 +727,11 @@ mcpManager:
   # Scratch /tmp for artifact/upload spool files under readOnlyRootFilesystem
   # (os.CreateTemp("", ...) in internal/artifactstore, internal/api and
   # internal/sandboxruntime). Bounded so concurrent uploads/downloads can't
-  # exhaust node ephemeral storage; raise it if artifacts routinely approach
-  # this size.
+  # exhaust node ephemeral storage. Holds at least one spool of
+  # sandboxRuntime.workspace.maxFileBytes (1 GiB) with room beside it; raise
+  # both together.
   tmpVolume:
-    sizeLimit: 1Gi
+    sizeLimit: 2Gi
 
   # Serverless MCP instances: a container-backed instance is started on its
   # first call and reclaimed once it has gone idle, instead of running from
@@ -1027,7 +1043,7 @@ sandboxRuntime:
     # runtime additionally applies emptyDir.sizeLimit and an ephemeral-storage
     # container limit. The manager refuses malformed or missing values.
     maxFiles: "10000"
-    maxFileBytes: "268435456"
+    maxFileBytes: "1073741824"
     maxBytes: "2147483648"
     signedUrlTTL: "1h"
     forcePathStyle: true
@@ -1132,9 +1148,9 @@ mcpSandboxRunner:
   # readOnlyRootFilesystem (os.CreateTemp("", ...) in
   # internal/sandboxruntime/manager.go SandboxFileUpload). Smaller than
   # mcp-manager's: the runner only ever spools one sandbox file at a time,
-  # bounded by sandboxRuntime.workspace.maxFileBytes.
+  # bounded by sandboxRuntime.workspace.maxFileBytes (1 GiB), plus headroom.
   tmpVolume:
-    sizeLimit: 512Mi
+    sizeLimit: 1536Mi
 
   consumerGroup: agentarea-sandbox-runners
   batchSize: 1
@@ -1153,14 +1169,14 @@ temporal:
   replicaCount: 1
   image:
     repository: temporalio/server
-    tag: "1.32.1"
+    tag: "1.32.2"
   # Runs the schema init container (creates and migrates the temporal and
   # temporal_visibility databases) and the namespace job. Keep its tag equal
   # to image.tag: the schema it applies is the one that server version needs.
   adminTools:
     image:
       repository: temporalio/admin-tools
-      tag: "1.32.1"
+      tag: "1.32.2"
   # Retention of global.temporal.namespace when the namespace job creates it.
   namespaceRetention: 24h
 
@@ -1180,7 +1196,7 @@ postgresql:
   enabled: true
   image:
     repository: postgres
-    tag: "16.15-alpine"
+    tag: "16.16-alpine"
   resources:
     limits:
       cpu: 500m
@@ -1200,6 +1216,8 @@ redis:
 
 # Valkey subchart passthrough — forwarded verbatim to valkey-io/valkey-helm.
 valkey:
+  image:
+    tag: "9.1.4"
   auth:
     enabled: true
     usersExistingSecret: "agentarea-redis-secret"
@@ -1239,7 +1257,7 @@ rustfs:
   enabled: true
   image:
     repository: "rustfs/rustfs"
-    tag: "1.0.3"
+    tag: "1.0.6"
   auth:
     existingSecret: "agentarea-rustfs-secret"
   # Optional bootstrap override. Empty means global.storage.bucket, keeping
@@ -1355,7 +1373,7 @@ openfga:
   replicaCount: 1
   image:
     repository: openfga/openfga
-    tag: "v1.22.0"
+    tag: "v1.23.0"
   database:
     name: "openfga"
     createJob:

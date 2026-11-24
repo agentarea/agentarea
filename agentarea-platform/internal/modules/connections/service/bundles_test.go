@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -71,7 +72,8 @@ func TestBundleUpdateMCPReplacesSpecAndInstanceKeepingTheSecret(t *testing.T) {
 	}
 }
 
-func TestBundleRediscoverCountsTheToolsServedNow(t *testing.T) {
+// Re-discovery returns before the verification it starts ends; the instance then stores the tools served now.
+func TestBundleRediscoverVerifiesAgainInTheBackground(t *testing.T) {
 	f, _ := newVerifyFixture(t, http.DefaultTransport)
 	ctx := context.Background()
 	specID := f.spec(t, catalogapi.MCPSpec{Name: "fs", Cmd: []any{"node", "server.js"}})
@@ -79,11 +81,28 @@ func TestBundleRediscoverCountsTheToolsServedNow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.waitTerminal(t, v.Instance.ID)
-	got, err := BundleMCPs{S: func() *Service { return f.svc }}.Rediscover(ctx, f.c, v.Instance.ID)
-	if err != nil || got.Status != domain.VerifySucceeded || got.Tools != 1 || got.Error != nil {
-		t.Fatalf("rediscover = %+v, %v", got, err)
+	id := v.Instance.ID
+	before := f.waitTerminal(t, id)
+	time.Sleep(10 * time.Millisecond)
+	if err := (BundleMCPs{S: func() *Service { return f.svc }}).Rediscover(ctx, f.c, id); err != nil {
+		t.Fatal(err)
 	}
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		inst, err := f.svc.instanceIn(ctx, f.c.Workspace, uuid.MustParse(id))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := inst.Verification
+		if got.At != nil && before.At != nil && *got.At != *before.At && got.Status == domain.VerifySucceeded {
+			if len(inst.Tools) != 1 {
+				t.Fatalf("tools = %v", inst.Tools)
+			}
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("the background re-discovery never finished")
 }
 
 func TestBundleUpdateMCPAndRediscoverNeedEditOnTheInstance(t *testing.T) {
@@ -104,7 +123,7 @@ func TestBundleUpdateMCPAndRediscoverNeedEditOnTheInstance(t *testing.T) {
 	if !errors.As(err, &refusal) || refusal.Msg != "you may not edit MCP instance "+made.InstanceID {
 		t.Fatalf("update without edit: %v", err)
 	}
-	if _, err := b.Rediscover(ctx, f.c, made.InstanceID); !errors.As(err, &refusal) {
+	if err := b.Rediscover(ctx, f.c, made.InstanceID); !errors.As(err, &refusal) {
 		t.Fatalf("rediscover without edit: %v", err)
 	}
 	f.graph.denied = map[string]bool{made.SpecID: true}

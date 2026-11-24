@@ -28,6 +28,7 @@ import (
 
 const (
 	runnerClientKey  = "runner_client_id"
+	workspaceTaskKey = "workspace_task_id"
 	runnerSessionKey = "runner_session_id"
 	modelParameter   = "model"
 	effortParameter  = "reasoning_effort"
@@ -411,7 +412,7 @@ func (c *conn) onEvent(ctx context.Context, t *turn, f *upFrame) {
 		return
 	case "message":
 		t.events = append(t.events, workflows.RunnerTurnEvent{
-			Seq: *f.Seq, Kind: "message", ItemID: *b.ItemID, Text: *b.Text, Model: deref(b.Model),
+			Seq: *f.Seq, Kind: "message", ItemID: *b.ItemID, Text: taskRelative(*b.Text, t.call.Request.TaskID), Model: deref(b.Model),
 		})
 		t.live.forget(*b.ItemID)
 	case "tool.call":
@@ -645,7 +646,7 @@ func (c *conn) RunTurn(ctx context.Context, call workflows.RunnerTurnCall) (work
 				return c.failed(ctx, t, err)
 			}
 			f := t.finished
-			return workflows.RunnerTurnResult{Status: *f.Status, Response: deref(f.Response), Error: deref(f.Error)}, nil
+			return workflows.RunnerTurnResult{Status: *f.Status, Response: taskRelative(deref(f.Response), call.Request.TaskID), Error: deref(f.Error)}, nil
 		case <-ctx.Done():
 			if c.closed.Load() {
 				c.reportLost(ctx, t)
@@ -787,7 +788,7 @@ func (c *conn) assignment(ctx context.Context, req workflows.RunnerTurnRequest) 
 		"task_id": task.ID, "agent_id": task.AgentID, "iteration": req.Iteration, "message": req.Message,
 		"session_id": task.Metadata[runnerSessionKey], "requested_by": requestedBy,
 		"actor": map[string]any{"type": actor.Type, "id": actor.ID},
-		"model": nullable(model), "reasoning_effort": nullable(effort), "instructions": nullable(agent.Instructions),
+		"model": nullable(model), "reasoning_effort": nullable(effort), "instructions": withOutputsLimit(agent.Instructions),
 		"allow_domains": domains, "sandbox": client.Sandbox,
 	}, actor, task.CreatedBy, nil
 }

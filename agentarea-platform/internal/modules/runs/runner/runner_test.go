@@ -27,6 +27,7 @@ import (
 	agentsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/agents/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/store"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/workflows"
+	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 )
 
 const (
@@ -39,6 +40,8 @@ const (
 	agentID    = "11111111-1111-4111-8111-111111111111"
 	turnTaskID = "22222222-2222-4222-8222-222222222222"
 	otherTask  = "33333333-3333-4333-8333-333333333333"
+	subTask    = "44444444-4444-4444-8444-444444444444"
+	parentTask = "55555555-5555-4555-8555-555555555555"
 )
 
 var clientID = uuid.NewSHA1(uuid.NameSpaceOID, []byte("client")).String()
@@ -175,6 +178,40 @@ func (f *fakeFiles) Put(_ context.Context, key string, body io.Reader, _ int64, 
 	return err
 }
 
+type published struct {
+	workspaceID, taskID, path, contentType string
+	body                                   []byte
+}
+
+type fakeArtifacts struct {
+	mu   sync.Mutex
+	pubs []published
+	err  error
+}
+
+func (f *fakeArtifacts) PublishArtifact(_ context.Context, workspaceID, taskID, p, contentType string, body []byte) (sandboxapi.TaskArtifact, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return sandboxapi.TaskArtifact{}, f.err
+	}
+	f.pubs = append(f.pubs, published{workspaceID, taskID, p, contentType, body})
+	return sandboxapi.TaskArtifact{Path: p}, nil
+}
+
+// fakeShared is the parent task's store a subtask works on.
+type fakeShared struct {
+	mu   sync.Mutex
+	puts []string
+}
+
+func (s *fakeShared) PutFile(_ context.Context, _, taskID, p string, data []byte) (sandboxapi.StoredFile, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.puts = append(s.puts, taskID+":"+p+"="+string(data))
+	return sandboxapi.StoredFile{Path: p, Size: int64(len(data))}, nil
+}
+
 type fakeWorker struct {
 	queue  string
 	limits durable.Limits
@@ -256,6 +293,8 @@ type rig struct {
 	clients  *fakeClients
 	broker   *fakeBroker
 	files    *fakeFiles
+	outputs  *fakeArtifacts
+	shared   *fakeShared
 	workers  *fakeWorkers
 	tasks    *fakeTasks
 	live     *fakeLiveTurns
@@ -274,6 +313,8 @@ func newRig(t *testing.T) *rig {
 		}},
 		broker:   &fakeBroker{notes: make(chan notified, 64), deliveries: make(chan map[string]string, 4)},
 		files:    &fakeFiles{},
+		outputs:  &fakeArtifacts{},
+		shared:   &fakeShared{},
 		workers:  &fakeWorkers{},
 		live:     &fakeLiveTurns{alive: map[string]bool{}},
 		tokens:   fakeTokens{claims: make(chan authn.TurnClaims, 4)},
@@ -282,6 +323,9 @@ func newRig(t *testing.T) *rig {
 		tasks: &fakeTasks{sessions: map[string]string{}, tasks: map[string]store.RunnerTask{
 			turnTaskID: {ID: turnTaskID, AgentID: agentID, CreatedBy: "creator", SourceIdentity: "user:u1",
 				Parameters: map[string]any{}, Metadata: map[string]any{runnerClientKey: clientID}},
+			subTask: {ID: subTask, AgentID: agentID, CreatedBy: "creator", Parameters: map[string]any{}, Metadata: map[string]any{
+				runnerClientKey: clientID, workspaceTaskKey: parentTask,
+			}},
 			otherTask: {ID: otherTask, AgentID: agentID, CreatedBy: "creator",
 				Parameters: map[string]any{}, Metadata: map[string]any{runnerClientKey: "another"}},
 		}},
@@ -297,7 +341,7 @@ func newRig(t *testing.T) *rig {
 	mux := chi.NewRouter()
 	Mount(mux, errs, Deps{
 		Tasks: r.tasks, Gate: gate, Clients: r.clients, Slugs: fakeSlugs{}, Broker: r.broker, Presence: r.presence,
-		Files: r.files, Workers: r.workers, Tokens: r.tokens, Live: r.live, Log: log,
+		Files: r.files, Artifacts: r.outputs, Store: r.shared, Workers: r.workers, Tokens: r.tokens, Live: r.live, Log: log,
 		register: func(_ durable.Worker, turns workflows.RunnerTurns, _ durable.Executor) { r.turns <- turns },
 	})
 	r.srv = httptest.NewServer(mux)
@@ -384,6 +428,73 @@ func TestUploadStoresTheFileInItsTaskFolder(t *testing.T) {
 	status, body = r.do(t, http.MethodPut, "/v1/runner/tasks/"+turnTaskID+"/files/big.bin", runnerKey, bytes.NewReader(make([]byte, fileMaxBytes+1)))
 	if status != http.StatusRequestEntityTooLarge || !strings.Contains(body, detailTooLarge) {
 		t.Errorf("too large: %d %s", status, body)
+	}
+	if len(r.outputs.pubs) != 0 {
+		t.Errorf("a file outside outputs/ was published: %+v", r.outputs.pubs)
+	}
+}
+
+func TestUploadPublishesAFileUnderOutputsAsATaskArtifact(t *testing.T) {
+	r := newRig(t)
+	status, body := r.do(t, http.MethodPut, "/v1/runner/tasks/"+turnTaskID+"/files/outputs/logo.png", runnerKey, strings.NewReader("png"))
+	if status != http.StatusNoContent {
+		t.Fatalf("upload: %d %s", status, body)
+	}
+	if len(r.files.puts) != 1 || r.files.puts[0].key != "harness-files/"+wsID+"/"+turnTaskID+"/outputs/logo.png" {
+		t.Fatalf("puts: %+v", r.files.puts)
+	}
+	want := published{wsID, turnTaskID, "outputs/logo.png", "image/png", []byte("png")}
+	if len(r.outputs.pubs) != 1 || r.outputs.pubs[0].path != want.path || r.outputs.pubs[0].workspaceID != want.workspaceID ||
+		r.outputs.pubs[0].taskID != want.taskID || r.outputs.pubs[0].contentType != want.contentType || string(r.outputs.pubs[0].body) != "png" {
+		t.Fatalf("published: %+v", r.outputs.pubs)
+	}
+
+	r.outputs.err = errors.New("artifact store down")
+	status, body = r.do(t, http.MethodPut, "/v1/runner/tasks/"+turnTaskID+"/files/outputs/clip.mp4", runnerKey, strings.NewReader("mp4"))
+	if status < 500 {
+		t.Fatalf("a file that could not be published was accepted: %d %s", status, body)
+	}
+}
+
+func TestTaskRelativeTurnsTheRunnersTaskFolderIntoTaskPaths(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"Saved to /data/tasks/" + turnTaskID + "/outputs/agentarea.png.", "Saved to outputs/agentarea.png."},
+		{"![logo](/home/me/.agentarea/runner/tasks/" + turnTaskID + "/outputs/a%20b.png)", "![logo](outputs/a%20b.png)"},
+		{"[clip](file:///data/tasks/" + turnTaskID + "/outputs/clip.mp4)", "[clip](outputs/clip.mp4)"},
+		{"See `/data/tasks/" + turnTaskID + "/notes.md`", "See `notes.md`"},
+		{"Another task: /data/tasks/" + otherTask + "/outputs/x.png", "Another task: /data/tasks/" + otherTask + "/outputs/x.png"},
+		{"No paths here.", "No paths here."},
+	} {
+		if got := taskRelative(c.in, turnTaskID); got != c.want {
+			t.Errorf("taskRelative(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestASubtasksOutputsGoToTheTaskItWorksOn(t *testing.T) {
+	r := newRig(t)
+	status, body := r.do(t, http.MethodPut, "/v1/runner/tasks/"+subTask+"/files/outputs/x.png", runnerKey, strings.NewReader("png"))
+	if status != http.StatusNoContent {
+		t.Fatalf("upload: %d %s", status, body)
+	}
+	if len(r.shared.puts) != 1 || r.shared.puts[0] != parentTask+":outputs/x.png=png" || len(r.files.puts) != 0 || len(r.outputs.pubs) != 0 {
+		t.Fatalf("shared %v, own %v, published %v", r.shared.puts, r.files.puts, r.outputs.pubs)
+	}
+	status, body = r.do(t, http.MethodPut, "/v1/runner/tasks/"+subTask+"/files/inputs/attachments/IMG.MOV", runnerKey, strings.NewReader("mov"))
+	if status != http.StatusNoContent {
+		t.Fatalf("upload: %d %s", status, body)
+	}
+	if len(r.shared.puts) != 1 || len(r.files.puts) != 1 || r.files.puts[0].key != "harness-files/"+wsID+"/"+subTask+"/inputs/attachments/IMG.MOV" {
+		t.Fatalf("a file outside outputs/ went to the shared task: shared %v, own %v", r.shared.puts, r.files.puts)
+	}
+}
+
+func TestARunnersAgentIsToldWhatOfItsOutputsComesBack(t *testing.T) {
+	if fileMaxBytes != 50<<20 || !strings.Contains(outputsLimitNote, "up to 50 MB each") || !strings.Contains(outputsLimitNote, "ffmpeg") {
+		t.Fatalf("note = %q", outputsLimitNote)
+	}
+	if withOutputsLimit("") != outputsLimitNote || withOutputsLimit("Be brief.") != "Be brief.\n\n"+outputsLimitNote {
+		t.Fatal("the note does not follow the agent's instructions")
 	}
 }
 
@@ -541,7 +652,7 @@ func TestSocketRoundTripOfATurn(t *testing.T) {
 	want := map[string]any{
 		"type": "turn.assign", "task_id": turnTaskID, "agent_id": agentID, "iteration": 1.0, "message": "do it",
 		"session_id": nil, "requested_by": "u1", "model": "gpt-5", "reasoning_effort": "high",
-		"instructions": "Be brief.\n\n## Skill: s\n\nbody", "sandbox": true, "token": "turn-token",
+		"instructions": "Be brief.\n\n## Skill: s\n\nbody\n\n" + outputsLimitNote, "sandbox": true, "token": "turn-token",
 		"mcp_path": "/mcp/clients/" + clientID,
 	}
 	for k, v := range want {
@@ -586,11 +697,11 @@ func TestSocketRoundTripOfATurn(t *testing.T) {
 	}
 	sendFrame(t, ctx, c, map[string]any{"type": "steer.accepted", "turn_id": turnID, "message_id": "q1"})
 	sendFrame(t, ctx, c, map[string]any{"type": "turn.event", "turn_id": turnID, "seq": 4,
-		"event": map[string]any{"kind": "message", "item_id": "m1", "text": "Hello", "model": "gpt-5"}})
-	sendFrame(t, ctx, c, map[string]any{"type": "turn.finished", "turn_id": turnID, "status": "completed", "response": "Hello"})
+		"event": map[string]any{"kind": "message", "item_id": "m1", "text": "Hello: /data/tasks/" + turnTaskID + "/outputs/a.png", "model": "gpt-5"}})
+	sendFrame(t, ctx, c, map[string]any{"type": "turn.finished", "turn_id": turnID, "status": "completed", "response": "Hello: /data/tasks/" + turnTaskID + "/outputs/a.png"})
 
 	got := <-done
-	if got.err != nil || got.res.Status != "completed" || got.res.Response != "Hello" {
+	if got.err != nil || got.res.Status != "completed" || got.res.Response != "Hello: outputs/a.png" {
 		t.Fatalf("turn: %+v", got)
 	}
 	close(updates)
@@ -605,6 +716,9 @@ func TestSocketRoundTripOfATurn(t *testing.T) {
 	}
 	if len(evs) != 3 || evs[0].Kind != "tool.call" || evs[1].Kind != "tool.result" || evs[2].Kind != "message" {
 		t.Fatalf("events: %+v", evs)
+	}
+	if evs[2].Text != "Hello: outputs/a.png" {
+		t.Errorf("message: %q", evs[2].Text)
 	}
 	if !strings.HasSuffix(evs[1].Output, clippedNote) || evs[1].ExitCode == nil || *evs[1].Success != true {
 		t.Errorf("tool result: %+v", evs[1])

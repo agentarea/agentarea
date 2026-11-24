@@ -3,6 +3,7 @@ package api
 // Workflow names. The run surface in serve starts and signals them.
 const (
 	WorkflowAgentExecution    = "AgentExecutionWorkflow"
+	WorkflowRemoteDelegation  = "RemoteDelegationWorkflow"
 	WorkflowUndispatchedTasks = "UndispatchedTaskReconcilerWorkflow"
 	WorkflowCronScheduleSync  = "CronScheduleSyncWorkflow"
 	WorkflowTriggerExecution  = "TriggerExecutionWorkflow"
@@ -22,6 +23,8 @@ const (
 	ActivityCallLLM                   = "call_llm_activity"
 	ActivityCompactMessages           = "compact_messages_activity"
 	ActivityExecuteTool               = "execute_mcp_tool_activity"
+	ActivityGetRemoteTask             = "get_remote_task_activity"
+	ActivityCancelRemoteTask          = "cancel_remote_task_activity"
 	ActivityValidateArtifacts         = "validate_artifacts_activity"
 	ActivityActivateSkill             = "activate_skill_activity"
 	ActivityRecallHistory             = "recall_history_activity"

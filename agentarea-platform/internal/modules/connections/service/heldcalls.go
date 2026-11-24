@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authn"
@@ -13,6 +14,9 @@ import (
 
 // UseHeldCalls sets runs' approval gate of held calls; runs is built after connections.
 func (s *Service) UseHeldCalls(h runsapi.HeldCalls) { s.d.HeldCalls = h }
+
+// UseTaskFiles sets runs' signed downloads of a turn's task files.
+func (s *Service) UseTaskFiles(f runsapi.TaskFileURLs) { s.d.TaskFiles = f }
 
 // toolAudit is where one tool call's verdict is filed: the resource it went through.
 type toolAudit struct {
@@ -132,6 +136,9 @@ func (s *Service) judged(ctx context.Context, c authn.Caller, clientID string, a
 		return s.auditToolCall(ctx, c, a.resourceType, a.resourceID, a.actorType, a.name, a.args, d, a.extra)
 	}
 	if s.d.ClientCalls == nil {
+		if c.BoundTaskID != "" {
+			return nil, "", errors.New("a runner turn's call cannot be held to its run: runs' call layer is not wired")
+		}
 		if err := audit(ctx, ""); err != nil {
 			return nil, "", err
 		}
@@ -143,7 +150,7 @@ func (s *Service) judged(ctx context.Context, c authn.Caller, clientID string, a
 		_ = decodeUseNumber(a.args, &arguments)
 	}
 	refusal, err := s.d.ClientCalls.RunClientCall(ctx, c.Workspace, runsapi.ClientToolCall{
-		UserID: c.UserID, ClientID: clientID, ToolName: a.name, Args: arguments, Binding: b,
+		UserID: c.UserID, ClientID: clientID, TaskID: c.BoundTaskID, ToolName: a.name, Args: arguments, Binding: b, Approved: approved,
 	}, runsapi.ClientCallHooks{
 		Audit: audit,
 		Invoke: func(context.Context) (runsapi.ClientToolAnswer, error) {
@@ -184,6 +191,12 @@ func answerOf(v any) (runsapi.ClientToolAnswer, error) {
 		return runsapi.ClientToolAnswer{}, err
 	}
 	return answerOf(m)
+}
+
+// named gives a binding the names a run's policy may use for the tool.
+func named(b runsapi.ToolBinding, n governanceapi.ToolNames) runsapi.ToolBinding {
+	b.PolicyNames, b.RestrictingNames = n.Aliases, n.Restricting
+	return b
 }
 
 func mcpBinding(instanceID, raw string) runsapi.ToolBinding {

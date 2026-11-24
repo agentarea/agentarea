@@ -1,10 +1,9 @@
 import { getFormatter, getTranslations } from "next-intl/server";
-import { TelegramIcon } from "@/components/brand-icons";
+import { TelegramTile } from "@/components/TelegramTile";
 import { Button } from "@/components/ui/button";
-import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { listExternalIdentities } from "@/lib/api";
-import { deterministicHue } from "@/lib/avatar-hue";
+import { telegramAccountLabel } from "@/lib/telegram-account";
 import {
   linkTelegramAction,
   unlinkMessengerAction,
@@ -12,25 +11,17 @@ import {
 import SettingsRow from "./SettingsRow";
 import { SettingsSection } from "./SettingsSection";
 
-const telegramTile = (
-  <EntityAvatar
-    size={32}
-    hue={deterministicHue("telegram")}
-    iconScale={0.56}
-    icon={<TelegramIcon className="text-foreground" />}
-    aria-hidden
-  />
-);
+const telegramTile = <TelegramTile />;
 
 /**
  * Messenger accounts the platform recognises as the caller. A bot answers only
- * linked people it is allowed to; linking starts from the bot itself, which
- * sends the person here with its username.
+ * linked people it is allowed to; linking starts from the bot itself, whose
+ * reply links the account in one confirmation.
  */
 export default async function MessengersSection({
   linkBot,
 }: {
-  /** The bot that sent the caller here; linking goes through it. */
+  /** The bot an older reply sent the caller here from; linking goes through it. */
   linkBot?: string;
 }) {
   const t = await getTranslations("SettingsPage.messengers");
@@ -42,47 +33,59 @@ export default async function MessengersSection({
 
   return (
     <div id="messengers">
-      <SettingsSection title={t("title")} description={t("description")}>
-        {links.map((link) => (
+      <SettingsSection
+        title={t("title")}
+        description={
+          links.length > 0
+            ? `${t("description")} ${t("linkAnotherHint")}`
+            : t("description")
+        }
+      >
+        {links.map((link) => {
+          const named = Boolean(link.username || link.display_name);
+          const date = format.dateTime(new Date(link.linked_at), {
+            dateStyle: "medium",
+          });
+          return (
+            <SettingsRow
+              key={link.id}
+              tile={telegramTile}
+              title={telegramAccountLabel(link)}
+              description={
+                <StatusIndicator kind="active" size="sm" className="mt-0.5">
+                  {named
+                    ? t("linkedAs", { id: link.external_id, date })
+                    : t("linkedOn", { date })}
+                </StatusIndicator>
+              }
+            >
+              <form action={unlinkMessengerAction}>
+                <input type="hidden" name="id" value={link.id} />
+                <Button type="submit" variant="outline" size="xs">
+                  {t("unlink")}
+                </Button>
+              </form>
+            </SettingsRow>
+          );
+        })}
+        {(linkBot || links.length === 0) && (
           <SettingsRow
-            key={link.id}
             tile={telegramTile}
             title="Telegram"
             description={
-              <StatusIndicator kind="active" size="sm" className="mt-0.5">
-                {t("linkedAs", {
-                  id: link.external_id,
-                  date: format.dateTime(new Date(link.linked_at), {
-                    dateStyle: "medium",
-                  }),
-                })}
-              </StatusIndicator>
+              linkBot ? t("linkThrough", { bot: `@${linkBot}` }) : t("howTo")
             }
           >
-            <form action={unlinkMessengerAction}>
-              <input type="hidden" name="id" value={link.id} />
-              <Button type="submit" variant="outline" size="xs">
-                {t("unlink")}
-              </Button>
-            </form>
+            {linkBot && (
+              <form action={linkTelegramAction}>
+                <input type="hidden" name="bot" value={linkBot} />
+                <Button type="submit" size="xs">
+                  {t("link")}
+                </Button>
+              </form>
+            )}
           </SettingsRow>
-        ))}
-        <SettingsRow
-          tile={telegramTile}
-          title={links.length ? t("linkAnother") : "Telegram"}
-          description={
-            linkBot ? t("linkThrough", { bot: `@${linkBot}` }) : t("howTo")
-          }
-        >
-          {linkBot && (
-            <form action={linkTelegramAction}>
-              <input type="hidden" name="bot" value={linkBot} />
-              <Button type="submit" size="xs">
-                {t("link")}
-              </Button>
-            </form>
-          )}
-        </SettingsRow>
+        )}
       </SettingsSection>
     </div>
   );

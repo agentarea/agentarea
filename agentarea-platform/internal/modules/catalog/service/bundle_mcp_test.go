@@ -93,16 +93,13 @@ func (r *recordingMCPs) InstanceSpecID(_ context.Context, _ authn.Caller, id str
 	_, ok := r.names[id]
 	return "spec-of-" + id, ok, nil
 }
-func (r *recordingMCPs) Rediscover(_ context.Context, _ authn.Caller, id string) (catalogapi.BundleDiscovery, error) {
+func (r *recordingMCPs) Rediscover(_ context.Context, _ authn.Caller, id string) error {
 	if r.refuse {
-		return catalogapi.BundleDiscovery{}, &catalogapi.BundleRefusal{Msg: "you may not edit MCP instance " + id}
+		return &catalogapi.BundleRefusal{Msg: "you may not edit MCP instance " + id}
 	}
 	r.verified = append(r.verified, id)
 	r.log.add("rediscover %s", id)
-	if r.discoverErr != nil {
-		return catalogapi.BundleDiscovery{}, r.discoverErr
-	}
-	return catalogapi.BundleDiscovery{Status: "succeeded", Tools: 3}, nil
+	return r.discoverErr
 }
 func (r *recordingMCPs) DeleteInstance(_ context.Context, _ authn.Caller, id string) error {
 	delete(r.names, id)
@@ -210,7 +207,7 @@ func TestRedeployUpdatesAChangedMCPAndKeepsItsSecret(t *testing.T) {
 		t.Fatalf("headers = %v", headers)
 	}
 	e := mcpEntity(t, res2)
-	if e.Action != ActionUpdated || *e.ID != "mcp-1" || e.Detail == nil || *e.Detail != "tools re-discovered: 3" ||
+	if e.Action != ActionUpdated || *e.ID != "mcp-1" || e.Detail == nil || *e.Detail != rediscoveryStarted ||
 		!reflect.DeepEqual(mcps.verified, []string{"mcp-1"}) {
 		t.Fatalf("entity = %+v, verified %v", e, mcps.verified)
 	}
@@ -226,7 +223,7 @@ func TestRedeployRediscoversAnUnchangedMCP(t *testing.T) {
 		t.Fatalf("plan = %+v", p.Entities)
 	}
 	e := mcpEntity(t, res2)
-	if len(mcps.updates) != 0 || e.Action != ActionUnchanged || *e.Detail != "tools re-discovered: 3" ||
+	if len(mcps.updates) != 0 || e.Action != ActionUnchanged || *e.Detail != rediscoveryStarted ||
 		!reflect.DeepEqual(mcps.verified, []string{"mcp-1"}) {
 		t.Fatalf("updates %v, entity %+v", mcps.updates, e)
 	}

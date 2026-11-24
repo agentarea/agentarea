@@ -50,6 +50,8 @@ type ResolvedModel struct {
 	ReasoningLevels        []string        `json:"reasoning_levels"`
 	Provider               ProviderProfile `json:"provider"`
 	DefaultContextStrategy string          `json:"default_context_strategy"`
+	// ResponsesLite: the model takes its tools the Responses Lite way.
+	ResponsesLite bool `json:"responses_lite,omitempty"`
 }
 
 // ModelPrices are the spec's USD prices per token; nil is unpriced.
@@ -70,6 +72,12 @@ type ProviderProfile struct {
 	ReasoningParam   string   `json:"reasoning_param"`
 	ReasoningLevels  []string `json:"reasoning_levels"`
 	CacheBreakpoints bool     `json:"cache_breakpoints"`
+	// MaxImageBytes and MaxImageEdge are what the provider takes in one image
+	// (the file's bytes, the longer edge in pixels); 0 is unstated.
+	MaxImageBytes int `json:"max_image_bytes,omitempty"`
+	MaxImageEdge  int `json:"max_image_edge,omitempty"`
+	// PDFInput is whether the provider reads a PDF sent as a file.
+	PDFInput bool `json:"pdf_input,omitempty"`
 }
 
 // ToolDefinition is a function tool the model may call.
@@ -79,11 +87,14 @@ type ToolDefinition struct {
 	Parameters  map[string]any
 }
 
-// ContentPart is a part of a multi-part message: text, or an image by URL.
+// ContentPart is a part of a multi-part message: text, an image by URL, or
+// a file (a PDF) by data URL.
 type ContentPart struct {
 	Type     string
 	Text     string
 	ImageURL string
+	FileData string
+	Filename string
 }
 
 // ToolCall is a call the model asked for; Arguments is its JSON text.

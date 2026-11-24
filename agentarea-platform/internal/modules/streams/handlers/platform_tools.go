@@ -280,7 +280,11 @@ func (p PlatformStreams) require(ctx context.Context, permission, streamID strin
 var errSourcesUnavailable = errors.New("stream sources need the catalog's source types and the secret stores, which this process was not given")
 
 func (p PlatformStreams) List(ctx context.Context, c authn.Caller, limit, offset int) (any, error) {
-	rows, err := p.s.svc.ListStreams(authn.WithCaller(ctx, c), limit, offset)
+	ctx = authn.WithCaller(ctx, c)
+	rows, err := p.s.svc.ListStreams(ctx, limit, offset)
+	if err == nil {
+		err = p.s.svc.WithSourceTypes(ctx, rows)
+	}
 	if err != nil {
 		return nil, toolText(err)
 	}
@@ -297,10 +301,14 @@ func (p PlatformStreams) Get(ctx context.Context, c authn.Caller, streamID strin
 		return nil, err
 	}
 	st, err := p.s.svc.GetStream(ctx, streamID)
+	one := []domain.Stream{st}
+	if err == nil {
+		err = p.s.svc.WithSourceTypes(ctx, one)
+	}
 	if err != nil {
 		return nil, toolText(err)
 	}
-	return streamOut(st), nil
+	return streamOut(one[0]), nil
 }
 
 func (p PlatformStreams) Create(ctx context.Context, c authn.Caller, name, description string) (any, error) {
@@ -459,6 +467,14 @@ func (p PlatformStreams) CreateForward(ctx context.Context, c authn.Caller, stre
 	return subscriptionOut(sub), nil
 }
 
+func (p PlatformStreams) ReplayEvent(ctx context.Context, c authn.Caller, eventID string) (any, error) {
+	out, err := p.s.svc.ReplayEvent(authn.WithCaller(ctx, c), eventID)
+	if err != nil {
+		return nil, toolText(err)
+	}
+	return out, nil
+}
+
 func (p PlatformStreams) DeleteForward(ctx context.Context, c authn.Caller, streamID, subscriptionID string) error {
 	ctx = authn.WithCaller(ctx, c)
 	if err := p.require(ctx, "edit", streamID); err != nil {
@@ -587,5 +603,18 @@ func NewPlatformStreamEvents(svc *service.Service) PlatformStreamEvents {
 
 func (p PlatformStreamEvents) Read(ctx context.Context, c authn.Caller, stream string, after int64, limit int, since *time.Time) (api.StreamEventsRead, error) {
 	out, err := p.svc.ReadStreamEvents(authn.WithCaller(ctx, c), stream, after, limit, since)
+	return out, toolText(err)
+}
+
+// PlatformMessages is api.PlatformMessages over the streams service.
+type PlatformMessages struct{ svc *service.Service }
+
+var _ api.PlatformMessages = PlatformMessages{}
+
+// NewPlatformMessages builds the messages toolset's provider.
+func NewPlatformMessages(svc *service.Service) PlatformMessages { return PlatformMessages{svc: svc} }
+
+func (p PlatformMessages) Send(ctx context.Context, c authn.Caller, in api.MessageSend) (api.MessageSent, error) {
+	out, err := p.svc.SendMessage(authn.WithCaller(ctx, c), in)
 	return out, toolText(err)
 }

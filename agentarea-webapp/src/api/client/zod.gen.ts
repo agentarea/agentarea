@@ -786,6 +786,23 @@ export const zCategoryFacet = z.object({
 });
 
 /**
+ * ChatGPTDeviceCodeResponse
+ */
+export const zChatGptDeviceCodeResponse = z.object({
+  expires_in: z.int(),
+  interval: z.int(),
+  user_code: z.string(),
+  verification_uri: z.string(),
+});
+
+/**
+ * ChatGPTSignInResponse
+ */
+export const zChatGptSignInResponse = z.object({
+  signed_in: z.boolean(),
+});
+
+/**
  * CheckRequest
  */
 export const zCheckRequest = z.object({
@@ -1234,12 +1251,17 @@ export const zExistingBundleInstall = z.object({
 
 /**
  * ExternalIdentityResponse
+ *
+ * A messenger account linked to the caller. username and display_name are how the
+ * messenger named the account when it was linked; null for links made before they were kept.
  */
 export const zExternalIdentityResponse = z.object({
+  display_name: z.string().nullable(),
   external_id: z.string(),
   id: z.uuid(),
   linked_at: z.iso.datetime(),
   provider: z.string(),
+  username: z.string().nullable(),
 });
 
 /**
@@ -2203,6 +2225,67 @@ export const zOAuthAuthorizeResponse = z.object({
 });
 
 /**
+ * OAuthInstallation
+ */
+export const zOAuthInstallation = z.object({
+  account: z.string(),
+  account_type: z.string(),
+  id: z.int(),
+  repository_selection: z.string(),
+});
+
+/**
+ * OAuthInstallationsResponse
+ */
+export const zOAuthInstallationsResponse = z.object({
+  installations: z.array(zOAuthInstallation),
+});
+
+/**
+ * OAuthInstallationRepository
+ */
+export const zOAuthInstallationRepository = z.object({
+  full_name: z.string(),
+  name: z.string(),
+  private: z.boolean(),
+});
+
+/**
+ * OAuthInstallationRepositoriesResponse
+ */
+export const zOAuthInstallationRepositoriesResponse = z.object({
+  repositories: z.array(zOAuthInstallationRepository),
+});
+
+/**
+ * OAuthInstallationBinding
+ *
+ * The installation a connection's calls are limited to.
+ */
+export const zOAuthInstallationBinding = z.object({
+  account: z.string(),
+  installation_id: z.int(),
+  repositories: z.array(z.string()).nullable(),
+});
+
+/**
+ * OAuthInstallationBindingRequest
+ */
+export const zOAuthInstallationBindingRequest = z.object({
+  installation_id: z.int().gte(1).nullable(),
+  instance_id: z.uuid().nullish(),
+  openapi_connection_id: z.uuid().nullish(),
+  repositories: z.array(z.string().min(1).max(100)).max(500).nullish(),
+});
+
+/**
+ * OAuthInstallationBindingResponse
+ */
+export const zOAuthInstallationBindingResponse = z.object({
+  installation_binding: zOAuthInstallationBinding.nullable(),
+});
+
+/**
  * OAuthFinishRequest
  */
 export const zOAuthFinishRequest = z.object({
@@ -2259,6 +2342,9 @@ export const zOAuthPreflightResponse = z.object({
   credential_source: z.enum(["platform", "dynamic", "custom"]).nullish(),
   default_scopes: z.array(z.string()).optional(),
   detail: z.string().optional().default(""),
+  install_url: z.string().nullish(),
+  installation_binding: zOAuthInstallationBinding.nullish(),
+  installation_binding_available: z.boolean().optional().default(false),
   issuer: z.string().nullish(),
   redirect_uri: z.string(),
   scopes: z.array(z.string()).optional(),
@@ -2879,6 +2965,7 @@ export const zProviderConfigUpdate = z.object({
  * ProviderSpecResponse
  */
 export const zProviderSpecResponse = z.object({
+  auth: z.string(),
   created_at: z.iso.datetime(),
   description: z.string().nullable(),
   icon: z.string().nullable(),
@@ -3976,6 +4063,7 @@ export const zStreamResponse = z.object({
   id: z.uuid(),
   kind: z.string(),
   name: z.string(),
+  source_types: z.array(z.string()),
 });
 
 /**
@@ -4266,6 +4354,30 @@ export const zInboxResponse = z.object({
  */
 export const zTelegramLinkRequest = z.object({
   bot: z.string().regex(/^[A-Za-z0-9_]{5,32}$/),
+});
+
+/**
+ * TelegramLinkOfferRequest
+ */
+export const zTelegramLinkOfferRequest = z.object({
+  code: z.string().min(1),
+});
+
+/**
+ * TelegramLinkOfferResponse
+ *
+ * The Telegram account a bot offered a link for, as Telegram named it when the bot
+ * answered, and the workspace whose bot offered it; only a member of that workspace
+ * sees or accepts it. linked_to is who already holds it: "you", "another_account", or null.
+ */
+export const zTelegramLinkOfferResponse = z.object({
+  bot: z.string().nullable(),
+  display_name: z.string().nullable(),
+  external_id: z.string(),
+  linked_to: z.enum(["you", "another_account"]).nullable(),
+  provider: z.string(),
+  username: z.string().nullable(),
+  workspace_name: z.string(),
 });
 
 /**
@@ -5176,6 +5288,7 @@ export const zAgentareaApiApiV1ProviderSpecsModelSpecResponse = z.object({
  * ProviderSpecWithModelsResponse
  */
 export const zProviderSpecWithModelsResponse = z.object({
+  auth: z.string(),
   created_at: z.iso.datetime(),
   description: z.string().nullable(),
   icon: z.string().nullable(),
@@ -5200,6 +5313,46 @@ export const zAgentareaApiApiV1RegistriesSyncResponse = z.object({
   total: z.int(),
   unchanged: z.int(),
   updates_flagged: z.int(),
+});
+
+/**
+ * OAuthConsentClient
+ */
+export const zOAuthConsentClient = z.object({
+  client_id: z.string(),
+  client_name: z.string(),
+  client_uri: z.string(),
+  logo_uri: z.string(),
+  redirect_uris: z.array(z.string()),
+});
+
+/**
+ * OAuthConsentResponse
+ *
+ * A consent request of this API's authorization server: the client, and what accepting grants it. `api` reaches the whole account and is granted only to first-party clients; `mcp` reaches MCP in one workspace the user picks.
+ */
+export const zOAuthConsentResponse = z.object({
+  client: zOAuthConsentClient,
+  redirect_uri: z.string(),
+  first_party: z.boolean(),
+  access: z.enum(["mcp", "api"]),
+  scopes: z.array(z.string()),
+});
+
+/**
+ * OAuthConsentDecision
+ */
+export const zOAuthConsentDecision = z.object({
+  challenge: z.string(),
+  action: z.enum(["accept", "reject"]),
+  workspaces: z.array(z.string()).nullish(),
+});
+
+/**
+ * OAuthConsentRedirect
+ */
+export const zOAuthConsentRedirect = z.object({
+  redirect_to: z.string(),
 });
 
 export const zOauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetPath =
@@ -5317,6 +5470,24 @@ export const zStartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostBody =
  */
 export const zStartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponse =
   zTelegramLinkResponse;
+
+export const zAcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostBody =
+  zTelegramLinkOfferRequest;
+
+/**
+ * Successful Response
+ */
+export const zAcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponse =
+  zExternalIdentityResponse;
+
+export const zPreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostBody =
+  zTelegramLinkOfferRequest;
+
+/**
+ * Successful Response
+ */
+export const zPreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponse =
+  zTelegramLinkOfferResponse;
 
 export const zUnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeletePath =
   z.object({
@@ -6852,6 +7023,43 @@ export const zOauthPreflightV1OauthPreflightGetQuery = z.object({
 export const zOauthPreflightV1OauthPreflightGetResponse =
   zOAuthPreflightResponse;
 
+export const zOauthInstallationsV1OauthInstallationsGetQuery = z.object({
+  instance_id: z.uuid().nullish(),
+  openapi_connection_id: z.uuid().nullish(),
+});
+
+/**
+ * Successful Response
+ */
+export const zOauthInstallationsV1OauthInstallationsGetResponse =
+  zOAuthInstallationsResponse;
+
+export const zOauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetPath =
+  z.object({
+    installation_id: z.int().gte(1),
+  });
+
+export const zOauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetQuery =
+  z.object({
+    instance_id: z.uuid().nullish(),
+    openapi_connection_id: z.uuid().nullish(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zOauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponse =
+  zOAuthInstallationRepositoriesResponse;
+
+export const zOauthBindInstallationV1OauthInstallationPutBody =
+  zOAuthInstallationBindingRequest;
+
+/**
+ * Successful Response
+ */
+export const zOauthBindInstallationV1OauthInstallationPutResponse =
+  zOAuthInstallationBindingResponse;
+
 export const zListConnectionsV1OpenapiConnectionsGetQuery = z.object({
   status: z.string().nullish(),
   search: z.string().nullish(),
@@ -7320,6 +7528,28 @@ export const zDiscoverModelsV1ProviderConfigsConfigIdDiscoverPostPath =
  */
 export const zDiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponse =
   zDiscoveryResponse;
+
+export const zStartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostPath =
+  z.object({
+    config_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zStartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponse =
+  zChatGptDeviceCodeResponse;
+
+export const zCompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostPath =
+  z.object({
+    config_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zCompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponse =
+  zChatGptSignInResponse;
 
 export const zListProviderSpecsV1ProviderSpecsGetQuery = z.object({
   is_builtin: z.boolean().nullish(),
@@ -8583,3 +8813,20 @@ export const zWebhookHealthCheckWebhooksHealthGetResponse = z.record(
 export const zHandleWebhookWebhooksWebhookIdPostPath = z.object({
   webhook_id: z.string(),
 });
+
+export const zOauthConsentV1OauthConsentGetQuery = z.object({
+  challenge: z.string(),
+});
+
+/**
+ * Successful Response
+ */
+export const zOauthConsentV1OauthConsentGetResponse = zOAuthConsentResponse;
+
+export const zOauthConsentDecideV1OauthConsentPostBody = zOAuthConsentDecision;
+
+/**
+ * Successful Response
+ */
+export const zOauthConsentDecideV1OauthConsentPostResponse =
+  zOAuthConsentRedirect;

@@ -28,7 +28,7 @@ import (
 
 // SyncFormat is part of the stored ETag: bump it when parsing or facets
 // change, so the next sync re-applies every source.
-const SyncFormat = "8"
+const SyncFormat = "11"
 
 // Sync budgets (service.py).
 const (
@@ -808,8 +808,8 @@ func (s *Service) backfill(ctx context.Context, sess db.Session, r domain.Regist
 
 func canonicalWire(v any) any { return canonical(v) }
 
-func transports() []string          { return []string{"openai", "anthropic"} }
-func auths() []string               { return []string{"bearer", "api_key_header", "none"} }
+func transports() []string          { return []string{"openai", "anthropic", "responses"} }
+func auths() []string               { return []string{"bearer", "api_key_header", "none", "chatgpt"} }
 func listShapes() []string          { return []string{"data_id", "models_name"} }
 func reasoningParams() []string     { return []string{"reasoning_effort", "reasoning"} }
 func pricedPerTokenKinds() []string { return []string{"chat", "embedding"} }
@@ -870,14 +870,39 @@ func providerRow(it domain.Item, spec map[string]any) (store.ProviderRow, error)
 			c.ReasoningEfforts = &store.Opt[[]byte]{Value: b}
 		}
 	}
-	if v, has := spec["cache_breakpoints"]; has {
+	for _, f := range []struct {
+		name string
+		dst  **store.Opt[bool]
+	}{{"cache_breakpoints", &c.CacheBreakpoints}, {"pdf_input", &c.PDFInput}} {
+		v, has := spec[f.name]
+		if !has {
+			continue
+		}
 		switch b := v.(type) {
 		case nil:
-			c.CacheBreakpoints = &store.Opt[bool]{Value: false}
+			*f.dst = &store.Opt[bool]{Value: false}
 		case bool:
-			c.CacheBreakpoints = &store.Opt[bool]{Value: b}
+			*f.dst = &store.Opt[bool]{Value: b}
 		default:
-			return p, entryErr("cache_breakpoints must be true or false")
+			return p, entryErr("%s must be true or false", f.name)
+		}
+	}
+	for _, f := range []struct {
+		name string
+		dst  **store.Opt[int]
+	}{{"max_image_bytes", &c.MaxImageBytes}, {"max_image_edge", &c.MaxImageEdge}} {
+		v, has := spec[f.name]
+		if !has {
+			continue
+		}
+		n, err := optInt(v)
+		if err != nil || (n != nil && *n <= 0) {
+			return p, entryErr("%s must be a positive integer or null", f.name)
+		}
+		if n == nil {
+			*f.dst = &store.Opt[int]{Null: true}
+		} else {
+			*f.dst = &store.Opt[int]{Value: *n}
 		}
 	}
 	return p, nil
@@ -951,6 +976,13 @@ func modelRow(it domain.Item, spec map[string]any, provider uuid.UUID) (store.Mo
 	}
 	if v := spec["reasoning_efforts"]; v != nil {
 		m.ReasoningEfforts, _ = json.Marshal(v)
+	}
+	switch v := spec["responses_lite"].(type) {
+	case nil:
+	case bool:
+		m.ResponsesLite = v
+	default:
+		return m, entryErr("Model '%s' has responses_lite %v; expected a bool", name, v)
 	}
 	return m, nil
 }

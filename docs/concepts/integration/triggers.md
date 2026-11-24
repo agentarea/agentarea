@@ -115,13 +115,24 @@ per provider. The cost is a model call per candidate event, which the
 
 **A messenger admits senders, not anyone who writes.** A catalog entry with an
 `admission` block, today Telegram's, lets an event through only from a sender
-linked to a platform user. A person links their Telegram account from inside
-Telegram with a code they asked for while signed in, then `/confirm`. A linked
-sender is admitted only when the authorization graph lets them run the agent,
-and the task runs as that person, not as whoever configured the trigger.
-Everyone else is refused and the reaction is `skipped`: an unlinked sender is
-told at most once a day how to link, a linked sender without access is told
-they have none, and group chats and other bots are ignored.
+linked to a platform user. A bot open to the workspace's members (`senders:
+members`) answers an unlinked sender with a link, good for 30 minutes and once,
+that names their Telegram account; opened by a signed-in member of the bot's
+workspace, it links the account after one confirmation. A private bot
+(`senders: owner` or a list of ids) says nothing to anyone else: strangers are
+ignored without a reply, and its owner links from the app. A person can also link
+from inside Telegram with a code they asked for while signed in, then
+`/confirm`. A linked sender is admitted only when the authorization graph lets
+them run the agent, and the task runs as that person, not as whoever
+configured the trigger. Everyone else is refused and the reaction is
+`skipped`: on a members bot an unlinked sender gets one link at a time (writing
+after it expired or was used brings a fresh one), a linked sender without access
+is told they have none, and group chats and other bots are ignored.
+
+**An agent can write first.** With the `agentarea/messages` toolset a run sends
+a member a message through the bot, to the Telegram account that member linked;
+their answer arrives as a chat message and continues the session like any
+other. See [Platform toolsets](/reference/platform-toolsets).
 
 **A trigger's run acts as its agent.** The run reaches what the agent was
 granted, not what the person who configured the trigger can reach, so that
@@ -154,6 +165,39 @@ cut: the block names a task input file, `inputs/attachments/trigger-event.json`,
 which the run writes into the task's own workspace before the agent starts. A
 schedule tick carries no event, so its message is the task text alone.
 
+**A chat message arrives as its text; the event is kept with the task.** When
+the event belongs to a conversation (its source type has a `session_key`
+template, as messengers and mail do) and carries a text by the source's
+`summary` templates, there is no block: a trigger without task text gives the
+agent exactly the message, and a trigger with one leads with it and puts the
+message under a `## Message` heading. Which channel it came through does not
+matter to the agent; the reply goes back through the delivery address. The
+whole event stays with the task as data, in its parameters and the input file
+`inputs/attachments/trigger-event.json`, for tools that need it.
+
+```text
+Answer politely.
+
+## Message
+
+what can you do?
+```
+
+**Files a message carries become task input files.** A source type's
+`event.attachments` names where an event keeps its files and how they are
+fetched: `inline` (the bytes came with the event), `telegram.getFile`,
+`slack.url_private` or `url`. Intake keeps only a reference; when a trigger
+fires, the files are fetched once with the source's credentials into the
+workspace's files under `events/<stream>/<event>/` and copied into the task as
+`inputs/attachments/<name>`, listed in the agent's prompt by path. A follow-up
+that a session routes into a running task adds its files to that task (a name
+already taken by other content gets a `-1` suffix) and its message ends with one
+`Attached file: inputs/attachments/<name> (<type>, <size>)` line per file. A
+message with files and no text still starts or continues a task: its text is a
+line naming them, `(file: IMG_6110.MOV)`. A file that cannot be fetched, such as
+a Telegram file over the 20 MB a bot may download, is not attached; the task's
+message says so, so the agent can tell the sender.
+
 ### Channels carry the output back
 
 **A task an event started replies through its delivery address.** When a
@@ -168,10 +212,24 @@ target, starts a task that does not reply.
 | Reply sender | Used by | Shows |
 |---|---|---|
 | `http` | Slack, Discord, from the entry's `reply.request` | `concise`: result, questions to the user, status |
-| `telegram_live` | Telegram: one message edited in place as the run goes | `concise` |
+| `telegram_live` | Telegram: one message per turn, quoting the message it answers, edited in place as the run goes; the answer ends with a link to the task's page in the web app | `concise` |
 | `smtp` | email and IMAP sources | `summary`: result and questions, at the end |
 | `task_webhook` | the webhook a caller gave when starting a task | |
 | `a2a_webhook` | A2A push notification configs | |
+
+**A Telegram reply carries the files the turn published.** When a turn ends
+with `task.completed`, `telegram_live` sends the chat each file the task
+published (everything under `outputs/` and the artifacts it declared) that it
+has not sent before, each as a message of its own after the answer: an mp4 as a
+video, a JPEG, PNG or WebP up to 10 MB as a photo, anything else as a document.
+A file over the 50 MB a bot uploads, or one Telegram refuses as too large
+(413), comes as a line `<name> (<size> MB): <link>` instead, linking the file in
+the task's files view of the web app (`/w/<slug>/tasks/<id>/files?file=<path>`),
+which asks for sign-in, never a raw storage URL that would open for anyone the
+message is forwarded to. Another refusal is named in a short note. Files of an earlier turn are not sent again,
+and a turn sends at most ten. The event service reads the files through the
+sandbox manager, so it needs `AGENTAREA_SANDBOX_FILE_SECRET` as the worker
+does.
 
 **Delivery is a consumer group, not an inline call.** A run publishes its
 events once to `tasks.events` and does not know who reads them. The `delivery`
@@ -231,6 +289,10 @@ reports that this step was skipped.
 **Sender admission exists for Telegram only.** Other messengers with a `reply`
 block, such as Slack and Discord, admit any sender the provider delivers; the
 task acts as the agent with no person's policy narrowing it.
+
+**Fetched files have size limits.** A Telegram bot downloads files up to 20 MB;
+`url` and `slack.url_private` fetches stop at 50 MB. A batch's task receives no
+event files.
 
 **A batch replies to one address.** A batch's task answers the newest event's
 sender only, even when its events came from several chats.

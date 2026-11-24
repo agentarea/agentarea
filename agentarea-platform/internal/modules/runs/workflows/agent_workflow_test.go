@@ -38,6 +38,13 @@ type fakeRun struct {
 	toolCalls []ToolCallRequest
 	tool      func(ToolCallRequest) (ToolCallResult, error)
 	created   []CreateDelegationTaskRequest
+	// files is each task's store when a test keeps one: validation then finds only what is there.
+	files     map[string]map[string]bool
+	validated []ArtifactValidationRequest
+	client    string
+	remoteGet func(RemoteTaskRequest) (ToolCallResult, error)
+	gets      []RemoteTaskRequest
+	cancels   []RemoteTaskRequest
 }
 
 func newFakeRun() *fakeRun {
@@ -111,7 +118,49 @@ func (f *fakeRun) executeTool(_ context.Context, req ToolCallRequest) (ToolCallR
 	return f.tool(req)
 }
 
+func (f *fakeRun) getRemoteTask(_ context.Context, req RemoteTaskRequest) (ToolCallResult, error) {
+	f.mu.Lock()
+	f.gets = append(f.gets, req)
+	get := f.remoteGet
+	f.mu.Unlock()
+	if get == nil {
+		return ToolCallResult{}, errors.New("no remote agent in this test")
+	}
+	return get(req)
+}
+
+func (f *fakeRun) cancelRemoteTask(_ context.Context, req RemoteTaskRequest) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cancels = append(f.cancels, req)
+	return nil
+}
+
+func (f *fakeRun) write(task, path string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.files[task] == nil {
+		f.files[task] = map[string]bool{}
+	}
+	f.files[task][path] = true
+}
+
 func (f *fakeRun) validate(_ context.Context, req ArtifactValidationRequest) (ArtifactValidationResult, error) {
+	f.mu.Lock()
+	f.validated = append(f.validated, req)
+	store := f.files
+	f.mu.Unlock()
+	if store != nil {
+		var issues []ArtifactIssue
+		for _, p := range req.DeclaredPaths {
+			if !store[req.TaskID][p] {
+				issues = append(issues, ArtifactIssue{Path: p, Validator: "published_artifact", Code: "artifact_missing", Message: "file not found: " + p})
+			}
+		}
+		if len(issues) > 0 {
+			return ArtifactValidationResult{State: "failed", Generation: 1, Issues: issues}, nil
+		}
+	}
 	ev := make([]ArtifactEvidence, 0, len(req.DeclaredPaths))
 	for _, p := range req.DeclaredPaths {
 		ev = append(ev, ArtifactEvidence{Path: p, Validator: "exists"})
@@ -131,7 +180,7 @@ func (f *fakeRun) createDelegation(_ context.Context, req CreateDelegationTaskRe
 	f.mu.Lock()
 	f.created = append(f.created, req)
 	f.mu.Unlock()
-	return CreateDelegationTaskResult{Status: "created", TaskID: childTask, Policy: testPolicy()}, nil
+	return CreateDelegationTaskResult{Status: "created", TaskID: childTask, Policy: testPolicy(), RunnerClientID: f.client}, nil
 }
 
 func (f *fakeRun) delegatedSpend(_ context.Context, _ DelegatedSpendRequest) (DelegatedSpendResult, error) {
@@ -193,12 +242,14 @@ func newEnv(t *testing.T, f *fakeRun) *testsuite.TestWorkflowEnvironment {
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
 	env.RegisterWorkflowWithOptions(AgentExecutionWorkflow, workflow.RegisterOptions{Name: api.WorkflowAgentExecution})
+	env.RegisterWorkflowWithOptions(RemoteDelegationWorkflow, workflow.RegisterOptions{Name: api.WorkflowRemoteDelegation})
 	for name, fn := range map[string]any{
 		api.ActivityResolveRunConfig: f.resolve, api.ActivityRecord: f.record, api.ActivityCallLLM: f.callLLM,
 		api.ActivityExecuteTool: f.executeTool, api.ActivityValidateArtifacts: f.validate,
 		api.ActivityCheckMonthlySpendCap: f.spendCap, api.ActivityCompactMessages: f.compact,
 		api.ActivityCreateDelegationTask: f.createDelegation, api.ActivityDelegatedTaskSpend: f.delegatedSpend,
 		api.ActivityUpdateGovernanceSnapshot: f.updateSnapshot,
+		api.ActivityGetRemoteTask:            f.getRemoteTask, api.ActivityCancelRemoteTask: f.cancelRemoteTask,
 	} {
 		env.RegisterActivityWithOptions(fn, activity.RegisterOptions{Name: name})
 	}

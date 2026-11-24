@@ -82,6 +82,39 @@ export function buildMonthWeeks<T extends { fires_at: string }>(
   return buildWeeks(items, now, first, last);
 }
 
+/**
+ * The days that hold the next `limit` runs from now on, in order; empty days
+ * are left out, and the last day keeps all its runs.
+ */
+export function buildUpcoming<T extends { fires_at: string }>(
+  items: T[],
+  now: Date,
+  limit: number
+): CalendarDay<T>[] {
+  const ahead = byFiresAt(items).filter((i) => new Date(i.fires_at) >= now);
+  const todayKey = dayKey(now);
+  const days: CalendarDay<T>[] = [];
+  let taken = 0;
+  for (const item of ahead) {
+    const date = new Date(item.fires_at);
+    const key = dayKey(date);
+    const last = days[days.length - 1];
+    const sameDay = last !== undefined && dayKey(last.date) === key;
+    if (taken >= limit && !sameDay) break;
+    if (sameDay) last.items.push(item);
+    else
+      days.push({
+        date: addDays(date, 0),
+        isToday: key === todayKey,
+        isPast: false,
+        inMonth: true,
+        items: [item],
+      });
+    taken++;
+  }
+  return days;
+}
+
 /** The first run at or after `from`, discrete or frequent. */
 export function firstRunFrom<
   R extends { fires_at: string },

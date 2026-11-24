@@ -35,8 +35,8 @@ func (r *agentRun) toolMessage(call ToolCall, content string) {
 	r.messages = append(r.messages, Message{Role: "tool", Content: content, ToolCallID: call.ID, Name: call.Name})
 }
 
-// executeToolCalls runs a turn's calls: context tools, delegations in
-// parallel, regular tools in order, completion last.
+// executeToolCalls runs a turn's calls: context tools, delegations to local
+// and remote agents in parallel, regular tools in order, completion last.
 func (r *agentRun) executeToolCalls(ctx workflow.Context, calls []ToolCall) error {
 	exec := policyExec(r.cfg.Policy)
 	perTurn, ok := intLimit(exec.MaxToolCallsPerTurn)
@@ -85,7 +85,7 @@ func (r *agentRun) executeToolCalls(ctx workflow.Context, calls []ToolCall) erro
 		case domain.ToolActivateSkill:
 			skills = append(skills, c)
 		default:
-			if _, ok := r.cfg.Delegates[c.Name]; ok {
+			if r.delegates(c) {
 				delegations = append(delegations, c)
 			} else {
 				regular = append(regular, c)
@@ -458,11 +458,7 @@ func (r *agentRun) recordToolResult(ctx workflow.Context, c ToolCall, args map[s
 		"source": nullable(res.Source), "server_instance_id": nullable(res.ServerInstanceID),
 		"server_name": nullable(res.ServerName), "server_icon": nullable(res.ServerIcon),
 	}
-	if spent := res.ModelCost.Add(res.Cost); spent.Sign() > 0 {
-		r.cost = r.cost.Add(spent)
-		r.llmCostUsed = r.llmCostUsed.Add(res.ModelCost)
-		r.enforceAgentSpendCap()
-	}
+	r.chargeTool(res)
 	if !res.Success {
 		msg := firstNonEmpty(res.Error, res.Result, "Tool execution failed")
 		r.messages = append(r.messages, Message{Role: "tool", Content: "Tool failed: " + msg, ToolCallID: c.ID, Name: c.Name, Meta: meta})
@@ -516,6 +512,15 @@ func (r *agentRun) recordToolResult(ctx workflow.Context, c ToolCall, args map[s
 	mergeInto(data, priced, paid, replay, extra, server)
 	r.emit(ctx, domain.EventToolResult, data)
 	return r.publish(ctx)
+}
+
+// chargeTool adds what a call cost the run: its model and connector cost.
+func (r *agentRun) chargeTool(res ToolCallResult) {
+	if spent := res.ModelCost.Add(res.Cost); spent.Sign() > 0 {
+		r.cost = r.cost.Add(spent)
+		r.llmCostUsed = r.llmCostUsed.Add(res.ModelCost)
+		r.enforceAgentSpendCap()
+	}
 }
 
 func paymentValue(ps []Payment) any {
@@ -628,7 +633,7 @@ func (r *agentRun) readToolOutput(ctx workflow.Context, c ToolCall) error {
 		return nil
 	}
 	grep, _ := args["grep"].(string)
-	req := ReadOutputRequest{Principal: r.principal, TaskID: r.taskID, OutputID: id, Grep: grep, Head: optionalInt(args["head"]), Tail: optionalInt(args["tail"])}
+	req := ReadOutputRequest{Principal: r.principal, TaskID: r.taskID, FilesTaskID: r.sharedFilesTask(), OutputID: id, Grep: grep, Head: optionalInt(args["head"]), Tail: optionalInt(args["tail"])}
 	var res ContextResult
 	var content string
 	err := workflow.ExecuteActivity(activityCtx(ctx, api.ActivityReadContextOutput, "", 0), api.ActivityReadContextOutput, req).Get(ctx, &res)
@@ -778,7 +783,7 @@ func (r *agentRun) activateSkill(ctx workflow.Context, c ToolCall) error {
 	r.nextSeq++
 	eventID := r.ids.uuid()
 	req := ActivateSkillRequest{
-		Principal: r.principal, TaskID: r.taskID, ExecutionID: r.executionID, ToolCallID: c.ID, Skill: skill,
+		Principal: r.principal, TaskID: r.taskID, FilesTaskID: r.sharedFilesTask(), ExecutionID: r.executionID, ToolCallID: c.ID, Skill: skill,
 		Seq: seq, EventID: eventID, Iteration: ptr(r.iteration), MaxTokens: maxTokens,
 	}
 	var res ActivateSkillResult

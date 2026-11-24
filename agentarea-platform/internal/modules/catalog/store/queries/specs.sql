@@ -1,19 +1,19 @@
 -- name: ProviderSpecByID :one
 SELECT id, provider_key, provider_type, name, description, icon, is_builtin, is_first_party, requires_api_key,
     base_url, transport, auth, models_path, list_shape, models_query, reasoning_param, reasoning_efforts,
-    cache_breakpoints, workspace_id, created_by, created_at, updated_at
+    cache_breakpoints, max_image_bytes, max_image_edge, pdf_input, workspace_id, created_by, created_at, updated_at
 FROM provider_specs WHERE id = @id;
 
 -- name: ProviderSpecByKey :one
 SELECT id, provider_key, provider_type, name, description, icon, is_builtin, is_first_party, requires_api_key,
     base_url, transport, auth, models_path, list_shape, models_query, reasoning_param, reasoning_efforts,
-    cache_breakpoints, workspace_id, created_by, created_at, updated_at
+    cache_breakpoints, max_image_bytes, max_image_edge, pdf_input, workspace_id, created_by, created_at, updated_at
 FROM provider_specs WHERE provider_key = @provider_key;
 
 -- name: ProviderSpecsByIDs :many
 SELECT id, provider_key, provider_type, name, description, icon, is_builtin, is_first_party, requires_api_key,
     base_url, transport, auth, models_path, list_shape, models_query, reasoning_param, reasoning_efforts,
-    cache_breakpoints, workspace_id, created_by, created_at, updated_at
+    cache_breakpoints, max_image_bytes, max_image_edge, pdf_input, workspace_id, created_by, created_at, updated_at
 FROM provider_specs WHERE id = ANY(@ids::uuid[]);
 
 -- name: ModelSpecsByIDs :many
@@ -25,7 +25,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs WHERE id = ANY(@ids::uuid[]);
 
@@ -39,7 +39,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs WHERE id = @id AND (workspace_id = @workspace_id OR workspace_id = 'platform');
 
@@ -53,7 +53,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs WHERE workspace_id = @workspace_id AND provider_spec_id = @provider_spec_id AND model_name = @model_name
 ORDER BY created_at DESC LIMIT 1;
@@ -130,7 +130,7 @@ WHERE r.registry_type = 'llm_models' AND ri.registry_active AND ri.id = @id;
 -- name: OfferedProviderSpecs :many
 SELECT id, provider_key, provider_type, name, description, icon, is_builtin, is_first_party, requires_api_key,
     base_url, transport, auth, models_path, list_shape, models_query, reasoning_param, reasoning_efforts,
-    cache_breakpoints, workspace_id, created_by, created_at, updated_at
+    cache_breakpoints, max_image_bytes, max_image_edge, pdf_input, workspace_id, created_by, created_at, updated_at
 FROM provider_specs ps
 WHERE (NOT EXISTS (SELECT 1 FROM registry_items ri WHERE ri.installed_entity_id = ps.id AND ri.registry_type = 'llm_providers')
     OR EXISTS (SELECT 1 FROM registry_items ri WHERE ri.installed_entity_id = ps.id AND ri.registry_type = 'llm_providers' AND ri.in_source IS TRUE)
@@ -152,7 +152,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs WHERE provider_spec_id = ANY(@ids::uuid[]) AND workspace_id = @workspace_id
 ORDER BY created_at, id;
@@ -167,7 +167,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs
 WHERE workspace_id = @workspace_id
@@ -185,7 +185,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs WHERE id = @id AND workspace_id = @workspace_id;
 

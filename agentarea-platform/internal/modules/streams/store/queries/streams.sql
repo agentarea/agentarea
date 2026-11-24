@@ -37,6 +37,12 @@ FOR KEY SHARE;
 -- name: StreamNames :many
 SELECT id, name FROM streams WHERE workspace_id = @workspace_id AND id = ANY(@ids::uuid[]);
 
+-- name: StreamSourceTypes :many
+SELECT stream_id, webhook_type::text AS source_type FROM stream_sources
+WHERE workspace_id = @workspace_id AND stream_id = ANY(@ids::uuid[]) AND webhook_type IS NOT NULL
+GROUP BY stream_id, webhook_type
+ORDER BY stream_id, min(created_at), webhook_type;
+
 -- name: DeleteStream :execrows
 DELETE FROM streams WHERE workspace_id = @workspace_id AND id = @id;
 

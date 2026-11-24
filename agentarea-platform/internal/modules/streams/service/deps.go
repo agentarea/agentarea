@@ -18,6 +18,7 @@ import (
 	governanceapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/governance/api"
 	identityapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/identity/api"
 	runsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/api"
+	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/api"
 )
 
@@ -56,6 +57,12 @@ type Tasks = runsapi.Tasks
 // TaskOutcomes is runs' read of the task a task event names.
 type TaskOutcomes = runsapi.TaskOutcomes
 
+// Turns records the delivery address of a follow-up routed into a running task: the turn it
+// starts is answered there (replies.Turns).
+type Turns interface {
+	Begin(ctx context.Context, taskID string, address map[string]any) error
+}
+
 // Deps are the service's ports. A nil port leaves the routes that need it unmounted.
 type Deps struct {
 	DB    db.Database
@@ -88,6 +95,9 @@ type Deps struct {
 	Quota WriteQuota
 	// Tasks starts a trigger's task; nil leaves firing unmounted.
 	Tasks Tasks
+	// Turns records where a routed follow-up is answered; nil answers every turn of a session
+	// at the message that started its task.
+	Turns Turns
 	// TaskReads is the task statuses and costs the feed and history show; nil shows none.
 	TaskReads api.TaskReads
 	// FiringTasks is the task reads a firing needs (retry, overlap, saved task); nil fails a firing that needs one.
@@ -105,8 +115,13 @@ type Deps struct {
 	// Out is the outbound HTTP clients: api_lookup reads a provider's API through netguard.Vendor.
 	// Nil makes an api_lookup delivery unverifiable now (503).
 	Out netguard.Clients
+	// Fetchers bring the files an event names by reference, by its source type's
+	// event.attachments.fetch; nil is the built-in ones over Out.
+	Fetchers map[string]AttachmentFetcher
 	// MCPEventSources reads an MCP server instance for an MCP Events source; nil refuses those sources.
 	MCPEventSources MCPEventSources
+	// TaskFiles reads a run's files: the files send_message sends. Nil refuses files.
+	TaskFiles sandboxapi.TaskFiles
 	// Links is identity's messenger link handshake; with Owners and Notices it admits the senders
 	// of a source type with an admission. Nil refuses every such event.
 	Links identityapi.MessengerLinks
@@ -116,6 +131,8 @@ type Deps struct {
 	Notices events.Dedup
 	// AppURL is the webapp's public base (AGENTAREA_APP_URL): where a sender links their account.
 	AppURL string
+	// Slugs is the workspaces' URL slugs: a file too large to send is linked under AppURL instead.
+	Slugs identityapi.WorkspaceSlugs
 	// Executor starts and cancels trigger batch workflows (signal-with-start); nil leaves batched
 	// triggers erroring and open batches uncancelled.
 	Executor durable.Executor

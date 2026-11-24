@@ -166,6 +166,8 @@ type ToolProgress struct {
 type ToolImage struct {
 	Data     []byte
 	MimeType string
+	// Pages is a PDF's page count; a PDF goes to the model as a file.
+	Pages int
 }
 
 // ToolInvocation is one tool call for a binding.
@@ -211,6 +213,8 @@ type ToolOutput struct {
 	MeteredBody              any
 	MeteredMeta              map[string]any
 	VendorCost               *money.Decimal
+	// RemoteTask is the task a remote delegate still runs; the answer comes when it ends.
+	RemoteTask *api.RemoteAgentTask
 }
 
 // ToolCaller runs a call for one binding source: mcp (connections/api),
@@ -218,6 +222,13 @@ type ToolOutput struct {
 // modules), remote_agent (A2A).
 type ToolCaller interface {
 	Call(ctx context.Context, inv ToolInvocation) (ToolOutput, error)
+}
+
+// RemoteTaskCaller asks a remote delegate (remote_agent) about a task a call of it started.
+// GetTask answers with RemoteTask set while the task still runs.
+type RemoteTaskCaller interface {
+	GetTask(ctx context.Context, inv ToolInvocation, task api.RemoteAgentTask) (ToolOutput, error)
+	CancelTask(ctx context.Context, inv ToolInvocation, task api.RemoteAgentTask) error
 }
 
 // LLMGateCall is a model call as the entitlement gate sees it: the model the
@@ -279,6 +290,8 @@ type Deps struct {
 	Media     modelsapi.Media
 	VideoJobs modelsapi.VideoJobs
 	Tools     map[string]ToolCaller
+	// RemoteTasks reads and stops the tasks remote delegates run; nil leaves them unreachable.
+	RemoteTasks RemoteTaskCaller
 	// Web are the agentarea/web toolset's transports.
 	Web         WebClients
 	Settings    RunSettings

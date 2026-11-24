@@ -585,6 +585,17 @@ func TestOpenAIBreakpointGoesOnTheLastPartOfAMultipartTurn(t *testing.T) {
 	]`)
 }
 
+func TestOpenAISendsAPDFAsAFilePart(t *testing.T) {
+	ms := []api.Message{{Role: "user", Parts: []api.ContentPart{
+		{Type: "text", Text: "Files returned by read_file (call c1):"},
+		{Type: "file", FileData: "data:application/pdf;base64,JVBERi0=", Filename: "plan.pdf"},
+	}}}
+	assertJSON(t, "messages", sentMessages(t, domain.Profile{}, ms), `[{"role": "user", "content": [
+		{"type": "text", "text": "Files returned by read_file (call c1):"},
+		{"type": "file", "file": {"filename": "plan.pdf", "file_data": "data:application/pdf;base64,JVBERi0="}}
+	]}]`)
+}
+
 func TestOpenAIOnlyTheLastSystemMessageAndAnEmptyLastTurnStaysUnmarked(t *testing.T) {
 	ms := []api.Message{
 		{Role: "system", Content: "first"},

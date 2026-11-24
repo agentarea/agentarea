@@ -77,6 +77,14 @@ type Preflight struct {
 	AuthorizationEndpoint *string
 	Scopes                []string
 	DefaultScopes         []string
+	// InstallURL is the install page of the platform app the connection's
+	// credential was minted through, where the user picks what it reaches.
+	InstallURL *string
+	// InstallationBindingAvailable says the connection signed in through a
+	// GitHub App whose installations it can be bound to; InstallationBinding
+	// is the one it is bound to, nil when it uses the user's token.
+	InstallationBindingAvailable bool
+	InstallationBinding          *InstallationBinding
 }
 
 // CustomOAuthApp is CustomOAuthAppFields, already validated (one source per credential).
@@ -657,10 +665,12 @@ func (s *Service) OAuthPreflight(ctx context.Context, c authn.Caller, ref OAuthT
 	if err != nil {
 		return Preflight{}, err
 	}
+	available, binding := s.installationBindingView(t.current)
 	p, err := t.profile(ctx)
 	var na *notAuthorizable
 	if errors.As(err, &na) {
-		return Preflight{Status: "unsupported", Connected: t.connected, Detail: na.detail, Scopes: []string{}, DefaultScopes: []string{}}, nil
+		return Preflight{Status: "unsupported", Connected: t.connected, Detail: na.detail, Scopes: []string{}, DefaultScopes: []string{},
+			InstallationBindingAvailable: available, InstallationBinding: binding}, nil
 	}
 	if err != nil {
 		return Preflight{}, err
@@ -686,7 +696,22 @@ func (s *Service) OAuthPreflight(ctx context.Context, c authn.Caller, ref OAuthT
 	}
 	def, _ := p.requestedScopes(nil, false)
 	out.DefaultScopes = oaNonNil(def)
+	out.InstallURL = oaOptional(s.installURL(t.current))
+	out.InstallationBindingAvailable, out.InstallationBinding = available, binding
 	return out, nil
+}
+
+// installURL is the install page of the platform app a credential was minted
+// through; empty for any other credential.
+func (s *Service) installURL(a *domain.AuthConfig) string {
+	if a == nil {
+		return ""
+	}
+	app, err := s.platformApp(*a)
+	if err != nil || app == nil {
+		return ""
+	}
+	return app.InstallURL
 }
 
 func oaNonNil(l []string) []string {
@@ -768,6 +793,9 @@ func (s *Service) OAuthAuthorize(ctx context.Context, c authn.Caller, req Author
 		}
 		for k, v := range r.config {
 			cfg[k] = v
+		}
+		if cfg["credential_mode"] == domain.CredentialModeManaged {
+			carryInstallationBinding(t.current, oaPyStr(cfg["platform_oauth_issuer"]), cfg)
 		}
 		a, err := s.mintAuthConfig(ctx, c, t.authName(connID), cfg, r.credentials, kind, connID)
 		if err != nil {
@@ -1140,6 +1168,9 @@ func (s *Service) OAuthFinish(ctx context.Context, p authn.Principal, token stri
 		s.VerifyInBackground(c.Workspace, connID)
 	}
 	s.countOAuth(s.oauthProvider(authConfigIssuer(a.Config)), "succeeded")
+	if s.installURL(&a) != "" {
+		return oaWithQuery(landing, [2]string{"oauth", "success"}, [2]string{"install", "1"}), nil
+	}
 	return oaWithQuery(landing, [2]string{"oauth", "success"}), nil
 }
 

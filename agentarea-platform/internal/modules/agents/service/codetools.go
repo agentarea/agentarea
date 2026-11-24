@@ -19,7 +19,7 @@ func codePlanes() map[string]string {
 		"agentarea/streams": "build", "agentarea/stream_events": "operate", "agentarea/inbox": "operate",
 		"agentarea/openapi_connections": "build", "agentarea/mcp_servers": "build", "agentarea/providers": "build",
 		"agentarea/models": "build", "agentarea/secrets": "build", "agentarea/audit": "observe",
-		"agentarea/network": "observe", "agentarea/workspace_config": "build",
+		"agentarea/network": "observe", "agentarea/workspace_config": "build", "agentarea/messages": "operate",
 	}
 }
 
@@ -33,11 +33,13 @@ func sandboxCodeToolsets() []CodeToolset {
 	}
 	return []CodeToolset{
 		{Name: "agentarea/files", DisplayName: "File Operations", Category: "utility", Plane: ref("runtime"), Group: ref("sandbox"),
-			Description: "Read, write and list text files in this task's working directory, " +
-				"the same files the shell sees. Use the shell for binary files.",
+			Description: "Read, write and list files in this task's working directory, " +
+				"the same files the shell sees; read_file also shows images and PDFs. Use the shell for other binary files.",
 			RequiresUserConfirmation: true, Methods: []CodeToolMethod{
 				method("list_files", "read", "List the files in the working directory."),
-				method("read_file", "read", "Read a text file from the working directory."),
+				method("read_file", "read", "Read a file from the working directory. Text comes back as text (offset and limit read a range of lines); "+
+					"an image (PNG, JPEG, GIF, WebP) is shown to you; a PDF is attached as the pages themselves, at most 20 at a time, "+
+					"and pages is required for one over 10 pages."),
 				method("save_file", "write", "Write text to a file in the working directory. Text only: "+
 					"produce .pdf, .xlsx, images and other binary files with a program in the shell."),
 				method("search_files", "read", "Find files in the working directory whose path matches a glob."),

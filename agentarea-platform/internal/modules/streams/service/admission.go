@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -27,7 +28,6 @@ const (
 	ConfirmCommand   = "/confirm"
 	NoticeInterval   = 24 * time.Hour
 	NoticePrefix     = "telegram-sender-notice"
-	privateNotice    = "This bot is private."
 	telegramBotAPI   = "https://api.telegram.org"
 	telegramCallTime = 10 * time.Second
 )
@@ -55,7 +55,12 @@ type Admitted struct {
 
 type telegramSender struct {
 	externalID, chatID, text string
+	username, name           string
 	private, isBot           bool
+}
+
+func (t telegramSender) account() identityapi.Account {
+	return identityapi.Account{Provider: Telegram, ExternalID: t.externalID, Username: t.username, Name: t.name}
 }
 
 func senderOf(a domain.Admission, data map[string]any) (telegramSender, bool) {
@@ -79,8 +84,12 @@ func senderOf(a domain.Admission, data map[string]any) (telegramSender, bool) {
 	private, _ := domain.RenderFirst(a.Private, c)
 	isBot, _ := domain.RenderFirst(a.IsBot, c)
 	text, _ := domain.RenderFirst(a.Text, c)
+	username, _ := domain.RenderFirst(a.Username, c)
+	first, _ := domain.RenderFirst(a.FirstName, c)
+	last, _ := domain.RenderFirst(a.LastName, c)
 	return telegramSender{
 		externalID: externalID, chatID: chatID, text: strings.TrimSpace(text),
+		username: username, name: strings.TrimSpace(first + " " + last),
 		private: private == a.PrivateValue, isBot: isBot == "true",
 	}, true
 }
@@ -117,7 +126,7 @@ func (s *Service) Admit(ctx context.Context, ws scope.Workspace, t domain.Trigge
 	switch door.Senders.Allow {
 	case domain.SendersIDs:
 		if !contains(door.Senders.IDs, sender.externalID) {
-			return Admitted{}, "the sender is not on the source's list", s.notifyOnce(ctx, t, bot, sender, "private", privateNotice)
+			return Admitted{}, "the sender is not on the source's list", nil
 		}
 		if door.OwnerID == "" {
 			return Admitted{}, "the source has no owner to answer for its senders", nil
@@ -129,12 +138,13 @@ func (s *Service) Admit(ctx context.Context, ws scope.Workspace, t domain.Trigge
 			return Admitted{}, "", err
 		}
 		if !linked {
-			return Admitted{}, "the sender has not linked their Telegram account",
-				s.notifyOnce(ctx, t, bot, sender, "unlinked", s.unlinkedText(ctx, bot))
+			if door.Senders.Allow == domain.SendersOwner {
+				return Admitted{}, "the sender has not linked their Telegram account", nil
+			}
+			return Admitted{}, "the sender has not linked their Telegram account", s.offerLink(ctx, bot, sender)
 		}
 		if door.Senders.Allow == domain.SendersOwner && holder != door.OwnerID {
-			return Admitted{}, fmt.Sprintf("only the source's owner may write; %s is not", holder),
-				s.notifyOnce(ctx, t, bot, sender, "private", privateNotice)
+			return Admitted{}, fmt.Sprintf("only the source's owner may write; %s is not", holder), nil
 		}
 		userID = holder
 	}
@@ -179,7 +189,7 @@ func (s *Service) redeem(ctx context.Context, bot botOf, sender telegramSender, 
 }
 
 func (s *Service) confirm(ctx context.Context, bot botOf, sender telegramSender) error {
-	userID, ok, err := s.d.Links.Confirm(ctx, Telegram, sender.externalID)
+	userID, ok, err := s.d.Links.Confirm(ctx, sender.account())
 	if errors.Is(err, identityapi.ErrAccountTaken) {
 		bot.reply(ctx, sender, "This Telegram account is already linked to another AgentArea account. Unlink it there first.")
 		return nil
@@ -195,13 +205,21 @@ func (s *Service) confirm(ctx context.Context, bot botOf, sender telegramSender)
 	return nil
 }
 
-func (s *Service) unlinkedText(ctx context.Context, bot botOf) string {
-	url := strings.TrimRight(s.d.AppURL, "/") + "/link/telegram"
-	if name := bot.username(ctx); name != "" {
-		url += "?bot=" + name
+// offerLink answers an unlinked sender with a link that already names their account: opened by
+// a signed-in member of the bot's workspace, it links the account after one confirmation. A
+// sender hears it while no earlier link of this bot's is unspent: writing after the link expired
+// or was used brings a fresh one.
+func (s *Service) offerLink(ctx context.Context, bot botOf, sender telegramSender) error {
+	code, issued, err := s.d.Links.Offer(ctx, sender.account(), identityapi.OfferingBot{
+		WorkspaceID: bot.ws.ID(), SourceID: bot.door.Source.ID, Username: bot.username(ctx)})
+	if err != nil || !issued {
+		return err
 	}
-	return "This bot answers only people who linked their Telegram account to AgentArea " +
-		"and were given access. Link yours here: " + url
+	link := strings.TrimRight(s.d.AppURL, "/") + "/link/telegram?" + url.Values{"code": {code}}.Encode()
+	bot.reply(ctx, sender, fmt.Sprintf("This bot answers only people who linked their Telegram account to AgentArea "+
+		"and were given access. Link this Telegram account here (the link works for %d minutes): %s",
+		int(identityapi.OfferTTL/time.Minute), link))
+	return nil
 }
 
 func (s *Service) notifyOnce(ctx context.Context, t domain.Trigger, bot botOf, sender telegramSender, kind, text string) error {

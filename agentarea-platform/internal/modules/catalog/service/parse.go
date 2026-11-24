@@ -793,7 +793,7 @@ func copyWith(m map[string]any, k string, v any) map[string]any {
 // ProviderContractFields are PROVIDER_CONTRACT_FIELDS.
 func ProviderContractFields() []string {
 	return []string{"base_url", "transport", "auth", "models_path", "list_shape", "models_query",
-		"reasoning_param", "reasoning_efforts", "cache_breakpoints"}
+		"reasoning_param", "reasoning_efforts", "cache_breakpoints", "max_image_bytes", "max_image_edge", "pdf_input"}
 }
 
 func parseProviders(m map[string]any) ([]Entry, error) {
@@ -838,7 +838,7 @@ func parseModels(m map[string]any) ([]Entry, error) {
 		}
 		spec := map[string]any{"provider_key": key, "model_name": model, "kind": kind}
 		for _, f := range []string{"context_window", "max_output_tokens", "input_cost_per_token", "output_cost_per_token",
-			"cached_input_cost_per_token", "cache_creation_input_cost_per_token", "reasoning_efforts"} {
+			"cached_input_cost_per_token", "cache_creation_input_cost_per_token", "reasoning_efforts", "responses_lite"} {
 			spec[f] = entry[f]
 		}
 		for _, f := range []string{"supports_function_calling", "supports_vision", "supports_reasoning"} {
@@ -905,9 +905,23 @@ func parseSourceTypes(m map[string]any) ([]Entry, error) {
 			tags = []any{entry["delivery"]}
 		}
 		items = append(items, Entry{ExternalID: slug, Name: truthyStr(entry["name"], slug), Description: cut500(entry["description"]),
-			Version: strp(truthyStr(entry["version"], "1.0.0")), Spec: entry, Tags: tags, Rank: rankFields(entry)})
+			Version: strp(truthyStr(entry["version"], "1.0.0")), Spec: sourceTypeSpec(entry), Tags: tags, Rank: rankFields(entry)})
 	}
 	return items, nil
+}
+
+// sourceTypeSpec is the entry without the keys the item's columns hold: streams
+// reads the spec as a SourceTypeEntry, which refuses keys it does not know.
+func sourceTypeSpec(entry map[string]any) map[string]any {
+	spec := make(map[string]any, len(entry))
+	for k, v := range entry {
+		switch k {
+		case "version", "recommendation_rank", "agentarea:recommendation_rank":
+		default:
+			spec[k] = v
+		}
+	}
+	return spec
 }
 
 func parseBundles(m map[string]any) []Entry {

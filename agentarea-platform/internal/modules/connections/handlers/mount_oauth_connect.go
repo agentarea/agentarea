@@ -30,6 +30,7 @@ func mountOAuthConnect(g group) {
 	g.base.Method(http.MethodPost, p+"/oauth/authorize", g.errs.Handler(func(w http.ResponseWriter, r *http.Request) error {
 		return oauthAuthorize(w, r, svc)
 	}))
+	mountOAuthInstallations(g)
 	g.r.Method(http.MethodGet, "/v1/oauth/callback", g.errs.Handler(func(w http.ResponseWriter, r *http.Request) error {
 		q := r.URL.Query()
 		loc, err := svc.OAuthReceive(r.Context(), q.Get("state"), q.Get("code"), q.Get("error"), q.Get("error_description"))
@@ -131,6 +132,9 @@ func oauthPreflight(w http.ResponseWriter, r *http.Request, svc *service.Service
 		{Key: "scopes", Value: oauthStrings(pf.Scopes)},
 		{Key: "default_scopes", Value: oauthStrings(pf.DefaultScopes)},
 		{Key: "redirect_uri", Value: svc.OAuthCallbackURI()},
+		{Key: "install_url", Value: orNil(pf.InstallURL)},
+		{Key: "installation_binding_available", Value: pf.InstallationBindingAvailable},
+		{Key: "installation_binding", Value: installationBindingJSON(pf.InstallationBinding)},
 	})
 }
 

@@ -4,7 +4,7 @@
 #   - dev:  the compose sandbox-executor container
 # Debian base (not Alpine): agent workloads need manylinux wheels
 # (pandas, lxml, pillow) that do not install on musl.
-FROM golang:1.27.3-alpine3.24 AS builder
+FROM golang:1.27.4-alpine3.24 AS builder
 
 RUN apk add --no-cache git ca-certificates
 
@@ -20,17 +20,20 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build \
  && CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build \
     -a -installsuffix cgo -o bin/agentarea-exec-supervisor ./cmd/exec-supervisor
 
-FROM node:24.22.0-trixie-slim AS node
+FROM node:24.22.3-trixie-slim AS node
 
-FROM python:3.14.8-slim-trixie
+FROM python:3.14.10-slim-trixie
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
     bash \
     ca-certificates \
     curl \
     dumb-init \
     file \
     findutils \
+    fontconfig \
+    fonts-dejavu-core \
     git \
     gzip \
     iptables \
@@ -38,6 +41,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     skopeo \
     tar \
     unzip \
+    xz-utils \
     zip \
     && rm -rf /var/lib/apt/lists/*
 
@@ -47,12 +51,18 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
     && ln -s ../lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack
 
+# The npm and pip the base images ship vendor undici and certifi releases with
+# known CVEs; these releases carry the fixed ones.
+RUN npm install -g --no-audit --no-fund npm@11.21.3 && npm cache clean --force \
+    && pip install --no-cache-dir --upgrade pip==26.3
+
 # Venv-first: /opt/runtime/venv owns `python` and `pip` on PATH, so agent
 # `pip install` works without --break-system-packages (no PEP 668 marker).
 ENV PATH=/opt/runtime/venv/bin:$PATH
 ENV AGENTAREA_SANDBOX_UID=10001 AGENTAREA_SANDBOX_GID=10001
 COPY sandbox-runtime/requirements.txt /opt/runtime/requirements.txt
 RUN python -m venv /opt/runtime/venv \
+    && pip install --no-cache-dir --upgrade pip==26.3 \
     && pip install --no-cache-dir -r /opt/runtime/requirements.txt
 
 # The version stamped into the runtime manifest, from the VERSION file via the

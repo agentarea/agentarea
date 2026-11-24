@@ -122,6 +122,8 @@ type PlatformStreams interface {
 	UpdateProcessor(ctx context.Context, c authn.Caller, streamID, subscriptionID string, ch ProcessorChange) (any, error)
 	DeleteProcessor(ctx context.Context, c authn.Caller, streamID, subscriptionID string) error
 	ListEvents(ctx context.Context, c authn.Caller, q EventQuery) (any, error)
+	// ReplayEvent appends a copy of a stored event to its stream as a new arrival.
+	ReplayEvent(ctx context.Context, c authn.Caller, eventID string) (any, error)
 }
 
 // StreamRef names the stream stream_events_read_stream read.
@@ -155,4 +157,37 @@ type PlatformStreamEvents interface {
 	// Read is the events of the stream named or identified by stream after
 	// sequence after, oldest first; since keeps those received from then on.
 	Read(ctx context.Context, c authn.Caller, stream string, after int64, limit int, since *time.Time) (StreamEventsRead, error)
+}
+
+// MessageSend is messages_send_message's arguments with its recipient resolved to a member.
+type MessageSend struct {
+	// UserID is the workspace member the message is for; Recipient is how the answer names them.
+	UserID    string
+	Recipient string
+	// Stream is a stream name or id; "" for the only messenger stream that reaches the member.
+	Stream string
+	Text   string
+	// Files are paths of the run's files sent after the text, each as a file of its own;
+	// TaskID is the run whose files they are.
+	Files  []string
+	TaskID string
+}
+
+// MessageSent is messages_send_message's output.
+type MessageSent struct {
+	Sent      bool      `json:"sent"`
+	To        string    `json:"to"`
+	Stream    StreamRef `json:"stream"`
+	Messenger string    `json:"messenger"`
+	MessageID *int64    `json:"message_id"`
+	Truncated bool      `json:"truncated"`
+	Files     []string  `json:"files,omitempty"`
+	// Linked are files too large to send, sent as links to the task's files in the webapp.
+	Linked []string `json:"linked,omitempty"`
+}
+
+// PlatformMessages is what the platform messages toolset calls: a message a run starts with a
+// member, through the bot of a messenger stream, to the account the member linked.
+type PlatformMessages interface {
+	Send(ctx context.Context, c authn.Caller, in MessageSend) (MessageSent, error)
 }

@@ -144,6 +144,24 @@ func (e ResolveRequestResourceKind) Valid() bool {
 	}
 }
 
+// Defines values for TelegramLinkOfferResponseLinkedTo.
+const (
+	AnotherAccount TelegramLinkOfferResponseLinkedTo = "another_account"
+	You            TelegramLinkOfferResponseLinkedTo = "you"
+)
+
+// Valid indicates whether the value is a known member of the TelegramLinkOfferResponseLinkedTo enum.
+func (e TelegramLinkOfferResponseLinkedTo) Valid() bool {
+	switch e {
+	case AnotherAccount:
+		return true
+	case You:
+		return true
+	default:
+		return false
+	}
+}
+
 // APIKeyCreateRequest defines model for APIKeyCreateRequest.
 type APIKeyCreateRequest struct {
 	// AgentId Bind the key to one agent of this workspace: it then reaches only that agent over A2A, nothing else. The key to hand to a caller outside the workspace.
@@ -232,12 +250,15 @@ type CreateWorkspaceBody struct {
 	Name string `json:"name"`
 }
 
-// ExternalIdentityResponse defines model for ExternalIdentityResponse.
+// ExternalIdentityResponse A messenger account linked to the caller. username and display_name are how the
+// messenger named the account when it was linked; null for links made before they were kept.
 type ExternalIdentityResponse struct {
-	ExternalId string             `json:"external_id"`
-	Id         openapi_types.UUID `json:"id"`
-	LinkedAt   time.Time          `json:"linked_at"`
-	Provider   string             `json:"provider"`
+	DisplayName *string            `json:"display_name"`
+	ExternalId  string             `json:"external_id"`
+	Id          openapi_types.UUID `json:"id"`
+	LinkedAt    time.Time          `json:"linked_at"`
+	Provider    string             `json:"provider"`
+	Username    *string            `json:"username"`
 }
 
 // GraphNode defines model for GraphNode.
@@ -427,6 +448,27 @@ type SubjectSetBody struct {
 	Relation  string `json:"relation"`
 }
 
+// TelegramLinkOfferRequest defines model for TelegramLinkOfferRequest.
+type TelegramLinkOfferRequest struct {
+	Code string `json:"code"`
+}
+
+// TelegramLinkOfferResponse The Telegram account a bot offered a link for, as Telegram named it when the bot
+// answered, and the workspace whose bot offered it; only a member of that workspace
+// sees or accepts it. linked_to is who already holds it: "you", "another_account", or null.
+type TelegramLinkOfferResponse struct {
+	Bot           *string                            `json:"bot"`
+	DisplayName   *string                            `json:"display_name"`
+	ExternalId    string                             `json:"external_id"`
+	LinkedTo      *TelegramLinkOfferResponseLinkedTo `json:"linked_to"`
+	Provider      string                             `json:"provider"`
+	Username      *string                            `json:"username"`
+	WorkspaceName string                             `json:"workspace_name"`
+}
+
+// TelegramLinkOfferResponseLinkedTo defines model for TelegramLinkOfferResponse.LinkedTo.
+type TelegramLinkOfferResponseLinkedTo string
+
 // TelegramLinkRequest defines model for TelegramLinkRequest.
 type TelegramLinkRequest struct {
 	// Bot The bot to open the link in
@@ -500,6 +542,12 @@ type PreviewInvitationV1InvitationsPreviewPostJSONRequestBody = InvitationPrevie
 
 // StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostJSONRequestBody defines body for StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPost for application/json ContentType.
 type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostJSONRequestBody = TelegramLinkRequest
+
+// AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostJSONRequestBody defines body for AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost for application/json ContentType.
+type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostJSONRequestBody = TelegramLinkOfferRequest
+
+// PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostJSONRequestBody defines body for PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost for application/json ContentType.
+type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostJSONRequestBody = TelegramLinkOfferRequest
 
 // CreateWorkspaceV1WorkspacesPostJSONRequestBody defines body for CreateWorkspaceV1WorkspacesPost for application/json ContentType.
 type CreateWorkspaceV1WorkspacesPostJSONRequestBody = CreateWorkspaceBody
@@ -601,6 +649,12 @@ type ServerInterface interface {
 	// StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPost Start Telegram Link
 	// (POST /v1/me/external-identities/telegram/link)
 	StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPost(w http.ResponseWriter, r *http.Request)
+	// AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost Accept Telegram Link Offer
+	// (POST /v1/me/external-identities/telegram/offer/accept)
+	AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost(w http.ResponseWriter, r *http.Request)
+	// PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost Preview Telegram Link Offer
+	// (POST /v1/me/external-identities/telegram/offer/preview)
+	PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost(w http.ResponseWriter, r *http.Request)
 	// UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDelete Unlink External Identity
 	// (DELETE /v1/me/external-identities/{identity_id})
 	UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDelete(w http.ResponseWriter, r *http.Request, identityId openapi_types.UUID)
@@ -694,6 +748,18 @@ func (_ Unimplemented) ListExternalIdentitiesV1MeExternalIdentitiesGet(w http.Re
 // StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPost Start Telegram Link
 // (POST /v1/me/external-identities/telegram/link)
 func (_ Unimplemented) StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPost(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost Accept Telegram Link Offer
+// (POST /v1/me/external-identities/telegram/offer/accept)
+func (_ Unimplemented) AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost Preview Telegram Link Offer
+// (POST /v1/me/external-identities/telegram/offer/preview)
+func (_ Unimplemented) PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -885,6 +951,34 @@ func (siw *ServerInterfaceWrapper) StartTelegramLinkV1MeExternalIdentitiesTelegr
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPost(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost operation middleware
+func (siw *ServerInterfaceWrapper) AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost operation middleware
+func (siw *ServerInterfaceWrapper) PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1652,6 +1746,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/v1/me/external-identities/telegram/link", wrapper.StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPost)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/me/external-identities/telegram/offer/accept", wrapper.AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/me/external-identities/telegram/offer/preview", wrapper.PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/v1/me/external-identities/{identity_id}", wrapper.UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDelete)
 	})
 	r.Group(func(r chi.Router) {
@@ -1839,6 +1939,78 @@ func (response StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPost200JSONRes
 type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPost422JSONResponse HTTPValidationError
 
 func (response StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPost422JSONResponse) VisitStartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostRequestObject struct {
+	Body *AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostJSONRequestBody
+}
+
+type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponseObject interface {
+	VisitAcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponse(w http.ResponseWriter) error
+}
+
+type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost200JSONResponse ExternalIdentityResponse
+
+func (response AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost200JSONResponse) VisitAcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost422JSONResponse HTTPValidationError
+
+func (response AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost422JSONResponse) VisitAcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostRequestObject struct {
+	Body *PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostJSONRequestBody
+}
+
+type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponseObject interface {
+	VisitPreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponse(w http.ResponseWriter) error
+}
+
+type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost200JSONResponse TelegramLinkOfferResponse
+
+func (response PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost200JSONResponse) VisitPreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost422JSONResponse HTTPValidationError
+
+func (response PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost422JSONResponse) VisitPreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -2639,6 +2811,12 @@ type StrictServerInterface interface {
 	// StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPost Start Telegram Link
 	// (POST /v1/me/external-identities/telegram/link)
 	StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPost(ctx context.Context, request StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostRequestObject) (StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponseObject, error)
+	// AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost Accept Telegram Link Offer
+	// (POST /v1/me/external-identities/telegram/offer/accept)
+	AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost(ctx context.Context, request AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostRequestObject) (AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponseObject, error)
+	// PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost Preview Telegram Link Offer
+	// (POST /v1/me/external-identities/telegram/offer/preview)
+	PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost(ctx context.Context, request PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostRequestObject) (PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponseObject, error)
 	// UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDelete Unlink External Identity
 	// (DELETE /v1/me/external-identities/{identity_id})
 	UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDelete(ctx context.Context, request UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteRequestObject) (UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponseObject, error)
@@ -2856,6 +3034,68 @@ func (sh *strictHandler) StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPost
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponseObject); ok {
 		if err := validResponse.VisitStartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost operation middleware
+func (sh *strictHandler) AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost(w http.ResponseWriter, r *http.Request) {
+	var request AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostRequestObject
+
+	var body AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost(ctx, request.(AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponseObject); ok {
+		if err := validResponse.VisitAcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost operation middleware
+func (sh *strictHandler) PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost(w http.ResponseWriter, r *http.Request) {
+	var request PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostRequestObject
+
+	var body PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost(ctx, request.(PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponseObject); ok {
+		if err := validResponse.VisitPreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

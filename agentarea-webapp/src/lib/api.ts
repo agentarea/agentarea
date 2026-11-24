@@ -42,6 +42,7 @@ import type {
   ModelKind,
   ModelSpecCreate,
   ModelSpecUpdate,
+  OAuthConsentDecision,
   OpenApiConnectionCreate,
   OpenApiConnectionUpdate,
   PaginatedResponseSkillResponse,
@@ -866,6 +867,26 @@ export const discoverModels = async (configId: string) => {
   return { data, error };
 };
 
+export const startChatGptSignIn = async (configId: string) => {
+  const { data, error } =
+    await sdk.startChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost({
+      client: serverClient,
+      path: { config_id: configId },
+    });
+  return { data, error };
+};
+
+export const completeChatGptSignIn = async (configId: string) => {
+  const { data, error } =
+    await sdk.completeChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost(
+      {
+        client: serverClient,
+        path: { config_id: configId },
+      }
+    );
+  return { data, error };
+};
+
 export const discoverModelsPreview = async (body: {
   provider_key: string;
   api_key?: string | null;
@@ -1586,6 +1607,24 @@ export const deleteStreamSource = async (
       path: { stream_id: streamId, source_id: sourceId },
     });
   return { error };
+};
+
+// Consent for this API's authorization server: the signed-in user reads and
+// decides a client's request; the API picks the grant.
+export const getOAuthConsent = async (challenge: string) => {
+  const { data, error } = await sdk.oauthConsentV1OauthConsentGet({
+    client: serverClient,
+    query: { challenge },
+  });
+  return { data, error };
+};
+
+export const decideOAuthConsent = async (body: OAuthConsentDecision) => {
+  const { data, error } = await sdk.oauthConsentDecideV1OauthConsentPost({
+    client: serverClient,
+    body,
+  });
+  return { data, error };
 };
 
 // Listing workspaces deliberately lives outside this client — see
@@ -2704,6 +2743,23 @@ export const startTelegramLink = async (bot: string) => {
   return withStatus(result);
 };
 
+// A code a bot handed an unlinked Telegram sender: what it links, then linking it.
+export const previewTelegramLinkOffer = async (code: string) => {
+  const result =
+    await sdk.previewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPost(
+      { client: serverClient, body: { code } }
+    );
+  return withStatus(result);
+};
+
+export const acceptTelegramLinkOffer = async (code: string) => {
+  const result =
+    await sdk.acceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPost(
+      { client: serverClient, body: { code } }
+    );
+  return withStatus(result);
+};
+
 export const unlinkExternalIdentity = async (identityId: string) => {
   const { data, error } =
     await sdk.unlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDelete({
@@ -2715,5 +2771,22 @@ export const unlinkExternalIdentity = async (identityId: string) => {
 
 export const getAnalyticsConfig = async () => {
   const result = await sdk.getAnalyticsV1AnalyticsGet({ client: serverClient });
+  return withStatus(result);
+};
+
+export const listTaskDefinitions = async () => {
+  const result = await sdk.listTaskDefinitionsV1TaskDefinitionsGet({
+    client: serverClient,
+  });
+  return withStatus(result);
+};
+
+export const runTaskDefinition = async (definitionId: string) => {
+  const result =
+    await sdk.runTaskDefinitionV1TaskDefinitionsDefinitionIdRunPost({
+      client: serverClient,
+      path: { definition_id: definitionId },
+      body: {},
+    });
   return withStatus(result);
 };

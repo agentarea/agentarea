@@ -49,17 +49,19 @@ func (m *Module) Replies(p ReplyDeps) ([]lifecycle.Component, error) {
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	x, err := replies.New(replies.Deps{
-		Broker: m.d.Broker, Dedup: p.Dedup, Tasks: m.d.TaskOutcomes, Consumer: p.Consumer, Config: p.Config,
+		Broker: m.d.Broker, Dedup: p.Dedup, Tasks: m.d.TaskOutcomes, Turns: replies.Turns{Redis: p.Redis},
+		Consumer: p.Consumer, Config: p.Config,
 		Replies: func(ctx context.Context, slug string) (*domain.Reply, bool, error) {
 			e, ok, err := m.svc.SourceTypeEntry(ctx, slug)
 			return e.Reply, ok, err
 		},
 		Senders: map[string]replies.Sender{
-			"http":          replies.HTTPReply{Credentials: creds, Client: vendor},
-			"telegram_live": replies.TelegramLive{Credentials: creds, Redis: p.Redis, Client: vendor},
-			"smtp":          replies.Email{Credentials: creds, Dialer: m.d.Out.Dialer()},
-			"task_webhook":  replies.TaskWebhook{Secret: m.taskSecret, Client: member, Now: m.d.Now},
-			"a2a_webhook":   replies.A2APush{Secret: m.taskSecret, Client: public},
+			"http": replies.HTTPReply{Credentials: creds, Client: vendor},
+			"telegram_live": replies.TelegramLive{Credentials: creds, Redis: p.Redis, Client: vendor, Files: m.d.TaskFiles,
+				AppURL: m.d.AppURL, Slugs: m.d.Slugs},
+			"smtp":         replies.Email{Credentials: creds, Dialer: m.d.Out.Dialer()},
+			"task_webhook": replies.TaskWebhook{Secret: m.taskSecret, Client: member, Now: m.d.Now},
+			"a2a_webhook":  replies.A2APush{Secret: m.taskSecret, Client: public},
 		},
 		Now: m.d.Now, Log: m.log().With("component", "task reply delivery"),
 	})

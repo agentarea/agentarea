@@ -101,4 +101,4 @@ oauth2:
   pkce:
     enforced_for_public_clients: true
   allowed_top_level_claims:
-    - workspace_id
+    - workspace_ids

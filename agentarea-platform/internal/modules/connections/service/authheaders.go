@@ -50,8 +50,9 @@ func (s *Service) AuthHeaders(ctx context.Context, ws scope.Workspace, authConfi
 		release()
 		return nil, &domain.Invalid{Msg: fmt.Sprintf("Auth config %s not found in this workspace", authConfigID)}
 	}
+	var app *OAuthApp
 	if domain.IsManaged(a.Config) {
-		app, err := s.platformApp(a)
+		app, err = s.platformApp(a)
 		if err != nil {
 			release()
 			return nil, err
@@ -88,7 +89,15 @@ func (s *Service) AuthHeaders(ctx context.Context, ws scope.Workspace, authConfi
 		}
 		return map[string]string{"Authorization": "Bearer " + t}, nil
 	case "oauth2":
-		token, err := s.oauthToken(ctx, ws, a, creds, forceRefresh)
+		var token string
+		if b, bound := installationBindingOf(a.Config); bound && app != nil {
+			if !app.MintsInstallationTokens() {
+				return nil, &domain.Invalid{Msg: fmt.Sprintf("Auth config %s is bound to a GitHub App installation, but the platform OAuth app for %s no longer sets app_id, private_key and api_url.", a.ID, app.Issuer)}
+			}
+			token, err = s.installationToken(ctx, ws, a, creds, app, b, forceRefresh)
+		} else {
+			token, err = s.oauthToken(ctx, ws, a, creds, forceRefresh)
+		}
 		if err != nil {
 			return nil, err
 		}

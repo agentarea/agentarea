@@ -136,6 +136,7 @@ func providerSpec(r ProviderSpecByIDRow) (api.ProviderSpec, error) {
 		RequiresAPIKey: r.RequiresApiKey, BaseURL: fromText(r.BaseUrl), Transport: r.Transport, Auth: r.Auth,
 		ModelsPath: fromText(r.ModelsPath), ListShape: r.ListShape, ModelsQuery: fromText(r.ModelsQuery),
 		ReasoningParam: r.ReasoningParam, ReasoningEfforts: efforts, CacheBreakpoints: r.CacheBreakpoints,
+		MaxImageBytes: fromInt4(r.MaxImageBytes), MaxImageEdge: fromInt4(r.MaxImageEdge), PDFInput: r.PdfInput,
 	}, nil
 }
 
@@ -147,6 +148,7 @@ func modelSpec(r ModelSpecsByIDsRow) (api.ModelSpec, error) {
 		SupportsFunctionCalling: fromBool(r.SupportsFunctionCalling), SupportsVision: fromBool(r.SupportsVision),
 		SupportsReasoning: fromBool(r.SupportsReasoning), DefaultContextStrategy: fromText(r.DefaultContextStrategy),
 		IsActive: r.IsActive, CreatedAt: fromTimestamp(r.CreatedAt), UpdatedAt: fromTimestamp(r.UpdatedAt),
+		ResponsesLite: r.ResponsesLite,
 	}
 	var err error
 	prices := []struct {

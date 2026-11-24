@@ -2565,6 +2565,46 @@ export type CategoryFacet = {
 };
 
 /**
+ * ChatGPTDeviceCodeResponse
+ */
+export type ChatGptDeviceCodeResponse = {
+    /**
+     * Expires In
+     *
+     * Seconds the code stays valid
+     */
+    expires_in: number;
+    /**
+     * Interval
+     *
+     * Seconds to wait between checks
+     */
+    interval: number;
+    /**
+     * User Code
+     *
+     * The code the user enters at verification_uri
+     */
+    user_code: string;
+    /**
+     * Verification Uri
+     */
+    verification_uri: string;
+};
+
+/**
+ * ChatGPTSignInResponse
+ */
+export type ChatGptSignInResponse = {
+    /**
+     * Signed In
+     *
+     * False while the user has not entered the code yet
+     */
+    signed_in: boolean;
+};
+
+/**
  * CheckRequest
  */
 export type CheckRequest = {
@@ -3798,8 +3838,15 @@ export type ExistingBundleInstall = {
 
 /**
  * ExternalIdentityResponse
+ *
+ * A messenger account linked to the caller. username and display_name are how the
+ * messenger named the account when it was linked; null for links made before they were kept.
  */
 export type ExternalIdentityResponse = {
+    /**
+     * Display Name
+     */
+    display_name: string | null;
     /**
      * External Id
      */
@@ -3816,6 +3863,10 @@ export type ExternalIdentityResponse = {
      * Provider
      */
     provider: string;
+    /**
+     * Username
+     */
+    username: string | null;
 };
 
 /**
@@ -6047,6 +6098,134 @@ export type OAuthAuthorizeResponse = {
 };
 
 /**
+ * OAuthInstallation
+ */
+export type OAuthInstallation = {
+    /**
+     * Account
+     */
+    account: string;
+    /**
+     * Account Type
+     *
+     * Organization or User
+     */
+    account_type: string;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Repository Selection
+     *
+     * all or selected: what the installation itself reaches
+     */
+    repository_selection: string;
+};
+
+/**
+ * OAuthInstallationsResponse
+ */
+export type OAuthInstallationsResponse = {
+    /**
+     * Installations
+     */
+    installations: Array<OAuthInstallation>;
+};
+
+/**
+ * OAuthInstallationRepository
+ */
+export type OAuthInstallationRepository = {
+    /**
+     * Full Name
+     */
+    full_name: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Private
+     */
+    private: boolean;
+};
+
+/**
+ * OAuthInstallationRepositoriesResponse
+ */
+export type OAuthInstallationRepositoriesResponse = {
+    /**
+     * Repositories
+     */
+    repositories: Array<OAuthInstallationRepository>;
+};
+
+/**
+ * OAuthInstallationBinding
+ *
+ * The installation a connection's calls are limited to.
+ */
+export type OAuthInstallationBinding = {
+    /**
+     * Account
+     *
+     * Login of the account (organization or user) the installation belongs to
+     */
+    account: string;
+    /**
+     * Installation Id
+     */
+    installation_id: number;
+    /**
+     * Repositories
+     *
+     * Names of the repositories the token is limited to; null for every repository of the installation
+     */
+    repositories: Array<string> | null;
+};
+
+/**
+ * OAuthInstallationBindingRequest
+ */
+export type OAuthInstallationBindingRequest = {
+    /**
+     * Installation Id
+     *
+     * Installation to bind to; null returns the connection to the user's token
+     */
+    installation_id: number | null;
+    /**
+     * Instance Id
+     *
+     * MCP instance to bind
+     */
+    instance_id?: string | null;
+    /**
+     * Openapi Connection Id
+     *
+     * API connection to bind
+     */
+    openapi_connection_id?: string | null;
+    /**
+     * Repositories
+     *
+     * Repository names to limit the token to; null or empty for every repository of the installation
+     */
+    repositories?: Array<string> | null;
+};
+
+/**
+ * OAuthInstallationBindingResponse
+ */
+export type OAuthInstallationBindingResponse = {
+    /**
+     * Installation Binding
+     */
+    installation_binding: OAuthInstallationBinding | null;
+};
+
+/**
  * OAuthFinishRequest
  */
 export type OAuthFinishRequest = {
@@ -6174,6 +6353,24 @@ export type OAuthPreflightResponse = {
      * Detail
      */
     detail?: string;
+    /**
+     * Install Url
+     *
+     * Install page of the platform OAuth app the connection's credential was minted through, where the user picks what the app may reach (a GitHub App's repositories). Null for any other credential.
+     */
+    install_url?: string | null;
+    /**
+     * Installation Binding
+     *
+     * The GitHub App installation the connection's calls are limited to; null when it uses the user's token.
+     */
+    installation_binding?: OAuthInstallationBinding | null;
+    /**
+     * Installation Binding Available
+     *
+     * The connection signed in through a platform GitHub App with installation tokens, so it can be bound to one of its installations.
+     */
+    installation_binding_available?: boolean;
     /**
      * Issuer
      */
@@ -7576,6 +7773,12 @@ export type ProviderConfigUpdate = {
  */
 export type ProviderSpecResponse = {
     /**
+     * Auth
+     *
+     * How a configuration authenticates: bearer, api_key_header, none, or chatgpt (a ChatGPT sign-in instead of a key)
+     */
+    auth: string;
+    /**
      * Created At
      */
     created_at: string;
@@ -7625,6 +7828,12 @@ export type ProviderSpecResponse = {
  * ProviderSpecWithModelsResponse
  */
 export type ProviderSpecWithModelsResponse = {
+    /**
+     * Auth
+     *
+     * How a configuration authenticates: bearer, api_key_header, none, or chatgpt (a ChatGPT sign-in instead of a key)
+     */
+    auth: string;
     /**
      * Created At
      */
@@ -9778,6 +9987,12 @@ export type StreamResponse = {
      * Name
      */
     name: string;
+    /**
+     * Source Types
+     *
+     * The source types of the stream's sources, the first added first.
+     */
+    source_types: Array<string>;
 };
 
 /**
@@ -10540,6 +10755,54 @@ export type TelegramLinkRequest = {
      * The bot to open the link in
      */
     bot: string;
+};
+
+/**
+ * TelegramLinkOfferRequest
+ */
+export type TelegramLinkOfferRequest = {
+    /**
+     * Code
+     */
+    code: string;
+};
+
+/**
+ * TelegramLinkOfferResponse
+ *
+ * The Telegram account a bot offered a link for, as Telegram named it when the bot
+ * answered, and the workspace whose bot offered it; only a member of that workspace
+ * sees or accepts it. linked_to is who already holds it: "you", "another_account", or null.
+ */
+export type TelegramLinkOfferResponse = {
+    /**
+     * Bot
+     */
+    bot: string | null;
+    /**
+     * Display Name
+     */
+    display_name: string | null;
+    /**
+     * External Id
+     */
+    external_id: string;
+    /**
+     * Linked To
+     */
+    linked_to: 'you' | 'another_account' | null;
+    /**
+     * Provider
+     */
+    provider: string;
+    /**
+     * Username
+     */
+    username: string | null;
+    /**
+     * Workspace Name
+     */
+    workspace_name: string;
 };
 
 /**
@@ -12167,6 +12430,89 @@ export type AgentareaApiApiV1RegistriesSyncResponse = {
     updates_flagged: number;
 };
 
+/**
+ * OAuthConsentClient
+ */
+export type OAuthConsentClient = {
+    /**
+     * Client Id
+     */
+    client_id: string;
+    /**
+     * Client Name
+     */
+    client_name: string;
+    /**
+     * Client Uri
+     */
+    client_uri: string;
+    /**
+     * Logo Uri
+     */
+    logo_uri: string;
+    /**
+     * Redirect Uris
+     */
+    redirect_uris: Array<string>;
+};
+
+/**
+ * OAuthConsentResponse
+ *
+ * A consent request of this API's authorization server: the client, and what accepting grants it. `api` reaches the whole account and is granted only to first-party clients; `mcp` reaches MCP in one workspace the user picks.
+ */
+export type OAuthConsentResponse = {
+    client: OAuthConsentClient;
+    /**
+     * Redirect Uri
+     *
+     * Where accepting sends the authorization code; empty when the request names none and the client registered several.
+     */
+    redirect_uri: string;
+    /**
+     * First Party
+     */
+    first_party: boolean;
+    /**
+     * Access
+     */
+    access: 'mcp' | 'api';
+    /**
+     * Scopes
+     */
+    scopes: Array<string>;
+};
+
+/**
+ * OAuthConsentDecision
+ */
+export type OAuthConsentDecision = {
+    /**
+     * Challenge
+     */
+    challenge: string;
+    /**
+     * Action
+     */
+    action: 'accept' | 'reject';
+    /**
+     * Workspaces
+     *
+     * Slugs or ids of the workspaces an `mcp` grant reaches; at least one to accept one.
+     */
+    workspaces?: Array<string> | null;
+};
+
+/**
+ * OAuthConsentRedirect
+ */
+export type OAuthConsentRedirect = {
+    /**
+     * Redirect To
+     */
+    redirect_to: string;
+};
+
 export type HydraJwksProxyWellKnownJwksJsonGetData = {
     body?: never;
     path?: never;
@@ -12763,6 +13109,56 @@ export type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses = {
 };
 
 export type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponse = StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses[keyof StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses];
+
+export type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostData = {
+    body: TelegramLinkOfferRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/me/external-identities/telegram/offer/accept';
+};
+
+export type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostError = AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostErrors[keyof AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostErrors];
+
+export type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ExternalIdentityResponse;
+};
+
+export type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponse = AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponses[keyof AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponses];
+
+export type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostData = {
+    body: TelegramLinkOfferRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/me/external-identities/telegram/offer/preview';
+};
+
+export type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostError = PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostErrors[keyof PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostErrors];
+
+export type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: TelegramLinkOfferResponse;
+};
+
+export type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponse = PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponses[keyof PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponses];
 
 export type UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteData = {
     body?: never;
@@ -17747,6 +18143,112 @@ export type OauthPreflightV1OauthPreflightGetResponses = {
 
 export type OauthPreflightV1OauthPreflightGetResponse = OauthPreflightV1OauthPreflightGetResponses[keyof OauthPreflightV1OauthPreflightGetResponses];
 
+export type OauthInstallationsV1OauthInstallationsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Instance Id
+         *
+         * MCP instance whose sign-in to use
+         */
+        instance_id?: string | null;
+        /**
+         * Openapi Connection Id
+         *
+         * API connection whose sign-in to use
+         */
+        openapi_connection_id?: string | null;
+    };
+    url: '/v1/workspaces/{workspace}/oauth/installations';
+};
+
+export type OauthInstallationsV1OauthInstallationsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type OauthInstallationsV1OauthInstallationsGetError = OauthInstallationsV1OauthInstallationsGetErrors[keyof OauthInstallationsV1OauthInstallationsGetErrors];
+
+export type OauthInstallationsV1OauthInstallationsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthInstallationsResponse;
+};
+
+export type OauthInstallationsV1OauthInstallationsGetResponse = OauthInstallationsV1OauthInstallationsGetResponses[keyof OauthInstallationsV1OauthInstallationsGetResponses];
+
+export type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetData = {
+    body?: never;
+    path: {
+        /**
+         * Installation Id
+         */
+        installation_id: number;
+    };
+    query?: {
+        /**
+         * Instance Id
+         *
+         * MCP instance whose sign-in to use
+         */
+        instance_id?: string | null;
+        /**
+         * Openapi Connection Id
+         *
+         * API connection whose sign-in to use
+         */
+        openapi_connection_id?: string | null;
+    };
+    url: '/v1/workspaces/{workspace}/oauth/installations/{installation_id}/repositories';
+};
+
+export type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetError = OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetErrors[keyof OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetErrors];
+
+export type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthInstallationRepositoriesResponse;
+};
+
+export type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponse = OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponses[keyof OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponses];
+
+export type OauthBindInstallationV1OauthInstallationPutData = {
+    body: OAuthInstallationBindingRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/oauth/installation';
+};
+
+export type OauthBindInstallationV1OauthInstallationPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type OauthBindInstallationV1OauthInstallationPutError = OauthBindInstallationV1OauthInstallationPutErrors[keyof OauthBindInstallationV1OauthInstallationPutErrors];
+
+export type OauthBindInstallationV1OauthInstallationPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthInstallationBindingResponse;
+};
+
+export type OauthBindInstallationV1OauthInstallationPutResponse = OauthBindInstallationV1OauthInstallationPutResponses[keyof OauthBindInstallationV1OauthInstallationPutResponses];
+
 export type ListConnectionsV1OpenapiConnectionsGetData = {
     body?: never;
     path?: never;
@@ -19076,6 +19578,66 @@ export type DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses = {
 };
 
 export type DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponse = DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses[keyof DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses];
+
+export type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostData = {
+    body?: never;
+    path: {
+        /**
+         * Config Id
+         */
+        config_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in';
+};
+
+export type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostError = StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostErrors[keyof StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostErrors];
+
+export type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChatGptDeviceCodeResponse;
+};
+
+export type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponse = StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses[keyof StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses];
+
+export type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostData = {
+    body?: never;
+    path: {
+        /**
+         * Config Id
+         */
+        config_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in/complete';
+};
+
+export type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostError = CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostErrors[keyof CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostErrors];
+
+export type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChatGptSignInResponse;
+};
+
+export type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponse = CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponses[keyof CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponses];
 
 export type ListProviderSpecsV1ProviderSpecsGetData = {
     body?: never;
@@ -22729,3 +23291,58 @@ export type HandleWebhookWebhooksWebhookIdPostResponses = {
      */
     200: unknown;
 };
+
+export type OauthConsentV1OauthConsentGetData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Challenge
+         */
+        challenge: string;
+    };
+    url: '/v1/oauth/consent';
+};
+
+export type OauthConsentV1OauthConsentGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type OauthConsentV1OauthConsentGetError = OauthConsentV1OauthConsentGetErrors[keyof OauthConsentV1OauthConsentGetErrors];
+
+export type OauthConsentV1OauthConsentGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthConsentResponse;
+};
+
+export type OauthConsentV1OauthConsentGetResponse = OauthConsentV1OauthConsentGetResponses[keyof OauthConsentV1OauthConsentGetResponses];
+
+export type OauthConsentDecideV1OauthConsentPostData = {
+    body: OAuthConsentDecision;
+    path?: never;
+    query?: never;
+    url: '/v1/oauth/consent';
+};
+
+export type OauthConsentDecideV1OauthConsentPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type OauthConsentDecideV1OauthConsentPostError = OauthConsentDecideV1OauthConsentPostErrors[keyof OauthConsentDecideV1OauthConsentPostErrors];
+
+export type OauthConsentDecideV1OauthConsentPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthConsentRedirect;
+};
+
+export type OauthConsentDecideV1OauthConsentPostResponse = OauthConsentDecideV1OauthConsentPostResponses[keyof OauthConsentDecideV1OauthConsentPostResponses];

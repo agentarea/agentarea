@@ -375,6 +375,9 @@ func (s *Service) DiscoverPreview(ctx context.Context, providerKey string, apiKe
 	if err != nil {
 		return Discovery{}, err
 	}
+	if signsIn(p.Auth) {
+		return Discovery{}, noChatGPTDiscovery()
+	}
 	found := s.discover(ctx, providerKey, str(apiKey), str(endpointURL), p)
 	return s.persistDiscovered(ctx, providerKey, spec.ID, found)
 }
@@ -401,16 +404,23 @@ func (s *Service) DiscoverConfig(ctx context.Context, id uuid.UUID) (Discovery, 
 	if v.Spec == nil {
 		return Discovery{}, fmt.Errorf("provider spec %s of configuration %s is missing", v.ProviderSpecID, v.ID)
 	}
+	p, err := domainProfile(*v.Spec)
+	if err != nil {
+		return Discovery{}, err
+	}
+	if signsIn(p.Auth) {
+		return Discovery{}, noChatGPTDiscovery()
+	}
 	key := ""
 	if v.APIKey != nil && *v.APIKey != "" {
 		if key, err = s.readSecret(ctx, ws, userID, *v.APIKey); err != nil {
 			return Discovery{}, err
 		}
 	}
-	p, err := domainProfile(*v.Spec)
-	if err != nil {
-		return Discovery{}, err
-	}
 	found := s.discover(ctx, v.Spec.ProviderKey, key, str(v.EndpointURL), p)
 	return s.persistDiscovered(ctx, v.Spec.ProviderKey, v.Spec.ID, found)
+}
+
+func noChatGPTDiscovery() error {
+	return &HTTPError{Status: 400, Detail: "A ChatGPT subscription offers the models the catalog lists; it has no discovery."}
 }

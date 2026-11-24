@@ -59,7 +59,7 @@ func TestIssuerGivesNothingToAnInstanceThatDoesNotOptIn(t *testing.T) {
 
 func TestIssuerRefusesAnOptedInInstanceWithoutAManagerURL(t *testing.T) {
 	_, err := NewIssuer(testSecret(), "").Environment("inst-1", "ws-1", optedIn())
-	if err == nil || !strings.Contains(err.Error(), "AGENTAREA_MCP_MANAGER_URL") {
+	if err == nil || !strings.Contains(err.Error(), "AGENTAREA_MCP_STORAGE_URL") {
 		t.Fatalf("Environment() error = %v", err)
 	}
 }
@@ -86,7 +86,7 @@ func load(env map[string]string) (Config, error) {
 
 func TestLoadConfig(t *testing.T) {
 	for value, want := range map[string]ConditionalWrites{"": NativeConditionalWrites, "native": NativeConditionalWrites, "emulated": EmulatedConditionalWrites} {
-		cfg, err := load(map[string]string{"AGENTAREA_S3_CONDITIONAL_WRITES": value, "AGENTAREA_MCP_MANAGER_URL": "http://mcp:80/"})
+		cfg, err := load(map[string]string{"AGENTAREA_S3_CONDITIONAL_WRITES": value, "AGENTAREA_MCP_STORAGE_URL": "http://mcp:80/"})
 		if err != nil || cfg.Writes != want || cfg.ManagerURL != "http://mcp:80" {
 			t.Fatalf("%q: got %+v, %v; want %q", value, cfg, err, want)
 		}
@@ -94,7 +94,7 @@ func TestLoadConfig(t *testing.T) {
 	if _, err := load(map[string]string{"AGENTAREA_S3_CONDITIONAL_WRITES": "off"}); err == nil {
 		t.Fatal("an unknown conditional-writes mode was accepted")
 	}
-	if _, err := load(map[string]string{"AGENTAREA_MCP_MANAGER_URL": "mcp:80"}); err == nil {
+	if _, err := load(map[string]string{"AGENTAREA_MCP_STORAGE_URL": "mcp:80"}); err == nil {
 		t.Fatal("a relative manager URL was accepted")
 	}
 }

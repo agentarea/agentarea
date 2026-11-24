@@ -26,7 +26,7 @@ type fakeGate struct {
 	turnOnly   map[string]bool
 }
 
-func (g fakeGate) Optional(_ context.Context, token string, admitTurn bool) (*authn.Principal, error) {
+func (g fakeGate) Optional(_ context.Context, token string, _ authn.Surface, admitTurn bool) (*authn.Principal, error) {
 	p, ok := g.principals[token]
 	if !ok || (g.turnOnly[token] && !admitTurn) {
 		return nil, nil
