@@ -2,8 +2,6 @@ package service
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"path"
@@ -67,15 +65,14 @@ func (s *Surface) freeName(ctx context.Context, ws scope.Workspace, taskID strin
 		if !live {
 			return name, nil
 		}
-		data, _, err := s.d.Workspaces.Get(ctx, ws.ID(), taskID, "inputs/attachments/"+name)
+		digest, err := s.d.Workspaces.Digest(ctx, ws.ID(), taskID, "inputs/attachments/"+name)
 		if errors.Is(err, sandboxapi.ErrFileNotFound) {
 			return name, nil
 		}
 		if err != nil {
 			return "", err
 		}
-		sum := sha256.Sum256(data)
-		if hex.EncodeToString(sum[:]) == f.SHA256 {
+		if digest == f.SHA256 {
 			return name, nil
 		}
 	}

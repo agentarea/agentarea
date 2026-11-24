@@ -24,6 +24,9 @@ type TaskWorkspace interface {
 	Get(ctx context.Context, workspaceID, taskID, path string) ([]byte, string, error)
 	// Exists reports a live entry of the current manifest.
 	Exists(ctx context.Context, workspaceID, taskID, path string) (bool, error)
+	// Digest is the sha256 the current manifest records for a live entry;
+	// ErrFileNotFound when absent.
+	Digest(ctx context.Context, workspaceID, taskID, path string) (string, error)
 }
 
 // ErrWorkspaceInvalid is WorkspaceValidationError, ErrWorkspaceConflict

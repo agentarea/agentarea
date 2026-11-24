@@ -29,12 +29,12 @@ func (f *attachStore) AttachObject(_ context.Context, _, taskID, path string, sr
 	return sandboxapi.ManifestRef{}, nil
 }
 
-func (f *attachStore) Get(_ context.Context, _, taskID, path string) ([]byte, string, error) {
+func (f *attachStore) Digest(_ context.Context, _, taskID, path string) (string, error) {
 	data, ok := f.files[taskID][path]
 	if !ok {
-		return nil, "", sandboxapi.ErrFileNotFound
+		return "", sandboxapi.ErrFileNotFound
 	}
-	return data, "", nil
+	return digestOf(string(data)), nil
 }
 
 type signalled struct {
