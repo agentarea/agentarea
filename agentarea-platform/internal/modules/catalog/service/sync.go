@@ -28,7 +28,7 @@ import (
 
 // SyncFormat is part of the stored ETag: bump it when parsing or facets
 // change, so the next sync re-applies every source.
-const SyncFormat = "10"
+const SyncFormat = "11"
 
 // Sync budgets (service.py).
 const (
@@ -976,6 +976,13 @@ func modelRow(it domain.Item, spec map[string]any, provider uuid.UUID) (store.Mo
 	}
 	if v := spec["reasoning_efforts"]; v != nil {
 		m.ReasoningEfforts, _ = json.Marshal(v)
+	}
+	switch v := spec["responses_lite"].(type) {
+	case nil:
+	case bool:
+		m.ResponsesLite = v
+	default:
+		return m, entryErr("Model '%s' has responses_lite %v; expected a bool", name, v)
 	}
 	return m, nil
 }

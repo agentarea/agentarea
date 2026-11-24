@@ -450,6 +450,7 @@ type ModelRow struct {
 	InputCost, OutputCost, CachedCost, CacheCreationCost *money.Decimal
 	FunctionCalling, Vision, Reasoning, Active           bool
 	ReasoningEfforts                                     []byte
+	ResponsesLite                                        bool
 }
 
 func numeric(d *money.Decimal) pgtype.Numeric {
@@ -468,7 +469,7 @@ func (Sync) UpsertModel(ctx context.Context, s db.Session, m ModelRow, now time.
 		MaxOutputTokens: int4(m.MaxOutputTokens), InputCost: numeric(m.InputCost), OutputCost: numeric(m.OutputCost),
 		CachedInputCost: numeric(m.CachedCost), CacheCreationCost: numeric(m.CacheCreationCost),
 		SupportsFunctionCalling: boolean(m.FunctionCalling), SupportsVision: boolean(m.Vision),
-		SupportsReasoning: boolean(m.Reasoning), ReasoningEfforts: m.ReasoningEfforts, IsActive: m.Active, Now: naive(now),
+		SupportsReasoning: boolean(m.Reasoning), ReasoningEfforts: m.ReasoningEfforts, ResponsesLite: m.ResponsesLite, IsActive: m.Active, Now: naive(now),
 	})
 }
 

@@ -95,6 +95,8 @@ type Model struct {
 	BodyLimit int64
 	// AccountID is the ChatGPT account a ChatGPT sign-in calls as.
 	AccountID string
+	// ResponsesLite sends the tools as one additional_tools item (codex-rs use_responses_lite).
+	ResponsesLite bool
 }
 
 // Request is LLMRequest.
@@ -217,6 +219,9 @@ func (m Model) send(ctx context.Context, url string, payload any) (*idleBody, in
 		for k, v := range chatGPTHeaders(m.AccountID) {
 			req.Header.Set(k, v)
 		}
+	}
+	if m.ResponsesLite {
+		req.Header.Set("x-openai-internal-codex-responses-lite", "true")
 	}
 	var connected, wrote atomic.Bool
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{

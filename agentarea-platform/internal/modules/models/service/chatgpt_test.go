@@ -429,3 +429,26 @@ func TestNoPathSendsTheRefreshTokenToAModelHost(t *testing.T) {
 		t.Error("the access token was not sent")
 	}
 }
+
+func TestAResponsesLiteModelResolvesAndCallsTheLiteWay(t *testing.T) {
+	srv, seen := backend(t)
+	e := newChatGPTEnv(t, srv.URL)
+	e.store(t, "r0", time.Hour)
+	lite := e.model
+	lite.ResponsesLite = true
+	e.cat.models[lite.ID] = lite
+	in := domain.Instance{ID: uuid.NewString(), ProviderConfigID: e.config.ID, ModelSpecID: lite.ID.String(), Name: "lite",
+		IsActive: true, WorkspaceID: e.ws.ID(), Tags: []string{}}
+	e.st.instances[in.ID] = in
+	m, err := e.svc.Model(context.Background(), e.principal(), in.ID)
+	if err != nil || !m.ResponsesLite {
+		t.Fatalf("resolved %+v %v", m, err)
+	}
+	if _, err := e.svc.Call(context.Background(), e.principal(), api.Call{Model: m, Messages: []api.Message{{Role: "user", Content: "hi"}},
+		Tools: []api.ToolDefinition{{Name: "ls"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if !seen.carries("X-Openai-Internal-Codex-Responses-Lite: true") || !seen.carries(`"type":"additional_tools"`) {
+		t.Errorf("seen = %v", seen.seen)
+	}
+}

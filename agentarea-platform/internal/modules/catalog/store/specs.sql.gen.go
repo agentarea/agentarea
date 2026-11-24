@@ -316,7 +316,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs WHERE workspace_id = $1 AND provider_spec_id = $2 AND model_name = $3
 ORDER BY created_at DESC LIMIT 1
@@ -349,6 +349,7 @@ type ModelSpecByProviderAndNameRow struct {
 	SupportsVision          pgtype.Bool
 	SupportsReasoning       pgtype.Bool
 	ReasoningEfforts        []byte
+	ResponsesLite           bool
 	DefaultContextStrategy  pgtype.Text
 	IsActive                bool
 	CreatedAt               pgtype.Timestamp
@@ -380,6 +381,7 @@ func (q *Queries) ModelSpecByProviderAndName(ctx context.Context, arg ModelSpecB
 		&i.SupportsVision,
 		&i.SupportsReasoning,
 		&i.ReasoningEfforts,
+		&i.ResponsesLite,
 		&i.DefaultContextStrategy,
 		&i.IsActive,
 		&i.CreatedAt,
@@ -433,7 +435,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs WHERE id = ANY($1::uuid[])
 `
@@ -459,6 +461,7 @@ type ModelSpecsByIDsRow struct {
 	SupportsVision          pgtype.Bool
 	SupportsReasoning       pgtype.Bool
 	ReasoningEfforts        []byte
+	ResponsesLite           bool
 	DefaultContextStrategy  pgtype.Text
 	IsActive                bool
 	CreatedAt               pgtype.Timestamp
@@ -495,6 +498,7 @@ func (q *Queries) ModelSpecsByIDs(ctx context.Context, ids []uuid.UUID) ([]Model
 			&i.SupportsVision,
 			&i.SupportsReasoning,
 			&i.ReasoningEfforts,
+			&i.ResponsesLite,
 			&i.DefaultContextStrategy,
 			&i.IsActive,
 			&i.CreatedAt,
@@ -519,7 +523,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs WHERE provider_spec_id = ANY($1::uuid[]) AND workspace_id = $2
 ORDER BY created_at, id
@@ -551,6 +555,7 @@ type ModelSpecsOfProvidersRow struct {
 	SupportsVision          pgtype.Bool
 	SupportsReasoning       pgtype.Bool
 	ReasoningEfforts        []byte
+	ResponsesLite           bool
 	DefaultContextStrategy  pgtype.Text
 	IsActive                bool
 	CreatedAt               pgtype.Timestamp
@@ -589,6 +594,7 @@ func (q *Queries) ModelSpecsOfProviders(ctx context.Context, arg ModelSpecsOfPro
 			&i.SupportsVision,
 			&i.SupportsReasoning,
 			&i.ReasoningEfforts,
+			&i.ResponsesLite,
 			&i.DefaultContextStrategy,
 			&i.IsActive,
 			&i.CreatedAt,
@@ -745,7 +751,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs WHERE id = $1 AND workspace_id = $2
 `
@@ -776,6 +782,7 @@ type OwnModelSpecRow struct {
 	SupportsVision          pgtype.Bool
 	SupportsReasoning       pgtype.Bool
 	ReasoningEfforts        []byte
+	ResponsesLite           bool
 	DefaultContextStrategy  pgtype.Text
 	IsActive                bool
 	CreatedAt               pgtype.Timestamp
@@ -806,6 +813,7 @@ func (q *Queries) OwnModelSpec(ctx context.Context, arg OwnModelSpecParams) (Own
 		&i.SupportsVision,
 		&i.SupportsReasoning,
 		&i.ReasoningEfforts,
+		&i.ResponsesLite,
 		&i.DefaultContextStrategy,
 		&i.IsActive,
 		&i.CreatedAt,
@@ -823,7 +831,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs
 WHERE workspace_id = $1
@@ -861,6 +869,7 @@ type OwnModelSpecsRow struct {
 	SupportsVision          pgtype.Bool
 	SupportsReasoning       pgtype.Bool
 	ReasoningEfforts        []byte
+	ResponsesLite           bool
 	DefaultContextStrategy  pgtype.Text
 	IsActive                bool
 	CreatedAt               pgtype.Timestamp
@@ -903,6 +912,7 @@ func (q *Queries) OwnModelSpecs(ctx context.Context, arg OwnModelSpecsParams) ([
 			&i.SupportsVision,
 			&i.SupportsReasoning,
 			&i.ReasoningEfforts,
+			&i.ResponsesLite,
 			&i.DefaultContextStrategy,
 			&i.IsActive,
 			&i.CreatedAt,
@@ -1261,7 +1271,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs WHERE id = $1 AND (workspace_id = $2 OR workspace_id = 'platform')
 `
@@ -1292,6 +1302,7 @@ type UsableModelSpecRow struct {
 	SupportsVision          pgtype.Bool
 	SupportsReasoning       pgtype.Bool
 	ReasoningEfforts        []byte
+	ResponsesLite           bool
 	DefaultContextStrategy  pgtype.Text
 	IsActive                bool
 	CreatedAt               pgtype.Timestamp
@@ -1323,6 +1334,7 @@ func (q *Queries) UsableModelSpec(ctx context.Context, arg UsableModelSpecParams
 		&i.SupportsVision,
 		&i.SupportsReasoning,
 		&i.ReasoningEfforts,
+		&i.ResponsesLite,
 		&i.DefaultContextStrategy,
 		&i.IsActive,
 		&i.CreatedAt,
