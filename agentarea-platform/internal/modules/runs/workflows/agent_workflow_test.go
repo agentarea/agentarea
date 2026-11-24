@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -45,6 +47,11 @@ type fakeRun struct {
 	remoteGet func(RemoteTaskRequest) (ToolCallResult, error)
 	gets      []RemoteTaskRequest
 	cancels   []RemoteTaskRequest
+	resolves  []ResolveRunConfigRequest
+	// resolveErr, when set, is what resolving the config answers.
+	resolveErr error
+	// noTurnMark is a record activity from before follow-up turns were marked.
+	noTurnMark bool
 }
 
 func newFakeRun() *fakeRun {
@@ -76,7 +83,13 @@ func testConfig() api.RunConfig {
 	}
 }
 
-func (f *fakeRun) resolve(_ context.Context, _ ResolveRunConfigRequest) (api.RunConfig, error) {
+func (f *fakeRun) resolve(_ context.Context, req ResolveRunConfigRequest) (api.RunConfig, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.resolves = append(f.resolves, req)
+	if f.resolveErr != nil {
+		return api.RunConfig{}, f.resolveErr
+	}
 	return f.cfg, nil
 }
 
@@ -90,7 +103,7 @@ func (f *fakeRun) record(_ context.Context, req RecordRequest) (RecordResult, er
 	if req.Status != nil {
 		f.statuses[req.TaskID] = append(f.statuses[req.TaskID], *req.Status)
 	}
-	return RecordResult{Rows: len(req.Rows)}, nil
+	return RecordResult{Rows: len(req.Rows), TurnStart: req.TurnStart && !f.noTurnMark}, nil
 }
 
 func (f *fakeRun) callLLM(ctx context.Context, req LLMCallRequest) (LLMCallResult, error) {
@@ -654,4 +667,113 @@ func TestIterationLimitWaitsForAContinuationGrant(t *testing.T) {
 		t.Fatalf("result = %+v, grant = %+v", res, granted)
 	}
 	contains(t, f.events(parentTask), domain.EventTaskAwaitingContinuation, domain.EventTaskContinued, domain.EventTaskCompleted)
+}
+
+func sessionRequest() AgentRunRequest {
+	return request(map[string]any{"session": map[string]any{"continue": true, "idle_timeout_seconds": 3600}})
+}
+
+// redeploy changes the agent between turns: a new tool, a new prompt, then the owner's next message.
+func redeploy(f *fakeRun, env *testsuite.TestWorkflowEnvironment) {
+	f.mu.Lock()
+	f.cfg.Agent.Instruction = "Use the shell."
+	f.cfg.Tools = append(f.cfg.Tools, api.ToolDefinition{Name: "shell", Description: "Run a command", Parameters: map[string]any{"type": "object"}})
+	f.cfg.Bindings = map[string]api.ToolBinding{
+		"search": f.cfg.Bindings["search"],
+		"shell":  {Source: "mcp", MCP: &api.MCPBinding{InstanceID: "mcp-2", RawName: "shell"}},
+	}
+	f.mu.Unlock()
+	env.SignalWorkflow(api.SignalWorkflowCommand, api.WorkflowCommandSignal{Command: api.CommandQueueMessage, Payload: map[string]any{"message": "list the files"}})
+}
+
+func offeredTools(req LLMCallRequest) []string {
+	var names []string
+	for _, t := range req.Tools {
+		names = append(names, t.Name)
+	}
+	return names
+}
+
+func TestAFollowUpTurnRunsOnTheAgentsCurrentConfig(t *testing.T) {
+	f := newFakeRun()
+	var offered [][]string
+	replies := turns(
+		calls(complete("c1", "first answer")),
+		calls(ToolCall{ID: "c2", Name: "shell", Arguments: `{"command": "ls"}`}),
+		calls(complete("c3", "second answer")),
+	)
+	f.llm[parentTask] = func(req LLMCallRequest, attempt int32) (LLMCallResult, error) {
+		offered = append(offered, offeredTools(req))
+		return replies(req, attempt)
+	}
+	env := newEnv(t, f)
+	env.RegisterDelayedCallback(func() { redeploy(f, env) }, 10*time.Minute)
+	env.ExecuteWorkflow(AgentExecutionWorkflow, sessionRequest())
+
+	if res := result(t, env); !res.Success || res.FinalResponse != "second answer" {
+		t.Fatalf("result = %+v", res)
+	}
+	if len(offered) != 3 || slices.Contains(offered[0], "shell") || !slices.Contains(offered[1], "shell") {
+		t.Fatalf("tools offered per model call = %v", offered)
+	}
+	if len(f.toolCalls) != 1 || f.toolCalls[0].Binding.MCP == nil || f.toolCalls[0].Binding.MCP.InstanceID != "mcp-2" {
+		t.Fatalf("tool calls = %+v", f.toolCalls)
+	}
+	if len(f.resolves) != 2 || f.resolves[1].TaskID != parentTask || f.resolves[1].Policy.Budget == nil {
+		t.Fatalf("config resolved %d times: %+v", len(f.resolves), f.resolves)
+	}
+	sys := f.messages(parentTask, "system")
+	if len(sys) != 2 || strings.Contains(sys[0].Content, "Use the shell.") || !strings.Contains(sys[1].Content, "Use the shell.") {
+		t.Fatalf("system rows = %+v", sys)
+	}
+}
+
+func TestAFollowUpOfAnArchivedAgentFailsTheTurn(t *testing.T) {
+	f := newFakeRun()
+	f.llm[parentTask] = turns(calls(complete("c1", "first answer")))
+	env := newEnv(t, f)
+	env.RegisterDelayedCallback(func() {
+		f.mu.Lock()
+		f.resolveErr = temporal.NewNonRetryableApplicationError("agent agent-1 is archived", "AgentArchived", nil)
+		f.mu.Unlock()
+		env.SignalWorkflow(api.SignalWorkflowCommand, api.WorkflowCommandSignal{Command: api.CommandQueueMessage, Payload: map[string]any{"message": "again"}})
+	}, 10*time.Minute)
+	env.ExecuteWorkflow(AgentExecutionWorkflow, sessionRequest())
+
+	if err := env.GetWorkflowError(); err == nil || !strings.Contains(err.Error(), "archived") {
+		t.Fatalf("want the turn to fail on the archived agent, got %v", err)
+	}
+	if f.llmCalls[parentTask] != 1 {
+		t.Fatalf("model called %d times", f.llmCalls[parentTask])
+	}
+	failed := f.eventData(parentTask, domain.EventTaskFailed)
+	if len(failed) != 1 || !strings.Contains(fmt.Sprint(failed[0]["error_detail"], failed[0]["error"]), "archived") {
+		t.Fatalf("task.failed = %+v", failed)
+	}
+	if st := f.lastStatus(parentTask); st.Status != StatusFailed {
+		t.Fatalf("final status = %+v", st)
+	}
+}
+
+// A history recorded before turns were marked has no mark on its follow-up records, so it replays
+// on the config the run started with and schedules no activity the history lacks.
+func TestAnUnmarkedFollowUpKeepsTheStartingConfig(t *testing.T) {
+	f := newFakeRun()
+	f.noTurnMark = true
+	var offered [][]string
+	replies := turns(calls(complete("c1", "first answer")), calls(complete("c2", "second answer")))
+	f.llm[parentTask] = func(req LLMCallRequest, attempt int32) (LLMCallResult, error) {
+		offered = append(offered, offeredTools(req))
+		return replies(req, attempt)
+	}
+	env := newEnv(t, f)
+	env.RegisterDelayedCallback(func() { redeploy(f, env) }, 10*time.Minute)
+	env.ExecuteWorkflow(AgentExecutionWorkflow, sessionRequest())
+
+	if res := result(t, env); !res.Success || res.FinalResponse != "second answer" {
+		t.Fatalf("result = %+v", res)
+	}
+	if len(f.resolves) != 1 || len(offered) != 2 || slices.Contains(offered[1], "shell") {
+		t.Fatalf("resolved %d times, tools offered %v", len(f.resolves), offered)
+	}
 }

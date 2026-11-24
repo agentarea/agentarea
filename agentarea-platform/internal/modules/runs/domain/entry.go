@@ -140,7 +140,7 @@ func AnsweredMessages(entries []Entry) []Entry {
 	return valid
 }
 
-// ModelWindow is what the model sees: the first system prompt, the latest
+// ModelWindow is what the model sees: the latest system prompt, the latest
 // compaction, the answered messages after it. Event rows never enter.
 func ModelWindow(entries []Entry) []Entry {
 	var ordered []Entry
@@ -162,7 +162,6 @@ func ModelWindow(entries []Entry) []Entry {
 	for i := range ordered {
 		if ordered[i].Kind == KindMessage && ordered[i].Role == "system" {
 			system = &ordered[i]
-			break
 		}
 	}
 	for i := len(ordered) - 1; i >= 0; i-- {
@@ -177,7 +176,7 @@ func ModelWindow(entries []Entry) []Entry {
 	}
 	var rest []Entry
 	for _, e := range ordered {
-		if e.Kind == KindMessage && e.Seq > start && (system == nil || e.Seq != system.Seq) {
+		if e.Kind == KindMessage && e.Seq > start && e.Role != "system" {
 			rest = append(rest, e)
 		}
 	}

@@ -271,7 +271,13 @@ func (r *agentRun) awaitFollowUp(ctx workflow.Context) error {
 		return err
 	}
 	r.awaitingInput = false
-	return r.persistStatus(ctx, r.statusOnly("running"))
+	st := r.statusOnly("running")
+	st.RunStartedAt = r.runStartedAt
+	reload, err := r.recordTurn(ctx, &st, true)
+	if err != nil || !reload {
+		return err
+	}
+	return r.reloadConfig(ctx)
 }
 
 func (r *agentRun) resetForFollowUp() {
