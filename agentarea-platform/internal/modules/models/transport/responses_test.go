@@ -115,3 +115,85 @@ func TestResponsesWithAnAPIKeySendsTheLimits(t *testing.T) {
 		t.Errorf("body = %v", body)
 	}
 }
+
+func liteModel(t *testing.T, base string) Model {
+	t.Helper()
+	m := chatGPTModel(t, base)
+	m.ModelName, m.ResponsesLite = "gpt-6.2-sol", true
+	return m
+}
+
+var lsTool = []api.ToolDefinition{{Name: "ls", Description: "list", Parameters: map[string]any{"type": "object"}}}
+
+func TestAResponsesLiteRequestSendsItsToolsAsOneAdditionalToolsItem(t *testing.T) {
+	srv, c := serveRaw(t, 200, responsesSSE(`{"type":"response.completed","response":{}}`))
+	_, err := runStream(context.Background(), liteModel(t, srv.URL), Request{
+		Messages: []api.Message{{Role: "system", Content: "be brief"}, {Role: "user", Content: "list files"}},
+		Tools:    lsTool, ReasoningEffort: "high",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, header, body := c.snapshot()
+	if header.Get("X-Openai-Internal-Codex-Responses-Lite") != "true" {
+		t.Errorf("lite header = %q", header.Get("X-Openai-Internal-Codex-Responses-Lite"))
+	}
+	assertJSON(t, "body", body, `{
+		"model":"gpt-6.2-sol","store":false,"stream":true,"tool_choice":"auto","parallel_tool_calls":false,
+		"reasoning":{"effort":"high","summary":"auto","context":"all_turns"},
+		"input":[
+			{"type":"additional_tools","role":"developer","tools":[{"type":"namespace","name":"functions","description":"",
+				"tools":[{"type":"function","name":"ls","description":"list","parameters":{"type":"object"},"strict":false}]}]},
+			{"type":"message","role":"developer","content":[{"type":"input_text","text":"be brief"}]},
+			{"type":"message","role":"user","content":[{"type":"input_text","text":"list files"}]}
+		]}`)
+}
+
+func TestANonLiteRequestKeepsTopLevelToolsAndNoLiteHeader(t *testing.T) {
+	srv, c := serveRaw(t, 200, responsesSSE(`{"type":"response.completed","response":{}}`))
+	if _, err := runStream(context.Background(), chatGPTModel(t, srv.URL), Request{Messages: userHi(), Tools: lsTool}); err != nil {
+		t.Fatal(err)
+	}
+	_, _, header, body := c.snapshot()
+	if header.Get("X-Openai-Internal-Codex-Responses-Lite") != "" || body["reasoning"] != nil {
+		t.Errorf("lite header = %q, reasoning = %v", header.Get("X-Openai-Internal-Codex-Responses-Lite"), body["reasoning"])
+	}
+	assertJSON(t, "tools", body["tools"], `[{"type":"function","name":"ls","description":"list","parameters":{"type":"object"},"strict":false}]`)
+	if input, _ := body["input"].([]any); len(input) != 1 {
+		t.Errorf("input = %v", body["input"])
+	}
+}
+
+func TestAResponsesLiteToolCallRoundTrips(t *testing.T) {
+	srv, _ := serveRaw(t, 200, responsesSSE(
+		`{"type":"response.output_item.added","item":{"type":"function_call","id":"fc_1","namespace":"functions","call_id":"call_7","name":"ls","arguments":""}}`,
+		`{"type":"response.function_call_arguments.delta","item_id":"fc_1","delta":"{\"dir\":\".\"}"}`,
+		`{"type":"response.output_item.done","item":{"type":"function_call","id":"fc_1","namespace":"functions","call_id":"call_7","name":"ls","arguments":"{\"dir\":\".\"}"}}`,
+		`{"type":"response.completed","response":{"usage":{"input_tokens":3,"output_tokens":2}}}`,
+	))
+	m := liteModel(t, srv.URL)
+	o, err := runStream(context.Background(), m, Request{Messages: userHi(), Tools: lsTool})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := api.ToolCall{ID: "call_7", Name: "ls", Arguments: `{"dir":"."}`}
+	if len(o.toolCalls) != 1 || o.toolCalls[0] != want || o.finish != "tool_calls" {
+		t.Fatalf("tool calls = %+v finish = %q", o.toolCalls, o.finish)
+	}
+
+	next, c := serveRaw(t, 200, responsesSSE(`{"type":"response.completed","response":{}}`))
+	m = liteModel(t, next.URL)
+	history := append(userHi(),
+		api.Message{Role: "assistant", ToolCalls: o.toolCalls},
+		api.Message{Role: "tool", ToolCallID: "call_7", Content: "a.txt"})
+	if _, err := runStream(context.Background(), m, Request{Messages: history, Tools: lsTool}); err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, body := c.snapshot()
+	input, _ := body["input"].([]any)
+	if len(input) != 4 {
+		t.Fatalf("input = %v", body["input"])
+	}
+	assertJSON(t, "replayed call", input[2], `{"type":"function_call","namespace":"functions","call_id":"call_7","name":"ls","arguments":"{\"dir\":\".\"}"}`)
+	assertJSON(t, "tool result", input[3], `{"type":"function_call_output","call_id":"call_7","output":"a.txt"}`)
+}

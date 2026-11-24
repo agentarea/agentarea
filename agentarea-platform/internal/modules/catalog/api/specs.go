@@ -59,9 +59,11 @@ type ModelSpec struct {
 	OutputCostPerVideoPerSecond                                *money.Decimal
 	SupportsFunctionCalling, SupportsVision, SupportsReasoning *bool
 	ReasoningEfforts                                           []string
-	DefaultContextStrategy                                     *string
-	IsActive                                                   bool
-	CreatedAt, UpdatedAt                                       time.Time
+	// ResponsesLite: the model takes its tools the Responses Lite way (codex-rs use_responses_lite).
+	ResponsesLite          bool
+	DefaultContextStrategy *string
+	IsActive               bool
+	CreatedAt, UpdatedAt   time.Time
 }
 
 // DiscoveredSpec is one row of a discovery upsert; nil fields are left alone

@@ -148,6 +148,7 @@ func modelSpec(r ModelSpecsByIDsRow) (api.ModelSpec, error) {
 		SupportsFunctionCalling: fromBool(r.SupportsFunctionCalling), SupportsVision: fromBool(r.SupportsVision),
 		SupportsReasoning: fromBool(r.SupportsReasoning), DefaultContextStrategy: fromText(r.DefaultContextStrategy),
 		IsActive: r.IsActive, CreatedAt: fromTimestamp(r.CreatedAt), UpdatedAt: fromTimestamp(r.UpdatedAt),
+		ResponsesLite: r.ResponsesLite,
 	}
 	var err error
 	prices := []struct {

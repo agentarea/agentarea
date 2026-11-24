@@ -74,7 +74,7 @@ func (s *Service) Model(ctx context.Context, p api.Principal, modelID string) (a
 			Input: m.InputCostPerToken, Output: m.OutputCostPerToken,
 			CachedInput: m.CachedInputCostPerToken, CacheCreation: m.CacheCreationInputCostPerToken,
 		},
-		SupportsVision: m.SupportsVision != nil && *m.SupportsVision, ReasoningLevels: m.ReasoningEfforts,
+		SupportsVision: m.SupportsVision != nil && *m.SupportsVision, ReasoningLevels: m.ReasoningEfforts, ResponsesLite: m.ResponsesLite,
 		Provider: providerProfile(*v.Provider),
 	}
 	if v.Config.APIKey != nil {
@@ -241,7 +241,7 @@ func (s *Service) call(ctx context.Context, p api.Principal, call api.Call) (api
 		Prices: transport.Prices{
 			Input: m.Prices.Input, Output: m.Prices.Output, CachedInput: m.Prices.CachedInput, CacheCreation: m.Prices.CacheCreation,
 		},
-		Profile: profile, Transport: s.roundTripper(m.ManagedBy), AccountID: accountID,
+		Profile: profile, Transport: s.roundTripper(m.ManagedBy), AccountID: accountID, ResponsesLite: m.ResponsesLite,
 	}
 	return Complete(ctx, model, transport.Request{
 		Messages: call.Messages, Tools: call.Tools, Temperature: call.Temperature, MaxTokens: call.MaxTokens,

@@ -25,7 +25,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs WHERE id = ANY(@ids::uuid[]);
 
@@ -39,7 +39,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs WHERE id = @id AND (workspace_id = @workspace_id OR workspace_id = 'platform');
 
@@ -53,7 +53,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs WHERE workspace_id = @workspace_id AND provider_spec_id = @provider_spec_id AND model_name = @model_name
 ORDER BY created_at DESC LIMIT 1;
@@ -152,7 +152,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs WHERE provider_spec_id = ANY(@ids::uuid[]) AND workspace_id = @workspace_id
 ORDER BY created_at, id;
@@ -167,7 +167,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs
 WHERE workspace_id = @workspace_id
@@ -185,7 +185,7 @@ SELECT id, provider_spec_id, workspace_id, created_by, model_name, display_name,
     cache_creation_input_cost_per_token AS cache_creation_input_cost,
     output_cost_per_image AS image_cost,
     output_cost_per_video_per_second AS video_cost,
-    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts,
+    supports_function_calling, supports_vision, supports_reasoning, reasoning_efforts, responses_lite,
     default_context_strategy, is_active, created_at, updated_at
 FROM model_specs WHERE id = @id AND workspace_id = @workspace_id;
 

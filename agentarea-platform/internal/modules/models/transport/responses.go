@@ -8,9 +8,13 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/domain"
 )
 
+// responsesLiteNamespace is the namespace Responses Lite groups plain function tools under (codex-rs DEFAULT_FUNCTION_NAMESPACE).
+const responsesLiteNamespace = "functions"
+
 // responsesInput renders the conversation as Responses API input items; a
 // system message is a developer message, as the Codex CLI sends its instructions.
-func responsesInput(ms []api.Message) []any {
+// A Responses Lite call names its function calls' namespace.
+func responsesInput(ms []api.Message, lite bool) []any {
 	input := []any{}
 	for _, m := range ms {
 		switch m.Role {
@@ -25,7 +29,11 @@ func responsesInput(ms []api.Message) []any {
 					"content": []any{map[string]any{"type": "output_text", "text": m.Content}}})
 			}
 			for _, tc := range m.ToolCalls {
-				input = append(input, map[string]any{"type": "function_call", "call_id": tc.ID, "name": tc.Name, "arguments": tc.Arguments})
+				call := map[string]any{"type": "function_call", "call_id": tc.ID, "name": tc.Name, "arguments": tc.Arguments}
+				if lite {
+					call["namespace"] = responsesLiteNamespace
+				}
+				input = append(input, call)
 			}
 		default:
 			parts := []any{}
@@ -91,17 +99,34 @@ func (m Model) streamResponses(ctx context.Context, r Request, yield func(Delta)
 	if err != nil {
 		return err
 	}
-	payload := map[string]any{"model": m.ModelName, "input": responsesInput(r.Messages), "store": false, "stream": true}
+	input := responsesInput(r.Messages, m.ResponsesLite)
+	payload := map[string]any{"model": m.ModelName, "store": false, "stream": true}
 	if len(r.Tools) > 0 {
-		payload["tools"] = responsesTools(r.Tools)
+		if m.ResponsesLite {
+			// codex-rs core/src/client.rs build_responses_request: the tools
+			// lead the input as one additional_tools developer item, plain
+			// functions grouped in the "functions" namespace.
+			namespace := map[string]any{"type": "namespace", "name": responsesLiteNamespace, "description": "", "tools": responsesTools(r.Tools)}
+			input = append([]any{map[string]any{"type": "additional_tools", "role": "developer", "tools": []any{namespace}}}, input...)
+		} else {
+			payload["tools"] = responsesTools(r.Tools)
+		}
 		payload["tool_choice"] = "auto"
 		payload["parallel_tool_calls"] = false
 	}
+	payload["input"] = input
 	if r.ReasoningMaxTokens != nil && *r.ReasoningMaxTokens != 0 {
 		return &domain.ReasoningSettingError{Msg: "this provider takes a reasoning level (reasoning_effort), not a token budget"}
 	}
+	reasoning := map[string]any{}
 	if r.ReasoningEffort != "" {
-		payload["reasoning"] = map[string]any{"effort": r.ReasoningEffort, "summary": "auto"}
+		reasoning["effort"], reasoning["summary"] = r.ReasoningEffort, "auto"
+	}
+	if m.ResponsesLite {
+		reasoning["context"] = "all_turns"
+	}
+	if len(reasoning) > 0 {
+		payload["reasoning"] = reasoning
 	}
 	if m.Profile.Auth != domain.AuthChatGPT {
 		if r.Temperature != nil {
