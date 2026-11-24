@@ -16,6 +16,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
 	identityapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/identity/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/domain"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/replies"
 )
 
 // Telegram is the one identity a source admission links today.
@@ -302,7 +303,7 @@ func (b botOf) reply(ctx context.Context, sender telegramSender, text string) {
 	if token == "" {
 		return
 	}
-	resp, err := b.call(ctx, token, "sendMessage", map[string]any{"chat_id": sender.chatID, "text": text})
+	resp, err := b.call(ctx, token, "sendMessage", map[string]any{"chat_id": sender.chatID, "text": text, "link_preview_options": replies.NoLinkPreview()})
 	if err != nil {
 		b.s.log.WarnContext(ctx, "Could not reply to a Telegram sender", "error", err.Error())
 		return
