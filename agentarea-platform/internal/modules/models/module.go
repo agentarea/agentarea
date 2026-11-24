@@ -13,6 +13,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/handlers"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/service"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/store"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/transport"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/serve"
 )
 
@@ -46,7 +47,7 @@ type Module struct {
 func New(d Deps) *Module {
 	return &Module{d: d, svc: service.New(service.Deps{
 		DB: d.DB, Store: store.Store{}, VideoJobs: store.VideoJobs{}, Catalog: d.Catalog, Secrets: d.Secrets, Out: d.Out, Admin: d.Admin, Pricing: d.Pricing,
-		LocalHost: d.LocalHost, APIURL: d.APIURL, Now: d.Now,
+		LocalHost: d.LocalHost, APIURL: d.APIURL, Now: d.Now, ChatGPTIssuer: transport.ChatGPTIssuer,
 	})}
 }
 

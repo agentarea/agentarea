@@ -228,12 +228,20 @@ func (s *Service) call(ctx context.Context, p api.Principal, call api.Call) (api
 	if err != nil {
 		return api.Reply{}, err
 	}
+	accountID, endpoint := "", m.EndpointURL
+	if signsIn(profile.Auth) {
+		t, err := s.chatGPTAccess(ctx, ws, p.UserID, m.APIKeySecret, key)
+		if err != nil {
+			return api.Reply{}, err
+		}
+		key, accountID, endpoint = t.AccessToken, t.AccountID, ""
+	}
 	model := transport.Model{
-		ProviderType: m.ProviderType, ModelName: m.ModelName, APIKey: key, EndpointURL: s.localEndpoint(m.EndpointURL),
+		ProviderType: m.ProviderType, ModelName: m.ModelName, APIKey: key, EndpointURL: s.localEndpoint(endpoint),
 		Prices: transport.Prices{
 			Input: m.Prices.Input, Output: m.Prices.Output, CachedInput: m.Prices.CachedInput, CacheCreation: m.Prices.CacheCreation,
 		},
-		Profile: profile, Transport: s.roundTripper(m.ManagedBy),
+		Profile: profile, Transport: s.roundTripper(m.ManagedBy), AccountID: accountID,
 	}
 	return Complete(ctx, model, transport.Request{
 		Messages: call.Messages, Tools: call.Tools, Temperature: call.Temperature, MaxTokens: call.MaxTokens,

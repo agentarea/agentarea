@@ -2489,6 +2489,44 @@ export type CategoryFacet = {
     value: string;
 };
 /**
+ * ChatGPTDeviceCodeResponse
+ */
+export type ChatGptDeviceCodeResponse = {
+    /**
+     * Expires In
+     *
+     * Seconds the code stays valid
+     */
+    expires_in: number;
+    /**
+     * Interval
+     *
+     * Seconds to wait between checks
+     */
+    interval: number;
+    /**
+     * User Code
+     *
+     * The code the user enters at verification_uri
+     */
+    user_code: string;
+    /**
+     * Verification Uri
+     */
+    verification_uri: string;
+};
+/**
+ * ChatGPTSignInResponse
+ */
+export type ChatGptSignInResponse = {
+    /**
+     * Signed In
+     *
+     * False while the user has not entered the code yet
+     */
+    signed_in: boolean;
+};
+/**
  * CheckRequest
  */
 export type CheckRequest = {
@@ -7457,6 +7495,12 @@ export type ProviderConfigUpdate = {
  */
 export type ProviderSpecResponse = {
     /**
+     * Auth
+     *
+     * How a configuration authenticates: bearer, api_key_header, none, or chatgpt (a ChatGPT sign-in instead of a key)
+     */
+    auth: string;
+    /**
      * Created At
      */
     created_at: string;
@@ -7505,6 +7549,12 @@ export type ProviderSpecResponse = {
  * ProviderSpecWithModelsResponse
  */
 export type ProviderSpecWithModelsResponse = {
+    /**
+     * Auth
+     *
+     * How a configuration authenticates: bearer, api_key_header, none, or chatgpt (a ChatGPT sign-in instead of a key)
+     */
+    auth: string;
     /**
      * Created At
      */
@@ -17825,6 +17875,56 @@ export type DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses = {
     200: DiscoveryResponse;
 };
 export type DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponse = DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses[keyof DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses];
+export type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostData = {
+    body?: never;
+    path: {
+        /**
+         * Config Id
+         */
+        config_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in';
+};
+export type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostError = StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostErrors[keyof StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostErrors];
+export type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChatGptDeviceCodeResponse;
+};
+export type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponse = StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses[keyof StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses];
+export type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostData = {
+    body?: never;
+    path: {
+        /**
+         * Config Id
+         */
+        config_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in/complete';
+};
+export type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostError = CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostErrors[keyof CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostErrors];
+export type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChatGptSignInResponse;
+};
+export type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponse = CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponses[keyof CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponses];
 export type ListProviderSpecsV1ProviderSpecsGetData = {
     body?: never;
     path?: never;

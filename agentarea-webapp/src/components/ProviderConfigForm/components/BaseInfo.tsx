@@ -1,6 +1,13 @@
+import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { CheckCircle2, Key, Link, RefreshCw, Settings } from "lucide-react";
-import { Control, Controller, FieldErrors, FieldValues, Path } from "react-hook-form";
+import {
+  Control,
+  Controller,
+  FieldErrors,
+  FieldValues,
+  Path,
+} from "react-hook-form";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +24,8 @@ interface BaseInfoProps<T extends FieldValues = FieldValues> {
   discoveryError?: string | null;
   apiKeyValue?: string;
   endpointUrlValue?: string;
+  // Replaces the API key and endpoint fields for a provider that signs in instead.
+  credential?: ReactNode;
 }
 
 export default function BaseInfo<T extends FieldValues = FieldValues>({
@@ -30,6 +39,7 @@ export default function BaseInfo<T extends FieldValues = FieldValues>({
   discoveryError,
   apiKeyValue,
   endpointUrlValue,
+  credential,
 }: BaseInfoProps<T>) {
   const t = useTranslations("ProviderConfigForm");
   return (
@@ -54,95 +64,105 @@ export default function BaseInfo<T extends FieldValues = FieldValues>({
               )}
             />
             {errors.name && (
-              <p className="form-error">
-                {String(errors.name.message)}
-              </p>
+              <p className="form-error">{String(errors.name.message)}</p>
             )}
           </div>
 
-          <div className="space-y-2">
-            <FormLabel
-              htmlFor="api_key"
-              optional={Boolean(endpointUrlValue?.trim())}
-              icon={Key}
-            >
-              {t("apiKey")}
-            </FormLabel>
-            <Controller
-              name={"api_key" as Path<T>}
-              control={control}
-              render={({ field }) =>
-                isEdit ? (
-                  <ApiKeyEditInput field={field} />
-                ) : (
-                  <Input
-                    id="api_key"
-                    type="password"
-                    value={field.value}
-                    onChange={field.onChange}
-                    placeholder={t("apiKeyPlaceholder")}
-                  />
-                )
-              }
-            />
-            {errors.api_key && (
-              <p className="form-error">
-                {String(errors.api_key.message)}
-              </p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              {t("apiKeyOptionalForCustomEndpoint")}
-            </p>
-            {!isEdit && onDiscoverModels && (
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="outline"
-                  onClick={() => onDiscoverModels(apiKeyValue || "", endpointUrlValue || undefined)}
-                  disabled={(!apiKeyValue?.trim() && !endpointUrlValue?.trim()) || isDiscovering}
+          {credential ?? (
+            <>
+              <div className="space-y-2">
+                <FormLabel
+                  htmlFor="api_key"
+                  optional={Boolean(endpointUrlValue?.trim())}
+                  icon={Key}
                 >
-                  <RefreshCw
-                    className={`mr-1.5 ${isDiscovering ? "animate-spin" : ""}`}
-                  />
-                  {isDiscovering ? "Discovering..." : "Test & Discover"}
-                </Button>
-                {discoverySuccess && (
-                  <span className="flex items-center gap-1 text-xs text-green-600">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Models discovered
-                  </span>
+                  {t("apiKey")}
+                </FormLabel>
+                <Controller
+                  name={"api_key" as Path<T>}
+                  control={control}
+                  render={({ field }) =>
+                    isEdit ? (
+                      <ApiKeyEditInput field={field} />
+                    ) : (
+                      <Input
+                        id="api_key"
+                        type="password"
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder={t("apiKeyPlaceholder")}
+                      />
+                    )
+                  }
+                />
+                {errors.api_key && (
+                  <p className="form-error">{String(errors.api_key.message)}</p>
                 )}
-                {discoveryError && (
-                  <span className="text-xs text-red-500">{discoveryError}</span>
+                <p className="text-xs text-muted-foreground">
+                  {t("apiKeyOptionalForCustomEndpoint")}
+                </p>
+                {!isEdit && onDiscoverModels && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="outline"
+                      onClick={() =>
+                        onDiscoverModels(
+                          apiKeyValue || "",
+                          endpointUrlValue || undefined
+                        )
+                      }
+                      disabled={
+                        (!apiKeyValue?.trim() && !endpointUrlValue?.trim()) ||
+                        isDiscovering
+                      }
+                    >
+                      <RefreshCw
+                        className={`mr-1.5 ${isDiscovering ? "animate-spin" : ""}`}
+                      />
+                      {isDiscovering ? "Discovering..." : "Test & Discover"}
+                    </Button>
+                    {discoverySuccess && (
+                      <span className="flex items-center gap-1 text-xs text-green-600">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Models discovered
+                      </span>
+                    )}
+                    {discoveryError && (
+                      <span className="text-xs text-red-500">
+                        {discoveryError}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
 
-          <div className="space-y-2">
-            <FormLabel htmlFor="endpoint_url" icon={Link} optional>
-              {t("customEndpointUrl")}
-            </FormLabel>
-            <Controller
-              name={"endpoint_url" as Path<T>}
-              control={control}
-              render={({ field }) => (
-                <Input
-                  id="endpoint_url"
-                  type="url"
-                  value={field.value || ""}
-                  onChange={field.onChange}
-                  placeholder={t("customEndpointUrlPlaceholder")}
+              <div className="space-y-2">
+                <FormLabel htmlFor="endpoint_url" icon={Link} optional>
+                  {t("customEndpointUrl")}
+                </FormLabel>
+                <Controller
+                  name={"endpoint_url" as Path<T>}
+                  control={control}
+                  render={({ field }) => (
+                    <Input
+                      id="endpoint_url"
+                      type="url"
+                      value={field.value || ""}
+                      onChange={field.onChange}
+                      placeholder={t("customEndpointUrlPlaceholder")}
+                    />
+                  )}
                 />
-              )}
-            />
-            {errors.endpoint_url && (
-              <p className="form-error">
-                {String(errors.endpoint_url.message)}
-              </p>
-            )}
-          </div>
+                {errors.endpoint_url && (
+                  <p className="form-error">
+                    {String(errors.endpoint_url.message)}
+                  </p>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
     </>

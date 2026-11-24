@@ -49,3 +49,13 @@ WHERE workspace_id = @workspace_id OR managed_by = 'platform';
 
 -- name: UsedProviderSpecs :many
 SELECT DISTINCT provider_spec_id FROM provider_configs WHERE provider_spec_id = ANY(@ids::uuid[]);
+
+-- SetLockTimeout bounds how long the transaction waits for a row lock.
+-- name: SetLockTimeout :exec
+SET LOCAL lock_timeout = '5s';
+
+-- LockOwnConfig holds the workspace's own configuration row until the transaction ends.
+-- name: LockOwnConfig :one
+SELECT id FROM provider_configs
+WHERE id = @id AND workspace_id = @workspace_id
+FOR UPDATE;

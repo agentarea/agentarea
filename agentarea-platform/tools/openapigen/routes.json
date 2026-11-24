@@ -948,6 +948,14 @@
   "router_file": "provider_configs"
  },
  {
+  "operation_id": "start_chatgpt_sign_in_v1_provider_configs__config_id__chatgpt_sign_in_post",
+  "router_file": "provider_configs"
+ },
+ {
+  "operation_id": "complete_chatgpt_sign_in_v1_provider_configs__config_id__chatgpt_sign_in_complete_post",
+  "router_file": "provider_configs"
+ },
+ {
   "operation_id": "list_provider_specs_v1_provider_specs__get",
   "router_file": "provider_specs"
  },

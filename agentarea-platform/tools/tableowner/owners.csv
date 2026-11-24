@@ -48,6 +48,7 @@ project_agents,projects
 project_mcp_instances,projects
 project_skills,projects
 projects,projects
+provider_config_sign_ins,models
 provider_configs,models
 provider_specs,catalog
 registries,catalog

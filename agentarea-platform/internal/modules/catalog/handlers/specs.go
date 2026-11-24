@@ -56,6 +56,7 @@ func providerJSON(p service.ProviderView, withModels bool) wirejson.Object {
 		{Key: "icon_url", Value: orNil(p.IconURL)},
 		{Key: "is_builtin", Value: p.IsBuiltin},
 		{Key: "is_first_party", Value: p.IsFirstParty},
+		{Key: "auth", Value: p.Auth},
 		{Key: "created_at", Value: utcISO(p.CreatedAt)},
 		{Key: "updated_at", Value: utcISO(p.UpdatedAt)},
 	}

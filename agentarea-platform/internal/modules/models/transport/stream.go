@@ -93,6 +93,8 @@ type Model struct {
 	Deadline time.Duration
 	// BodyLimit bounds the streamed answer; zero is StreamBodyLimit.
 	BodyLimit int64
+	// AccountID is the ChatGPT account a ChatGPT sign-in calls as.
+	AccountID string
 }
 
 // Request is LLMRequest.
@@ -128,9 +130,12 @@ func (m Model) configuredCost(u Usage) money.Decimal { return ConfiguredCost(m.P
 // Stream calls the model and hands each delta to yield; an error from yield ends the call.
 func (m Model) Stream(ctx context.Context, r Request, yield func(Delta) error) error {
 	var err error
-	if m.Profile.Transport == domain.TransportAnthropic {
+	switch m.Profile.Transport {
+	case domain.TransportAnthropic:
 		err = m.streamAnthropic(ctx, r, yield)
-	} else {
+	case domain.TransportResponses:
+		err = m.streamResponses(ctx, r, yield)
+	default:
 		err = m.streamOpenAI(ctx, r, yield)
 	}
 	if err != nil && !errors.Is(err, context.Canceled) {
@@ -207,6 +212,11 @@ func (m Model) send(ctx context.Context, url string, payload any) (*idleBody, in
 	req.Header.Set("Content-Type", "application/json")
 	for k, v := range m.Profile.Headers(m.APIKey) {
 		req.Header.Set(k, v)
+	}
+	if m.Profile.Auth == domain.AuthChatGPT {
+		for k, v := range chatGPTHeaders(m.AccountID) {
+			req.Header.Set(k, v)
+		}
 	}
 	var connected, wrote atomic.Bool
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{

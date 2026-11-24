@@ -58,6 +58,9 @@ import type {
   CheckPermissionV1AccessControlCheckPostData,
   CheckPermissionV1AccessControlCheckPostErrors,
   CheckPermissionV1AccessControlCheckPostResponses,
+  CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostData,
+  CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostErrors,
+  CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponses,
   ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostData,
   ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostErrors,
   ConnectCatalogApiV1OpenapiConnectionsFromCatalogCatalogItemIdPostResponses,
@@ -890,6 +893,9 @@ import type {
   SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutData,
   SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutErrors,
   SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutResponses,
+  StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostData,
+  StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostErrors,
+  StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses,
   StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostData,
   StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostErrors,
   StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses,
@@ -8936,6 +8942,71 @@ export const discoverModelsV1ProviderConfigsConfigIdDiscoverPost = <
     url: "/v1/workspaces/{workspace}/provider-configs/{config_id}/discover",
     ...options,
   });
+
+/**
+ * Start Chatgpt Sign In
+ *
+ * Start the ChatGPT device-code sign-in of a ChatGPT subscription provider: the user opens verification_uri and enters user_code. The device code itself stays on the server, bound to the caller and this configuration.
+ */
+export const startChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses,
+  StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses,
+    StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in",
+    ...options,
+  });
+
+/**
+ * Complete Chatgpt Sign In
+ *
+ * Check the caller's pending ChatGPT sign-in on this configuration; once the user entered the code, the configuration keeps the sign-in and signed_in is true. Only the member who started it can finish it.
+ */
+export const completeChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponses,
+    CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).post<
+      CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponses,
+      CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in/complete",
+      ...options,
+    });
 
 /**
  * List Provider Specs
