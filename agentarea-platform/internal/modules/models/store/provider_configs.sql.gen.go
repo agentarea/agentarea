@@ -231,6 +231,25 @@ func (q *Queries) ListConfigIDs(ctx context.Context, arg ListConfigIDsParams) ([
 	return items, nil
 }
 
+const lockOwnConfig = `-- name: LockOwnConfig :one
+SELECT id FROM provider_configs
+WHERE id = $1 AND workspace_id = $2
+FOR UPDATE
+`
+
+type LockOwnConfigParams struct {
+	ID          uuid.UUID
+	WorkspaceID string
+}
+
+// LockOwnConfig holds the workspace's own configuration row until the transaction ends.
+func (q *Queries) LockOwnConfig(ctx context.Context, arg LockOwnConfigParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, lockOwnConfig, arg.ID, arg.WorkspaceID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const ownsConfig = `-- name: OwnsConfig :one
 SELECT count(*) FROM provider_configs WHERE id = $1 AND workspace_id = $2
 `
@@ -270,6 +289,16 @@ func (q *Queries) ProviderSpecIDsWithVisibleConfigs(ctx context.Context, workspa
 		return nil, err
 	}
 	return items, nil
+}
+
+const setLockTimeout = `-- name: SetLockTimeout :exec
+SET LOCAL lock_timeout = '5s'
+`
+
+// SetLockTimeout bounds how long the transaction waits for a row lock.
+func (q *Queries) SetLockTimeout(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, setLockTimeout)
+	return err
 }
 
 const updateConfig = `-- name: UpdateConfig :execrows

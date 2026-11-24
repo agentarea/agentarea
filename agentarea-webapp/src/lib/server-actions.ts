@@ -59,6 +59,7 @@ import {
   bulkCreateModelInstances,
   cancelAgentTask,
   checkMCPServerInstanceConfiguration,
+  completeChatGptSignIn,
   connectCatalogApi,
   continueAgentTask,
   createAgentWallet,
@@ -137,6 +138,7 @@ import {
   sendTaskCommand,
   setMCPServerInstanceSharing,
   setOpenAPIConnectionSharing,
+  startChatGptSignIn,
   submitTaskInput,
   updateAgentWallet,
   updateAllSkills,
@@ -415,6 +417,14 @@ export async function upsertModelSpecAction(spec: ModelSpecCreate) {
 
 export async function discoverModelsAction(configId: string) {
   return await discoverModels(configId);
+}
+
+export async function startChatGptSignInAction(configId: string) {
+  return await startChatGptSignIn(configId);
+}
+
+export async function completeChatGptSignInAction(configId: string) {
+  return await completeChatGptSignIn(configId);
 }
 
 export async function discoverModelsPreviewAction(body: {

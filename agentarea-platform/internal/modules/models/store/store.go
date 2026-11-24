@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
@@ -88,6 +89,28 @@ func (Store) Config(ctx context.Context, s db.Session, id uuid.UUID) (domain.Con
 		return domain.Config{}, false, err
 	}
 	return config(r), true, nil
+}
+
+// ErrLockBusy is a configuration row another transaction held past the lock timeout.
+var ErrLockBusy = errors.New("the provider configuration is locked by another call")
+
+// LockConfig holds the workspace's own configuration row for the rest of the
+// session's transaction, waiting at most the lock timeout (ErrLockBusy);
+// false when it has no such row.
+func (Store) LockConfig(ctx context.Context, s db.Session, id uuid.UUID) (bool, error) {
+	q := New(s.Q())
+	if err := q.SetLockTimeout(ctx); err != nil {
+		return false, err
+	}
+	_, err := q.LockOwnConfig(ctx, LockOwnConfigParams{ID: id, WorkspaceID: s.Workspace().ID()})
+	var pg *pgconn.PgError
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return false, nil
+	case errors.As(err, &pg) && pg.Code == "55P03":
+		return false, ErrLockBusy
+	}
+	return err == nil, err
 }
 
 // ConfigFilter narrows a configuration listing.

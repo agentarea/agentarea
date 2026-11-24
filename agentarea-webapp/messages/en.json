@@ -1591,6 +1591,18 @@
       "unexpectedError": "An unexpected error occurred",
       "modelInstancesPartial": "Saved the configuration, but {failed} of {total} model instances could not be created: {sample}",
       "saveFailed": "Couldn't save the provider configuration"
+    },
+    "chatgpt": {
+      "title": "ChatGPT sign-in",
+      "description": "This provider runs on your ChatGPT plan, no API key. Sign in with the ChatGPT account whose plan should pay.",
+      "afterCreate": "Create the configuration, then sign in with ChatGPT on its page.",
+      "signIn": "Sign in with ChatGPT",
+      "signInAgain": "Sign in again",
+      "openAndEnter": "Open {url} in a browser, sign in to ChatGPT and enter this code:",
+      "entered": "I've entered the code",
+      "pending": "Not confirmed yet. Finish in the ChatGPT tab, then press the button again.",
+      "signedIn": "Signed in. Agents on this provider now run on the ChatGPT plan.",
+      "failed": "The ChatGPT sign-in failed"
     }
   },
   "Chat": {

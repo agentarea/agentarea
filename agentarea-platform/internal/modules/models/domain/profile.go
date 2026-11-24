@@ -10,10 +10,15 @@ import (
 const (
 	TransportOpenAI    = "openai"
 	TransportAnthropic = "anthropic"
+	// TransportResponses is the OpenAI Responses API (/responses).
+	TransportResponses = "responses"
 
 	AuthBearer       = "bearer"
 	AuthAPIKeyHeader = "api_key_header"
 	AuthNone         = "none"
+	// AuthChatGPT is a ChatGPT sign-in: the configuration holds the token set
+	// of a device-code login, and calls carry its access token and account.
+	AuthChatGPT = "chatgpt"
 
 	ReasoningEffortParam = "reasoning_effort"
 	ReasoningObjectParam = "reasoning"
@@ -58,10 +63,10 @@ func NewProfile(p Profile) (Profile, error) {
 		return v, nil
 	}
 	var err error
-	if p.Transport, err = pick(p.Transport, TransportOpenAI, TransportOpenAI, TransportAnthropic); err != nil {
+	if p.Transport, err = pick(p.Transport, TransportOpenAI, TransportOpenAI, TransportAnthropic, TransportResponses); err != nil {
 		return Profile{}, err
 	}
-	if p.Auth, err = pick(p.Auth, AuthBearer, AuthBearer, AuthAPIKeyHeader, AuthNone); err != nil {
+	if p.Auth, err = pick(p.Auth, AuthBearer, AuthBearer, AuthAPIKeyHeader, AuthNone, AuthChatGPT); err != nil {
 		return Profile{}, err
 	}
 	if p.ListShape, err = pick(p.ListShape, ListDataID, ListDataID, ListModelsName); err != nil {

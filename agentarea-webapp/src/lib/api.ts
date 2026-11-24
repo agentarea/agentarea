@@ -867,6 +867,26 @@ export const discoverModels = async (configId: string) => {
   return { data, error };
 };
 
+export const startChatGptSignIn = async (configId: string) => {
+  const { data, error } =
+    await sdk.startChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost({
+      client: serverClient,
+      path: { config_id: configId },
+    });
+  return { data, error };
+};
+
+export const completeChatGptSignIn = async (configId: string) => {
+  const { data, error } =
+    await sdk.completeChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost(
+      {
+        client: serverClient,
+        path: { config_id: configId },
+      }
+    );
+  return { data, error };
+};
+
 export const discoverModelsPreview = async (body: {
   provider_key: string;
   api_key?: string | null;
@@ -2762,12 +2782,11 @@ export const listTaskDefinitions = async () => {
 };
 
 export const runTaskDefinition = async (definitionId: string) => {
-  const result = await sdk.runTaskDefinitionV1TaskDefinitionsDefinitionIdRunPost(
-    {
+  const result =
+    await sdk.runTaskDefinitionV1TaskDefinitionsDefinitionIdRunPost({
       client: serverClient,
       path: { definition_id: definitionId },
       body: {},
-    }
-  );
+    });
   return withStatus(result);
 };

@@ -1,7 +1,7 @@
 version: "2"
 sql:
   - engine: postgresql
-    schema: ../../../schema/migrations/00001_baseline.sql
+    schema: ../../../schema/migrations
     queries: queries
     gen:
       go:

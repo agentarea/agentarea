@@ -161,10 +161,14 @@ func (s *Service) CreateConfig(ctx context.Context, n domain.NewConfig) (ConfigV
 	if err != nil {
 		return ConfigView{}, err
 	}
-	if _, ok, err := s.d.Catalog.ProviderSpec(ctx, ws, specID); err != nil {
+	spec, ok, err := s.d.Catalog.ProviderSpec(ctx, ws, specID)
+	if err != nil {
 		return ConfigView{}, err
 	} else if !ok {
 		return ConfigView{}, &NotFoundError{Detail: "Provider spec not found"}
+	}
+	if n.EndpointURL != nil && *n.EndpointURL != "" && signsIn(spec.Auth) {
+		return ConfigView{}, noEndpointForChatGPT()
 	}
 	if n.EndpointURL != nil && *n.EndpointURL != "" {
 		if err := s.assertEndpointAllowed(ctx, *n.EndpointURL); err != nil {
@@ -232,6 +236,17 @@ func (s *Service) UpdateConfig(ctx context.Context, id uuid.UUID, p domain.Confi
 		}
 		if p.EndpointURL.Set {
 			if p.EndpointURL.Value != nil && *p.EndpointURL.Value != "" {
+				specID, err := uuid.Parse(c.ProviderSpecID)
+				if err != nil {
+					return err
+				}
+				spec, ok, err := s.d.Catalog.ProviderSpec(ctx, ws, specID)
+				if err != nil {
+					return err
+				}
+				if ok && signsIn(spec.Auth) {
+					return noEndpointForChatGPT()
+				}
 				if err := s.assertEndpointAllowed(ctx, *p.EndpointURL.Value); err != nil {
 					return err
 				}

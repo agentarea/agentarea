@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -44,10 +50,15 @@ import {
   SelectedModel,
 } from "@/types/provider";
 import BaseInfo from "./components/BaseInfo";
+import ChatGptSignIn from "./components/ChatGptSignIn";
 import ModelInstances from "./components/ModelInstances";
 
-const providerConfigCreateFormSchema = zProviderConfigCreate.superRefine(
-  (data, ctx) => {
+// A ChatGPT subscription provider signs in with ChatGPT instead of a key.
+const CHATGPT_AUTH = "chatgpt";
+
+const providerConfigCreateFormSchema = (signsIn: (specId: string) => boolean) =>
+  zProviderConfigCreate.superRefine((data, ctx) => {
+    if (signsIn(data.provider_spec_id)) return;
     if (!data.endpoint_url?.trim() && !data.api_key?.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -56,8 +67,7 @@ const providerConfigCreateFormSchema = zProviderConfigCreate.superRefine(
           "API key is required (or set a custom endpoint URL for keyless proxies)",
       });
     }
-  }
-);
+  });
 
 type ProviderConfigFormData = z.input<typeof zProviderConfigCreate>;
 
@@ -97,6 +107,8 @@ export default function ProviderConfigForm({
   const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
   const [providerSpecs, setProviderSpecs] = useState<ProviderSpec[]>([]);
   const [modelSpecs, setModelSpecs] = useState<ModelSpec[]>([]);
+  const specsRef = useRef<ProviderSpec[]>([]);
+  specsRef.current = providerSpecs;
 
   // Load provider specs and model specs.
   // Pass { silent: true } to refresh without unmounting the form (used after
@@ -192,7 +204,13 @@ export default function ProviderConfigForm({
     reset,
   } = useForm<ProviderConfigFormData>({
     resolver: zodResolver(
-      isEdit ? zProviderConfigCreate : providerConfigCreateFormSchema
+      isEdit
+        ? zProviderConfigCreate
+        : providerConfigCreateFormSchema(
+            (id) =>
+              specsRef.current.find((spec) => spec.id === id)?.auth ===
+              CHATGPT_AUTH
+          )
     ),
     defaultValues: {
       provider_spec_id:
@@ -213,6 +231,7 @@ export default function ProviderConfigForm({
   const selectedProvider = providerSpecs?.find?.(
     (spec) => spec.id === watchedProviderId
   );
+  const signsInWithChatGpt = selectedProvider?.auth === CHATGPT_AUTH;
 
   // Memoize availableModels to prevent infinite re-renders
   const availableModels = useMemo(() => {
@@ -493,13 +512,15 @@ export default function ProviderConfigForm({
         }
       }
 
-      // Redirect if autoRedirect is enabled and no custom handler
+      // Redirect if autoRedirect is enabled and no custom handler. A new
+      // ChatGPT subscription config lands on its page to sign in there.
       if (autoRedirect && !onAfterSubmit) {
+        const query = instancesError
+          ? `?${new URLSearchParams({ [INSTANCES_ERROR_PARAM]: instancesError })}`
+          : "";
         router.push(
-          instancesError
-            ? `/models/edit/${providerConfig.id}?${new URLSearchParams({
-                [INSTANCES_ERROR_PARAM]: instancesError,
-              })}`
+          instancesError || (signsInWithChatGpt && !isEdit)
+            ? `/models/edit/${providerConfig.id}${query}`
             : "/models"
         );
         return;
@@ -603,6 +624,13 @@ export default function ProviderConfigForm({
             errors={errors}
             providerSpecId={watchedProviderId}
             isEdit={isEdit}
+            credential={
+              signsInWithChatGpt ? (
+                <ChatGptSignIn
+                  configId={isEdit && initialData ? initialData.id : undefined}
+                />
+              ) : undefined
+            }
           />
 
           {selectedProvider && showModelSelection && (
