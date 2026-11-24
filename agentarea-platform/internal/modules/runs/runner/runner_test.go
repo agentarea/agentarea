@@ -490,7 +490,7 @@ func TestASubtasksOutputsGoToTheTaskItWorksOn(t *testing.T) {
 }
 
 func TestARunnersAgentIsToldWhatOfItsOutputsComesBack(t *testing.T) {
-	if !strings.Contains(outputsLimitNote, "up to 50 MB each") || !strings.Contains(outputsLimitNote, "ffmpeg") {
+	if fileMaxBytes != 50<<20 || !strings.Contains(outputsLimitNote, "up to 50 MB each") || !strings.Contains(outputsLimitNote, "ffmpeg") {
 		t.Fatalf("note = %q", outputsLimitNote)
 	}
 	if withOutputsLimit("") != outputsLimitNote || withOutputsLimit("Be brief.") != "Be brief.\n\n"+outputsLimitNote {

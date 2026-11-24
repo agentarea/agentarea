@@ -296,9 +296,10 @@ func clipped(output string) string {
 	return string([]rune(output)[:toolOutputMax]) + clippedNote
 }
 
-// outputsLimitNote tells the CLI's agent what of its outputs/ comes back, so it can shrink a file.
-var outputsLimitNote = fmt.Sprintf("Files you write under outputs/ come back to the task only up to %d MB each; "+
-	"a larger one does not. Compress or transcode it to fit (for a video, re-encode it with ffmpeg) before you finish.", fileMaxBytes>>20)
+// outputsLimitNote tells the CLI's agent what of its outputs/ comes back (fileMaxBytes), so it can
+// shrink a file.
+const outputsLimitNote = "Files you write under outputs/ come back to the task only up to 50 MB each; " +
+	"a larger one does not. Compress or transcode it to fit (for a video, re-encode it with ffmpeg) before you finish."
 
 // withOutputsLimit is the agent's instructions with what of its outputs/ comes back.
 func withOutputsLimit(instructions string) string {
