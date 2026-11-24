@@ -157,6 +157,9 @@ func TestADeletedMCPSourceIsUnsubscribed(t *testing.T) {
 		got.req.Delivery.URL != "https://api.example.com/webhooks/wm" {
 		t.Fatalf("unsubscribe = %+v", got)
 	}
+	if len(src.unregistered) != 1 {
+		t.Fatalf("the registered URL was not cleared: %v", src.unregistered)
+	}
 }
 
 func TestAFailedMCPSubscriptionIsRecorded(t *testing.T) {

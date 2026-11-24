@@ -905,9 +905,23 @@ func parseSourceTypes(m map[string]any) ([]Entry, error) {
 			tags = []any{entry["delivery"]}
 		}
 		items = append(items, Entry{ExternalID: slug, Name: truthyStr(entry["name"], slug), Description: cut500(entry["description"]),
-			Version: strp(truthyStr(entry["version"], "1.0.0")), Spec: entry, Tags: tags, Rank: rankFields(entry)})
+			Version: strp(truthyStr(entry["version"], "1.0.0")), Spec: sourceTypeSpec(entry), Tags: tags, Rank: rankFields(entry)})
 	}
 	return items, nil
+}
+
+// sourceTypeSpec is the entry without the keys the item's columns hold: streams
+// reads the spec as a SourceTypeEntry, which refuses keys it does not know.
+func sourceTypeSpec(entry map[string]any) map[string]any {
+	spec := make(map[string]any, len(entry))
+	for k, v := range entry {
+		switch k {
+		case "version", "recommendation_rank", "agentarea:recommendation_rank":
+		default:
+			spec[k] = v
+		}
+	}
+	return spec
 }
 
 func parseBundles(m map[string]any) []Entry {

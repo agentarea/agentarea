@@ -25,3 +25,6 @@ WHERE id = @id;
 
 -- name: SourceRegistered :exec
 UPDATE stream_sources SET registered_url = NULLIF(@url::text, ''), poll_error = NULL WHERE id = @id;
+
+-- name: SourceUnregistered :exec
+UPDATE stream_sources SET registered_url = NULL WHERE id = @id AND registered_url IS NOT NULL;
