@@ -213,6 +213,8 @@ type PlatformCall struct {
 	WorkspaceID string
 	UserID      string
 	AgentID     string
+	// TaskID is the run that calls: its files are what a tool such as send_message reads.
+	TaskID string
 	// Namespace is agentarea/<toolset>; Method the toolset's method.
 	Namespace string
 	Method    string

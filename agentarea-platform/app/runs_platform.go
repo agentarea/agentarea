@@ -25,7 +25,7 @@ func (c platformCaller) Call(ctx context.Context, inv runsservice.ToolInvocation
 	}
 	r, err := c.t.Call(ctx, connectionsapi.PlatformCall{
 		WorkspaceID: inv.Principal.WorkspaceID, UserID: inv.Principal.UserID, AgentID: inv.Principal.AgentID,
-		Namespace: b.Namespace, Method: b.Method, Args: args,
+		TaskID: inv.TaskID, Namespace: b.Namespace, Method: b.Method, Args: args,
 	})
 	if errors.Is(err, connectionsapi.ErrUnknownPlatformTool) {
 		return unknown, nil

@@ -18,6 +18,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/netguard"
 	governanceapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/governance/api"
 	identityapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/identity/api"
+	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/handlers"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/router"
@@ -84,6 +85,10 @@ type Deps struct {
 	Subscriber events.GroupSubscriber
 	// Processors runs processor code in the sandbox; nil retries every processor reaction.
 	Processors service.ProcessorRunner
+	// TaskFiles reads a task's files: what a messenger reply and send_message send as files.
+	TaskFiles sandboxapi.TaskFiles
+	// Slugs is the workspaces' URL slugs: a messenger reply links the task's page under AppURL.
+	Slugs identityapi.WorkspaceSlugs
 	// Audit writes the trigger audit rows.
 	Audit governanceapi.AuditWriter
 	// APIURL and WebhookURL are the public bases of webhook URLs.
@@ -116,7 +121,7 @@ func New(d Deps) *Module {
 		TaskReads: d.TaskReads, FiringTasks: d.FiringTasks, TaskOutcomes: d.TaskOutcomes, Executor: d.Executor,
 		APIURL: d.APIURL, WebhookURL: d.WebhookURL, Settings: d.Settings, Now: d.Now, Log: d.Log,
 		Out: d.Out, MCPEventSources: d.MCPEventSources, ModelKinds: d.ModelKinds, Models: d.Models, AgentModels: d.AgentModels,
-		Links: d.Links, Owners: d.Owners, Notices: d.Notices, AppURL: d.AppURL,
+		Links: d.Links, Owners: d.Owners, Notices: d.Notices, AppURL: d.AppURL, TaskFiles: d.TaskFiles,
 	})}
 }
 

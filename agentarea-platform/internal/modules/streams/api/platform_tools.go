@@ -165,6 +165,10 @@ type MessageSend struct {
 	// Stream is a stream name or id; "" for the only messenger stream that reaches the member.
 	Stream string
 	Text   string
+	// Files are paths of the run's files sent after the text, each as a file of its own;
+	// TaskID is the run whose files they are.
+	Files  []string
+	TaskID string
 }
 
 // MessageSent is messages_send_message's output.
@@ -175,6 +179,7 @@ type MessageSent struct {
 	Messenger string    `json:"messenger"`
 	MessageID *int64    `json:"message_id"`
 	Truncated bool      `json:"truncated"`
+	Files     []string  `json:"files,omitempty"`
 }
 
 // PlatformMessages is what the platform messages toolset calls: a message a run starts with a

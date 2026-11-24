@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"strings"
@@ -14,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/netguard"
+	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/service"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/store/storetest"
@@ -29,6 +32,19 @@ type telegramServer struct {
 func (s *telegramServer) RoundTrip(r *http.Request) (*http.Response, error) {
 	answer, status := `{"ok":true,"result":true}`, http.StatusOK
 	token, method, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/bot"), "/")
+	if ct, params, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct == "multipart/form-data" {
+		form, err := multipart.NewReader(r.Body, params["boundary"]).ReadForm(1 << 20)
+		if err != nil {
+			return nil, err
+		}
+		for field, fhs := range form.File {
+			f, _ := fhs[0].Open()
+			body, _ := io.ReadAll(f)
+			s.mu.Lock()
+			s.sent = append(s.sent, fmt.Sprintf("%s %s %s %s=%s:%s", token, method, form.Value["chat_id"][0], field, fhs[0].Filename, body))
+			s.mu.Unlock()
+		}
+	}
 	if r.URL.Host == "api.telegram.org" && method == "sendMessage" {
 		var m struct {
 			ChatID any    `json:"chat_id"`
@@ -66,6 +82,24 @@ type messaging struct {
 	tg    *telegramServer
 	links *links
 	graph *storetest.Graph
+	files *sandboxFiles
+}
+
+// sandboxFiles is a run's live files by task and path.
+type sandboxFiles struct {
+	sandboxapi.TaskFiles
+	files map[string]string
+}
+
+func (f *sandboxFiles) ReadFile(_ context.Context, _, taskID, p string, _ bool) (sandboxapi.Download, error) {
+	if p == "outputs/huge.mp4" {
+		return sandboxapi.Download{Body: io.NopCloser(strings.NewReader("")), Header: http.Header{"Content-Length": {"60000000"}}}, nil
+	}
+	data, ok := f.files[taskID+"/"+p]
+	if !ok {
+		return sandboxapi.Download{}, &sandboxapi.TaskFileError{Status: http.StatusNotFound, Detail: "File not found"}
+	}
+	return sandboxapi.Download{Body: io.NopCloser(strings.NewReader(data)), Header: http.Header{"Content-Type": {"application/octet-stream"}}}, nil
 }
 
 func newMessaging(t *testing.T) messaging {
@@ -75,12 +109,12 @@ func newMessaging(t *testing.T) messaging {
 	ctx, _ := storetest.Caller(context.Background(), ws, "owner")
 	secrets := storetest.NewSecrets()
 	m := messaging{ctx: ctx, tg: &telegramServer{}, graph: &storetest.Graph{AllowAll: true},
-		links: &links{accounts: map[string][]string{}}}
+		links: &links{accounts: map[string][]string{}}, files: &sandboxFiles{files: map[string]string{}}}
 	m.svc = service.New(service.Deps{
 		DB: storetest.DB{Pool: pool}, Graph: m.graph, SourceTypes: storetest.ShippedSourceTypes(t),
 		Secrets: secrets, SecretCatalog: secrets.Catalog, Blob: &storetest.Blob{}, Bus: &storetest.Bus{},
 		Dedup: &storetest.Dedup{}, Quota: &storetest.Quota{}, Out: m.tg, APIURL: "https://api.example.test",
-		Links: m.links, Owners: owners{owner: "owner"}, Notices: &storetest.Dedup{},
+		Links: m.links, Owners: owners{owner: "owner"}, Notices: &storetest.Dedup{}, TaskFiles: m.files,
 	})
 	return m
 }
@@ -204,5 +238,47 @@ func TestAStreamTheCallerCannotReadIsNotUsed(t *testing.T) {
 	}
 	if sent := m.tg.take(); len(sent) != 0 {
 		t.Fatalf("telegram got %q", sent)
+	}
+}
+
+func TestAMessageCarriesTheRunsFiles(t *testing.T) {
+	m := newMessaging(t)
+	m.stream(t, "tg-"+uuid.NewString()[:8], "telegram", "TOKEN")
+	m.links.accounts["owner"] = []string{"42"}
+	m.files.files["task-1/outputs/clip.subtitled.mp4"] = "movie"
+	m.files.files["task-1/outputs/clip.srt"] = "1"
+	in := api.MessageSend{UserID: "owner", Recipient: "owner@example.com", Text: "Your video", TaskID: "task-1",
+		Files: []string{"/workspace/outputs/clip.subtitled.mp4", "./outputs/clip.srt"}}
+
+	out, err := m.svc.SendMessage(m.ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Files) != 2 || out.Files[0] != "outputs/clip.subtitled.mp4" {
+		t.Fatalf("sent %+v", out)
+	}
+	sent := m.tg.take()
+	if len(sent) != 3 || sent[0] != "TOKEN 42 Your video" || sent[1] != "TOKEN sendVideo 42 video=clip.subtitled.mp4:movie" ||
+		sent[2] != "TOKEN sendDocument 42 document=clip.srt:1" {
+		t.Fatalf("telegram got %q", sent)
+	}
+
+	for _, c := range []struct {
+		files      []string
+		task, want string
+	}{
+		{[]string{"../etc/passwd"}, "task-1", "is not a path in the run's workspace"},
+		{[]string{"outputs/missing.mp4"}, "task-1", "outputs/missing.mp4 cannot be read: File not found"},
+		{[]string{"outputs/clip.srt"}, "", "files can be sent only from a run"},
+		{[]string{"outputs/huge.mp4"}, "task-1", "outputs/huge.mp4 is larger than the 50 MB a Telegram bot sends"},
+		{[]string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"}, "task-1", "at most 10 files go in one message, 11 given"},
+	} {
+		in.Files, in.TaskID = c.files, c.task
+		if _, err := m.svc.SendMessage(m.ctx, in); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Fatalf("%v: %v", c.files, err)
+		}
+	}
+	if sent := m.tg.take(); len(sent) != 0 {
+		t.Fatalf("a refused file sent %q", sent)
 	}
 }

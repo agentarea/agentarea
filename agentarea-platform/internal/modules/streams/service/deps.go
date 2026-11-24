@@ -18,6 +18,7 @@ import (
 	governanceapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/governance/api"
 	identityapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/identity/api"
 	runsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/api"
+	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/api"
 )
 
@@ -119,6 +120,8 @@ type Deps struct {
 	Fetchers map[string]AttachmentFetcher
 	// MCPEventSources reads an MCP server instance for an MCP Events source; nil refuses those sources.
 	MCPEventSources MCPEventSources
+	// TaskFiles reads a run's files: the files send_message sends. Nil refuses files.
+	TaskFiles sandboxapi.TaskFiles
 	// Links is identity's messenger link handshake; with Owners and Notices it admits the senders
 	// of a source type with an admission. Nil refuses every such event.
 	Links identityapi.MessengerLinks
