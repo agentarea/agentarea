@@ -62,5 +62,6 @@ func (r *agentRun) continuedState(runID string) ContinuedState {
 		PendingEvents: r.pending, BudgetWarningSent: r.budgetWarningSent, Currency: r.currency,
 		ContextWarningSent: r.contextWarningSent, CompactionCount: r.compactionCount, ConversationSeeded: true,
 		MonthlyCapMessage: r.monthlyCapMessage, RecordedTurnCalls: r.recordedTurnCalls, RecordedTurnAnswered: r.recordedTurnAnswered,
+		ModelOverride: r.modelOverride,
 	}
 }

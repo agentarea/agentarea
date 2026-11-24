@@ -75,6 +75,7 @@ func (r *agentRun) changeModel(ctx workflow.Context, payload map[string]any) err
 	previousID := r.cfg.Agent.ModelID
 	r.cfg.Model = p.Model
 	r.cfg.Agent.ModelID = p.Model.ModelID
+	r.modelOverride = p.Model.ModelID
 	if p.Model.ContextWindow != r.contextWindow {
 		r.contextWindow = p.Model.ContextWindow
 		r.contextUsage = 0

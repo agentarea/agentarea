@@ -151,6 +151,7 @@ type ContinuedState struct {
 	MonthlyCapMessage    string                         `json:"monthly_cap_message"`
 	RecordedTurnCalls    []ToolCall                     `json:"recorded_turn_calls"`
 	RecordedTurnAnswered []string                       `json:"recorded_turn_answered"`
+	ModelOverride        string                         `json:"model_override,omitempty"`
 }
 
 // Execution statuses of the run.

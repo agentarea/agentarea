@@ -327,11 +327,16 @@ type RecordRequest struct {
 	Rows        []LogRow    `json:"rows"`
 	Live        []Event     `json:"live"`
 	Status      *TaskStatus `json:"status"`
+	// TurnStart marks the record that starts a follow-up turn.
+	TurnStart bool `json:"turn_start,omitempty"`
 }
 
 type RecordResult struct {
 	Rows   int `json:"rows"`
 	Events int `json:"events"`
+	// TurnStart echoes the request's. The workflow reloads the agent's config only on a result
+	// that carries it, so a history recorded before the reload existed replays without one.
+	TurnStart bool `json:"turn_start,omitempty"`
 }
 
 type UpdateGovernanceSnapshotRequest struct {
