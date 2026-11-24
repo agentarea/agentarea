@@ -8,6 +8,7 @@ import (
 	"mime"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -105,15 +106,19 @@ func (s *Service) SendMessage(ctx context.Context, in api.MessageSend) (api.Mess
 	}
 	var sent []string
 	for _, f := range files {
-		err := tg.File(ctx, creds["bot_token"], accounts[0], path.Base(f.path), f.contentType, f.data)
+		data, ct, err := s.readRunFile(ctx, c, in.TaskID, f)
+		if err != nil {
+			return api.MessageSent{}, err
+		}
+		err = tg.File(ctx, creds["bot_token"], accounts[0], path.Base(f), ct, data)
 		var refusedFile *replies.FileRefused
 		if errors.As(err, &refusedFile) {
-			return api.MessageSent{}, domain.Refused(fmt.Sprintf("Telegram refused %s: %s (sent before it: %v)", f.path, refusedFile.Description, sent))
+			return api.MessageSent{}, domain.Refused(fmt.Sprintf("Telegram refused %s: %s (sent before it: %v)", f, refusedFile.Description, sent))
 		}
 		if err != nil {
 			return api.MessageSent{}, err
 		}
-		sent = append(sent, f.path)
+		sent = append(sent, f)
 	}
 	s.log.InfoContext(ctx, "Message sent to a workspace member", "stream_id", bot.stream.ID, "source_id", bot.source.ID,
 		"user_id", in.UserID, "agent_id", agentOf(c))
@@ -125,53 +130,77 @@ func (s *Service) SendMessage(ctx context.Context, in api.MessageSend) (api.Mess
 	return out, nil
 }
 
-type runFile struct {
-	path, contentType string
-	data              []byte
-}
+// MaxMessageFiles is how many files one send_message sends.
+const MaxMessageFiles = 10
 
-// runFiles reads the files in.Files names from the run's sandbox before anything is sent: a
-// path outside it, a file that is not there or one over Telegram's upload limit is refused.
-func (s *Service) runFiles(ctx context.Context, c authn.Caller, in api.MessageSend) ([]runFile, error) {
+// runFiles checks the files in.Files names before anything is sent: each a path in the run's
+// workspace, there, and not over Telegram's upload limit when its size is known. It answers
+// the normalized paths; nothing is read yet.
+func (s *Service) runFiles(ctx context.Context, c authn.Caller, in api.MessageSend) ([]string, error) {
 	if len(in.Files) == 0 {
 		return nil, nil
 	}
 	if in.TaskID == "" {
 		return nil, domain.Refused("files can be sent only from a run: they are paths of the run's own files")
 	}
+	if len(in.Files) > MaxMessageFiles {
+		return nil, domain.Refused(fmt.Sprintf("at most %d files go in one message, %d given", MaxMessageFiles, len(in.Files)))
+	}
 	if s.d.TaskFiles == nil {
 		return nil, ErrMessagesUnwired
 	}
-	out := make([]runFile, 0, len(in.Files))
+	out := make([]string, 0, len(in.Files))
 	for _, raw := range in.Files {
 		p := strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(raw), "/workspace/"), "./")
 		clean := path.Clean(p)
 		if p == "" || strings.HasPrefix(clean, "/") || clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
 			return nil, domain.Refused(fmt.Sprintf("%s is not a path in the run's workspace, such as outputs/report.pdf", domain.PyRepr(raw)))
 		}
-		d, err := s.d.TaskFiles.ReadFile(ctx, c.Workspace.ID(), in.TaskID, clean, false)
-		var tfe *sandboxapi.TaskFileError
-		if errors.As(err, &tfe) && tfe.Status < 500 {
-			return nil, domain.Refused(fmt.Sprintf("%s cannot be read: %s", clean, tfe.Detail))
-		}
+		d, err := s.openRunFile(ctx, c, in.TaskID, clean)
 		if err != nil {
 			return nil, err
 		}
-		data, err := io.ReadAll(io.LimitReader(d.Body, replies.TelegramUploadLimit+1))
 		_ = d.Body.Close()
-		if err != nil {
-			return nil, err
+		if n, err := strconv.ParseInt(d.Header.Get("Content-Length"), 10, 64); err == nil && n > replies.TelegramUploadLimit {
+			return nil, tooLargeToSend(clean)
 		}
-		if len(data) > replies.TelegramUploadLimit {
-			return nil, domain.Refused(fmt.Sprintf("%s is larger than the 50 MB a Telegram bot sends", clean))
-		}
-		ct := d.Header.Get("Content-Type")
-		if ct == "" || strings.HasPrefix(ct, "application/octet-stream") {
-			ct = mime.TypeByExtension(strings.ToLower(path.Ext(clean)))
-		}
-		out = append(out, runFile{path: clean, contentType: ct, data: data})
+		out = append(out, clean)
 	}
 	return out, nil
+}
+
+func tooLargeToSend(p string) error {
+	return domain.Refused(fmt.Sprintf("%s is larger than the 50 MB a Telegram bot sends", p))
+}
+
+func (s *Service) openRunFile(ctx context.Context, c authn.Caller, taskID, p string) (sandboxapi.Download, error) {
+	d, err := s.d.TaskFiles.ReadFile(ctx, c.Workspace.ID(), taskID, p, false)
+	var tfe *sandboxapi.TaskFileError
+	if errors.As(err, &tfe) && tfe.Status < 500 {
+		return d, domain.Refused(fmt.Sprintf("%s cannot be read: %s", p, tfe.Detail))
+	}
+	return d, err
+}
+
+// readRunFile reads one checked file, at most Telegram's upload limit, and its type.
+func (s *Service) readRunFile(ctx context.Context, c authn.Caller, taskID, p string) ([]byte, string, error) {
+	d, err := s.openRunFile(ctx, c, taskID, p)
+	if err != nil {
+		return nil, "", err
+	}
+	defer func() { _ = d.Body.Close() }()
+	data, err := io.ReadAll(io.LimitReader(d.Body, replies.TelegramUploadLimit+1))
+	if err != nil {
+		return nil, "", err
+	}
+	if len(data) > replies.TelegramUploadLimit {
+		return nil, "", tooLargeToSend(p)
+	}
+	ct := d.Header.Get("Content-Type")
+	if ct == "" || strings.HasPrefix(ct, "application/octet-stream") {
+		ct = mime.TypeByExtension(strings.ToLower(path.Ext(p)))
+	}
+	return data, ct, nil
 }
 
 func agentOf(c authn.Caller) string {

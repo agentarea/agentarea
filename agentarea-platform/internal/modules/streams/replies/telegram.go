@@ -49,6 +49,8 @@ type TelegramLive struct {
 	// turn links the task's page. Either empty leaves the link out.
 	AppURL string
 	Slugs  identityapi.WorkspaceSlugs
+	// LockTTL is how long the per-task lock lives between renewals; zero is 30s.
+	LockTTL time.Duration
 }
 
 func (t TelegramLive) Format(s Send) (string, error) { return formatInMarkup(s) }
@@ -215,10 +217,12 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 		}
 	}
 	if end {
-		if err := t.Redis.Set(ctx, telegramDonePrefix+s.Event.TaskID, endMark(s.Event.Timestamp), telegramStateTTL).Err(); err != nil {
+		mark, cancel := context.WithTimeout(outer, 10*time.Second)
+		defer cancel()
+		if err := t.Redis.Set(mark, telegramDonePrefix+s.Event.TaskID, endMark(s.Event.Timestamp), telegramStateTTL).Err(); err != nil {
 			return err
 		}
-		return t.Redis.Del(ctx, key).Err()
+		return t.Redis.Del(mark, key).Err()
 	}
 	return nil
 }
@@ -282,23 +286,48 @@ func (t TelegramLive) Message(ctx context.Context, token string, chatID any, tex
 	return answer.Result.MessageID, cut != text, nil
 }
 
+const renewScript = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("pexpire", KEYS[1], ARGV[2]) end return 0`
+
 const unlockScript = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) end return 0`
 
 // lock serializes the sends of one task across replicas, so a retried progress update cannot
-// interleave with the end; the returned func frees it.
+// interleave with the end. It is renewed while held, however long the files of a turn take to
+// upload; the returned func frees it.
 func (t TelegramLive) lock(ctx context.Context, taskID string) (func(), error) {
 	key, token := telegramLockPrefix+taskID, uuid.NewString()
+	ttl := t.LockTTL
+	if ttl <= 0 {
+		ttl = telegramLockTTL
+	}
 	wait, cancel := context.WithTimeout(ctx, telegramLockWait)
 	defer cancel()
 	for {
-		ok, err := t.Redis.SetNX(wait, key, token, telegramLockTTL).Result()
+		ok, err := t.Redis.SetNX(wait, key, token, ttl).Result()
 		if err != nil {
 			return nil, fmt.Errorf("live message lock of task %s: %w", taskID, err)
 		}
 		if ok {
+			stop, stopped := make(chan struct{}), make(chan struct{})
+			go func() {
+				defer close(stopped)
+				tick := time.NewTicker(ttl / 3)
+				defer tick.Stop()
+				for {
+					select {
+					case <-stop:
+						return
+					case <-tick.C:
+						renew, done := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+						_ = redis.NewScript(renewScript).Run(renew, t.Redis, []string{key}, token, ttl.Milliseconds()).Err()
+						done()
+					}
+				}
+			}()
 			return func() {
-				free, stop := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-				defer stop()
+				close(stop)
+				<-stopped
+				free, done := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+				defer done()
 				_ = redis.NewScript(unlockScript).Run(free, t.Redis, []string{key}, token).Err()
 			}, nil
 		}

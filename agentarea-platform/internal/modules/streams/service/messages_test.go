@@ -92,6 +92,9 @@ type sandboxFiles struct {
 }
 
 func (f *sandboxFiles) ReadFile(_ context.Context, _, taskID, p string, _ bool) (sandboxapi.Download, error) {
+	if p == "outputs/huge.mp4" {
+		return sandboxapi.Download{Body: io.NopCloser(strings.NewReader("")), Header: http.Header{"Content-Length": {"60000000"}}}, nil
+	}
 	data, ok := f.files[taskID+"/"+p]
 	if !ok {
 		return sandboxapi.Download{}, &sandboxapi.TaskFileError{Status: http.StatusNotFound, Detail: "File not found"}
@@ -267,6 +270,8 @@ func TestAMessageCarriesTheRunsFiles(t *testing.T) {
 		{[]string{"../etc/passwd"}, "task-1", "is not a path in the run's workspace"},
 		{[]string{"outputs/missing.mp4"}, "task-1", "outputs/missing.mp4 cannot be read: File not found"},
 		{[]string{"outputs/clip.srt"}, "", "files can be sent only from a run"},
+		{[]string{"outputs/huge.mp4"}, "task-1", "outputs/huge.mp4 is larger than the 50 MB a Telegram bot sends"},
+		{[]string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"}, "task-1", "at most 10 files go in one message, 11 given"},
 	} {
 		in.Files, in.TaskID = c.files, c.task
 		if _, err := m.svc.SendMessage(m.ctx, in); err == nil || !strings.Contains(err.Error(), c.want) {
