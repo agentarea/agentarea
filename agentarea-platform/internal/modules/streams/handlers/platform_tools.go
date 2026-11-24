@@ -467,6 +467,14 @@ func (p PlatformStreams) CreateForward(ctx context.Context, c authn.Caller, stre
 	return subscriptionOut(sub), nil
 }
 
+func (p PlatformStreams) ReplayEvent(ctx context.Context, c authn.Caller, eventID string) (any, error) {
+	out, err := p.s.svc.ReplayEvent(authn.WithCaller(ctx, c), eventID)
+	if err != nil {
+		return nil, toolText(err)
+	}
+	return out, nil
+}
+
 func (p PlatformStreams) DeleteForward(ctx context.Context, c authn.Caller, streamID, subscriptionID string) error {
 	ctx = authn.WithCaller(ctx, c)
 	if err := p.require(ctx, "edit", streamID); err != nil {
