@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	modelsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/api"
 	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 	"image"
@@ -390,7 +391,7 @@ func TestReadFileShowsAnImageToTheModel(t *testing.T) {
 	if !out.Success || len(out.Images) != 1 || out.Images[0].MimeType != "image/png" {
 		t.Fatalf("%+v", out)
 	}
-	if want := "inputs/plan.png is an image (image/png, 3000x1500 px, 0.1 MB); it is attached."; out.Result != want || !bytes.Equal(out.Images[0].Data, b.Bytes()) {
+	if want := fmt.Sprintf("inputs/plan.png is an image (image/png, 3000x1500 px, %d KB); it is attached.", (b.Len()+1023)/1024); out.Result != want || !bytes.Equal(out.Images[0].Data, b.Bytes()) {
 		t.Fatalf("result %q, want %q", out.Result, want)
 	}
 	if out := read("inputs/blob.bin"); len(out.Images) != 0 || !strings.Contains(out.Result, "can't decode") {

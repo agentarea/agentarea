@@ -48,7 +48,14 @@ func inspectImage(data []byte) (imageInfo, bool, error) {
 
 // imageReadNote is read_file's text for an image it attaches.
 func imageReadNote(name string, info imageInfo, size int) string {
-	return fmt.Sprintf("%s is an image (%s, %dx%d px, %.1f MB); it is attached.", name, info.MimeType, info.Width, info.Height, float64(size)/(1<<20))
+	return fmt.Sprintf("%s is an image (%s, %dx%d px, %s); it is attached.", name, info.MimeType, info.Width, info.Height, fileSize(size))
+}
+
+func fileSize(n int) string {
+	if n < 1<<20 {
+		return fmt.Sprintf("%d KB", (n+1023)/1024)
+	}
+	return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
 }
 
 const pdfMimeType = domain.PDFMimeType
