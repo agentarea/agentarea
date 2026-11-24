@@ -100,7 +100,7 @@ export default function HeaderTabs({
           className={cn(
             "grid h-6 w-[30px] place-items-center rounded-[5px] transition-colors",
             activeTab === tab.value
-              ? "bg-background text-foreground shadow-sm"
+              ? "bg-background text-foreground shadow-sm dark:bg-sidebar"
               : "text-muted-foreground hover:text-foreground"
           )}
         >

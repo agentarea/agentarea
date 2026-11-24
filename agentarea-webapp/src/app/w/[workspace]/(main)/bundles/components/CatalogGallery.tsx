@@ -1109,8 +1109,10 @@ function FacetGroup({
               className={cn(
                 "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
                 selected === value
-                  ? "bg-muted font-medium text-foreground"
-                  : "text-muted-foreground hover:bg-muted/50"
+                  ? // bg-muted is the dark content background itself, so the
+                    // dark theme lifts the selection a step to stay visible.
+                    "bg-muted font-medium text-foreground dark:bg-zinc-700/70"
+                  : "text-muted-foreground hover:bg-muted/50 dark:hover:bg-zinc-700/40"
               )}
             >
               {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
@@ -2243,8 +2245,8 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
                   className={cn(
                     "flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition-colors",
                     selected === f.path
-                      ? "bg-muted font-medium text-foreground"
-                      : "text-muted-foreground hover:bg-muted/50"
+                      ? "bg-muted font-medium text-foreground dark:bg-zinc-700/70"
+                      : "text-muted-foreground hover:bg-muted/50 dark:hover:bg-zinc-700/40"
                   )}
                 >
                   <FileText className="h-3.5 w-3.5 shrink-0" />

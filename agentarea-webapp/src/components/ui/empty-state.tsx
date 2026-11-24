@@ -40,7 +40,7 @@ function IconTile({
   return (
     <div
       className={cn(
-        "grid size-11 place-items-center rounded-xl bg-background shadow-md ring-1 ring-border transition duration-500 group-hover:duration-200",
+        "grid size-11 place-items-center rounded-xl bg-background shadow-md ring-1 ring-border transition duration-500 group-hover:duration-200 dark:bg-sidebar",
         className
       )}
     >

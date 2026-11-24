@@ -117,7 +117,7 @@ export default function EmptyState({
     >
       <EmptyStateComponent
         className={cn(
-          "max-w-auto w-full hover:border-accent/20 hover:bg-white dark:bg-zinc-800 dark:hover:border-white/30 dark:hover:bg-zinc-800",
+          "max-w-auto w-full hover:border-accent/20 hover:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-white/30 dark:hover:bg-zinc-800",
           className
         )}
         title={title}
