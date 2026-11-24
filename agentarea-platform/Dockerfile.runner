@@ -32,6 +32,8 @@ RUN apt-get update && apt-get upgrade -y \
     dumb-init \
     file \
     findutils \
+    fontconfig \
+    fonts-dejavu-core \
     git \
     gzip \
     iptables \
@@ -39,6 +41,7 @@ RUN apt-get update && apt-get upgrade -y \
     skopeo \
     tar \
     unzip \
+    xz-utils \
     zip \
     && rm -rf /var/lib/apt/lists/*
 

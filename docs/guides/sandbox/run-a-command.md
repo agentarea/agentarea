@@ -143,6 +143,15 @@ kubectl get pods -n agentarea -l mcp.agentarea.io/task-id=$TASK_ID \
     Inspect that runtime and its isolation attestation; see
     [sandbox isolation](/concepts/sandbox/isolation) .
   </Accordion>
+  <Accordion title="A tool the agent needs is not in the image (ffmpeg, a speech model)">
+    Commands run as an unprivileged user, so `apt-get` fails. Install into the
+    image's Python environment with `pip`, and fetch static binaries (for
+    example a static ffmpeg build) into the workspace. Downloads need
+    `sandboxRuntime.allowInternet`. Every file a command writes, a model's
+    weights included, is capped at `sandboxRuntime.workspace.maxFileBytes`
+    (1 GiB by default; `Errno 27 File too large` past it). A step that installs
+    and then processes for minutes should pass `timeout_seconds`.
+  </Accordion>
 </AccordionGroup>
 
 ## Related
