@@ -42,6 +42,12 @@ func TestTaskWorkspacePutGetImport(t *testing.T) {
 	if ok, err := tw.Exists(ctx, wsID, taskID, "out/missing"); ok || err != nil {
 		t.Fatalf("exists missing = %v %v", ok, err)
 	}
+	if d, err := tw.Digest(ctx, wsID, taskID, "out/a.txt"); err != nil || d != "559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd" {
+		t.Fatalf("digest = %q %v", d, err)
+	}
+	if _, err := tw.Digest(ctx, wsID, taskID, "out/missing"); !errors.Is(err, api.ErrFileNotFound) {
+		t.Fatalf("digest of a missing file = %v", err)
+	}
 	f.put(t, "projects/p1/in.csv", "1,2")
 	f.put(t, "projects/p1/sub/x.txt", "x")
 	ref2, err := tw.ImportPrefix(ctx, wsID, taskID, "projects/p1", "inputs/project", api.WriteOptions{})

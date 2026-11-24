@@ -959,6 +959,15 @@ func (w *Workspaces) Exists(ctx context.Context, workspaceID, taskID, path strin
 	return err == nil, err
 }
 
+// Digest is the recorded sha256 of a live entry, without reading its object.
+func (w *Workspaces) Digest(ctx context.Context, workspaceID, taskID, path string) (string, error) {
+	e, err := w.entry(ctx, workspaceID, taskID, path)
+	if err != nil {
+		return "", err
+	}
+	return e.SHA256, nil
+}
+
 // GetObjectRef is get_object_ref: a verified task object read by its
 // reference, without manifest membership (execution stdout/stderr).
 func (w *Workspaces) GetObjectRef(ctx context.Context, workspaceID, taskID string, ref map[string]any) ([]byte, error) {

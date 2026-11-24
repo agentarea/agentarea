@@ -183,6 +183,21 @@ Answer politely.
 what can you do?
 ```
 
+**Files a message carries become task input files.** A source type's
+`event.attachments` names where an event keeps its files and how they are
+fetched: `inline` (the bytes came with the event), `telegram.getFile`,
+`slack.url_private` or `url`. Intake keeps only a reference; when a trigger
+fires, the files are fetched once with the source's credentials into the
+workspace's files under `events/<stream>/<event>/` and copied into the task as
+`inputs/attachments/<name>`, listed in the agent's prompt by path. A follow-up
+that a session routes into a running task adds its files to that task (a name
+already taken by other content gets a `-1` suffix) and its message ends with one
+`Attached file: inputs/attachments/<name> (<type>, <size>)` line per file. A
+message with files and no text still starts or continues a task: its text is a
+line naming them, `(file: IMG_6110.MOV)`. A file that cannot be fetched, such as
+a Telegram file over the 20 MB a bot may download, is not attached; the task's
+message says so, so the agent can tell the sender.
+
 ### Channels carry the output back
 
 **A task an event started replies through its delivery address.** When a
@@ -260,6 +275,10 @@ reports that this step was skipped.
 **Sender admission exists for Telegram only.** Other messengers with a `reply`
 block, such as Slack and Discord, admit any sender the provider delivers; the
 task acts as the agent with no person's policy narrowing it.
+
+**Fetched files have size limits.** A Telegram bot downloads files up to 20 MB;
+`url` and `slack.url_private` fetches stop at 50 MB. A batch's task receives no
+event files.
 
 **A batch replies to one address.** A batch's task answers the newest event's
 sender only, even when its events came from several chats.
