@@ -506,7 +506,6 @@ export type {
   CatalogToolPrice,
   CategoryFacet,
   ChatGptDeviceCodeResponse,
-  ChatGptSignInRequest,
   ChatGptSignInResponse,
   CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostData,
   CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostError,

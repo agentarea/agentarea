@@ -19,24 +19,22 @@ import (
 
 // input is what a route's parameters and body validated to.
 type input struct {
-	ids          map[string]uuid.UUID
-	specID       *uuid.UUID
-	configID     *uuid.UUID
-	modelSpecID  *uuid.UUID
-	isActive     *bool
-	kind         *string
-	newConfig    domain.NewConfig
-	patch        domain.ConfigPatch
-	newInstance  domain.NewInstance
-	bulk         []domain.NewInstance
-	providerKey  string
-	apiKey       *string
-	endpointURL  *string
-	testConfig   uuid.UUID
-	testSpec     uuid.UUID
-	testMessage  *string
-	deviceAuthID string
-	userCode     string
+	ids         map[string]uuid.UUID
+	specID      *uuid.UUID
+	configID    *uuid.UUID
+	modelSpecID *uuid.UUID
+	isActive    *bool
+	kind        *string
+	newConfig   domain.NewConfig
+	patch       domain.ConfigPatch
+	newInstance domain.NewInstance
+	bulk        []domain.NewInstance
+	providerKey string
+	apiKey      *string
+	endpointURL *string
+	testConfig  uuid.UUID
+	testSpec    uuid.UUID
+	testMessage *string
 }
 
 type inputKey struct{}

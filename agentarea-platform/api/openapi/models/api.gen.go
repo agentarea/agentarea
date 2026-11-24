@@ -61,7 +61,8 @@ func (e ModelKind) Valid() bool {
 
 // ChatGPTDeviceCodeResponse defines model for ChatGPTDeviceCodeResponse.
 type ChatGPTDeviceCodeResponse struct {
-	DeviceAuthId string `json:"device_auth_id"`
+	// ExpiresIn Seconds the code stays valid
+	ExpiresIn int `json:"expires_in"`
 
 	// Interval Seconds to wait between checks
 	Interval int `json:"interval"`
@@ -69,12 +70,6 @@ type ChatGPTDeviceCodeResponse struct {
 	// UserCode The code the user enters at verification_uri
 	UserCode        string `json:"user_code"`
 	VerificationUri string `json:"verification_uri"`
-}
-
-// ChatGPTSignInRequest defines model for ChatGPTSignInRequest.
-type ChatGPTSignInRequest struct {
-	DeviceAuthId string `json:"device_auth_id"`
-	UserCode     string `json:"user_code"`
 }
 
 // ChatGPTSignInResponse defines model for ChatGPTSignInResponse.
@@ -379,9 +374,6 @@ type PatchProviderConfigV1ProviderConfigsConfigIdPatchJSONRequestBody = Provider
 
 // UpdateProviderConfigV1ProviderConfigsConfigIdPutJSONRequestBody defines body for UpdateProviderConfigV1ProviderConfigsConfigIdPut for application/json ContentType.
 type UpdateProviderConfigV1ProviderConfigsConfigIdPutJSONRequestBody = ProviderConfigUpdate
-
-// CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostJSONRequestBody defines body for CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost for application/json ContentType.
-type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostJSONRequestBody = ChatGPTSignInRequest
 
 // AsValidationErrorLoc0 returns the union data inside the ValidationError_Loc_Item as a ValidationErrorLoc0
 func (t ValidationError_Loc_Item) AsValidationErrorLoc0() (ValidationErrorLoc0, error) {
@@ -2110,7 +2102,6 @@ func (response StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost422JS
 type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostRequestObject struct {
 	Workspace string             `json:"workspace"`
 	ConfigId  openapi_types.UUID `json:"config_id"`
-	Body      *CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostJSONRequestBody
 }
 
 type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponseObject interface {
@@ -2788,13 +2779,6 @@ func (sh *strictHandler) CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSi
 
 	request.Workspace = workspace
 	request.ConfigId = configId
-
-	var body CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostJSONRequestBody
-	if err := runtime.BindJSONBody(r, &body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost(ctx, request.(CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostRequestObject))

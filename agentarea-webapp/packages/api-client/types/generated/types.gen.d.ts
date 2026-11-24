@@ -2493,9 +2493,11 @@ export type CategoryFacet = {
  */
 export type ChatGptDeviceCodeResponse = {
     /**
-     * Device Auth Id
+     * Expires In
+     *
+     * Seconds the code stays valid
      */
-    device_auth_id: string;
+    expires_in: number;
     /**
      * Interval
      *
@@ -2512,19 +2514,6 @@ export type ChatGptDeviceCodeResponse = {
      * Verification Uri
      */
     verification_uri: string;
-};
-/**
- * ChatGPTSignInRequest
- */
-export type ChatGptSignInRequest = {
-    /**
-     * Device Auth Id
-     */
-    device_auth_id: string;
-    /**
-     * User Code
-     */
-    user_code: string;
 };
 /**
  * ChatGPTSignInResponse
@@ -18094,7 +18083,7 @@ export type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponse
 };
 export type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponse = StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses[keyof StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses];
 export type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostData = {
-    body: ChatGptSignInRequest;
+    body?: never;
     path: {
         /**
          * Config Id

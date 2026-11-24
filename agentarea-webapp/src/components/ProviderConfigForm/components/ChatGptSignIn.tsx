@@ -40,10 +40,7 @@ export default function ChatGptSignIn({ configId }: { configId?: string }) {
   const complete = (code: ChatGptDeviceCodeResponse) =>
     startTransition(async () => {
       if (!configId) return;
-      const result = await completeChatGptSignInAction(configId, {
-        device_auth_id: code.device_auth_id,
-        user_code: code.user_code,
-      });
+      const result = await completeChatGptSignInAction(configId);
       if (!result.data) {
         setStep({
           kind: "failed",

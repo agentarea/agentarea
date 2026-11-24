@@ -12,7 +12,6 @@ import (
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/money"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/api"
-	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/domain"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/transport"
 )
 
@@ -101,15 +100,14 @@ func (s *Service) testCall(ctx context.Context, userID string, v ConfigView, pro
 	if err != nil {
 		return TestResult{}, err
 	}
-	accountID := ""
-	if profile.Auth == domain.AuthChatGPT && key != "" {
+	accountID, endpoint := "", str(v.EndpointURL)
+	if signsIn(profile.Auth) && key != "" {
 		t, err := s.chatGPTAccess(ctx, ws, userID, *v.APIKey, key)
 		if err != nil {
 			return TestResult{}, err
 		}
-		key, accountID = t.AccessToken, t.AccountID
+		key, accountID, endpoint = t.AccessToken, t.AccountID, ""
 	}
-	endpoint := str(v.EndpointURL)
 	if key == "" && profile.RequiresAPIKey() {
 		return TestResult{Message: "No API key found for this provider configuration", ErrorType: ptr("MissingAPIKey"),
 			ProviderType: ptr(providerType), ModelName: ptr(modelName)}, nil

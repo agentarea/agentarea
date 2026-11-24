@@ -291,6 +291,16 @@ func (q *Queries) ProviderSpecIDsWithVisibleConfigs(ctx context.Context, workspa
 	return items, nil
 }
 
+const setLockTimeout = `-- name: SetLockTimeout :exec
+SET LOCAL lock_timeout = '5s'
+`
+
+// SetLockTimeout bounds how long the transaction waits for a row lock.
+func (q *Queries) SetLockTimeout(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, setLockTimeout)
+	return err
+}
+
 const updateConfig = `-- name: UpdateConfig :execrows
 UPDATE provider_configs SET
     name = $1, description = $2, api_key = $3, endpoint_url = $4,

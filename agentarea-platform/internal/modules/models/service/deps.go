@@ -24,6 +24,9 @@ type Store interface {
 	UpdateConfig(ctx context.Context, s db.Session, c domain.Config, now time.Time) (bool, error)
 	DeleteConfig(ctx context.Context, s db.Session, id uuid.UUID) (bool, error)
 	LockConfig(ctx context.Context, s db.Session, id uuid.UUID) (bool, error)
+	PutSignIn(ctx context.Context, s db.Session, in domain.SignIn) error
+	SignIn(ctx context.Context, s db.Session, configID uuid.UUID, userID string) (domain.SignIn, bool, error)
+	DeleteSignIn(ctx context.Context, s db.Session, configID uuid.UUID, userID string) error
 	ProviderSpecIDsWithVisibleConfigs(ctx context.Context, s db.Session) ([]uuid.UUID, error)
 	Instance(ctx context.Context, s db.Session, id uuid.UUID) (domain.Instance, bool, error)
 	Instances(ctx context.Context, s db.Session, f store.InstanceFilter) ([]domain.Instance, error)

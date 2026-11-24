@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import type { ZodError } from "zod";
 import type {
   CatalogConnectRequest,
-  ChatGptSignInRequest,
   ContinueTaskPayload,
   CreateWalletRequest,
   CreateWorkspaceDirectoryRequest,
@@ -33,7 +32,6 @@ import type {
 } from "@/api/client/types.gen";
 import {
   zCatalogConnectRequest,
-  zChatGptSignInRequest,
   zCreateWorkspaceDirectoryRequest,
   zListSecretsV1SecretsGetResponse,
   zModelSpecCreate,
@@ -425,23 +423,8 @@ export async function startChatGptSignInAction(configId: string) {
   return await startChatGptSignIn(configId);
 }
 
-export async function completeChatGptSignInAction(
-  configId: string,
-  body: ChatGptSignInRequest
-) {
-  const parsed = zChatGptSignInRequest.safeParse(body);
-  if (!parsed.success) {
-    return {
-      data: undefined,
-      error: {
-        detail: parsed.error.issues.map((issue) => ({
-          msg: `${issue.path.join(".")}: ${issue.message}`,
-        })),
-      },
-      status: undefined,
-    };
-  }
-  return await completeChatGptSignIn(configId, parsed.data);
+export async function completeChatGptSignInAction(configId: string) {
+  return await completeChatGptSignIn(configId);
 }
 
 export async function discoverModelsPreviewAction(body: {

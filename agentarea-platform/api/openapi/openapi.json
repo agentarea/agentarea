@@ -4424,9 +4424,10 @@
       },
       "ChatGPTDeviceCodeResponse": {
         "properties": {
-          "device_auth_id": {
-            "title": "Device Auth Id",
-            "type": "string"
+          "expires_in": {
+            "description": "Seconds the code stays valid",
+            "title": "Expires In",
+            "type": "integer"
           },
           "interval": {
             "description": "Seconds to wait between checks",
@@ -4444,30 +4445,12 @@
           }
         },
         "required": [
-          "device_auth_id",
           "user_code",
           "verification_uri",
-          "interval"
+          "interval",
+          "expires_in"
         ],
         "title": "ChatGPTDeviceCodeResponse",
-        "type": "object"
-      },
-      "ChatGPTSignInRequest": {
-        "properties": {
-          "device_auth_id": {
-            "title": "Device Auth Id",
-            "type": "string"
-          },
-          "user_code": {
-            "title": "User Code",
-            "type": "string"
-          }
-        },
-        "required": [
-          "device_auth_id",
-          "user_code"
-        ],
-        "title": "ChatGPTSignInRequest",
         "type": "object"
       },
       "ChatGPTSignInResponse": {
@@ -37677,7 +37660,7 @@
     },
     "/v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in": {
       "post": {
-        "description": "Start the ChatGPT device-code sign-in of a ChatGPT subscription provider: the user opens verification_uri and enters user_code.",
+        "description": "Start the ChatGPT device-code sign-in of a ChatGPT subscription provider: the user opens verification_uri and enters user_code. The device code itself stays on the server, bound to the caller and this configuration.",
         "operationId": "start_chatgpt_sign_in_v1_provider_configs__config_id__chatgpt_sign_in_post",
         "parameters": [
           {
@@ -37741,7 +37724,7 @@
     },
     "/v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in/complete": {
       "post": {
-        "description": "Check the device code; once the user entered it, the configuration keeps the sign-in and signed_in is true.",
+        "description": "Check the caller's pending ChatGPT sign-in on this configuration; once the user entered the code, the configuration keeps the sign-in and signed_in is true. Only the member who started it can finish it.",
         "operationId": "complete_chatgpt_sign_in_v1_provider_configs__config_id__chatgpt_sign_in_complete_post",
         "parameters": [
           {
@@ -37768,16 +37751,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChatGPTSignInRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {

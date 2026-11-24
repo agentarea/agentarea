@@ -38,7 +38,7 @@ func Mount(r chi.Router, errs *httpx.Errors, principal, workspace func(http.Hand
 	on(request{pathUUIDs: cfg}).Delete(pc+"/{config_id}", w.DeleteProviderConfigV1ProviderConfigsConfigIdDelete)
 	on(request{pathUUIDs: cfg}).Post(pc+"/{config_id}/discover", w.DiscoverModelsV1ProviderConfigsConfigIdDiscoverPost)
 	on(request{pathUUIDs: cfg}).Post(pc+"/{config_id}/chatgpt-sign-in", w.StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost)
-	on(request{pathUUIDs: cfg, body: signInBody}).Post(pc+"/{config_id}/chatgpt-sign-in/complete", w.CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost)
+	on(request{pathUUIDs: cfg}).Post(pc+"/{config_id}/chatgpt-sign-in/complete", w.CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost)
 
 	on(request{query: instancesQuery}).Get(mi+"/", w.ListModelInstancesV1ModelInstancesGet)
 	on(request{body: instanceBody}).Post(mi+"/", w.CreateModelInstanceV1ModelInstancesPost)

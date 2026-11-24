@@ -1656,13 +1656,13 @@ export declare const discoverModelsV1ProviderConfigsConfigIdDiscoverPost: <Throw
 /**
  * Start Chatgpt Sign In
  *
- * Start the ChatGPT device-code sign-in of a ChatGPT subscription provider: the user opens verification_uri and enters user_code.
+ * Start the ChatGPT device-code sign-in of a ChatGPT subscription provider: the user opens verification_uri and enters user_code. The device code itself stays on the server, bound to the caller and this configuration.
  */
 export declare const startChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost: <ThrowOnError extends boolean = false>(options: Options<StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostData, ThrowOnError>) => RequestResult<StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses, StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostErrors, ThrowOnError>;
 /**
  * Complete Chatgpt Sign In
  *
- * Check the device code; once the user entered it, the configuration keeps the sign-in and signed_in is true.
+ * Check the caller's pending ChatGPT sign-in on this configuration; once the user entered the code, the configuration keeps the sign-in and signed_in is true. Only the member who started it can finish it.
  */
 export declare const completeChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost: <ThrowOnError extends boolean = false>(options: Options<CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostData, ThrowOnError>) => RequestResult<CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponses, CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostErrors, ThrowOnError>;
 /**

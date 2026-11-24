@@ -34,6 +34,8 @@ type fakeStore struct {
 	configs   map[string]domain.Config
 	instances map[string]domain.Instance
 	locks     int
+	busy      bool
+	signIns   map[string]domain.SignIn
 }
 
 func visible(ws, owner string, managed *string) bool {
@@ -93,9 +95,27 @@ func (f *fakeStore) DeleteConfig(_ context.Context, s db.Session, id uuid.UUID) 
 	return true, nil
 }
 
+func (f *fakeStore) PutSignIn(_ context.Context, s db.Session, in domain.SignIn) error {
+	f.signIns[s.Workspace().ID()+"/"+in.ConfigID+"/"+in.UserID] = in
+	return nil
+}
+
+func (f *fakeStore) SignIn(_ context.Context, s db.Session, configID uuid.UUID, userID string) (domain.SignIn, bool, error) {
+	in, ok := f.signIns[s.Workspace().ID()+"/"+configID.String()+"/"+userID]
+	return in, ok, nil
+}
+
+func (f *fakeStore) DeleteSignIn(_ context.Context, s db.Session, configID uuid.UUID, userID string) error {
+	delete(f.signIns, s.Workspace().ID()+"/"+configID.String()+"/"+userID)
+	return nil
+}
+
 func (f *fakeStore) LockConfig(_ context.Context, s db.Session, id uuid.UUID) (bool, error) {
 	c, ok := f.configs[id.String()]
 	f.locks++
+	if f.busy {
+		return false, store.ErrLockBusy
+	}
 	return ok && c.WorkspaceID == s.Workspace().ID(), nil
 }
 
@@ -330,7 +350,7 @@ func newEnv(t *testing.T) *env {
 	chat := catalogapi.ModelSpec{ID: uuid.New(), ProviderSpecID: prov.ID, WorkspaceID: PlatformWorkspaceID,
 		ModelName: "gpt-x", DisplayName: "GPT X", Kind: "chat", ContextWindow: &cw}
 	e := &env{
-		st:  &fakeStore{configs: map[string]domain.Config{}, instances: map[string]domain.Instance{}},
+		st:  &fakeStore{configs: map[string]domain.Config{}, instances: map[string]domain.Instance{}, signIns: map[string]domain.SignIn{}},
 		cat: &fakeCatalog{providers: map[uuid.UUID]catalogapi.ProviderSpec{prov.ID: prov}, models: map[uuid.UUID]catalogapi.ModelSpec{chat.ID: chat}},
 		sec: &fakeSecrets{refs: map[string][]ksecrets.Reference{}}, ws: ws, other: other, prov: prov, chat: chat,
 	}

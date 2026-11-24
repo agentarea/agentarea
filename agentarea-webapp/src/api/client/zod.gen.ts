@@ -789,18 +789,10 @@ export const zCategoryFacet = z.object({
  * ChatGPTDeviceCodeResponse
  */
 export const zChatGptDeviceCodeResponse = z.object({
-  device_auth_id: z.string(),
+  expires_in: z.int(),
   interval: z.int(),
   user_code: z.string(),
   verification_uri: z.string(),
-});
-
-/**
- * ChatGPTSignInRequest
- */
-export const zChatGptSignInRequest = z.object({
-  device_auth_id: z.string(),
-  user_code: z.string(),
 });
 
 /**
@@ -7547,9 +7539,6 @@ export const zStartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostPath =
  */
 export const zStartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponse =
   zChatGptDeviceCodeResponse;
-
-export const zCompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostBody =
-  zChatGptSignInRequest;
 
 export const zCompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostPath =
   z.object({

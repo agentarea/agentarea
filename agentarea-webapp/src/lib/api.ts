@@ -9,7 +9,6 @@ import type {
   AnalyzeRequest,
   TaskResponse as ApiTaskResponse,
   CatalogConnectRequest,
-  ChatGptSignInRequest,
   ClientUpdate,
   ContinueTaskPayload,
   CreateInvitationBody,
@@ -877,16 +876,12 @@ export const startChatGptSignIn = async (configId: string) => {
   return { data, error };
 };
 
-export const completeChatGptSignIn = async (
-  configId: string,
-  body: ChatGptSignInRequest
-) => {
+export const completeChatGptSignIn = async (configId: string) => {
   const { data, error } =
     await sdk.completeChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost(
       {
         client: serverClient,
         path: { config_id: configId },
-        body,
       }
     );
   return { data, error };
