@@ -4294,6 +4294,12 @@
         "agentarea": "На AgentArea"
       },
       "title": "Фильтры"
+    },
+    "columns": {
+      "name": "Название",
+      "source": "Источник",
+      "category": "Категория",
+      "description": "Описание"
     }
   },
   "BundleInstall": {

@@ -1010,7 +1010,7 @@ function CatalogShelfHeading({
 // landed wherever the name ended, so no two rows lined up.
 const CATALOG_COLUMNS: Column<CatalogEntry>[] = [
   {
-    header: "Name",
+    header: <ColumnTitle column="name" />,
     accessor: "title",
     headerClassName: "w-[40%] md:w-[32%]",
     render: (_, e) =>
@@ -1035,7 +1035,7 @@ const CATALOG_COLUMNS: Column<CatalogEntry>[] = [
       ) : null,
   },
   {
-    header: "Source",
+    header: <ColumnTitle column="source" />,
     accessor: "source",
     headerClassName: "hidden w-[200px] lg:table-cell",
     cellClassName: "hidden lg:table-cell",
@@ -1045,7 +1045,7 @@ const CATALOG_COLUMNS: Column<CatalogEntry>[] = [
       ) : null,
   },
   {
-    header: "Category",
+    header: <ColumnTitle column="category" />,
     accessor: "category",
     headerClassName: "hidden w-[200px] sm:table-cell",
     cellClassName: "hidden sm:table-cell",
@@ -1053,7 +1053,7 @@ const CATALOG_COLUMNS: Column<CatalogEntry>[] = [
       e?.category ? <CategoryBadge category={e.category} /> : null,
   },
   {
-    header: "Description",
+    header: <ColumnTitle column="description" />,
     accessor: "description",
     headerClassName: "hidden md:table-cell",
     cellClassName: "hidden md:table-cell",
@@ -1234,7 +1234,7 @@ function CatalogCard({
       onClick={onOpen}
       className="group flex flex-col overflow-hidden rounded-lg border border-border/60 bg-white text-left transition-[box-shadow,border-color] hover:border-border hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700/60 dark:bg-zinc-900 dark:hover:border-zinc-600"
     >
-      <div className="relative flex h-20 items-center justify-center gap-1.5 border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
+      <div className="relative flex h-[72px] items-center justify-center gap-1.5 border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
         {entry.verified ? (
           <span className="absolute left-2 top-2">
             <Badge variant="blue" size="sm" className="gap-1">
@@ -1267,7 +1267,7 @@ function CatalogCard({
           <EntityMark
             identity={entry.identity}
             brandFallback={false}
-            className="h-[52px] w-[52px] rounded-xl border border-border/60 bg-white p-1.5 text-xs shadow-sm dark:bg-zinc-800"
+            className="h-12 w-12 rounded-xl border border-border/60 bg-white p-1.5 text-xs shadow-sm dark:bg-zinc-800"
           />
         )}
         <span className="absolute right-2 top-2">
@@ -2747,29 +2747,46 @@ export function CatalogGallerySkeleton({
   );
 }
 
-// Mirrors CatalogCard: h-20 logo header + padded title/description body.
+// Mirrors CatalogCard: logo header, title, two-line description, badge row.
 function CatalogCardSkeleton() {
   return (
     <div
       className="flex flex-col overflow-hidden rounded-lg border border-border/60 bg-white dark:border-zinc-700/60 dark:bg-zinc-900"
       aria-hidden="true"
     >
-      <div className="flex h-20 items-center justify-center border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
-        <div className="h-10 w-10 animate-pulse rounded-lg bg-muted" />
+      <div className="flex h-[72px] items-center justify-center border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
+        <div className="h-12 w-12 animate-pulse rounded-xl bg-muted" />
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3">
-        <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
-        <div className="h-3 w-full animate-pulse rounded bg-muted/60" />
-        <div className="h-3 w-2/3 animate-pulse rounded bg-muted/60" />
+        <div className="h-5 w-1/2 animate-pulse rounded bg-muted" />
+        <div className="flex min-h-[2lh] flex-col justify-center gap-1.5 text-xs">
+          <div className="h-3 w-full animate-pulse rounded bg-muted/60" />
+          <div className="h-3 w-2/3 animate-pulse rounded bg-muted/60" />
+        </div>
+        <div className="mt-auto flex flex-wrap items-center gap-1 pt-1.5">
+          <div className="h-5 w-24 animate-pulse rounded-md bg-muted/50" />
+          <div className="h-5 w-36 animate-pulse rounded-md bg-muted/50" />
+          <div className="h-5 w-14 animate-pulse rounded-md bg-muted/50" />
+        </div>
       </div>
     </div>
   );
 }
 
+/** A catalog table header, in the active locale. */
+function ColumnTitle({
+  column,
+}: {
+  column: "name" | "source" | "category" | "description";
+}) {
+  const t = useTranslations("CatalogPage.columns");
+  return t(column);
+}
+
 // Mirrors CATALOG_COLUMNS so the table does not shift when entries arrive.
 const SKELETON_COLUMNS: Column<{ id: number }>[] = [
   {
-    header: "Name",
+    header: <ColumnTitle column="name" />,
     accessor: "title",
     headerClassName: "w-[40%] md:w-[32%]",
     render: () => (
@@ -2780,7 +2797,16 @@ const SKELETON_COLUMNS: Column<{ id: number }>[] = [
     ),
   },
   {
-    header: "Category",
+    header: <ColumnTitle column="source" />,
+    accessor: "source",
+    headerClassName: "hidden w-[200px] lg:table-cell",
+    cellClassName: "hidden lg:table-cell",
+    render: () => (
+      <div className="h-5 w-32 animate-pulse rounded-md bg-muted/60" />
+    ),
+  },
+  {
+    header: <ColumnTitle column="category" />,
     accessor: "category",
     headerClassName: "hidden w-[200px] sm:table-cell",
     cellClassName: "hidden sm:table-cell",
@@ -2789,7 +2815,7 @@ const SKELETON_COLUMNS: Column<{ id: number }>[] = [
     ),
   },
   {
-    header: "Description",
+    header: <ColumnTitle column="description" />,
     accessor: "description",
     headerClassName: "hidden md:table-cell",
     cellClassName: "hidden md:table-cell",

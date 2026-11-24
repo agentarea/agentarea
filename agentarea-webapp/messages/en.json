@@ -4293,6 +4293,12 @@
         "agentarea": "Runs on AgentArea"
       },
       "title": "Filters"
+    },
+    "columns": {
+      "name": "Name",
+      "source": "Source",
+      "category": "Category",
+      "description": "Description"
     }
   },
   "BundleInstall": {
