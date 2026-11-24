@@ -329,7 +329,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.serviceAccount.create | bool | `true` |  |
 | mcpManager.serviceAccount.name | string | `""` |  |
 | mcpManager.serviceAccount.annotations | object | `{}` |  |
-| mcpManager.tmpVolume.sizeLimit | string | `"1Gi"` |  |
+| mcpManager.tmpVolume.sizeLimit | string | `"2Gi"` |  |
 | mcpManager.serverless.enabled | bool | `true` |  |
 | mcpManager.serverless.idleTimeout | string | `"10m"` |  |
 | mcpManager.serverless.sweepInterval | string | `"60s"` |  |
@@ -406,7 +406,7 @@ The following table lists configurable parameters of the chart and their default
 | sandboxRuntime.executionQueueTimeout | string | `"5m"` |  |
 | sandboxRuntime.executionCompletionGrace | string | `"2m"` |  |
 | sandboxRuntime.workspace.maxFiles | string | `"10000"` |  |
-| sandboxRuntime.workspace.maxFileBytes | string | `"268435456"` |  |
+| sandboxRuntime.workspace.maxFileBytes | string | `"1073741824"` |  |
 | sandboxRuntime.workspace.maxBytes | string | `"2147483648"` |  |
 | sandboxRuntime.workspace.signedUrlTTL | string | `"1h"` |  |
 | sandboxRuntime.workspace.forcePathStyle | bool | `true` |  |
@@ -453,7 +453,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpSandboxRunner.serviceAccount.create | bool | `true` |  |
 | mcpSandboxRunner.serviceAccount.name | string | `""` |  |
 | mcpSandboxRunner.serviceAccount.annotations | object | `{}` |  |
-| mcpSandboxRunner.tmpVolume.sizeLimit | string | `"512Mi"` |  |
+| mcpSandboxRunner.tmpVolume.sizeLimit | string | `"1536Mi"` |  |
 | mcpSandboxRunner.consumerGroup | string | `"agentarea-sandbox-runners"` |  |
 | mcpSandboxRunner.batchSize | int | `1` |  |
 | mcpSandboxRunner.resources.requests.cpu | string | `"50m"` |  |

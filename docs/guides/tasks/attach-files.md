@@ -143,7 +143,7 @@ If the path is present with the size you uploaded, the agent can read it.
     through a presigned URL.
   </Accordion>
   <Accordion title="413 on upload or on task creation">
-    The per-file limit is 256 MiB, enforced at the presign step. A 413 at task
+    The per-file limit is 1 GiB by default (`sandboxRuntime.workspace.maxFileBytes`), enforced at the presign step. A 413 at task
     creation instead means the workspace's
     total quota would be exceeded by the attach.
   </Accordion>

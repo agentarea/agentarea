@@ -121,7 +121,7 @@ should be listed with its expected byte size.
     by something other than the presigned upload.
   </Accordion>
   <Accordion title="413 on upload or on task create">
-    A single attachment is capped at 268435456 bytes (256 MiB). The task's whole
+    A single attachment is capped at `sandboxRuntime.workspace.maxFileBytes`, 1073741824 bytes (1 GiB) by default. The task's whole
     durable workspace is separately capped, so several large files can pass
     individually and still exceed the aggregate. See [limits](/reference/limits)
     .

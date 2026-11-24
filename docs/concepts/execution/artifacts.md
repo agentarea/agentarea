@@ -181,7 +181,7 @@ binding makes the object store itself the verifier.
 - **Nothing garbage-collects old generations.** Superseded manifests and the
   objects only they referenced stay in the bucket.
 - **Caps are hard, and there are four.** 10,000 files and 2 GiB total per task
-  workspace, 256 MiB per file at the repository; the shell tool's copy-out
+  workspace, 1 GiB per file at the repository (`sandboxRuntime.workspace.maxFileBytes`); the shell tool's copy-out
   applies its own tighter caps of 16 MiB per artifact and 1 GiB of durable bytes
   per task, and refuses the copy rather than truncating.
 - **Only the task workspace is downloadable through the task API.** The artifact
