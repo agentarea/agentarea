@@ -61,6 +61,13 @@
         "key": [
           "{header:webhook-id}",
           "{header:idempotency-key}"
+        ],
+        "summary": [
+          "{body:title}",
+          "{body:subject}",
+          "{body:summary}",
+          "{body:text}",
+          "{body:message}"
         ]
       },
       "events": []
@@ -93,7 +100,12 @@
           "{header:x-github-event}"
         ],
         "key": "{header:x-github-delivery}",
-        "sender": "github:{body:sender.login}"
+        "sender": "github:{body:sender.login}",
+        "summary": [
+          "{body:pull_request.title}",
+          "{body:issue.title}",
+          "{body:head_commit.message}"
+        ]
       },
       "events": [
         "push",
@@ -176,6 +188,10 @@
         "session_key": "{body:event.channel}:{body:event.thread_ts|event.ts}",
         "sender": "slack:{body:event.user|user_id|user.id}",
         "occurred_at": "{body:event_time}",
+        "summary": [
+          "{body:event.text}",
+          "{body:text}"
+        ],
         "attachments": {
           "path": "event.files",
           "fetch": "slack.url_private"
@@ -284,6 +300,12 @@
         "session_key": "{body:message.chat.id|edited_message.chat.id|channel_post.chat.id|edited_channel_post.chat.id|callback_query.message.chat.id|my_chat_member.chat.id|chat_member.chat.id|chat_join_request.chat.id}",
         "sender": "tg:{body:message.from.id|edited_message.from.id|callback_query.from.id|inline_query.from.id|my_chat_member.from.id|chat_member.from.id|chat_join_request.from.id}",
         "occurred_at": "{body:message.date|edited_message.date|channel_post.date|edited_channel_post.date}",
+        "summary": [
+          "{body:message.text}",
+          "{body:edited_message.text}",
+          "{body:channel_post.text}",
+          "{body:message.caption}"
+        ],
         "attachments": {
           "path": "message.document|message.photo[-1]|message.video|message.voice|message.audio|message.animation|message.video_note",
           "fetch": "telegram.getFile"
@@ -357,7 +379,8 @@
         ],
         "key": "{header:linear-delivery}",
         "sender": "linear:{body:actor.id}",
-        "occurred_at": "{body:createdAt}"
+        "occurred_at": "{body:createdAt}",
+        "summary": "{body:data.title}"
       },
       "events": [
         "Issue.create",
@@ -420,6 +443,7 @@
         "session_key": "{body:channel_id|d.channel_id}",
         "sender": "discord:{body:member.user.id|user.id|d.author.id|author.id}",
         "occurred_at": "{body:d.timestamp|timestamp}",
+        "summary": "{body:d.content|content}",
         "attachments": {
           "path": "d.attachments|data.resolved.attachments.*|attachments",
           "fetch": "url"
@@ -587,7 +611,8 @@
         "key": "{body:id}",
         "session_key": "{body:conversation.id}",
         "sender": "teams:{body:from.id}",
-        "occurred_at": "{body:timestamp}"
+        "occurred_at": "{body:timestamp}",
+        "summary": "{body:text}"
       },
       "events": [
         "message",
@@ -685,6 +710,7 @@
         "session_key": "{body:references.0|in_reply_to|message_id}",
         "sender": "{body:from}",
         "occurred_at": "{body:date}",
+        "summary": "{body:subject}",
         "attachments": {
           "path": "attachments",
           "fetch": "inline"
@@ -796,6 +822,7 @@
         "session_key": "{body:references.0|in_reply_to|message_id}",
         "sender": "{body:from}",
         "occurred_at": "{body:date}",
+        "summary": "{body:subject}",
         "attachments": {
           "path": "attachments",
           "fetch": "inline"
@@ -843,7 +870,8 @@
         "kind": "item",
         "key": "{body:id|link}",
         "occurred_at": "{body:published|updated}",
-        "sender": "{body:author}"
+        "sender": "{body:author}",
+        "summary": "{body:title}"
       },
       "events": [
         "item"

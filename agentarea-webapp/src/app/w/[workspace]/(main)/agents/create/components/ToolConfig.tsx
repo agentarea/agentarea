@@ -1286,7 +1286,7 @@ const ToolConfig = ({
                     setSheetError(tMcp("warnings.validateFirst"));
                     return;
                   }
-                  if (validationResult && !validationResult.valid) {
+                  if (!validationResult.valid) {
                     setSheetError(tMcp("errors.validationFailedForceCreate"));
                     return;
                   }

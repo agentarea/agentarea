@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  openapiToolPolicyTarget,
   parseToolPolicyChange,
   planToolPolicyChange,
   sharedToolPolicy,
@@ -64,6 +65,20 @@ describe("toolPolicyTarget", () => {
   it("escapes glob characters so a name never matches its siblings", () => {
     expect(toolPolicyTarget(INSTANCE, "a*b?[c]")).toBe(
       `tool:mcp:${INSTANCE}:a[*]b[?][[]c]`
+    );
+  });
+});
+
+describe("openapiToolPolicyTarget", () => {
+  it("names the operation as a run calls it: its name made a tool name", () => {
+    expect(openapiToolPolicyTarget(INSTANCE, "issues.create")).toBe(
+      `tool:openapi:${INSTANCE}:issues_create`
+    );
+  });
+
+  it("leaves no glob character in the name", () => {
+    expect(openapiToolPolicyTarget(INSTANCE, "a*b?[c] d")).toBe(
+      `tool:openapi:${INSTANCE}:a_b__c__d`
     );
   });
 });

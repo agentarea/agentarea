@@ -1,3 +1,4 @@
+import "server-only";
 import { cache } from "react";
 import { listWorkspaceEvents } from "@/lib/api";
 import { feedApiQuery, type FeedState } from "@/lib/eventFeed";

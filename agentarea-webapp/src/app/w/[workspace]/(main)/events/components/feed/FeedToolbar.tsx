@@ -8,9 +8,6 @@ import SearchInput from "@/components/SearchInput";
 import SourceTypeMark from "@/components/SourceTypeMark";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
 import ToolbarSelect, {
-  ToolbarMultiSelect,
-  ToolbarMultiSelectRows,
-  type ToolbarMultiSelectProps,
   type ToolbarSelectProps,
 } from "@/components/ToolbarSelect";
 import {
@@ -52,37 +49,18 @@ type Filter = Pick<
 };
 
 const ORIGIN_ICON: Record<FeedOrigin, typeof Globe> = {
-  outside: Globe,
   all: Layers,
+  outside: Globe,
   platform: Cpu,
 };
 
-/**
- * The URL's query as the feed state reads it: a repeated key (several
- * sources) as a list, any other as its one value.
- */
-function queryRecord(params: URLSearchParams) {
-  const record: Record<string, string | string[]> = {};
-  for (const key of new Set(params.keys())) {
-    const values = params.getAll(key);
-    record[key] = values.length > 1 ? values : values[0];
-  }
-  return record;
-}
-
 /** The feed's filters in one menu, a section each: the subheader when the selects do not fit. */
-function FiltersMenu({
-  filters,
-  sources,
-}: {
-  filters: Filter[];
-  sources: ToolbarMultiSelectProps<string>;
-}) {
+function FiltersMenu({ filters }: { filters: Filter[] }) {
   const t = useTranslations("EventsPage.list");
   const [open, setOpen] = useState(false);
-  const active =
-    filters.filter((filter) => filter.value !== (filter.idle ?? ALL)).length +
-    (sources.values.length > 0 ? 1 : 0);
+  const active = filters.filter(
+    (filter) => filter.value !== (filter.idle ?? ALL)
+  ).length;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -129,9 +107,6 @@ function FiltersMenu({
               ))}
           </div>
         ))}
-        <MenuSeparator />
-        <MenuSectionLabel>{sources.label}</MenuSectionLabel>
-        <ToolbarMultiSelectRows {...sources} />
       </PopoverContent>
     </Popover>
   );
@@ -139,7 +114,7 @@ function FiltersMenu({
 
 /**
  * The feed's subheader: the section switch, the kind search, then whose
- * events (from outside, with the platform's, the platform's alone), result,
+ * events (every one's, from outside only, the platform's alone), result,
  * stream and source. Every
  * choice is a URL, so a view can be shared; it reads the view from the URL
  * itself, so it stays mounted while the rows below reload.
@@ -159,16 +134,15 @@ export default function FeedToolbar({
   const t = useTranslations("EventsPage");
   const router = useWorkspaceRouter();
   const searchParams = useSearchParams();
-  const state = parseFeedState(queryRecord(searchParams));
+  const state = parseFeedState(Object.fromEntries(searchParams));
   const facets = sourceCounts ? use(sourceCounts) : undefined;
   // The sources the view has events from, most first, as the feed counts
-  // them; a picked one stays in the list with nothing left under it.
-  const picked = state.source_type ?? [];
+  // them; the picked one stays in the list with nothing left under it.
   const sourceSlugs = [
     ...Object.entries(facets?.counts ?? {})
       .sort((a, b) => b[1] - a[1])
       .map(([slug]) => slug),
-    ...picked,
+    ...(state.source_type ? [state.source_type] : []),
   ].filter(
     (slug, index, all) =>
       slug !== PLATFORM_SOURCE_TYPE && all.indexOf(slug) === index
@@ -180,11 +154,10 @@ export default function FeedToolbar({
       feedHref(state, { ...patch, event: undefined, before: undefined }),
       { scroll: false }
     );
-  // Picking a source or a stream from the platform-only view widens it to
-  // outside and platform: a picked source joins the platform's events
-  // (`feedApiQuery` asks for both); a stream narrows to that stream.
+  // Picking a source or a stream from the platform-only view leaves it for
+  // every one's events: the source or the stream is then the filter.
   const leavePlatformOnly = (): Partial<FeedState> =>
-    state.origin === "platform" ? { origin: "all" } : {};
+    state.origin === "platform" ? { origin: undefined } : {};
 
   const outsideStreams = streams.filter(
     (stream) => !platformStreams.includes(stream.id)
@@ -194,7 +167,7 @@ export default function FeedToolbar({
   const filters: Filter[] = [
     {
       label: t("toolbar.origin"),
-      idle: "outside",
+      idle: "all",
       groups: [
         FEED_ORIGINS.map((origin) => {
           const Icon = ORIGIN_ICON[origin];
@@ -248,45 +221,49 @@ export default function FeedToolbar({
         }),
     });
   }
-  const sources: ToolbarMultiSelectProps<string> = {
+  filters.push({
     label: t("list.provider"),
-    all: {
-      label: t("list.all"),
-      triggerLabel: t("list.provider"),
-      icon: <Shapes className={ICON} />,
-    },
-    // The platform's own source is "Origin" too, so it is not offered here.
-    options: sourceSlugs.map((slug) => {
-      const type = sourceTypeBySlug(sourceTypes, slug);
-      const name = type?.name ?? slug;
-      const count = facets?.counts[slug];
-      return {
-        value: slug,
-        label: (
-          <span className="flex min-w-0 items-center gap-3">
-            <span className="flex-1 truncate">{name}</span>
-            {count !== undefined && (
-              <span className="text-xs tabular-nums text-muted-foreground">
-                {count}
-                {facets?.capped && "+"}
-              </span>
-            )}
-          </span>
-        ),
-        triggerLabel: name,
-        icon: (
-          <SourceTypeMark type={type} slug={slug} inline className={ICON} />
-        ),
-      };
-    }),
-    values: state.source_type ?? [],
-    onChange: (values) =>
+    groups: [
+      [
+        {
+          value: ALL,
+          label: t("list.all"),
+          triggerLabel: t("list.provider"),
+          icon: <Shapes className={ICON} />,
+        },
+      ],
+      // The platform's own source is "Origin" too, so it is not offered here.
+      sourceSlugs.map((slug) => {
+        const type = sourceTypeBySlug(sourceTypes, slug);
+        const name = type?.name ?? slug;
+        const count = facets?.counts[slug];
+        return {
+          value: slug,
+          label: (
+            <span className="flex min-w-0 items-center gap-3">
+              <span className="flex-1 truncate">{name}</span>
+              {count !== undefined && (
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {count}
+                  {facets?.capped && "+"}
+                </span>
+              )}
+            </span>
+          ),
+          triggerLabel: name,
+          icon: (
+            <SourceTypeMark type={type} slug={slug} inline className={ICON} />
+          ),
+        };
+      }),
+    ],
+    value: state.source_type ?? ALL,
+    onChange: (value) =>
       go({
-        source_type: values.length > 0 ? values : undefined,
+        source_type: value === ALL ? undefined : value,
         ...leavePlatformOnly(),
       }),
-    countLabel: (count) => t("toolbar.sourcesCount", { count }),
-  };
+  });
 
   return (
     // The subheader's own width decides whether the selects fit (globals.css,
@@ -310,9 +287,8 @@ export default function FeedToolbar({
               {filters.map((filter) => (
                 <ToolbarSelect<string> key={filter.label} {...filter} />
               ))}
-              <ToolbarMultiSelect<string> {...sources} />
             </div>
-            <FiltersMenu filters={filters} sources={sources} />
+            <FiltersMenu filters={filters} />
           </>
         }
       />

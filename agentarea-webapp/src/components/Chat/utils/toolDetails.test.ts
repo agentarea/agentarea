@@ -66,18 +66,16 @@ describe("tool event detail presentation", () => {
     expect(
       stripUnavailableToolValues({ output: omitted, error: null })
     ).toEqual({ error: null });
-    expect(
-      hasAvailableToolValue({ output: omitted, error: null })
-    ).toBe(true);
+    expect(hasAvailableToolValue({ output: omitted, error: null })).toBe(true);
   });
 
   it("recognizes nested and typed sanitizer markers", () => {
-    expect(isUnavailableToolValue("[nested value omitted from event log]")).toBe(
-      true
-    );
+    expect(
+      isUnavailableToolValue("[nested value omitted from event log]")
+    ).toBe(true);
     expect(isUnavailableToolValue("[bytes omitted from event log]")).toBe(true);
-    expect(isUnavailableToolValue("[object omitted from event log] in prose")).toBe(
-      false
-    );
+    expect(
+      isUnavailableToolValue("[object omitted from event log] in prose")
+    ).toBe(false);
   });
 });

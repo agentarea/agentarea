@@ -49,7 +49,7 @@ export function NavSearch({ sections }: { sections: Sections }) {
           onClick={() => setOpen(true)}
           className="flex h-8 w-full items-center gap-2 rounded-md border border-sidebar-border bg-background px-2 text-[13px] text-muted-foreground shadow-sm transition-colors hover:border-zinc-300 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring dark:hover:border-zinc-600"
         >
-          <Search className="size-3.5 shrink-0" />
+          <Search className="size-4 shrink-0" strokeWidth={1.75} />
           <span className="min-w-0 flex-1 truncate text-left">
             {t("searchPlaceholder")}
           </span>

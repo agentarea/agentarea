@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build AgentArea images for ARM64 and load into minikube
 # Usage: ./scripts/build-images-minikube.sh [component]
-#   component: api, worker, frontend, or "all" (default)
+#   component: platform, frontend, or "all" (default)
 
 set -e
 
@@ -62,24 +62,14 @@ build_image() {
     log_info "✓ ${name} image built: ${tag}"
 }
 
-# Build backend API image
-build_api() {
-    log_info "Building Backend API image..."
+# Build the platform image: one binary for every server role
+build_platform() {
+    log_info "Building Platform image..."
     build_image \
-        "Backend API" \
-        "${PROJECT_ROOT}/core" \
-        "${PROJECT_ROOT}/core/apps/api/Dockerfile" \
-        "agentarea/agentarea-api:latest"
-}
-
-# Build worker image
-build_worker() {
-    log_info "Building Worker image..."
-    build_image \
-        "Worker" \
-        "${PROJECT_ROOT}/core" \
-        "${PROJECT_ROOT}/core/apps/worker/Dockerfile" \
-        "agentarea/agentarea-worker:latest"
+        "Platform" \
+        "${PROJECT_ROOT}/agentarea-platform" \
+        "${PROJECT_ROOT}/agentarea-platform/Dockerfile" \
+        "agentarea/agentarea-platform:latest"
 }
 
 # Build frontend image
@@ -87,29 +77,9 @@ build_frontend() {
     log_info "Building Frontend image..."
     build_image \
         "Frontend" \
-        "${PROJECT_ROOT}/frontend" \
-        "${PROJECT_ROOT}/frontend/Dockerfile" \
+        "${PROJECT_ROOT}/agentarea-webapp" \
+        "${PROJECT_ROOT}/agentarea-webapp/Dockerfile" \
         "agentarea/agentarea-frontend:latest"
-}
-
-# Build MCP Manager image
-build_mcp_manager() {
-    log_info "Building MCP Manager image..."
-    build_image \
-        "MCP Manager" \
-        "${PROJECT_ROOT}/agentarea-mcp-manager" \
-        "${PROJECT_ROOT}/agentarea-mcp-manager/Dockerfile" \
-        "agentarea/agentarea-mcp-manager:latest"
-}
-
-# Build operator image
-build_operator() {
-    log_info "Building Operator image..."
-    build_image \
-        "Operator" \
-        "${PROJECT_ROOT}/agentarea-operator" \
-        "${PROJECT_ROOT}/agentarea-operator/Dockerfile" \
-        "agentarea/agentarea-operator:latest"
 }
 
 # Main execution
@@ -120,31 +90,19 @@ main() {
     setup_docker_env
     
     case "${COMPONENT}" in
-        api)
-            build_api
-            ;;
-        worker)
-            build_worker
+        platform)
+            build_platform
             ;;
         frontend)
             build_frontend
             ;;
-        mcp-manager|mcp)
-            build_mcp_manager
-            ;;
-        operator)
-            build_operator
-            ;;
         all)
-            build_api
-            build_worker
+            build_platform
             build_frontend
-            build_mcp_manager
-            build_operator
             ;;
         *)
             log_error "Unknown component: ${COMPONENT}"
-            echo "Usage: $0 [api|worker|frontend|mcp-manager|operator|all]"
+            echo "Usage: $0 [platform|frontend|all]"
             exit 1
             ;;
     esac

@@ -67,7 +67,7 @@ export function applyApiUrlFlag(apiUrl: string | undefined): void {
 
 /**
  * The one API URL every command uses: `--api-url` (via applyApiUrlFlag), else
- * AGENTAREA_API_URL, else the saved config, else http://localhost:8000.
+ * AGENTAREA_API_URL, else the saved config, else https://api.agentarea.ai.
  */
 export function getApiBaseUrl(): string {
 	return normalizeApiUrl(configManager.get().apiBaseUrl);

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
@@ -8,11 +9,17 @@ import TasksInfiniteList from "./TasksInfiniteList";
 interface TasksDataProps {
   query: TasksQuery;
   viewMode?: string;
+  /**
+   * Replaces both empty states when the caller fixes the scope (a member's
+   * tasks), where "clear the search" and "start your first task" mislead.
+   */
+  empty?: ReactNode;
 }
 
 export async function TasksData({
   query,
   viewMode = "table",
+  empty,
 }: TasksDataProps) {
   const t = await getTranslations("TasksPage");
   const tCommon = await getTranslations("Common");
@@ -40,6 +47,8 @@ export async function TasksData({
       />
     );
   }
+
+  if (firstPage.tasks.length === 0 && empty) return empty;
 
   const searchQuery = query.search.trim();
   const filtered = Boolean(

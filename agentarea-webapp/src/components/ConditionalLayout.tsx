@@ -1,15 +1,10 @@
 "use client";
 
 import { Suspense } from "react";
+import { useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useTranslations } from "next-intl";
 import AuthGuard from "@/components/auth/AuthGuard";
-import {
-  BALANCE_BAR_HEIGHT,
-  BalanceBar,
-  useBalanceExhausted,
-} from "@/components/BalanceBar";
 import InvitationDialog from "@/components/InvitationDialog/InvitationDialog";
 import { AppSidebarContent } from "@/components/MainLayout/components/AppSidebar";
 import QuickTaskDialog from "@/components/QuickTask/QuickTaskDialog";
@@ -26,6 +21,7 @@ import type { Workspace } from "@/lib/workspaces";
 interface ConditionalLayoutProps {
   children: React.ReactNode;
   sidebarDefaultOpen?: boolean;
+  sidebarDefaultWidth?: number;
   workspaces: Workspace[];
 }
 
@@ -52,11 +48,11 @@ function SkipToContentLink() {
 export default function ConditionalLayout({
   children,
   sidebarDefaultOpen,
+  sidebarDefaultWidth,
   workspaces,
 }: ConditionalLayoutProps) {
   const shouldReduceMotion = useReducedMotion();
   const pathname = usePathname();
-  const balanceExhausted = useBalanceExhausted();
 
   // The layout shell is chosen purely from the route, never from auth state.
   // This keeps SidebarProvider (and the sidebar's open/collapsed state) mounted
@@ -80,20 +76,12 @@ export default function ConditionalLayout({
   return (
     <SidebarProvider
       defaultOpen={sidebarDefaultOpen}
+      defaultWidth={sidebarDefaultWidth}
       className="flex-col"
-      style={
-        {
-          "--top-bar-h": balanceExhausted ? BALANCE_BAR_HEIGHT : "0px",
-        } as React.CSSProperties
-      }
     >
       <SkipToContentLink />
-      <BalanceBar />
-      <div className="flex h-[calc(100vh-var(--top-bar-h))] w-screen flex-row overflow-hidden bg-layoutBackground py-2 pr-2 pl-2 md:pl-0">
-        <Sidebar
-          collapsible="icon"
-          className="top-[var(--top-bar-h)] h-[calc(100svh-var(--top-bar-h))]"
-        >
+      <div className="flex h-screen w-screen flex-row overflow-hidden bg-layoutBackground py-2 pr-2 pl-2 md:pl-0">
+        <Sidebar collapsible="icon">
           <div className="relative h-full w-full overflow-hidden">
             <AnimatePresence mode="popLayout" initial={false}>
               <motion.div
@@ -122,7 +110,7 @@ export default function ConditionalLayout({
             </AnimatePresence>
           </div>
           {/* Rail lives outside the overflow-hidden animated wrapper so its
-              -right-4 toggle strip is not clipped and stays clickable. */}
+              resize handle on the edge is not clipped. */}
           <SidebarRail />
         </Sidebar>
         <main

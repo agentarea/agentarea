@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { cookies } from "next/headers";
 import type { McpServerInstanceResponse } from "@/api/client/types.gen";
 import ContentBlock from "@/components/ContentBlock";
 import EmptyState from "@/components/EmptyState/EmptyState";
@@ -20,6 +19,7 @@ import type { ApiResultLike } from "@/lib/api-errors";
 import { mcpAppEntries, type McpAppEntry } from "@/lib/apps/mcp/tools";
 import { mcpIdentity, type EntityIdentity } from "@/lib/entity-identity";
 import { optionalApiData, requireApiData } from "@/lib/server-resource";
+import { readUiPrefs } from "@/lib/ui-prefs-server";
 import { getMCPConnectionTitle } from "../connections/utils";
 
 export const metadata: Metadata = {
@@ -203,16 +203,16 @@ export default async function AppsPage({
     (apiResult) => ({ apiResult }),
     (exception: unknown) => ({ exception })
   );
-  const [t, resolvedSearchParams, cookieStore] = await Promise.all([
+  const [t, resolvedSearchParams, uiPrefs] = await Promise.all([
     getTranslations("AppsPage"),
     searchParams,
-    cookies(),
+    readUiPrefs(),
   ]);
-  // Read tab from URL or fallback to cookie
+  // Read tab from URL, else the remembered view
   const viewMode =
     typeof resolvedSearchParams.tab === "string"
       ? resolvedSearchParams.tab
-      : cookieStore.get("tab_apps")?.value || "grid";
+      : uiPrefs.views["tab_apps"] || "grid";
   const labels: AppsLabels = {
     title: t("title"),
     description: t("description"),

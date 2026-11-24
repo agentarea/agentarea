@@ -1,3 +1,4 @@
+import { listAgents } from "@/lib/api";
 import {
   PLATFORM_SOURCE_TYPE,
   showsPlatform,
@@ -20,14 +21,23 @@ export default async function FeedContent({
   sourceTypes: SourceType[];
 }) {
   const showPlatform = showsPlatform(state, platformStreams);
-  const page = await feedPage(state, showPlatform);
+  const [page, agentsResult] = await Promise.all([
+    feedPage(state, showPlatform),
+    listAgents(),
+  ]);
+  const agents = (agentsResult.data ?? []).map((a) => ({
+    id: a.id,
+    name: a.name,
+  }));
   return (
     <FeedList
       initial={page.events}
       nextBefore={page.next_before ?? null}
       state={state}
       streams={streams}
+      platformStreams={platformStreams}
       sourceTypes={sourceTypes}
+      agents={agents}
       hidesPlatform={
         !showPlatform &&
         (page.facets?.source_types[PLATFORM_SOURCE_TYPE] ?? 0) > 0

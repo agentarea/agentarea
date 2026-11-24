@@ -137,14 +137,8 @@ docker compose -f docker-compose.dev.yaml up -d
 
 #### Diagnosis
 ```bash
-# Check current migration status
-docker compose -f docker-compose.dev.yaml run --rm app alembic current
-
-# Check migration history
-docker compose -f docker-compose.dev.yaml run --rm app alembic history
-
-# Check for migration conflicts
-docker compose -f docker-compose.dev.yaml run --rm app alembic branches
+# Each migration set's applied and latest version; non-zero exit when one is behind
+docker compose -f docker-compose.dev.yaml run --rm app check-migrations
 ```
 
 #### Solutions
@@ -152,17 +146,11 @@ docker compose -f docker-compose.dev.yaml run --rm app alembic branches
 **Run Migrations:**
 ```bash
 # Apply all pending migrations
-docker compose -f docker-compose.dev.yaml run --rm app alembic upgrade head
-
-# Downgrade to specific revision
-docker compose -f docker-compose.dev.yaml run --rm app alembic downgrade <revision>
+docker compose -f docker-compose.dev.yaml run --rm app migrate
 ```
 
 **Reset Migration State:**
 ```bash
-# Mark current state as head (DANGEROUS)
-docker compose -f docker-compose.dev.yaml run --rm app alembic stamp head
-
 # Complete reset (DESTRUCTIVE)
 docker compose -f docker-compose.dev.yaml down -v
 docker compose -f docker-compose.dev.yaml up -d

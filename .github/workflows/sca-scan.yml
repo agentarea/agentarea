@@ -27,9 +27,7 @@ jobs:
     with:
       scan-args: |-
         --config=./osv-scanner.toml
-        --lockfile=./agentarea-platform/uv.lock
-        --lockfile=./agentarea-operator/uv.lock
         --lockfile=./agentarea-webapp/pnpm-lock.yaml
         --lockfile=./agentarea-cli/pnpm-lock.yaml
-        --lockfile=./agentarea-mcp-manager/go.mod
-        --lockfile=./agentarea-event-service/go.mod
+        --lockfile=./agentarea-platform/go.mod
+        --lockfile=./agentarea-platform/test/fuzz/uv.lock

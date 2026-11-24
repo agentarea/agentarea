@@ -1,0 +1,1410 @@
+[
+ {
+  "operation_id": "root__get",
+  "router_file": "main"
+ },
+ {
+  "operation_id": "hydra_jwks_proxy__well_known_jwks_json_get",
+  "router_file": "mcp_oauth_as"
+ },
+ {
+  "operation_id": "oauth_authorization_server_metadata__well_known_oauth_authorization_server_get",
+  "router_file": "mcp_oauth_as"
+ },
+ {
+  "operation_id": "oauth_protected_resource_metadata__well_known_oauth_protected_resource_get",
+  "router_file": "mcp_oauth_as"
+ },
+ {
+  "operation_id": "oauth_protected_resource_metadata_by_path__well_known_oauth_protected_resource__resource_path__get",
+  "router_file": "mcp_oauth_as"
+ },
+ {
+  "operation_id": "health_health_get",
+  "router_file": "main"
+ },
+ {
+  "operation_id": "health_check_health_get",
+  "router_file": "main"
+ },
+ {
+  "operation_id": "hydra_auth_redirect_oauth2_auth_get",
+  "router_file": "mcp_oauth_as"
+ },
+ {
+  "operation_id": "hydra_dcr_proxy_oauth2_register_post",
+  "router_file": "mcp_oauth_as"
+ },
+ {
+  "operation_id": "hydra_oauth2_proxy_oauth2__path__delete",
+  "router_file": "mcp_oauth_as"
+ },
+ {
+  "operation_id": "hydra_oauth2_proxy_oauth2__path__get",
+  "router_file": "mcp_oauth_as"
+ },
+ {
+  "operation_id": "hydra_oauth2_proxy_oauth2__path__patch",
+  "router_file": "mcp_oauth_as"
+ },
+ {
+  "operation_id": "hydra_oauth2_proxy_oauth2__path__post",
+  "router_file": "mcp_oauth_as"
+ },
+ {
+  "operation_id": "hydra_oauth2_proxy_oauth2__path__put",
+  "router_file": "mcp_oauth_as"
+ },
+ {
+  "operation_id": "get_agent_well_known_index_v1_agents__agent_id___well_known__get",
+  "router_file": "agents_well_known"
+ },
+ {
+  "operation_id": "get_agent_a2a_info_v1_agents__agent_id___well_known_a2a_info_json_get",
+  "router_file": "agents_well_known"
+ },
+ {
+  "operation_id": "get_agent_well_known_card_v1_agents__agent_id___well_known_agent_card_json_get",
+  "router_file": "agents_well_known"
+ },
+ {
+  "operation_id": "handle_agent_jsonrpc_v1_agents__agent_id__a2a_rpc_post",
+  "router_file": "agents_a2a"
+ },
+ {
+  "operation_id": "get_agent_well_known_v1_agents__agent_id__a2a_well_known_get",
+  "router_file": "agents_a2a"
+ },
+ {
+  "operation_id": "get_analytics_v1_analytics_get",
+  "router_file": "analytics"
+ },
+ {
+  "operation_id": "accept_invitation_v1_invitations_accept_post",
+  "router_file": "workspace_invitations"
+ },
+ {
+  "operation_id": "preview_invitation_v1_invitations_preview_post",
+  "router_file": "workspace_invitations"
+ },
+ {
+  "operation_id": "proxy_instance_v1_mcp__instance_id__mcp_delete",
+  "router_file": "mcp_proxy"
+ },
+ {
+  "operation_id": "proxy_instance_v1_mcp__instance_id__mcp_get",
+  "router_file": "mcp_proxy"
+ },
+ {
+  "operation_id": "proxy_instance_v1_mcp__instance_id__mcp_post",
+  "router_file": "mcp_proxy"
+ },
+ {
+  "operation_id": "list_external_identities_v1_me_external_identities_get",
+  "router_file": "external_identities"
+ },
+ {
+  "operation_id": "start_telegram_link_v1_me_external_identities_telegram_link_post",
+  "router_file": "external_identities"
+ },
+ {
+  "operation_id": "preview_telegram_link_offer_v1_me_external_identities_telegram_offer_preview_post",
+  "router_file": "external_identities"
+ },
+ {
+  "operation_id": "accept_telegram_link_offer_v1_me_external_identities_telegram_offer_accept_post",
+  "router_file": "external_identities"
+ },
+ {
+  "operation_id": "unlink_external_identity_v1_me_external_identities__identity_id__delete",
+  "router_file": "external_identities"
+ },
+ {
+  "operation_id": "oauth_callback_v1_oauth_callback_get",
+  "router_file": "oauth_connect"
+ },
+ {
+  "operation_id": "oauth_finish_v1_oauth_finish_post",
+  "router_file": "oauth_connect"
+ },
+ {
+  "operation_id": "get_pricing_currency_v1_pricing_currency_get",
+  "router_file": "pricing"
+ },
+ {
+  "operation_id": "upload_task_file_v1_runner_tasks__task_id__files__file_path__put",
+  "router_file": "harness_runner"
+ },
+ {
+  "operation_id": "runner_whoami_v1_runner_whoami_get",
+  "router_file": "harness_runner"
+ },
+ {
+  "operation_id": "list_workspaces_v1_workspaces_get",
+  "router_file": "workspaces"
+ },
+ {
+  "operation_id": "create_workspace_v1_workspaces_post",
+  "router_file": "workspaces"
+ },
+ {
+  "operation_id": "read_agent_card_v1_a2a_agent_cards_post",
+  "router_file": "a2a_agent_cards"
+ },
+ {
+  "operation_id": "check_permission_v1_access_control_check_post",
+  "router_file": "access_control"
+ },
+ {
+  "operation_id": "get_graph_v1_access_control_graph_get",
+  "router_file": "access_control"
+ },
+ {
+  "operation_id": "delete_relationship_v1_access_control_relationships_delete",
+  "router_file": "access_control"
+ },
+ {
+  "operation_id": "list_relationships_v1_access_control_relationships_get",
+  "router_file": "access_control"
+ },
+ {
+  "operation_id": "create_relationship_v1_access_control_relationships_post",
+  "router_file": "access_control"
+ },
+ {
+  "operation_id": "resolve_access_v1_access_control_resolve_post",
+  "router_file": "access_control"
+ },
+ {
+  "operation_id": "sync_grants_v1_access_control_sync_post",
+  "router_file": "access_control"
+ },
+ {
+  "operation_id": "list_agents_v1_agents_get",
+  "router_file": "agents"
+ },
+ {
+  "operation_id": "list_agents_v1_agents__get",
+  "router_file": "agents"
+ },
+ {
+  "operation_id": "create_agent_v1_agents__post",
+  "router_file": "agents"
+ },
+ {
+  "operation_id": "list_agent_presets_v1_agents_presets_get",
+  "router_file": "agents"
+ },
+ {
+  "operation_id": "get_all_tools_v1_agents_tools_get",
+  "router_file": "agents"
+ },
+ {
+  "operation_id": "delete_agent_v1_agents__agent_id__delete",
+  "router_file": "agents"
+ },
+ {
+  "operation_id": "get_agent_v1_agents__agent_id__get",
+  "router_file": "agents"
+ },
+ {
+  "operation_id": "update_agent_v1_agents__agent_id__patch",
+  "router_file": "agents"
+ },
+ {
+  "operation_id": "install_agent_v1_agents__agent_id__install_post",
+  "router_file": "agents"
+ },
+ {
+  "operation_id": "get_agent_overview_v1_agents__agent_id__overview_get",
+  "router_file": "agent_overview"
+ },
+ {
+  "operation_id": "restore_agent_v1_agents__agent_id__restore_post",
+  "router_file": "agents"
+ },
+ {
+  "operation_id": "list_agent_tasks_v1_agents__agent_id__tasks__get",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "create_task_for_agent_with_stream_v1_agents__agent_id__tasks__post",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "schedule_task_for_agent_v1_agents__agent_id__tasks_schedule_post",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "create_task_for_agent_sync_v1_agents__agent_id__tasks_sync_post",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "cancel_agent_task_v1_agents__agent_id__tasks__task_id__delete",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "get_agent_task_v1_agents__agent_id__tasks__task_id__get",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "send_a2ui_action_v1_agents__agent_id__tasks__task_id__a2ui_action_post",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "list_task_artifacts_v1_agents__agent_id__tasks__task_id__artifacts_get",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "download_task_artifact_v1_agents__agent_id__tasks__task_id__artifacts_files__artifact_path__get",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "send_task_command_v1_agents__agent_id__tasks__task_id__command_post",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "list_pending_escalations_v1_agents__agent_id__tasks__task_id__escalations_get",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "get_task_events_v1_agents__agent_id__tasks__task_id__events_get",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "stream_task_events_v1_agents__agent_id__tasks__task_id__events_stream_get",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "submit_task_input_v1_agents__agent_id__tasks__task_id__input_post",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "pause_agent_task_v1_agents__agent_id__tasks__task_id__pause_post",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "resolve_task_escalation_v1_agents__agent_id__tasks__task_id__resolve_escalation_post",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "resume_agent_task_v1_agents__agent_id__tasks__task_id__resume_post",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "retry_agent_task_v1_agents__agent_id__tasks__task_id__retry_post",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "list_task_sandbox_files_v1_agents__agent_id__tasks__task_id__sandbox_files_get",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "read_task_sandbox_file_v1_agents__agent_id__tasks__task_id__sandbox_files__file_path__get",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "get_agent_task_status_v1_agents__agent_id__tasks__task_id__status_get",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "get_task_summary_v1_agents__agent_id__tasks__task_id__summary_get",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "delete_wallet_v1_agents__agent_id__wallet_delete",
+  "router_file": "wallet"
+ },
+ {
+  "operation_id": "get_wallet_v1_agents__agent_id__wallet_get",
+  "router_file": "wallet"
+ },
+ {
+  "operation_id": "create_wallet_v1_agents__agent_id__wallet_post",
+  "router_file": "wallet"
+ },
+ {
+  "operation_id": "update_wallet_v1_agents__agent_id__wallet_put",
+  "router_file": "wallet"
+ },
+ {
+  "operation_id": "get_wallet_balance_v1_agents__agent_id__wallet_balance_get",
+  "router_file": "wallet"
+ },
+ {
+  "operation_id": "fund_wallet_v1_agents__agent_id__wallet_fund_post",
+  "router_file": "wallet"
+ },
+ {
+  "operation_id": "get_payment_history_v1_agents__agent_id__wallet_payments_get",
+  "router_file": "wallet"
+ },
+ {
+  "operation_id": "list_api_keys_v1_api_keys__get",
+  "router_file": "api_keys"
+ },
+ {
+  "operation_id": "create_api_key_v1_api_keys__post",
+  "router_file": "api_keys"
+ },
+ {
+  "operation_id": "revoke_api_key_v1_api_keys__token_id__delete",
+  "router_file": "api_keys"
+ },
+ {
+  "operation_id": "get_api_key_v1_api_keys__token_id__get",
+  "router_file": "api_keys"
+ },
+ {
+  "operation_id": "list_audit_logs_v1_audit_logs__get",
+  "router_file": "audit"
+ },
+ {
+  "operation_id": "get_balance_v1_balance_get",
+  "router_file": "dashboard"
+ },
+ {
+  "operation_id": "analyze_bundle_v1_bundles_analyze_post",
+  "router_file": "bundles"
+ },
+ {
+  "operation_id": "install_bundle_v1_bundles_install_post",
+  "router_file": "bundles"
+ },
+ {
+  "operation_id": "list_clients_v1_clients__get",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "create_client_v1_clients__post",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "list_platform_toolsets_v1_clients_platform_toolsets_get",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "delete_client_v1_clients__client_id__delete",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "get_client_v1_clients__client_id__get",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "update_client_v1_clients__client_id__patch",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "harness_agent_v1_clients__client_id__agent_post",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "add_mcp_instance_to_client_v1_clients__client_id__mcp_instances_post",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "remove_mcp_instance_from_client_v1_clients__client_id__mcp_instances__mcp_instance_id__delete",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "add_openapi_connection_to_client_v1_clients__client_id__openapi_connections_post",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "remove_openapi_connection_from_client_v1_clients__client_id__openapi_connections__connection_id__delete",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "add_platform_toolset_to_client_v1_clients__client_id__platform_toolsets_post",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "remove_platform_toolset_from_client_v1_clients__client_id__platform_toolsets__toolset__delete",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "list_runner_keys_v1_clients__client_id__runner_keys_get",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "issue_runner_key_v1_clients__client_id__runner_keys_post",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "revoke_runner_key_v1_clients__client_id__runner_keys__key_id__delete",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "add_skill_to_client_v1_clients__client_id__skills_post",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "remove_skill_from_client_v1_clients__client_id__skills__skill_id__delete",
+  "router_file": "clients"
+ },
+ {
+  "operation_id": "get_dashboard_v1_dashboard_get",
+  "router_file": "dashboard"
+ },
+ {
+  "operation_id": "list_egress_exits_v1_egress_exits__get",
+  "router_file": "egress_exits"
+ },
+ {
+  "operation_id": "create_egress_exit_v1_egress_exits__post",
+  "router_file": "egress_exits"
+ },
+ {
+  "operation_id": "delete_egress_exit_v1_egress_exits__exit_id__delete",
+  "router_file": "egress_exits"
+ },
+ {
+  "operation_id": "get_egress_exit_v1_egress_exits__exit_id__get",
+  "router_file": "egress_exits"
+ },
+ {
+  "operation_id": "update_egress_exit_v1_egress_exits__exit_id__patch",
+  "router_file": "egress_exits"
+ },
+ {
+  "operation_id": "export_workspace_config_v1_export_get",
+  "router_file": "workspace_config"
+ },
+ {
+  "operation_id": "list_workspace_files_v1_files_get",
+  "router_file": "files"
+ },
+ {
+  "operation_id": "create_workspace_directory_v1_files_directories_post",
+  "router_file": "files"
+ },
+ {
+  "operation_id": "stream_workspace_file_v1_files_download__file_path__get",
+  "router_file": "files"
+ },
+ {
+  "operation_id": "workspace_file_history_v1_files_history_get",
+  "router_file": "files"
+ },
+ {
+  "operation_id": "move_workspace_file_v1_files_move_post",
+  "router_file": "files"
+ },
+ {
+  "operation_id": "restore_workspace_file_v1_files_restore__file_path__post",
+  "router_file": "files"
+ },
+ {
+  "operation_id": "create_attachment_upload_url_v1_files_upload_url_post",
+  "router_file": "files"
+ },
+ {
+  "operation_id": "plan_workspace_uploads_v1_files_upload_urls_post",
+  "router_file": "files"
+ },
+ {
+  "operation_id": "delete_workspace_file_v1_files__file_path__delete",
+  "router_file": "files"
+ },
+ {
+  "operation_id": "download_workspace_file_v1_files__file_path__get",
+  "router_file": "files"
+ },
+ {
+  "operation_id": "preview_effective_policy_v1_governance_effective_policy_preview_post",
+  "router_file": "governance"
+ },
+ {
+  "operation_id": "get_task_policy_snapshot_v1_governance_task_policy_snapshots__task_id__get",
+  "router_file": "governance"
+ },
+ {
+  "operation_id": "get_inbox_items_v1_inbox__get",
+  "router_file": "inbox"
+ },
+ {
+  "operation_id": "list_approval_decisions_v1_inbox_decisions_get",
+  "router_file": "inbox"
+ },
+ {
+  "operation_id": "list_invitations_v1_invitations_get",
+  "router_file": "workspace_invitations"
+ },
+ {
+  "operation_id": "create_invitation_v1_invitations_post",
+  "router_file": "workspace_invitations"
+ },
+ {
+  "operation_id": "revoke_invitation_v1_invitations__invitation_id__delete",
+  "router_file": "workspace_invitations"
+ },
+ {
+  "operation_id": "delete_workspace_logo_v1_logo_delete",
+  "router_file": "workspaces"
+ },
+ {
+  "operation_id": "upload_workspace_logo_v1_logo_put",
+  "router_file": "workspaces"
+ },
+ {
+  "operation_id": "list_mcp_auth_configs_v1_mcp_auth_configs__get",
+  "router_file": "mcp_auth_configs"
+ },
+ {
+  "operation_id": "create_mcp_auth_config_v1_mcp_auth_configs__post",
+  "router_file": "mcp_auth_configs"
+ },
+ {
+  "operation_id": "delete_mcp_auth_config_v1_mcp_auth_configs__config_id__delete",
+  "router_file": "mcp_auth_configs"
+ },
+ {
+  "operation_id": "get_mcp_auth_config_v1_mcp_auth_configs__config_id__get",
+  "router_file": "mcp_auth_configs"
+ },
+ {
+  "operation_id": "update_mcp_auth_config_v1_mcp_auth_configs__config_id__put",
+  "router_file": "mcp_auth_configs"
+ },
+ {
+  "operation_id": "create_oauth_link_v1_mcp_oauth_links__post",
+  "router_file": "mcp_oauth_links"
+ },
+ {
+  "operation_id": "list_oauth_links_for_instance_v1_mcp_oauth_links_instance__instance_id__get",
+  "router_file": "mcp_oauth_links"
+ },
+ {
+  "operation_id": "revoke_oauth_link_v1_mcp_oauth_links__link_id__delete",
+  "router_file": "mcp_oauth_links"
+ },
+ {
+  "operation_id": "get_oauth_link_v1_mcp_oauth_links__link_id__get",
+  "router_file": "mcp_oauth_links"
+ },
+ {
+  "operation_id": "list_mcp_server_instances_v1_mcp_server_instances__get",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "create_mcp_server_instance_v1_mcp_server_instances__post",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "check_mcp_server_instance_configuration_v1_mcp_server_instances_check_post",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "get_containers_health_v1_mcp_server_instances_health_containers_get",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "list_mcp_server_instance_tool_policies_v1_mcp_server_instances_tool_policies_get",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "validate_instance_spec_v1_mcp_server_instances_validate_post",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "validate_connection_v1_mcp_server_instances_validate_connection_post",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "create_mcp_server_connection_v1_mcp_server_instances_with_spec_post",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "delete_mcp_server_instance_v1_mcp_server_instances__instance_id__delete",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "get_mcp_server_instance_v1_mcp_server_instances__instance_id__get",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "update_mcp_server_instance_v1_mcp_server_instances__instance_id__patch",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "list_mcp_server_instance_consumers_v1_mcp_server_instances__instance_id__consumers_get",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "discover_mcp_server_instance_tools_v1_mcp_server_instances__instance_id__discover_tools_post",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "get_instance_environment_v1_mcp_server_instances__instance_id__environment_get",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "create_oauth_link_v1_mcp_server_instances__instance_id__oauth_link_post",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "list_oauth_links_v1_mcp_server_instances__instance_id__oauth_links_get",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "probe_instance_auth_v1_mcp_server_instances__instance_id__probe_post",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "set_mcp_server_instance_sharing_v1_mcp_server_instances__instance_id__sharing_put",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "run_test_auth_v1_mcp_server_instances__instance_id__test_auth_post",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "get_mcp_server_instance_tool_policies_v1_mcp_server_instances__instance_id__tool_policies_get",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "verify_mcp_server_instance_v1_mcp_server_instances__instance_id__verify_post",
+  "router_file": "mcp_server_instances"
+ },
+ {
+  "operation_id": "list_mcp_servers_v1_mcp_servers__get",
+  "router_file": "mcp_servers_specifications"
+ },
+ {
+  "operation_id": "create_mcp_server_v1_mcp_servers__post",
+  "router_file": "mcp_servers_specifications"
+ },
+ {
+  "operation_id": "delete_mcp_server_v1_mcp_servers__server_id__delete",
+  "router_file": "mcp_servers_specifications"
+ },
+ {
+  "operation_id": "get_mcp_server_v1_mcp_servers__server_id__get",
+  "router_file": "mcp_servers_specifications"
+ },
+ {
+  "operation_id": "update_mcp_server_v1_mcp_servers__server_id__patch",
+  "router_file": "mcp_servers_specifications"
+ },
+ {
+  "operation_id": "deploy_mcp_server_v1_mcp_servers__server_id__deploy_post",
+  "router_file": "mcp_servers_specifications"
+ },
+ {
+  "operation_id": "list_members_v1_members_get",
+  "router_file": "workspace_invitations"
+ },
+ {
+  "operation_id": "remove_member_v1_members__user_id__delete",
+  "router_file": "workspace_invitations"
+ },
+ {
+  "operation_id": "list_model_instances_v1_model_instances__get",
+  "router_file": "model_instances"
+ },
+ {
+  "operation_id": "create_model_instance_v1_model_instances__post",
+  "router_file": "model_instances"
+ },
+ {
+  "operation_id": "create_model_instances_bulk_v1_model_instances_bulk_post",
+  "router_file": "model_instances"
+ },
+ {
+  "operation_id": "validate_model_instance_v1_model_instances_test_post",
+  "router_file": "model_instances"
+ },
+ {
+  "operation_id": "delete_model_instance_v1_model_instances__instance_id__delete",
+  "router_file": "model_instances"
+ },
+ {
+  "operation_id": "get_model_instance_v1_model_instances__instance_id__get",
+  "router_file": "model_instances"
+ },
+ {
+  "operation_id": "list_model_specs_v1_model_specs__get",
+  "router_file": "model_specs"
+ },
+ {
+  "operation_id": "create_model_spec_v1_model_specs__post",
+  "router_file": "model_specs"
+ },
+ {
+  "operation_id": "list_model_specs_by_provider_v1_model_specs_by_provider__provider_spec_id__get",
+  "router_file": "model_specs"
+ },
+ {
+  "operation_id": "get_model_spec_by_provider_and_name_v1_model_specs_by_provider__provider_spec_id___model_name__get",
+  "router_file": "model_specs"
+ },
+ {
+  "operation_id": "upsert_model_spec_v1_model_specs_upsert_post",
+  "router_file": "model_specs"
+ },
+ {
+  "operation_id": "delete_model_spec_v1_model_specs__model_spec_id__delete",
+  "router_file": "model_specs"
+ },
+ {
+  "operation_id": "get_model_spec_v1_model_specs__model_spec_id__get",
+  "router_file": "model_specs"
+ },
+ {
+  "operation_id": "update_model_spec_v1_model_specs__model_spec_id__patch",
+  "router_file": "model_specs"
+ },
+ {
+  "operation_id": "get_network_people_access_v1_network_people_access_get",
+  "router_file": "network_people"
+ },
+ {
+  "operation_id": "get_network_topology_v1_network_topology_get",
+  "router_file": "network"
+ },
+ {
+  "operation_id": "oauth_authorize_v1_oauth_authorize_post",
+  "router_file": "oauth_connect"
+ },
+ {
+  "operation_id": "oauth_preflight_v1_oauth_preflight_get",
+  "router_file": "oauth_connect"
+ },
+ {
+  "operation_id": "oauth_installations_v1_oauth_installations_get",
+  "router_file": "oauth_connect"
+ },
+ {
+  "operation_id": "oauth_installation_repositories_v1_oauth_installations__installation_id__repositories_get",
+  "router_file": "oauth_connect"
+ },
+ {
+  "operation_id": "oauth_bind_installation_v1_oauth_installation_put",
+  "router_file": "oauth_connect"
+ },
+ {
+  "operation_id": "list_connections_v1_openapi_connections__get",
+  "router_file": "openapi_connections"
+ },
+ {
+  "operation_id": "create_connection_v1_openapi_connections__post",
+  "router_file": "openapi_connections"
+ },
+ {
+  "operation_id": "get_catalog_connect_form_v1_openapi_connections_from_catalog__catalog_item_id__get",
+  "router_file": "openapi_connections"
+ },
+ {
+  "operation_id": "connect_catalog_api_v1_openapi_connections_from_catalog__catalog_item_id__post",
+  "router_file": "openapi_connections"
+ },
+ {
+  "operation_id": "preview_spec_v1_openapi_connections_preview_spec_post",
+  "router_file": "openapi_connections"
+ },
+ {
+  "operation_id": "delete_connection_v1_openapi_connections__connection_id__delete",
+  "router_file": "openapi_connections"
+ },
+ {
+  "operation_id": "get_connection_v1_openapi_connections__connection_id__get",
+  "router_file": "openapi_connections"
+ },
+ {
+  "operation_id": "update_connection_v1_openapi_connections__connection_id__patch",
+  "router_file": "openapi_connections"
+ },
+ {
+  "operation_id": "discover_tools_v1_openapi_connections__connection_id__discover_tools_post",
+  "router_file": "openapi_connections"
+ },
+ {
+  "operation_id": "set_connection_sharing_v1_openapi_connections__connection_id__sharing_put",
+  "router_file": "openapi_connections"
+ },
+ {
+  "operation_id": "get_connection_tool_policies_v1_openapi_connections__connection_id__tool_policies_get",
+  "router_file": "openapi_connections"
+ },
+ {
+  "operation_id": "list_policy_rules_v1_policies_get",
+  "router_file": "policies"
+ },
+ {
+  "operation_id": "create_policy_rule_v1_policies_post",
+  "router_file": "policies"
+ },
+ {
+  "operation_id": "delete_policy_rule_v1_policies__rule_id__delete",
+  "router_file": "policies"
+ },
+ {
+  "operation_id": "get_policy_rule_v1_policies__rule_id__get",
+  "router_file": "policies"
+ },
+ {
+  "operation_id": "update_policy_rule_v1_policies__rule_id__patch",
+  "router_file": "policies"
+ },
+ {
+  "operation_id": "resolve_principals_v1_principals_get",
+  "router_file": "principals"
+ },
+ {
+  "operation_id": "list_projects_v1_projects__get",
+  "router_file": "projects"
+ },
+ {
+  "operation_id": "create_project_v1_projects__post",
+  "router_file": "projects"
+ },
+ {
+  "operation_id": "delete_project_v1_projects__project_id__delete",
+  "router_file": "projects"
+ },
+ {
+  "operation_id": "get_project_v1_projects__project_id__get",
+  "router_file": "projects"
+ },
+ {
+  "operation_id": "update_project_v1_projects__project_id__patch",
+  "router_file": "projects"
+ },
+ {
+  "operation_id": "add_agent_to_project_v1_projects__project_id__agents_post",
+  "router_file": "projects"
+ },
+ {
+  "operation_id": "remove_agent_from_project_v1_projects__project_id__agents__agent_id__delete",
+  "router_file": "projects"
+ },
+ {
+  "operation_id": "list_project_files_v1_projects__project_id__files_get",
+  "router_file": "projects"
+ },
+ {
+  "operation_id": "stream_project_file_v1_projects__project_id__files_download__file_path__get",
+  "router_file": "projects"
+ },
+ {
+  "operation_id": "plan_project_uploads_v1_projects__project_id__files_upload_urls_post",
+  "router_file": "projects"
+ },
+ {
+  "operation_id": "delete_project_file_v1_projects__project_id__files__file_path__delete",
+  "router_file": "projects"
+ },
+ {
+  "operation_id": "download_project_file_v1_projects__project_id__files__file_path__get",
+  "router_file": "projects"
+ },
+ {
+  "operation_id": "add_mcp_instance_to_project_v1_projects__project_id__mcp_instances_post",
+  "router_file": "projects"
+ },
+ {
+  "operation_id": "remove_mcp_instance_from_project_v1_projects__project_id__mcp_instances__mcp_instance_id__delete",
+  "router_file": "projects"
+ },
+ {
+  "operation_id": "add_skill_to_project_v1_projects__project_id__skills_post",
+  "router_file": "projects"
+ },
+ {
+  "operation_id": "remove_skill_from_project_v1_projects__project_id__skills__skill_id__delete",
+  "router_file": "projects"
+ },
+ {
+  "operation_id": "list_provider_configs_v1_provider_configs__get",
+  "router_file": "provider_configs"
+ },
+ {
+  "operation_id": "create_provider_config_v1_provider_configs__post",
+  "router_file": "provider_configs"
+ },
+ {
+  "operation_id": "get_provider_logo_v1_provider_configs_admin__provider_key__logo_get",
+  "router_file": "provider_configs"
+ },
+ {
+  "operation_id": "discover_models_preview_v1_provider_configs_discover_preview_post",
+  "router_file": "provider_configs"
+ },
+ {
+  "operation_id": "list_provider_configs_with_instances_v1_provider_configs_with_instances_get",
+  "router_file": "provider_configs"
+ },
+ {
+  "operation_id": "delete_provider_config_v1_provider_configs__config_id__delete",
+  "router_file": "provider_configs"
+ },
+ {
+  "operation_id": "get_provider_config_v1_provider_configs__config_id__get",
+  "router_file": "provider_configs"
+ },
+ {
+  "operation_id": "patch_provider_config_v1_provider_configs__config_id__patch",
+  "router_file": "provider_configs"
+ },
+ {
+  "operation_id": "update_provider_config_v1_provider_configs__config_id__put",
+  "router_file": "provider_configs"
+ },
+ {
+  "operation_id": "discover_models_v1_provider_configs__config_id__discover_post",
+  "router_file": "provider_configs"
+ },
+ {
+  "operation_id": "start_chatgpt_sign_in_v1_provider_configs__config_id__chatgpt_sign_in_post",
+  "router_file": "provider_configs"
+ },
+ {
+  "operation_id": "complete_chatgpt_sign_in_v1_provider_configs__config_id__chatgpt_sign_in_complete_post",
+  "router_file": "provider_configs"
+ },
+ {
+  "operation_id": "list_provider_specs_v1_provider_specs__get",
+  "router_file": "provider_specs"
+ },
+ {
+  "operation_id": "get_provider_spec_by_key_v1_provider_specs_by_key__provider_key__get",
+  "router_file": "provider_specs"
+ },
+ {
+  "operation_id": "list_provider_specs_with_models_v1_provider_specs_with_models_get",
+  "router_file": "provider_specs"
+ },
+ {
+  "operation_id": "get_provider_spec_v1_provider_specs__provider_spec_id__get",
+  "router_file": "provider_specs"
+ },
+ {
+  "operation_id": "list_registries_v1_registries__get",
+  "router_file": "registries"
+ },
+ {
+  "operation_id": "create_registry_v1_registries__post",
+  "router_file": "registries"
+ },
+ {
+  "operation_id": "browse_catalog_v1_registries_catalog_browse_get",
+  "router_file": "registries"
+ },
+ {
+  "operation_id": "delete_catalog_item_v1_registries_catalog_items__item_id__delete",
+  "router_file": "registries"
+ },
+ {
+  "operation_id": "get_catalog_item_v1_registries_catalog_items__item_id__get",
+  "router_file": "registries"
+ },
+ {
+  "operation_id": "update_catalog_item_v1_registries_catalog_items__item_id__patch",
+  "router_file": "registries"
+ },
+ {
+  "operation_id": "update_item_spec_v1_registries_catalog_items__item_id__update_post",
+  "router_file": "registries"
+ },
+ {
+  "operation_id": "search_catalog_v1_registries_catalog_search_get",
+  "router_file": "registries"
+ },
+ {
+  "operation_id": "delete_registry_v1_registries__registry_id__delete",
+  "router_file": "registries"
+ },
+ {
+  "operation_id": "get_registry_v1_registries__registry_id__get",
+  "router_file": "registries"
+ },
+ {
+  "operation_id": "update_registry_v1_registries__registry_id__patch",
+  "router_file": "registries"
+ },
+ {
+  "operation_id": "list_registry_items_v1_registries__registry_id__items_get",
+  "router_file": "registries"
+ },
+ {
+  "operation_id": "create_catalog_item_v1_registries__registry_id__items_post",
+  "router_file": "registries"
+ },
+ {
+  "operation_id": "sync_registry_v1_registries__registry_id__sync_post",
+  "router_file": "registries"
+ },
+ {
+  "operation_id": "update_all_specs_v1_registries__registry_id__update_all_post",
+  "router_file": "registries"
+ },
+ {
+  "operation_id": "list_sandboxes_v1_sandboxes_get",
+  "router_file": "sandboxes"
+ },
+ {
+  "operation_id": "list_secrets_v1_secrets_get",
+  "router_file": "workspace_secrets"
+ },
+ {
+  "operation_id": "create_secret_v1_secrets_post",
+  "router_file": "workspace_secrets"
+ },
+ {
+  "operation_id": "delete_secret_v1_secrets__secret_id__delete",
+  "router_file": "workspace_secrets"
+ },
+ {
+  "operation_id": "get_secret_v1_secrets__secret_id__get",
+  "router_file": "workspace_secrets"
+ },
+ {
+  "operation_id": "update_secret_description_v1_secrets__secret_id__patch",
+  "router_file": "workspace_secrets"
+ },
+ {
+  "operation_id": "rotate_secret_v1_secrets__secret_id__value_put",
+  "router_file": "workspace_secrets"
+ },
+ {
+  "operation_id": "get_workspace_settings_v1_settings_get",
+  "router_file": "dashboard"
+ },
+ {
+  "operation_id": "update_workspace_settings_v1_settings_put",
+  "router_file": "dashboard"
+ },
+ {
+  "operation_id": "list_collections_v1_skill_collections__get",
+  "router_file": "skill_collections"
+ },
+ {
+  "operation_id": "create_collection_v1_skill_collections__post",
+  "router_file": "skill_collections"
+ },
+ {
+  "operation_id": "delete_collection_v1_skill_collections__collection_id__delete",
+  "router_file": "skill_collections"
+ },
+ {
+  "operation_id": "get_collection_v1_skill_collections__collection_id__get",
+  "router_file": "skill_collections"
+ },
+ {
+  "operation_id": "update_collection_v1_skill_collections__collection_id__put",
+  "router_file": "skill_collections"
+ },
+ {
+  "operation_id": "add_skill_to_collection_v1_skill_collections__collection_id__skills_post",
+  "router_file": "skill_collections"
+ },
+ {
+  "operation_id": "remove_skill_from_collection_v1_skill_collections__collection_id__skills__skill_id__delete",
+  "router_file": "skill_collections"
+ },
+ {
+  "operation_id": "list_skills_v1_skills_get",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "create_skill_v1_skills_post",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "update_all_skills_v1_skills_update_all_post",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "upload_skill_v1_skills_upload_post",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "delete_skill_v1_skills__skill_id__delete",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "get_skill_v1_skills__skill_id__get",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "update_skill_v1_skills__skill_id__put",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "get_skill_content_v1_skills__skill_id__content_get",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "list_skill_files_v1_skills__skill_id__files_get",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "get_skill_file_v1_skills__skill_id__files__path__get",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "flatten_skill_members_v1_skills__skill_id__flatten_get",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "install_skill_v1_skills__skill_id__install_post",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "list_skill_members_v1_skills__skill_id__members_get",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "add_skill_member_v1_skills__skill_id__members_post",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "remove_skill_member_v1_skills__skill_id__members__child_skill_id__delete",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "update_installed_skill_v1_skills__skill_id__update_post",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "list_skill_versions_v1_skills__skill_id__versions_get",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "rollback_skill_v1_skills__skill_id__versions__version_id__rollback_post",
+  "router_file": "skills"
+ },
+ {
+  "operation_id": "list_streams_v1_streams__get",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "create_stream_v1_streams__post",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "list_workspace_events_v1_streams_events_get",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "stream_workspace_events_v1_streams_events_live_get",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "get_event_by_id_v1_streams_events__event_id__get",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "list_source_types_v1_streams_source_types_get",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "delete_stream_v1_streams__stream_id__delete",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "get_stream_v1_streams__stream_id__get",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "list_events_v1_streams__stream_id__events_get",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "get_event_v1_streams__stream_id__events__sequence__get",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "create_forward_v1_streams__stream_id__forwards_post",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "create_processor_v1_streams__stream_id__processors_post",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "delete_processor_v1_streams__stream_id__processors__subscription_id__delete",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "update_processor_v1_streams__stream_id__processors__subscription_id__patch",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "list_sources_v1_streams__stream_id__sources_get",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "add_source_v1_streams__stream_id__sources_post",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "delete_source_v1_streams__stream_id__sources__source_id__delete",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "patch_source_v1_streams__stream_id__sources__source_id__patch",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "list_subscriptions_v1_streams__stream_id__subscriptions_get",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "delete_forward_v1_streams__stream_id__subscriptions__subscription_id__delete",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "list_outcomes_v1_streams__stream_id__subscriptions__subscription_id__outcomes_get",
+  "router_file": "streams"
+ },
+ {
+  "operation_id": "list_task_definitions_v1_task_definitions__get",
+  "router_file": "task_definitions"
+ },
+ {
+  "operation_id": "create_task_definition_v1_task_definitions__post",
+  "router_file": "task_definitions"
+ },
+ {
+  "operation_id": "delete_task_definition_v1_task_definitions__definition_id__delete",
+  "router_file": "task_definitions"
+ },
+ {
+  "operation_id": "get_task_definition_v1_task_definitions__definition_id__get",
+  "router_file": "task_definitions"
+ },
+ {
+  "operation_id": "update_task_definition_v1_task_definitions__definition_id__put",
+  "router_file": "task_definitions"
+ },
+ {
+  "operation_id": "run_task_definition_v1_task_definitions__definition_id__run_post",
+  "router_file": "task_definitions"
+ },
+ {
+  "operation_id": "get_all_tasks_v1_tasks__get",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "get_task_by_id_v1_tasks__task_id__get",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "continue_task_execution_v1_tasks__task_id__continue_post",
+  "router_file": "agents_tasks"
+ },
+ {
+  "operation_id": "list_tool_call_approvals_v1_tool_call_approvals_get",
+  "router_file": "tool_call_approvals"
+ },
+ {
+  "operation_id": "get_tool_call_approval_v1_tool_call_approvals__approval_id__get",
+  "router_file": "tool_call_approvals"
+ },
+ {
+  "operation_id": "decide_tool_call_approval_v1_tool_call_approvals__approval_id__decide_post",
+  "router_file": "tool_call_approvals"
+ },
+ {
+  "operation_id": "list_triggers_v1_triggers__get",
+  "router_file": "triggers"
+ },
+ {
+  "operation_id": "create_trigger_v1_triggers__post",
+  "router_file": "triggers"
+ },
+ {
+  "operation_id": "triggers_health_check_v1_triggers_health_get",
+  "router_file": "triggers"
+ },
+ {
+  "operation_id": "delete_trigger_v1_triggers__trigger_id__delete",
+  "router_file": "triggers"
+ },
+ {
+  "operation_id": "get_trigger_v1_triggers__trigger_id__get",
+  "router_file": "triggers"
+ },
+ {
+  "operation_id": "update_trigger_v1_triggers__trigger_id__put",
+  "router_file": "triggers"
+ },
+ {
+  "operation_id": "get_execution_correlations_v1_triggers__trigger_id__correlations_get",
+  "router_file": "triggers"
+ },
+ {
+  "operation_id": "disable_trigger_v1_triggers__trigger_id__disable_post",
+  "router_file": "triggers"
+ },
+ {
+  "operation_id": "enable_trigger_v1_triggers__trigger_id__enable_post",
+  "router_file": "triggers"
+ },
+ {
+  "operation_id": "execute_trigger_v1_triggers__trigger_id__execute_post",
+  "router_file": "triggers"
+ },
+ {
+  "operation_id": "get_execution_history_v1_triggers__trigger_id__executions_get",
+  "router_file": "triggers"
+ },
+ {
+  "operation_id": "get_execution_metrics_v1_triggers__trigger_id__metrics_get",
+  "router_file": "triggers"
+ },
+ {
+  "operation_id": "run_trigger_now_v1_triggers__trigger_id__run_post",
+  "router_file": "triggers"
+ },
+ {
+  "operation_id": "get_trigger_status_v1_triggers__trigger_id__status_get",
+  "router_file": "triggers"
+ },
+ {
+  "operation_id": "get_execution_timeline_v1_triggers__trigger_id__timeline_get",
+  "router_file": "triggers"
+ },
+ {
+  "operation_id": "list_workspace_registries_v1_workspace_registries_get",
+  "router_file": "workspace_registries"
+ },
+ {
+  "operation_id": "create_workspace_registry_v1_workspace_registries_post",
+  "router_file": "workspace_registries"
+ },
+ {
+  "operation_id": "delete_workspace_registry_v1_workspace_registries__registry_id__delete",
+  "router_file": "workspace_registries"
+ },
+ {
+  "operation_id": "get_workspace_registry_v1_workspace_registries__registry_id__get",
+  "router_file": "workspace_registries"
+ },
+ {
+  "operation_id": "update_workspace_registry_v1_workspace_registries__registry_id__patch",
+  "router_file": "workspace_registries"
+ },
+ {
+  "operation_id": "sync_workspace_registry_v1_workspace_registries__registry_id__sync_post",
+  "router_file": "workspace_registries"
+ },
+ {
+  "operation_id": "webhook_health_check_webhooks_health_get",
+  "router_file": "webhooks"
+ },
+ {
+  "operation_id": "handle_webhook_webhooks__webhook_id__post",
+  "router_file": "webhooks"
+ },
+ {
+  "operation_id": "oauth_consent_v1_oauth_consent_get",
+  "router_file": "mcp_oauth_as"
+ },
+ {
+  "operation_id": "oauth_consent_decide_v1_oauth_consent_post",
+  "router_file": "mcp_oauth_as"
+ }
+]

@@ -360,35 +360,19 @@ export const zBudgetPeriod = z.enum(["execution", "daily", "monthly"]);
  */
 export const zBundleAgent = z.object({
   client: z.string().nullish(),
+  delegates: z.array(z.string()).optional(),
   description: z.string().max(1000).optional().default(""),
   instruction: z.string().max(20000).optional().default(""),
   key: z.string().min(1),
   mcps: z.array(z.string()).optional(),
   model: z.string().nullish(),
   name: z.string().min(1).max(255),
+  openapi: z.array(z.string()).optional(),
   reasoning_effort: z.string().nullish(),
   reasoning_max_tokens: z.int().nullish(),
+  renamed_from: z.string().nullish(),
   skills: z.array(z.string()).optional(),
   toolsets: z.array(z.string()).optional(),
-});
-
-/**
- * BundleAutomation
- *
- * A scheduled run of one of the package's agents (maps to a CronTrigger).
- *
- * Automations are imported disabled by default; the user enables them after
- * verifying connections, mirroring the Zapier/Make "connect then activate"
- * flow.
- */
-export const zBundleAutomation = z.object({
-  agent: z.string().min(1),
-  cron: z.string().min(1),
-  enabled: z.boolean().optional().default(false),
-  key: z.string().min(1),
-  prompt: z.string().min(1),
-  timezone: z.string().optional().default("UTC"),
-  type: z.literal("cron").optional().default("cron"),
 });
 
 /**
@@ -410,6 +394,7 @@ export const zBundleChannel = z.object({
     .min(1)
     .optional()
     .default("Handle the incoming message: {{ message_text }}"),
+  renamed_from: z.string().nullish(),
   type: z.enum(["telegram", "generic"]).optional().default("telegram"),
 });
 
@@ -425,6 +410,7 @@ export const zBundleMcp = z.object({
   json_spec: z.record(z.string(), z.unknown()).nullish(),
   key: z.string().min(1),
   name: z.string().min(1).max(255),
+  renamed_from: z.string().nullish(),
 });
 
 /**
@@ -443,16 +429,57 @@ export const zBundleMetadata = z.object({
 });
 
 /**
+ * BundleOpenAPI
+ *
+ * An OpenAPI connection the bundle creates: its spec at spec_url or inline in spec (exactly one).
+ */
+export const zBundleOpenApi = z.object({
+  base_url: z.string().min(1),
+  description: z.string().optional().default(""),
+  headers: z.record(z.string(), z.string()).optional(),
+  key: z.string().min(1),
+  name: z.string().min(1).max(255),
+  query: z.record(z.string(), z.string()).optional(),
+  renamed_from: z.string().nullish(),
+  spec: z.record(z.string(), z.unknown()).nullish(),
+  spec_url: z.string().nullish(),
+  variables: z.record(z.string(), z.string()).optional(),
+});
+
+/**
+ * BundleOrigin
+ *
+ * Where a deployed folder came from, as the CLI reports it. Shown in the plan and the install record, never checked.
+ */
+export const zBundleOrigin = z.object({
+  git_commit: z.string().nullish(),
+  git_remote: z.string().nullish(),
+  path: z.string().nullish(),
+});
+
+/**
+ * BundleInstallRef
+ *
+ * The install of a bundle a plan updates.
+ */
+export const zBundleInstallRef = z.object({
+  id: z.string(),
+  name: z.string(),
+  origin: zBundleOrigin.nullish(),
+  updated_at: z.iso.datetime(),
+  updated_by: z.string().nullish(),
+});
+
+/**
  * BundlePolicy
  *
- * A governance rule the package installs (maps to a PolicyRule).
+ * A governance rule the package installs on its own agents (maps to a PolicyRule).
  *
- * Portable like everything else: ``subject`` is the literal "workspace" or a
- * BundleAgent ``key`` (never a DB id); the installer resolves it to a real
- * subject id. ``target``/``effect``/``params`` mirror the unified governance
- * rule model, so this is "our policy format" — not a new one.
+ * ``subject`` is a BundleAgent ``key``, a list of them, or "*" for every agent of the bundle; a list or "*" becomes one policy per agent, keyed ``<key>-<agent>``. "workspace" and effect "allow" are refused: rules that reach beyond the bundle or loosen belong to an admin.
  */
 export const zBundlePolicy = z.object({
+  approvers: z.array(z.string()).optional(),
+  billing_currency: z.string().nullish(),
   condition: z.string().nullish(),
   effect: z.enum(["allow", "deny", "cap", "approval", "safety"]),
   enabled: z.boolean().optional().default(true),
@@ -460,8 +487,47 @@ export const zBundlePolicy = z.object({
   message: z.string().nullish(),
   params: z.record(z.string(), z.unknown()).optional(),
   priority: z.int().gte(-2147483648).lte(2147483647).optional().default(0),
-  subject: z.string().optional().default("workspace"),
+  renamed_from: z.string().nullish(),
+  subject: z.string(),
   target: z.string().min(1),
+});
+
+/**
+ * BundlePolicy
+ *
+ * A governance rule the package installs on its own agents (maps to a PolicyRule).
+ *
+ * ``subject`` is a BundleAgent ``key``, a list of them, or "*" for every agent of the bundle; a list or "*" becomes one policy per agent, keyed ``<key>-<agent>``. "workspace" and effect "allow" are refused: rules that reach beyond the bundle or loosen belong to an admin.
+ */
+export const zBundlePolicyInput = z.object({
+  approvers: z.array(z.string()).optional(),
+  billing_currency: z.string().nullish(),
+  condition: z.string().nullish(),
+  effect: z.enum(["allow", "deny", "cap", "approval", "safety"]),
+  enabled: z.boolean().optional().default(true),
+  key: z.string().min(1),
+  message: z.string().nullish(),
+  params: z.record(z.string(), z.unknown()).optional(),
+  priority: z.int().gte(-2147483648).lte(2147483647).optional().default(0),
+  renamed_from: z.string().nullish(),
+  subject: z.union([z.string(), z.array(z.string())]),
+  target: z.string().min(1),
+});
+
+/**
+ * BundleProject
+ *
+ * A project grouping the bundle's agents, MCP servers and skills by key.
+ */
+export const zBundleProject = z.object({
+  agents: z.array(z.string()).optional(),
+  description: z.string().optional().default(""),
+  instructions: z.string().nullish(),
+  key: z.string().min(1),
+  mcp: z.array(z.string()).optional(),
+  name: z.string().min(1).max(255),
+  renamed_from: z.string().nullish(),
+  skills: z.array(z.string()).optional(),
 });
 
 /**
@@ -474,11 +540,107 @@ export const zBundleSkill = z.object({
   files: z.record(z.string(), z.string()).nullish(),
   key: z.string().min(1),
   name: z.string().min(1).max(255),
+  renamed_from: z.string().nullish(),
   source_type: z
     .enum(["content", "files", "github"])
     .optional()
     .default("content"),
   source_url: z.string().nullish(),
+});
+
+/**
+ * BundleStreamForward
+ *
+ * A forward copying a bundle stream's events into other streams.
+ */
+export const zBundleStreamForward = z.object({
+  filter: z.record(z.string(), z.unknown()).optional(),
+  outputs: z.array(z.string()),
+});
+
+/**
+ * BundleStreamProcessor
+ *
+ * A processor of a bundle stream.
+ */
+export const zBundleStreamProcessor = z.object({
+  code: z.string().min(1),
+  filter: z.record(z.string(), z.unknown()).optional(),
+  outputs: z.array(z.string()),
+});
+
+/**
+ * BundleStreamSource
+ *
+ * A source feeding a bundle stream; credentials are ${secret.<name>} or ${setup.<key>} references.
+ */
+export const zBundleStreamSource = z.object({
+  config: z.record(z.string(), z.string()).optional(),
+  credentials: z.record(z.string(), z.string()).optional(),
+  kind: z.enum(["webhook", "poll"]).optional().default("webhook"),
+  type: z.string().min(1),
+});
+
+/**
+ * BundleStream
+ *
+ * A stream the bundle creates, with its sources, processors and forwards.
+ */
+export const zBundleStream = z.object({
+  description: z.string().optional().default(""),
+  forwards: z.array(zBundleStreamForward).optional(),
+  key: z.string().min(1),
+  name: z.string().min(1).max(255),
+  processors: z.array(zBundleStreamProcessor).optional(),
+  renamed_from: z.string().nullish(),
+  sources: z.array(zBundleStreamSource).optional(),
+});
+
+/**
+ * BundleTask
+ *
+ * A saved task the bundle creates: a run of agent asked prompt.
+ */
+export const zBundleTask = z.object({
+  agent: z.string().min(1),
+  key: z.string().min(1),
+  name: z.string().min(1).max(255),
+  parameters: z.record(z.string(), z.unknown()).optional(),
+  prompt: z.string().min(1),
+  renamed_from: z.string().nullish(),
+});
+
+/**
+ * BundleTriggerOn
+ *
+ * The stream an automation runs on and the events it takes.
+ */
+export const zBundleTriggerOn = z.object({
+  filter: z.record(z.string(), z.unknown()).optional(),
+  stream: z.string().min(1),
+});
+
+/**
+ * BundleAutomation
+ *
+ * A run of one of the package's agents: on a cron schedule, or on the events of a stream (`on`). Exactly one of `cron` and `on`, and either `task` or `agent` with `prompt`.
+ *
+ * Automations are imported disabled by default; the user enables them after
+ * verifying connections, mirroring the Zapier/Make "connect then activate"
+ * flow.
+ */
+export const zBundleAutomation = z.object({
+  agent: z.string().optional(),
+  cron: z.string().min(1).optional(),
+  enabled: z.boolean().optional().default(false),
+  key: z.string().min(1),
+  on: zBundleTriggerOn.optional(),
+  parameters: z.record(z.string(), z.unknown()).optional(),
+  prompt: z.string().optional(),
+  renamed_from: z.string().nullish(),
+  task: z.string().min(1).nullish(),
+  timezone: z.string().optional().default("UTC"),
+  type: z.literal("cron").optional().default("cron"),
 });
 
 /**
@@ -624,6 +786,23 @@ export const zCategoryFacet = z.object({
 });
 
 /**
+ * ChatGPTDeviceCodeResponse
+ */
+export const zChatGptDeviceCodeResponse = z.object({
+  expires_in: z.int(),
+  interval: z.int(),
+  user_code: z.string(),
+  verification_uri: z.string(),
+});
+
+/**
+ * ChatGPTSignInResponse
+ */
+export const zChatGptSignInResponse = z.object({
+  signed_in: z.boolean(),
+});
+
+/**
  * CheckRequest
  */
 export const zCheckRequest = z.object({
@@ -695,6 +874,7 @@ export const zClientResponse = z.object({
   created_by: z.string(),
   default_model: z.string().nullish(),
   description: z.string().nullable(),
+  has_runner: z.boolean().optional().default(false),
   id: z.uuid(),
   kind: z.string(),
   mcp_endpoint_url: z.string().nullish(),
@@ -775,6 +955,13 @@ export const zCollectionSummaryResponse = z.object({
 export const zCollectionUpdateRequest = z.object({
   description: z.string().nullish(),
   name: z.string().min(1).max(255).nullish(),
+});
+
+/**
+ * ConnectionSharingRequest
+ */
+export const zConnectionSharingRequest = z.object({
+  shared: z.boolean(),
 });
 
 /**
@@ -930,6 +1117,10 @@ export const zEntityKind = z.enum([
   "channel",
   "automation",
   "policy",
+  "stream",
+  "openapi",
+  "task",
+  "project",
 ]);
 
 /**
@@ -1046,13 +1237,31 @@ export const zExecutionTimelineResponse = z.object({
 });
 
 /**
+ * ExistingBundleInstall
+ *
+ * The install that already has a bundle's name: deploy into it by id, or rename the bundle.
+ */
+export const zExistingBundleInstall = z.object({
+  created_by: z.string(),
+  id: z.string(),
+  name: z.string(),
+  updated_at: z.iso.datetime(),
+  updated_by: z.string().nullish(),
+});
+
+/**
  * ExternalIdentityResponse
+ *
+ * A messenger account linked to the caller. username and display_name are how the
+ * messenger named the account when it was linked; null for links made before they were kept.
  */
 export const zExternalIdentityResponse = z.object({
+  display_name: z.string().nullable(),
   external_id: z.string(),
   id: z.uuid(),
   linked_at: z.iso.datetime(),
   provider: z.string(),
+  username: z.string().nullable(),
 });
 
 /**
@@ -1238,6 +1447,7 @@ export const zInstalledEntity = z.object({
   id: z.string().nullish(),
   key: z.string(),
   kind: zEntityKind,
+  model_id: z.string().nullish(),
   name: z.string(),
 });
 
@@ -1247,6 +1457,7 @@ export const zInstalledEntity = z.object({
 export const zInstallResult = z.object({
   bundle_name: z.string(),
   entities: z.array(zInstalledEntity).optional(),
+  install_id: z.string().optional(),
   installed_bundle_id: z.string().nullish(),
   setup_values: z.record(z.string(), z.unknown()).optional(),
 });
@@ -1578,10 +1789,12 @@ export const zMcpServerInstanceResponse = z.object({
   description: z.string().nullable(),
   events: z.record(z.string(), z.unknown()).nullish(),
   id: z.uuid(),
+  is_owner: z.boolean().optional().default(false),
   json_spec: z.record(z.string(), z.unknown()),
   last_dispatch: z.record(z.string(), z.unknown()).nullish(),
   managed_by: z.string().nullish(),
   name: z.string(),
+  personal: z.boolean().optional().default(false),
   server_spec_id: z.string(),
   tools: z.array(z.record(z.string(), z.unknown())).nullish(),
   transport: zMcpTransport,
@@ -1985,9 +2198,10 @@ export const zNetworkTopologyResponse = z.object({
  *
  * Start a sign-in for one MCP instance or one catalog API.
  *
- * ``auto`` uses the operator's platform app when one serves the provider, else
- * registers AgentArea with it (RFC 7591). ``custom`` uses an OAuth app the
- * workspace registered with the provider, and overrides either.
+ * ``auto`` signs a connection connected with its own OAuth app in with that
+ * app again; else it uses the operator's platform app when one serves the
+ * provider, else registers AgentArea with it (RFC 7591). ``custom`` uses an
+ * OAuth app the workspace registered with the provider, and overrides any.
  */
 export const zOAuthAuthorizeRequest = z.object({
   catalog_item_id: z.uuid().nullish(),
@@ -1997,6 +2211,7 @@ export const zOAuthAuthorizeRequest = z.object({
   client_secret_secret_id: z.uuid().nullish(),
   credential_mode: z.enum(["auto", "custom"]).optional().default("auto"),
   instance_id: z.uuid().nullish(),
+  openapi_connection_id: z.uuid().nullish(),
   return_to: z.string().max(2048).optional().default(""),
   scopes: z.array(z.string()).min(1).nullish(),
 });
@@ -2007,6 +2222,67 @@ export const zOAuthAuthorizeRequest = z.object({
 export const zOAuthAuthorizeResponse = z.object({
   authorize_url: z.string(),
   connection_id: z.uuid(),
+});
+
+/**
+ * OAuthInstallation
+ */
+export const zOAuthInstallation = z.object({
+  account: z.string(),
+  account_type: z.string(),
+  id: z.int(),
+  repository_selection: z.string(),
+});
+
+/**
+ * OAuthInstallationsResponse
+ */
+export const zOAuthInstallationsResponse = z.object({
+  installations: z.array(zOAuthInstallation),
+});
+
+/**
+ * OAuthInstallationRepository
+ */
+export const zOAuthInstallationRepository = z.object({
+  full_name: z.string(),
+  name: z.string(),
+  private: z.boolean(),
+});
+
+/**
+ * OAuthInstallationRepositoriesResponse
+ */
+export const zOAuthInstallationRepositoriesResponse = z.object({
+  repositories: z.array(zOAuthInstallationRepository),
+});
+
+/**
+ * OAuthInstallationBinding
+ *
+ * The installation a connection's calls are limited to.
+ */
+export const zOAuthInstallationBinding = z.object({
+  account: z.string(),
+  installation_id: z.int(),
+  repositories: z.array(z.string()).nullable(),
+});
+
+/**
+ * OAuthInstallationBindingRequest
+ */
+export const zOAuthInstallationBindingRequest = z.object({
+  installation_id: z.int().gte(1).nullable(),
+  instance_id: z.uuid().nullish(),
+  openapi_connection_id: z.uuid().nullish(),
+  repositories: z.array(z.string().min(1).max(100)).max(500).nullish(),
+});
+
+/**
+ * OAuthInstallationBindingResponse
+ */
+export const zOAuthInstallationBindingResponse = z.object({
+  installation_binding: zOAuthInstallationBinding.nullable(),
 });
 
 /**
@@ -2054,16 +2330,21 @@ export const zOAuthLinkResponse = z.object({
  * What the UI needs before it can offer Connect.
  *
  * ``ready`` — Connect runs unattended, with the client ``credential_source``
- * names: the operator's ``platform`` app, or one registered ``dynamic``-ally.
+ * names: the operator's ``platform`` app, one registered ``dynamic``-ally, or
+ * the ``custom`` app the connection was connected with, signed in with again.
  * ``oauth_app_required`` — ask for a client ID/secret first.
  * ``unsupported`` — this cannot be authorized with OAuth; ``detail`` says why.
  */
 export const zOAuthPreflightResponse = z.object({
   authorization_endpoint: z.string().nullish(),
+  client_id: z.string().nullish(),
   connected: z.boolean(),
-  credential_source: z.enum(["platform", "dynamic"]).nullish(),
+  credential_source: z.enum(["platform", "dynamic", "custom"]).nullish(),
   default_scopes: z.array(z.string()).optional(),
   detail: z.string().optional().default(""),
+  install_url: z.string().nullish(),
+  installation_binding: zOAuthInstallationBinding.nullish(),
+  installation_binding_available: z.boolean().optional().default(false),
   issuer: z.string().nullish(),
   redirect_uri: z.string(),
   scopes: z.array(z.string()).optional(),
@@ -2400,11 +2681,24 @@ export const zPresignUploadResponse = z.object({
 });
 
 /**
+ * PreviewApproval
+ *
+ * An approval policy that binds an agent, as the agent's plan line shows it.
+ */
+export const zPreviewApproval = z.object({
+  approvers: z.array(z.string()),
+  policy: z.string(),
+  target: z.string(),
+  workspace: z.boolean(),
+});
+
+/**
  * PreviewEntity
  *
  * One thing the package will (or won't) create.
  */
 export const zPreviewEntity = z.object({
+  approvals: z.array(zPreviewApproval).optional(),
   detail: z.string().nullish(),
   key: z.string(),
   kind: zEntityKind,
@@ -2418,6 +2712,7 @@ export const zPreviewEntity = z.object({
  * A problem found while analyzing the package.
  */
 export const zPreviewIssue = z.object({
+  code: z.string().nullish(),
   entity_key: z.string().nullish(),
   message: z.string(),
   severity: zIssueSeverity,
@@ -2501,6 +2796,7 @@ export const zFeedEventResponse = z.object({
   source_id: z.uuid().nullable(),
   source_type: z.string().nullable(),
   stream_id: z.uuid(),
+  summary: z.string().nullable(),
   v: z.int().optional().default(1),
 });
 
@@ -2669,6 +2965,7 @@ export const zProviderConfigUpdate = z.object({
  * ProviderSpecResponse
  */
 export const zProviderSpecResponse = z.object({
+  auth: z.string(),
   created_at: z.iso.datetime(),
   description: z.string().nullable(),
   icon: z.string().nullable(),
@@ -2721,9 +3018,11 @@ export const zOpenApiConnectionResponse = z.object({
   custom_query_params: z.array(zQueryParamOutput).nullish(),
   description: z.string().nullish(),
   id: z.uuid(),
+  is_owner: z.boolean().optional().default(false),
   last_dispatch: z.record(z.string(), z.unknown()).nullish(),
   managed_by: z.string().nullish(),
   name: z.string(),
+  personal: z.boolean().optional().default(false),
   registry_item_id: z.uuid().nullish(),
   spec_url: z.string().nullish(),
   status: z.string(),
@@ -3187,6 +3486,21 @@ export const zSecretValueUpdate = z.object({
 });
 
 /**
+ * Senders
+ *
+ * Which senders a source with an ``admission`` lets through to its agent.
+ *
+ * ``owner``: only whoever added the source, once their account is linked.
+ * ``members``: anyone linked whom the graph lets run the agent.
+ * ``ids``: exactly these accounts at the provider, linked or not; the owner
+ * answers for them, so their runs are the owner's.
+ */
+export const zSenders = z.object({
+  allow: z.enum(["owner", "members", "ids"]),
+  ids: z.array(z.string()).max(100).optional().default([]),
+});
+
+/**
  * SetupFieldType
  *
  * Input widget / storage hint for a setup field.
@@ -3233,10 +3547,14 @@ export const zBundleInput = z.object({
   mcps: z.array(zBundleMcp).optional(),
   metadata: zBundleMetadata.optional(),
   name: z.string().min(1).max(255),
-  policies: z.array(zBundlePolicy).optional(),
+  openapi: z.array(zBundleOpenApi).optional(),
+  policies: z.array(zBundlePolicyInput).optional(),
+  projects: z.array(zBundleProject).optional(),
   schema_version: z.string().optional().default("0.1.0"),
   setup: z.array(zSetupField).optional(),
   skills: z.array(zBundleSkill).optional(),
+  streams: z.array(zBundleStream).optional(),
+  tasks: z.array(zBundleTask).optional(),
 });
 
 /**
@@ -3253,6 +3571,8 @@ export const zBundleInput = z.object({
 export const zAnalyzeRequest = z.object({
   bundle: zBundleInput.nullish(),
   files: z.record(z.string(), z.string()).nullish(),
+  into: z.string().nullish(),
+  origin: zBundleOrigin.nullish(),
   setup_values: z.record(z.string(), z.unknown()).optional(),
   source: z.string().nullish(),
   source_url: z.string().nullish(),
@@ -3272,10 +3592,14 @@ export const zBundleOutput = z.object({
   mcps: z.array(zBundleMcp).optional(),
   metadata: zBundleMetadata.optional(),
   name: z.string().min(1).max(255),
+  openapi: z.array(zBundleOpenApi).optional(),
   policies: z.array(zBundlePolicy).optional(),
+  projects: z.array(zBundleProject).optional(),
   schema_version: z.string().optional().default("0.1.0"),
   setup: z.array(zSetupField).optional(),
   skills: z.array(zBundleSkill).optional(),
+  streams: z.array(zBundleStream).optional(),
+  tasks: z.array(zBundleTask).optional(),
 });
 
 /**
@@ -3286,6 +3610,8 @@ export const zBundleOutput = z.object({
 export const zImportPreview = z.object({
   bundle: zBundleOutput,
   entities: z.array(zPreviewEntity).optional(),
+  existing_install: zExistingBundleInstall.nullish(),
+  install: zBundleInstallRef.nullish(),
   installable: z.boolean(),
   issues: z.array(zPreviewIssue).optional(),
   plan_digest: z.string().nullish(),
@@ -3299,6 +3625,8 @@ export const zImportPreview = z.object({
  */
 export const zInstallRequest = z.object({
   bundle: zBundleInput,
+  install_id: z.string().nullish(),
+  origin: zBundleOrigin.nullish(),
   plan_digest: z.string().min(1),
   setup_values: z.record(z.string(), z.unknown()).optional(),
 });
@@ -3534,6 +3862,8 @@ export const zSourceCreated = z.object({
   poll_error: z.string().nullish(),
   polled_at: z.iso.datetime().nullish(),
   registered: z.boolean().optional().default(false),
+  senders: zSenders.nullish(),
+  senders_set_by: z.string().nullish(),
   source_type: z.string().nullable(),
   webhook_id: z.string().nullable(),
   webhook_url: z.string().nullable(),
@@ -3570,6 +3900,7 @@ export const zSourceCreate = z.object({
     .optional(),
   event_templates: zEventOverrides.nullish(),
   kind: zSourceKind.optional().default("webhook"),
+  senders: zSenders.nullish(),
   source_type: z.string().min(1).max(50),
 });
 
@@ -3588,6 +3919,7 @@ export const zSourceTypeTemplates = z.object({
  * SourceTypeResponse
  */
 export const zSourceTypeResponse = z.object({
+  admits_senders: z.boolean().optional().default(false),
   config: z.array(zSourceField),
   continues_sessions: z.boolean(),
   credentials: z.array(zSourceField),
@@ -3598,10 +3930,20 @@ export const zSourceTypeResponse = z.object({
   icon: z.string(),
   icon_url: z.string().nullable(),
   name: z.string(),
+  registers_webhook: z.boolean().optional().default(false),
   replies: z.boolean(),
   slug: z.string(),
   verification_header: z.string().nullable(),
   verification_scheme: z.string().nullable(),
+});
+
+/**
+ * SourceUpdate
+ *
+ * What can change on a source once added: who may write to it.
+ */
+export const zSourceUpdate = z.object({
+  senders: zSenders,
 });
 
 /**
@@ -3669,6 +4011,7 @@ export const zStreamEventDetailResponse = z.object({
   source_id: z.uuid().nullable(),
   source_type: z.string().nullable(),
   stream_id: z.uuid(),
+  summary: z.string().nullable(),
   v: z.int().optional().default(1),
 });
 
@@ -3697,6 +4040,7 @@ export const zStreamEventResponse = z.object({
   source_id: z.uuid().nullable(),
   source_type: z.string().nullable(),
   stream_id: z.uuid(),
+  summary: z.string().nullable(),
   v: z.int().optional().default(1),
 });
 
@@ -3719,6 +4063,7 @@ export const zStreamResponse = z.object({
   id: z.uuid(),
   kind: z.string(),
   name: z.string(),
+  source_types: z.array(z.string()),
 });
 
 /**
@@ -3732,6 +4077,8 @@ export const zStreamSourceResponse = z.object({
   poll_error: z.string().nullish(),
   polled_at: z.iso.datetime().nullish(),
   registered: z.boolean().optional().default(false),
+  senders: zSenders.nullish(),
+  senders_set_by: z.string().nullish(),
   source_type: z.string().nullable(),
   webhook_id: z.string().nullable(),
   webhook_url: z.string().nullable(),
@@ -4007,6 +4354,30 @@ export const zInboxResponse = z.object({
  */
 export const zTelegramLinkRequest = z.object({
   bot: z.string().regex(/^[A-Za-z0-9_]{5,32}$/),
+});
+
+/**
+ * TelegramLinkOfferRequest
+ */
+export const zTelegramLinkOfferRequest = z.object({
+  code: z.string().min(1),
+});
+
+/**
+ * TelegramLinkOfferResponse
+ *
+ * The Telegram account a bot offered a link for, as Telegram named it when the bot
+ * answered, and the workspace whose bot offered it; only a member of that workspace
+ * sees or accepts it. linked_to is who already holds it: "you", "another_account", or null.
+ */
+export const zTelegramLinkOfferResponse = z.object({
+  bot: z.string().nullable(),
+  display_name: z.string().nullable(),
+  external_id: z.string(),
+  linked_to: z.enum(["you", "another_account"]).nullable(),
+  provider: z.string(),
+  username: z.string().nullable(),
+  workspace_name: z.string(),
 });
 
 /**
@@ -4917,6 +5288,7 @@ export const zAgentareaApiApiV1ProviderSpecsModelSpecResponse = z.object({
  * ProviderSpecWithModelsResponse
  */
 export const zProviderSpecWithModelsResponse = z.object({
+  auth: z.string(),
   created_at: z.iso.datetime(),
   description: z.string().nullable(),
   icon: z.string().nullable(),
@@ -4941,6 +5313,46 @@ export const zAgentareaApiApiV1RegistriesSyncResponse = z.object({
   total: z.int(),
   unchanged: z.int(),
   updates_flagged: z.int(),
+});
+
+/**
+ * OAuthConsentClient
+ */
+export const zOAuthConsentClient = z.object({
+  client_id: z.string(),
+  client_name: z.string(),
+  client_uri: z.string(),
+  logo_uri: z.string(),
+  redirect_uris: z.array(z.string()),
+});
+
+/**
+ * OAuthConsentResponse
+ *
+ * A consent request of this API's authorization server: the client, and what accepting grants it. `api` reaches the whole account and is granted only to first-party clients; `mcp` reaches MCP in one workspace the user picks.
+ */
+export const zOAuthConsentResponse = z.object({
+  client: zOAuthConsentClient,
+  redirect_uri: z.string(),
+  first_party: z.boolean(),
+  access: z.enum(["mcp", "api"]),
+  scopes: z.array(z.string()),
+});
+
+/**
+ * OAuthConsentDecision
+ */
+export const zOAuthConsentDecision = z.object({
+  challenge: z.string(),
+  action: z.enum(["accept", "reject"]),
+  workspaces: z.array(z.string()).nullish(),
+});
+
+/**
+ * OAuthConsentRedirect
+ */
+export const zOAuthConsentRedirect = z.object({
+  redirect_to: z.string(),
 });
 
 export const zOauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetPath =
@@ -5058,6 +5470,24 @@ export const zStartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostBody =
  */
 export const zStartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponse =
   zTelegramLinkResponse;
+
+export const zAcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostBody =
+  zTelegramLinkOfferRequest;
+
+/**
+ * Successful Response
+ */
+export const zAcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponse =
+  zExternalIdentityResponse;
+
+export const zPreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostBody =
+  zTelegramLinkOfferRequest;
+
+/**
+ * Successful Response
+ */
+export const zPreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponse =
+  zTelegramLinkOfferResponse;
 
 export const zUnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeletePath =
   z.object({
@@ -6311,6 +6741,20 @@ export const zProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostPath =
     instance_id: z.uuid(),
   });
 
+export const zSetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutBody =
+  zConnectionSharingRequest;
+
+export const zSetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutPath =
+  z.object({
+    instance_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zSetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutResponse =
+  zMcpServerInstanceResponse;
+
 export const zRunTestAuthV1McpServerInstancesInstanceIdTestAuthPostPath =
   z.object({
     instance_id: z.uuid(),
@@ -6570,6 +7014,7 @@ export const zOauthPreflightV1OauthPreflightGetQuery = z.object({
   instance_id: z.uuid().nullish(),
   server_id: z.uuid().nullish(),
   catalog_item_id: z.uuid().nullish(),
+  openapi_connection_id: z.uuid().nullish(),
 });
 
 /**
@@ -6577,6 +7022,43 @@ export const zOauthPreflightV1OauthPreflightGetQuery = z.object({
  */
 export const zOauthPreflightV1OauthPreflightGetResponse =
   zOAuthPreflightResponse;
+
+export const zOauthInstallationsV1OauthInstallationsGetQuery = z.object({
+  instance_id: z.uuid().nullish(),
+  openapi_connection_id: z.uuid().nullish(),
+});
+
+/**
+ * Successful Response
+ */
+export const zOauthInstallationsV1OauthInstallationsGetResponse =
+  zOAuthInstallationsResponse;
+
+export const zOauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetPath =
+  z.object({
+    installation_id: z.int().gte(1),
+  });
+
+export const zOauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetQuery =
+  z.object({
+    instance_id: z.uuid().nullish(),
+    openapi_connection_id: z.uuid().nullish(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zOauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponse =
+  zOAuthInstallationRepositoriesResponse;
+
+export const zOauthBindInstallationV1OauthInstallationPutBody =
+  zOAuthInstallationBindingRequest;
+
+/**
+ * Successful Response
+ */
+export const zOauthBindInstallationV1OauthInstallationPutResponse =
+  zOAuthInstallationBindingResponse;
 
 export const zListConnectionsV1OpenapiConnectionsGetQuery = z.object({
   status: z.string().nullish(),
@@ -6676,6 +7158,31 @@ export const zDiscoverToolsV1OpenapiConnectionsConnectionIdDiscoverToolsPostPath
   z.object({
     connection_id: z.uuid(),
   });
+
+export const zSetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutBody =
+  zConnectionSharingRequest;
+
+export const zSetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutPath =
+  z.object({
+    connection_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zSetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutResponse =
+  zOpenApiConnectionResponse;
+
+export const zGetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetPath =
+  z.object({
+    connection_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zGetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetResponse =
+  zMcpInstanceToolPolicies;
 
 export const zListPolicyRulesV1PoliciesGetQuery = z.object({
   subject_type: zPolicySubjectType.nullish(),
@@ -7021,6 +7528,28 @@ export const zDiscoverModelsV1ProviderConfigsConfigIdDiscoverPostPath =
  */
 export const zDiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponse =
   zDiscoveryResponse;
+
+export const zStartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostPath =
+  z.object({
+    config_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zStartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponse =
+  zChatGptDeviceCodeResponse;
+
+export const zCompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostPath =
+  z.object({
+    config_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zCompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponse =
+  zChatGptSignInResponse;
 
 export const zListProviderSpecsV1ProviderSpecsGetQuery = z.object({
   is_builtin: z.boolean().nullish(),
@@ -7608,7 +8137,7 @@ export const zListWorkspaceEventsV1StreamsEventsGetQuery = z.object({
   before: z.int().gte(1).lte(9223372036854776000).nullish(),
   limit: z.int().gte(1).lte(200).optional().default(50),
   stream_id: z.uuid().nullish(),
-  source_type: z.array(z.string()).max(50).optional().default([]),
+  source_type: z.string().max(64).nullish(),
   kind: z.string().max(255).nullish(),
   sender: z.string().max(512).nullish(),
   session_key: z.string().max(512).nullish(),
@@ -7626,7 +8155,7 @@ export const zListWorkspaceEventsV1StreamsEventsGetResponse =
 
 export const zStreamWorkspaceEventsV1StreamsEventsLiveGetQuery = z.object({
   stream_id: z.uuid().nullish(),
-  source_type: z.array(z.string()).max(50).optional().default([]),
+  source_type: z.string().max(64).nullish(),
   kind: z.string().max(255).nullish(),
   sender: z.string().max(512).nullish(),
   session_key: z.string().max(512).nullish(),
@@ -7786,6 +8315,20 @@ export const zDeleteSourceV1StreamsStreamIdSourcesSourceIdDeletePath = z.object(
  */
 export const zDeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponse =
   z.void();
+
+export const zPatchSourceV1StreamsStreamIdSourcesSourceIdPatchBody =
+  zSourceUpdate;
+
+export const zPatchSourceV1StreamsStreamIdSourcesSourceIdPatchPath = z.object({
+  stream_id: z.uuid(),
+  source_id: z.uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zPatchSourceV1StreamsStreamIdSourcesSourceIdPatchResponse =
+  zStreamSourceResponse;
 
 export const zListSubscriptionsV1StreamsStreamIdSubscriptionsGetPath = z.object(
   {
@@ -8270,3 +8813,20 @@ export const zWebhookHealthCheckWebhooksHealthGetResponse = z.record(
 export const zHandleWebhookWebhooksWebhookIdPostPath = z.object({
   webhook_id: z.string(),
 });
+
+export const zOauthConsentV1OauthConsentGetQuery = z.object({
+  challenge: z.string(),
+});
+
+/**
+ * Successful Response
+ */
+export const zOauthConsentV1OauthConsentGetResponse = zOAuthConsentResponse;
+
+export const zOauthConsentDecideV1OauthConsentPostBody = zOAuthConsentDecision;
+
+/**
+ * Successful Response
+ */
+export const zOauthConsentDecideV1OauthConsentPostResponse =
+  zOAuthConsentRedirect;

@@ -10,8 +10,8 @@ import {
   preprocessFileLinks,
 } from "./utils/markdownComponents";
 import {
-  type BrowserImageSources,
   messageRehypePlugins,
+  type BrowserImageSources,
 } from "./utils/markdownImagePolicy";
 
 const noopSubscribe = () => () => {};

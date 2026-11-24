@@ -79,7 +79,7 @@ function hasMarkdownSyntax(text: string): boolean {
   return (
     /^#{1,6}[\s\S]/.test(text.trim()) ||
     /\*\*[^*]+\*\*/.test(text) ||
-    /\*[^*\*]+\*/.test(text) ||
+    /\*[^*]+\*/.test(text) ||
     /`[^`]+`/.test(text) ||
     /^[-*+]\s/m.test(text) ||
     /^\d+\.\s/m.test(text)

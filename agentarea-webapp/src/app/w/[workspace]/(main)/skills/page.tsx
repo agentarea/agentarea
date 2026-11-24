@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { readUiPrefs } from "@/lib/ui-prefs-server";
 import SkillsView from "./components/SkillsView";
 
 export const metadata = {
@@ -17,8 +17,8 @@ export default async function SkillsPage({
   const resolvedSearchParams = await searchParams;
 
   // View mode: prefer URL, fall back to cookie, default to the Linear list.
-  const cookieStore = await cookies();
-  const cookieView = cookieStore.get("view_skills")?.value;
+  const uiPrefs = await readUiPrefs();
+  const cookieView = uiPrefs.views["view_skills"];
   const urlView = asString(resolvedSearchParams.view);
   const view: "list" | "grid" =
     urlView === "grid" || urlView === "list"

@@ -29,20 +29,23 @@ export function MenuRow({
   selected = false,
   onClick,
   trailing,
+  disabled = false,
 }: {
   icon?: ReactNode;
   label: ReactNode;
   selected?: boolean;
   onClick?: () => void;
   trailing?: ReactNode;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-[12.5px]",
-        selected ? "text-primary" : "text-foreground/80 hover:bg-muted"
+        "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-[12.5px] disabled:cursor-not-allowed disabled:opacity-50",
+        selected ? "text-primary" : "text-foreground/80 enabled:hover:bg-muted"
       )}
     >
       {icon != null && (

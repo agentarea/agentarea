@@ -1,6 +1,6 @@
 {
 	"name": "@agentarea/cli",
-	"version": "0.1.0",
+	"version": "0.3.0",
 	"description": "Interactive CLI for AgentArea — authenticate, discover agents, submit tasks, and monitor real-time execution via SSE.",
 	"license": "Apache-2.0",
 	"author": "AgentArea",
@@ -53,7 +53,8 @@
 		"axios": "^1.20.0",
 		"@zowe/secrets-for-zowe-sdk": "^8.8.3",
 		"async-exit-hook": "^2.0.1",
-		"conf": "^12.0.0"
+		"conf": "^12.0.0",
+		"yaml": "^2.9.1"
 	},
 	"devDependencies": {
 		"@sindresorhus/tsconfig": "^8.1.0",
@@ -129,6 +130,7 @@
 			"js-yaml@>=4.0.0 <4.3.2": "4.3.2",
 			"json-schema-typed@8.0.1": "8.0.2",
 			"minimatch@>=3.0.0 <3.1.5": "3.1.5",
+			"minimatch@>=7.0.0 <11.0.1": "11.0.9",
 			"ws@>=8.0.0 <8.20.1": "8.21.0",
 			"zod@>=4.0.0 <4.6.6": "4.6.6"
 		}

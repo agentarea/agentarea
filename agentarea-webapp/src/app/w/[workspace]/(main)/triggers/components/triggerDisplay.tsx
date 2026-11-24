@@ -5,6 +5,7 @@ import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { deterministicHue } from "@/lib/avatar-hue";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { formatMoney } from "@/lib/money";
+import type { SourceType } from "@/lib/sourceTypes";
 import { cn } from "@/lib/utils";
 import { getValidTimestamp } from "@/utils/dateUtils";
 import { parseCronSchedule, type CronTime } from "./cronSchedule";
@@ -12,7 +13,18 @@ import { parseCronSchedule, type CronTime } from "./cronSchedule";
 export type EnrichedTrigger = TriggerResponse & {
   agent_name?: string;
   next_run_at?: string | null;
+  /** The name of the stream a stream trigger listens to. */
+  stream_name?: string;
+  /** The catalog entries of what feeds that stream, the first added first. */
+  source_types?: SourceType[];
 };
+
+/** What feeds a stream trigger, in words: "Telegram", "Telegram +1"; "" when nothing is known. */
+export function describeTriggerSources(trigger: EnrichedTrigger): string {
+  const [first, ...rest] = trigger.source_types ?? [];
+  if (!first) return "";
+  return rest.length > 0 ? `${first.name} +${rest.length}` : first.name;
+}
 
 export interface TriggerLike {
   trigger_type?: string;

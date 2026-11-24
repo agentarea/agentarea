@@ -145,8 +145,6 @@ describe("TaskConversation history lifecycle", () => {
         }) as HTMLButtonElement
       ).disabled
     ).toBe(true);
-    expect(
-      screen.getByText("historyUnavailable")
-    ).toBeTruthy();
+    expect(screen.getByText("historyUnavailable")).toBeTruthy();
   });
 });

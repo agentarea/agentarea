@@ -21,10 +21,10 @@ const research: AgentToolConfig = {
 
 const docs: AgentToolConfig = {
   type: "agent",
-  name: "aadocs-writer",
+  name: "docs-team-writer",
   settings: {
-    a2a_url: "https://x.a2a.agentarea.ru",
-    auth_secret_name: "aadocs-key",
+    a2a_url: "https://x.a2a.agentarea.ai",
+    auth_secret_name: "docs-team-key", // pragma: allowlist secret
   },
 };
 
@@ -106,7 +106,7 @@ describe("patchDelegate", () => {
 });
 
 describe("remoteDelegateProblem", () => {
-  const url = "https://agentarea.ru/v1/agents/y/a2a/rpc";
+  const url = "https://agentarea.ai/v1/agents/y/a2a/rpc";
 
   it("accepts a named agent with an http(s) URL", () => {
     expect(remoteDelegateProblem({ name: "support", url }, tools)).toBeNull();
@@ -119,18 +119,18 @@ describe("remoteDelegateProblem", () => {
   });
 
   it("rejects a name another delegate already uses", () => {
-    expect(remoteDelegateProblem({ name: "aadocs-writer", url }, tools)).toBe(
+    expect(remoteDelegateProblem({ name: "docs-team-writer", url }, tools)).toBe(
       "nameTaken"
     );
   });
 
   it("rejects a name that becomes another delegate's tool name", () => {
-    expect(remoteDelegateProblem({ name: "aadocs writer", url }, tools)).toBe(
+    expect(remoteDelegateProblem({ name: "docs-team writer", url }, tools)).toBe(
       "nameTaken"
     );
   });
 
-  it.each(["", "ftp://host/rpc", "agentarea.ru/rpc", "https://"])(
+  it.each(["", "ftp://host/rpc", "agentarea.ai/rpc", "https://"])(
     "rejects the URL %j",
     (bad) => {
       expect(remoteDelegateProblem({ name: "support", url: bad }, tools)).toBe(

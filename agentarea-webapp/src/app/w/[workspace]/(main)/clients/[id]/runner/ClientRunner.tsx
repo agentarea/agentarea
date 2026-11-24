@@ -302,7 +302,13 @@ function RunnerKeys({
               warning={t("connect.shownOnce")}
             />
             <p className="note">{t("connect.then")}</p>
-            <CopyableText text={`agentarea runner ${kind}`} />
+            <CopyableText
+              text={
+                kind === "acp"
+                  ? `agentarea runner acp --command "<your ACP command>"`
+                  : `agentarea runner ${kind}`
+              }
+            />
             <Button size="sm" variant="outline" onClick={() => setKey(null)}>
               {t("connect.done")}
             </Button>

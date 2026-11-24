@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getStreamEvent, listStreams, listStreamSourceTypes } from "@/lib/api";
 import {
   feedHref,
-  legacyEventSequence,
+  legacyStreamQuery,
   liveQuery,
   parseFeedState,
   showsPlatform,
@@ -42,22 +42,27 @@ export default async function StreamEventsPage({
       listStreams(),
       listStreamSourceTypes(),
     ]);
-  // An old link to this page named its event by its sequence here: open the
-  // same event by its id.
-  const sequence = legacyEventSequence(query.event);
-  if (sequence !== undefined) {
-    const legacy = await getStreamEvent(streamId, sequence);
-    const params = new URLSearchParams();
-    if (legacy.data) params.set("event", legacy.data.event_id);
-    const target = params.toString();
+  const { stream: _ignored, ...fromUrl } = parseFeedState(query);
+  const state = { ...fromUrl, stream: streamId };
+  const path = { base: `/events/${streamId}`, pinned: ["stream"] as const };
+  // An old link to this page asked by `?outcome=` and named its event by its
+  // sequence here: the same view, the event by its id.
+  const legacy = legacyStreamQuery(query);
+  if (legacy) {
+    const event =
+      legacy.sequence === undefined
+        ? undefined
+        : (await getStreamEvent(streamId, legacy.sequence)).data?.event_id;
     redirect(
       await requestWorkspacePath(
-        `/events/${streamId}${target ? `?${target}` : ""}`
+        feedHref(
+          fromUrl,
+          { result: legacy.result ?? fromUrl.result, before: undefined, event },
+          path
+        )
       )
     );
   }
-  const { stream: _ignored, ...fromUrl } = parseFeedState(query);
-  const state = { ...fromUrl, stream: streamId };
   const streams = requireApiData(streamsResult, "streams").map((s) => ({
     id: s.id,
     // The platform's stream is named by the platform, not by a member.
@@ -68,7 +73,6 @@ export default async function StreamEventsPage({
   const platformStreams = streams.filter(isPlatformStream).map((s) => s.id);
   const showPlatform = showsPlatform(state, platformStreams);
   const { event, ...filters } = state;
-  const path = { base: `/events/${streamId}`, pinned: ["stream"] as const };
 
   return (
     <FeedPathProvider path={path}>

@@ -2,8 +2,8 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Button } from "@/components/ui/button";
 import { ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface ScrollToBottomButtonProps {
   visible: boolean;
@@ -14,7 +14,6 @@ export const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({
   visible,
   onScrollToBottom,
 }) => {
-
   const t = useTranslations("Common");
 
   return (
@@ -35,4 +34,3 @@ export const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({
     </div>
   );
 };
-

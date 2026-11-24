@@ -102,7 +102,7 @@ export function isSortMode(v: unknown): v is SortMode {
 // here (not in the "use client" gallery) so the Server Components — explore
 // page.tsx + loading.tsx — import the real string, not a client-reference proxy.
 // Same `${param}_${path}` convention as HeaderTabs.
-export const EXPLORE_VIEW_COOKIE = "view_explore";
+export const EXPLORE_VIEW_KEY = "view_explore";
 
 export type RawSpec = Record<string, unknown>;
 

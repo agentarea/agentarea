@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
-import { cookies } from "next/headers";
+import { readUiPrefs } from "@/lib/ui-prefs-server";
 import ProvidersData from "../components/ProvidersData";
 import ProvidersSkeleton from "../components/ProvidersSkeleton";
-import { MODELS_VIEW_COOKIE, resolveViewMode } from "../components/viewMode";
+import { MODELS_VIEW_KEY, resolveViewMode } from "../components/viewMode";
 
 interface ProviderConfigsPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -13,10 +13,10 @@ interface ProviderConfigsPageProps {
 export default async function ProviderConfigsPage({
   searchParams,
 }: ProviderConfigsPageProps) {
-  const [t, resolvedSearchParams, cookieStore] = await Promise.all([
+  const [t, resolvedSearchParams, uiPrefs] = await Promise.all([
     getTranslations("Models"),
     searchParams,
-    cookies(),
+    readUiPrefs(),
   ]);
   const searchQuery =
     typeof resolvedSearchParams.search === "string"
@@ -24,7 +24,7 @@ export default async function ProviderConfigsPage({
       : "";
   const tab = resolveViewMode(
     resolvedSearchParams.tab,
-    cookieStore.get(MODELS_VIEW_COOKIE)?.value
+    uiPrefs.views[MODELS_VIEW_KEY]
   );
 
   const configColumns = [
@@ -36,12 +36,7 @@ export default async function ProviderConfigsPage({
   return (
     <Suspense
       key={searchQuery}
-      fallback={
-        <ProvidersSkeleton
-          viewMode={tab}
-          columns={configColumns}
-        />
-      }
+      fallback={<ProvidersSkeleton viewMode={tab} columns={configColumns} />}
     >
       <ProvidersData searchQuery={searchQuery} viewMode={tab} />
     </Suspense>

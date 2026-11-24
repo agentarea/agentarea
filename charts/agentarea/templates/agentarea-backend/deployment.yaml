@@ -36,7 +36,9 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
-      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      # Drives MCP workloads in process, so it runs as the identity bound to
+      # the workload Role, not the shared app account (which has no RBAC).
+      serviceAccountName: {{ include "agentarea.mcpManagerServiceAccountName" . }}
       terminationGracePeriodSeconds: {{ .Values.backend.terminationGracePeriodSeconds }}
       {{- with .Values.global.security.podSecurityContext }}
       securityContext:
@@ -61,8 +63,9 @@ spec:
       {{- end }}
       containers:
         - name: backend
-          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ default .Chart.AppVersion .Values.backend.image.tag }}"
+          image: {{ include "agentarea.image" . | quote }}
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          command: ["agentarea", "serve"]
           {{- with .Values.global.security.containerSecurityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -71,23 +74,18 @@ spec:
             - name: http
               containerPort: {{ .Values.global.api.port }}
               protocol: TCP
-            - name: health
-              containerPort: {{ .Values.global.monitoring.health.port }}
-              protocol: TCP
           {{- if gt (int .Values.backend.preStopDelay) 0 }}
           lifecycle:
             preStop:
               # Keep serving while the endpoint removal propagates. Without
-              # this, SIGTERM and the Service update race, and uvicorn stops
+              # this, SIGTERM and the Service update race, and the server stops
               # accepting connections that are still being routed here.
               exec:
                 command: ["/bin/sh", "-c", "sleep {{ .Values.backend.preStopDelay }}"]
           {{- end }}
           env:
-            - name: AGENTAREA_API_WORKERS
-              value: {{ .Values.backend.workers | quote }}
-            - name: AGENTAREA_API_SHUTDOWN_TIMEOUT
-              value: {{ .Values.backend.shutdownTimeout | quote }}
+            - name: AGENTAREA_SHUTDOWN_TIMEOUT
+              value: {{ printf "%ds" (int .Values.backend.shutdownTimeout) | quote }}
             {{- include "agentarea.database.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.database.envs" . | nindent 12 }}
             {{- include "agentarea.redis.secrets.envs" . | nindent 12 }}
@@ -95,6 +93,7 @@ spec:
             {{- include "agentarea.redis.urlEnv" . | nindent 12 }}
             {{- include "agentarea.storage.envs" . | nindent 12 }}
             {{- include "agentarea.storage.secrets.envs" . | nindent 12 }}
+            {{- include "agentarea.application.envs" . | nindent 12 }}
             {{- include "agentarea.application.secrets.envs" . | nindent 12 }}
             - name: AGENTAREA_SANDBOX_INSPECT_SECRET
               valueFrom:
@@ -116,24 +115,10 @@ spec:
             {{- end }}
             {{- include "agentarea.temporal.envs" . | nindent 12 }}
             {{- include "agentarea.backend.envs" . | nindent 12 }}
-            {{- include "agentarea.telemetry.envs" (dict "root" . "image" .Values.backend.image) | nindent 12 }}
+            {{- include "agentarea.mcpRuntime.podEnvs" . | nindent 12 }}
+            {{- include "agentarea.telemetry.envs" (dict "root" . "image" .Values.global.image) | nindent 12 }}
             {{- include "agentarea.backend.secrets.envs" . | nindent 12 }}
-            {{- if .Values.openfga.enabled }}
-            - name: AGENTAREA_AUTHZ_BACKEND
-              value: "openfga"
-            - name: AGENTAREA_AUTHZ_FGA_URL
-              value: "http://{{ include "agentarea.fullname" . }}-openfga:{{ .Values.openfga.service.httpPort | default 8080 }}"
-            - name: AGENTAREA_AUTHZ_FGA_STORE_ID
-              value: {{ .Values.openfga.accessControl.storeId | quote }}
-            - name: AGENTAREA_AUTHZ_FGA_MODEL_ID
-              value: {{ .Values.openfga.accessControl.authorizationModelId | quote }}
-            - name: AGENTAREA_AUTHZ_FGA_BOOTSTRAP
-              value: {{ .Values.openfga.accessControl.autoBootstrap | quote }}
-            - name: AGENTAREA_AUTHZ_FGA_APPLY_MODEL
-              value: {{ .Values.openfga.accessControl.autoApplyModel | quote }}
-            - name: AGENTAREA_AUTHZ_FGA_STORE_NAME
-              value: {{ .Values.openfga.accessControl.storeName | default "agentarea" | quote }}
-            {{- end }}
+            {{- include "agentarea.authz.envs" . | nindent 12 }}
             {{- if .Values.global.http.extraCaCerts }}
             - name: AGENTAREA_HTTP_EXTRA_CA_CERTS
               value: {{ include "agentarea.extraCaCerts.path" . | quote }}
@@ -161,7 +146,7 @@ spec:
             {{- end }}
           livenessProbe:
             httpGet:
-              path: {{ .Values.global.monitoring.health.path }}
+              path: /livez
               port: {{ .Values.global.api.port }}
             initialDelaySeconds: {{ .Values.backend.livenessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.backend.livenessProbe.periodSeconds }}
@@ -170,7 +155,7 @@ spec:
             successThreshold: 1
           readinessProbe:
             httpGet:
-              path: {{ .Values.global.monitoring.health.path }}
+              path: /readyz
               port: {{ .Values.global.api.port }}
             initialDelaySeconds: {{ .Values.backend.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.backend.readinessProbe.periodSeconds }}
@@ -179,7 +164,7 @@ spec:
             successThreshold: 1
           startupProbe:
             httpGet:
-              path: {{ .Values.global.monitoring.health.path }}
+              path: /livez
               port: {{ .Values.global.api.port }}
             initialDelaySeconds: 10
             periodSeconds: 5
@@ -199,8 +184,10 @@ spec:
               memory: {{ .Values.global.workloads.resources.mainContainer.memory.request }}
             {{- end }}
           {{- end }}
-          {{- if or .Values.global.http.extraCaCerts .Values.backend.extraVolumeMounts }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- include "agentarea.mcpRuntime.volumeMounts" . | nindent 12 }}
             {{- if .Values.global.http.extraCaCerts }}
             - name: extra-ca-certs
               mountPath: {{ include "agentarea.extraCaCerts.dir" . }}
@@ -209,9 +196,11 @@ spec:
             {{- with .Values.backend.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- end }}
-      {{- if or .Values.global.http.extraCaCerts .Values.backend.extraVolumes }}
       volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.backend.tmpVolume.sizeLimit | quote }}
+        {{- include "agentarea.mcpRuntime.volumes" . | nindent 8 }}
         {{- if .Values.global.http.extraCaCerts }}
         - name: extra-ca-certs
           configMap:
@@ -220,7 +209,6 @@ spec:
         {{- with .Values.backend.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- end }}
       {{- with .Values.backend.extraContainers }}
       {{- toYaml . | nindent 6 }}
       {{- end }}

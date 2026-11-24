@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  authorizeTargetOf,
   buildAuthorizeRequest,
   canAuthorize,
   canUseOwnApp,
+  clientIdTail,
   deriveOAuthConnectState,
   preflightAfterAuthorizeError,
+  preflightTargetOf,
   scopeChoice,
   scopeShortName,
   summarizeAuthorization,
@@ -13,7 +16,7 @@ import {
 
 const INSTANCE_ID = "76216436-01e9-4ebc-a8d5-9023ed773cce";
 const ITEM_ID = "0b5a3e0e-7d0a-4a43-9c64-0d1f6f3e9b11";
-const REDIRECT_URI = "https://api.agentarea.ru/v1/oauth/callback";
+const REDIRECT_URI = "https://api.agentarea.ai/v1/oauth/callback";
 
 function preflight(over: Partial<OAuthPreflight> = {}): OAuthPreflight {
   return {
@@ -63,6 +66,67 @@ describe("deriveOAuthConnectState", () => {
     expect(preflightAfterAuthorizeError(after, null, "Network failure")).toBe(
       after
     );
+  });
+  it("names the app's install page only for a signed-in connection", () => {
+    const install = "https://github.com/apps/agentarea/installations/new";
+    expect(
+      deriveOAuthConnectState({
+        isUrlType: true,
+        preflight: preflight({
+          credential_source: "platform",
+          connected: true,
+          install_url: install,
+        }),
+      })
+    ).toEqual({
+      kind: "ready",
+      connected: true,
+      credentialSource: "platform",
+      installUrl: install,
+    });
+    expect(
+      deriveOAuthConnectState({
+        isUrlType: true,
+        preflight: preflight({ connected: false, install_url: install }),
+      })
+    ).not.toHaveProperty("installUrl");
+    expect(
+      deriveOAuthConnectState({
+        isUrlType: true,
+        preflight: preflight({ connected: true, install_url: null }),
+      })
+    ).not.toHaveProperty("installUrl");
+  });
+  it("offers an installation binding only for a signed-in connection that can have one", () => {
+    const binding = { installation_id: 7, account: "acme", repositories: null };
+    expect(
+      deriveOAuthConnectState({
+        isUrlType: true,
+        preflight: preflight({
+          connected: true,
+          installation_binding_available: true,
+          installation_binding: binding,
+        }),
+      })
+    ).toMatchObject({ kind: "ready", installation: { binding } });
+    expect(
+      deriveOAuthConnectState({
+        isUrlType: true,
+        preflight: preflight({
+          connected: true,
+          installation_binding_available: true,
+        }),
+      })
+    ).toMatchObject({ installation: { binding: null } });
+    expect(
+      deriveOAuthConnectState({
+        isUrlType: true,
+        preflight: preflight({
+          connected: false,
+          installation_binding_available: true,
+        }),
+      })
+    ).not.toHaveProperty("installation");
   });
   it("offers nothing until the preflight answer arrives", () => {
     expect(
@@ -133,6 +197,57 @@ describe("deriveOAuthConnectState", () => {
     ).toEqual({ kind: "ready", connected: false, credentialSource: "dynamic" });
   });
 
+  it("reconnects with the connection's own app instead of asking for it again", () => {
+    const ready = preflight({
+      credential_source: "custom",
+      client_id: "1234-own-client-abcd",
+      connected: true,
+    });
+    const state = deriveOAuthConnectState({
+      isUrlType: true,
+      preflight: ready,
+    });
+
+    expect(state).toEqual({
+      kind: "ready",
+      connected: true,
+      credentialSource: "custom",
+      clientId: "1234-own-client-abcd",
+    });
+    expect(
+      buildAuthorizeRequest({
+        target: { instance_id: INSTANCE_ID },
+        state,
+        scopes: ["https://www.googleapis.com/auth/gmail.modify"],
+      })
+    ).toEqual({
+      instance_id: INSTANCE_ID,
+      credential_mode: "auto",
+      scopes: ["https://www.googleapis.com/auth/gmail.modify"],
+    });
+  });
+
+  it("asks for a new app when the person replaces the connection's own", () => {
+    const ready = preflight({ credential_source: "custom", connected: true });
+
+    expect(canUseOwnApp(ready)).toBe(true);
+    expect(
+      deriveOAuthConnectState({
+        isUrlType: true,
+        preflight: ready,
+        useOwnApp: true,
+      })
+    ).toEqual({
+      kind: "needs_oauth_app",
+      connected: true,
+      reason: "",
+      issuer: "https://accounts.google.com",
+      redirectUri: REDIRECT_URI,
+      optional: true,
+      replacesOwnApp: true,
+    });
+  });
+
   it("carries the reason through when the server cannot be authorized at all", () => {
     const state = deriveOAuthConnectState({
       isUrlType: true,
@@ -171,12 +286,12 @@ describe("buildAuthorizeRequest", () => {
       buildAuthorizeRequest({
         target: { instance_id: INSTANCE_ID },
         state: { kind: "ready", connected: false },
-        returnTo: "https://app.agentarea.ru",
+        returnTo: "https://app.agentarea.ai",
       })
     ).toEqual({
       instance_id: INSTANCE_ID,
       credential_mode: "auto",
-      return_to: "https://app.agentarea.ru",
+      return_to: "https://app.agentarea.ai",
     });
   });
 
@@ -360,12 +475,12 @@ describe("catalog APIs", () => {
           connected: false,
           credentialSource: "platform",
         },
-        returnTo: "https://app.agentarea.ru",
+        returnTo: "https://app.agentarea.ai",
       })
     ).toEqual({
       catalog_item_id: ITEM_ID,
       credential_mode: "auto",
-      return_to: "https://app.agentarea.ru",
+      return_to: "https://app.agentarea.ai",
     });
   });
 
@@ -486,5 +601,36 @@ describe("picked scopes", () => {
         scopes: [],
       })
     ).toBeNull();
+  });
+});
+
+describe("clientIdTail", () => {
+  it("shows only the end of a client ID", () => {
+    expect(clientIdTail("1234-own-client-abcd")).toBe("…abcd");
+    expect(clientIdTail("abcd")).toBe("abcd");
+  });
+});
+
+describe("preflightTargetOf", () => {
+  it("names each connection the way the API asks about it", () => {
+    expect(preflightTargetOf("instance", INSTANCE_ID)).toEqual({
+      instance_id: INSTANCE_ID,
+    });
+    expect(preflightTargetOf("spec", ITEM_ID)).toEqual({ server_id: ITEM_ID });
+    expect(preflightTargetOf("catalog", ITEM_ID)).toEqual({
+      catalog_item_id: ITEM_ID,
+    });
+    expect(preflightTargetOf("api_connection", ITEM_ID)).toEqual({
+      openapi_connection_id: ITEM_ID,
+    });
+  });
+
+  it("signs an existing API connection in again, not a new one", () => {
+    expect(
+      buildAuthorizeRequest({
+        target: authorizeTargetOf("api_connection", ITEM_ID),
+        state: { kind: "ready", connected: true, credentialSource: "platform" },
+      })
+    ).toEqual({ openapi_connection_id: ITEM_ID, credential_mode: "auto" });
   });
 });

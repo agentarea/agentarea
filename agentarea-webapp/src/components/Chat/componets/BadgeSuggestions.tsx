@@ -3,8 +3,8 @@
 import React, { use } from "react";
 import { useTranslations } from "next-intl";
 import { Plug, Sparkles } from "lucide-react";
-import Link from "@/components/WorkspaceLink";
 import { Skeleton } from "@/components/ui/skeleton";
+import Link from "@/components/WorkspaceLink";
 import { cn } from "@/lib/utils";
 
 /** Shared by the list and its skeleton so the two sit in the same place. */

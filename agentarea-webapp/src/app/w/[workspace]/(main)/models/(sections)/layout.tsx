@@ -1,15 +1,15 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import SearchInput from "@/components/SearchInput";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { listProviderConfigs, listProviderSpecsWithModels } from "@/lib/api";
+import { readUiPrefs } from "@/lib/ui-prefs-server";
 import AddProviderButton from "../components/AddProviderButton";
 import ModelsSectionTabs from "../components/ModelsSectionTabs";
 import ProviderHeaderTabs from "../components/ProviderHeaderTabs";
-import { MODELS_VIEW_COOKIE, resolveViewMode } from "../components/viewMode";
+import { MODELS_VIEW_KEY, resolveViewMode } from "../components/viewMode";
 
 // One browser-tab title for both tabs, the same one the header shows.
 export async function generateMetadata(): Promise<Metadata> {
@@ -27,13 +27,13 @@ export default async function ModelsSectionsLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [t, cookieStore] = await Promise.all([
+  const [t, uiPrefs] = await Promise.all([
     getTranslations("Models"),
-    cookies(),
+    readUiPrefs(),
   ]);
   const initialView = resolveViewMode(
     undefined,
-    cookieStore.get(MODELS_VIEW_COOKIE)?.value
+    uiPrefs.views[MODELS_VIEW_KEY]
   );
 
   return (

@@ -3,14 +3,13 @@
 #
 # Stacks call the same entrypoints CI does (make check / pnpm run check*).
 # Mirrors:
-#   .github/workflows/ci.yml             (platform, Go, webapp)
-#   .github/workflows/schema-check.yml   (backend -> openapi.json -> docs drift)
+#   .github/workflows/ci.yml             (Go platform, webapp)
 #   .github/workflows/frontend-integration.yml (elements-react build + webapp build)
 #   .github/workflows/check-helm-docs.yml (Helm chart README)
 #   .github/workflows/validate-env-templates.yml (Helm env tpl drift)
 #
 # Each check is independent — failure prints how to fix and aborts.
-# Set SKIP=schema,webapp,helm-docs,... to skip groups.
+# Set SKIP=go,webapp,helm-docs,... to skip groups.
 
 set -euo pipefail
 
@@ -29,26 +28,11 @@ fail() { printf '\033[31m✗ %s\033[0m\n' "$1"; exit 1; }
 # Track tool availability
 have() { command -v "$1" >/dev/null 2>&1; }
 
-# ── 1. Platform (lint + tests + migration heads) ────────────────────────────
-if ! should_skip python; then
-  step "Platform check (make -C agentarea-platform check)"
-  make -C agentarea-platform check || fail "platform check failed"
-  ok "Platform"
-fi
-
-# ── 2. Go (build + tests + golangci-lint) ───────────────────────────────────
+# ── 1. Go platform (build + vet + tests + golangci-lint + architecture) ─────
 if ! should_skip go; then
-  step "Go check (mcp-manager, event-service)"
-  make -C agentarea-mcp-manager check   || fail "mcp-manager check failed"
-  make -C agentarea-event-service check || fail "event-service check failed"
+  step "Go check (make -C agentarea-platform check)"
+  make -C agentarea-platform check || fail "agentarea-platform check failed"
   ok "Go"
-fi
-
-# ── 3. Schema drift (FastAPI -> openapi.json -> docs copy) ──────────────────
-if ! should_skip schema; then
-  step "OpenAPI schema drift"
-  bash scripts/check-openapi-drift.sh || fail "OpenAPI schema drift"
-  ok "Schema drift"
 fi
 
 # ── 3b. Webapp (lint, types, tests, client drift, build) ────────────────────

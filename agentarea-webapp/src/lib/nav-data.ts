@@ -6,12 +6,17 @@ import {
   FileText,
   GalleryVerticalEnd,
   Gauge,
+  Hammer,
+  Inbox,
   KeyRound,
   LayoutGrid,
+  Library,
+  MessagesSquare,
   Network,
   Plug,
   Radio,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Terminal,
   Users,
@@ -37,8 +42,6 @@ export type NavSection = {
 export const navData = {
   navSections: [
     {
-      label: "Work",
-      labelKey: "work",
       collapsible: false,
       items: [
         {
@@ -46,6 +49,12 @@ export const navData = {
           titleKey: "dashboard",
           url: "/dashboard",
           icon: Gauge,
+        },
+        {
+          title: "Inbox",
+          titleKey: "inbox",
+          url: "/inbox",
+          icon: Inbox,
         },
         {
           title: "Apps",
@@ -76,6 +85,7 @@ export const navData = {
     {
       label: "Knowledge",
       labelKey: "knowledge",
+      icon: Library,
       items: [
         {
           title: "Context",
@@ -94,6 +104,7 @@ export const navData = {
     {
       label: "Build",
       labelKey: "build",
+      icon: Hammer,
       items: [
         {
           title: "Agents",
@@ -126,6 +137,12 @@ export const navData = {
           icon: Zap,
         },
         {
+          title: "Channels",
+          titleKey: "channels",
+          url: "/channels",
+          icon: MessagesSquare,
+        },
+        {
           title: "Models",
           titleKey: "providerConfigs",
           url: "/models",
@@ -134,8 +151,9 @@ export const navData = {
       ],
     },
     {
-      label: "Govern",
-      labelKey: "govern",
+      label: "Control",
+      labelKey: "control",
+      icon: SlidersHorizontal,
       items: [
         {
           title: "Network",

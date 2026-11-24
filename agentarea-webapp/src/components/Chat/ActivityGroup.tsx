@@ -13,11 +13,11 @@ import {
   TOOL_DETAILS_UNAVAILABLE,
 } from "@/components/Chat/utils/toolDetails";
 import { ToolIcon } from "@/components/Chat/utils/toolIcon";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import type { Part } from "@/lib/events/contract";
 import { PartRenderer } from "@/lib/events/parts/PartRenderer";
-import { cn } from "@/lib/utils";
 import type { StatusKind } from "@/lib/status";
-import { StatusIndicator } from "@/components/ui/status-indicator";
+import { cn } from "@/lib/utils";
 import type { ActivityRun } from "./activityView";
 
 interface ActivityGroupProps {

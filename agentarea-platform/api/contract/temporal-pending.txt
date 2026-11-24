@@ -1,0 +1,1 @@
+# Workflows and activities of temporal.json Go does not register yet: "<name> -- <reason>". The list only shrinks.

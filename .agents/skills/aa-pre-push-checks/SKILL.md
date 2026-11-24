@@ -5,8 +5,8 @@ description: Use before pushing, force-pushing, opening or marking a PR ready, o
 
 # AgentArea Pre-Push Checks
 
-This is a polyglot monorepo: Python platform, Next.js webapp, two Go services, a
-Node CLI, Helm charts. CI splits along those seams and skips everything your
+This is a polyglot monorepo: the Go platform, Next.js webapp, a Node CLI, Helm
+charts. CI splits along those seams and skips everything your
 diff does not touch. Match that. Running the whole suite for a one-package change
 wastes minutes; running nothing and hoping wastes a CI round-trip.
 
@@ -30,12 +30,10 @@ same filters CI uses:
 
 | Changed path | Filter | Jobs that wake up |
 |---|---|---|
-| `agentarea-platform/**` | `platform` | `platform-lint`, `platform-test`, `platform-build`, `migrations-gate` |
+| `agentarea-platform/**` | `go` | `go-check`, `go-db`, `docker-platform` (main) |
+| `agentarea-platform/Dockerfile.runner`, `sandbox-runtime/**`, the runner binaries | `mcp_runner` | `docker-agentarea-mcp-runner`, `docker-agentarea-mcp-runner-locked` (main) |
 | `agentarea-webapp/**` | `webapp` | `webapp-lint`, `webapp-build` |
 | `agentarea-cli/**` | `cli` | `cli-test` |
-| `agentarea-mcp-manager/**` | `mcp_manager` | `mcp-manager-lint-test` |
-| `agentarea-event-service/**` | `events` | `events-lint-test` |
-| `agentarea-operator/**` | `operator` | `docker-operator` |
 
 `ci-required` is the aggregate gate; it treats a legitimately skipped job as a
 pass, so an unmatched filter is not a hidden failure.
@@ -45,49 +43,25 @@ pass, so an unmatched filter is not a hidden failure.
 Run the command CI runs, not an approximation of it. Each of these is copied
 from the job of the same name in `.github/workflows/ci.yml`.
 
-**`platform-lint`** — all three, from `agentarea-platform/`. Format-check and
-`pyright` are separate gates from `ruff check`; passing one proves nothing about
-the others.
+**`go-check`** — from the repo root. The golangci-lint version is pinned in
+`agentarea-platform/Makefile` (`GOLANGCI_LINT_VERSION`) and in the job; a locally
+installed one of another version does not prove the pinned one is clean.
 
 ```sh
-cd agentarea-platform
-uv run ruff check .
-uv run ruff format --check .
-uv run pyright
+make -C agentarea-platform check
 ```
 
-`pyright` is a ratchet: its bug-catching rules sit at `error` with a count of
-zero, so a new real bug blocks the merge while known noise stays at `warning`.
-A new `error` is your diff's, not pre-existing.
-
-**`platform-test`** — CI runs `make test` verbatim, and the platform makefile
-calls that target the single source of truth for the per-merge gate. It is
-strictly wider than `pytest tests/unit tests/functional`: it also collects
-`apps/api/tests`, `libs/common/tests`, `libs/tasks/tests`, seven `FLOW_TESTS`,
-two `REDACTION_TESTS`, and a separate process for `SECRET_REDACTION_TESTS`.
+**`go-db`** — the schema-backed suites, which skip without a disposable
+Postgres. If the diff touches `internal/schema/migrations/` or a repository:
 
 ```sh
-cd agentarea-platform && make test
+make db-test-up
+export AGENTAREA_DB_TEST_URL=postgres://postgres:postgres@localhost:55432/agentarea_test?sslmode=disable
+make -C agentarea-platform check-db
+make db-test-down
 ```
 
-While iterating, run the owning test file directly — `uv run python -m pytest
-<path> -m "not integration"`. Note the `uv run` prefix: `pytest` is not on the
-`PATH` of the runtime container venv. Run `make test` once before pushing.
-
-**`migrations-gate`** — triggered by any `agentarea-platform/**` change, not just
-migration files. It asserts exactly one alembic head, applies migrations to a
-fresh database, runs a downgrade/upgrade roundtrip on the last revision, and then
-runs the Go `./internal/mcpgateway/...` tests against the migrated schema. If you
-added a migration:
-
-```sh
-cd agentarea-platform/apps/api && uv run alembic upgrade head
-```
-
-Never run alembic from the repository root. Name new revisions with an ISO
-timestamp, not the `aa`/`bb`/`cc` letter-pair scheme. Two heads is the usual
-failure here, and it appears after a merge, not when you write the migration —
-re-check it after merging main.
+Never run them against a shared or live database.
 
 **`webapp-lint` / `webapp-build`** — the build doubles as the type check, and a
 type error fails CI even though the standalone type-check step is warn-only.
@@ -132,37 +106,22 @@ connected provider — needs that data created first.
 cd agentarea-cli && pnpm install --frozen-lockfile && pnpm run test
 ```
 
-**`mcp-manager-lint-test` / `events-lint-test`** — both are Go, both run
-`go test ./...` plus `golangci-lint`, but they are pinned differently:
-`agentarea-mcp-manager` runs **golangci-lint v2.12.2**, while
-`agentarea-event-service` runs **latest**. A locally installed golangci-lint is
-one version for both, so a clean local run does not prove the pinned one is
-clean. Trust the version match before trusting the result.
-
-```sh
-cd agentarea-mcp-manager && go test ./... && golangci-lint run ./...
-cd agentarea-event-service && go test ./... && golangci-lint run ./...
-```
-
-Schema drift, Helm chart README, Helm lint, and env-template drift live in
-separate workflows (`schema-check.yml`, `validate-helm.yml`) and are covered by
-`make preflight`. If the diff touches API routes or `charts/`, run those.
+Helm chart README, Helm lint, and env-template drift live in a separate
+workflow (`validate-helm.yml`) and are covered by `make preflight`. If the diff
+touches `charts/`, run those. A diff that changes the API surface also owes the
+live-stack fuzz (`api-fuzz` in `integration-tests.yml`): against a running stack,
+`make -C agentarea-platform test-api-fuzz` with `AGENTAREA_API_URL`,
+`AGENTAREA_AUTH_KRATOS_URL` and `AGENTAREA_AUTH_KRATOS_ADMIN_URL` set.
 
 ## Where `make preflight` falls short
 
 `scripts/preflight.sh` predates several CI jobs and its comments have drifted
 from `ci.yml`. Treat these as uncovered:
 
-- **`pyright` is skipped**, and the script's comment claims it is "declared in
-  pyproject but NOT enforced by CI". That is wrong: `platform-lint` runs
-  `uv run pyright` with no `continue-on-error`.
-- **Python tests are a subset.** preflight runs `pytest tests/unit
-  tests/functional`; CI runs `make test`.
-- **`migrations-gate`, `cli-test`, `events-lint-test`, `version-check`, and
-  `platform-build` are not run at all.** `agentarea-event-service` and
-  `agentarea-cli` are invisible to preflight.
+- **`version-check`, `env-naming`, `jwks-perms-check`, `cli-test`, `mcp-base-test`
+  and the image builds are not run at all.** `agentarea-cli` is invisible to preflight.
 
-preflight does cover things CI splits into other workflows — schema drift,
+preflight does cover things CI splits into other workflows —
 helm-docs, helm lint, env templates — so it is worth running, just not worth
 believing on its own.
 

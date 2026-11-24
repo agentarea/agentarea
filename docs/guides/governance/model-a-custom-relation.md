@@ -29,7 +29,7 @@ once. Make changes additive.
 
 <Info>
 - The `fga` CLI installed. Every step below depends on it.
-- To change the platform's own model: write access to `agentarea-platform/libs/common/agentarea_common/rebac/openfga/` in the
+- To change the platform's own model: write access to `agentarea-platform/internal/profiles/cluster/authz/model/` in the
   repository. To extend it in your deployment only, see
   [extend the model in your deployment](#extend-the-model-in-your-deployment).
 - A dev stack you can restart: `AGENTAREA_AUTHZ_BACKEND=openfga` with
@@ -42,7 +42,7 @@ once. Make changes additive.
 - Read [the AgentArea model](/concepts/governance/the-agentarea-model) — you are
   editing exactly what that page describes.
 
-These files live in `agentarea-platform/libs/common/agentarea_common/rebac/openfga/` and move together:
+These files live in `agentarea-platform/internal/profiles/cluster/authz/model/` and move together:
 
 | File | Role |
 |---|---|
@@ -76,7 +76,7 @@ These files live in `agentarea-platform/libs/common/agentarea_common/rebac/openf
   </Step>
 
   <Step title="Edit the model">
-    Add to `agentarea-platform/libs/common/agentarea_common/rebac/openfga/model.fga`. Keep changes additive: a new type, or a
+    Add to `agentarea-platform/internal/profiles/cluster/authz/model/model.fga`. Keep changes additive: a new type, or a
     new relation on an existing type. Changing or removing an existing relation
     breaks live tuples that reference it.
 
@@ -104,7 +104,7 @@ These files live in `agentarea-platform/libs/common/agentarea_common/rebac/openf
 
   <Step title="Add tests before you validate">
     Every new relation needs at least one positive and one negative assertion in
-    `agentarea-platform/libs/common/agentarea_common/rebac/openfga/model.fga.yaml`. Add tuples to the shared `tuples` block and
+    `agentarea-platform/internal/profiles/cluster/authz/model/model.fga.yaml`. Add tuples to the shared `tuples` block and
     a case to `tests`:
 
     ```yaml
@@ -129,7 +129,7 @@ These files live in `agentarea-platform/libs/common/agentarea_common/rebac/openf
 
   <Step title="Validate and test">
     ```bash
-    cd agentarea-platform/libs/common/agentarea_common/rebac/openfga
+    cd agentarea-platform/internal/profiles/cluster/authz/model
     fga model validate --file fga.mod
     fga model test --tests model.fga.yaml
     ```
@@ -171,7 +171,7 @@ These files live in `agentarea-platform/libs/common/agentarea_common/rebac/openf
 **The CLI tests pass.** This is the gate; run it before anything else:
 
 ```bash
-cd agentarea-platform/libs/common/agentarea_common/rebac/openfga && fga model test --tests model.fga.yaml
+cd agentarea-platform/internal/profiles/cluster/authz/model && fga model test --tests model.fga.yaml
 ```
 
 **The running platform loaded the new model.** Write a tuple that uses the new

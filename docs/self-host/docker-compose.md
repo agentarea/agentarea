@@ -99,8 +99,8 @@ This guide covers `docker-compose.yaml`.
 
     1. `db` becomes healthy (`pg_isready`), and `rustfs` becomes healthy.
     2. `postgres_init` creates the `agentarea`, `temporal`, and `kratos` databases. It is idempotent.
-    3. `app_migrations` runs `agentarea-api migrate` with working directory `/app/apps/api`, and `kratos-migrate` runs the Kratos schema migration. `bucket-init` creates the two object-storage buckets and gives them the CORS allowlist browsers need for direct uploads (`AGENTAREA_S3_CORS_ORIGINS`, default `http://localhost:3000`).
-    4. `app`, `frontend`, `agentarea-worker`, `agentarea-events`, `agentarea-mcp-manager`, `sandbox-executor`, `temporal`, and `kratos` start.
+    3. `app_migrations` runs `agentarea migrate`, and `kratos-migrate` runs the Kratos schema migration. `bucket-init` (`agentarea init-buckets`) creates the two object-storage buckets and gives them the CORS allowlist browsers need for direct uploads (`AGENTAREA_S3_CORS_ORIGINS`, default `http://localhost:3000`).
+    4. `app`, `frontend`, `agentarea-worker`, `agentarea-events`, `agentarea-mcp-manager`, `sandbox-executor`, `temporal`, and `kratos` start. `app`, `agentarea-worker`, `agentarea-events` and `agentarea-mcp-manager` are the one `agentarea/agentarea-platform` image running `agentarea serve`, `worker`, `events` and `mcp`; `app`, the worker and the manager mount the Docker socket, because each of them drives MCP containers.
 
     The one-shot containers (`postgres_init`, `app_migrations`, `kratos-migrate`,
     `bucket-init`) exit 0 and stay in `Exited` state. That is the expected result,
@@ -143,14 +143,14 @@ Check the two HTTP health endpoints:
 
 ```bash
 curl -s http://localhost:8000/health
-curl -s http://localhost:7999/health
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:7999/readyz
 ```
 
-The API returns its status, service name, version, connection health, and a
-timestamp:
+The API returns its status, version and a timestamp; the manager answers 200
+once it reaches the database:
 
 ```json
-{"status":"healthy","service":"agentarea-api","version":"0.1.0","connections":{},"timestamp":"..."}
+{"status":"healthy","version":"0.1.0","timestamp":"..."}
 ```
 
 Confirm the migrations actually applied, rather than the stack merely being up:

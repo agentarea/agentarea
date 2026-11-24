@@ -1,0 +1,1 @@
+# Commands of cli.json the Go binary does not run yet: "<name> -- <reason>". The list only shrinks.

@@ -33,7 +33,7 @@ cd agentarea
 ### 2. Environment Configuration
 ```bash
 # Copy environment template
-cp agentarea-platform/docs/env.example .env
+cp .env.example .env
 
 # Edit configuration (optional for development)
 vim .env
@@ -89,11 +89,11 @@ docker compose -f docker-compose.dev.yaml down
 
 ### Database Operations
 ```bash
-# Run migrations
-docker compose -f docker-compose.dev.yaml run --rm app alembic upgrade head
+# Run migrations (the app_migrations service runs this on every start)
+docker compose -f docker-compose.dev.yaml run --rm app migrate
 
-# Create new migration
-docker compose -f docker-compose.dev.yaml run --rm app alembic revision --autogenerate -m "description"
+# Create new migration: add the next goose file to
+# agentarea-platform/internal/schema/migrations/ (NNNNN_<slug>.sql)
 
 # Reset database (development only)
 docker compose -f docker-compose.dev.yaml down -v

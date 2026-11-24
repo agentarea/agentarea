@@ -2,9 +2,12 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
+  useState,
   type ReactNode,
 } from "react";
 import type { FeedEventResponse, Processing } from "@/api/client/types.gen";
@@ -19,9 +22,12 @@ export type LiveMessage =
   | { type: "recorded"; event: FeedEventResponse }
   | { type: "processing"; eventId: string; processing: Processing };
 
+export type FeedLiveStatus = "connecting" | "live" | "reconnecting";
+
 interface FeedLiveValue {
   /** Calls `listener` with every message from now on; returns the unsubscribe. */
   listen: (listener: (message: LiveMessage) => void) => () => void;
+  status: FeedLiveStatus;
 }
 
 const FeedLiveContext = createContext<FeedLiveValue | null>(null);
@@ -41,6 +47,7 @@ export function FeedLiveProvider({
 }) {
   const slug = useWorkspaceSlug();
   const listeners = useRef(new Set<(message: LiveMessage) => void>());
+  const [status, setStatus] = useState<FeedLiveStatus>("connecting");
 
   useEffect(() => {
     const url = withWorkspaceQuery(
@@ -57,8 +64,12 @@ export function FeedLiveProvider({
       source = current;
       // Read the page again once subscribed: an event that arrived between
       // the server's read and this subscription would otherwise be missed.
-      current.onopen = () => emit({ type: "resync" });
+      current.onopen = () => {
+        setStatus("live");
+        emit({ type: "resync" });
+      };
       current.onerror = () => {
+        setStatus("reconnecting");
         // A refused response (the API restarting) closes it for good; the
         // browser retries only a connection that dropped.
         if (current.readyState === EventSource.CLOSED) {
@@ -83,6 +94,7 @@ export function FeedLiveProvider({
         });
       });
     };
+    setStatus("connecting");
     connect();
     return () => {
       clearTimeout(retry);
@@ -90,14 +102,13 @@ export function FeedLiveProvider({
     };
   }, [query, slug]);
 
-  const value: FeedLiveValue = {
-    listen: (listener) => {
-      listeners.current.add(listener);
-      return () => {
-        listeners.current.delete(listener);
-      };
-    },
-  };
+  const listen = useCallback((listener: (message: LiveMessage) => void) => {
+    listeners.current.add(listener);
+    return () => {
+      listeners.current.delete(listener);
+    };
+  }, []);
+  const value = useMemo(() => ({ listen, status }), [listen, status]);
   return (
     <FeedLiveContext.Provider value={value}>
       {children}

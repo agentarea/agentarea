@@ -52,8 +52,9 @@ spec:
       {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: event-service
-          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.eventService.image.repository }}:{{ default .Chart.AppVersion .Values.eventService.image.tag }}"
+          image: {{ include "agentarea.image" . | quote }}
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          command: ["agentarea", "events"]
           {{- with .Values.global.security.containerSecurityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -68,9 +69,18 @@ spec:
             {{- include "agentarea.redis.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.redis.envs" . | nindent 12 }}
             {{- include "agentarea.redis.urlEnv" . | nindent 12 }}
+            {{- include "agentarea.storage.envs" . | nindent 12 }}
+            {{- include "agentarea.storage.secrets.envs" . | nindent 12 }}
+            {{- include "agentarea.application.envs" . | nindent 12 }}
             {{- include "agentarea.application.secrets.envs" . | nindent 12 }}
+            {{- include "agentarea.temporal.envs" . | nindent 12 }}
+            {{- include "agentarea.authz.envs" . | nindent 12 }}
             - name: AGENTAREA_API_URL
               value: {{ include "agentarea.backend.apiUrl" . | quote }}
+            # Where a messenger sender links their account: the bot's reply to an
+            # unlinked sender carries <app>/link/telegram.
+            - name: AGENTAREA_APP_URL
+              value: {{ include "agentarea.frontendUrl" . | quote }}
             - name: PORT
               value: {{ .Values.eventService.port | quote }}
             - name: AGENTAREA_EVENT_POLL_INTERVAL
@@ -84,13 +94,20 @@ spec:
                 secretKeyRef:
                   name: {{ include "agentarea.mcpGatewaySecretName" . }}
                   key: {{ include "agentarea.mcpGatewaySecretKey" . }}
-            {{- include "agentarea.telemetry.envs" (dict "root" . "image" .Values.eventService.image) | nindent 12 }}
+            # A messenger reply sends the files a task published, read through
+            # the sandbox manager's file API.
+            - name: AGENTAREA_SANDBOX_FILE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentarea.sandboxFileSecretName" . }}
+                  key: {{ include "agentarea.sandboxFileSecretKey" . }}
+            {{- include "agentarea.telemetry.envs" (dict "root" . "image" .Values.global.image) | nindent 12 }}
             {{- if .Values.eventService.extraEnv }}
             {{- toYaml .Values.eventService.extraEnv | nindent 12 }}
             {{- end }}
           livenessProbe:
             httpGet:
-              path: {{ .Values.global.monitoring.health.path }}
+              path: /livez
               port: {{ .Values.eventService.port }}
             initialDelaySeconds: {{ .Values.eventService.livenessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.eventService.livenessProbe.periodSeconds }}
@@ -98,7 +115,7 @@ spec:
             failureThreshold: {{ .Values.eventService.livenessProbe.failureThreshold }}
           readinessProbe:
             httpGet:
-              path: {{ .Values.global.monitoring.health.path }}
+              path: /readyz
               port: {{ .Values.eventService.port }}
             initialDelaySeconds: {{ .Values.eventService.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.eventService.readinessProbe.periodSeconds }}
@@ -108,4 +125,11 @@ spec:
           resources:
             {{- toYaml .Values.eventService.resources | nindent 12 }}
           {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
 {{- end }}

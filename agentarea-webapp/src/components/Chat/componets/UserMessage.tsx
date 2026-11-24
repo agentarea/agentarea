@@ -1,6 +1,6 @@
 import React from "react";
-import Link from "@/components/WorkspaceLink";
 import { AttachmentCard } from "@/components/ui/attachment-card";
+import Link from "@/components/WorkspaceLink";
 import { renderTextWithMentions } from "@/utils/mentions";
 import { useFormatTimestamp } from "../../../utils/dateUtils";
 import MessageWrapper from "./MessageWrapper";

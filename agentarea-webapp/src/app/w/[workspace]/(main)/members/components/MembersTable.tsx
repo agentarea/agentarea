@@ -1,21 +1,19 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { LogOut, Search, Trash2, User, Users } from "lucide-react";
-import BaseModal from "@/components/BaseModal";
+import { Search, User, Users } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import Table, { type Column } from "@/components/Table/Table";
-import { TableRowAction } from "@/components/Table/TableRowAction";
+import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
 import { Badge } from "@/components/ui/badge";
 import { BlueprintBadge } from "@/components/ui/blueprint-badge";
 import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { formatApiError } from "@/lib/api-errors";
 import { deterministicHue } from "@/lib/avatar-hue";
-import { removeMemberAction } from "../actions";
+import { MemberRemoveButton } from "./MemberRemoveButton";
 import {
   getMemberAccess,
+  getMemberHref,
   getMemberLabel,
   getMemberSecondaryLabel,
   isAnonymousMember,
@@ -94,94 +92,6 @@ function MemberCell({
   );
 }
 
-function MemberRowActions({
-  member,
-  currentUser,
-  access,
-  ownerUserId,
-  workspaceName,
-  onRemovalPending,
-}: {
-  member: DisplayMember;
-  currentUser: CurrentUser;
-  access: MemberAccess;
-  ownerUserId: string | null;
-  workspaceName: string;
-  onRemovalPending: (pending: { userId: string; label: string }) => void;
-}) {
-  const t = useTranslations("MembersPage");
-  const router = useWorkspaceRouter();
-  const [, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-
-  const isSelf = member.user_id === currentUser.id;
-  const label = isAnonymousMember(member, currentUser)
-    ? shortId(member.user_id)
-    : getMemberLabel(member, currentUser);
-  const canLeave = isSelf && access !== "owner";
-  const canRemove =
-    !isSelf &&
-    ownerUserId !== null &&
-    ownerUserId === currentUser.id &&
-    access !== "owner";
-  if (!canLeave && !canRemove) return null;
-
-  const remove = async () => {
-    setError(null);
-    let res: Awaited<ReturnType<typeof removeMemberAction>>;
-    try {
-      res = await removeMemberAction(member.user_id);
-    } catch (err) {
-      console.error("Failed to remove member", err);
-      setError(
-        `${isSelf ? t("leaveFailed") : t("removeFailed")}: ${formatApiError(err)}`
-      );
-      return;
-    }
-    if (res.error) {
-      setError(res.error);
-      return;
-    }
-    // The row disappears on refresh; the table keeps the notice.
-    if (res.pending && !isSelf) {
-      onRemovalPending({ userId: member.user_id, label });
-    }
-    if (isSelf) {
-      router.push("/");
-    } else {
-      startTransition(() => router.refresh());
-    }
-  };
-
-  return (
-    <span className="inline-flex items-center gap-2">
-      {error && (
-        <span className="form-error max-w-xs text-left" role="alert">
-          {error}
-        </span>
-      )}
-      <BaseModal
-        type="delete"
-        title={isSelf ? t("leaveWorkspace") : t("removeMemberTitle")}
-        description={
-          isSelf
-            ? t("leaveText", { workspace: workspaceName })
-            : t("removeMemberText", { member: label, workspace: workspaceName })
-        }
-        confirmLabel={isSelf ? t("leave") : t("remove")}
-        onConfirm={remove}
-      >
-        <TableRowAction
-          variant="destructiveOutline"
-          icon={isSelf ? <LogOut /> : <Trash2 />}
-        >
-          {isSelf ? t("leave") : t("remove")}
-        </TableRowAction>
-      </BaseModal>
-    </span>
-  );
-}
-
 export function MembersTable({
   members,
   currentUser,
@@ -226,6 +136,7 @@ export function MembersTable({
     {
       header: t("member"),
       accessor: "user_id",
+      rowLink: true,
       render: (_, member) =>
         member ? (
           <MemberCell member={member} currentUser={currentUser} />
@@ -251,18 +162,30 @@ export function MembersTable({
       },
     },
     {
+      header: t("joined"),
+      accessor: "joined_at",
+      headerClassName: "w-[160px] max-md:hidden",
+      cellClassName: "max-md:hidden",
+      render: (_, member) =>
+        member?.joined_at ? (
+          <TableDateDisplay dateString={member.joined_at} onlyDate />
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
       header: "",
       accessor: "actions",
       headerClassName: "w-0",
       cellClassName: "text-right",
       render: (_, member) =>
         member ? (
-          <MemberRowActions
+          <MemberRemoveButton
             member={member}
             currentUser={currentUser}
-            access={getMemberAccess(member, ownerUserId)}
             ownerUserId={ownerUserId}
             workspaceName={workspaceName}
+            placement="row"
             onRemovalPending={setRemovalPending}
           />
         ) : null,
@@ -276,7 +199,7 @@ export function MembersTable({
           {t("removalInProgressText", { member: removalPending.label })}
         </p>
       )}
-      <Table data={members} columns={columns} />
+      <Table data={members} columns={columns} rowHref={getMemberHref} />
     </>
   );
 }

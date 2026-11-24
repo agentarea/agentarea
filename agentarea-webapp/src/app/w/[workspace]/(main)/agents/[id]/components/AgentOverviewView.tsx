@@ -29,8 +29,8 @@ import {
   StatStrip,
 } from "@/components/Overview/OverviewCard";
 import { OverviewHero } from "@/components/Overview/OverviewHero";
+import { OverviewTaskRow } from "@/components/Overview/OverviewTaskRow";
 import SectionLoadError from "@/components/SectionLoadError";
-import { TaskStatus, useTaskStatusLabel } from "@/components/TaskStatus";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { CollapsibleGroup } from "@/components/ui/group-header";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
@@ -750,48 +750,18 @@ function TaskRow({
   locale: string;
   hideRunningStatus?: boolean;
 }) {
-  const status = String(task.status ?? "unknown");
-  const label = useTaskStatusLabel(status);
-  const visuallyHideStatus = hideRunningStatus && isRunningTask(task);
   const resultCost =
     task.result && typeof task.result === "object"
       ? task.result.total_cost
       : undefined;
   const cost = Number(task.total_cost ?? resultCost ?? 0);
   const when = agoText(task.created_at, t);
-  const title = task.description || task.id;
-  // Status, title, time and cost all sit on one line: the title is the only
-  // part worth the width, so everything else is fixed and the title truncates.
-  const timeText = isRunningTask(task) ? t("started", { time: when }) : when;
-
   return (
-    <Link href={`/tasks/${task.id}`} className="block">
-      <InteractiveListRow
-        className="px-[15px] py-[11px]"
-        dividerClassName="border-b border-border/60"
-        contentClassName="gap-3"
-        // Leads the row as a bare marker; its name is the tooltip and the
-        // accessible label.
-        start={
-          visuallyHideStatus ? (
-            <span className="sr-only">{label}</span>
-          ) : (
-            <TaskStatus status={status} caption="never" className="shrink-0" />
-          )
-        }
-        end={
-          <span className="flex items-center gap-3 text-[11.5px] text-muted-foreground">
-            <span className="whitespace-nowrap">{timeText}</span>
-            <span className="w-[46px] text-right tabular-nums">
-              {cost > 0 ? formatMoney(cost, currency, locale) : "—"}
-            </span>
-          </span>
-        }
-      >
-        <div className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
-          {title}
-        </div>
-      </InteractiveListRow>
-    </Link>
+    <OverviewTaskRow
+      task={task}
+      timeText={isRunningTask(task) ? t("started", { time: when }) : when}
+      costText={cost > 0 ? formatMoney(cost, currency, locale) : "—"}
+      hideStatus={hideRunningStatus && isRunningTask(task)}
+    />
   );
 }

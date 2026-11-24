@@ -1,12 +1,12 @@
 ---
 name: aa-env-vars
-description: Add, rename or remove an AgentArea environment variable. Use whenever a diff touches a pydantic settings class, os.getenv / os.Getenv / process.env, charts/agentarea/config.yaml, a docker-compose file, .env.example or a workflow env block, or when reviewing such a diff. Covers whose name it is, how to name it, where it must be wired, and what proves it.
+description: Add, rename or remove an AgentArea environment variable. Use whenever a diff touches a config.Loader read, os.Getenv / process.env, charts/agentarea/config.yaml, a docker-compose file, .env.example or a workflow env block, or when reviewing such a diff. Covers whose name it is, how to name it, where it must be wired, and what proves it.
 ---
 
 # AgentArea environment variables
 
 A variable is a contract with whoever deploys us. The name is the contract; the
-Python attribute behind it is internal and can change any time. So the name is
+Go field behind it is internal and can change any time. So the name is
 decided once, carefully, and `scripts/check_env_naming.py` holds it in CI.
 
 ## 1. Whose name is it
@@ -20,7 +20,7 @@ Name it after **whoever reads it**.
   postgres *image*, `AWS_*` for the AWS SDK, `NEXT_PUBLIC_*`, `PORT` / `HOST`.
 - **Our code reads it and passes the value on**: ours, `AGENTAREA_`-prefixed.
 - Not a standard: libpq `PG*` (drivers apply them silently) and `AWS_*` for our
-  S3 storage (that is RustFS/Timeweb, while the AWS SDK picks `AWS_*` up by itself
+  S3 storage (that is RustFS or another S3-compatible store, while the AWS SDK picks `AWS_*` up by itself
   in the same process). Both stay `AGENTAREA_DB_*` / `AGENTAREA_S3_*`.
 
 ## 2. How to name ours
@@ -49,17 +49,13 @@ Name it after **whoever reads it**.
 
 ## 4. Wire it
 
-**Python.** Put the field on the settings class whose `env_prefix` is the domain
-(`DatabaseSettings` → `AGENTAREA_DB_`). The env name is always `env_prefix` plus
-the field name. Never `validation_alias`: the guard fails on it. A field that
-belongs to another domain moves to that domain's class. Constructors and test
-stubs take the *field* name (`DatabaseSettings(HOST=…)`). `extra="ignore"` drops
-a wrong kwarg without a word, so check the test really sets what it means to. No
-`getattr(settings, "NAME", default)`: a renamed attribute then silently becomes
-the default.
+**Go.** Read it through the `config.Loader`
+(`agentarea-platform/internal/kernel/config`: `RequiredEnv`, `StringEnv`,
+`DurationEnv`, ...) with the full name as a string literal, or through a named
+`const`, so the guard can see it. Required config uses `RequiredEnv`, which
+fails the process at startup and names the variable.
 
-**Go / TypeScript.** Read it through the service's config loader or a named
-`const`, so the guard can see it.
+**TypeScript.** Read `process.env.NAME` directly, so the guard can see it.
 
 **Deployment.** Every place that starts the process:
 
@@ -115,7 +111,7 @@ by itself, grep for the implicit readers: `LoadDefaultConfig`, `boto3.client`
 with no explicit keys, `os.environ` passed whole to a library, and pass the
 values explicitly instead.
 
-The guard cannot see test stubs or attribute access. Run `uv run pyright` for
-the attribute side and `make test` for the stubs. If the chart changed, render
+The guard cannot see test stubs. Run `make -C agentarea-platform check` for
+them. If the chart changed, render
 it (`helm template`) and check that each new name lands on the containers that
 read it.

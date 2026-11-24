@@ -1,12 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import {
-  getNodeId,
-  getNodeLabel,
-  UiNodeGroupEnum,
-  type UiNode,
-} from "@ory/client-fetch";
+import { getNodeId, UiNodeGroupEnum, type UiNode } from "@ory/client-fetch";
 import { Lock } from "lucide-react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { Button } from "@/components/ui/button";
@@ -18,14 +13,17 @@ import {
   FieldErrors,
   FlowSuccess,
   MethodSubmit,
-  OryText,
   useSavedHere,
 } from "./FlowParts";
 import { errorsOf, fieldNodes } from "./oryNodes";
 import SettingsRow from "./SettingsRow";
 import { SettingsFooter, SettingsSection } from "./SettingsSection";
 
-/** Our copy and treatment for the traits of the identity schema; any other trait keeps Kratos' label. */
+/**
+ * The traits a person edits here, with our copy. Any other trait of the
+ * identity schema (a signup consent, a provider's picture) is not drawn; the
+ * form still carries its value, so a save keeps it as it was.
+ */
 const TRAITS: Record<
   string,
   {
@@ -61,28 +59,25 @@ export default function ProfileSection({ nodes }: { nodes: UiNode[] }) {
       {fieldNodes(nodes).map((node) => {
         const { name, type, required, autocomplete } = node.attributes;
         const trait = TRAITS[name];
-        const label = getNodeLabel(node);
-        const title = trait
-          ? t(trait.label)
-          : label && <OryText message={label} />;
+        if (!trait) return null;
         const id = `settings-${name}`;
         return (
           <SettingsRow
             key={getNodeId(node)}
             htmlFor={id}
             control="field"
-            title={title || name}
-            description={trait?.hint && t(trait.hint)}
+            title={t(trait.label)}
+            description={trait.hint && t(trait.hint)}
           >
             <Input
               id={id}
               type={type}
               required={required}
               autoComplete={autocomplete}
-              readOnly={trait?.readOnly}
-              leading={trait?.leading}
+              readOnly={trait.readOnly}
+              leading={trait.leading}
               trailing={
-                trait?.readOnly ? (
+                trait.readOnly ? (
                   <span className="pointer-events-none grid w-9 place-items-center text-muted-foreground">
                     <Lock className="h-3.5 w-3.5" />
                   </span>
@@ -126,14 +121,15 @@ export default function ProfileSection({ nodes }: { nodes: UiNode[] }) {
   );
 }
 
-/** Avatar, name and @username as they read now, edits included. */
+/** Avatar (the provider's picture when there is one), name and @username as they read now, edits included. */
 function IdentityHead() {
-  const [first, last, username, email] = useWatch({
+  const [first, last, username, email, picture] = useWatch({
     name: [
       "traits.name.first",
       "traits.name.last",
       "traits.username",
       "traits.email",
+      "traits.picture",
     ],
   }) as (string | undefined)[];
   const name = displayName({ name: { first, last }, username, email });
@@ -145,6 +141,7 @@ function IdentityHead() {
         variant="pigment"
         hue={deterministicHue(email || name || "")}
         text={nameInitials(name)}
+        src={picture || undefined}
         aria-hidden
       />
       <div className="min-w-0">

@@ -1,0 +1,14 @@
+# Event types of events.json Go deliberately does not publish: "<name> -- <reason>".
+TaskUpdated -- no consumer of domain.events.TaskUpdated in Python, webapp, CLI or enterprise
+TaskStatusChanged -- no consumer of domain.events.TaskStatusChanged in Python, webapp, CLI or enterprise
+AgentCreated -- no consumer of domain.events.AgentCreated in Python, webapp, CLI or enterprise
+AgentUpdated -- no consumer of domain.events.AgentUpdated in Python, webapp, CLI or enterprise
+AgentArchived -- no consumer of domain.events.AgentArchived in Python, webapp, CLI or enterprise
+AgentRestored -- no consumer of domain.events.AgentRestored in Python, webapp, CLI or enterprise
+AgentDeleted -- no consumer of domain.events.AgentDeleted in Python, webapp, CLI or enterprise
+MCPServerCreated -- no consumer of domain.events.MCPServerCreated in Python, webapp, CLI or enterprise
+MCPServerUpdated -- no consumer of domain.events.MCPServerUpdated in Python, webapp, CLI or enterprise
+MCPServerDeleted -- no consumer of domain.events.MCPServerDeleted in Python, webapp, CLI or enterprise
+MCPServerDeployed -- no consumer of domain.events.MCPServerDeployed in Python, webapp, CLI or enterprise
+MCPServerInstanceCreated -- Go publishes it as com.agentarea.mcp.instance.created; nothing consumes either name
+MCPServerInstanceDeleted -- Go publishes it as com.agentarea.mcp.instance.deleted; nothing consumes either name

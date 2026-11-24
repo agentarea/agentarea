@@ -2,10 +2,13 @@
 
 import { useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { LayoutGrid, List } from "lucide-react";
+import {
+  useWorkspacePathname,
+  useWorkspaceRouter,
+} from "@/hooks/useWorkspaceNavigation";
+import { setUiView } from "@/lib/ui-prefs-client";
 import { cn } from "@/lib/utils";
-import { setCookie } from "@/utils/cookies";
 
 export interface TabItem {
   value: string;
@@ -58,8 +61,8 @@ export default function HeaderTabs({
   const searchParams = useSearchParams();
   const pathname = useWorkspacePathname();
 
-  // Unique cookie key based on current path.
-  const cookieKey = useMemo(() => {
+  // The remembered view is keyed by the current path.
+  const viewKey = useMemo(() => {
     const cleanPath = pathname.replace(/^\/+/, "").replace(/\//g, "_");
     return `${paramName}_${cleanPath}`;
   }, [pathname, paramName]);
@@ -77,7 +80,7 @@ export default function HeaderTabs({
     }
     const params = new URLSearchParams(searchParams.toString());
     params.set(paramName, next);
-    setCookie(cookieKey, next);
+    setUiView(viewKey, next);
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
 

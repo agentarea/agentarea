@@ -96,7 +96,11 @@ async function connectAndRun<T>(
   } finally {
     // A no-op on 2026 connections, which have no session to end.
     await transport.terminateSession().catch((error: unknown) => {
-      console.warn(`MCP session for ${instanceId} was not terminated`, error);
+      console.warn(
+        "MCP session for %s was not terminated",
+        JSON.stringify(instanceId),
+        error
+      );
     });
     await client.close();
   }

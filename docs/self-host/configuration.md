@@ -42,7 +42,7 @@ Every variable AgentArea reads is `AGENTAREA_<DOMAIN>_<KEY>`, at most 40
 characters, with at most three segments after the domain. The domain comes from
 a closed list: `DB` `S3` `AUTH` `AUTHZ` `SECRET` `MCP` `SANDBOX` `TEMPORAL`
 `WORKER` `TASK` `TRIGGER` `CHANNEL` `EVENT` `CORS` `LOG` `REDIS` `KAFKA` `TOOL` `K8S`
-`API` `HTTP` `OTEL` `BILLING` `METRICS` `A2A` `SPEND` `ANALYTICS`. Domains are whole words; only
+`API` `HTTP` `OTEL` `BILLING` `METRICS` `A2A` `SPEND` `ANALYTICS` `BUNDLE`. Domains are whole words; only
 established acronyms are abbreviated. A handful of
 app-level names carry no domain — `AGENTAREA_ENV`, `AGENTAREA_API_URL`,
 `AGENTAREA_APP_URL`, `AGENTAREA_EDITION`.
@@ -80,13 +80,6 @@ Consumed by the backend, worker, and event service.
 | `AGENTAREA_DB_SSLMODE` | `global.database.sslMode` | `disable` |
 | `AGENTAREA_DB_USER` | Secret `global.secrets.postgresql`, key `username` | generated |
 | `AGENTAREA_DB_PASSWORD` | Secret `global.secrets.postgresql`, key `password` | generated |
-| `AGENTAREA_DB_URL` | composed from the five above | `postgresql://$(AGENTAREA_DB_USER):$(AGENTAREA_DB_PASSWORD)@$(AGENTAREA_DB_HOST):$(AGENTAREA_DB_PORT)/$(AGENTAREA_DB_NAME)?sslmode=<sslMode>` |
-| `AGENTAREA_DB_TENANT_SCOPE` | `global.database.tenantScope` | `log` |
-
-`AGENTAREA_DB_TENANT_SCOPE` is required and has no default in the platform. It
-decides what an ORM query on a workspace-scoped table does when nothing bound a
-workspace: `log` runs it unfiltered and logs one warning per call site, `enforce`
-refuses it. Deploy with `log`, clear the warnings, then switch to `enforce`.
 
 `global.database.maxConnections` and `global.database.connectionTimeout` exist in
 `values.yaml` but are not rendered into any environment variable by
@@ -140,7 +133,7 @@ without them, and refuses them while RustFS is enabled.
 | `AGENTAREA_S3_BUCKET` | `global.storage.bucket` | `agentarea-documents` |
 | `AGENTAREA_S3_ARTIFACTS_BUCKET` | `global.storage.bucket` | `agentarea-documents` |
 | `AGENTAREA_S3_ENDPOINT` | `global.storage.endpoint`; with RustFS, the RustFS service, port 9000 | derived |
-| `AGENTAREA_S3_CONDITIONAL_WRITES` | `global.storage.conditionalWrites`: `native`, or `emulated` for a store that refuses or ignores `If-Match` / `If-None-Match` (Timeweb S3); mcp-manager then checks them under a per-object lock, which needs a single replica | `native` |
+| `AGENTAREA_S3_CONDITIONAL_WRITES` | `global.storage.conditionalWrites`: `native`, or `emulated` for a store that refuses or ignores `If-Match` / `If-None-Match` (an S3-compatible store without conditional writes); mcp-manager then checks them under a per-object lock, which needs a single replica | `native` |
 | `AGENTAREA_S3_ACCESS_KEY` | Secret `global.storage.existingSecret`, key `global.storage.accessKeyKey`; with RustFS, Secret `global.secrets.rustfs`, key `root-user` | generated |
 | `AGENTAREA_S3_SECRET_KEY` | Secret `global.storage.existingSecret`, key `global.storage.secretKeyKey`; with RustFS, Secret `global.secrets.rustfs`, key `root-password` | generated |
 
@@ -155,9 +148,9 @@ without them, and refuses them while RustFS is enabled.
 | `AGENTAREA_LOG_LEVEL` | fixed in `config.yaml` | `info` |
 | `AGENTAREA_API_URL` | `global.api.publicUrl`, else derived from `ingress.hosts.backend.host`, else the ClusterIP service URL | derived |
 | `AGENTAREA_MCP_MANAGER_URL` | the MCP Manager service and `mcpManager.service.port` | derived |
+| `AGENTAREA_MCP_STORAGE_URL` | `mcpManager.workloadUrl`, else the MCP Manager service | derived |
 | `AGENTAREA_MCP_TIMEOUT` | fixed | `30` |
 | `AGENTAREA_S3_PUBLIC_ENDPOINT` | `global.storage.publicEndpoint` | `""` |
-| `AGENTAREA_ENV` | `global.deploymentEnv` | `production` |
 | `AGENTAREA_ANALYTICS_ENABLED` | `global.analytics.enabled` | `true` |
 | `AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY` | Secret `global.analytics.signupHookSecret`, key `signup-hook-key` | unset (no sign-up hook) |
 | `AGENTAREA_ANALYTICS_OWN_DOMAINS` | `global.analytics.ownDomains` (a list) | empty (no own domains) |
@@ -167,6 +160,7 @@ without them, and refuses them while RustFS is enabled.
 | `AGENTAREA_AUTH_KRATOS_ADMIN_URL` | `kratos.urls.admin` | in-cluster `<release>-kratos-admin:4434` |
 | `AGENTAREA_APP_URL` | derived from the frontend ingress | `http://localhost:3000` |
 | `AGENTAREA_A2A_AGENT_URL` | `global.envVars.AGENTAREA_A2A_AGENT_URL` | `http://{agent_id}.a2a.localhost:8000` |
+| `AGENTAREA_TELEGRAM_WEBHOOK_URL` | `backend.extraEnv` | empty (Telegram posts to `AGENTAREA_API_URL/webhooks/{webhook_id}`) |
 | `SMTP_CONNECTION_URI` / `SMTP_FROM_EMAIL` / `SMTP_FROM_NAME` | `kratos.smtp.*` | empty (invitations are link-only) |
 | `AGENTAREA_MCP_OAUTH_APPS` | Secret `global.mcpOAuthApps.existingSecret`, key `global.mcpOAuthApps.existingSecretKey` | unset (no platform OAuth apps) |
 
@@ -211,6 +205,23 @@ GitHub. It is a JSON list of objects with `issuer`, `client_id`,
 at one of `resource_origins` through `issuer` then authorizes with that app
 without registering its own; tokens minted through it are sent only to
 `resource_origins`. Unset, such providers need the workspace's own OAuth app.
+An app may also set `install_url` (https), such as a GitHub App's
+`https://github.com/apps/<app>/installations/new`: a GitHub App's user token
+reaches only the repositories the app is installed on, so once a user has
+signed in through the app the connection offers a "Choose repositories"
+button that opens this page.
+A GitHub App may also set `app_id`, `private_key` (the app's PEM private key)
+and `api_url` (https, such as `https://api.github.com`), all three or none.
+A user token reaches every installation of the app its user can access, so
+one person's connections in two workspaces reach the same repositories. With
+these fields set, a connection signed in through the app can be bound to one
+installation the signed-in user can access, and optionally to some of its
+repositories. A bound connection sends the MCP server an installation access
+token minted with the app's key (`POST {api_url}/app/installations/{id}/access_tokens`)
+instead of the user's token, so it reaches only that installation. The token
+is cached until shortly before it expires, and each new one is minted only
+after checking that the connection's user still has access to the installation.
+Clearing the binding returns the connection to the user's token.
 The same list serves one-click catalog API connections (Google Search Console,
 Yandex Metrica and the like): a catalog connection uses the app whose
 `authorization_endpoint` and `token_endpoint` equal its own and whose
@@ -226,8 +237,8 @@ it, the worker to refresh tokens.
 | `AGENTAREA_TEMPORAL_MAX_ACTIVITIES` | fixed in `config.yaml` | `10` |
 | `AGENTAREA_TEMPORAL_MAX_WORKFLOWS` | fixed in `config.yaml` | `5` |
 | `AGENTAREA_DEBUG` | fixed | `false` |
-| `AGENTAREA_ENV` | `global.deploymentEnv` | `production` |
 | `AGENTAREA_MCP_MANAGER_URL` | derived | — |
+| `AGENTAREA_MCP_STORAGE_URL` | `mcpManager.workloadUrl`, else the MCP Manager service | derived |
 | `AGENTAREA_MCP_OAUTH_APPS` | same Secret as the backend | unset |
 | `AGENTAREA_TASK_OUTAGE_RETRY_WINDOW` | `worker.outageWait.retryWindow` | `5m` |
 | `AGENTAREA_TASK_OUTAGE_WAIT_BACKOFF` | `worker.outageWait.backoff` | `1m,5m,10m` |
@@ -287,6 +298,7 @@ are not rendered into environment variables.
 | `AGENTAREA_API_URL` | the backend service, port 8000 | derived |
 | `HOST` | fixed | `0.0.0.0` |
 | `PORT` | fixed; the Service still answers on `mcpManager.service.port` | `8000` |
+| `AGENTAREA_MCP_STORAGE_URL` | `mcpManager.workloadUrl`, else the MCP Manager service | derived |
 | `AGENTAREA_MCP_BACKEND` | fixed to `kubernetes` in `config.yaml` | `kubernetes` |
 | `AGENTAREA_K8S_ENABLED` | fixed | `true` |
 | `AGENTAREA_K8S_NAMESPACE` | the release namespace | derived |
@@ -313,7 +325,8 @@ are not rendered into environment variables.
 
 An empty `AGENTAREA_MCP_PACKAGE_REPO` uses the local Docker image store only when
 the manager's backend is Docker; Kubernetes and data-plane backends require a
-repository.
+repository, and the chart runs one of those, so the value is required: the
+backend, worker and mcp-manager refuse to start without it.
 
 `mcpManager.packageImages.registrySecret` names an existing
 `kubernetes.io/dockerconfigjson` Secret. The manager projects its
@@ -448,6 +461,9 @@ It also reads, from the groups above:
 
 - `AGENTAREA_API_URL`: the public base of `/webhooks/{webhook_id}`, the URL it
   registers with a provider. Required; the chart sets the backend's own value.
+- `AGENTAREA_APP_URL`: the webapp's public base, derived like the backend's.
+  The Telegram bot's reply to a sender who has not linked an account links to
+  `<app>/link/telegram?code=...`.
 - `AGENTAREA_SECRET_ENCRYPTION_KEY`: source credentials are read from the
   `database` secret backend. Required; the event service refuses to start with
   any other `AGENTAREA_SECRET_BACKEND`.
@@ -465,7 +481,7 @@ It also reads, from the groups above:
 |---|---|---|
 | Consumer group | `mcpSandboxRunner.consumerGroup` | `agentarea-sandbox-runners` |
 | Batch size | `mcpSandboxRunner.batchSize` | `1` |
-| Image | `mcpSandboxRunner.image` | falls back to `mcpManager.image` |
+| Image | `global.image` (the platform image, `agentarea sandbox`) | `agentarea/agentarea-platform` |
 | Max command duration | `mcpManager.warmPool.maxExecutionTimeoutSeconds` | `1800` |
 
 The runner consumes sandbox execution requests from Redis Streams. In Docker
@@ -484,10 +500,13 @@ Rendered into backend, worker, mcp-manager and event-service by the
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `telemetry.otlpEndpoint`, required when enabled | unset |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | fixed | `http/protobuf` |
 | `OTEL_SEMCONV_STABILITY_OPT_IN` | fixed | `http` |
+| `OTEL_TRACES_EXPORTER` | `none` while `telemetry.traces.enabled` is false | unset (`otlp`) |
 | `OTEL_RESOURCE_ATTRIBUTES` | fixed, from the Downward API `POD_NAME` and `POD_NAMESPACE` and the Deployment's image tag | `k8s.pod.name=$(POD_NAME),k8s.namespace.name=$(POD_NAMESPACE),service.version=<tag>` |
 
 `AGENTAREA_OTEL_ENABLED=true` with no `OTEL_EXPORTER_OTLP_ENDPOINT` (or no
-per-signal endpoints) stops the process at startup. `OTEL_METRICS_EXPORTER`
+per-signal endpoints) stops the process at startup. `OTEL_TRACES_EXPORTER`
+picks `otlp` (the default) or `none`, which exports no spans and needs no traces
+endpoint; set it for a collector with no traces pipeline. `OTEL_METRICS_EXPORTER`
 picks `otlp` (the default), `prometheus` (a scrape endpoint on
 `OTEL_EXPORTER_PROMETHEUS_HOST`:`OTEL_EXPORTER_PROMETHEUS_PORT`, default
 `localhost:9464`) or `none`; `OTEL_METRIC_EXPORT_INTERVAL` sets the push interval
@@ -544,19 +563,25 @@ included. `AGENTAREA_HTTP_ALLOW_PRIVATE=true` admits every private address and
 belongs only on a single-tenant install. `docker-compose.dev.yaml` allows
 `localhost,host.docker.internal`; `docker-compose.yaml` allows nothing.
 
-### Spend currency (not in `config.yaml`)
+### Environment, edition and spend currency (group `application`)
 
-Read by `SpendSettings` in the backend and the worker.
+Rendered into every platform role (backend, worker, event service, mcp-manager,
+operator, the registry-reconcile Job).
 
 | Variable | Helm value | Default |
 |---|---|---|
-| `AGENTAREA_SPEND_CURRENCY` | none (set it in the env values) | `USD` |
+| `AGENTAREA_ENV` | `global.deploymentEnv` | `production` |
+| `AGENTAREA_EDITION` | `global.edition` | `oss` |
+| `AGENTAREA_SPEND_CURRENCY` | `global.spendCurrency` | `USD` |
+
+`AGENTAREA_ENV` is the telemetry resource's `deployment.environment.name`.
+`AGENTAREA_EDITION` is `oss` or `enterprise`; usage analytics report it.
 
 The one currency spend caps count and tool costs are declared in, as an ISO 4217
 code. Nothing converts other currencies: a tool cost declared in another currency is
 recorded in that currency and shown as not covered by caps. With the enterprise
 billing extension installed, billing's ledger currency is the source of truth and
-this must name it, or the backend and the worker refuse to start.
+this must name it, or every platform role refuses to start.
 
 ### Docker Compose variables
 

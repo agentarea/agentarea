@@ -1,0 +1,33 @@
+{
+  "extracted_from": "agentarea-platform, read statically (grep), 2026-11-15; source paths are relative to agentarea-platform/. Processes: worker = apps/worker/agentarea_worker/main.py run() and streams.py StreamRuntime.start(); api = apps/api/agentarea_api/main.py app_lifespan. Request-scoped hubs (tasks-live, streams-live) and one-shot startup steps are not loops.",
+  "entries": [
+    {"name": "worker:TaskEventDelivery", "kind": "consumer", "process": "worker", "source": "apps/worker/agentarea_worker/main.py:482"},
+    {"name": "worker:StreamAutoclaimer:tasks.events/delivery", "kind": "consumer", "process": "worker", "source": "apps/worker/agentarea_worker/main.py:484"},
+    {"name": "worker:OutboxRelay", "kind": "periodic", "process": "worker", "source": "apps/worker/agentarea_worker/main.py:486"},
+    {"name": "worker:CostSettlement", "kind": "periodic", "process": "worker", "source": "apps/worker/agentarea_worker/main.py:488"},
+    {"name": "worker:AnalyticsSender", "kind": "periodic", "process": "worker", "source": "apps/worker/agentarea_worker/main.py:493"},
+    {"name": "worker:InstallationPulse", "kind": "periodic", "process": "worker", "source": "apps/worker/agentarea_worker/main.py:498"},
+    {"name": "worker:PartitionMaintainer", "kind": "periodic", "process": "worker", "source": "apps/worker/agentarea_worker/streams.py:99"},
+    {"name": "worker:PolledItemConsumer", "kind": "consumer", "process": "worker", "source": "apps/worker/agentarea_worker/streams.py:100"},
+    {"name": "worker:StreamAutoclaimer:streams.ingest/ingest", "kind": "consumer", "process": "worker", "source": "apps/worker/agentarea_worker/streams.py:101"},
+    {"name": "worker:SubscriptionChangeListener", "kind": "consumer", "process": "worker", "source": "apps/worker/agentarea_worker/streams.py:102"},
+    {"name": "worker:ExternalDelivery:consumers", "kind": "consumer", "process": "worker", "source": "libs/streams/agentarea_streams/application/external_delivery.py:149"},
+    {"name": "worker:ExternalDelivery:sweeper", "kind": "periodic", "process": "worker", "source": "libs/streams/agentarea_streams/application/external_delivery.py:152"},
+    {"name": "worker:StreamAutoclaimer:streams.external/delivery", "kind": "consumer", "process": "worker", "source": "apps/worker/agentarea_worker/streams.py:105"},
+    {"name": "worker:EventsView", "kind": "consumer", "process": "worker", "source": "apps/worker/agentarea_worker/streams.py:109"},
+    {"name": "worker:EventRouter", "kind": "consumer", "process": "worker", "source": "apps/worker/agentarea_worker/streams.py:118"},
+    {"name": "worker:PlatformProjection", "kind": "consumer", "process": "worker", "source": "apps/worker/agentarea_worker/streams.py:127"},
+    {"name": "worker:TriggerRunOutcomes", "kind": "consumer", "process": "worker", "source": "apps/worker/agentarea_worker/streams.py:136"},
+    {"name": "worker:MCPContainerMonitor", "kind": "periodic", "process": "worker", "source": "apps/worker/agentarea_worker/main.py:505"},
+    {"name": "worker:DispatchStampWriter", "kind": "periodic", "process": "worker", "source": "apps/worker/agentarea_worker/main.py:511"},
+    {"name": "worker:TemporalWorker:agent", "kind": "temporal_worker", "process": "worker", "source": "apps/worker/agentarea_worker/main.py:515"},
+    {"name": "worker:TemporalWorker:trigger", "kind": "temporal_worker", "process": "worker", "source": "apps/worker/agentarea_worker/main.py:515"},
+    {"name": "worker:Schedule:UndispatchedTaskReconciler", "kind": "schedule", "process": "worker", "source": "apps/worker/agentarea_worker/main.py:329"},
+    {"name": "worker:Schedule:CronScheduleSync", "kind": "schedule", "process": "worker", "source": "apps/worker/agentarea_worker/main.py:330"},
+    {"name": "worker:HealthServer", "kind": "listener", "process": "worker", "source": "apps/worker/agentarea_worker/main.py:556"},
+    {"name": "api:MCPStatusEventsRouter", "kind": "consumer", "process": "api", "source": "apps/api/agentarea_api/main.py:231"},
+    {"name": "api:DispatchStampWriter", "kind": "periodic", "process": "api", "source": "apps/api/agentarea_api/main.py:237"},
+    {"name": "api:AnalyticsSender", "kind": "periodic", "process": "api", "source": "apps/api/agentarea_api/main.py:241"},
+    {"name": "api:BrokerHealthMetrics", "kind": "metrics", "process": "api", "source": "apps/api/agentarea_api/main.py:247"}
+  ]
+}

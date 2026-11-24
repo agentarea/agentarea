@@ -77,6 +77,14 @@ The installer marks the resulting `env_schema` entry as a secret based on
 heuristic. The bundle already declared which inputs are credentials, so guessing
 from the variable name is unnecessary and less accurate.
 
+A binding can instead name a secret the workspace already holds:
+`Authorization: "${secret.github-token}"`. The instance then keeps a reference
+to that secret rather than a copy, reads it each time the server starts, and
+nothing secret passes through the install. Analyze checks that the secret
+exists and that the deploying caller may use it
+([`can_use_secret`](/reference/authorization-model)), and blocks the plan
+otherwise. The reference must be the whole value.
+
 A URL MCP that verifies the signed call context
 ([tool call context](/reference/mcp-tool-call-context)) takes its signing key
 the same way. `context_secret` is a `${setup.<key>}` reference to a setup field

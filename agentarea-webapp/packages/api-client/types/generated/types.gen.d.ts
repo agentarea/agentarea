@@ -676,11 +676,21 @@ export type AnalyzeRequest = {
     /**
      * Files
      *
-     * An agent folder: relative POSIX path -> UTF-8 file text, rooted at agent.yaml. 5MB total.
+     * A bundle folder: relative POSIX path -> UTF-8 file text, rooted at agentarea.yaml (or the deprecated agent.yaml). 5MB total.
      */
     files?: {
         [key: string]: string;
     } | null;
+    /**
+     * Into
+     *
+     * The install to update: its id, or the name of exactly one install. Without it the bundle's name must be free in the workspace, else the plan blocks with code bundle_exists.
+     */
+    into?: string | null;
+    /**
+     * Where the folder came from; informational.
+     */
+    origin?: BundleOrigin | null;
     /**
      * Setup Values
      *
@@ -1236,9 +1246,17 @@ export type BundleInput = {
      */
     name: string;
     /**
+     * Openapi
+     */
+    openapi?: Array<BundleOpenApi>;
+    /**
      * Policies
      */
-    policies?: Array<BundlePolicy>;
+    policies?: Array<BundlePolicyInput>;
+    /**
+     * Projects
+     */
+    projects?: Array<BundleProject>;
     /**
      * Schema Version
      */
@@ -1251,6 +1269,14 @@ export type BundleInput = {
      * Skills
      */
     skills?: Array<BundleSkill>;
+    /**
+     * Streams
+     */
+    streams?: Array<BundleStream>;
+    /**
+     * Tasks
+     */
+    tasks?: Array<BundleTask>;
 };
 /**
  * Bundle
@@ -1290,9 +1316,17 @@ export type BundleOutput = {
      */
     name: string;
     /**
+     * Openapi
+     */
+    openapi?: Array<BundleOpenApi>;
+    /**
      * Policies
      */
     policies?: Array<BundlePolicy>;
+    /**
+     * Projects
+     */
+    projects?: Array<BundleProject>;
     /**
      * Schema Version
      */
@@ -1305,6 +1339,14 @@ export type BundleOutput = {
      * Skills
      */
     skills?: Array<BundleSkill>;
+    /**
+     * Streams
+     */
+    streams?: Array<BundleStream>;
+    /**
+     * Tasks
+     */
+    tasks?: Array<BundleTask>;
 };
 /**
  * BundleAgent
@@ -1318,6 +1360,12 @@ export type BundleAgent = {
      * The id of a Codex or Claude Code client of the workspace whose runner runs the agent's tasks, or a ${setup.x} reference to one. Unset runs them on the platform.
      */
     client?: string | null;
+    /**
+     * Delegates
+     *
+     * BundleAgent keys this agent may hand work to; each becomes a delegate tool.
+     */
+    delegates?: Array<string>;
     /**
      * Description
      */
@@ -1345,6 +1393,12 @@ export type BundleAgent = {
      */
     name: string;
     /**
+     * Openapi
+     *
+     * BundleOpenAPI keys of the connections the agent calls.
+     */
+    openapi?: Array<string>;
+    /**
      * Reasoning Effort
      *
      * A reasoning level the model takes, e.g. low or high. Not with reasoning_max_tokens.
@@ -1356,6 +1410,12 @@ export type BundleAgent = {
      * A token budget for the model's reasoning. Not with reasoning_effort.
      */
     reasoning_max_tokens?: number | null;
+    /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
     /**
      * Skills
      *
@@ -1372,7 +1432,7 @@ export type BundleAgent = {
 /**
  * BundleAutomation
  *
- * A scheduled run of one of the package's agents (maps to a CronTrigger).
+ * A run of one of the package's agents: on a cron schedule, or on the events of a stream (`on`). Exactly one of `cron` and `on`, and either `task` or `agent` with `prompt`.
  *
  * Automations are imported disabled by default; the user enables them after
  * verifying connections, mirroring the Zapier/Make "connect then activate"
@@ -1382,15 +1442,15 @@ export type BundleAutomation = {
     /**
      * Agent
      *
-     * BundleAgent key to invoke.
+     * BundleAgent key to invoke; with task, the task's agent or left out.
      */
-    agent: string;
+    agent?: string;
     /**
      * Cron
      *
      * 5- or 6-field cron expression.
      */
-    cron: string;
+    cron?: string;
     /**
      * Enabled
      */
@@ -1400,11 +1460,35 @@ export type BundleAutomation = {
      */
     key: string;
     /**
+     * Run on a stream's events instead of a cron schedule.
+     */
+    on?: BundleTriggerOn;
+    /**
+     * Parameters
+     *
+     * Parameters of the saved task's runs; with task only.
+     */
+    parameters?: {
+        [key: string]: unknown;
+    };
+    /**
      * Prompt
      *
-     * Task query passed to the agent on each run.
+     * Task query passed to the agent on each run; left out with task.
      */
-    prompt: string;
+    prompt?: string;
+    /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
+    /**
+     * Task
+     *
+     * The saved task it runs instead of asking agent a prompt: a task key of the bundle or the name of a workspace's saved task. Its agent is the task's; prompt stays empty.
+     */
+    task?: string | null;
     /**
      * Timezone
      */
@@ -1458,11 +1542,44 @@ export type BundleChannel = {
      */
     prompt?: string;
     /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
+    /**
      * Type
      *
      * Webhook provider for the created trigger.
      */
     type?: 'telegram' | 'generic';
+};
+/**
+ * BundleInstallRef
+ *
+ * The install of a bundle a plan updates.
+ */
+export type BundleInstallRef = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Where the folder last deployed came from.
+     */
+    origin?: BundleOrigin | null;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Updated By
+     */
+    updated_by?: string | null;
 };
 /**
  * BundleMcp
@@ -1481,7 +1598,7 @@ export type BundleMcp = {
     /**
      * Catalog
      *
-     * Id of a catalog MCP server, e.g. 'ru.yookassa/mcp' or 'io.github.owner/server/command'. Set this or json_spec.
+     * Id of a catalog MCP server, e.g. 'io.github.owner/server' or 'io.github.owner/server/command'. Set this or json_spec.
      */
     catalog?: string | null;
     /**
@@ -1510,6 +1627,12 @@ export type BundleMcp = {
      * Instance display name created in the workspace.
      */
     name: string;
+    /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
 };
 /**
  * BundleMetadata
@@ -1553,16 +1676,111 @@ export type BundleMetadata = {
     website?: string | null;
 };
 /**
+ * BundleOpenAPI
+ *
+ * An OpenAPI connection the bundle creates: its spec at spec_url or inline in spec (exactly one).
+ */
+export type BundleOpenApi = {
+    /**
+     * Base Url
+     */
+    base_url: string;
+    /**
+     * Description
+     */
+    description?: string;
+    /**
+     * Headers
+     *
+     * A secret header's value is ${secret.<name>} or ${setup.<key>}.
+     */
+    headers?: {
+        [key: string]: string;
+    };
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Query
+     *
+     * Query parameters; one reading a secret is stored as a secret.
+     */
+    query?: {
+        [key: string]: string;
+    };
+    /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
+    /**
+     * Spec
+     *
+     * The OpenAPI document inline.
+     */
+    spec?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Spec Url
+     */
+    spec_url?: string | null;
+    /**
+     * Variables
+     *
+     * Values of the base URL's {variables}.
+     */
+    variables?: {
+        [key: string]: string;
+    };
+};
+/**
+ * BundleOrigin
+ *
+ * Where a deployed folder came from, as the CLI reports it. Shown in the plan and the install record, never checked.
+ */
+export type BundleOrigin = {
+    /**
+     * Git Commit
+     */
+    git_commit?: string | null;
+    /**
+     * Git Remote
+     */
+    git_remote?: string | null;
+    /**
+     * Path
+     *
+     * The folder's path inside the repository.
+     */
+    path?: string | null;
+};
+/**
  * BundlePolicy
  *
- * A governance rule the package installs (maps to a PolicyRule).
+ * A governance rule the package installs on its own agents (maps to a PolicyRule).
  *
- * Portable like everything else: ``subject`` is the literal "workspace" or a
- * BundleAgent ``key`` (never a DB id); the installer resolves it to a real
- * subject id. ``target``/``effect``/``params`` mirror the unified governance
- * rule model, so this is "our policy format" — not a new one.
+ * ``subject`` is a BundleAgent ``key``, a list of them, or "*" for every agent of the bundle; a list or "*" becomes one policy per agent, keyed ``<key>-<agent>``. "workspace" and effect "allow" are refused: rules that reach beyond the bundle or loosen belong to an admin.
  */
 export type BundlePolicy = {
+    /**
+     * Approvers
+     *
+     * Who approves an approval policy: emails or user:<id>, resolved to members of the workspace the bundle deploys into. None is whoever may act on the run.
+     */
+    approvers?: Array<string>;
+    /**
+     * Billing Currency
+     *
+     * The currency params' amounts are in; the plan blocks when the workspace bills in another.
+     */
+    billing_currency?: string | null;
     /**
      * Condition
      *
@@ -1600,17 +1818,145 @@ export type BundlePolicy = {
      */
     priority?: number;
     /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
+    /**
      * Subject
      *
-     * "workspace" or a BundleAgent key the rule binds to.
+     * The BundleAgent key the rule binds to (a list or "*" was expanded to one policy per agent). "workspace" makes it a workspace policy: it binds every agent in the workspace and only a workspace admin deploys it.
      */
-    subject?: string;
+    subject: string;
     /**
      * Target
      *
      * Selector, e.g. "tool:send_email", "spend", "content", "*".
      */
     target: string;
+};
+/**
+ * BundlePolicy
+ *
+ * A governance rule the package installs on its own agents (maps to a PolicyRule).
+ *
+ * ``subject`` is a BundleAgent ``key``, a list of them, or "*" for every agent of the bundle; a list or "*" becomes one policy per agent, keyed ``<key>-<agent>``. "workspace" and effect "allow" are refused: rules that reach beyond the bundle or loosen belong to an admin.
+ */
+export type BundlePolicyInput = {
+    /**
+     * Approvers
+     *
+     * Who approves an approval policy: emails or user:<id>, resolved to members of the workspace the bundle deploys into. None is whoever may act on the run.
+     */
+    approvers?: Array<string>;
+    /**
+     * Billing Currency
+     *
+     * The currency params' amounts are in; the plan blocks when the workspace bills in another.
+     */
+    billing_currency?: string | null;
+    /**
+     * Condition
+     *
+     * Optional CEL condition.
+     */
+    condition?: string | null;
+    /**
+     * Effect
+     */
+    effect: 'allow' | 'deny' | 'cap' | 'approval' | 'safety';
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Message
+     *
+     * Human-readable reason.
+     */
+    message?: string | null;
+    /**
+     * Params
+     *
+     * Effect-specific params, e.g. {amount_usd, period} for cap.
+     */
+    params?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Priority
+     */
+    priority?: number;
+    /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
+    /**
+     * Subject
+     *
+     * A BundleAgent key, a list of them, or "*". "workspace" makes it a workspace policy: it binds every agent in the workspace and only a workspace admin deploys it.
+     */
+    subject: string | Array<string>;
+    /**
+     * Target
+     *
+     * Selector, e.g. "tool:send_email", "spend", "content", "*".
+     */
+    target: string;
+};
+/**
+ * BundleProject
+ *
+ * A project grouping the bundle's agents, MCP servers and skills by key.
+ */
+export type BundleProject = {
+    /**
+     * Agents
+     *
+     * BundleAgent keys.
+     */
+    agents?: Array<string>;
+    /**
+     * Description
+     */
+    description?: string;
+    /**
+     * Instructions
+     */
+    instructions?: string | null;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Mcp
+     *
+     * BundleMcp keys.
+     */
+    mcp?: Array<string>;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
+    /**
+     * Skills
+     *
+     * BundleSkill keys.
+     */
+    skills?: Array<string>;
 };
 /**
  * BundleSkill
@@ -1641,6 +1987,12 @@ export type BundleSkill = {
      */
     name: string;
     /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
+    /**
      * Source Type
      */
     source_type?: 'content' | 'files' | 'github';
@@ -1650,6 +2002,184 @@ export type BundleSkill = {
      * Repo URL for source_type=github.
      */
     source_url?: string | null;
+};
+/**
+ * BundleStream
+ *
+ * A stream the bundle creates, with its sources, processors and forwards.
+ */
+export type BundleStream = {
+    /**
+     * Description
+     */
+    description?: string;
+    /**
+     * Forwards
+     */
+    forwards?: Array<BundleStreamForward>;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Processors
+     */
+    processors?: Array<BundleStreamProcessor>;
+    /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
+    /**
+     * Sources
+     */
+    sources?: Array<BundleStreamSource>;
+};
+/**
+ * BundleStreamForward
+ *
+ * A forward copying a bundle stream's events into other streams.
+ */
+export type BundleStreamForward = {
+    /**
+     * Filter
+     *
+     * EventFilter of the events it copies.
+     */
+    filter?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Outputs
+     *
+     * Stream keys of the bundle or names of workspace streams.
+     */
+    outputs: Array<string>;
+};
+/**
+ * BundleStreamProcessor
+ *
+ * A processor of a bundle stream.
+ */
+export type BundleStreamProcessor = {
+    /**
+     * Code
+     *
+     * Python defining process(event).
+     */
+    code: string;
+    /**
+     * Filter
+     *
+     * EventFilter of the events it takes.
+     */
+    filter?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Outputs
+     *
+     * Stream keys of the bundle or names of workspace streams.
+     */
+    outputs: Array<string>;
+};
+/**
+ * BundleStreamSource
+ *
+ * A source feeding a bundle stream; credentials are ${secret.<name>} or ${setup.<key>} references.
+ */
+export type BundleStreamSource = {
+    /**
+     * Config
+     *
+     * Source settings.
+     */
+    config?: {
+        [key: string]: string;
+    };
+    /**
+     * Credentials
+     *
+     * Credentials as ${secret.<name>} or ${setup.<key>}.
+     */
+    credentials?: {
+        [key: string]: string;
+    };
+    /**
+     * Kind
+     */
+    kind?: 'webhook' | 'poll';
+    /**
+     * Type
+     *
+     * Source type slug from the catalog.
+     */
+    type: string;
+};
+/**
+ * BundleTask
+ *
+ * A saved task the bundle creates: a run of agent asked prompt.
+ */
+export type BundleTask = {
+    /**
+     * Agent
+     *
+     * BundleAgent key.
+     */
+    agent: string;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Parameters
+     *
+     * Default parameters of a run.
+     */
+    parameters?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Prompt
+     */
+    prompt: string;
+    /**
+     * Renamed From
+     *
+     * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
+     */
+    renamed_from?: string | null;
+};
+/**
+ * BundleTriggerOn
+ *
+ * The stream an automation runs on and the events it takes.
+ */
+export type BundleTriggerOn = {
+    /**
+     * Filter
+     *
+     * EventFilter: kinds and fields; empty takes every event.
+     */
+    filter?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Stream
+     *
+     * A stream key of the bundle, or the name of a workspace stream.
+     */
+    stream: string;
 };
 /**
  * CatalogBrowseResponse
@@ -1959,6 +2489,44 @@ export type CategoryFacet = {
     value: string;
 };
 /**
+ * ChatGPTDeviceCodeResponse
+ */
+export type ChatGptDeviceCodeResponse = {
+    /**
+     * Expires In
+     *
+     * Seconds the code stays valid
+     */
+    expires_in: number;
+    /**
+     * Interval
+     *
+     * Seconds to wait between checks
+     */
+    interval: number;
+    /**
+     * User Code
+     *
+     * The code the user enters at verification_uri
+     */
+    user_code: string;
+    /**
+     * Verification Uri
+     */
+    verification_uri: string;
+};
+/**
+ * ChatGPTSignInResponse
+ */
+export type ChatGptSignInResponse = {
+    /**
+     * Signed In
+     *
+     * False while the user has not entered the code yet
+     */
+    signed_in: boolean;
+};
+/**
  * CheckRequest
  */
 export type CheckRequest = {
@@ -2095,6 +2663,10 @@ export type ClientResponse = {
      * Description
      */
     description: string | null;
+    /**
+     * Has Runner
+     */
+    has_runner?: boolean;
     /**
      * Id
      */
@@ -2289,6 +2861,15 @@ export type CollectionUpdateRequest = {
      * Name
      */
     name?: string | null;
+};
+/**
+ * ConnectionSharingRequest
+ */
+export type ConnectionSharingRequest = {
+    /**
+     * Shared
+     */
+    shared: boolean;
 };
 /**
  * ContentSafetyPolicy
@@ -2832,7 +3413,7 @@ export type EgressExitUpdate = {
 /**
  * EntityKind
  */
-export type EntityKind = 'mcp' | 'skill' | 'agent' | 'channel' | 'automation' | 'policy';
+export type EntityKind = 'mcp' | 'skill' | 'agent' | 'channel' | 'automation' | 'policy' | 'stream' | 'openapi' | 'task' | 'project';
 /**
  * EntityStatus
  */
@@ -3101,9 +3682,43 @@ export type ExecutionTimelineResponse = {
     trigger_id: string;
 };
 /**
+ * ExistingBundleInstall
+ *
+ * The install that already has a bundle's name: deploy into it by id, or rename the bundle.
+ */
+export type ExistingBundleInstall = {
+    /**
+     * Created By
+     */
+    created_by: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Updated By
+     */
+    updated_by?: string | null;
+};
+/**
  * ExternalIdentityResponse
+ *
+ * A messenger account linked to the caller. username and display_name are how the
+ * messenger named the account when it was linked; null for links made before they were kept.
  */
 export type ExternalIdentityResponse = {
+    /**
+     * Display Name
+     */
+    display_name: string | null;
     /**
      * External Id
      */
@@ -3120,6 +3735,10 @@ export type ExternalIdentityResponse = {
      * Provider
      */
     provider: string;
+    /**
+     * Username
+     */
+    username: string | null;
 };
 /**
  * FailedTaskBlocker
@@ -3215,6 +3834,10 @@ export type FeedEventResponse = {
      * Stream Id
      */
     stream_id: string;
+    /**
+     * Summary
+     */
+    summary: string | null;
     /**
      * V
      */
@@ -3536,6 +4159,14 @@ export type ImportPreview = {
      */
     entities?: Array<PreviewEntity>;
     /**
+     * The install that already has the bundle's name, when that blocks the plan.
+     */
+    existing_install?: ExistingBundleInstall | null;
+    /**
+     * The install this plan updates; null when it creates one.
+     */
+    install?: BundleInstallRef | null;
+    /**
      * Installable
      *
      * True when there are no blocking issues (setup may still be required).
@@ -3604,6 +4235,16 @@ export type InstallAction = 'created' | 'updated' | 'unchanged' | 'orphaned' | '
 export type InstallRequest = {
     bundle: BundleInput;
     /**
+     * Install Id
+     *
+     * The install the plan was made for (the plan's install.id); null when the plan creates one. Another id, or an install written since the plan, is refused with 409.
+     */
+    install_id?: string | null;
+    /**
+     * Where the folder came from; informational.
+     */
+    origin?: BundleOrigin | null;
+    /**
      * Plan Digest
      *
      * The plan_digest analyze returned for this bundle and these setup values: the plan the caller approved.
@@ -3630,6 +4271,12 @@ export type InstallResult = {
      * Entities
      */
     entities?: Array<InstalledEntity>;
+    /**
+     * Install Id
+     *
+     * The install this deploy wrote; pass it as into and install_id on the next deploy.
+     */
+    install_id?: string;
     /**
      * Installed Bundle Id
      */
@@ -3669,6 +4316,12 @@ export type InstalledEntity = {
      */
     key: string;
     kind: EntityKind;
+    /**
+     * Model Id
+     *
+     * For an agent whose model is given by name: the model instance the name resolved to when the agent was last written.
+     */
+    model_id?: string | null;
     /**
      * Name
      */
@@ -4270,6 +4923,10 @@ export type McpServerInstanceResponse = {
      */
     id: string;
     /**
+     * Is Owner
+     */
+    is_owner?: boolean;
+    /**
      * Json Spec
      */
     json_spec: {
@@ -4289,6 +4946,10 @@ export type McpServerInstanceResponse = {
      * Name
      */
     name: string;
+    /**
+     * Personal
+     */
+    personal?: boolean;
     /**
      * Server Spec Id
      */
@@ -5158,9 +5819,10 @@ export type NetworkTopologyResponse = {
  *
  * Start a sign-in for one MCP instance or one catalog API.
  *
- * ``auto`` uses the operator's platform app when one serves the provider, else
- * registers AgentArea with it (RFC 7591). ``custom`` uses an OAuth app the
- * workspace registered with the provider, and overrides either.
+ * ``auto`` signs a connection connected with its own OAuth app in with that
+ * app again; else it uses the operator's platform app when one serves the
+ * provider, else registers AgentArea with it (RFC 7591). ``custom`` uses an
+ * OAuth app the workspace registered with the provider, and overrides any.
  */
 export type OAuthAuthorizeRequest = {
     /**
@@ -5200,6 +5862,12 @@ export type OAuthAuthorizeRequest = {
      */
     instance_id?: string | null;
     /**
+     * Openapi Connection Id
+     *
+     * API connection made from the catalog, to sign in again.
+     */
+    openapi_connection_id?: string | null;
+    /**
      * Return To
      */
     return_to?: string;
@@ -5222,6 +5890,127 @@ export type OAuthAuthorizeResponse = {
      * Connection Id
      */
     connection_id: string;
+};
+/**
+ * OAuthInstallation
+ */
+export type OAuthInstallation = {
+    /**
+     * Account
+     */
+    account: string;
+    /**
+     * Account Type
+     *
+     * Organization or User
+     */
+    account_type: string;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Repository Selection
+     *
+     * all or selected: what the installation itself reaches
+     */
+    repository_selection: string;
+};
+/**
+ * OAuthInstallationsResponse
+ */
+export type OAuthInstallationsResponse = {
+    /**
+     * Installations
+     */
+    installations: Array<OAuthInstallation>;
+};
+/**
+ * OAuthInstallationRepository
+ */
+export type OAuthInstallationRepository = {
+    /**
+     * Full Name
+     */
+    full_name: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Private
+     */
+    private: boolean;
+};
+/**
+ * OAuthInstallationRepositoriesResponse
+ */
+export type OAuthInstallationRepositoriesResponse = {
+    /**
+     * Repositories
+     */
+    repositories: Array<OAuthInstallationRepository>;
+};
+/**
+ * OAuthInstallationBinding
+ *
+ * The installation a connection's calls are limited to.
+ */
+export type OAuthInstallationBinding = {
+    /**
+     * Account
+     *
+     * Login of the account (organization or user) the installation belongs to
+     */
+    account: string;
+    /**
+     * Installation Id
+     */
+    installation_id: number;
+    /**
+     * Repositories
+     *
+     * Names of the repositories the token is limited to; null for every repository of the installation
+     */
+    repositories: Array<string> | null;
+};
+/**
+ * OAuthInstallationBindingRequest
+ */
+export type OAuthInstallationBindingRequest = {
+    /**
+     * Installation Id
+     *
+     * Installation to bind to; null returns the connection to the user's token
+     */
+    installation_id: number | null;
+    /**
+     * Instance Id
+     *
+     * MCP instance to bind
+     */
+    instance_id?: string | null;
+    /**
+     * Openapi Connection Id
+     *
+     * API connection to bind
+     */
+    openapi_connection_id?: string | null;
+    /**
+     * Repositories
+     *
+     * Repository names to limit the token to; null or empty for every repository of the installation
+     */
+    repositories?: Array<string> | null;
+};
+/**
+ * OAuthInstallationBindingResponse
+ */
+export type OAuthInstallationBindingResponse = {
+    /**
+     * Installation Binding
+     */
+    installation_binding: OAuthInstallationBinding | null;
 };
 /**
  * OAuthFinishRequest
@@ -5317,7 +6106,8 @@ export type OAuthLinkResponse = {
  * What the UI needs before it can offer Connect.
  *
  * ``ready`` — Connect runs unattended, with the client ``credential_source``
- * names: the operator's ``platform`` app, or one registered ``dynamic``-ally.
+ * names: the operator's ``platform`` app, one registered ``dynamic``-ally, or
+ * the ``custom`` app the connection was connected with, signed in with again.
  * ``oauth_app_required`` — ask for a client ID/secret first.
  * ``unsupported`` — this cannot be authorized with OAuth; ``detail`` says why.
  */
@@ -5327,13 +6117,17 @@ export type OAuthPreflightResponse = {
      */
     authorization_endpoint?: string | null;
     /**
+     * Client Id
+     */
+    client_id?: string | null;
+    /**
      * Connected
      */
     connected: boolean;
     /**
      * Credential Source
      */
-    credential_source?: 'platform' | 'dynamic' | null;
+    credential_source?: 'platform' | 'dynamic' | 'custom' | null;
     /**
      * Default Scopes
      */
@@ -5342,6 +6136,24 @@ export type OAuthPreflightResponse = {
      * Detail
      */
     detail?: string;
+    /**
+     * Install Url
+     *
+     * Install page of the platform OAuth app the connection's credential was minted through, where the user picks what the app may reach (a GitHub App's repositories). Null for any other credential.
+     */
+    install_url?: string | null;
+    /**
+     * Installation Binding
+     *
+     * The GitHub App installation the connection's calls are limited to; null when it uses the user's token.
+     */
+    installation_binding?: OAuthInstallationBinding | null;
+    /**
+     * Installation Binding Available
+     *
+     * The connection signed in through a platform GitHub App with installation tokens, so it can be bound to one of its installations.
+     */
+    installation_binding_available?: boolean;
     /**
      * Issuer
      */
@@ -5488,6 +6300,10 @@ export type OpenApiConnectionResponse = {
      */
     id: string;
     /**
+     * Is Owner
+     */
+    is_owner?: boolean;
+    /**
      * Last Dispatch
      */
     last_dispatch?: {
@@ -5501,6 +6317,10 @@ export type OpenApiConnectionResponse = {
      * Name
      */
     name: string;
+    /**
+     * Personal
+     */
+    personal?: boolean;
     /**
      * Registry Item Id
      */
@@ -6132,11 +6952,44 @@ export type PresignUploadResponse = {
     upload_url: string;
 };
 /**
+ * PreviewApproval
+ *
+ * An approval policy that binds an agent, as the agent's plan line shows it.
+ */
+export type PreviewApproval = {
+    /**
+     * Approvers
+     *
+     * Approvers by email or name; empty is whoever may act on the run.
+     */
+    approvers: Array<string>;
+    /**
+     * Policy
+     */
+    policy: string;
+    /**
+     * Target
+     */
+    target: string;
+    /**
+     * Workspace
+     *
+     * A workspace policy, binding every agent.
+     */
+    workspace: boolean;
+};
+/**
  * PreviewEntity
  *
  * One thing the package will (or won't) create.
  */
 export type PreviewEntity = {
+    /**
+     * Approvals
+     *
+     * On an agent: the approval policies that bind it.
+     */
+    approvals?: Array<PreviewApproval>;
     /**
      * Detail
      */
@@ -6158,6 +7011,12 @@ export type PreviewEntity = {
  * A problem found while analyzing the package.
  */
 export type PreviewIssue = {
+    /**
+     * Code
+     *
+     * Set on issues a client acts on: bundle_exists, bundle_install_not_found, bundle_install_ambiguous.
+     */
+    code?: string | null;
     /**
      * Entity Key
      */
@@ -6647,6 +7506,12 @@ export type ProviderConfigUpdate = {
  */
 export type ProviderSpecResponse = {
     /**
+     * Auth
+     *
+     * How a configuration authenticates: bearer, api_key_header, none, or chatgpt (a ChatGPT sign-in instead of a key)
+     */
+    auth: string;
+    /**
      * Created At
      */
     created_at: string;
@@ -6695,6 +7560,12 @@ export type ProviderSpecResponse = {
  * ProviderSpecWithModelsResponse
  */
 export type ProviderSpecWithModelsResponse = {
+    /**
+     * Auth
+     *
+     * How a configuration authenticates: bearer, api_key_header, none, or chatgpt (a ChatGPT sign-in instead of a key)
+     */
+    auth: string;
     /**
      * Created At
      */
@@ -7737,6 +8608,26 @@ export type SecretValueUpdate = {
     value: string;
 };
 /**
+ * Senders
+ *
+ * Which senders a source with an ``admission`` lets through to its agent.
+ *
+ * ``owner``: only whoever added the source, once their account is linked.
+ * ``members``: anyone linked whom the graph lets run the agent.
+ * ``ids``: exactly these accounts at the provider, linked or not; the owner
+ * answers for them, so their runs are the owner's.
+ */
+export type Senders = {
+    /**
+     * Allow
+     */
+    allow: 'owner' | 'members' | 'ids';
+    /**
+     * Ids
+     */
+    ids?: Array<string>;
+};
+/**
  * SetupField
  *
  * A single value the user must provide before the package can run.
@@ -8183,6 +9074,10 @@ export type SourceCreate = {
      */
     kind?: SourceKind;
     /**
+     * Who may write, for a type that admits senders (Telegram): owner, the one adding it (the default); members, linked people who may run the agent; ids, these account ids. Other types take none.
+     */
+    senders?: Senders | null;
+    /**
      * Source Type
      *
      * A slug of GET /streams/source-types.
@@ -8237,6 +9132,16 @@ export type SourceCreated = {
      * The provider was pointed at webhook_url (entries with a registration).
      */
     registered?: boolean;
+    /**
+     * Who may write, on a type that admits senders; null there means members (added before it could be chosen), and null on every other type.
+     */
+    senders?: Senders | null;
+    /**
+     * Senders Set By
+     *
+     * The user who chose senders: 'owner' admits them, listed senders run as them.
+     */
+    senders_set_by?: string | null;
     /**
      * Source Type
      *
@@ -8294,6 +9199,12 @@ export type SourceKind = 'webhook' | 'poll' | 'platform';
  */
 export type SourceTypeResponse = {
     /**
+     * Admits Senders
+     *
+     * Its sources choose who may write (see a source's senders).
+     */
+    admits_senders?: boolean;
+    /**
      * Config
      */
     config: Array<SourceField>;
@@ -8339,6 +9250,12 @@ export type SourceTypeResponse = {
      */
     name: string;
     /**
+     * Registers Webhook
+     *
+     * The platform registers a webhook source's URL with the provider itself.
+     */
+    registers_webhook?: boolean;
+    /**
      * Replies
      *
      * A task started by its event can answer where it came from.
@@ -8381,6 +9298,14 @@ export type SourceTypeTemplates = {
      * Session Key
      */
     session_key: string | Array<string> | null;
+};
+/**
+ * SourceUpdate
+ *
+ * What can change on a source once added: who may write to it.
+ */
+export type SourceUpdate = {
+    senders: Senders;
 };
 /**
  * SpecPreviewRequest
@@ -8571,6 +9496,10 @@ export type StreamEventDetailResponse = {
      */
     stream_id: string;
     /**
+     * Summary
+     */
+    summary: string | null;
+    /**
      * V
      */
     v?: number;
@@ -8687,6 +9616,10 @@ export type StreamEventResponse = {
      */
     stream_id: string;
     /**
+     * Summary
+     */
+    summary: string | null;
+    /**
      * V
      */
     v?: number;
@@ -8719,6 +9652,12 @@ export type StreamResponse = {
      * Name
      */
     name: string;
+    /**
+     * Source Types
+     *
+     * The source types of the stream's sources, the first added first.
+     */
+    source_types: Array<string>;
 };
 /**
  * StreamSourceResponse
@@ -8760,6 +9699,16 @@ export type StreamSourceResponse = {
      * The provider was pointed at webhook_url (entries with a registration).
      */
     registered?: boolean;
+    /**
+     * Who may write, on a type that admits senders; null there means members (added before it could be chosen), and null on every other type.
+     */
+    senders?: Senders | null;
+    /**
+     * Senders Set By
+     *
+     * The user who chose senders: 'owner' admits them, listed senders run as them.
+     */
+    senders_set_by?: string | null;
     /**
      * Source Type
      *
@@ -9452,6 +10401,52 @@ export type TelegramLinkRequest = {
      * The bot to open the link in
      */
     bot: string;
+};
+/**
+ * TelegramLinkOfferRequest
+ */
+export type TelegramLinkOfferRequest = {
+    /**
+     * Code
+     */
+    code: string;
+};
+/**
+ * TelegramLinkOfferResponse
+ *
+ * The Telegram account a bot offered a link for, as Telegram named it when the bot
+ * answered, and the workspace whose bot offered it; only a member of that workspace
+ * sees or accepts it. linked_to is who already holds it: "you", "another_account", or null.
+ */
+export type TelegramLinkOfferResponse = {
+    /**
+     * Bot
+     */
+    bot: string | null;
+    /**
+     * Display Name
+     */
+    display_name: string | null;
+    /**
+     * External Id
+     */
+    external_id: string;
+    /**
+     * Linked To
+     */
+    linked_to: 'you' | 'another_account' | null;
+    /**
+     * Provider
+     */
+    provider: string;
+    /**
+     * Username
+     */
+    username: string | null;
+    /**
+     * Workspace Name
+     */
+    workspace_name: string;
 };
 /**
  * TelegramLinkResponse
@@ -11027,6 +12022,85 @@ export type AgentareaApiApiV1RegistriesSyncResponse = {
      */
     updates_flagged: number;
 };
+/**
+ * OAuthConsentClient
+ */
+export type OAuthConsentClient = {
+    /**
+     * Client Id
+     */
+    client_id: string;
+    /**
+     * Client Name
+     */
+    client_name: string;
+    /**
+     * Client Uri
+     */
+    client_uri: string;
+    /**
+     * Logo Uri
+     */
+    logo_uri: string;
+    /**
+     * Redirect Uris
+     */
+    redirect_uris: Array<string>;
+};
+/**
+ * OAuthConsentResponse
+ *
+ * A consent request of this API's authorization server: the client, and what accepting grants it. `api` reaches the whole account and is granted only to first-party clients; `mcp` reaches MCP in one workspace the user picks.
+ */
+export type OAuthConsentResponse = {
+    client: OAuthConsentClient;
+    /**
+     * Redirect Uri
+     *
+     * Where accepting sends the authorization code; empty when the request names none and the client registered several.
+     */
+    redirect_uri: string;
+    /**
+     * First Party
+     */
+    first_party: boolean;
+    /**
+     * Access
+     */
+    access: 'mcp' | 'api';
+    /**
+     * Scopes
+     */
+    scopes: Array<string>;
+};
+/**
+ * OAuthConsentDecision
+ */
+export type OAuthConsentDecision = {
+    /**
+     * Challenge
+     */
+    challenge: string;
+    /**
+     * Action
+     */
+    action: 'accept' | 'reject';
+    /**
+     * Workspaces
+     *
+     * Slugs or ids of the workspaces an `mcp` grant reaches; at least one to accept one.
+     */
+    workspaces?: Array<string> | null;
+};
+/**
+ * OAuthConsentRedirect
+ */
+export type OAuthConsentRedirect = {
+    /**
+     * Redirect To
+     */
+    redirect_to: string;
+};
 export type HydraJwksProxyWellKnownJwksJsonGetData = {
     body?: never;
     path?: never;
@@ -11533,6 +12607,46 @@ export type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses = {
     200: TelegramLinkResponse;
 };
 export type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponse = StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses[keyof StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses];
+export type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostData = {
+    body: TelegramLinkOfferRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/me/external-identities/telegram/offer/accept';
+};
+export type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostError = AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostErrors[keyof AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostErrors];
+export type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ExternalIdentityResponse;
+};
+export type AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponse = AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponses[keyof AcceptTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferAcceptPostResponses];
+export type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostData = {
+    body: TelegramLinkOfferRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/me/external-identities/telegram/offer/preview';
+};
+export type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostError = PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostErrors[keyof PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostErrors];
+export type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: TelegramLinkOfferResponse;
+};
+export type PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponse = PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponses[keyof PreviewTelegramLinkOfferV1MeExternalIdentitiesTelegramOfferPreviewPostResponses];
 export type UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteData = {
     body?: never;
     path: {
@@ -14952,6 +16066,31 @@ export type ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostResponses = 
      */
     200: unknown;
 };
+export type SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutData = {
+    body: ConnectionSharingRequest;
+    path: {
+        /**
+         * Instance Id
+         */
+        instance_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/sharing';
+};
+export type SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutError = SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutErrors[keyof SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutErrors];
+export type SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: McpServerInstanceResponse;
+};
+export type SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutResponse = SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutResponses[keyof SetMcpServerInstanceSharingV1McpServerInstancesInstanceIdSharingPutResponses];
 export type RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostData = {
     body?: never;
     path: {
@@ -15685,6 +16824,12 @@ export type OauthPreflightV1OauthPreflightGetData = {
          * Catalog API to inspect before connecting it
          */
         catalog_item_id?: string | null;
+        /**
+         * Openapi Connection Id
+         *
+         * API connection made from the catalog, to sign in again
+         */
+        openapi_connection_id?: string | null;
     };
     url: '/v1/workspaces/{workspace}/oauth/preflight';
 };
@@ -15702,6 +16847,97 @@ export type OauthPreflightV1OauthPreflightGetResponses = {
     200: OAuthPreflightResponse;
 };
 export type OauthPreflightV1OauthPreflightGetResponse = OauthPreflightV1OauthPreflightGetResponses[keyof OauthPreflightV1OauthPreflightGetResponses];
+export type OauthInstallationsV1OauthInstallationsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Instance Id
+         *
+         * MCP instance whose sign-in to use
+         */
+        instance_id?: string | null;
+        /**
+         * Openapi Connection Id
+         *
+         * API connection whose sign-in to use
+         */
+        openapi_connection_id?: string | null;
+    };
+    url: '/v1/workspaces/{workspace}/oauth/installations';
+};
+export type OauthInstallationsV1OauthInstallationsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type OauthInstallationsV1OauthInstallationsGetError = OauthInstallationsV1OauthInstallationsGetErrors[keyof OauthInstallationsV1OauthInstallationsGetErrors];
+export type OauthInstallationsV1OauthInstallationsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthInstallationsResponse;
+};
+export type OauthInstallationsV1OauthInstallationsGetResponse = OauthInstallationsV1OauthInstallationsGetResponses[keyof OauthInstallationsV1OauthInstallationsGetResponses];
+export type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetData = {
+    body?: never;
+    path: {
+        /**
+         * Installation Id
+         */
+        installation_id: number;
+    };
+    query?: {
+        /**
+         * Instance Id
+         *
+         * MCP instance whose sign-in to use
+         */
+        instance_id?: string | null;
+        /**
+         * Openapi Connection Id
+         *
+         * API connection whose sign-in to use
+         */
+        openapi_connection_id?: string | null;
+    };
+    url: '/v1/workspaces/{workspace}/oauth/installations/{installation_id}/repositories';
+};
+export type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetError = OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetErrors[keyof OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetErrors];
+export type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthInstallationRepositoriesResponse;
+};
+export type OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponse = OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponses[keyof OauthInstallationRepositoriesV1OauthInstallationsInstallationIdRepositoriesGetResponses];
+export type OauthBindInstallationV1OauthInstallationPutData = {
+    body: OAuthInstallationBindingRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/oauth/installation';
+};
+export type OauthBindInstallationV1OauthInstallationPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type OauthBindInstallationV1OauthInstallationPutError = OauthBindInstallationV1OauthInstallationPutErrors[keyof OauthBindInstallationV1OauthInstallationPutErrors];
+export type OauthBindInstallationV1OauthInstallationPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthInstallationBindingResponse;
+};
+export type OauthBindInstallationV1OauthInstallationPutResponse = OauthBindInstallationV1OauthInstallationPutResponses[keyof OauthBindInstallationV1OauthInstallationPutResponses];
 export type ListConnectionsV1OpenapiConnectionsGetData = {
     body?: never;
     path?: never;
@@ -15930,6 +17166,56 @@ export type DiscoverToolsV1OpenapiConnectionsConnectionIdDiscoverToolsPostRespon
      */
     200: unknown;
 };
+export type SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutData = {
+    body: ConnectionSharingRequest;
+    path: {
+        /**
+         * Connection Id
+         */
+        connection_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/openapi-connections/{connection_id}/sharing';
+};
+export type SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutError = SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutErrors[keyof SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutErrors];
+export type SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: OpenApiConnectionResponse;
+};
+export type SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutResponse = SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutResponses[keyof SetConnectionSharingV1OpenapiConnectionsConnectionIdSharingPutResponses];
+export type GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetData = {
+    body?: never;
+    path: {
+        /**
+         * Connection Id
+         */
+        connection_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/openapi-connections/{connection_id}/tool-policies';
+};
+export type GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetError = GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetErrors[keyof GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetErrors];
+export type GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: McpInstanceToolPolicies;
+};
+export type GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetResponse = GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetResponses[keyof GetConnectionToolPoliciesV1OpenapiConnectionsConnectionIdToolPoliciesGetResponses];
 export type ListPolicyRulesV1PoliciesGetData = {
     body?: never;
     path?: never;
@@ -16771,6 +18057,56 @@ export type DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses = {
     200: DiscoveryResponse;
 };
 export type DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponse = DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses[keyof DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses];
+export type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostData = {
+    body?: never;
+    path: {
+        /**
+         * Config Id
+         */
+        config_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in';
+};
+export type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostError = StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostErrors[keyof StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostErrors];
+export type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChatGptDeviceCodeResponse;
+};
+export type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponse = StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses[keyof StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponses];
+export type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostData = {
+    body?: never;
+    path: {
+        /**
+         * Config Id
+         */
+        config_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in/complete';
+};
+export type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostError = CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostErrors[keyof CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostErrors];
+export type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChatGptSignInResponse;
+};
+export type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponse = CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponses[keyof CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponses];
 export type ListProviderSpecsV1ProviderSpecsGetData = {
     body?: never;
     path?: never;
@@ -18290,10 +19626,8 @@ export type ListWorkspaceEventsV1StreamsEventsGetData = {
         stream_id?: string | null;
         /**
          * Source Type
-         *
-         * Any of these source types; repeat it for several.
          */
-        source_type?: Array<string>;
+        source_type?: string | null;
         /**
          * Kind
          *
@@ -18359,10 +19693,8 @@ export type StreamWorkspaceEventsV1StreamsEventsLiveGetData = {
         stream_id?: string | null;
         /**
          * Source Type
-         *
-         * Any of these source types; repeat it for several.
          */
-        source_type?: Array<string>;
+        source_type?: string | null;
         /**
          * Kind
          *
@@ -18774,6 +20106,35 @@ export type DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponses = {
     204: void;
 };
 export type DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponse = DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponses[keyof DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponses];
+export type PatchSourceV1StreamsStreamIdSourcesSourceIdPatchData = {
+    body: SourceUpdate;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+        /**
+         * Source Id
+         */
+        source_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}/sources/{source_id}';
+};
+export type PatchSourceV1StreamsStreamIdSourcesSourceIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type PatchSourceV1StreamsStreamIdSourcesSourceIdPatchError = PatchSourceV1StreamsStreamIdSourcesSourceIdPatchErrors[keyof PatchSourceV1StreamsStreamIdSourcesSourceIdPatchErrors];
+export type PatchSourceV1StreamsStreamIdSourcesSourceIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: StreamSourceResponse;
+};
+export type PatchSourceV1StreamsStreamIdSourcesSourceIdPatchResponse = PatchSourceV1StreamsStreamIdSourcesSourceIdPatchResponses[keyof PatchSourceV1StreamsStreamIdSourcesSourceIdPatchResponses];
 export type ListSubscriptionsV1StreamsStreamIdSubscriptionsGetData = {
     body?: never;
     path: {
@@ -19864,3 +21225,48 @@ export type HandleWebhookWebhooksWebhookIdPostResponses = {
      */
     200: unknown;
 };
+export type OauthConsentV1OauthConsentGetData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Challenge
+         */
+        challenge: string;
+    };
+    url: '/v1/oauth/consent';
+};
+export type OauthConsentV1OauthConsentGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type OauthConsentV1OauthConsentGetError = OauthConsentV1OauthConsentGetErrors[keyof OauthConsentV1OauthConsentGetErrors];
+export type OauthConsentV1OauthConsentGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthConsentResponse;
+};
+export type OauthConsentV1OauthConsentGetResponse = OauthConsentV1OauthConsentGetResponses[keyof OauthConsentV1OauthConsentGetResponses];
+export type OauthConsentDecideV1OauthConsentPostData = {
+    body: OAuthConsentDecision;
+    path?: never;
+    query?: never;
+    url: '/v1/oauth/consent';
+};
+export type OauthConsentDecideV1OauthConsentPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type OauthConsentDecideV1OauthConsentPostError = OauthConsentDecideV1OauthConsentPostErrors[keyof OauthConsentDecideV1OauthConsentPostErrors];
+export type OauthConsentDecideV1OauthConsentPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthConsentRedirect;
+};
+export type OauthConsentDecideV1OauthConsentPostResponse = OauthConsentDecideV1OauthConsentPostResponses[keyof OauthConsentDecideV1OauthConsentPostResponses];

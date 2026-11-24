@@ -68,6 +68,8 @@ interface CreateTriggerFormProps {
   agents: AgentResponse[];
   streams: StreamOptions;
   initialData?: TriggerResponse;
+  /** A new trigger on this stream, from a link that names it. */
+  preset?: { streamId: string };
 }
 
 const INLINE_ERROR_FIELDS = new Set([
@@ -96,6 +98,7 @@ export function CreateTriggerForm({
   agents,
   streams,
   initialData,
+  preset,
 }: CreateTriggerFormProps) {
   const router = useWorkspaceRouter();
   const t = useTranslations("TriggersPage.create");
@@ -109,20 +112,27 @@ export function CreateTriggerForm({
   const initialState: TriggerFormState = { message: "" };
   const [state, formAction, isPending] = useActionState(action, initialState);
 
+  const presetStream = initialData ? undefined : preset?.streamId;
   const [triggerType, setTriggerType] = useState<string>(
-    initialData?.trigger_type ?? ""
+    initialData?.trigger_type ?? (presetStream ? "stream" : "")
   );
   // A new trigger starts with a name, as a new agent or model does: generic
   // until a type is picked, then named after the type. Once someone types
   // their own, picking another type leaves it alone.
   const [name, setName] = useState(
-    () => initialData?.name ?? t("automationNamePlaceholder")
+    () =>
+      initialData?.name ??
+      (presetStream
+        ? t("suggestedName", { type: tType("stream") })
+        : t("automationNamePlaceholder"))
   );
   const [nameEdited, setNameEdited] = useState(isEditing);
   const [selectedAgentId, setSelectedAgentId] = useState(
     initialData?.agent_id ?? ""
   );
-  const [streamId, setStreamId] = useState(initialData?.stream_id ?? "");
+  const [streamId, setStreamId] = useState(
+    initialData?.stream_id ?? presetStream ?? ""
+  );
   // Null until someone changes it: then it follows the chosen stream's default.
   const [session, setSession] = useState<TriggerSession | null>(
     initialData?.session ?? null

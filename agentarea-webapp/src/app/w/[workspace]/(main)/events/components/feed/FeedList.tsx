@@ -2,32 +2,27 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { ArrowUp, CalendarDays, Paperclip } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import type { FeedEventResponse, Processing } from "@/api/client/types.gen";
-import SourceTypeMark from "@/components/SourceTypeMark";
-import Table, { type Column } from "@/components/Table/Table";
+import { useViewerZone } from "@/components/EventTime";
 import { Button } from "@/components/ui/button";
-import { CollapsibleGroup } from "@/components/ui/group-header";
-import WorkspaceLink from "@/components/WorkspaceLink";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { EntityIcon } from "@/lib/entity-icons";
 import {
   applyProcessing,
   applyRecorded,
   dayGroups,
+  foldRuns,
   matchesResult,
   neighbourEvent,
+  showsPlatform,
   type FeedState,
 } from "@/lib/eventFeed";
-import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
+import type { SourceType } from "@/lib/sourceTypes";
+import { readOlderEventsAction } from "./actions";
 import FeedEmptyState from "./FeedEmptyState";
 import { useFeedLive } from "./FeedLive";
-import { useFeedHref, useFeedPath } from "./FeedPath";
+import FeedRow, { type FeedAgent } from "./FeedRow";
 import { useFeedSelection } from "./FeedSelection";
-import ProcessingPill from "./ProcessingPill";
-
-/** `Table` keys rows by `id`. */
-type FeedRow = FeedEventResponse & { id: string };
 
 /** Scrolled further than this, a new event waits behind the "N new" pill. */
 const AT_TOP_PX = 48;
@@ -60,22 +55,22 @@ export default function FeedList({
   nextBefore,
   state,
   streams,
+  platformStreams,
   sourceTypes,
+  agents,
   hidesPlatform,
 }: {
   initial: FeedEventResponse[];
   nextBefore: number | null;
   state: FeedState;
   streams: { id: string; name: string }[];
+  platformStreams: string[];
   sourceTypes: SourceType[];
+  agents: FeedAgent[];
   /** The platform's own events are left out, and there are some. */
   hidesPlatform: boolean;
 }) {
   const t = useTranslations("EventsPage.list");
-  const tFeed = useTranslations("EventsPage.feed");
-  const feedHref = useFeedHref();
-  // On a stream's own page every row is of that stream: no column for it.
-  const oneStream = useFeedPath().pinned?.includes("stream") ?? false;
   const locale = useLocale();
   const router = useWorkspaceRouter();
   const { listen } = useFeedLive();
@@ -84,16 +79,19 @@ export default function FeedList({
   const [arrived, setArrived] = useState<FeedEventResponse[]>([]);
   const [held, setHeld] = useState<FeedEventResponse[]>([]);
   const [moved, setMoved] = useState<Record<string, Processing>>({});
-  // The viewer's clock and zone, known once mounted; the server renders UTC.
-  const [clock, setClock] = useState<{ now: number; zone: string } | null>(
-    null
-  );
+  const [older, setOlder] = useState<FeedEventResponse[]>([]);
+  const [cursor, setCursor] = useState(nextBefore);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderFailed, setOlderFailed] = useState(false);
+  const endRef = useRef<HTMLDivElement>(null);
+  // The viewer's clock, known once mounted.
+  const [now, setNow] = useState<number | null>(null);
+  const zone = useViewerZone();
   const live = state.before === undefined;
 
   useEffect(() => {
-    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    setClock({ now: Date.now(), zone });
-    const timer = setInterval(() => setClock({ now: Date.now(), zone }), 1000);
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(timer);
   }, []);
 
@@ -118,13 +116,62 @@ export default function FeedList({
   }, [listen, live, router]);
 
   const rows = useMemo(() => {
-    let merged = initial;
+    const seen = new Set(initial.map((e) => e.event_id));
+    let merged = [...initial, ...older.filter((e) => !seen.has(e.event_id))];
     for (const event of arrived) merged = applyRecorded(merged, event);
     for (const [id, processing] of Object.entries(moved)) {
       merged = applyProcessing(merged, id, processing);
     }
     return merged.filter((e) => matchesResult(e, state.result));
-  }, [initial, arrived, moved, state.result]);
+  }, [initial, older, arrived, moved, state.result]);
+
+  const loadOlder = async () => {
+    if (cursor == null || loadingOlder) return;
+    setLoadingOlder(true);
+    setOlderFailed(false);
+    const page = await readOlderEventsAction(
+      state,
+      showsPlatform(state, platformStreams),
+      cursor
+    ).catch(() => null);
+    setLoadingOlder(false);
+    if (!page) {
+      setOlderFailed(true);
+      return;
+    }
+    setOlder((rows) => [...rows, ...page.events]);
+    setCursor(page.nextBefore);
+  };
+
+  useEffect(() => {
+    const end = endRef.current;
+    if (!end || cursor == null || loadingOlder || olderFailed) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) void loadOlder();
+      },
+      { root: scrollParent(end), rootMargin: "400px" }
+    );
+    observer.observe(end);
+    return () => observer.disconnect();
+  });
+
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const groups = useMemo(
+    () =>
+      dayGroups(rows, new Date(now ?? Date.now()), zone).map((group) => ({
+        ...group,
+        items: foldRuns(
+          group.events,
+          selected ? new Set(expanded).add(selected) : expanded
+        ),
+      })),
+    [rows, now, zone, expanded, selected]
+  );
+  const visible = useMemo(
+    () => groups.flatMap((g) => g.items.map((i) => i.event)),
+    [groups]
+  );
 
   const waiting = held.filter(
     (e) =>
@@ -161,7 +208,7 @@ export default function FeedList({
             ? -1
             : 0;
       if (step === 0) return;
-      const next = neighbourEvent(rows, selected ?? undefined, step);
+      const next = neighbourEvent(visible, selected ?? undefined, step);
       if (!next) return;
       e.preventDefault();
       select(next, selected != null);
@@ -171,106 +218,12 @@ export default function FeedList({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [rows, selected, select]);
+  }, [visible, selected, select]);
 
   const open = (eventId: string) => select(eventId);
   const streamNames = new Map(streams.map((s) => [s.id, s.name]));
-  const zone = clock?.zone ?? "UTC";
-  const groups = dayGroups(rows, new Date(clock?.now ?? Date.now()), zone);
-
-  // One table per day: a fixed layout with set widths keeps the columns of
-  // every day in the same place (Automation does the same per group). The
-  // widths sit on the cells too, since a later day's table has no header.
-  // The day heading says when; a row needs no time column of its own.
-  const columns: Column<FeedRow>[] = [
-    // Leads the row like Automation's: the source's tile, then what arrived.
-    {
-      header: tFeed("kind"),
-      accessor: "kind",
-      render: (_value, event) =>
-        event && (
-          <span className="flex min-w-0 items-center gap-2.5">
-            <SourceTypeMark
-              type={sourceTypeBySlug(sourceTypes, event.source_type)}
-              slug={event.source_type}
-              size={28}
-            />
-            <span className="truncate text-[13px] font-medium text-foreground">
-              {event.kind}
-            </span>
-            {event.sender && (
-              <span className="truncate text-[13px] text-muted-foreground">
-                {event.sender}
-              </span>
-            )}
-            {event.attachments > 0 && (
-              <Paperclip
-                aria-hidden="true"
-                className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-              />
-            )}
-          </span>
-        ),
-    },
-    ...(oneStream
-      ? []
-      : [
-          {
-            header: t("stream"),
-            accessor: "stream_id",
-            headerClassName: "hidden w-[180px] md:table-cell",
-            cellClassName: "hidden w-[180px] md:table-cell",
-            render: (value) => (
-              <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground">
-                <EntityIcon kind="stream" className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">
-                  {streamNames.get(String(value)) ?? t("unknownStream")}
-                </span>
-              </span>
-            ),
-          } satisfies Column<FeedRow>,
-        ]),
-    {
-      header: t("session"),
-      accessor: "session_key",
-      headerClassName: "hidden w-[160px] 2xl:table-cell",
-      cellClassName: "hidden w-[160px] 2xl:table-cell",
-      render: (_value, event) =>
-        event?.session_key ? (
-          <WorkspaceLink
-            href={feedHref(state, {
-              session: event.session_key,
-              event: undefined,
-              before: undefined,
-            })}
-            scroll={false}
-            title={t("filterSession")}
-            onClick={(e) => e.stopPropagation()}
-            className="block truncate font-mono text-[12px] text-muted-foreground hover:text-primary hover:underline"
-          >
-            {event.session_key.split(":").slice(1).join(":") ||
-              event.session_key}
-          </WorkspaceLink>
-        ) : (
-          <span className="text-[13px] text-muted-foreground">—</span>
-        ),
-    },
-    {
-      header: t("result"),
-      accessor: "processing",
-      headerClassName: "w-[180px]",
-      cellClassName: "w-[180px]",
-      render: (_value, event) =>
-        event && (
-          <ProcessingPill
-            processing={event.processing}
-            receivedAt={event.received_at}
-            now={clock?.now ?? null}
-          />
-        ),
-    },
-  ];
-
+  const agentsById = new Map(agents.map((a) => [a.id, a]));
+  const streamName = (id: string) => streamNames.get(id) ?? t("unknownStream");
   return (
     <div ref={listRef} className="min-w-0 space-y-4">
       {waiting.length > 0 && (
@@ -289,18 +242,11 @@ export default function FeedList({
       {rows.length === 0 ? (
         <FeedEmptyState state={state} hidesPlatform={hidesPlatform} />
       ) : (
-        // A heading per day, the shared group heading Automation uses; it
-        // carries its own air above the label, so the days are pulled up into
-        // the content's top padding.
-        <div className="-mt-2 flex flex-col gap-1">
-          {groups.map((group, index) => (
-            <CollapsibleGroup
-              key={group.day}
-              variant="plain"
-              icon={<CalendarDays />}
-              count={group.events.length}
-              label={
-                group.relative
+        <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 [&>div:last-child>div]:border-b-0">
+          {groups.map((group) => (
+            <section key={group.day} aria-label={group.day}>
+              <h2 className="border-b border-zinc-200 bg-muted/40 px-4 py-1 text-[11px] uppercase tracking-wide text-muted-foreground dark:border-zinc-700">
+                {group.relative
                   ? t(group.relative)
                   : new Date(`${group.day}T12:00:00Z`).toLocaleDateString(
                       locale,
@@ -310,46 +256,46 @@ export default function FeedList({
                         year: "numeric",
                         timeZone: "UTC",
                       }
-                    )
-              }
-            >
-              <Table<FeedRow>
-                className="table-fixed"
-                data={group.events.map((event) => ({
-                  ...event,
-                  id: event.event_id,
-                }))}
-                columns={columns}
-                hideHeader={index > 0}
-                onRowClick={(event) => open(event.event_id)}
-                rowProps={(event) => ({
-                  id: `feed-row-${event.event_id}`,
-                  role: "link",
-                  tabIndex: 0,
-                  onKeyDown: (e) => {
-                    if (e.key === "Enter") open(event.event_id);
-                  },
-                  // The table's own selected state, not a local tint.
-                  ...(event.event_id === selected
-                    ? { "aria-current": "true", "data-state": "selected" }
-                    : {}),
-                })}
-              />
-            </CollapsibleGroup>
+                    )}
+              </h2>
+              {group.items.map(({ event, folded }) => (
+                <div key={event.event_id} id={`feed-row-${event.event_id}`}>
+                  <FeedRow
+                    event={event}
+                    count={folded.length + 1}
+                    sourceTypes={sourceTypes}
+                    agents={agentsById}
+                    streamName={
+                      state.stream || platformStreams.includes(event.stream_id)
+                        ? null
+                        : streamName(event.stream_id)
+                    }
+                    selected={event.event_id === selected}
+                    onOpen={() => {
+                      if (folded.length > 0) {
+                        setExpanded((ids) => new Set(ids).add(event.event_id));
+                      }
+                      open(event.event_id);
+                    }}
+                  />
+                </div>
+              ))}
+            </section>
           ))}
         </div>
       )}
-      {nextBefore != null && (
-        <WorkspaceLink
-          href={feedHref(state, {
-            before: String(nextBefore),
-            event: undefined,
-          })}
-          className="text-sm text-primary hover:underline"
-        >
-          {t("older")}
-        </WorkspaceLink>
-      )}
+      <div ref={endRef}>
+        {cursor != null && (
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={loadingOlder}
+            onClick={() => void loadOlder()}
+          >
+            {loadingOlder ? t("loadingOlder") : t("older")}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

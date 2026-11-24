@@ -1,13 +1,14 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { Hash, Paperclip, RefreshCw } from "lucide-react";
 import type {
   HandlerResponse,
   StreamEventDetailResponse,
 } from "@/api/client/types.gen";
+import EventTime from "@/components/EventTime";
 import FormError from "@/components/FormError/FormError";
 import {
   InfoPanelBody,
@@ -31,8 +32,8 @@ import { EntityIcon, type EntityKind } from "@/lib/entity-icons";
 import { PLATFORM_SOURCE_TYPE, processingProgress } from "@/lib/eventFeed";
 import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
 import { getStreamOutcomeStatusPresentation } from "@/lib/status";
-import { parseUtcTimestamp } from "@/utils/dateUtils";
 import { formatFileSize } from "@/utils/fileUtils";
+import { EventBody, EventHeaders } from "./EventEnvelope";
 import ProcessingPill from "./ProcessingPill";
 
 type Translator = ReturnType<typeof useTranslations>;
@@ -70,7 +71,6 @@ export default function FeedEventPanel({
   const tDetail = useTranslations("EventsPage.detail");
   const tFilter = useTranslations("EventsPage.filter");
   const tCommon = useTranslations("Common");
-  const format = useFormatter();
   const searchParams = useSearchParams();
   // Another event (a cause, a forward) opens in this same panel, the feed
   // and its filters left as they are.
@@ -79,12 +79,6 @@ export default function FeedEventPanel({
     const params = new URLSearchParams(searchParams.toString());
     params.set("event", id);
     return `${pathname}?${params.toString()}`;
-  };
-  const when = (value: string | null | undefined) => {
-    const date = parseUtcTimestamp(value);
-    return date
-      ? format.dateTime(date, { dateStyle: "medium", timeStyle: "short" })
-      : null;
   };
 
   if (!event) {
@@ -123,7 +117,6 @@ export default function FeedEventPanel({
     streams.find((s) => s.id === event.stream_id)?.name ??
     t("list.unknownStream");
   const sourceType = sourceTypeBySlug(sourceTypes, event.source_type);
-  const occurred = when(event.occurred_at);
   // The platform writes what a task did; its cause is that task (the id it
   // carries as causation is the task's own event, not an event of a stream).
   const platformTask =
@@ -137,17 +130,22 @@ export default function FeedEventPanel({
         className="pr-10"
         label={streamName}
         title={event.kind}
-        right={
-          event.processing && (
+      />
+      <div className="-mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-3 pb-3 text-xs text-muted-foreground">
+        <EventTime value={event.received_at} style="dateTime" />
+        {event.processing && event.processing.status !== "no_handlers" && (
+          <>
+            <span aria-hidden="true">·</span>
             <ProcessingPill
               processing={event.processing}
               receivedAt={event.received_at}
               now={null}
             />
-          )
-        }
-      />
+          </>
+        )}
+      </div>
       <InfoPanelBody>
+        {event.summary && <p className="text-sm">{event.summary}</p>}
         <InfoPanelSection
           title={t("panel.details")}
           contentClassName="space-y-3 text-xs"
@@ -184,10 +182,15 @@ export default function FeedEventPanel({
               <InfoPanelValueBox mono>{event.sender}</InfoPanelValueBox>
             </InfoPanelField>
           )}
+          {/* When it arrived is under the header; when it happened, here. */}
           <Facts
             facts={[
-              [t("panel.received"), when(event.received_at)],
-              [tDetail("occurredAt"), occurred],
+              [
+                tDetail("occurredAt"),
+                event.occurred_at && (
+                  <EventTime value={event.occurred_at} style="full" />
+                ),
+              ],
             ]}
           />
           {platformTask ? (
@@ -257,29 +260,8 @@ export default function FeedEventPanel({
           </InfoPanelSection>
         )}
 
-        <InfoPanelSection title={tDetail("data")} contentClassName="p-0">
-          {typeof event.data.body_ref === "string" && (
-            <p className="border-b border-border px-3 py-2">
-              {event.body_url ? (
-                <a
-                  href={event.body_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  {tDetail("bodyStored")}
-                </a>
-              ) : (
-                <span className="text-muted-foreground">
-                  {tDetail("bodyStored")}
-                </span>
-              )}
-            </p>
-          )}
-          <pre className="max-h-96 overflow-auto p-3 font-mono text-[11px] leading-relaxed">
-            {JSON.stringify(event.data, null, 2)}
-          </pre>
-        </InfoPanelSection>
+        <EventBody event={event} />
+        <EventHeaders event={event} />
 
         {/* On its own stream's page the event is already in its stream. */}
         {pathname !== `/events/${event.stream_id}` && (
@@ -304,7 +286,7 @@ function taskIdOf(data: StreamEventDetailResponse["data"]): string | undefined {
 
 /** Label and value side by side, for the plain values (dates). */
 function Facts({ facts }: { facts: [string, ReactNode][] }) {
-  const shown = facts.filter(([, value]) => value != null);
+  const shown = facts.filter(([, value]) => Boolean(value));
   if (shown.length === 0) return null;
   return (
     <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">

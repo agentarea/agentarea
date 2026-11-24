@@ -35,7 +35,7 @@ export default function FeedEmptyState({
   const showPlatform = {
     label: t("showPlatformAction"),
     href: feedHref(state, {
-      origin: "all",
+      origin: undefined,
       event: undefined,
       before: undefined,
     }),

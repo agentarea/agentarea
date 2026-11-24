@@ -1,0 +1,12 @@
+{
+  "ce_id": "8d6b4a52-0c1e-4f7a-9a43-2b1f6c3d9e01",
+  "ce_type": "task.completed",
+  "ce_source": "agentarea-worker",
+  "ce_time": "2026-11-12T10:00:00.123456+00:00",
+  "ce_specversion": "1.0",
+  "ce_datacontenttype": "application/json",
+  "data": "{\"result\": \"ok \\u00e9\", \"n\": 3, \"nested\": {\"a\": [1, null]}}",
+  "ce_subject": "task-1",
+  "ce_workspace": "ws-1",
+  "ce_seq": "42"
+}

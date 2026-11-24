@@ -65,7 +65,7 @@ describe("computeLabelElements", () => {
 
   test("converts legal text with bare urls into clickable links", () => {
     const labelText =
-      "Я даю согласие на обработку моих персональных данных в соответствии с Политикой конфиденциальности (agentarea.ru/legal/privacy) и принимаю Пользовательское соглашение (agentarea.ru/legal/terms)"
+      "Я даю согласие на обработку моих персональных данных в соответствии с Политикой конфиденциальности (example.com/legal/privacy) и принимаю Пользовательское соглашение (example.com/legal/terms)"
 
     const { getByRole } = render(
       <CheckboxLabel label={{ text: labelText, id: 0, type: "info" }} />,
@@ -74,11 +74,11 @@ describe("computeLabelElements", () => {
 
     expect(getByRole("link", { name: "Политикой конфиденциальности" })).toHaveAttribute(
       "href",
-      "https://agentarea.ru/legal/privacy",
+      "https://example.com/legal/privacy",
     )
     expect(getByRole("link", { name: "Пользовательское соглашение" })).toHaveAttribute(
       "href",
-      "https://agentarea.ru/legal/terms",
+      "https://example.com/legal/terms",
     )
   })
 

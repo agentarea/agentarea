@@ -73,6 +73,7 @@ configured. Delete them; there is no replacement.
 | `LITELLM_CALLBACKS`, `LITELLM_LOCAL_MODEL_COST_MAP` | The platform no longer uses the LiteLLM SDK; it calls models over its own OpenAI-compatible and Anthropic transports. |
 | `AGENTAREA_METRICS_ENABLED`, `AGENTAREA_METRICS_PORT` | The API no longer serves Prometheus metrics on a port of its own. Every process records OpenTelemetry metrics and pushes them over OTLP with its traces while `AGENTAREA_OTEL_ENABLED` is set; `OTEL_METRICS_EXPORTER=prometheus` serves them for scraping instead. In the chart, `global.monitoring.prometheus` and the backend's `metrics` port are gone: set `telemetry.enabled` and `telemetry.otlpEndpoint`. |
 | `AGENTAREA_K8S_MONITORING`, `AGENTAREA_K8S_PROMETHEUS`, `AGENTAREA_K8S_SERVICE_MONITOR` | They promised Prometheus metrics no MCP workload served; the first only added an unused `metrics` port to each instance Service. The mcp-manager pushes its own metrics over OTLP behind `AGENTAREA_OTEL_ENABLED`. |
+| `AGENTAREA_EGRESS_EXITS` | Enterprise only. Egress exits live in the database (`/v1/egress-exits`); which workspace may bind one is its ownership and the `use` permission, not a JSON map. A pod that requires an exit without naming one gets the platform exit named by `AGENTAREA_EGRESS_DEFAULT_EXIT`. |
 
 ## Changed defaults
 
@@ -82,6 +83,7 @@ keep the old behaviour.
 | Variable | Service | Was | Is |
 |---|---|---|---|
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | event-service | `grpc` | `http/protobuf`, the OpenTelemetry SDK default (port 4318). An endpoint on the gRPC port 4317 with no protocol set now loses every span and metric without an error; set `grpc` to keep it. |
+| `AGENTAREA_MCP_MANAGER_URL` | backend, worker, mcp-manager | also the address handed to MCP instances for their storage | only where this process calls the MCP role. The address handed to MCP instances is `AGENTAREA_MCP_STORAGE_URL`; without it an instance that opts into storage is refused. The chart sets both. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | event-service | optional; the SDK fell back to `localhost` | required while `AGENTAREA_OTEL_ENABLED` is true, unless every OTLP signal has its own `OTEL_EXPORTER_OTLP_{TRACES,METRICS}_ENDPOINT`. The service refuses to start without one. The mcp-manager, which exports for the first time, applies the same rule. |
 
 ## Renamed
@@ -453,6 +455,15 @@ topic and broker key.
 | `WEB_SEARCH_BASE_URL` | `AGENTAREA_TOOL_SEARCH_URL` |
 | `OUTBOUND_PRIVATE_ALLOWLIST` | `AGENTAREA_HTTP_PRIVATE_ALLOWLIST` |
 | `WEBAPP_PUBLIC_ORIGIN` | `AGENTAREA_APP_ORIGIN` |
+
+### Test harness
+
+Read only by the Go test suites that need a real database or broker.
+
+| Was | Is |
+|---|---|
+| `AGENTAREA_TEST_POSTGRES_URL` | `AGENTAREA_DB_TEST_URL` |
+| `AGENTAREA_TEST_REDIS_URL` | `AGENTAREA_REDIS_TEST_URL` |
 
 ### Listen address
 

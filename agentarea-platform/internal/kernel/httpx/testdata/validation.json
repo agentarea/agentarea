@@ -1,0 +1,1016 @@
+{
+ "uuid": [
+  [
+   "xyz",
+   {
+    "ok": false,
+    "error": {
+     "type": "uuid_parsing",
+     "msg": "Input should be a valid UUID, invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `x` at 1",
+     "ctx": {
+      "error": "invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `x` at 1"
+     }
+    }
+   }
+  ],
+  [
+   "0b6f3a4e8c1d4c559a0e5f6a7b8c9d0e",
+   {
+    "ok": true,
+    "value": "0b6f3a4e-8c1d-4c55-9a0e-5f6a7b8c9d0e"
+   }
+  ],
+  [
+   "0b6f3a4e-8c1d-4c55-9a0e-5f6a7b8c9d0",
+   {
+    "ok": false,
+    "error": {
+     "type": "uuid_parsing",
+     "msg": "Input should be a valid UUID, invalid group length in group 4: expected 12, found 11",
+     "ctx": {
+      "error": "invalid group length in group 4: expected 12, found 11"
+     }
+    }
+   }
+  ],
+  [
+   "0b6f3a4e-8c1d-4c55-9a0e5f6a7b8c9d0e",
+   {
+    "ok": false,
+    "error": {
+     "type": "uuid_parsing",
+     "msg": "Input should be a valid UUID, invalid group count: expected 5, found 4",
+     "ctx": {
+      "error": "invalid group count: expected 5, found 4"
+     }
+    }
+   }
+  ],
+  [
+   "{0b6f3a4e-8c1d-4c55-9a0e-5f6a7b8c9d0e}",
+   {
+    "ok": true,
+    "value": "0b6f3a4e-8c1d-4c55-9a0e-5f6a7b8c9d0e"
+   }
+  ],
+  [
+   "urn:uuid:0b6f3a4e-8c1d-4c55-9a0e-5f6a7b8c9d0e",
+   {
+    "ok": true,
+    "value": "0b6f3a4e-8c1d-4c55-9a0e-5f6a7b8c9d0e"
+   }
+  ],
+  [
+   "0B6F3A4E-8C1D-4C55-9A0E-5F6A7B8C9D0E",
+   {
+    "ok": true,
+    "value": "0b6f3a4e-8c1d-4c55-9a0e-5f6a7b8c9d0e"
+   }
+  ],
+  [
+   "",
+   {
+    "ok": false,
+    "error": {
+     "type": "uuid_parsing",
+     "msg": "Input should be a valid UUID, invalid length: expected length 32 for simple format, found 0",
+     "ctx": {
+      "error": "invalid length: expected length 32 for simple format, found 0"
+     }
+    }
+   }
+  ],
+  [
+   "0b6f3a4e-8c1d-4c55-9a0e-5f6a7b8c9d0z",
+   {
+    "ok": false,
+    "error": {
+     "type": "uuid_parsing",
+     "msg": "Input should be a valid UUID, invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `z` at 36",
+     "ctx": {
+      "error": "invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `z` at 36"
+     }
+    }
+   }
+  ],
+  [
+   "0b6f3a4e8c1d4c559a0e5f6a7b8c9d0",
+   {
+    "ok": false,
+    "error": {
+     "type": "uuid_parsing",
+     "msg": "Input should be a valid UUID, invalid length: expected length 32 for simple format, found 31",
+     "ctx": {
+      "error": "invalid length: expected length 32 for simple format, found 31"
+     }
+    }
+   }
+  ],
+  [
+   "0b6f3a4e-8c1d-4c55-9a0e-5f6a7b8c9d0e1",
+   {
+    "ok": false,
+    "error": {
+     "type": "uuid_parsing",
+     "msg": "Input should be a valid UUID, invalid group length in group 4: expected 12, found 13",
+     "ctx": {
+      "error": "invalid group length in group 4: expected 12, found 13"
+     }
+    }
+   }
+  ],
+  [
+   "gggggggggggggggggggggggggggggggggggg",
+   {
+    "ok": false,
+    "error": {
+     "type": "uuid_parsing",
+     "msg": "Input should be a valid UUID, invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `g` at 1",
+     "ctx": {
+      "error": "invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `g` at 1"
+     }
+    }
+   }
+  ],
+  [
+   "0b6f3a4e-8c1d-4c55-9a0e-5f6a7b8c9-0e",
+   {
+    "ok": false,
+    "error": {
+     "type": "uuid_parsing",
+     "msg": "Input should be a valid UUID, invalid group count: expected 5, found 6",
+     "ctx": {
+      "error": "invalid group count: expected 5, found 6"
+     }
+    }
+   }
+  ],
+  [
+   "0b6f3a4e--8c1d-4c55-9a0e-5f6a7b8c9d0e",
+   {
+    "ok": false,
+    "error": {
+     "type": "uuid_parsing",
+     "msg": "Input should be a valid UUID, invalid group count: expected 5, found 6",
+     "ctx": {
+      "error": "invalid group count: expected 5, found 6"
+     }
+    }
+   }
+  ],
+  [
+   "-0b6f3a4e-8c1d-4c55-9a0e-5f6a7b8c9d0e",
+   {
+    "ok": false,
+    "error": {
+     "type": "uuid_parsing",
+     "msg": "Input should be a valid UUID, invalid group count: expected 5, found 6",
+     "ctx": {
+      "error": "invalid group count: expected 5, found 6"
+     }
+    }
+   }
+  ],
+  [
+   "0b6f3a4e8c1d4c559a0e5f6a7b8c9d0g",
+   {
+    "ok": false,
+    "error": {
+     "type": "uuid_parsing",
+     "msg": "Input should be a valid UUID, invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `g` at 32",
+     "ctx": {
+      "error": "invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `g` at 32"
+     }
+    }
+   }
+  ],
+  [
+   "urn:uuid:",
+   {
+    "ok": false,
+    "error": {
+     "type": "uuid_parsing",
+     "msg": "Input should be a valid UUID, invalid group count: expected 5, found 1",
+     "ctx": {
+      "error": "invalid group count: expected 5, found 1"
+     }
+    }
+   }
+  ],
+  [
+   "{0b6f3a4e-8c1d-4c55-9a0e-5f6a7b8c9d0e",
+   {
+    "ok": false,
+    "error": {
+     "type": "uuid_parsing",
+     "msg": "Input should be a valid UUID, invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `{` at 1",
+     "ctx": {
+      "error": "invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `{` at 1"
+     }
+    }
+   }
+  ],
+  [
+   "0b6f3a4e-8c1d-4c55-9a0e-5f6a7b8c9d0é",
+   {
+    "ok": false,
+    "error": {
+     "type": "uuid_parsing",
+     "msg": "Input should be a valid UUID, invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `é` at 36",
+     "ctx": {
+      "error": "invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `é` at 36"
+     }
+    }
+   }
+  ],
+  [
+   "0b6f-3a4e-8c1d-4c55-9a0e5f6a7b8c9d0e",
+   {
+    "ok": false,
+    "error": {
+     "type": "uuid_parsing",
+     "msg": "Input should be a valid UUID, invalid group length in group 0: expected 8, found 4",
+     "ctx": {
+      "error": "invalid group length in group 0: expected 8, found 4"
+     }
+    }
+   }
+  ],
+  [
+   "0b6f3a4e-8c1d-4c55-9a0e-5f6a7b8c9d0ee",
+   {
+    "ok": false,
+    "error": {
+     "type": "uuid_parsing",
+     "msg": "Input should be a valid UUID, invalid group length in group 4: expected 12, found 13",
+     "ctx": {
+      "error": "invalid group length in group 4: expected 12, found 13"
+     }
+    }
+   }
+  ]
+ ],
+ "int": [
+  [
+   "5",
+   {
+    "ok": true,
+    "value": "5"
+   }
+  ],
+  [
+   " 5 ",
+   {
+    "ok": true,
+    "value": "5"
+   }
+  ],
+  [
+   "+5",
+   {
+    "ok": true,
+    "value": "5"
+   }
+  ],
+  [
+   "-0",
+   {
+    "ok": true,
+    "value": "0"
+   }
+  ],
+  [
+   "05",
+   {
+    "ok": true,
+    "value": "5"
+   }
+  ],
+  [
+   "5.0",
+   {
+    "ok": true,
+    "value": "5"
+   }
+  ],
+  [
+   "5.00",
+   {
+    "ok": true,
+    "value": "5"
+   }
+  ],
+  [
+   "5.5",
+   {
+    "ok": false,
+    "error": {
+     "type": "int_parsing",
+     "msg": "Input should be a valid integer, unable to parse string as an integer"
+    }
+   }
+  ],
+  [
+   "1_000",
+   {
+    "ok": true,
+    "value": "1000"
+   }
+  ],
+  [
+   "_1",
+   {
+    "ok": false,
+    "error": {
+     "type": "int_parsing",
+     "msg": "Input should be a valid integer, unable to parse string as an integer"
+    }
+   }
+  ],
+  [
+   "1__0",
+   {
+    "ok": false,
+    "error": {
+     "type": "int_parsing",
+     "msg": "Input should be a valid integer, unable to parse string as an integer"
+    }
+   }
+  ],
+  [
+   "1_",
+   {
+    "ok": false,
+    "error": {
+     "type": "int_parsing",
+     "msg": "Input should be a valid integer, unable to parse string as an integer"
+    }
+   }
+  ],
+  [
+   "1e2",
+   {
+    "ok": false,
+    "error": {
+     "type": "int_parsing",
+     "msg": "Input should be a valid integer, unable to parse string as an integer"
+    }
+   }
+  ],
+  [
+   "",
+   {
+    "ok": false,
+    "error": {
+     "type": "int_parsing",
+     "msg": "Input should be a valid integer, unable to parse string as an integer"
+    }
+   }
+  ],
+  [
+   "abc",
+   {
+    "ok": false,
+    "error": {
+     "type": "int_parsing",
+     "msg": "Input should be a valid integer, unable to parse string as an integer"
+    }
+   }
+  ],
+  [
+   "0x10",
+   {
+    "ok": false,
+    "error": {
+     "type": "int_parsing",
+     "msg": "Input should be a valid integer, unable to parse string as an integer"
+    }
+   }
+  ],
+  [
+   "99999999999999999999",
+   {
+    "ok": true,
+    "value": "99999999999999999999"
+   }
+  ],
+  [
+   "5.",
+   {
+    "ok": false,
+    "error": {
+     "type": "int_parsing",
+     "msg": "Input should be a valid integer, unable to parse string as an integer"
+    }
+   }
+  ],
+  [
+   "٣",
+   {
+    "ok": false,
+    "error": {
+     "type": "int_parsing",
+     "msg": "Input should be a valid integer, unable to parse string as an integer"
+    }
+   }
+  ],
+  [
+   "-5",
+   {
+    "ok": true,
+    "value": "-5"
+   }
+  ],
+  [
+   "+-5",
+   {
+    "ok": false,
+    "error": {
+     "type": "int_parsing",
+     "msg": "Input should be a valid integer, unable to parse string as an integer"
+    }
+   }
+  ],
+  [
+   " ",
+   {
+    "ok": false,
+    "error": {
+     "type": "int_parsing",
+     "msg": "Input should be a valid integer, unable to parse string as an integer"
+    }
+   }
+  ],
+  [
+   "5 0",
+   {
+    "ok": false,
+    "error": {
+     "type": "int_parsing",
+     "msg": "Input should be a valid integer, unable to parse string as an integer"
+    }
+   }
+  ],
+  [
+   "\t7\n",
+   {
+    "ok": true,
+    "value": "7"
+   }
+  ],
+  [
+   "-5.0",
+   {
+    "ok": true,
+    "value": "-5"
+   }
+  ],
+  [
+   "0.0",
+   {
+    "ok": true,
+    "value": "0"
+   }
+  ],
+  [
+   ".0",
+   {
+    "ok": false,
+    "error": {
+     "type": "int_parsing",
+     "msg": "Input should be a valid integer, unable to parse string as an integer"
+    }
+   }
+  ]
+ ],
+ "bool": [
+  [
+   "true",
+   {
+    "ok": true,
+    "value": true
+   }
+  ],
+  [
+   "True",
+   {
+    "ok": true,
+    "value": true
+   }
+  ],
+  [
+   "TRUE",
+   {
+    "ok": true,
+    "value": true
+   }
+  ],
+  [
+   "1",
+   {
+    "ok": true,
+    "value": true
+   }
+  ],
+  [
+   "0",
+   {
+    "ok": true,
+    "value": false
+   }
+  ],
+  [
+   "yes",
+   {
+    "ok": true,
+    "value": true
+   }
+  ],
+  [
+   "no",
+   {
+    "ok": true,
+    "value": false
+   }
+  ],
+  [
+   "on",
+   {
+    "ok": true,
+    "value": true
+   }
+  ],
+  [
+   "off",
+   {
+    "ok": true,
+    "value": false
+   }
+  ],
+  [
+   "t",
+   {
+    "ok": true,
+    "value": true
+   }
+  ],
+  [
+   "f",
+   {
+    "ok": true,
+    "value": false
+   }
+  ],
+  [
+   "y",
+   {
+    "ok": true,
+    "value": true
+   }
+  ],
+  [
+   "n",
+   {
+    "ok": true,
+    "value": false
+   }
+  ],
+  [
+   "maybe",
+   {
+    "ok": false,
+    "error": {
+     "type": "bool_parsing",
+     "msg": "Input should be a valid boolean, unable to interpret input"
+    }
+   }
+  ],
+  [
+   "",
+   {
+    "ok": false,
+    "error": {
+     "type": "bool_parsing",
+     "msg": "Input should be a valid boolean, unable to interpret input"
+    }
+   }
+  ],
+  [
+   " true",
+   {
+    "ok": false,
+    "error": {
+     "type": "bool_parsing",
+     "msg": "Input should be a valid boolean, unable to interpret input"
+    }
+   }
+  ],
+  [
+   "Yes",
+   {
+    "ok": true,
+    "value": true
+   }
+  ],
+  [
+   "ON",
+   {
+    "ok": true,
+    "value": true
+   }
+  ],
+  [
+   "2",
+   {
+    "ok": false,
+    "error": {
+     "type": "bool_parsing",
+     "msg": "Input should be a valid boolean, unable to interpret input"
+    }
+   }
+  ],
+  [
+   "tRuE",
+   {
+    "ok": true,
+    "value": true
+   }
+  ]
+ ],
+ "float": [
+  [
+   "1.5",
+   {
+    "ok": true,
+    "value": "1.5"
+   }
+  ],
+  [
+   "1e3",
+   {
+    "ok": true,
+    "value": "1000.0"
+   }
+  ],
+  [
+   "abc",
+   {
+    "ok": false,
+    "error": {
+     "type": "float_parsing",
+     "msg": "Input should be a valid number, unable to parse string as a number"
+    }
+   }
+  ],
+  [
+   " 2 ",
+   {
+    "ok": true,
+    "value": "2.0"
+   }
+  ],
+  [
+   "1_0",
+   {
+    "ok": true,
+    "value": "10.0"
+   }
+  ],
+  [
+   "-0.5",
+   {
+    "ok": true,
+    "value": "-0.5"
+   }
+  ],
+  [
+   ".5",
+   {
+    "ok": true,
+    "value": "0.5"
+   }
+  ],
+  [
+   "5.",
+   {
+    "ok": true,
+    "value": "5.0"
+   }
+  ],
+  [
+   "1e",
+   {
+    "ok": false,
+    "error": {
+     "type": "float_parsing",
+     "msg": "Input should be a valid number, unable to parse string as a number"
+    }
+   }
+  ],
+  [
+   "+1",
+   {
+    "ok": true,
+    "value": "1.0"
+   }
+  ]
+ ],
+ "json": [
+  [
+   "{\"name\": \"x\",",
+   {
+    "pos": 13,
+    "msg": "Expecting property name enclosed in double quotes"
+   }
+  ],
+  [
+   "{",
+   {
+    "pos": 1,
+    "msg": "Expecting property name enclosed in double quotes"
+   }
+  ],
+  [
+   "[1,]",
+   {
+    "pos": 2,
+    "msg": "Illegal trailing comma before end of array"
+   }
+  ],
+  [
+   "{\"a\" 1}",
+   {
+    "pos": 5,
+    "msg": "Expecting ':' delimiter"
+   }
+  ],
+  [
+   "{\"a\": 1,}",
+   {
+    "pos": 7,
+    "msg": "Illegal trailing comma before end of object"
+   }
+  ],
+  [
+   "{\"a\": 1} x",
+   {
+    "pos": 9,
+    "msg": "Extra data"
+   }
+  ],
+  [
+   "\"abc",
+   {
+    "pos": 0,
+    "msg": "Unterminated string starting at"
+   }
+  ],
+  [
+   "{\"a\": \"\u0001\"}",
+   {
+    "pos": 7,
+    "msg": "Invalid control character at"
+   }
+  ],
+  [
+   "{\"a\": \"\\q\"}",
+   {
+    "pos": 7,
+    "msg": "Invalid \\escape"
+   }
+  ],
+  [
+   "{\"a\": \"\\u12\"}",
+   {
+    "pos": 8,
+    "msg": "Invalid \\uXXXX escape"
+   }
+  ],
+  [
+   "nul",
+   {
+    "pos": 0,
+    "msg": "Expecting value"
+   }
+  ],
+  [
+   "tru",
+   {
+    "pos": 0,
+    "msg": "Expecting value"
+   }
+  ],
+  [
+   "[1 2]",
+   {
+    "pos": 3,
+    "msg": "Expecting ',' delimiter"
+   }
+  ],
+  [
+   "{1: 2}",
+   {
+    "pos": 1,
+    "msg": "Expecting property name enclosed in double quotes"
+   }
+  ],
+  [
+   "é",
+   {
+    "pos": 0,
+    "msg": "Expecting value"
+   }
+  ],
+  [
+   "{\"é\": tru}",
+   {
+    "pos": 6,
+    "msg": "Expecting value"
+   }
+  ],
+  [
+   "  ",
+   {
+    "pos": 2,
+    "msg": "Expecting value"
+   }
+  ],
+  [
+   "-",
+   {
+    "pos": 0,
+    "msg": "Expecting value"
+   }
+  ],
+  [
+   "01",
+   {
+    "pos": 1,
+    "msg": "Extra data"
+   }
+  ],
+  [
+   "1.",
+   {
+    "pos": 1,
+    "msg": "Extra data"
+   }
+  ],
+  [
+   "1e",
+   {
+    "pos": 1,
+    "msg": "Extra data"
+   }
+  ],
+  [
+   "[",
+   {
+    "pos": 1,
+    "msg": "Expecting value"
+   }
+  ],
+  [
+   "{\"a\":}",
+   {
+    "pos": 5,
+    "msg": "Expecting value"
+   }
+  ],
+  [
+   "[1,",
+   {
+    "pos": 3,
+    "msg": "Expecting value"
+   }
+  ],
+  [
+   "{\"a\"",
+   {
+    "pos": 4,
+    "msg": "Expecting ':' delimiter"
+   }
+  ],
+  [
+   "{\"a\":1 \"b\":2}",
+   {
+    "pos": 7,
+    "msg": "Expecting ',' delimiter"
+   }
+  ],
+  [
+   "﻿{}",
+   null
+  ],
+  [
+   "\"\\ud800\"",
+   null
+  ],
+  [
+   "[1]]",
+   {
+    "pos": 3,
+    "msg": "Extra data"
+   }
+  ],
+  [
+   "{\"a\": [1, {\"b\": }]}",
+   {
+    "pos": 16,
+    "msg": "Expecting value"
+   }
+  ],
+  [
+   "\"\u001f\"",
+   {
+    "pos": 2,
+    "msg": "Invalid control character at"
+   }
+  ],
+  [
+   "1 2",
+   {
+    "pos": 2,
+    "msg": "Extra data"
+   }
+  ],
+  [
+   "{,}",
+   {
+    "pos": 1,
+    "msg": "Expecting property name enclosed in double quotes"
+   }
+  ],
+  [
+   "[,1]",
+   {
+    "pos": 1,
+    "msg": "Expecting value"
+   }
+  ]
+ ],
+ "status_phrases": {
+  "100": "Continue",
+  "101": "Switching Protocols",
+  "102": "Processing",
+  "103": "Early Hints",
+  "200": "OK",
+  "201": "Created",
+  "202": "Accepted",
+  "203": "Non-Authoritative Information",
+  "204": "No Content",
+  "205": "Reset Content",
+  "206": "Partial Content",
+  "207": "Multi-Status",
+  "208": "Already Reported",
+  "226": "IM Used",
+  "300": "Multiple Choices",
+  "301": "Moved Permanently",
+  "302": "Found",
+  "303": "See Other",
+  "304": "Not Modified",
+  "305": "Use Proxy",
+  "307": "Temporary Redirect",
+  "308": "Permanent Redirect",
+  "400": "Bad Request",
+  "401": "Unauthorized",
+  "402": "Payment Required",
+  "403": "Forbidden",
+  "404": "Not Found",
+  "405": "Method Not Allowed",
+  "406": "Not Acceptable",
+  "407": "Proxy Authentication Required",
+  "408": "Request Timeout",
+  "409": "Conflict",
+  "410": "Gone",
+  "411": "Length Required",
+  "412": "Precondition Failed",
+  "413": "Content Too Large",
+  "414": "URI Too Long",
+  "415": "Unsupported Media Type",
+  "416": "Range Not Satisfiable",
+  "417": "Expectation Failed",
+  "418": "I'm a Teapot",
+  "421": "Misdirected Request",
+  "422": "Unprocessable Content",
+  "423": "Locked",
+  "424": "Failed Dependency",
+  "425": "Too Early",
+  "426": "Upgrade Required",
+  "428": "Precondition Required",
+  "429": "Too Many Requests",
+  "431": "Request Header Fields Too Large",
+  "451": "Unavailable For Legal Reasons",
+  "500": "Internal Server Error",
+  "501": "Not Implemented",
+  "502": "Bad Gateway",
+  "503": "Service Unavailable",
+  "504": "Gateway Timeout",
+  "505": "HTTP Version Not Supported",
+  "506": "Variant Also Negotiates",
+  "507": "Insufficient Storage",
+  "508": "Loop Detected",
+  "510": "Not Extended",
+  "511": "Network Authentication Required"
+ }
+}

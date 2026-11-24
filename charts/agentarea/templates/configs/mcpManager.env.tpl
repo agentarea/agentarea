@@ -8,38 +8,13 @@ AGENTAREA_LOG_LEVEL: "INFO"
 AGENTAREA_API_URL: "http://{{ include "agentarea.fullname" . }}-backend:8000"
 HOST: "0.0.0.0"
 PORT: "8000"
-AGENTAREA_MCP_BACKEND: "{{ include "agentarea.mcpManager.backendType" . }}"
-AGENTAREA_MCP_DATAPLANE_URL: "{{ .Values.mcpManager.dataPlane.url | default "" }}"
-AGENTAREA_MCP_DATAPLANE_INSECURE: "{{ .Values.mcpManager.dataPlane.allowInsecure | default false }}"
-AGENTAREA_K8S_ENABLED: "true"
-AGENTAREA_K8S_NAMESPACE: "{{ .Release.Namespace }}"
-AGENTAREA_K8S_DOMAIN: "{{ .Values.mcpManager.domain | default "mcp.local" }}"
-AGENTAREA_K8S_GATEWAY: "{{ .Values.mcpManager.gateway.name | default "envoy-gateway" }}"
-AGENTAREA_K8S_GATEWAY_NS: "{{ .Values.mcpManager.gateway.namespace | default "envoy-gateway-system" }}"
-AGENTAREA_K8S_RUNTIME_CLASS: "{{ .Values.mcpManager.runtimeClass }}"
-AGENTAREA_MCP_ISOLATION: "{{ required "mcpManager.isolationTier is required" .Values.mcpManager.isolationTier }}"
-KUBECONFIG: "{{ include "agentarea.mcpManager.executionKubeconfigPath" . }}"
-AGENTAREA_K8S_SERVICE_ACCOUNT: "{{ include "agentarea.mcpRuntimeServiceAccountName" . }}"
+AGENTAREA_MCP_STORAGE_URL: "{{ include "agentarea.mcpManager.workloadUrl" . }}"
 AGENTAREA_SANDBOX_STORAGE: "s3"
 AGENTAREA_SANDBOX_MAX_FILES: "{{ .Values.sandboxRuntime.workspace.maxFiles }}"
 AGENTAREA_SANDBOX_MAX_FILE_SIZE: "{{ .Values.sandboxRuntime.workspace.maxFileBytes }}"
 AGENTAREA_SANDBOX_MAX_TOTAL_SIZE: "{{ .Values.sandboxRuntime.workspace.maxBytes }}"
 AGENTAREA_SANDBOX_S3_URL_TTL: "{{ .Values.sandboxRuntime.workspace.signedUrlTTL }}"
 AGENTAREA_SANDBOX_S3_PATH_STYLE: "{{ .Values.sandboxRuntime.workspace.forcePathStyle }}"
-AGENTAREA_K8S_NON_ROOT: "true"
-AGENTAREA_K8S_READONLY_ROOT: "true"
-AGENTAREA_K8S_CPU_REQUEST: "100m"
-AGENTAREA_K8S_CPU_LIMIT: "500m"
-AGENTAREA_K8S_MEMORY_REQUEST: "128Mi"
-AGENTAREA_K8S_MEMORY_LIMIT: "512Mi"
-AGENTAREA_MCP_FEATURES: "{{ join "," .Values.mcpManager.features.enabled }}"
-AGENTAREA_MCP_IDLE_TIMEOUT: "{{ if .Values.mcpManager.serverless.enabled }}{{ .Values.mcpManager.serverless.idleTimeout }}{{ else }}0{{ end }}"
-AGENTAREA_MCP_SWEEP_INTERVAL: "{{ .Values.mcpManager.serverless.sweepInterval }}"
-AGENTAREA_MCP_LEASE_TTL: "{{ .Values.mcpManager.serverless.requestLeaseTTL }}"
-AGENTAREA_MCP_STARTUP_TIMEOUT: "{{ .Values.mcpManager.serverless.startupTimeout }}"
-AGENTAREA_MCP_BASE_IMAGE: "{{ .Values.mcpManager.mcpBase.image.repository }}:{{ default .Chart.AppVersion .Values.mcpManager.mcpBase.image.tag }}"
-AGENTAREA_MCP_PACKAGE_REPO: "{{ .Values.mcpManager.packageImages.repository }}"
-AGENTAREA_MCP_IMPORT_TIMEOUT: "{{ .Values.mcpManager.packageImages.importTimeout }}"
 {{- end }}
 
 {{- define "agentarea.mcpManager.envs" }}
@@ -63,66 +38,11 @@ AGENTAREA_MCP_IMPORT_TIMEOUT: "{{ .Values.mcpManager.packageImages.importTimeout
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: PORT
-- name: AGENTAREA_MCP_BACKEND
+- name: AGENTAREA_MCP_STORAGE_URL
   valueFrom:
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_MCP_BACKEND
-- name: AGENTAREA_MCP_DATAPLANE_URL
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_MCP_DATAPLANE_URL
-- name: AGENTAREA_MCP_DATAPLANE_INSECURE
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_MCP_DATAPLANE_INSECURE
-- name: AGENTAREA_K8S_ENABLED
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_K8S_ENABLED
-- name: AGENTAREA_K8S_NAMESPACE
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_K8S_NAMESPACE
-- name: AGENTAREA_K8S_DOMAIN
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_K8S_DOMAIN
-- name: AGENTAREA_K8S_GATEWAY
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_K8S_GATEWAY
-- name: AGENTAREA_K8S_GATEWAY_NS
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_K8S_GATEWAY_NS
-- name: AGENTAREA_K8S_RUNTIME_CLASS
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_K8S_RUNTIME_CLASS
-- name: AGENTAREA_MCP_ISOLATION
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_MCP_ISOLATION
-- name: KUBECONFIG
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: KUBECONFIG
-- name: AGENTAREA_K8S_SERVICE_ACCOUNT
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_K8S_SERVICE_ACCOUNT
+      key: AGENTAREA_MCP_STORAGE_URL
 - name: AGENTAREA_SANDBOX_STORAGE
   valueFrom:
     configMapKeyRef:
@@ -153,84 +73,4 @@ AGENTAREA_MCP_IMPORT_TIMEOUT: "{{ .Values.mcpManager.packageImages.importTimeout
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: AGENTAREA_SANDBOX_S3_PATH_STYLE
-- name: AGENTAREA_K8S_NON_ROOT
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_K8S_NON_ROOT
-- name: AGENTAREA_K8S_READONLY_ROOT
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_K8S_READONLY_ROOT
-- name: AGENTAREA_K8S_CPU_REQUEST
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_K8S_CPU_REQUEST
-- name: AGENTAREA_K8S_CPU_LIMIT
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_K8S_CPU_LIMIT
-- name: AGENTAREA_K8S_MEMORY_REQUEST
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_K8S_MEMORY_REQUEST
-- name: AGENTAREA_K8S_MEMORY_LIMIT
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_K8S_MEMORY_LIMIT
-- name: AGENTAREA_MCP_FEATURES
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_MCP_FEATURES
-- name: AGENTAREA_MCP_IDLE_TIMEOUT
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_MCP_IDLE_TIMEOUT
-- name: AGENTAREA_MCP_SWEEP_INTERVAL
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_MCP_SWEEP_INTERVAL
-- name: AGENTAREA_MCP_LEASE_TTL
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_MCP_LEASE_TTL
-- name: AGENTAREA_MCP_STARTUP_TIMEOUT
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_MCP_STARTUP_TIMEOUT
-- name: AGENTAREA_MCP_BASE_IMAGE
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_MCP_BASE_IMAGE
-- name: AGENTAREA_MCP_PACKAGE_REPO
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_MCP_PACKAGE_REPO
-- name: AGENTAREA_MCP_IMPORT_TIMEOUT
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: AGENTAREA_MCP_IMPORT_TIMEOUT
-{{- end }}
-
-{{- define "agentarea.mcpManager.secrets.envs" }}
-{{- if .Values.mcpManager.dataPlane.url }}
-- name: AGENTAREA_MCP_DATAPLANE_TOKEN
-  valueFrom:
-    secretKeyRef:
-      name: "{{ .Values.mcpManager.dataPlane.tokenSecret }}"
-      key: {{ .Values.mcpManager.dataPlane.tokenKey }}
-{{- end }}
 {{- end }}

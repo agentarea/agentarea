@@ -5,7 +5,6 @@ groups:
       AGENTAREA_DB_PORT: '{{ .Values.global.database.port }}'
       AGENTAREA_DB_NAME: '{{ .Values.global.database.name }}'
       AGENTAREA_DB_SSLMODE: '{{ .Values.global.database.sslMode }}'
-      AGENTAREA_DB_TENANT_SCOPE: '{{ .Values.global.database.tenantScope }}'
     secrets:
       - name: AGENTAREA_DB_USER
         secretName: "{{ .Values.global.secrets.postgresql }}"
@@ -81,10 +80,9 @@ groups:
   backend:
     configVars:
       PORT: '8000'
-      AGENTAREA_ENV: '{{ .Values.global.deploymentEnv }}'
-      AGENTAREA_LOG_LEVEL: 'info'
+      AGENTAREA_LOG_LEVEL: 'INFO'
       AGENTAREA_MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
-      AGENTAREA_MCP_TIMEOUT: '30'
+      AGENTAREA_MCP_STORAGE_URL: '{{ include "agentarea.mcpManager.workloadUrl" . }}'
       AGENTAREA_API_URL: '{{ include "agentarea.backend.apiUrl" . }}'
       AGENTAREA_S3_PUBLIC_ENDPOINT: '{{ .Values.global.storage.publicEndpoint }}'
       AGENTAREA_ANALYTICS_ENABLED: '{{ .Values.global.analytics.enabled }}'
@@ -112,26 +110,7 @@ groups:
       AGENTAREA_API_URL: 'http://{{ include "agentarea.fullname" . }}-backend:8000'
       HOST: '0.0.0.0'
       PORT: '8000'
-      # Derived from whether mcpManager.dataPlane names a host, so the backend
-      # and the address it is given cannot disagree. Half-configuration stops
-      # the render — see the helper.
-      AGENTAREA_MCP_BACKEND: '{{ include "agentarea.mcpManager.backendType" . }}'
-      # Where MCP containers run when AGENTAREA_MCP_BACKEND is dataplane. Empty otherwise,
-      # which the manager reads as "no data plane declared".
-      AGENTAREA_MCP_DATAPLANE_URL: '{{ .Values.mcpManager.dataPlane.url | default "" }}'
-      AGENTAREA_MCP_DATAPLANE_INSECURE: '{{ .Values.mcpManager.dataPlane.allowInsecure | default false }}'
-      AGENTAREA_K8S_ENABLED: 'true'
-      AGENTAREA_K8S_NAMESPACE: '{{ .Release.Namespace }}'
-      AGENTAREA_K8S_DOMAIN: '{{ .Values.mcpManager.domain | default "mcp.local" }}'
-      AGENTAREA_K8S_GATEWAY: '{{ .Values.mcpManager.gateway.name | default "envoy-gateway" }}'
-      AGENTAREA_K8S_GATEWAY_NS: '{{ .Values.mcpManager.gateway.namespace | default "envoy-gateway-system" }}'
-      AGENTAREA_K8S_RUNTIME_CLASS: '{{ .Values.mcpManager.runtimeClass }}'
-      AGENTAREA_MCP_ISOLATION: '{{ required "mcpManager.isolationTier is required" .Values.mcpManager.isolationTier }}'
-      # Names the cluster workloads are created in and WINS over the manager's
-      # in-cluster credentials. Empty unless mcpManager.executionCluster names a
-      # Secret, which the deployment projects at this path.
-      KUBECONFIG: '{{ include "agentarea.mcpManager.executionKubeconfigPath" . }}'
-      AGENTAREA_K8S_SERVICE_ACCOUNT: '{{ include "agentarea.mcpRuntimeServiceAccountName" . }}'
+      AGENTAREA_MCP_STORAGE_URL: '{{ include "agentarea.mcpManager.workloadUrl" . }}'
       AGENTAREA_SANDBOX_STORAGE: 's3'
       AGENTAREA_SANDBOX_MAX_FILES: '{{ .Values.sandboxRuntime.workspace.maxFiles }}'
       AGENTAREA_SANDBOX_MAX_FILE_SIZE: '{{ .Values.sandboxRuntime.workspace.maxFileBytes }}'
@@ -144,14 +123,33 @@ groups:
       # name, which makes server-side apply reject the Deployment.
       AGENTAREA_SANDBOX_S3_URL_TTL: '{{ .Values.sandboxRuntime.workspace.signedUrlTTL }}'
       AGENTAREA_SANDBOX_S3_PATH_STYLE: '{{ .Values.sandboxRuntime.workspace.forcePathStyle }}'
+
+  # The MCP runtime: every process that starts or calls MCP workloads (backend,
+  # worker, mcp-manager) reads the same backend and workload settings.
+  mcpRuntime:
+    configVars:
+      # Derived from whether mcpManager.dataPlane names a host, so the backend
+      # and the address it is given cannot disagree. Half-configuration stops
+      # the render — see the helper.
+      AGENTAREA_MCP_BACKEND: '{{ include "agentarea.mcpManager.backendType" . }}'
+      # Where MCP containers run when AGENTAREA_MCP_BACKEND is dataplane. Empty otherwise,
+      # which the runtime reads as "no data plane declared".
+      AGENTAREA_MCP_DATAPLANE_URL: '{{ .Values.mcpManager.dataPlane.url | default "" }}'
+      AGENTAREA_MCP_DATAPLANE_INSECURE: '{{ .Values.mcpManager.dataPlane.allowInsecure | default false }}'
+      AGENTAREA_K8S_NAMESPACE: '{{ .Release.Namespace }}'
+      AGENTAREA_K8S_RUNTIME_CLASS: '{{ .Values.mcpManager.runtimeClass }}'
+      AGENTAREA_MCP_ISOLATION: '{{ required "mcpManager.isolationTier is required" .Values.mcpManager.isolationTier }}'
+      # Names the cluster workloads are created in and WINS over in-cluster
+      # credentials. Empty unless mcpManager.executionCluster names a Secret,
+      # which each deployment that runs the MCP runtime projects at this path.
+      KUBECONFIG: '{{ include "agentarea.mcpManager.executionKubeconfigPath" . }}'
+      AGENTAREA_K8S_SERVICE_ACCOUNT: '{{ include "agentarea.mcpRuntimeServiceAccountName" . }}'
       AGENTAREA_K8S_NON_ROOT: 'true'
       AGENTAREA_K8S_READONLY_ROOT: 'true'
       AGENTAREA_K8S_CPU_REQUEST: '100m'
       AGENTAREA_K8S_CPU_LIMIT: '500m'
       AGENTAREA_K8S_MEMORY_REQUEST: '128Mi'
       AGENTAREA_K8S_MEMORY_LIMIT: '512Mi'
-      AGENTAREA_MCP_FEATURES: '{{ join "," .Values.mcpManager.features.enabled }}'
-      # The manager is always the demand boundary for container-backed MCP.
       # serverless.enabled controls only whether idle workloads are reclaimed;
       # 0 keeps an on-demand workload running after its first successful start.
       AGENTAREA_MCP_IDLE_TIMEOUT: '{{ if .Values.mcpManager.serverless.enabled }}{{ .Values.mcpManager.serverless.idleTimeout }}{{ else }}0{{ end }}'
@@ -174,9 +172,8 @@ groups:
     configVars:
       AGENTAREA_TEMPORAL_MAX_ACTIVITIES: '10'
       AGENTAREA_TEMPORAL_MAX_WORKFLOWS: '5'
-      AGENTAREA_DEBUG: 'false'
-      AGENTAREA_ENV: '{{ .Values.global.deploymentEnv }}'
       AGENTAREA_MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
+      AGENTAREA_MCP_STORAGE_URL: '{{ include "agentarea.mcpManager.workloadUrl" . }}'
       AGENTAREA_WORKER_HEALTH_PORT: '{{ .Values.worker.healthPort }}'
       AGENTAREA_TASK_OUTAGE_RETRY_WINDOW: '{{ .Values.worker.outageWait.retryWindow }}'
       AGENTAREA_TASK_OUTAGE_WAIT_BACKOFF: '{{ .Values.worker.outageWait.backoff }}'
@@ -186,7 +183,13 @@ groups:
       AGENTAREA_APP_URL: '{{ include "agentarea.frontendUrl" . }}'
       AGENTAREA_ANALYTICS_ENABLED: '{{ .Values.global.analytics.enabled }}'
 
+  # Every platform role reads these; an enterprise process refuses to start
+  # when the spend currency differs from billing's ledger currency.
   application:
+    configVars:
+      AGENTAREA_ENV: '{{ .Values.global.deploymentEnv }}'
+      AGENTAREA_EDITION: '{{ .Values.global.edition }}'
+      AGENTAREA_SPEND_CURRENCY: '{{ .Values.global.spendCurrency }}'
     secrets:
       - name: AGENTAREA_SECRET_ENCRYPTION_KEY
         secretName: '{{ .Values.global.secrets.application }}'
@@ -198,7 +201,6 @@ groups:
       AGENTAREA_DB_PORT: '{{ .Values.global.database.port }}'
       AGENTAREA_DB_NAME: '{{ .Values.global.database.name }}'
       AGENTAREA_DB_SSLMODE: '{{ .Values.global.database.sslMode }}'
-      AGENTAREA_DB_TENANT_SCOPE: '{{ .Values.global.database.tenantScope }}'
     secrets:
       - name: AGENTAREA_DB_USER
         secretName: '{{ .Values.global.secrets.postgresql }}'

@@ -1,0 +1,173 @@
+package store
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/identity/domain"
+)
+
+func TestKratosDirectory(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.EscapedPath() {
+		case "/admin/identities/named":
+			_, _ = w.Write([]byte(`{"traits":{"email":"n@x.co","name":{"first":"Ann","last":"Lee"}}}`))
+		case "/admin/identities/plain":
+			_, _ = w.Write([]byte(`{"traits":{"email":"p@x.co","username":"  pat "}}`))
+		case "/admin/identities/a%2Fb":
+			_, _ = w.Write([]byte(`{"traits":{"name":" Solo "}}`))
+		case "/admin/identities/broken":
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	if _, err := NewKratos("  ", nil, nil); err == nil {
+		t.Fatal("blank admin url accepted")
+	}
+	k, err := NewKratos(srv.URL+"/", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := k.Resolve(context.Background(), []string{"named", "plain", "a/b", "missing", "broken", "named", ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("resolved %v", got)
+	}
+	if n := got["named"]; *n.DisplayName != "Ann Lee" || *n.Email != "n@x.co" {
+		t.Fatalf("named %+v", n)
+	}
+	if p := got["plain"]; *p.DisplayName != "pat" {
+		t.Fatalf("plain %+v", p)
+	}
+	if s := got["a/b"]; *s.DisplayName != "Solo" || s.Email != nil {
+		t.Fatalf("quoted %+v", s)
+	}
+	if rec, err := k.Lookup(context.Background(), "missing"); rec != nil || err != nil {
+		t.Fatalf("missing %v %v", rec, err)
+	}
+	if _, err := k.Lookup(context.Background(), "broken"); !errors.Is(err, ErrDirectoryUnavailable) {
+		t.Fatalf("broken %v", err)
+	}
+}
+
+type kv struct {
+	key, value string
+	all        map[string]string
+}
+
+func (k *kv) SetEX(_ context.Context, key, value string, ttl time.Duration) error {
+	if ttl != 600*time.Second && !strings.HasPrefix(key, LinkOfferPrefix) {
+		return errors.New("ttl")
+	}
+	k.key, k.value = key, value
+	if k.all == nil {
+		k.all = map[string]string{}
+	}
+	k.all[key] = value
+	return nil
+}
+
+func (k *kv) Get(_ context.Context, key string) (string, error) { return k.all[key], nil }
+
+func (k *kv) SetNX(_ context.Context, key, value string, _ time.Duration) (bool, error) {
+	if _, set := k.all[key]; set {
+		return false, nil
+	}
+	k.all[key] = value
+	return true, nil
+}
+
+func (k *kv) Del(_ context.Context, key string) error {
+	delete(k.all, key)
+	return nil
+}
+
+func TestALinkOfferNamesItsAccountUntilItIsTakenOnce(t *testing.T) {
+	ctx := context.Background()
+	store := &kv{}
+	codes := LinkCodes{KV: store}
+	o := domain.LinkOffer{MessengerAccount: domain.MessengerAccount{Provider: "telegram", ExternalID: "42", Username: "alice", Name: "Alice"},
+		WorkspaceID: "ws", SourceID: "src", Bot: "door_bot"}
+	code, issued, err := codes.Offer(ctx, o, time.Minute)
+	if err != nil || !issued {
+		t.Fatal(issued, err)
+	}
+	if strings.Contains(store.key, code) || !strings.HasPrefix(store.key, LinkOfferPrefix+":") {
+		t.Fatalf("stored under %q", store.key)
+	}
+	if again, issued, err := codes.Offer(ctx, o, time.Minute); err != nil || issued || again != "" {
+		t.Fatalf("a second code while the first lives: %q %v %v", again, issued, err)
+	}
+	other := o
+	other.SourceID = "another-bot"
+	if _, issued, _ := codes.Offer(ctx, other, time.Minute); !issued {
+		t.Fatal("another bot may not offer while this one's code lives")
+	}
+	for range 2 {
+		if got, ok, err := codes.PeekOffer(ctx, code); err != nil || !ok || got != o {
+			t.Fatalf("peek %+v %v %v", got, ok, err)
+		}
+	}
+	if _, ok, _ := codes.TakeOffer(ctx, "other"); ok {
+		t.Fatal("an unknown code taken")
+	}
+	if got, ok, err := codes.TakeOffer(ctx, code); err != nil || !ok || got != o {
+		t.Fatalf("take %+v %v %v", got, ok, err)
+	}
+	if _, ok, _ := codes.TakeOffer(ctx, code); ok {
+		t.Fatal("taken twice")
+	}
+	if fresh, issued, err := codes.Offer(ctx, o, time.Minute); err != nil || !issued || fresh == code {
+		t.Fatalf("no fresh code once the first was spent: %v %v", issued, err)
+	}
+}
+
+func (k *kv) GetDel(_ context.Context, key string) (string, error) {
+	v := k.all[key]
+	delete(k.all, key)
+	return v, nil
+}
+
+func TestLinkCodesStoreOnlyADigest(t *testing.T) {
+	store := &kv{}
+	code, err := LinkCodes{KV: store}.Issue(context.Background(), "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(code) != 32 || store.value != "user" || !strings.HasPrefix(store.key, LinkCodePrefix+":") || strings.Contains(store.key, code) {
+		t.Fatalf("code %q stored %+v", code, store)
+	}
+}
+
+func TestLinkCodesRedeemOnceThenConfirmFromTheSameAccount(t *testing.T) {
+	ctx := context.Background()
+	codes := LinkCodes{KV: &kv{}}
+	code, err := codes.Issue(ctx, "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u, ok, err := codes.Redeem(ctx, code, "telegram", "42"); err != nil || !ok || u != "user" {
+		t.Fatalf("redeem %q %v %v", u, ok, err)
+	}
+	if _, ok, _ := codes.Redeem(ctx, code, "telegram", "42"); ok {
+		t.Fatal("a code redeemed twice")
+	}
+	if _, ok, _ := codes.Confirm(ctx, "telegram", "43"); ok {
+		t.Fatal("another account confirmed")
+	}
+	if u, ok, err := codes.Confirm(ctx, "telegram", "42"); err != nil || !ok || u != "user" {
+		t.Fatalf("confirm %q %v %v", u, ok, err)
+	}
+	if _, ok, _ := codes.Confirm(ctx, "telegram", "42"); ok {
+		t.Fatal("confirmed twice")
+	}
+}

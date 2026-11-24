@@ -9,14 +9,20 @@ export const metadata = {
   title: "Create Trigger",
 };
 
-export default async function CreateTriggerPage() {
+export default async function CreateTriggerPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const t = await getTranslations("TriggersPage");
   const tCreate = await getTranslations("TriggersPage.create");
 
-  const [{ data: agents }, streams] = await Promise.all([
+  const [{ data: agents }, streams, query] = await Promise.all([
     listAgents(),
     loadStreamOptions(tCreate("streamsLoadFailed")),
+    searchParams,
   ]);
+  const presetStream = streams.items.find((s) => s.id === query.stream);
 
   return (
     <ContentBlock
@@ -34,6 +40,7 @@ export default async function CreateTriggerPage() {
       <CreateTriggerForm
         agents={agents ?? []}
         streams={streams}
+        preset={presetStream && { streamId: presetStream.id }}
       />
     </ContentBlock>
   );

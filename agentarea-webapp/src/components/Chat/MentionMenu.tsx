@@ -16,7 +16,12 @@ export interface Agent {
 interface MentionMenuProps {
   show: boolean;
   agents: Agent[];
-  position: { top: number; left: number; width: number; side: 'top' | 'bottom' };
+  position: {
+    top: number;
+    left: number;
+    width: number;
+    side: "top" | "bottom";
+  };
   selectedIndex: number;
   menuRef: React.RefObject<HTMLDivElement | null>;
   onAgentSelect: (agent: Agent) => void;

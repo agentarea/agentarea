@@ -212,7 +212,7 @@ by `_`. `<server>` comes from the instance name:
 | Instance name | `<server>` | Example |
 |---|---|---|
 | ASCII only | Lowercased, characters outside `[a-zA-Z0-9_-]` replaced by `_` (unchanged from before) | `My GitHub!` → `my_github_` |
-| Any other letters | Cyrillic transliterated, accents dropped, runs of anything else collapsed to one `_`, trimmed | `Constractio — инструменты сметчика` → `constractio_instrumenty_smetchika` |
+| Any other letters | Cyrillic transliterated, accents dropped, runs of anything else collapsed to one `_`, trimmed | `Acme — инструменты сметчика` → `acme_instrumenty_smetchika` |
 | Nothing readable left (CJK only, say) | `server` | `工具` → `server` |
 
 Two instances with the same `<server>` on one agent are kept apart by a suffix

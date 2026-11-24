@@ -12,6 +12,7 @@ local claims = {
       },
       [if 'email' in claims then 'username' else null]:
         if 'email' in claims then std.split(claims.email, '@')[0] else null,
+      [if 'picture' in claims && claims.picture != null then 'picture' else null]: claims.picture,
     },
   },
 }

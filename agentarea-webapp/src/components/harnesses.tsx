@@ -1,5 +1,5 @@
 import type { ComponentType, SVGProps } from "react";
-import { Plug } from "lucide-react";
+import { Plug, SquareTerminal } from "lucide-react";
 import type { AgentClientSummary } from "@/api/client";
 import { ClaudeIcon, CodexIcon } from "@/components/brand-icons";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,12 @@ const HARNESSES: Record<string, { label: string; icon: HarnessGlyph }> = {
   claude: { label: "Claude Code", icon: ClaudeIcon },
   "claude-code": { label: "Claude Code", icon: ClaudeIcon },
   codex: { label: "Codex", icon: CodexIcon },
+  opencode: { label: "OpenCode", icon: SquareTerminal },
+  gemini: { label: "Gemini CLI", icon: SquareTerminal },
+  qwen: { label: "Qwen Code", icon: SquareTerminal },
+  goose: { label: "Goose", icon: SquareTerminal },
+  cursor: { label: "Cursor", icon: SquareTerminal },
+  acp: { label: "Custom ACP command", icon: SquareTerminal },
   harness: { label: "Generic", icon: Plug },
 };
 
@@ -24,6 +30,12 @@ export const HARNESS_OPTIONS = [
   { value: "harness", label: "Generic" },
   { value: "claude", label: "Claude Code" },
   { value: "codex", label: "Codex" },
+  { value: "opencode", label: "OpenCode" },
+  { value: "gemini", label: "Gemini CLI" },
+  { value: "qwen", label: "Qwen Code" },
+  { value: "goose", label: "Goose" },
+  { value: "cursor", label: "Cursor" },
+  { value: "acp", label: "Custom ACP command" },
 ];
 
 export function harnessOf(kind?: string | null) {

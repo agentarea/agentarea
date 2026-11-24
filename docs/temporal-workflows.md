@@ -56,14 +56,11 @@ graph TB
 
 ```
 agentarea-platform/
-├── apps/worker/agentarea_worker/     # Temporal worker
-├── libs/execution/agentarea_execution/
-│   ├── workflows/
-│   │   ├── agent_execution_workflow.py
-│   │   └── trigger_execution_workflow.py
-│   └── activities/
-│       ├── agent_execution_activities.py
-│       └── event_publisher.py
+├── app/worker.go                          # the worker role
+└── internal/modules/runs/workflows/
+    ├── agent_workflow.go                  # agent execution workflow
+    ├── agent_loop.go, agent_turn.go       # the reason-act loop
+    └── activities.go                      # activities (ACTIVITIES.md)
 ```
 
 ---
@@ -373,7 +370,6 @@ async def publish_workflow_events_activity(
 ### Worker Setup
 
 ```python
-# apps/worker/agentarea_worker/main.py
 async def run_worker():
     client = await Client.connect(settings.TEMPORAL_SERVER_URL)
     

@@ -1,0 +1,1 @@
+# Platform MCP tools Go serves that api/contract/mcp-tools.json does not list: "<name> <reason>" per line.

@@ -40,12 +40,8 @@ export const MessageWrapper: React.FC<MessageWrapperProps> = ({
         className
       )}
     >
-      <Avatar
-        className="relative z-10 h-6 w-6 shrink-0 border border-border/60 bg-background"
-      >
-        <AvatarFallback
-          className="bg-muted/50 text-muted-foreground"
-        >
+      <Avatar className="relative z-10 h-6 w-6 shrink-0 border border-border/60 bg-background">
+        <AvatarFallback className="bg-muted/50 text-muted-foreground">
           {icon ? (
             icon
           ) : type === "error" ? (

@@ -57,7 +57,8 @@ workspace in the path also gets `403`.
 A handful of endpoints are not workspace-scoped in the path because they
 address one specific entity instead, and the workspace is resolved from that
 entity: the A2A surface (`/v1/agents/{agent_id}/a2a/*` and its
-`.well-known` documents), the MCP instance proxy (`/v1/mcp/{instance_id}/mcp`),
+`.well-known` documents), the connection MCP endpoint (`/v1/mcp/{connection_id}/mcp`, an MCP
+instance or an API connection),
 and inbound webhooks (`/webhooks/{webhook_id}`). `GET/POST /v1/workspaces`
 itself and invitation preview/accept are the only endpoints with no workspace
 context at all.

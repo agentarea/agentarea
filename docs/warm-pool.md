@@ -58,14 +58,12 @@ sequenceDiagram
 ### Components
 
 ```
-agentarea-mcp-manager/
-├── cmd/
-│   ├── mcp-manager/         # Main API service
-│   └── activation-service/  # Runs inside warm pool pods
-├── internal/
-│   ├── warmpool/           # Pool management client
-│   ├── container/          # Container lifecycle
-│   └── backends/           # Kubernetes backend
+agentarea-platform/
+├── cmd/activation-service/                      # runs inside warm pool pods
+└── internal/modules/sandbox/backends/
+    ├── warmpool/                                # pool management client
+    ├── sandboxcontrol/, sandboxplacement/       # control plane, placement
+    └── sandboxruntime/                          # workload lifecycle
 ```
 
 ### Warm Pool DaemonSet

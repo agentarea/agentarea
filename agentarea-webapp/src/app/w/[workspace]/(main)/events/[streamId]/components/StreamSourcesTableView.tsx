@@ -1,29 +1,42 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { UsersRound } from "lucide-react";
 import type { StreamSourceResponse } from "@/api/client/types.gen";
 import DeleteButton from "@/components/DeleteButton";
 import EmptyState from "@/components/EmptyState";
 import SourceTypeMark from "@/components/SourceTypeMark";
 import Table from "@/components/Table/Table";
 import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
+import { TableRowAction } from "@/components/Table/TableRowAction";
 import { CopyableText } from "@/components/ui/copyable-text";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import type { ApiResultLike } from "@/lib/api-errors";
 import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
+import SourceSenders from "./SourceSenders";
 
 /**
  * Where the stream's events come from, as the tables elsewhere: the source's
  * tile and name, how its events arrive, the URL a sender posts to, its
- * state, and delete.
+ * state, who may write to it (a bot), and delete.
  */
 export default function StreamSourcesTableView({
+  streamId,
   sources,
   types,
+  viewerId,
   onDelete,
 }: {
+  streamId: string;
   sources: StreamSourceResponse[];
   types: SourceType[];
+  /** The viewer's identity: whose choice the senders are. */
+  viewerId: string | undefined;
   onDelete: (sourceId: string) => Promise<ApiResultLike>;
 }) {
   const t = useTranslations("EventsPage");
@@ -130,20 +143,52 @@ export default function StreamSourcesTableView({
         {
           header: "",
           accessor: "id",
-          headerClassName: "w-[110px]",
-          cellClassName: "w-[110px] text-right",
+          headerClassName: "w-[220px]",
+          cellClassName: "w-[220px] text-right",
           render: (_value, source) =>
             source && (
-              <DeleteButton
-                itemId={source.id}
-                itemName={nameOf(source)}
-                onDelete={onDelete}
-                title={t("sources.deleteTitle")}
-                description={t("sources.deleteDescription", {
-                  name: nameOf(source),
-                })}
-                rowAction
-              />
+              <span className="inline-flex items-center justify-end gap-1">
+                {sourceTypeBySlug(types, source.source_type)
+                  ?.admits_senders && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <TableRowAction
+                        icon={<UsersRound />}
+                        title={t("sources.senders.label")}
+                      >
+                        {t("streamPage.senders")}
+                      </TableRowAction>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align="end"
+                      className="w-96 max-w-[calc(100vw-2rem)] p-3"
+                    >
+                      <SourceSenders
+                        streamId={streamId}
+                        sourceId={source.id}
+                        senders={source.senders}
+                        chosenByOther={
+                          !!source.senders_set_by &&
+                          source.senders_set_by !== viewerId
+                        }
+                      />
+                    </PopoverContent>
+                  </Popover>
+                )}
+                {/* The platform's own source is no one's to delete. */}
+                {source.kind !== "platform" && (
+                  <DeleteButton
+                    itemId={source.id}
+                    itemName={nameOf(source)}
+                    onDelete={onDelete}
+                    title={t("sources.deleteTitle")}
+                    description={t("sources.deleteDescription", {
+                      name: nameOf(source),
+                    })}
+                    rowAction
+                  />
+                )}
+              </span>
             ),
         },
       ]}

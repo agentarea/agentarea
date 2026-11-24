@@ -139,7 +139,7 @@ spec:
       {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: s3-client
-          image: "amazon/aws-cli:2.38.2"
+          image: "amazon/aws-cli:2.42.2"
           command:
             - sh
             - -c

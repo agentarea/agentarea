@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { browseCatalog } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
+import { readUiPrefs } from "@/lib/ui-prefs-server";
 import {
   ALL,
   connectionFacets,
   DEFAULT_SORT,
-  EXPLORE_VIEW_COOKIE,
+  EXPLORE_VIEW_KEY,
   isSortMode,
   normalize,
   PAGE,
@@ -65,11 +65,11 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   // Persisted grid/table choice: URL param wins, otherwise the cookie written
   // by the view toggle, otherwise grid. Seeds the toggle + gallery defaults so
   // the user's last view is restored on return.
-  const cookieStore = await cookies();
+  const uiPrefs = await readUiPrefs();
   const initialView =
     sp.view === "table" || sp.view === "grid"
       ? sp.view
-      : cookieStore.get(EXPLORE_VIEW_COOKIE)?.value === "table"
+      : uiPrefs.views[EXPLORE_VIEW_KEY] === "table"
         ? "table"
         : "grid";
 

@@ -1,0 +1,57 @@
+{{- if .Values.operator.enabled }}
+{{- if .Values.operator.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "agentarea.operatorServiceAccountName" . }}
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+  {{- with .Values.operator.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- include "agentarea.imagePullSecrets" . | nindent 0 }}
+automountServiceAccountToken: true
+---
+{{- end }}
+# The declared resources are watched in the release namespace only (internal/modules/catalog/
+# operator controller.go), so two releases in one cluster never reconcile each other's.
+# Only their status is written; apiKeySecretRef and tokenSecretRef are read one at a time
+# by name, never listed or watched.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "agentarea.fullname" . }}-operator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+rules:
+  - apiGroups: ["agentarea.io"]
+    resources: ["llmproviderconfigs", "platformconnections", "platformegressexits"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["agentarea.io"]
+    resources: ["llmproviderconfigs/status", "platformconnections/status", "platformegressexits/status"]
+    verbs: ["patch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "agentarea.fullname" . }}-operator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "agentarea.operatorServiceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: {{ include "agentarea.fullname" . }}-operator
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

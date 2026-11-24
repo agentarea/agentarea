@@ -17,6 +17,7 @@ local claims = std.extVar('claims');
           else null,
       },
       [if 'login' in claims then 'username' else null]: claims.login,
+      [if 'picture' in claims && claims.picture != null then 'picture' else null]: claims.picture,
     },
   },
 }

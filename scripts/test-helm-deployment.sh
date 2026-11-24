@@ -245,9 +245,9 @@ fi
 print_header "Test 9: Checking operator"
 OPERATOR_READY=$(kubectl get deploy -n "$NAMESPACE" -l app.kubernetes.io/component=operator -o jsonpath='{.items[*].status.readyReplicas}')
 if [ "$OPERATOR_READY" == "1" ]; then
-    print_success "agentarea-operator is ready"
+    print_success "operator is ready"
 else
-    print_info "agentarea-operator not running (operator.enabled=false or still starting)"
+    print_info "operator not running (operator.enabled=false or still starting)"
 fi
 
 # Summary

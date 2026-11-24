@@ -71,15 +71,15 @@ export default function FeedActiveFilters({
       onRemove: () => go({ stream: undefined }),
     });
   }
-  for (const slug of state.source_type ?? []) {
+  if (state.source_type) {
+    const slug = state.source_type;
     const type = sourceTypeBySlug(sourceTypes, slug);
-    const rest = state.source_type?.filter((s) => s !== slug) ?? [];
     filters.push({
-      id: `source_type:${slug}`,
+      id: "source_type",
       label: t("list.provider"),
       value: type?.name ?? slug,
       icon: <SourceTypeMark type={type} slug={slug} inline className={ICON} />,
-      onRemove: () => go({ source_type: rest.length > 0 ? rest : undefined }),
+      onRemove: () => go({ source_type: undefined }),
     });
   }
   const mono = [

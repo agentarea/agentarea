@@ -25,6 +25,7 @@ export function useAuth(): AuthState {
         id: session.identity.id,
         name: displayName(session.identity.traits),
         email: session.identity.traits?.email,
+        image: session.identity.traits?.picture,
       }
     : null;
 

@@ -223,7 +223,7 @@
     "work": "Work",
     "knowledge": "Knowledge",
     "build": "Build",
-    "govern": "Govern",
+    "control": "Control",
     "connections": "Connections",
     "apps": "Apps",
     "clients": "Harnesses",
@@ -234,6 +234,7 @@
     "workspace": "Workspace",
     "modelSpecs": "Model Specs",
     "automation": "Automation",
+    "channels": "Channels",
     "events": "Events",
     "network": "Network",
     "members": "Members",
@@ -244,7 +245,6 @@
     "settings": "Settings",
     "logout": "Logout",
     "workspaceSettings": "Workspace settings",
-    "inboxPending": "{count, plural, one {Inbox, # approval waiting} other {Inbox, # approvals waiting}}",
     "audit": "Audit"
   },
   "MembersPage": {
@@ -347,7 +347,80 @@
     "thisWorkspace": "this workspace",
     "orderExpires": "Expiry",
     "orderRecipient": "Recipient",
-    "createInvitationFailed": "Couldn't create the invitation"
+    "createInvitationFailed": "Couldn't create the invitation",
+    "detail": {
+      "sections": "Member sections",
+      "overview": "Overview",
+      "tasks": "Tasks",
+      "activity": "Activity",
+      "showMore": "Show more",
+      "showLess": "Show less",
+      "joinedOn": "Joined {date}",
+      "invitedBy": "Invited by",
+      "createdWorkspace": "Created the workspace",
+      "tasksStarted": "Tasks started",
+      "tasksUnavailable": "Couldn’t load tasks",
+      "noTasksYet": "None yet",
+      "runningNow": "{count} running now",
+      "needsAction": "Needs action",
+      "needsActionHint": "Waiting on an answer or approval",
+      "spend": "Spend",
+      "spendAcross": "{count, plural, one {Across # task} other {Across # tasks}}",
+      "spendNewest": "Newest {count} tasks",
+      "lastActive": "Last active",
+      "ago": "ago",
+      "noActivity": "No activity recorded",
+      "lastActiveTasksOnly": "From tasks they started",
+      "recentTasks": "Recent tasks",
+      "allTasks": "All tasks",
+      "noTasksSelf": "You haven’t started any tasks here yet.",
+      "noTasksOther": "No tasks started yet.",
+      "noTasksOtherHint": "Tasks {member} starts in this workspace show up here.",
+      "access": "Access",
+      "policies": "Policies",
+      "policiesUnavailable": "Couldn’t load policy rules",
+      "noPersonalRules": "No rules name this person",
+      "noPersonalRulesHint": "Workspace and agent rules apply to them as to everyone",
+      "ruleOn": "On",
+      "ruleOff": "Off",
+      "automations": "Automations they set up",
+      "automationsUnavailable": "Couldn’t load automations",
+      "noAutomations": "No automations set up by this person.",
+      "effect": {
+        "allow": "Allow",
+        "deny": "Deny",
+        "cap": "Budget",
+        "approval": "Approval",
+        "safety": "Safety",
+        "egress": "Network egress"
+      },
+      "relJustNow": "just now",
+      "relMinutes": "{count}m",
+      "relHours": "{count}h",
+      "relDays": "{count}d",
+      "agoFmt": "{time} ago",
+      "removeKeepsAutomations": "{count, plural, one {# active automation they set up keeps running} other {# active automations they set up keep running}}: automations act as their agent, not as the person who set them up.",
+      "leaveKeepsAutomations": "{count, plural, one {# active automation you set up keeps running} other {# active automations you set up keep running}}: automations act as their agent, not as you.",
+      "automationsOutlive": "These act as their agents, not as {member}: they keep running after {member} leaves, and the tasks they start stay attributed to them.",
+      "automationsOutliveSelf": "These act as their agents, not as you: they keep running if you leave, and the tasks they start stay attributed to you.",
+      "directAccess": "Direct access",
+      "accessView": "Access view",
+      "grantsUnavailable": "Couldn’t load access grants",
+      "noGrants": "Nothing is granted to this person directly.",
+      "moreGrants": "and {count} more",
+      "grantKind": {
+        "Agent": "Agent",
+        "MCPServer": "MCP server",
+        "Skill": "Skill",
+        "SkillCollection": "Skill collection",
+        "other": "Resource"
+      },
+      "grantRelation": {
+        "owner": "Owner",
+        "editor": "Editor",
+        "user": "User"
+      }
+    }
   },
   "InvitationDialog": {
     "title": "Workspace invitation",
@@ -527,11 +600,12 @@
       "title": "Messengers",
       "description": "Bots recognise you by these accounts. A bot answers only linked people who were given access to its agent.",
       "linkedAs": "Linked · ID {id} · {date}",
+      "linkedOn": "Linked · {date}",
       "unlink": "Unlink",
       "link": "Link in Telegram",
-      "linkAnother": "Link another Telegram account",
+      "linkAnotherHint": "To link another account, write to an agent's Telegram bot from it.",
       "linkThrough": "Opens {bot} in Telegram, which asks you to confirm.",
-      "howTo": "Write to any agent's Telegram bot: it replies with a link that brings you back here to finish.",
+      "howTo": "Nothing linked yet. Write to any agent's Telegram bot: it replies with a link that links your account in one click.",
       "linkFailed": "Could not start linking Telegram",
       "unlinkFailed": "Could not unlink the account"
     }
@@ -1014,6 +1088,8 @@
         "readyDetail": "Try signing in. If the provider refuses automatic registration, additional setup is required.",
         "authorizedTitle": "Authorized",
         "authorizedDetail": "This connection holds an access token. Reconnect to re-authorize it.",
+        "chooseRepositories": "Choose repositories",
+        "chooseRepositoriesHint": "The app can only see the repositories you pick on GitHub.",
         "needsAppTitle": "Needs an OAuth app",
         "needsAppTitleConnected": "Re-authorizing needs your OAuth app",
         "needsAppHint": "Enter a client ID and secret, or pick them from workspace secrets.",
@@ -1023,9 +1099,24 @@
         "usePlatformApp": "Use AgentArea's OAuth app",
         "ownAppTitle": "Your own OAuth app",
         "ownAppDetail": "Sign in through an OAuth app you registered with the provider instead of AgentArea's.",
+        "ownAppInUse": "Your own OAuth app · client {client}",
+        "ownAppInUseFromSecret": "Your own OAuth app · client ID from a workspace secret",
+        "replaceOwnApp": "Replace",
+        "replaceOwnAppTitle": "Replace your OAuth app",
+        "replaceOwnAppDetail": "Enter the client ID and secret of another OAuth app you registered with the provider.",
+        "keepOwnApp": "Keep the current app",
         "scopesSummary": "Access: {picked} of {total} scopes",
         "scopesHint": "What this connection may do at the provider. Untick what its agents do not need: the provider's consent screen asks only for what stays ticked.",
-        "scopesNone": "Pick at least one scope."
+        "scopesNone": "Pick at least one scope.",
+        "accessAllInstallations": "Access: every installation of the app your GitHub account reaches.",
+        "accessInstallation": "Access: {account}, all repositories.",
+        "accessRepositories": "Access: {account}, {count, plural, one {# repository} other {# repositories}}.",
+        "accessChange": "Change",
+        "accessHint": "Calls through this connection use a token for the installation you pick, not your own.",
+        "accessLabel": "GitHub App installation",
+        "accessUserToken": "Every installation you reach (your own token)",
+        "accessRepositoriesHint": "Tick none to allow every repository of {account}.",
+        "accessNoRepositories": "You see no repositories of this installation."
       },
       "status": {
         "stopped": "Stopped",
@@ -1136,7 +1227,9 @@
         "label": "Connection sections",
         "overview": "Overview",
         "tools": "Tools",
-        "activity": "Activity"
+        "activity": "Activity",
+        "access": "Access",
+        "settings": "Settings"
       },
       "showMore": "Show more",
       "showLess": "Show less",
@@ -1328,7 +1421,7 @@
     "openapiDetail": {
       "refreshFromSpec": "Refresh from spec URL",
       "deleteTitle": "Delete connection?",
-      "baseUrl": "Base URL",
+      "baseUrl": "Upstream API",
       "specUrl": "Spec URL",
       "noCustomHeaders": "No custom headers. Add Authorization or any other request header your provider needs.",
       "noCustomQueryParams": "No query parameters. Add a key the API expects in the URL, such as api_key.",
@@ -1360,6 +1453,17 @@
       "byState": "State",
       "byType": "Type",
       "none": "No grouping"
+    },
+    "sharing": {
+      "title": "Access",
+      "personal": "Personal",
+      "personalHint": "Only whoever added it, and the agents they attach it to, can use it",
+      "share": "Share with workspace",
+      "shared": "Shared with the workspace: every member and their agents can use it.",
+      "personalOwn": "Personal: only you and the agents you attach it to can use it.",
+      "personalOther": "Personal: only whoever added it and the agents they attach it to can use it.",
+      "ownerOnly": "Only whoever added it can share it.",
+      "saveFailed": "Could not change who can use this connection"
     }
   },
   "Models": {
@@ -1489,6 +1593,18 @@
       "unexpectedError": "An unexpected error occurred",
       "modelInstancesPartial": "Saved the configuration, but {failed} of {total} model instances could not be created: {sample}",
       "saveFailed": "Couldn't save the provider configuration"
+    },
+    "chatgpt": {
+      "title": "ChatGPT sign-in",
+      "description": "This provider runs on your ChatGPT plan, no API key. Sign in with the ChatGPT account whose plan should pay.",
+      "afterCreate": "Create the configuration, then sign in with ChatGPT on its page.",
+      "signIn": "Sign in with ChatGPT",
+      "signInAgain": "Sign in again",
+      "openAndEnter": "Open {url} in a browser, sign in to ChatGPT and enter this code:",
+      "entered": "I've entered the code",
+      "pending": "Not confirmed yet. Finish in the ChatGPT tab, then press the button again.",
+      "signedIn": "Signed in. Agents on this provider now run on the ChatGPT plan.",
+      "failed": "The ChatGPT sign-in failed"
     }
   },
   "Chat": {
@@ -1611,6 +1727,20 @@
     "runnerOffline": "{name} is offline: the task waits up to 10 minutes for it to come back."
   },
   "TasksPage": {
+    "sectionExpected": "Expected",
+    "sectionRuns": "Started",
+    "sectionTemplates": "Templates",
+    "runNow": "Run now",
+    "runFailed": "Could not start",
+    "open": "Open",
+    "expectedWhen": "When",
+    "expectedEmptyTitle": "Nothing expected",
+    "expectedEmptyDescription": "Enabled schedules and tasks booked for later show up here.",
+    "expectedLoadFailed": "Could not load what is expected",
+    "savedTitle": "Saved tasks",
+    "savedName": "Task",
+    "savedEmptyTitle": "No saved tasks",
+    "savedEmptyDescription": "Saved tasks come from a deployed folder's tasks/ or the API.",
     "title": "Tasks",
     "description": "Description",
     "agent": "Agent",
@@ -2236,6 +2366,7 @@
     "createTrigger": "Create Trigger",
     "searchPlaceholder": "Search triggers & agents…",
     "onStreamEvents": "On stream events",
+    "onSourceEvents": "On {source} events",
     "filter": {
       "all": "All",
       "channels": "Channels",
@@ -2483,7 +2614,7 @@
       "lastEvent": "Last event",
       "noEventsYet": "No events yet",
       "needsOwnerTitle": "This trigger stopped",
-      "needsOwnerBody": "The person who set it up can no longer run this agent. Restore their access and enable it again, or recreate it from an account that can.",
+      "needsOwnerBody": "Its agent was deleted or switched off. Point the trigger at another agent, or switch the agent back on, then enable it again.",
       "session": "Conversation",
       "sessionContinues": "The next event of a session joins the same task, which waits {timeout} for it",
       "sessionEachEvent": "Every event starts its own task",
@@ -2591,16 +2722,21 @@
       "source": "Source",
       "noSource": "No source",
       "kind": "Kind",
-      "key": "Key",
+      "key": "Delivery key",
       "session": "Session",
-      "noSession": "None: every event is its own task",
+      "noSession": "None",
       "sender": "Sender",
       "occurredAt": "Occurred",
       "attachments": "Attachments",
       "openAttachment": "Open",
       "fetchedByTask": "Fetched when a task opens it",
       "bodyStored": "Body stored as a file",
-      "processor": "Processor"
+      "processor": "Processor",
+      "headers": "Headers ({count})",
+      "details": "Details",
+      "keyHint": "Retries with the same key are dropped.",
+      "noSessionHint": "Every event starts its own task.",
+      "emptyBody": "Empty body"
     },
     "sources": {
       "title": "Sources",
@@ -2637,7 +2773,9 @@
           "session_key": "Session",
           "session_keyPlaceholder": "'{body:conversation.id}'",
           "hint": "Templates read the request: '{body:a.b}' for a field of the body, '{header:name}' for a header; text between them is kept as is.",
-          "noKeyHint": "Without a key, a resent request runs the agent again."
+          "noKeyHint": "Without a key, a resent request runs the agent again.",
+          "summary": "Summary",
+          "summaryPlaceholder": "'{body:title}'"
         },
         "events": "Events this provider can send",
         "eventsHint": "Enable these at the provider; every event it sends arrives in the stream.",
@@ -2685,9 +2823,31 @@
         "mcpWebhook": "AgentArea subscribed to the event on the MCP server; each one it posts is verified and recorded in this stream.",
         "mcpPoll": "AgentArea polls the MCP server for the event; each new one is recorded in this stream."
       },
-      "polledAt": "Polled {time}",
+      "polledAt": "Polled <time></time>",
       "notPolledYet": "Not polled yet",
-      "pollError": "Last poll failed: {error}"
+      "pollError": "Last poll failed: {error}",
+      "senders": {
+        "label": "Who may write to the bot",
+        "choices": {
+          "owner": "Only me",
+          "ownerOther": "Only whoever set it",
+          "ids": "Telegram IDs",
+          "members": "Members with access"
+        },
+        "hints": {
+          "owner": "The bot answers only you. Write to it once: it sends a link that ties your Telegram to your account.",
+          "ownerOther": "The bot answers only the person who chose this. Choose it yourself to make it you.",
+          "ids": "The bot answers only these Telegram accounts; they need no AgentArea account. Their runs count as yours, checked against what you may run.",
+          "idsOther": "The bot answers only these Telegram accounts; their runs count as whoever made the list. Save the list yourself to answer for it.",
+          "members": "The bot answers anyone who linked their Telegram and may run the agent."
+        },
+        "idsLabel": "Telegram IDs",
+        "idsPlaceholder": "123456789, 987654321",
+        "invalidIds": "Not a numeric Telegram ID: {ids}",
+        "save": "Save",
+        "saveFailed": "Could not change who may write to the bot"
+      },
+      "pollFailed": "Last poll failed"
     },
     "streamsDescription": "Named event streams, their sources and forwards",
     "result": {
@@ -2731,7 +2891,8 @@
       "noneMatchingTitle": "No matching events",
       "showPlatformAction": "Show platform events",
       "onlyPlatformTitle": "Nothing from outside yet",
-      "onlyPlatform": "Only platform events have arrived, and they are hidden from the feed."
+      "onlyPlatform": "Only platform events have arrived, and they are hidden from the feed.",
+      "loadingOlder": "Loading…"
     },
     "panel": {
       "handlers": "Handlers",
@@ -2794,7 +2955,39 @@
       "source": "Source",
       "delivery": "Delivery",
       "address": "Address",
-      "state": "State"
+      "state": "State",
+      "senders": "Senders"
+    },
+    "row": {
+      "attachments": "Has attachments",
+      "task": {
+        "completed": "Finished a task",
+        "failed": "Task failed",
+        "cancelled": "Task cancelled",
+        "approval": "Waiting for approval",
+        "input": "Waiting for an answer"
+      },
+      "fate": {
+        "queued": "Waiting to be handled",
+        "processing": "Being handled",
+        "skipped": "Handlers passed on it",
+        "passedOn": "Passed on",
+        "failed": "{count, plural, one {A handler failed} other {# handlers failed}}",
+        "tasks": "{count, plural, one {Agent task} other {# agent tasks}} · {status}"
+      },
+      "taskStatus": {
+        "draft": "not started",
+        "queued": "queued",
+        "scheduled": "scheduled",
+        "running": "running",
+        "attention": "needs you",
+        "paused": "paused",
+        "active": "running",
+        "off": "stopped",
+        "done": "done",
+        "failed": "failed",
+        "cancelled": "cancelled"
+      }
     }
   },
   "NetworkPage": {
@@ -3289,26 +3482,57 @@
       "approval": "Approvals"
     }
   },
+  "LinkTelegram": {
+    "title": "Link Telegram {account}?",
+    "subtitle": "To your AgentArea account {you}",
+    "titleUnknown": "Link Telegram",
+    "subtitleUnknown": "To your AgentArea account",
+    "theBot": "the bot",
+    "confirm": "Link Telegram",
+    "bot": "Bot",
+    "workspace": "Workspace",
+    "warningTitle": "Link only a Telegram account you own",
+    "warningDetail": "Whoever writes from {account} will act as you with your agents, in every workspace. If someone sent you this link, or this is not your Telegram account, close this page.",
+    "foreignTitle": "This link is not for you",
+    "foreignDetail": "It came from a bot of a workspace you are not a member of. Write to the bot from your own Telegram account for your own link.",
+    "linkedTitle": "Linked",
+    "alreadyYoursTitle": "Already linked to your account",
+    "linkedDetail": "Go back to Telegram and write to {bot} again.",
+    "openSettings": "Open messenger settings",
+    "goneTitle": "This link has expired or was already used",
+    "goneDetail": "Write to {bot} in Telegram again: it replies with a new link.",
+    "takenTitle": "Linked to another AgentArea account",
+    "takenDetail": "This Telegram account is already linked to another AgentArea account. Unlink it there first, then write to the bot again.",
+    "failed": "Could not link the account"
+  },
   "AuthConsent": {
     "title": "Authorize {clientName}",
     "description": "{clientName} is requesting access to your AgentArea account. Only approve apps you recognize and trust.",
     "permissionsHeading": "It will be able to:",
+    "fullAccess": "Act as you in all your workspaces: run agents, read and change your data, create API keys",
+    "mcpAccess": "Use the tools of the workspaces you tick below over MCP, as you. Nothing outside them, and no API keys.",
     "scope": {
       "openid": "Verify your identity",
-      "profile": "Read your basic profile",
-      "email": "See your email address",
       "offline_access": "Stay connected on your behalf when you're offline"
     },
     "footnote": "You can revoke access any time from Settings.",
     "allow": "Allow access",
     "deny": "Cancel",
+    "redirectHeading": "Allowing gives access to",
+    "redirectUnverified": "The name “{clientName}” was chosen by the app itself and is not verified. Allow only if you recognise this address.",
+    "redirectLoopback": "An app on this computer.",
+    "redirectUnknown": "Where the access would go cannot be determined, so it cannot be allowed.",
     "defaultClient": "an external application",
     "error": {
       "missingChallenge": "This authorization link is invalid or has expired.",
       "loadFailed": "We couldn't load the authorization request.",
       "acceptFailed": "Authorization didn't go through. Please try again.",
       "rejectFailed": "We couldn't cancel the request. Please try again."
-    }
+    },
+    "workspaceHeading": "Workspaces it can reach",
+    "workspaceNone": "You have no workspace to give it access to.",
+    "firstPartyWarning": "Allow only if you just started signing in from the AgentArea CLI or AgentArea Desktop yourself. Any app on this computer can open this page under their name.",
+    "workspaceHint": "It works only in the workspaces you tick. To change them, connect again."
   },
   "DashboardPage": {
     "title": "Dashboard",
@@ -3319,7 +3543,7 @@
     "topAgents": "Top spenders this month",
     "deletedAgent": "Deleted agent",
     "vsPrevDay": "vs prev day",
-    "budgetUsage": "{pct}% of {cap} budget",
+    "budgetUsage": "{pct}% of {cap} cap",
     "blocked": "Blocked",
     "budgetExhausted": "Budget exhausted — {amount} / {period, select, daily {day} monthly {month} execution {run} other {{period}}}",
     "taskFailed": "Task failed",
@@ -3362,38 +3586,26 @@
     "stopped": "Stopped",
     "activity": "Activity",
     "scheduleView": {
+      "upcoming": "Upcoming",
       "today": "Today",
       "week": "Week",
       "month": "Month"
     },
     "nextRun": "Next run: {title}, {when}",
-    "nothingInView": "{view, select, today {Nothing scheduled today} week {Nothing scheduled this week} other {Nothing scheduled this month}}"
+    "nothingInView": "{view, select, upcoming {Nothing coming up} today {Nothing scheduled today} week {Nothing scheduled this week} other {Nothing scheduled this month}}"
   },
   "BudgetsPage": {
     "couldntLoadTitle": "Couldn't load budget data",
-    "monthOutlook": "Month outlook",
-    "currentPeriod": "Current period",
-    "today": "Today",
-    "todaySub": "Spend so far today",
-    "projectedEom": "Projected end of month",
-    "projectedSub": "Based on {days}-day run rate",
     "monthlyCap": "Monthly cap",
-    "capProjected": "{pct}% of cap projected",
     "capNotSet": "Not set",
-    "noProjection": "No projection",
-    "hintUnderCap": "Projection stays well under cap — no action needed this period.",
-    "hintNearCap": "Projection is approaching the cap — keep an eye on spend.",
-    "hintOverCap": "Projection exceeds the cap — new tasks may be refused before month end.",
-    "hintNoCap": "No monthly cap is set — workspace spend is uncapped.",
-    "capTitle": "Workspace monthly cap",
-    "capDesc": "New tasks are refused once month-to-date spend reaches this amount.",
-    "capNoCap": "No cap is set. Workspace spend can continue without a monthly stop.",
-    "capUsed": "{amount} used",
-    "capOfTotal": "{pct}% of {cap}",
+    "hintNearCap": "Projected to reach {pct}% of the cap by month end.",
+    "hintOverCap": "Projected to reach {pct}% of the cap — new tasks will be refused before month end.",
+    "capDesc": "New tasks are refused once this month's spend reaches the cap.",
+    "capNoCap": "No cap — workspace spend has no monthly stop.",
+    "capUsed": "{amount} of {cap} spent",
     "capField": "Monthly cap ({currency})",
     "capPlaceholder": "No cap",
     "save": "Save",
-    "capNote": "Changes apply immediately across the workspace.",
     "capUpdated": "Workspace monthly cap updated.",
     "capInvalid": "Enter a positive number, or leave it empty to remove the cap.",
     "capUpdateFailed": "Failed to update workspace cap",
@@ -3411,7 +3623,13 @@
       "computeSub": "CPU reserved for sandboxes and MCP servers",
       "memorySub": "Memory reserved for sandboxes and MCP servers",
       "storageSub": "Files and artifacts the workspace keeps"
-    }
+    },
+    "todayAmount": "Today {amount}",
+    "edit": "Edit",
+    "cancel": "Cancel",
+    "capEditHint": "Leave empty to remove the cap. Applies immediately across the workspace.",
+    "agentsTitle": "Top spenders",
+    "agentsEmpty": "No agent has spent anything this month."
   },
   "AgentOverviewPage": {
     "showMore": "Show more",
@@ -3649,7 +3867,6 @@
     "title": "Apps",
     "description": "Interactive interfaces from your MCP connections.",
     "connection": "Connection",
-    "open": "Open app",
     "emptyTitle": "No MCP Apps available",
     "emptyDescription": "Connect an MCP server that exposes an interactive app to see it here.",
     "connectAction": "Browse connections",
@@ -4246,6 +4463,11 @@
       "orphaned": "Kept, not deleted",
       "changes_not_applied": "Changes not applied",
       "unsupported": "Unsupported"
+    },
+    "existing": {
+      "title": "{name} is already installed in this workspace",
+      "detail": "Last deployed by {who}, {when}. Update it with this bundle, or rename the bundle to install it separately.",
+      "update": "Update existing bundle"
     }
   },
   "ProjectOverviewPage": {
@@ -4577,9 +4799,44 @@
     "paidByOwner": "Paid by the owner",
     "unavailable": "Unavailable",
     "topUp": "Top up",
-    "ownKey": "Use your own API key",
-    "bannerMember": "Agents on AgentArea models do not start. Ask the workspace owner to top up.",
     "runway": "Enough for ~{days, plural, one {# day} other {# days}} at {perDay}/day",
     "runwayUnderDay": "Enough for less than a day at {perDay}/day"
+  },
+  "ChannelsPage": {
+    "title": "Channels",
+    "description": "Bots that people write to; the agent answers in the same chat.",
+    "new": "New channel",
+    "empty": "No channels yet",
+    "emptyDescription": "Paste a bot token, choose who may write and which agent answers.",
+    "loadFailed": "Could not load channels",
+    "create": {
+      "title": "New channel",
+      "submit": "Create channel",
+      "type": "Messenger",
+      "typePlaceholder": "Choose a messenger",
+      "name": "Name",
+      "agent": "Agent that answers",
+      "agentPlaceholder": "Choose an agent",
+      "agentHint": "Messages start a task of this agent; a chat continues the same conversation.",
+      "missing": "Fill in: {fields}",
+      "invalid": "The channel cannot be made: {detail}",
+      "failed": "Could not create the channel. Try again.",
+      "noTypes": "No messenger in the catalog can be a channel.",
+      "typesFailed": "Messengers",
+      "agentsFailed": "Agents",
+      "streamFailed": "Could not create the channel's stream",
+      "sourceFailed": "Could not connect the bot",
+      "triggerFailed": "Could not bind the agent",
+      "undoFailed": "Its stream {streamId} is left; delete it in Events",
+      "created": {
+        "title": "Channel created",
+        "write": "The bot is connected. Write to it.",
+        "writeAndLink": "The bot is connected. Write to it: the first reply brings a link that ties the chat to your account.",
+        "pasteUrl": "Paste this address into the app's webhook settings at the provider.",
+        "urlLabel": "Webhook URL",
+        "secretWarning": "Shown once. Copy it now.",
+        "done": "Open channel"
+      }
+    }
   }
 }

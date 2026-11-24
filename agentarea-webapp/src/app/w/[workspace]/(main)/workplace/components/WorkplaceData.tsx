@@ -1,16 +1,16 @@
 import { getTranslations } from "next-intl/server";
-import { getAgents } from "@/components/actions";
-import { WorkplaceChat } from "@/components/Chat/WorkplaceChat";
-import { WorkplaceOnboarding } from "@/components/Chat/WorkplaceOnboarding";
-import { listModelInstances, listPolicies, listProjects } from "@/lib/api";
-import { loadRunOptions } from "@/lib/run-options";
-import { apiErrorMessage } from "@/lib/api-errors";
-import { getViewerCapabilities } from "@/lib/workspace-context";
 import type {
   AgentResponse,
   PolicyRuleResponse,
   ProjectResponse,
 } from "@/api/client/types.gen";
+import { getAgents } from "@/components/actions";
+import { WorkplaceChat } from "@/components/Chat/WorkplaceChat";
+import { WorkplaceOnboarding } from "@/components/Chat/WorkplaceOnboarding";
+import { listModelInstances, listPolicies, listProjects } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/api-errors";
+import { loadRunOptions } from "@/lib/run-options";
+import { getViewerCapabilities } from "@/lib/workspace-context";
 import { loadWorkplaceSuggestions } from "./loadWorkplaceSuggestions";
 
 /**
@@ -27,7 +27,15 @@ import { loadWorkplaceSuggestions } from "./loadWorkplaceSuggestions";
  *  - the starter chips are a prompt, so their promise is handed down unawaited
  *    and a <Suspense> fills them in afterwards.
  */
-export async function WorkplaceData() {
+export async function WorkplaceData({
+  agentId,
+  prompt,
+}: {
+  /** The agent to start with, when the link names one. */
+  agentId?: string;
+  /** Text to put in the composer, when the link carries one. */
+  prompt?: string;
+} = {}) {
   const [tPage, tAdmin, { canAdminister }] = await Promise.all([
     getTranslations("WorkplacePage"),
     getTranslations("AdminOnly"),
@@ -97,7 +105,8 @@ export async function WorkplaceData() {
     agents.map(({ id, name }) => ({ id, name }))
   );
 
-  const defaultAgent = agents.length > 0 ? agents[0] : null;
+  const defaultAgent =
+    agents.find((agent) => agent.id === agentId) ?? agents[0] ?? null;
 
   // Only the onboarding screen asks whether a model exists, and it is the
   // screen nobody sees twice — so the read happens on that branch alone
@@ -105,6 +114,7 @@ export async function WorkplaceData() {
   const body = defaultAgent ? (
     <WorkplaceChat
       initialAgent={defaultAgent}
+      initialInput={prompt}
       availableAgents={agents}
       availableProjects={projects}
       availableTaskPolicies={taskPolicies}

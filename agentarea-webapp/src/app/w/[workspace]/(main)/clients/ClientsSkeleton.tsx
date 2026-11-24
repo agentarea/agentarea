@@ -64,9 +64,7 @@ export default function ClientsSkeleton({ viewMode }: { viewMode?: string }) {
       header={{
         breadcrumb: [{ label: t("title") }],
         description: t("description"),
-        controls: (
-          <Skeleton className="h-6 w-32 motion-reduce:animate-none" />
-        ),
+        controls: <Skeleton className="h-6 w-32 motion-reduce:animate-none" />,
       }}
       subheader={
         <SubheaderToolbar controls={<ViewModeTabs currentTab={viewMode} />} />

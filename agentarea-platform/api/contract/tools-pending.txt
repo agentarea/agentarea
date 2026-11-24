@@ -1,0 +1,1 @@
+# Contract platform MCP tools Go does not serve yet, one name per line; the list only shrinks.

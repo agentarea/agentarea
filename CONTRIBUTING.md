@@ -13,8 +13,7 @@ git clone https://github.com/agentarea/agentarea.git
 cd agentarea
 
 # Set up development environment
-cp agentarea-platform/docs/env.example .env
-docker compose -f docker-compose.dev.yaml up -d
+make up-dev   # creates .env from .env.example with local secrets, builds, starts
 
 # Verify setup
 curl http://localhost:8000/health
@@ -121,161 +120,33 @@ Ensure MCP servers wait for database connection before starting.
 
 ## 🔧 Coding Standards
 
-### Python Code Style
+### Go Code Style
 
-**Formatting and linting:** `ruff` (format + lint) and `pyright`.
+The backend is one Go module, `agentarea-platform/`. `gofmt` formats it;
+`golangci-lint` (version pinned in `agentarea-platform/Makefile`) lints it and
+enforces the layering that `tools/archgen` generates into `.golangci.yml`.
 
 ```bash
-make -C agentarea-platform format   # ruff format + ruff check --fix
-make -C agentarea-platform lint     # exactly what CI's platform-lint runs
+make -C agentarea-platform check   # exactly what CI's go-check runs
+make -C agentarea-platform archgen # after adding a module to tools/archgen
 ```
 
-**Code Quality:**
-- Maximum line length: 88 characters
-- Use type hints for all function parameters and return values
-- Follow PEP 8 naming conventions
-- Use docstrings for all public functions and classes
-
-**Example:**
-```python
-from typing import Optional, List
-from pydantic import BaseModel
-
-class AgentConfig(BaseModel):
-    """Configuration for AI agents.
-    
-    Attributes:
-        model: The LLM model to use
-        temperature: Sampling temperature (0.0-1.0)
-        max_tokens: Maximum tokens in response
-    """
-    model: str
-    temperature: float = 0.7
-    max_tokens: Optional[int] = None
-
-def create_agent(
-    name: str, 
-    config: AgentConfig,
-    user_id: Optional[str] = None
-) -> Agent:
-    """Create a new AI agent.
-    
-    Args:
-        name: Human-readable agent name
-        config: Agent configuration
-        user_id: ID of creating user
-        
-    Returns:
-        Created agent instance
-        
-    Raises:
-        ValidationError: If config is invalid
-    """
-    # Implementation here
-    pass
-```
+- A module imports the kernel, itself and other modules' `api` only.
+- SQL lives in a module's `store/` (sqlc) and `internal/kernel/db`.
+- Errors are returned, or logged with their cause; never dropped.
+- Required config fails the process at startup and names the variable.
 
 ### Database Patterns
 
-**Migrations:**
+**Migrations** are goose files in `agentarea-platform/internal/schema/migrations/`,
+applied by `agentarea migrate`. Add the next number (`NNNNN_<slug>.sql`); never
+edit a file that has shipped. Schema-backed tests run against a disposable
+Postgres:
+
 ```bash
-# Create new migration
-docker compose -f docker-compose.dev.yaml run --rm app alembic revision --autogenerate -m "descriptive message"
-
-# Review generated migration before committing
-# Test migration up and down
-docker compose -f docker-compose.dev.yaml run --rm app alembic upgrade head
-docker compose -f docker-compose.dev.yaml run --rm app alembic downgrade -1
-```
-
-**Model Conventions:**
-```python
-from sqlalchemy import Column, String, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
-from core.database.base import BaseModel
-
-class Agent(BaseModel):
-    """AI Agent model."""
-    __tablename__ = "agents"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String(255), nullable=False)
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    
-    # Relationships
-    creator = relationship("User", back_populates="agents")
-    
-    def __repr__(self) -> str:
-        return f"<Agent(id={self.id}, name='{self.name}')>"
-```
-
-### API Design
-
-**Endpoint Conventions:**
-```python
-from fastapi import APIRouter, Depends, HTTPException, status
-from typing import List
-from core.auth import get_current_user
-from core.schemas import AgentCreate, AgentResponse
-
-router = APIRouter(prefix="/v1/agents", tags=["agents"])
-
-@router.post("/", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
-async def create_agent(
-    agent_data: AgentCreate,
-    current_user: User = Depends(get_current_user)
-) -> AgentResponse:
-    """Create a new agent.
-    
-    Args:
-        agent_data: Agent creation data
-        current_user: Authenticated user
-        
-    Returns:
-        Created agent data
-        
-    Raises:
-        HTTPException: If creation fails
-    """
-    try:
-        agent = await agent_service.create(agent_data, current_user.id)
-        return AgentResponse.from_orm(agent)
-    except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-```
-
-**Response Patterns:**
-```python
-# Success responses
-{
-    "id": "agent-123",
-    "name": "chat-assistant",
-    "created_at": "2025-01-XX T XX:XX:XX.XXXZ"
-}
-
-# Error responses
-{
-    "error": {
-        "code": "VALIDATION_ERROR",
-        "message": "Invalid agent configuration",
-        "details": {
-            "field": "temperature",
-            "issue": "Must be between 0.0 and 1.0"
-        }
-    }
-}
-
-# List responses
-{
-    "items": [...],
-    "total": 42,
-    "limit": 20,
-    "offset": 0
-}
+make db-test-up      # prints the AGENTAREA_DB_TEST_URL to export
+make check-db
+make db-test-down
 ```
 
 ### Frontend Code Style (Future)
@@ -290,84 +161,16 @@ async def create_agent(
 
 ### Test Structure
 ```
-tests/
-├── unit/           # Unit tests
-├── integration/    # Integration tests
-├── e2e/           # End-to-end tests
-└── fixtures/      # Test data and fixtures
+agentarea-platform/
+├── **/*_test.go        # unit and schema-backed tests, next to the code
+├── test/suite/         # behaviour suite against a running stack (go test -tags suite)
+└── test/fuzz/          # schemathesis fuzz of a running stack (Python)
 ```
 
 ### Writing Tests
-
-**Unit Tests:**
-```python
-import pytest
-from unittest.mock import Mock, patch
-from core.services.agent_service import AgentService
-from core.schemas import AgentCreate
-
-class TestAgentService:
-    """Test cases for AgentService."""
-    
-    @pytest.fixture
-    def agent_service(self):
-        return AgentService()
-    
-    @pytest.fixture
-    def sample_agent_data(self):
-        return AgentCreate(
-            name="test-agent",
-            type="chat",
-            config={"model": "gpt-4"}
-        )
-    
-    async def test_create_agent_success(self, agent_service, sample_agent_data):
-        """Test successful agent creation."""
-        with patch('core.database.agent_repository.create') as mock_create:
-            mock_create.return_value = Mock(id="agent-123")
-            
-            result = await agent_service.create(sample_agent_data, "user-456")
-            
-            assert result.id == "agent-123"
-            mock_create.assert_called_once()
-    
-    async def test_create_agent_validation_error(self, agent_service):
-        """Test agent creation with invalid data."""
-        invalid_data = AgentCreate(name="", type="invalid")
-        
-        with pytest.raises(ValidationError):
-            await agent_service.create(invalid_data, "user-456")
-```
-
-**Integration Tests:**
-```python
-import pytest
-from httpx import AsyncClient
-from core.main import app
-
-@pytest.mark.asyncio
-class TestAgentAPI:
-    """Integration tests for Agent API."""
-    
-    async def test_create_agent_endpoint(self, client: AsyncClient, auth_headers):
-        """Test agent creation endpoint."""
-        agent_data = {
-            "name": "test-agent",
-            "type": "chat",
-            "config": {"model": "gpt-4"}
-        }
-        
-        response = await client.post(
-            "/v1/agents/",
-            json=agent_data,
-            headers=auth_headers
-        )
-        
-        assert response.status_code == 201
-        data = response.json()
-        assert data["name"] == "test-agent"
-        assert "id" in data
-```
+- A test must fail on the regression it claims to guard.
+- Tests that need Postgres skip without `AGENTAREA_DB_TEST_URL`; `make check-db` runs them.
+- The behaviour suite runs on `deploy/suite/stack.sh up`; see `agentarea-platform/test/suite/README.md`.
 
 ### Running Checks
 Every stack has one entrypoint, and CI calls the same one.
@@ -379,20 +182,22 @@ make check-db     # migrations + schema-backed suites (make db-test-up first, ex
 make -C agentarea-platform check
 pnpm -C agentarea-webapp run check
 
-# A single test file
-cd agentarea-platform && uv run python -m pytest path/to/test_file.py
+# A single package or test
+cd agentarea-platform && go test ./internal/modules/agents/... -run TestName
+
+# Fuzz a running stack (defaults to localhost:8000 and Kratos on :4433/:4434)
+make -C agentarea-platform test-api-fuzz
 ```
 
 ## 📚 Documentation Standards
 
 ### Code Documentation
-- Use docstrings for all public functions, classes, and modules
-- Include type hints in function signatures
+- Doc comments on exported identifiers state the contract, not the mechanics
 - Document complex algorithms and business logic
 - Keep comments up-to-date with code changes
 
 ### API Documentation
-- Use FastAPI automatic documentation
+- The spec is `agentarea-webapp/src/api/openapi.json`; the binary serves its copy at `/openapi.json`
 - Provide clear endpoint descriptions
 - Include request/response examples
 - Document error conditions
@@ -418,17 +223,12 @@ cd agentarea-platform && uv run python -m pytest path/to/test_file.py
 - Log security events
 
 ### Code Security
-```python
-# Good: Parameterized query
-result = await database.fetch_all(
-    "SELECT * FROM agents WHERE user_id = :user_id",
-    {"user_id": user_id}
-)
+```go
+// Good: parameterized query
+rows, err := s.Q().Query(ctx, "SELECT id FROM agents WHERE created_by = $1", userID)
 
-# Bad: String interpolation (SQL injection risk)
-result = await database.fetch_all(
-    f"SELECT * FROM agents WHERE user_id = '{user_id}'"
-)
+// Bad: string interpolation (SQL injection risk)
+rows, err := s.Q().Query(ctx, "SELECT id FROM agents WHERE created_by = '"+userID+"'")
 ```
 
 ## 🚀 Performance Guidelines

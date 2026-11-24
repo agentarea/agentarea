@@ -1,0 +1,98 @@
+{
+ "trace_id": "0af7651916cd43dd8448eb211c80319c",
+ "span_id": "b7ad6b7169203331",
+ "cases": [
+  {
+   "name": "plain",
+   "level": 20,
+   "logger": "agentarea.api",
+   "msg": "Started %s",
+   "args": [
+    "api"
+   ],
+   "extra": {},
+   "traced": false,
+   "line": "{\"timestamp\": \"2026-11-12 10:00:00,123\", \"level\": \"INFO\", \"logger\": \"agentarea.api\", \"message\": \"Started api\", \"taskName\": null}"
+  },
+  {
+   "name": "context_and_extras",
+   "level": 30,
+   "logger": "agentarea.tasks",
+   "msg": "Request failed: %s",
+   "args": [
+    "NotFoundError"
+   ],
+   "extra": {
+    "workspace_id": "ws-1",
+    "user_id": "u-1",
+    "request_method": "GET",
+    "request_path": "/v1/x",
+    "count": 3,
+    "ratio": 0.5,
+    "ok": true,
+    "none": null,
+    "items": [
+     "a",
+     "é"
+    ]
+   },
+   "traced": false,
+   "line": "{\"timestamp\": \"2026-11-12 10:00:00,123\", \"level\": \"WARNING\", \"logger\": \"agentarea.tasks\", \"message\": \"Request failed: NotFoundError\", \"user_id\": \"u-1\", \"workspace_id\": \"ws-1\", \"taskName\": null, \"request_method\": \"GET\", \"request_path\": \"/v1/x\", \"count\": 3, \"ratio\": 0.5, \"ok\": true, \"none\": null, \"items\": [\"a\", \"\\u00e9\"]}"
+  },
+  {
+   "name": "redacted_message",
+   "level": 40,
+   "logger": "agentarea.llm",
+   "msg": "call https://api.telegram.org/bot123456:ABCdefGHIjklMNOpqrSTUvwxYZ012345/getMe failed; dsn postgres://user:hunter2@db:5432/x; Authorization: Bearer abcdefgh12345; url https://x.test/?api_key=SECRET&b=1&access-token=T0K",
+   "args": [],
+   "extra": {
+    "url": "https://h/?token=abc&x=1",
+    "safe": "Loaded secret: DATABASE_URL"
+   },
+   "traced": false,
+   "line": "{\"timestamp\": \"2026-11-12 10:00:00,123\", \"level\": \"ERROR\", \"logger\": \"agentarea.llm\", \"message\": \"call https://api.telegram.org/bot<redacted>/getMe failed; dsn postgres://user:<redacted>@db:5432/x; Authorization: Bearer <redacted>; url https://x.test/?api_key=<redacted>&b=1&access-token=<redacted>\", \"taskName\": null, \"url\": \"https://h/?token=<redacted>&x=1\", \"safe\": \"Loaded secret: DATABASE_URL\"}"
+  },
+  {
+   "name": "sanitized",
+   "level": 20,
+   "logger": "agentarea.x",
+   "msg": "line1\nline2\r\tTab\u0000\u001b[0m",
+   "args": [],
+   "extra": {},
+   "traced": false,
+   "line": "{\"timestamp\": \"2026-11-12 10:00:00,123\", \"level\": \"INFO\", \"logger\": \"agentarea.x\", \"message\": \"line1 line2 \\tTab  [0m\", \"taskName\": null}"
+  },
+  {
+   "name": "unicode",
+   "level": 10,
+   "logger": "agentarea",
+   "msg": "héllo 😀 \"q\"",
+   "args": [],
+   "extra": {},
+   "traced": false,
+   "line": "{\"timestamp\": \"2026-11-12 10:00:00,123\", \"level\": \"DEBUG\", \"logger\": \"agentarea\", \"message\": \"h\\u00e9llo \\ud83d\\ude00 \\\"q\\\"\", \"taskName\": null}"
+  },
+  {
+   "name": "critical",
+   "level": 50,
+   "logger": "agentarea",
+   "msg": "down",
+   "args": [],
+   "extra": {},
+   "traced": false,
+   "line": "{\"timestamp\": \"2026-11-12 10:00:00,123\", \"level\": \"CRITICAL\", \"logger\": \"agentarea\", \"message\": \"down\", \"taskName\": null}"
+  },
+  {
+   "name": "traced",
+   "level": 20,
+   "logger": "agentarea.api",
+   "msg": "Started %s",
+   "args": [
+    "api"
+   ],
+   "extra": {},
+   "traced": true,
+   "line": "{\"timestamp\": \"2026-11-12 10:00:00,123\", \"level\": \"INFO\", \"logger\": \"agentarea.api\", \"message\": \"Started api\", \"trace_id\": \"0af7651916cd43dd8448eb211c80319c\", \"span_id\": \"b7ad6b7169203331\", \"taskName\": null}"
+  }
+ ]
+}

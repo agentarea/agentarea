@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
 import FormError from "@/components/FormError/FormError";
 import { ViewModeTabs } from "@/components/HeaderTabs";
@@ -9,6 +8,7 @@ import SearchInput from "@/components/SearchInput";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { getCatalogItem } from "@/lib/api";
 import { parseCatalogSource } from "@/lib/catalog-connections";
+import { readUiPrefs } from "@/lib/ui-prefs-server";
 import {
   normalize,
   type RegistryItem,
@@ -32,9 +32,9 @@ export default async function MCPServersPage({
   const t = await getTranslations("MCPServersPage");
   const resolvedSearchParams = await searchParams;
 
-  // Read tab from URL or fallback to cookie
-  const cookieStore = await cookies();
-  const cookieTab = cookieStore.get("tab_connections")?.value;
+  // Read tab from URL, else the remembered view
+  const uiPrefs = await readUiPrefs();
+  const cookieTab = uiPrefs.views["tab_connections"];
   const tab =
     typeof resolvedSearchParams.tab === "string"
       ? resolvedSearchParams.tab

@@ -1,5 +1,4 @@
 import { listAgents, listRunnerKeys } from "@/lib/api";
-import { RUNNER_KINDS } from "@/lib/runner-kinds";
 import { optionalApiData, requireApiData } from "@/lib/server-resource";
 import { getClientCached } from "./clientData";
 import ClientOverview from "./ClientOverview";
@@ -11,7 +10,7 @@ export default async function ClientPage({
 }) {
   const { id } = await params;
   const client = await getClientCached(id);
-  if (!RUNNER_KINDS.includes(client.kind)) {
+  if (!client.has_runner) {
     return <ClientOverview client={client} runner={null} />;
   }
   // Only those who may edit the client see its runner's keys.

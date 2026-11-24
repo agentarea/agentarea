@@ -1,0 +1,22 @@
+{
+  "extracted_from": "agentarea-platform, read statically (grep), 2026-11-15; source paths are relative to agentarea-platform/. Programs: agentarea-api (apps/api/pyproject.toml:61), agentarea-worker (apps/worker/pyproject.toml:37), and the module run as `python -m` by compose. There is no apps/cli.",
+  "entries": [
+    {"name": "agentarea-api serve", "kind": "command", "program": "agentarea-api", "source": "apps/api/agentarea_api/cli.py:52"},
+    {"name": "agentarea-api migrate", "kind": "command", "program": "agentarea-api", "source": "apps/api/agentarea_api/cli.py:128"},
+    {"name": "agentarea-api check-migrations", "kind": "command", "program": "agentarea-api", "source": "apps/api/agentarea_api/cli.py:208"},
+    {"name": "agentarea-api status", "kind": "command", "program": "agentarea-api", "source": "apps/api/agentarea_api/cli.py:240"},
+    {"name": "agentarea-api validate", "kind": "command", "program": "agentarea-api", "source": "apps/api/agentarea_api/cli.py:251"},
+    {"name": "agentarea-api reconcile", "kind": "command", "program": "agentarea-api", "source": "apps/api/agentarea_api/cli.py:287"},
+    {"name": "agentarea-api skills move-bodies-to-packages", "kind": "command", "program": "agentarea-api", "source": "apps/api/agentarea_api/cli.py:340"},
+    {"name": "agentarea-api skills move-own-copies-to-packages", "kind": "command", "program": "agentarea-api", "source": "apps/api/agentarea_api/cli.py:384"},
+    {"name": "agentarea-api skills delete-moved-own-copies", "kind": "command", "program": "agentarea-api", "source": "apps/api/agentarea_api/cli.py:412"},
+    {"name": "agentarea-api skills repin-catalog-installs", "kind": "command", "program": "agentarea-api", "source": "apps/api/agentarea_api/cli.py:452"},
+    {"name": "agentarea-api skills refresh-stub-installs", "kind": "command", "program": "agentarea-api", "source": "apps/api/agentarea_api/cli.py:489"},
+    {"name": "agentarea-api dlq-replay", "kind": "command", "program": "agentarea-api", "source": "apps/api/agentarea_api/cli.py:935"},
+    {"name": "agentarea-worker start", "kind": "command", "program": "agentarea-worker", "source": "apps/worker/agentarea_worker/cli.py:21"},
+    {"name": "agentarea-worker dev", "kind": "command", "program": "agentarea-worker", "source": "apps/worker/agentarea_worker/cli.py:54"},
+    {"name": "agentarea-worker status", "kind": "command", "program": "agentarea-worker", "source": "apps/worker/agentarea_worker/cli.py:104"},
+    {"name": "agentarea-worker validate", "kind": "command", "program": "agentarea-worker", "source": "apps/worker/agentarea_worker/cli.py:117"},
+    {"name": "python -m agentarea_common.artifacts.bucket_init", "kind": "module_main", "program": "python", "source": "libs/common/agentarea_common/artifacts/bucket_init.py:67"}
+  ]
+}

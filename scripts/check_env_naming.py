@@ -25,6 +25,7 @@ DOMAINS = {
     "DB", "S3", "AUTH", "AUTHZ", "SECRET", "MCP", "SANDBOX", "TEMPORAL", "WORKER",
     "TASK", "TRIGGER", "CHANNEL", "EVENT", "CORS", "LOG", "REDIS", "KAFKA", "TOOL",
     "K8S", "API", "HTTP", "OTEL", "BILLING", "METRICS", "A2A", "SPEND", "ANALYTICS",
+    "BUNDLE",
 }
 
 # App-level names that carry no domain segment.
@@ -122,6 +123,9 @@ WHITELIST = {
     "REGISTRIES_CONFIG",
     # what the manager hands a platform-run MCP app container (mcp-apps-kit reads them)
     "MCP_MANAGER_URL", "MCP_INSTANCE_ID", "MCP_STORAGE_TOKEN", "MCP_CONTEXT_KEY",
+    # what the runtime sets on every MCP container and reads back from a running
+    # one to find its port; renaming them strands the containers already running
+    "MCP_SERVICE_NAME", "MCP_CONTAINER_PORT",
 }
 
 # Fixture and tooling paths hold throwaway names, not deployed configuration.
@@ -154,6 +158,8 @@ GO_READ = re.compile(
     # env name: getenv/envOr/mustEnv/... and required*(Duration|PositiveIntEnv).
     r"(?:os\.Getenv|os\.LookupEnv|\b\w*[eE]nv\w*|\brequired\w*|\bstrictBool\w*)"
     r"\(\s*\"([A-Z][A-Z0-9_]*)\""
+    # requiredDuration(logger, "AGENTAREA_MCP_LEASE_TTL", ...) takes the name second.
+    r"|\brequired\w*\(\s*\w+\s*,\s*\"([A-Z][A-Z0-9_]*)\""
     # `const sandboxFileAuthSecretEnv = "AGENTAREA_SANDBOX_FILE_SECRET"` — the name  # pragma: allowlist secret
     # is declared here and read through the constant, so the call site alone
     # never shows it.

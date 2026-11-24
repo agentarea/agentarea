@@ -1,15 +1,15 @@
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
-import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
 import { ViewModeTabs } from "@/components/HeaderTabs";
 import SearchInput from "@/components/SearchInput";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
-import TriggersContent from "./components/TriggersContent";
-import TriggersSkeleton from "./components/TriggersSkeleton";
-import TriggersDisplayMenu from "./components/TriggersDisplayMenu";
-import TriggersTypeFilterSection from "./components/TriggersTypeFilterSection";
+import { readUiPrefs } from "@/lib/ui-prefs-server";
 import CreateTriggerButton from "./components/CreateTriggerButton";
+import TriggersContent from "./components/TriggersContent";
+import TriggersDisplayMenu from "./components/TriggersDisplayMenu";
+import TriggersSkeleton from "./components/TriggersSkeleton";
+import TriggersTypeFilterSection from "./components/TriggersTypeFilterSection";
 
 export const metadata = {
   title: "Automation",
@@ -23,9 +23,9 @@ export default async function TriggersPage({
   const t = await getTranslations("TriggersPage");
   const resolvedSearchParams = await searchParams;
 
-  // Read tab from URL or fallback to cookie
-  const cookieStore = await cookies();
-  const cookieTab = cookieStore.get("tab_triggers")?.value;
+  // Read tab from URL, else the remembered view
+  const uiPrefs = await readUiPrefs();
+  const cookieTab = uiPrefs.views["tab_triggers"];
   const viewMode =
     typeof resolvedSearchParams.tab === "string"
       ? (resolvedSearchParams.tab as "grid" | "table")

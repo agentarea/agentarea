@@ -1,0 +1,67 @@
+module agentarea
+
+type User
+
+type Agent
+
+type Workspace
+  relations
+    define members: [User, Agent]
+    define admin: [User]
+
+type role
+  relations
+    define can_read: [User:*, Agent:*]
+    define can_write: [User:*, Agent:*]
+    define can_manage: [User:*, Agent:*]
+
+type role_assignment
+  relations
+    define assignee: [User, Agent]
+    define role: [role]
+    define can_read: assignee and can_read from role
+    define can_write: assignee and can_write from role
+    define can_manage: assignee and can_manage from role
+
+type project
+  relations
+    define workspace: [Workspace]
+    define parent: [project]
+    define role_assignment: [role_assignment]
+    define reader: [User, Agent]
+    define writer: [User, Agent]
+    define manager: [User, Agent]
+    define can_read: reader or can_read from role_assignment or can_read from parent or admin from workspace
+    define can_write: writer or can_write from role_assignment or can_write from parent or admin from workspace
+    define can_manage: manager or can_manage from role_assignment or can_manage from parent or admin from workspace
+
+type resource
+  relations
+    define project: [project]
+    define role_assignment: [role_assignment]
+    define reader: [User, Agent]
+    define writer: [User, Agent]
+    define manager: [User, Agent]
+    define can_read: reader or can_read from role_assignment or can_read from project
+    define can_write: writer or can_write from role_assignment or can_write from project
+    define can_manage: manager or can_manage from role_assignment or can_manage from project
+    # Who may run the agent. Granted explicitly and implied by nothing: managing,
+    # reading or administering the workspace does not let anyone invoke it.
+    define invoker: [User, Agent, Workspace#members]
+    define can_invoke: invoker
+    # Who may wire a secret's value into something: an MCP env var or header, an
+    # OAuth client, an egress exit. Its creator (manager), whoever manages its
+    # project (a workspace admin through the root project), or an explicit
+    # grant. Reading or writing a secret's metadata does not imply it, and a
+    # role assignment on the secret itself does not either: it grants manage
+    # on the secret, not manager. Managing the secret's project does.
+    define secret_user: [User, Agent]
+    define can_use_secret: secret_user or manager or can_manage from project
+    # Who may call through a connection (an MCP server or an API connection).
+    # One without `personal` is the workspace's: whoever reads it may use it.
+    # A personal one is used through its creator's own account: the creator
+    # (manager) and whoever they lent it to may, and nobody else, not even a
+    # workspace admin, who still sees, manages and deletes it.
+    define personal: [User:*, Agent:*]
+    define connection_user: [User, Agent]
+    define can_use_connection: connection_user or manager or (can_read but not personal)

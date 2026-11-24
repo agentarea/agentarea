@@ -97,9 +97,7 @@ export function ContinuationGrantForm({
         <StatusIndicator kind="attention" size="sm">
           {t(`title.${limit === null ? "unknown" : failureReason}`)}
         </StatusIndicator>
-        <p className="text-xs text-muted-foreground">
-          {t("hint")}
-        </p>
+        <p className="text-xs text-muted-foreground">{t("hint")}</p>
       </div>
       <div className="flex flex-wrap items-end gap-3">
         {continuationFields(failureReason).map((field) => {

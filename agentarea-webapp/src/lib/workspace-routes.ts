@@ -15,6 +15,7 @@ export const WORKSPACE_ROUTES = [
   "approve",
   "budgets",
   "bundles",
+  "channels",
   "clients",
   "connect",
   "connections",

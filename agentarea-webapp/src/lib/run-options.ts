@@ -1,7 +1,6 @@
 import "server-only";
 import { listClients, listModelInstances } from "@/lib/api";
 import type { RunOptions } from "@/lib/run-targets";
-import { RUNNER_KINDS } from "@/lib/runner-kinds";
 
 /**
  * The workspace's chat models and runner clients a run can be sent to. Null
@@ -28,8 +27,6 @@ export async function loadRunOptions(): Promise<RunOptions | null> {
       provider: instance.provider_name || null,
       iconUrl: instance.provider_icon_url || null,
     })),
-    runners: clients.data.filter((client) =>
-      RUNNER_KINDS.includes(client.kind)
-    ),
+    runners: clients.data.filter((client) => client.has_runner),
   };
 }

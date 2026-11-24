@@ -26,7 +26,45 @@ import {
  * CLI's config, its environment or anything its commands can read.
  */
 
-export type RunnerHarness = 'codex' | 'claude';
+/** Harnesses that speak the Agent Client Protocol, by the command that starts them in it. */
+export const ACP_COMMANDS: Record<string, string[]> = {
+	opencode: ['opencode', 'acp'],
+	gemini: ['gemini', '--acp'],
+	qwen: ['qwen', '--acp'],
+	goose: ['goose', 'acp'],
+	cursor: ['cursor-agent', 'acp'],
+};
+
+/** A harness of any other ACP command, the one the runner is started with. */
+export const CUSTOM_ACP = 'acp';
+
+export type RunnerHarness = 'codex' | 'claude' | string;
+
+/** The command an ACP harness's turns run. */
+export function acpCommand(
+	options: Pick<RunnerOptions, 'harness' | 'command'>,
+): string[] {
+	const command = options.command?.length
+		? options.command
+		: ACP_COMMANDS[options.harness];
+	if (!command) {
+		throw new Error(
+			`a ${options.harness} runner needs --command, the ACP command its turns run`,
+		);
+	}
+
+	return command;
+}
+
+/** Whether the runner serves this kind of client. */
+export function isRunnerHarness(kind: unknown): kind is RunnerHarness {
+	return (
+		kind === 'codex' ||
+		kind === 'claude' ||
+		kind === CUSTOM_ACP ||
+		(typeof kind === 'string' && kind in ACP_COMMANDS)
+	);
+}
 
 /** What `agentarea runner register` stores in the runner's root. */
 export interface RunnerConfig {
@@ -50,6 +88,10 @@ export interface RunnerOptions {
 	allowDomains: string[];
 	/** Turns run at once. */
 	capacity: number;
+	/** The command an ACP harness runs, when not its usual one; the only one a custom harness has. */
+	command?: string[];
+	/** Environment variables an ACP harness keeps, e.g. the API key it signs in with. */
+	passEnv?: string[];
 }
 
 /** A turn as the platform assigns it. */
@@ -504,6 +546,9 @@ export class JsonRpcPeer {
 
 	private readonly child: ChildProcessWithoutNullStreams;
 	private readonly timeoutMs: number;
+	private readonly name: string;
+	/** Tag every message `"jsonrpc": "2.0"`; ACP agents drop one without it, Codex needs none. */
+	private readonly tagged: boolean;
 	private readonly onNotification: (
 		method: string,
 		params: Record<string, any>,
@@ -524,13 +569,17 @@ export class JsonRpcPeer {
 			params: Record<string, any>,
 		) => void,
 		timeoutMs = REQUEST_TIMEOUT_MS,
+		name = 'codex app-server',
+		tagged = false,
 	) {
 		this.timeoutMs = timeoutMs;
+		this.name = name;
+		this.tagged = tagged;
 		this.child = child;
 		this.onNotification = onNotification;
 		this.onRequest = onRequest;
 		child.stdin.on('error', (error: Error) => {
-			console.error(`[runner] writing to codex app-server: ${String(error)}`);
+			console.error(`[runner] writing to ${this.name}: ${String(error)}`);
 		});
 		const lines = readline.createInterface({input: child.stdout});
 		lines.on('line', line => {
@@ -538,21 +587,29 @@ export class JsonRpcPeer {
 		});
 	}
 
-	async request(method: string, params: unknown): Promise<any> {
+	/** A request; `timeoutMs` 0 waits as long as it takes, as a whole turn does. */
+	async request(
+		method: string,
+		params: unknown,
+		timeoutMs = this.timeoutMs,
+	): Promise<any> {
 		if (this.failed) {
 			throw this.failed;
 		}
 
 		const id = this.next++;
 		return new Promise((resolve, reject) => {
-			const timer = setTimeout(() => {
-				this.waiting.delete(id);
-				reject(
-					new Error(
-						`codex app-server did not answer ${method} in ${this.timeoutMs} ms`,
-					),
-				);
-			}, this.timeoutMs);
+			const timer =
+				timeoutMs > 0
+					? setTimeout(() => {
+							this.waiting.delete(id);
+							reject(
+								new Error(
+									`${this.name} did not answer ${method} in ${timeoutMs} ms`,
+								),
+							);
+					  }, timeoutMs)
+					: undefined;
 			this.waiting.set(id, {
 				resolve(value) {
 					clearTimeout(timer);
@@ -588,8 +645,9 @@ export class JsonRpcPeer {
 		this.waiting.clear();
 	}
 
-	private write(message: unknown): void {
-		this.child.stdin.write(`${JSON.stringify(message)}\n`);
+	private write(message: Record<string, unknown>): void {
+		const sent = this.tagged ? {jsonrpc: '2.0', ...message} : message;
+		this.child.stdin.write(`${JSON.stringify(sent)}\n`);
 	}
 
 	private receive(line: string): void {
@@ -597,7 +655,7 @@ export class JsonRpcPeer {
 		try {
 			message = JSON.parse(line);
 		} catch {
-			console.error(`[runner] codex app-server said: ${line}`);
+			console.error(`[runner] ${this.name} said: ${line}`);
 			return;
 		}
 
@@ -620,7 +678,7 @@ export class JsonRpcPeer {
 		this.waiting.delete(message['id']);
 		if (message['error']) {
 			pending.reject(
-				new Error(String(message['error'].message ?? 'codex app-server error')),
+				new Error(String(message['error'].message ?? `${this.name} error`)),
 			);
 		} else {
 			pending.resolve(message['result']);
@@ -731,7 +789,16 @@ class CodexTurn implements TurnControl {
 				: {}),
 			config: {
 				mcp_servers: {
-					[MCP_SERVER_NAME]: {url: this.server.relay.url(assign.task_id)},
+					// required: Codex otherwise starts the turn while the server is
+					// still connecting and leaves the whole tool set out of it.
+					// approve: the platform's policy engine already decides every
+					// call on this server; a second prompt from Codex only parks
+					// the task in waiting_for_approval.
+					[MCP_SERVER_NAME]: {
+						url: this.server.relay.url(assign.task_id),
+						required: true,
+						default_tools_approval_mode: 'approve',
+					},
 				},
 			},
 		};
@@ -1478,7 +1545,7 @@ export async function registerRunner(
 	if (
 		!ID_SEGMENT.test(String(identity.client_id)) ||
 		!ID_SEGMENT.test(String(identity.workspace)) ||
-		(identity.kind !== 'codex' && identity.kind !== 'claude')
+		!isRunnerHarness(identity.kind)
 	) {
 		throw new Error(
 			`the platform answered an unexpected identity: ${logged(
@@ -1658,6 +1725,575 @@ const RELAYED_RESPONSE_HEADERS = [
 	'cache-control',
 ];
 
+/** The messages and tool calls of one ACP turn, as its updates arrive. */
+export class AcpStream {
+	private messageId: string | undefined;
+	private text = '';
+	private count = 0;
+	private last = '';
+	private readonly toolNames = new Map<string, string>();
+	private readonly prefix: string;
+
+	constructor(prefix: string) {
+		this.prefix = prefix;
+	}
+
+	/** What the agent said last, the turn's answer. */
+	get response(): string {
+		return this.last;
+	}
+
+	/** The message under way, as one event, once something else begins. */
+	flush(): TurnEventBody[] {
+		if (!this.messageId || !this.text) {
+			this.messageId = undefined;
+			return [];
+		}
+
+		const done: TurnEventBody = {
+			kind: 'message',
+			item_id: this.messageId,
+			text: this.text,
+		};
+		this.last = this.text;
+		this.messageId = undefined;
+		this.text = '';
+		return [done];
+	}
+
+	chunk(id: string | undefined, text: string): TurnEventBody[] {
+		const flushed =
+			this.messageId && id && id !== this.messageId ? this.flush() : [];
+		this.messageId ??= id ?? `${this.prefix}-m${++this.count}`;
+		this.text += text;
+		return [...flushed, {kind: 'message.delta', item_id: this.messageId, text}];
+	}
+
+	nameTool(id: string, name: string): string {
+		this.toolNames.set(id, name);
+		return name;
+	}
+
+	toolName(id: string, fallback: unknown): string {
+		return this.toolNames.get(id) ?? String(fallback ?? 'tool');
+	}
+}
+
+/** The text of an ACP tool call's content blocks, or its raw output. */
+function acpToolOutput(update: Record<string, any>): string {
+	const parts = ((update['content'] ?? []) as Array<Record<string, any>>)
+		.map(block => {
+			if (block['type'] === 'content' && block['content']?.type === 'text') {
+				return String(block['content'].text);
+			}
+
+			if (block['type'] === 'diff') {
+				return `${String(block['path'] ?? '')}\n${String(
+					block['newText'] ?? '',
+				)}`;
+			}
+
+			return '';
+		})
+		.filter(Boolean);
+	if (parts.length > 0) {
+		return parts.join('\n');
+	}
+
+	return update['rawOutput'] === undefined || update['rawOutput'] === null
+		? ''
+		: JSON.stringify(update['rawOutput']);
+}
+
+/** What an ACP `session/update` adds to the turn. */
+export function acpEvents(
+	update: Record<string, any>,
+	stream: AcpStream,
+): TurnEventBody[] {
+	const kind = update['sessionUpdate'];
+	if (kind === 'agent_message_chunk') {
+		const content = update['content'] ?? {};
+		return content['type'] === 'text' && content['text']
+			? stream.chunk(update['messageId'] ?? undefined, String(content['text']))
+			: [];
+	}
+
+	if (kind === 'agent_thought_chunk') {
+		const content = update['content'] ?? {};
+		return content['type'] === 'text' && content['text']
+			? [
+					{
+						kind: 'message.delta',
+						item_id: `${String(update['messageId'] ?? 'thought')}-thinking`,
+						text: String(content['text']),
+						channel: 'thinking',
+					},
+			  ]
+			: [];
+	}
+
+	if (kind === 'tool_call') {
+		const id = String(update['toolCallId']);
+		const name = stream.nameTool(
+			id,
+			String(update['title'] ?? update['name'] ?? update['kind'] ?? 'tool'),
+		);
+		const events: TurnEventBody[] = [
+			...stream.flush(),
+			{
+				kind: 'tool.call',
+				id,
+				name,
+				arguments: (update['rawInput'] ?? {}) as Record<string, unknown>,
+			},
+		];
+		if (update['status'] === 'completed' || update['status'] === 'failed') {
+			events.push({
+				kind: 'tool.result',
+				id,
+				name,
+				output: acpToolOutput(update),
+				success: update['status'] === 'completed',
+			});
+		}
+
+		return events;
+	}
+
+	if (kind === 'tool_call_update') {
+		const id = String(update['toolCallId']);
+		const name = stream.toolName(id, update['title']);
+		const output = acpToolOutput(update);
+		if (update['status'] === 'completed' || update['status'] === 'failed') {
+			return [
+				{
+					kind: 'tool.result',
+					id,
+					name,
+					output,
+					success: update['status'] === 'completed',
+				},
+			];
+		}
+
+		return output ? [{kind: 'tool.progress', id, name, output}] : [];
+	}
+
+	return [];
+}
+
+/** An ACP harness's process, with the machine's own sign-in and the variables it keeps. */
+function spawnAcp(
+	options: Pick<RunnerOptions, 'passEnv'>,
+	command: string[],
+	cwd: string,
+): ChildProcessWithoutNullStreams {
+	const keep: Record<string, string> = {};
+	for (const name of options.passEnv ?? []) {
+		const value = process.env[name];
+		if (value !== undefined) {
+			keep[name] = value;
+		}
+	}
+
+	return spawn(command[0]!, command.slice(1), {
+		cwd,
+		// The machine's own sign-in to the CLI lives in its home.
+		env: cliEnv(os.homedir(), keep),
+		stdio: ['pipe', 'pipe', 'pipe'],
+	});
+}
+
+/**
+ * The models an ACP harness offers, from a session opened for the asking, so
+ * the client's page can pick the one its turns use.
+ */
+export async function acpRunnerReport(
+	options: RunnerOptions,
+): Promise<RunnerReport | undefined> {
+	const command = acpCommand(options);
+	const cwd = path.join(options.root, 'models');
+	fs.mkdirSync(cwd, {recursive: true});
+	const child = spawnAcp(options, command, cwd);
+	const peer = new JsonRpcPeer(
+		child,
+		() => {},
+		(id, method) => {
+			peer.respondError(id, `the runner does not answer ${method}`);
+		},
+		REQUEST_TIMEOUT_MS,
+		command[0] ?? 'acp',
+		true,
+	);
+	child.on('error', (error: Error) => {
+		peer.failAll(error);
+	});
+	try {
+		await peer.request('initialize', {
+			protocolVersion: 1,
+			clientCapabilities: {
+				fs: {readTextFile: false, writeTextFile: false},
+				terminal: false,
+			},
+			clientInfo: {name: 'agentarea-runner', version: VERSION},
+		});
+		const session = await peer.request('session/new', {cwd, mcpServers: []});
+		const options = (session?.configOptions ?? []) as Array<
+			Record<string, any>
+		>;
+		const models = acpModels(options);
+		if (models.length === 0) {
+			return undefined;
+		}
+
+		const current = options.find(option => option['category'] === 'model')?.[
+			'currentValue'
+		];
+		return {
+			models: models.map(name => ({
+				name,
+				reasoning_levels: [],
+				default_reasoning: null,
+			})),
+			default_model: typeof current === 'string' ? current : null,
+		};
+	} finally {
+		child.kill('SIGTERM');
+	}
+}
+
+/** The id of a session's model option, the way OpenCode offers its models. */
+export function acpModelOption(
+	configOptions: Array<Record<string, any>>,
+): string | undefined {
+	const option = configOptions.find(
+		candidate => candidate['category'] === 'model',
+	);
+	return option ? String(option['id']) : undefined;
+}
+
+/** The models a session offers, by the value that picks one. */
+export function acpModels(configOptions: Array<Record<string, any>>): string[] {
+	const option = configOptions.find(
+		candidate => candidate['category'] === 'model',
+	);
+	return ((option?.['options'] ?? []) as Array<Record<string, any>>).map(
+		choice => String(choice['value']),
+	);
+}
+
+/** The option that answers a permission request: allow once, or reject once. */
+export function acpPermissionOption(
+	options: Array<Record<string, any>>,
+	approved: boolean,
+): string | undefined {
+	const wanted = approved
+		? ['allow_once', 'allow_always']
+		: ['reject_once', 'reject_always'];
+	for (const kind of wanted) {
+		const option = options.find(candidate => candidate['kind'] === kind);
+		if (option) {
+			return String(option['optionId']);
+		}
+	}
+
+	return undefined;
+}
+
+/**
+ * One turn of a harness that speaks the Agent Client Protocol (OpenCode,
+ * Gemini CLI, Goose, Qwen Code, Cursor, or a command of the runner's own),
+ * one process per turn. The task's session carries on through `session/load`
+ * when the agent can load one. A sandboxed turn asks a person about every
+ * permission the agent asks for; an unconfined one allows them.
+ */
+export class AcpTurn implements TurnControl {
+	private readonly child: ChildProcessWithoutNullStreams;
+	private readonly peer: JsonRpcPeer;
+	private readonly stream: AcpStream;
+	private readonly permissions = new Map<
+		string,
+		{id: number | string; options: Array<Record<string, any>>}
+	>();
+
+	private sessionId: string | undefined;
+	private replaying = false;
+	private interrupting = false;
+	private ended = false;
+	private stderr = '';
+	/** Settles once the process is gone. */
+	readonly exited: Promise<void>;
+
+	readonly assign: Assign;
+	private readonly sink: TurnSink;
+	private readonly label: string;
+	private readonly options: RunnerOptions;
+
+	constructor(
+		options: RunnerOptions,
+		relay: McpRelay,
+		assign: Assign,
+		sink: TurnSink,
+		command: string[],
+	) {
+		this.options = options;
+		this.assign = assign;
+		this.sink = sink;
+		this.label = command[0] ?? 'acp';
+		this.stream = new AcpStream(assign.turn_id);
+		this.child = spawnAcp(options, command, taskDir(options, assign.task_id));
+		this.child.stderr.on('data', (chunk: Buffer) => {
+			this.stderr = (this.stderr + chunk.toString()).slice(-4000);
+		});
+		this.peer = new JsonRpcPeer(
+			this.child,
+			(method, params) => {
+				this.notified(method, params);
+			},
+			(id, method, params) => {
+				this.requested(id, method, params);
+			},
+			REQUEST_TIMEOUT_MS,
+			this.label,
+			true,
+		);
+		this.exited = new Promise(resolve => {
+			this.child.on('close', code => {
+				resolve();
+				this.peer.failAll(new Error(`${this.label} exited`));
+				if (this.interrupting) {
+					this.end('interrupted', {});
+					return;
+				}
+
+				this.end('failed', {
+					error:
+						this.stderr.trim() || `${this.label} exited with ${String(code)}`,
+				});
+			});
+			this.child.on('error', (error: NodeJS.ErrnoException) => {
+				console.error(`[runner] ${this.label}: ${String(error)}`);
+				resolve();
+				this.end('failed', {error: spawnFailure(this.label, error)});
+			});
+		});
+		void this.run(relay).catch((error: unknown) => {
+			this.end(this.interrupting ? 'interrupted' : 'failed', {
+				error: String(error instanceof Error ? error.message : error),
+			});
+			this.child.kill('SIGTERM');
+		});
+	}
+
+	private async run(relay: McpRelay): Promise<void> {
+		const {assign} = this;
+		const init = await this.peer.request('initialize', {
+			protocolVersion: 1,
+			clientCapabilities: {
+				fs: {readTextFile: false, writeTextFile: false},
+				terminal: false,
+			},
+			clientInfo: {name: 'agentarea-runner', version: VERSION},
+		});
+		const capabilities = (init?.agentCapabilities ?? {}) as Record<string, any>;
+		if (!capabilities['mcpCapabilities']?.http) {
+			throw new Error(
+				`${this.label} takes no HTTP MCP server, so the client's tools would be missing from its turns`,
+			);
+		}
+
+		const cwd = taskDir(this.options, assign.task_id);
+		const mcpServers = [
+			{
+				type: 'http',
+				name: MCP_SERVER_NAME,
+				url: relay.url(assign.task_id),
+				headers: [],
+			},
+		];
+		let resumed = false;
+		let session: Record<string, any> | null;
+		if (assign.session_id && capabilities['loadSession']) {
+			// Loading replays the session's history as updates; it is not this turn's.
+			this.replaying = true;
+			session = await this.peer.request('session/load', {
+				sessionId: assign.session_id,
+				cwd,
+				mcpServers,
+			});
+			this.replaying = false;
+			this.sessionId = assign.session_id;
+			resumed = true;
+		} else {
+			session = await this.peer.request('session/new', {cwd, mcpServers});
+			this.sessionId = String(session?.['sessionId']);
+		}
+
+		this.sink.started(this.sessionId);
+		if (assign.model) {
+			await this.pickModel(assign.model, session?.['configOptions'] ?? []);
+		}
+
+		const text =
+			assign.instructions && !resumed
+				? `${assign.instructions}\n\n${assign.message}`
+				: assign.message;
+		const result = await this.peer.request(
+			'session/prompt',
+			{sessionId: this.sessionId, prompt: [{type: 'text', text}]},
+			0,
+		);
+		for (const body of this.stream.flush()) {
+			this.sink.event(body);
+		}
+
+		const stop = String(result?.stopReason ?? 'end_turn');
+		if (stop === 'cancelled' || this.interrupting) {
+			this.end('interrupted', {});
+		} else if (stop === 'refusal') {
+			this.end('failed', {error: `${this.label} refused the turn`});
+		} else {
+			this.end('completed', {response: this.stream.response});
+		}
+
+		this.child.stdin.end();
+	}
+
+	/** The turn's model: the session's model option, or `session/set_model` where it has none. */
+	private async pickModel(
+		model: string,
+		configOptions: Array<Record<string, any>>,
+	): Promise<void> {
+		const option = acpModelOption(configOptions);
+		if (option) {
+			await this.peer.request('session/set_config_option', {
+				sessionId: this.sessionId,
+				configId: option,
+				value: model,
+			});
+			return;
+		}
+
+		await this.peer.request('session/set_model', {
+			sessionId: this.sessionId,
+			modelId: model,
+		});
+	}
+
+	private notified(method: string, params: Record<string, any>): void {
+		if (method !== 'session/update' || this.replaying) {
+			return;
+		}
+
+		for (const body of acpEvents(params['update'] ?? {}, this.stream)) {
+			this.sink.event(body);
+		}
+	}
+
+	private requested(
+		id: number | string,
+		method: string,
+		params: Record<string, any>,
+	): void {
+		if (method !== 'session/request_permission') {
+			this.peer.respondError(id, `the runner does not answer ${method}`);
+			return;
+		}
+
+		const options = (params['options'] ?? []) as Array<Record<string, any>>;
+		const call = (params['toolCall'] ?? {}) as Record<string, any>;
+		if (!sandboxed(this.assign)) {
+			this.answer(id, acpPermissionOption(options, true));
+			return;
+		}
+
+		const requestId = `${this.assign.turn_id}-${String(id)}`;
+		this.permissions.set(requestId, {id, options});
+		this.sink.approval({
+			request_id: requestId,
+			item_id: call['toolCallId'] ?? null,
+			kind: 'tool',
+			tool_name: this.stream.toolName(
+				String(call['toolCallId'] ?? ''),
+				call['title'] ?? call['kind'],
+			),
+			arguments: (call['rawInput'] ?? {}) as Record<string, unknown>,
+			reason: null,
+		});
+	}
+
+	private answer(id: number | string, optionId: string | undefined): void {
+		this.peer.respond(id, {
+			outcome: optionId
+				? {outcome: 'selected', optionId}
+				: {outcome: 'cancelled'},
+		});
+	}
+
+	steer(messageId: string, _text: string): void {
+		// ACP takes one prompt at a time; the platform sends this one as the next turn.
+		this.sink.steered(messageId, false);
+	}
+
+	cancel(): void {
+		this.interrupting = true;
+		for (const {id} of this.permissions.values()) {
+			this.answer(id, undefined);
+		}
+
+		this.permissions.clear();
+		if (this.sessionId) {
+			this.peer.notify('session/cancel', {sessionId: this.sessionId});
+		}
+
+		setTimeout(() => {
+			if (this.running) {
+				console.error(
+					`[runner] ${this.label} did not stop turn ${logged(
+						this.assign.turn_id,
+					)}; killing it`,
+				);
+				this.child.kill('SIGKILL');
+			}
+		}, CANCEL_GRACE_MS);
+	}
+
+	decide(requestId: string, approved: boolean): void {
+		const pending = this.permissions.get(requestId);
+		if (!pending) {
+			return;
+		}
+
+		this.permissions.delete(requestId);
+		this.answer(pending.id, acpPermissionOption(pending.options, approved));
+	}
+
+	/** Wait for the process of an earlier turn to exit, killing it after `graceMs`. */
+	async stop(graceMs: number): Promise<void> {
+		await Promise.race([this.exited, delay(graceMs)]);
+		if (this.running) {
+			this.child.kill('SIGKILL');
+			await Promise.race([this.exited, delay(graceMs)]);
+		}
+	}
+
+	private get running(): boolean {
+		return this.child.exitCode === null && this.child.signalCode === null;
+	}
+
+	private end(
+		status: FinishStatus,
+		fields: {response?: string; error?: string},
+	): void {
+		if (this.ended) {
+			return;
+		}
+
+		this.ended = true;
+		this.sink.finished(status, {...fields, sessionId: this.sessionId});
+	}
+}
+
 /**
  * The CLI's way to the client's MCP endpoint: a local endpoint per task that
  * forwards there with the token of the task's running turn. Between turns,
@@ -1820,6 +2456,9 @@ class Runner {
 	private readonly codexServers = new Map<string, CodexServer>();
 	/** Each task's latest Claude process, which a new turn of the task waits out. */
 	private readonly claudeTurns = new Map<string, ClaudeTurn>();
+	private readonly acpTurns = new Map<string, AcpTurn>();
+	/** An ACP harness's models, asked once at start. */
+	acpReport: RunnerReport | undefined;
 	private pinger: NodeJS.Timeout | undefined;
 	private backoff = 1000;
 
@@ -1852,7 +2491,7 @@ class Runner {
 			const report =
 				this.options.harness === 'codex'
 					? codexRunnerReport(this.options.loginFrom)
-					: undefined;
+					: this.acpReport;
 			socket.send(
 				JSON.stringify({
 					type: 'hello',
@@ -2120,7 +2759,37 @@ class Runner {
 			return;
 		}
 
+		if (this.options.harness !== 'codex') {
+			void this.startAcp(running, sink);
+			return;
+		}
+
 		void this.startCodex(running, sink);
+	}
+
+	private async startAcp(running: Running, sink: TurnSink): Promise<void> {
+		const {assign} = running;
+		// Two processes on one session would both write it.
+		await this.acpTurns.get(assign.task_id)?.stop(CANCEL_GRACE_MS);
+		if (running.cancelled) {
+			sink.finished('interrupted', {});
+			return;
+		}
+
+		const turn = new AcpTurn(
+			this.options,
+			this.relay,
+			assign,
+			sink,
+			acpCommand(this.options),
+		);
+		running.control = turn;
+		this.acpTurns.set(assign.task_id, turn);
+		void turn.exited.then(() => {
+			if (this.acpTurns.get(assign.task_id) === turn) {
+				this.acpTurns.delete(assign.task_id);
+			}
+		});
 	}
 
 	private async startClaude(running: Running, sink: TurnSink): Promise<void> {
@@ -2271,6 +2940,11 @@ export function setupCodexRequirements(): 'already' | 'written' {
 }
 
 export async function runRunner(options: RunnerOptions): Promise<never> {
+	if (options.harness !== 'codex' && options.harness !== 'claude') {
+		// A custom harness without a command stops here, not at its first turn.
+		acpCommand(options);
+	}
+
 	if (options.harness === 'codex' && !managesNetwork(codexRequirements())) {
 		console.error(
 			`[runner] ${REQUIREMENTS_MISSING}; until then its sandboxed turns fail.`,
@@ -2280,6 +2954,18 @@ export async function runRunner(options: RunnerOptions): Promise<never> {
 		`[runner] ${options.harness} serving client ${options.config.client_id} in ${options.config.workspace} at ${options.config.api_url}; data in ${options.root}`,
 	);
 	const runner = new Runner(options);
+	if (options.harness !== 'codex' && options.harness !== 'claude') {
+		try {
+			runner.acpReport = await acpRunnerReport(options);
+		} catch (error) {
+			console.error(
+				`[runner] could not ask ${options.harness} for its models: ${String(
+					error,
+				)}`,
+			);
+		}
+	}
+
 	await runner.relay.listen();
 	runner.connect();
 	return new Promise<never>(() => {

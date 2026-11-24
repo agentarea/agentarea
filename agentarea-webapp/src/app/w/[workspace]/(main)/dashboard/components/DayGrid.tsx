@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import type { ScheduledRun } from "@/api/client";
+import { AgentAvatar } from "@/components/AgentAvatar";
+import Link from "@/components/WorkspaceLink";
 import { cn } from "@/lib/utils";
 import { dayKey, type CalendarDay } from "./calendar";
-import { RunChip, runKey } from "./RunChip";
+import { RunChip, runHref, runKey, runName } from "./RunChip";
 import type { TimeGridFormats } from "./TimeGrid";
 
 function DayCell({
@@ -105,6 +107,42 @@ export function DayGrid({
 }
 
 /** A phone's week and month: the days ahead that have runs. */
+/** One run on a line: time, what fires, and the agent that runs it. */
+function UpcomingRow({
+  run,
+  formats,
+  date,
+}: {
+  run: ScheduledRun;
+  formats: TimeGridFormats;
+  date: string;
+}) {
+  return (
+    <Link
+      href={runHref(run)}
+      className="-mx-2 flex min-w-0 items-center gap-3 rounded-md px-2 py-1.5 text-[13px] transition-colors hover:bg-muted"
+      title={runName(run)}
+      aria-label={`${date} ${formats.time(run.fires_at)} ${runName(run)}`}
+    >
+      <span className="w-10 shrink-0 font-mono text-[12px] text-muted-foreground">
+        {formats.time(run.fires_at)}
+      </span>
+      <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+        {run.title}
+      </span>
+      {run.agent_name && (
+        <span className="flex min-w-0 max-w-[40%] shrink-0 items-center gap-1.5 text-[12px] text-muted-foreground">
+          <AgentAvatar
+            agent={{ id: run.agent_id, name: run.agent_name }}
+            size="xs"
+          />
+          <span className="truncate">{run.agent_name}</span>
+        </span>
+      )}
+    </Link>
+  );
+}
+
 export function UpcomingList({
   days,
   formats,
@@ -117,32 +155,30 @@ export function UpcomingList({
   const upcoming = days.filter((d) => !d.isPast && d.items.length > 0);
   if (upcoming.length === 0) {
     return (
-      <div className="px-6 py-6 text-[13px] text-muted-foreground">{empty}</div>
+      <div className="px-10 py-8 text-[13px] text-muted-foreground">
+        {empty}
+      </div>
     );
   }
   return (
-    <>
+    <div className="flex flex-col gap-4 px-10 py-5">
       {upcoming.map((day) => (
-        <div
-          key={dayKey(day.date)}
-          className="border-b border-zinc-200 px-6 py-2.5 dark:border-zinc-700"
-        >
-          <div className="mb-1.5 text-[12px] font-medium capitalize text-muted-foreground">
+        <div key={dayKey(day.date)}>
+          <div className="mb-1 text-[12px] font-medium capitalize text-muted-foreground">
             {formats.dayLabel(day.date)}
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col">
             {day.items.map((run) => (
-              <RunChip
+              <UpcomingRow
                 key={runKey(run)}
                 run={run}
-                time={formats.time}
+                formats={formats}
                 date={formats.dayLabel(day.date)}
-                withAgent
               />
             ))}
           </div>
         </div>
       ))}
-    </>
+    </div>
   );
 }
