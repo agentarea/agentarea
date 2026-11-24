@@ -74,6 +74,28 @@ func TestParseRanksDedupesAndRefusesBoolRank(t *testing.T) {
 	}
 }
 
+func TestASourceTypeSpecLeavesOutTheKeysTheCatalogKeeps(t *testing.T) {
+	v, _ := DecodeJSON([]byte(`{"source_types": [{"slug": "telegram", "name": "Telegram", "delivery": "webhook",
+		"version": "1.1.0", "recommendation_rank": 2, "agentarea:recommendation_rank": 3,
+		"event": {"kind": "telegram.update", "summary": ["{body:message.text}"]}}]}`))
+	items, err := ParseSource(domain.TypeSourceTypes, v)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("%+v %v", items, err)
+	}
+	it := items[0]
+	if *it.Version != "1.1.0" || *it.Rank != 2 {
+		t.Fatalf("version %v rank %v", *it.Version, *it.Rank)
+	}
+	for _, k := range []string{"version", "recommendation_rank", "agentarea:recommendation_rank"} {
+		if _, ok := it.Spec[k]; ok {
+			t.Fatalf("spec keeps %s: %v", k, it.Spec)
+		}
+	}
+	if fmt.Sprint(mapping(it.Spec["event"])["summary"]) != "[{body:message.text}]" || it.Spec["slug"] != "telegram" {
+		t.Fatalf("spec %v", it.Spec)
+	}
+}
+
 func TestMCPFormatsAndCommandPinning(t *testing.T) {
 	v, _ := DecodeJSON([]byte(`{"servers": [{"server": {"name": "io.x/weather-api", "version": "1.2.0",
 		"remotes": [{"type": "sse", "url": "https://w.example", "headers": [{"name": "Authorization"}]}],
