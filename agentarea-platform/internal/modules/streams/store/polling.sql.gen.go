@@ -165,3 +165,12 @@ func (q *Queries) SourceSubscribed(ctx context.Context, arg SourceSubscribedPara
 	)
 	return err
 }
+
+const sourceUnregistered = `-- name: SourceUnregistered :exec
+UPDATE stream_sources SET registered_url = NULL WHERE id = $1 AND registered_url IS NOT NULL
+`
+
+func (q *Queries) SourceUnregistered(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, sourceUnregistered, id)
+	return err
+}

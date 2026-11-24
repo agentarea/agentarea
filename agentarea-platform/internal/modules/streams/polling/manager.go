@@ -119,6 +119,9 @@ func (m *Manager) reconcile(ctx context.Context) {
 	var polled []Source
 	for _, src := range sources {
 		present[src.ID] = true
+		if src.Held {
+			continue
+		}
 		switch src.Kind {
 		case KindWebhook:
 			if src.Entry.Registration != nil && src.Entry.Registration.Transport == MCPEvents {
@@ -366,7 +369,7 @@ func (m *Manager) rememberValues(src Source, values Values) {
 }
 
 // unregisterGone takes back the webhook of every remembered source that no
-// longer exists.
+// longer exists; a source Load returns held is present.
 func (m *Manager) unregisterGone(ctx context.Context, present map[string]bool) {
 	m.mu.Lock()
 	gone := make(map[string]registration)
@@ -387,6 +390,7 @@ func (m *Manager) unregisterGone(ctx context.Context, present map[string]bool) {
 			continue
 		}
 		m.log.InfoContext(ctx, "webhook of a deleted source unregistered", "source_id", id)
+		m.record(ctx, m.sources.Unregistered(ctx, id))
 	}
 }
 
@@ -403,6 +407,7 @@ func (m *Manager) unsubscribe(ctx context.Context, id string, reg *mcpRegistrati
 		return
 	}
 	m.log.InfoContext(ctx, "MCP Events subscription of a deleted source taken back", "source_id", id)
+	m.record(ctx, m.sources.Unregistered(ctx, id))
 }
 
 func (m *Manager) record(ctx context.Context, err error) {
@@ -594,6 +599,10 @@ func (m *Manager) clearWebhook(ctx context.Context, src Source) {
 	}
 	if err != nil {
 		m.log.WarnContext(ctx, "could not clear the provider webhook before polling", "source_id", src.ID, "error", err)
+		return
+	}
+	if src.RegisteredURL != "" {
+		m.record(ctx, m.sources.Unregistered(ctx, src.ID))
 	}
 }
 

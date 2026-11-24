@@ -49,8 +49,9 @@ func (s StoredSources) write(ctx context.Context, fn func(ctx context.Context, q
 }
 
 // Load returns every poll source and every webhook source whose type registers with its
-// provider. A row that cannot be read (config not JSON, type not in the catalog) is logged
-// and left out: one bad source must not stop every other.
+// provider. A source that cannot be acted on now (config not JSON, type not in the catalog,
+// a webhook type that registers nothing) comes back Held: one bad source must not stop every
+// other, and a type the catalog lost for a while must not read as a deleted source.
 func (s StoredSources) Load(ctx context.Context) ([]Source, error) {
 	q, release, err := s.DB.Global().Read(ctx)
 	if err != nil {
@@ -61,20 +62,22 @@ func (s StoredSources) Load(ctx context.Context) ([]Source, error) {
 	if err != nil {
 		return nil, err
 	}
+	out := make([]Source, 0, len(rows)+len(bad))
 	for _, e := range bad {
 		s.Log.ErrorContext(ctx, "stream source skipped", "error", e)
+		if u, ok := errors.AsType[*store.UnreadableSource](e); ok {
+			out = append(out, Source{ID: u.ID, Held: true})
+		}
 	}
 	entries, err := s.Entries(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Source, 0, len(rows))
 	for _, r := range rows {
 		e, ok := entries[r.Slug]
-		if !ok {
-			continue
-		}
-		if r.Kind == KindWebhook && e.Entry.Registration == nil {
+		if !ok || (r.Kind == KindWebhook && e.Entry.Registration == nil) {
+			out = append(out, Source{ID: r.ID, WorkspaceID: r.WorkspaceID, Kind: r.Kind, Slug: r.Slug,
+				RegisteredURL: r.RegisteredURL, Held: true})
 			continue
 		}
 		src := Source{
@@ -127,6 +130,13 @@ func (s StoredSources) Failed(ctx context.Context, id, reason string) error {
 func (s StoredSources) Registered(ctx context.Context, id, url string) error {
 	return s.write(ctx, func(ctx context.Context, q db.Querier) error {
 		return store.Polling{}.Registered(ctx, q, id, url)
+	})
+}
+
+// Unregistered implements Sources.
+func (s StoredSources) Unregistered(ctx context.Context, id string) error {
+	return s.write(ctx, func(ctx context.Context, q db.Querier) error {
+		return store.Polling{}.Unregistered(ctx, q, id)
 	})
 }
 
