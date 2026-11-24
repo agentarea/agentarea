@@ -50,6 +50,8 @@ type ResolvedModel struct {
 	ReasoningLevels        []string        `json:"reasoning_levels"`
 	Provider               ProviderProfile `json:"provider"`
 	DefaultContextStrategy string          `json:"default_context_strategy"`
+	// ResponsesLite: the model takes its tools the Responses Lite way.
+	ResponsesLite bool `json:"responses_lite,omitempty"`
 }
 
 // ModelPrices are the spec's USD prices per token; nil is unpriced.

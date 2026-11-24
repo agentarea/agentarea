@@ -920,12 +920,12 @@ const upsertPlatformModelSpec = `-- name: UpsertPlatformModelSpec :one
 INSERT INTO model_specs (id, provider_spec_id, model_name, display_name, description, kind, context_window,
     max_output_tokens, input_cost_per_token, output_cost_per_token, cached_input_cost_per_token,
     cache_creation_input_cost_per_token, supports_function_calling, supports_vision, supports_reasoning,
-    reasoning_efforts, is_active, workspace_id, created_by, created_at, updated_at)
+    reasoning_efforts, responses_lite, is_active, workspace_id, created_by, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7,
     $8, $9::numeric, $10::numeric,
     $11::numeric, $12::numeric,
     $13, $14, $15, $16::jsonb,
-    $17, 'platform', 'platform', $18, $18)
+    $17, $18, 'platform', 'platform', $19, $19)
 ON CONFLICT (workspace_id, provider_spec_id, model_name) DO UPDATE SET
     display_name = EXCLUDED.display_name,
     description = COALESCE(EXCLUDED.description, model_specs.description),
@@ -940,8 +940,9 @@ ON CONFLICT (workspace_id, provider_spec_id, model_name) DO UPDATE SET
     supports_vision = EXCLUDED.supports_vision,
     supports_reasoning = EXCLUDED.supports_reasoning,
     reasoning_efforts = COALESCE(EXCLUDED.reasoning_efforts, model_specs.reasoning_efforts),
+    responses_lite = EXCLUDED.responses_lite,
     is_active = EXCLUDED.is_active,
-    updated_at = $18
+    updated_at = $19
 RETURNING id
 `
 
@@ -962,6 +963,7 @@ type UpsertPlatformModelSpecParams struct {
 	SupportsVision          pgtype.Bool
 	SupportsReasoning       pgtype.Bool
 	ReasoningEfforts        []byte
+	ResponsesLite           bool
 	IsActive                bool
 	Now                     pgtype.Timestamp
 }
@@ -986,6 +988,7 @@ func (q *Queries) UpsertPlatformModelSpec(ctx context.Context, arg UpsertPlatfor
 		arg.SupportsVision,
 		arg.SupportsReasoning,
 		arg.ReasoningEfforts,
+		arg.ResponsesLite,
 		arg.IsActive,
 		arg.Now,
 	)

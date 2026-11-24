@@ -205,12 +205,12 @@ SELECT id FROM provider_specs WHERE provider_key = @provider_key;
 INSERT INTO model_specs (id, provider_spec_id, model_name, display_name, description, kind, context_window,
     max_output_tokens, input_cost_per_token, output_cost_per_token, cached_input_cost_per_token,
     cache_creation_input_cost_per_token, supports_function_calling, supports_vision, supports_reasoning,
-    reasoning_efforts, is_active, workspace_id, created_by, created_at, updated_at)
+    reasoning_efforts, responses_lite, is_active, workspace_id, created_by, created_at, updated_at)
 VALUES (@id, @provider_spec_id, @model_name, @display_name, sqlc.narg(description), @kind, sqlc.narg(context_window),
     sqlc.narg(max_output_tokens), sqlc.narg(input_cost)::numeric, sqlc.narg(output_cost)::numeric,
     sqlc.narg(cached_input_cost)::numeric, sqlc.narg(cache_creation_cost)::numeric,
     @supports_function_calling, @supports_vision, @supports_reasoning, sqlc.narg(reasoning_efforts)::jsonb,
-    @is_active, 'platform', 'platform', @now, @now)
+    @responses_lite, @is_active, 'platform', 'platform', @now, @now)
 ON CONFLICT (workspace_id, provider_spec_id, model_name) DO UPDATE SET
     display_name = EXCLUDED.display_name,
     description = COALESCE(EXCLUDED.description, model_specs.description),
@@ -225,6 +225,7 @@ ON CONFLICT (workspace_id, provider_spec_id, model_name) DO UPDATE SET
     supports_vision = EXCLUDED.supports_vision,
     supports_reasoning = EXCLUDED.supports_reasoning,
     reasoning_efforts = COALESCE(EXCLUDED.reasoning_efforts, model_specs.reasoning_efforts),
+    responses_lite = EXCLUDED.responses_lite,
     is_active = EXCLUDED.is_active,
     updated_at = @now
 RETURNING id;

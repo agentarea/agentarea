@@ -838,7 +838,7 @@ func parseModels(m map[string]any) ([]Entry, error) {
 		}
 		spec := map[string]any{"provider_key": key, "model_name": model, "kind": kind}
 		for _, f := range []string{"context_window", "max_output_tokens", "input_cost_per_token", "output_cost_per_token",
-			"cached_input_cost_per_token", "cache_creation_input_cost_per_token", "reasoning_efforts"} {
+			"cached_input_cost_per_token", "cache_creation_input_cost_per_token", "reasoning_efforts", "responses_lite"} {
 			spec[f] = entry[f]
 		}
 		for _, f := range []string{"supports_function_calling", "supports_vision", "supports_reasoning"} {
