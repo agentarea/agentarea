@@ -95,6 +95,10 @@ func validateTightens(h, l api.Policy) error {
 		isTrue(h.ContentSafety.PromptInjectionDetectionEnabled) && isFalse(l.ContentSafety.PromptInjectionDetectionEnabled) {
 		return refused("prompt_injection_detection_enabled cannot be disabled")
 	}
+	if h.ContentSafety != nil && l.ContentSafety != nil &&
+		isTrue(h.ContentSafety.FetchSeenLinksOnly) && isFalse(l.ContentSafety.FetchSeenLinksOnly) {
+		return refused("fetch_seen_links_only cannot be disabled")
+	}
 	return nil
 }
 
@@ -217,7 +221,12 @@ func mergeContentSafety(h, l *api.ContentSafety) *api.ContentSafety {
 	if check == nil {
 		check = h.AnswerCheck
 	}
-	return &api.ContentSafety{PromptInjectionDetectionEnabled: &on, AnswerCheck: check}
+	var seenLinks *bool
+	if h.FetchSeenLinksOnly != nil || l.FetchSeenLinksOnly != nil {
+		v := isTrue(h.FetchSeenLinksOnly) || isTrue(l.FetchSeenLinksOnly)
+		seenLinks = &v
+	}
+	return &api.ContentSafety{PromptInjectionDetectionEnabled: &on, AnswerCheck: check, FetchSeenLinksOnly: seenLinks}
 }
 
 // Dedupe keeps the first of each value, in order (dict.fromkeys).

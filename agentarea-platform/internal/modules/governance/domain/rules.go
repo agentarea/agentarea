@@ -335,9 +335,11 @@ func safetyParams(c *api.Checker, p any) {
 	if v, pr := api.Field(o, "answer_check"); pr && v != nil {
 		check = c.AnswerCheck(v, loc("answer_check"))
 	}
-	c.Extra(o, []string{"prompt_injection", "answer_check"}, nil)
-	if c.Count() == before && injection == nil && check == nil {
-		c.Fail("safety on content requires 'prompt_injection' or 'answer_check'", nil)
+	v, pr = api.Field(o, "fetch_seen_links_only")
+	seenLinks := c.OptBool(v, pr, loc("fetch_seen_links_only"))
+	c.Extra(o, []string{"prompt_injection", "answer_check", "fetch_seen_links_only"}, nil)
+	if c.Count() == before && injection == nil && check == nil && seenLinks == nil {
+		c.Fail("safety on content requires 'prompt_injection', 'answer_check' or 'fetch_seen_links_only'", nil)
 	}
 }
 
@@ -581,6 +583,11 @@ func (a *accumulator) applySafety(params any) error {
 			return fmt.Errorf("invalid answer_check in a stored safety rule: %s", c.Errs[0].Msg)
 		}
 		a.contentSafety.AnswerCheck = check
+		a.contentSafetyKeys++
+	}
+	if v, ok := api.Field(params, "fetch_seen_links_only"); ok {
+		on := api.Truthy(v)
+		a.contentSafety.FetchSeenLinksOnly = &on
 		a.contentSafetyKeys++
 	}
 	return nil

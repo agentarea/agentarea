@@ -174,6 +174,7 @@ type ApprovalPolicy struct {
 type ContentSafetyPolicy struct {
 	PromptInjectionDetection *bool        `json:"prompt_injection_detection_enabled"`
 	AnswerCheck              *AnswerCheck `json:"answer_check"`
+	FetchSeenLinksOnly       *bool        `json:"fetch_seen_links_only,omitempty"`
 }
 
 type AnswerCheck struct {

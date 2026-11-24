@@ -243,6 +243,7 @@ type BudgetPolicyOutput struct {
 // ContentSafetyPolicy Content-safety governance controls.
 type ContentSafetyPolicy struct {
 	AnswerCheck                     *AnswerCheckPolicy `json:"answer_check"`
+	FetchSeenLinksOnly              *bool              `json:"fetch_seen_links_only"`
 	PromptInjectionDetectionEnabled *bool              `json:"prompt_injection_detection_enabled"`
 }
 

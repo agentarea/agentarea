@@ -136,3 +136,32 @@ func TestPatternIsWithin(t *testing.T) {
 		}
 	}
 }
+
+func TestFetchSeenLinksOnlyIsAnOptInSafetyRule(t *testing.T) {
+	ws, err := RulesToDocument([]Rule{mkRule("content", "safety", param("prompt_injection", true))}, slog.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	off, err := Resolve([]*api.Policy{&ws}, nil)
+	if err != nil || off.ContentSafety.FetchSeenLinksOnly != nil {
+		t.Fatalf("no rule turned it on, got %+v %v", off.ContentSafety, err)
+	}
+	rule := mkRule("content", "safety", param("fetch_seen_links_only", true))
+	rule.SubjectType, rule.SubjectID = "agent", "a1"
+	if err := AssertEnforceable(rule); err != nil {
+		t.Fatal(err)
+	}
+	agent, err := RulesToDocument([]Rule{rule}, slog.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	on, err := Resolve([]*api.Policy{&ws, &agent}, nil)
+	if err != nil || on.ContentSafety.FetchSeenLinksOnly == nil || !*on.ContentSafety.FetchSeenLinksOnly {
+		t.Fatalf("agent opt-in lost, got %+v %v", on.ContentSafety, err)
+	}
+	no := false
+	_, err = Resolve([]*api.Policy{&agent, {ContentSafety: &api.ContentSafety{FetchSeenLinksOnly: &no}}}, nil)
+	if !errors.Is(err, api.ErrPolicyRefused) {
+		t.Fatalf("a lower layer turned the opt-in off: %v", err)
+	}
+}

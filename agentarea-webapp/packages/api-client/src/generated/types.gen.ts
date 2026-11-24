@@ -2973,6 +2973,10 @@ export type ConnectionSharingRequest = {
 export type ContentSafetyPolicy = {
     answer_check?: AnswerCheckPolicy | null;
     /**
+     * Fetch Seen Links Only
+     */
+    fetch_seen_links_only?: boolean | null;
+    /**
      * Prompt Injection Detection Enabled
      */
     prompt_injection_detection_enabled?: boolean | null;

@@ -184,7 +184,7 @@ func (r *agentRun) gate(ctx workflow.Context, c ToolCall) (bool, bool, error) {
 		return false, false, nil
 	}
 	if b, bound := r.cfg.Bindings[c.Name]; !bound || b.MCP == nil {
-		if url, isFetch := webFetchURL(c.Name, args); isFetch && !r.linkReachedTask(url) {
+		if url, isFetch := webFetchURL(c.Name, args); isFetch && r.fetchSeenLinksOnly(ctx) && !r.linkReachedTask(url) {
 			r.deny(ctx, c, "a page can be fetched only from a link that already appeared in this "+
 				"task: the request, search results or a page fetched earlier", false, false)
 			return false, false, nil
@@ -224,6 +224,15 @@ func webFetchURL(tool string, args map[string]any) (string, bool) {
 	}
 	s, _ := url.(string)
 	return s, true
+}
+
+// fetchSeenLinksOnly is the policy's opt-in; a history recorded before it was
+// an opt-in replays with the rule always on.
+func (r *agentRun) fetchSeenLinksOnly(ctx workflow.Context) bool {
+	if cs := r.cfg.Policy.ContentSafety; cs != nil && cs.FetchSeenLinksOnly != nil && *cs.FetchSeenLinksOnly {
+		return true
+	}
+	return workflow.GetVersion(ctx, "fetch-seen-links-opt-in", workflow.DefaultVersion, 1) == workflow.DefaultVersion
 }
 
 func (r *agentRun) linkReachedTask(url string) bool {

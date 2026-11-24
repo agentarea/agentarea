@@ -971,6 +971,7 @@ export const zConnectionSharingRequest = z.object({
  */
 export const zContentSafetyPolicy = z.object({
   answer_check: zAnswerCheckPolicy.nullish(),
+  fetch_seen_links_only: z.boolean().nullish(),
   prompt_injection_detection_enabled: z.boolean().nullish(),
 });
 

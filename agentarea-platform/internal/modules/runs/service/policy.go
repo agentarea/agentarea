@@ -34,7 +34,7 @@ func toRunPolicy(p governanceapi.Policy) api.Policy {
 		out.Approval = ap
 	}
 	if c := p.ContentSafety; c != nil {
-		cs := &api.ContentSafetyPolicy{PromptInjectionDetection: c.PromptInjectionDetectionEnabled}
+		cs := &api.ContentSafetyPolicy{PromptInjectionDetection: c.PromptInjectionDetectionEnabled, FetchSeenLinksOnly: c.FetchSeenLinksOnly}
 		if c.AnswerCheck != nil {
 			cs.AnswerCheck = &api.AnswerCheck{Enabled: c.AnswerCheck.Enabled, Language: deref(c.AnswerCheck.Language), RewriteInstruction: deref(c.AnswerCheck.RewriteInstruction)}
 		}
@@ -108,7 +108,7 @@ func fromRunPolicy(p api.Policy) governanceapi.Policy {
 		out.Approval = ga
 	}
 	if c := p.ContentSafety; c != nil {
-		gc := &governanceapi.ContentSafety{PromptInjectionDetectionEnabled: c.PromptInjectionDetection}
+		gc := &governanceapi.ContentSafety{PromptInjectionDetectionEnabled: c.PromptInjectionDetection, FetchSeenLinksOnly: c.FetchSeenLinksOnly}
 		if c.AnswerCheck != nil {
 			gc.AnswerCheck = &governanceapi.AnswerCheck{Enabled: c.AnswerCheck.Enabled, Language: ref(c.AnswerCheck.Language), RewriteInstruction: ref(c.AnswerCheck.RewriteInstruction)}
 		}
