@@ -4300,7 +4300,8 @@
       "source": "Источник",
       "category": "Категория",
       "description": "Описание"
-    }
+    },
+    "found": "Найдено"
   },
   "BundleInstall": {
     "modelsLoadFailed": "Не удалось загрузить модели воркспейса",

@@ -4299,7 +4299,8 @@
       "source": "Source",
       "category": "Category",
       "description": "Description"
-    }
+    },
+    "found": "Found"
   },
   "BundleInstall": {
     "modelsLoadFailed": "Couldn't load workspace models",

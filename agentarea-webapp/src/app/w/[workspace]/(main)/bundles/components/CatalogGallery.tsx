@@ -891,26 +891,32 @@ export default function CatalogGallery({
                   )}
                 </section>
               ))}
-            {!busy &&
-              !hasFilters &&
-              sort === DEFAULT_SORT &&
-              initialSections.length > 0 &&
-              paging.entries.length > 0 && (
-                <CatalogShelfHeading
-                  icon={LayoutGrid}
-                  title={tCatalog(`allOfType.${type}`)}
-                  count={paging.total}
-                />
-              )}
-
             {!busy && paging.entries.length > 0 && (
               <div
                 className={cn(
-                  "transition-opacity",
+                  "space-y-2 transition-opacity",
                   refreshing && "pointer-events-none opacity-50"
                 )}
                 aria-busy={refreshing}
               >
+                {/* The list's heading sits as close to it as a shelf's does:
+                    under the shelves it is the whole list, and a search or
+                    filter says how much it found. */}
+                {!hasFilters &&
+                  sort === DEFAULT_SORT &&
+                  initialSections.length > 0 && (
+                    <CatalogShelfHeading
+                      icon={LayoutGrid}
+                      title={tCatalog(`allOfType.${type}`)}
+                    />
+                  )}
+                {hasFilters && (
+                  <CatalogShelfHeading
+                    icon={Search}
+                    title={tCatalog("found")}
+                    count={paging.total}
+                  />
+                )}
                 {view === "grid" ? (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                     {paging.entries.map((e) => (
@@ -981,7 +987,7 @@ function CatalogShelfHeading({
   icon: LucideIcon;
   title: string;
   description?: string;
-  /** The whole list's size; a shelf is a short pick, so it has none. */
+  /** How many matched; only a filtered list shows it. */
   count?: number;
 }) {
   return (
@@ -1414,7 +1420,12 @@ function DetailView({
   const isBundle = entry.type === "bundles";
 
   return (
-    <div className={cn("space-y-8", isBundle ? "max-w-[1120px]" : "max-w-2xl")}>
+    <div
+      className={cn(
+        "mx-auto space-y-8",
+        isBundle ? "max-w-[1120px]" : "max-w-2xl"
+      )}
+    >
       <button
         onClick={onBack}
         className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
