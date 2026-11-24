@@ -72,6 +72,9 @@ type Deps struct {
 	Files blob.Store
 	// Artifacts publishes what a runner puts under outputs/ as the task's artifacts.
 	Artifacts Artifacts
+	// FileStoreHost is the host of the platform's file store, where a turn downloads the task's
+	// files (agentarea_files_download_url); every turn allows it.
+	FileStoreHost string
 	// Store is the files of the task a subtask works on, its parent's.
 	Store   Store
 	Workers Workers

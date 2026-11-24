@@ -26,6 +26,22 @@ func digest(b []byte) string {
 	return hex.EncodeToString(s[:])
 }
 
+func TestPublicHostIsWherePresignedURLsGo(t *testing.T) {
+	for _, c := range []struct {
+		cfg  kernel.Config
+		want string
+	}{
+		{kernel.Config{Endpoint: "http://rustfs:9000", PublicEndpoint: "https://storage.example.com", ArtifactsBucket: "artifacts"}, "storage.example.com"},
+		{kernel.Config{Endpoint: "http://localhost:9000", ArtifactsBucket: "artifacts"}, "localhost"},
+		{kernel.Config{Region: "eu-west-1", ArtifactsBucket: "artifacts"}, "artifacts.s3.eu-west-1.amazonaws.com"},
+		{kernel.Config{Region: "us-east-1", ArtifactsBucket: "artifacts"}, "artifacts.s3.amazonaws.com"},
+	} {
+		if got := New(c.cfg).PublicHost(); got != c.want {
+			t.Errorf("%+v: %q, want %q", c.cfg, got, c.want)
+		}
+	}
+}
+
 func TestPutGetStatRoundTrip(t *testing.T) {
 	fake, srv := newFakeS3(t, "artifacts")
 	st := testClient(srv.URL, "").Artifacts()

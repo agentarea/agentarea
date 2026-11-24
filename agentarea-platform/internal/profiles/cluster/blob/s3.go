@@ -48,6 +48,24 @@ func New(cfg kernel.Config) *Client {
 	return &Client{cfg: cfg, internal: newS3(cfg, cfg.Endpoint), public: newS3(cfg, cfg.Signing())}
 }
 
+// PublicHost is the host the workspace file store's presigned URLs reach: the public endpoint's,
+// or on AWS the artifacts bucket's virtual host; "" when the endpoint is not a URL.
+func (c *Client) PublicHost() string {
+	endpoint := c.cfg.Signing()
+	if endpoint == "" {
+		host := "s3." + c.cfg.Region + ".amazonaws.com"
+		if c.cfg.Region == "us-east-1" {
+			host = "s3.amazonaws.com"
+		}
+		return c.cfg.ArtifactsBucket + "." + host
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return ""
+	}
+	return u.Hostname()
+}
+
 func newS3(cfg kernel.Config, endpoint string) *s3.Client {
 	return s3.New(s3.Options{
 		Region:      cfg.Region,

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -780,9 +781,9 @@ func (c *conn) assignment(ctx context.Context, req workflows.RunnerTurnRequest) 
 	if actor.Type == string(authn.SubjectUser) {
 		requestedBy = actor.ID
 	}
-	domains := client.AllowDomains
-	if domains == nil {
-		domains = []string{}
+	domains := append([]string{}, client.AllowDomains...)
+	if h := c.d.FileStoreHost; h != "" && !slices.Contains(domains, h) {
+		domains = append(domains, h)
 	}
 	return map[string]any{
 		"task_id": task.ID, "agent_id": task.AgentID, "iteration": req.Iteration, "message": req.Message,
