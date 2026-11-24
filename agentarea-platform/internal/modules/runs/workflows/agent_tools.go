@@ -633,7 +633,7 @@ func (r *agentRun) readToolOutput(ctx workflow.Context, c ToolCall) error {
 		return nil
 	}
 	grep, _ := args["grep"].(string)
-	req := ReadOutputRequest{Principal: r.principal, TaskID: r.taskID, OutputID: id, Grep: grep, Head: optionalInt(args["head"]), Tail: optionalInt(args["tail"])}
+	req := ReadOutputRequest{Principal: r.principal, TaskID: r.taskID, FilesTaskID: r.sharedFilesTask(), OutputID: id, Grep: grep, Head: optionalInt(args["head"]), Tail: optionalInt(args["tail"])}
 	var res ContextResult
 	var content string
 	err := workflow.ExecuteActivity(activityCtx(ctx, api.ActivityReadContextOutput, "", 0), api.ActivityReadContextOutput, req).Get(ctx, &res)
@@ -783,7 +783,7 @@ func (r *agentRun) activateSkill(ctx workflow.Context, c ToolCall) error {
 	r.nextSeq++
 	eventID := r.ids.uuid()
 	req := ActivateSkillRequest{
-		Principal: r.principal, TaskID: r.taskID, ExecutionID: r.executionID, ToolCallID: c.ID, Skill: skill,
+		Principal: r.principal, TaskID: r.taskID, FilesTaskID: r.sharedFilesTask(), ExecutionID: r.executionID, ToolCallID: c.ID, Skill: skill,
 		Seq: seq, EventID: eventID, Iteration: ptr(r.iteration), MaxTokens: maxTokens,
 	}
 	var res ActivateSkillResult

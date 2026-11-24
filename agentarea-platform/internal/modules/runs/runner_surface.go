@@ -32,7 +32,9 @@ type RunnerDeps struct {
 	Files blob.Store
 	// Artifacts publishes a runner's outputs/ as its task's artifacts (sandbox).
 	Artifacts runner.Artifacts
-	Workers   runner.Workers
+	// Store is the files of the task a subtask works on (sandbox).
+	Store   runner.Store
+	Workers runner.Workers
 	// Tokens and Live are nil without AGENTAREA_MCP_GATEWAY_SECRET; the routes are then unmounted.
 	Tokens authn.TurnTokens
 	Live   authn.LiveTurns
@@ -66,7 +68,7 @@ func (m *RunnerSurface) Missing() []string {
 		v    any
 	}{
 		{"database", d.DB}, {"gate", d.Gate}, {"runner clients (agents)", d.Clients}, {"workspace slugs (identity)", d.Slugs},
-		{"broker", d.Broker}, {"redis", d.Redis}, {"harness files bucket", d.Files}, {"task artifacts (sandbox)", d.Artifacts}, {"temporal workers", d.Workers},
+		{"broker", d.Broker}, {"redis", d.Redis}, {"harness files bucket", d.Files}, {"task artifacts (sandbox)", d.Artifacts}, {"task store (sandbox)", d.Store}, {"temporal workers", d.Workers},
 		{"turn tokens (AGENTAREA_MCP_GATEWAY_SECRET)", d.Tokens}, {"live turns", d.Live},
 	} {
 		if absent(p.v) {
@@ -93,7 +95,7 @@ func (m *RunnerSurface) Serve() serve.Module {
 			d := m.d
 			runner.Mount(rt.Mux.Chi(), rt.Errors, runner.Deps{
 				Tasks: runner.StoreTasks{DB: d.DB}, Gate: d.Gate, Clients: d.Clients, Slugs: d.Slugs, Broker: d.Broker,
-				Presence: runner.RedisPresence{RDB: d.Redis}, Files: d.Files, Artifacts: d.Artifacts, Workers: d.Workers,
+				Presence: runner.RedisPresence{RDB: d.Redis}, Files: d.Files, Artifacts: d.Artifacts, Store: d.Store, Workers: d.Workers,
 				Tokens: d.Tokens, Live: d.Live, Log: log.With("component", "runner"),
 			})
 			return nil

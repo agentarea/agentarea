@@ -115,6 +115,17 @@ func harnessTask(t Task) bool {
 	return ok
 }
 
+// liveFilesOf is the task whose live files t shows, and whether they are a runner's: a subtask
+// shows the files of the task it works on, its parent's.
+func liveFilesOf(t Task, taskID string) (string, bool) {
+	if v, ok := t.Metadata.Get(WorkspaceTaskKey); ok {
+		if shared, _ := v.(string); shared != "" {
+			return shared, false
+		}
+	}
+	return taskID, harnessTask(t)
+}
+
 // SandboxFiles is list_task_sandbox_files.
 func (s *Surface) SandboxFiles(ctx context.Context, agentID, taskID, prefix string) (wirejson.Object, error) {
 	c, err := caller(ctx)
@@ -129,7 +140,8 @@ func (s *Surface) SandboxFiles(ctx context.Context, agentID, taskID, prefix stri
 	if err != nil {
 		return nil, err
 	}
-	paths, err := s.d.TaskFiles.ListFiles(ctx, c.Workspace.ID(), taskID, prefix, harnessTask(t))
+	filesTask, harness := liveFilesOf(t, taskID)
+	paths, err := s.d.TaskFiles.ListFiles(ctx, c.Workspace.ID(), filesTask, prefix, harness)
 	if err != nil {
 		return nil, s.fileErr(ctx, "Failed to list sandbox files", err)
 	}
@@ -154,7 +166,8 @@ func (s *Surface) SandboxFile(ctx context.Context, agentID, taskID, filePath str
 	if err != nil {
 		return sandboxapi.Download{}, err
 	}
-	d, err := s.d.TaskFiles.ReadFile(ctx, c.Workspace.ID(), taskID, p, harnessTask(t))
+	filesTask, harness := liveFilesOf(t, taskID)
+	d, err := s.d.TaskFiles.ReadFile(ctx, c.Workspace.ID(), filesTask, p, harness)
 	if err != nil {
 		return sandboxapi.Download{}, s.fileErr(ctx, "Failed to read the sandbox file", err)
 	}

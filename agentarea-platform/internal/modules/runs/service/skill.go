@@ -16,6 +16,8 @@ import (
 // SkillActivation asks for a skill's entry at the seq and event id the workflow reserved.
 type SkillActivation struct {
 	TaskID, ExecutionID, ToolCallID string
+	// FilesTaskID is the task whose files the run works on, when not its own (a subtask's parent).
+	FilesTaskID string
 	// WorkflowID owns the workspace lease the skill's files are written under.
 	WorkflowID string
 	Skill      api.Skill
@@ -160,7 +162,11 @@ func (s *Service) putSkillFiles(ctx context.Context, p Principal, in SkillActiva
 		actor.AgentID = &p.AgentID
 	}
 	actor.TaskID = &in.TaskID
-	if _, err := s.d.Workspace.PutFiles(ctx, p.WorkspaceID, in.TaskID, put, sandboxapi.WriteOptions{Owner: in.WorkflowID, Actor: actor}); err != nil {
+	filesTask := in.TaskID
+	if in.FilesTaskID != "" {
+		filesTask = in.FilesTaskID
+	}
+	if _, err := s.d.Workspace.PutFiles(ctx, p.WorkspaceID, filesTask, put, sandboxapi.WriteOptions{Owner: in.WorkflowID, Actor: actor}); err != nil {
 		return "", nil, err
 	}
 	return domain.SkillWorkspaceDir(in.Skill.Name, in.Skill.ID), paths, nil

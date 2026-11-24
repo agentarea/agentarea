@@ -23,6 +23,8 @@ type DelegationInput struct {
 	ParentPolicy    api.Policy
 	RunBudget       *money.Decimal
 	ExecutionID     string
+	// WorkspaceTaskID is the task whose files the child works on, the parent's.
+	WorkspaceTaskID string
 }
 
 // DelegationOutput: Status created with TaskID and Policy, or failed with Error.
@@ -87,6 +89,9 @@ func (s *Service) CreateDelegationTask(ctx context.Context, p Principal, in Dele
 		}
 		if def.ClientID != "" {
 			meta[runnerClientKey] = def.ClientID
+		}
+		if in.WorkspaceTaskID != "" {
+			meta[WorkspaceTaskKey] = in.WorkspaceTaskID
 		}
 		if err := s.store.CreateTask(ctx, tx, store.NewTask{
 			ID: taskID, AgentID: in.TargetAgentID, Description: "Delegated task to " + in.TargetAgentName,

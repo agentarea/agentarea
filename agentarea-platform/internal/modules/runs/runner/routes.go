@@ -49,6 +49,12 @@ type Artifacts interface {
 	PublishArtifact(ctx context.Context, workspaceID, taskID, path, contentType string, body []byte) (sandboxapi.TaskArtifact, error)
 }
 
+// Store writes the live files of the task a subtask works on (sandbox Runtime), bringing its
+// store up on demand.
+type Store interface {
+	PutFile(ctx context.Context, workspaceID, taskID, path string, data []byte) (sandboxapi.StoredFile, error)
+}
+
 // Presence marks a client's runner connected (runner_presence.py).
 type Presence interface {
 	Mark(ctx context.Context, clientID string) error
@@ -66,11 +72,13 @@ type Deps struct {
 	Files blob.Store
 	// Artifacts publishes what a runner puts under outputs/ as the task's artifacts.
 	Artifacts Artifacts
-	Workers   Workers
-	Tokens    authn.TurnTokens
-	Live      authn.LiveTurns
-	Log       *slog.Logger
-	Now       func() time.Time
+	// Store is the files of the task a subtask works on, its parent's.
+	Store   Store
+	Workers Workers
+	Tokens  authn.TurnTokens
+	Live    authn.LiveTurns
+	Log     *slog.Logger
+	Now     func() time.Time
 
 	register registrar
 }
@@ -240,34 +248,45 @@ func contentTypeOf(p string) string {
 	return t
 }
 
-// upload is upload_task_file: a file the CLI made, into its task's folder.
-func (h *handlers) upload(w http.ResponseWriter, r *http.Request) {
+// ownFile is the runner's own task the URL names, and the file path after its files/.
+func (h *handlers) ownFile(w http.ResponseWriter, r *http.Request) (authn.Caller, store.RunnerTask, string, bool) {
 	p, c, _, ok := h.admit(w, r)
 	if !ok {
-		return
+		return authn.Caller{}, store.RunnerTask{}, "", false
 	}
-	ctx := r.Context()
 	rawTask := chi.URLParam(r, "task_id")
 	taskID, fe := httpx.ValidateUUID(rawTask, "path", "task_id")
 	if fe != nil {
 		h.errs.Write(w, r, httpx.Validation(*fe))
-		return
+		return authn.Caller{}, store.RunnerTask{}, "", false
 	}
-	task, err := h.d.Tasks.Task(ctx, c.Workspace, taskID)
+	task, err := h.d.Tasks.Task(r.Context(), c.Workspace, taskID)
 	if err != nil && !errors.Is(err, store.ErrTaskNotFound) {
 		h.errs.Write(w, r, err)
-		return
+		return authn.Caller{}, store.RunnerTask{}, "", false
 	}
 	if owner, _ := task.Metadata[runnerClientKey].(string); err != nil || owner != p.BoundClientID {
 		h.errs.Write(w, r, httpx.NotFound(detailNoTask))
-		return
+		return authn.Caller{}, store.RunnerTask{}, "", false
 	}
 	prefix := "/v1/runner/tasks/" + rawTask + "/files/"
 	filePath, ok := relativePath(strings.TrimPrefix(r.URL.Path, prefix))
 	if !strings.HasPrefix(r.URL.Path, prefix) || !ok {
 		h.errs.Write(w, r, httpx.HTTPError(http.StatusUnprocessableEntity, detailRelative))
+		return authn.Caller{}, store.RunnerTask{}, "", false
+	}
+	return c, task, filePath, true
+}
+
+// upload is upload_task_file: a file the CLI made, into its task's folder; a subtask's outputs/,
+// into the task it works on.
+func (h *handlers) upload(w http.ResponseWriter, r *http.Request) {
+	c, task, filePath, ok := h.ownFile(w, r)
+	if !ok {
 		return
 	}
+	ctx := r.Context()
+	taskID := task.ID
 	body, err := io.ReadAll(io.LimitReader(r.Body, fileMaxBytes+1))
 	if err != nil {
 		h.errs.Write(w, r, err)
@@ -275,6 +294,15 @@ func (h *handlers) upload(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(body) > fileMaxBytes {
 		h.errs.Write(w, r, httpx.HTTPError(http.StatusRequestEntityTooLarge, detailTooLarge))
+		return
+	}
+	if shared, _ := task.Metadata[workspaceTaskKey].(string); shared != "" && strings.HasPrefix(filePath, outputsDir) {
+		if _, err := h.d.Store.PutFile(ctx, c.Workspace.ID(), shared, filePath, body); err != nil {
+			h.d.Log.ErrorContext(ctx, "Could not write the runner's file into the task it works on", "task_id", taskID, "path", filePath, "error", err.Error())
+			h.errs.Write(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	key := "harness-files/" + c.Workspace.ID() + "/" + taskID + "/" + filePath

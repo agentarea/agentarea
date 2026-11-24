@@ -43,15 +43,15 @@ func TestTheTriggerEventInputIsReadableWithoutASandbox(t *testing.T) {
 	event := "{\n  \"action\": \"opened\",\n  \"pull_request\": {\n    \"number\": 42\n  }\n}"
 	ws := &taskFiles{files: map[string][]byte{p.WorkspaceID + "/t1/" + triggerEventInput: []byte(event)}}
 	s := New(Deps{Blob: newMemBlob(), Workspace: ws, Log: quiet()})
-	got, err := s.ReadOutput(context.Background(), p, "t1", triggerEventInput, "", nil, nil)
+	got, err := s.ReadOutput(context.Background(), p, "t1", "", triggerEventInput, "", nil, nil)
 	if err != nil || got != event {
 		t.Fatalf("read %q %v", got, err)
 	}
-	got, err = s.ReadOutput(context.Background(), p, "t1", triggerEventInput, "number", nil, nil)
+	got, err = s.ReadOutput(context.Background(), p, "t1", "", triggerEventInput, "number", nil, nil)
 	if err != nil || strings.TrimSpace(got) != "\"number\": 42" {
 		t.Fatalf("grep %q %v", got, err)
 	}
-	got, err = s.ReadOutput(context.Background(), p, "t1", triggerEventInput, "", intp(2), nil)
+	got, err = s.ReadOutput(context.Background(), p, "t1", "", triggerEventInput, "", intp(2), nil)
 	if err != nil || got != "{\n  \"action\": \"opened\"," {
 		t.Fatalf("head %q %v", got, err)
 	}
@@ -75,14 +75,14 @@ func TestReadOutputStaysInsideTheTasksInputsAndOutputs(t *testing.T) {
 		"inputs/attachments/../../t2/" + triggerEventInput, "inputs/attachments/sub/x", "inputs/attachments/x\n",
 		"./" + triggerEventInput, "inputs\\attachments\\x", "outputs/o1", "o1\\..\\x",
 	} {
-		if got, err := s.ReadOutput(context.Background(), p, "t1", name, "", nil, nil); err == nil {
+		if got, err := s.ReadOutput(context.Background(), p, "t1", "", name, "", nil, nil); err == nil {
 			t.Errorf("%q was read: %q", name, got)
 		}
 	}
-	if _, err := s.ReadOutput(context.Background(), p, "t1", triggerEventInput, "", nil, nil); err == nil || !strings.Contains(err.Error(), "no task input file") {
+	if _, err := s.ReadOutput(context.Background(), p, "t1", "", triggerEventInput, "", nil, nil); err == nil || !strings.Contains(err.Error(), "no task input file") {
 		t.Errorf("another task's input was read: %v", err)
 	}
-	if _, err := s.ReadOutput(context.Background(), p, "t1", "o1", "", nil, nil); err == nil || !strings.Contains(err.Error(), "no stored output") {
+	if _, err := s.ReadOutput(context.Background(), p, "t1", "", "o1", "", nil, nil); err == nil || !strings.Contains(err.Error(), "no stored output") {
 		t.Errorf("another task's output was read: %v", err)
 	}
 	for _, key := range ws.asked {
@@ -101,7 +101,7 @@ func TestABinaryTaskInputIsRefused(t *testing.T) {
 	p := testPrincipal()
 	ws := &taskFiles{files: map[string][]byte{p.WorkspaceID + "/t1/inputs/attachments/a.png": {0x89, 'P', 'N', 'G', 0xff, 0xfe}}}
 	s := New(Deps{Blob: newMemBlob(), Workspace: ws, Log: quiet()})
-	if _, err := s.ReadOutput(context.Background(), p, "t1", "inputs/attachments/a.png", "", nil, nil); err == nil || !strings.Contains(err.Error(), "is not text") {
+	if _, err := s.ReadOutput(context.Background(), p, "t1", "", "inputs/attachments/a.png", "", nil, nil); err == nil || !strings.Contains(err.Error(), "is not text") {
 		t.Fatalf("binary input: %v", err)
 	}
 }

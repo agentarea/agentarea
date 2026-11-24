@@ -28,6 +28,7 @@ import (
 
 const (
 	runnerClientKey  = "runner_client_id"
+	workspaceTaskKey = "workspace_task_id"
 	runnerSessionKey = "runner_session_id"
 	modelParameter   = "model"
 	effortParameter  = "reasoning_effort"
@@ -787,7 +788,7 @@ func (c *conn) assignment(ctx context.Context, req workflows.RunnerTurnRequest) 
 		"task_id": task.ID, "agent_id": task.AgentID, "iteration": req.Iteration, "message": req.Message,
 		"session_id": task.Metadata[runnerSessionKey], "requested_by": requestedBy,
 		"actor": map[string]any{"type": actor.Type, "id": actor.ID},
-		"model": nullable(model), "reasoning_effort": nullable(effort), "instructions": nullable(agent.Instructions),
+		"model": nullable(model), "reasoning_effort": nullable(effort), "instructions": withOutputsLimit(agent.Instructions),
 		"allow_domains": domains, "sandbox": client.Sandbox,
 	}, actor, task.CreatedBy, nil
 }
