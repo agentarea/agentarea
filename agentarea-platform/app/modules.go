@@ -131,8 +131,9 @@ func (d coreDeps) secretCatalog(audit ksecrets.Auditor, ws kscope.Workspace, act
 func buildModules(e *edge, d coreDeps) *moduleSet {
 	m := &moduleSet{edge: e}
 	var artifacts, harness kblob.Store
+	var fileStoreHost string
 	if d.Blob != nil {
-		artifacts, harness = d.Blob.Artifacts(), d.Blob.Default()
+		artifacts, harness, fileStoreHost = d.Blob.Artifacts(), d.Blob.Default(), d.Blob.PublicHost()
 	}
 	m.agents = agents.New(func() agents.Deps {
 		ad := agents.Deps{DB: d.DB, Graph: d.Graph, Config: d.Agents, Workspace: e.Workspace, Principal: e.Principal, Admin: e.Admin, Log: d.Log}
@@ -248,7 +249,7 @@ func buildModules(e *edge, d coreDeps) *moduleSet {
 		return err
 	})
 	m.runner = runs.NewRunnerSurface(runs.RunnerDeps{DB: d.DB, Gate: e.gate, Clients: m.agents.RunnerClients(), Slugs: m.identity.WorkspaceSlugs(),
-		Broker: d.Broker, Redis: d.Redis, Files: harness, Artifacts: m.sandbox.TaskFiles(), Store: m.sandbox.Runtime(), Workers: d.Durable, Tokens: d.TurnTokens, Live: d.LiveTurns, Log: d.Log})
+		Broker: d.Broker, Redis: d.Redis, Files: harness, Artifacts: m.sandbox.TaskFiles(), Store: m.sandbox.Runtime(), FileStoreHost: fileStoreHost, Workers: d.Durable, Tokens: d.TurnTokens, Live: d.LiveTurns, Log: d.Log})
 	m.streamsDeps = streamsDeps(e, d, m)
 	m.streams = streams.New(m.streamsDeps)
 	m.catalog.UseBundles(catalogBundles(d, m))

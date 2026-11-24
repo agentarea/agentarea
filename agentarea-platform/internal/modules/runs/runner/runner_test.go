@@ -341,7 +341,7 @@ func newRig(t *testing.T) *rig {
 	mux := chi.NewRouter()
 	Mount(mux, errs, Deps{
 		Tasks: r.tasks, Gate: gate, Clients: r.clients, Slugs: fakeSlugs{}, Broker: r.broker, Presence: r.presence,
-		Files: r.files, Artifacts: r.outputs, Store: r.shared, Workers: r.workers, Tokens: r.tokens, Live: r.live, Log: log,
+		Files: r.files, Artifacts: r.outputs, Store: r.shared, FileStoreHost: "storage.example.com", Workers: r.workers, Tokens: r.tokens, Live: r.live, Log: log,
 		register: func(_ durable.Worker, turns workflows.RunnerTurns, _ durable.Executor) { r.turns <- turns },
 	})
 	r.srv = httptest.NewServer(mux)
@@ -659,6 +659,9 @@ func TestSocketRoundTripOfATurn(t *testing.T) {
 		if assign[k] != v {
 			t.Errorf("assign %s = %v, want %v", k, assign[k], v)
 		}
+	}
+	if d, _ := assign["allow_domains"].([]any); len(d) != 2 || d[0] != "example.com" || d[1] != "storage.example.com" {
+		t.Errorf("allow_domains = %v, want the client's hosts and the file store's", assign["allow_domains"])
 	}
 	if a, _ := assign["actor"].(map[string]any); a["type"] != "user" || a["id"] != "u1" {
 		t.Errorf("actor: %v", assign["actor"])

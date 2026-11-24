@@ -32,6 +32,8 @@ type RunnerDeps struct {
 	Files blob.Store
 	// Artifacts publishes a runner's outputs/ as its task's artifacts (sandbox).
 	Artifacts runner.Artifacts
+	// FileStoreHost is the platform file store's host, which every runner turn may reach.
+	FileStoreHost string
 	// Store is the files of the task a subtask works on (sandbox).
 	Store   runner.Store
 	Workers runner.Workers
@@ -95,7 +97,7 @@ func (m *RunnerSurface) Serve() serve.Module {
 			d := m.d
 			runner.Mount(rt.Mux.Chi(), rt.Errors, runner.Deps{
 				Tasks: runner.StoreTasks{DB: d.DB}, Gate: d.Gate, Clients: d.Clients, Slugs: d.Slugs, Broker: d.Broker,
-				Presence: runner.RedisPresence{RDB: d.Redis}, Files: d.Files, Artifacts: d.Artifacts, Store: d.Store, Workers: d.Workers,
+				Presence: runner.RedisPresence{RDB: d.Redis}, Files: d.Files, Artifacts: d.Artifacts, Store: d.Store, FileStoreHost: d.FileStoreHost, Workers: d.Workers,
 				Tokens: d.Tokens, Live: d.Live, Log: log.With("component", "runner"),
 			})
 			return nil
