@@ -90,6 +90,16 @@ func (Store) Config(ctx context.Context, s db.Session, id uuid.UUID) (domain.Con
 	return config(r), true, nil
 }
 
+// LockConfig holds the workspace's own configuration row for the rest of the
+// session's transaction; false when it has no such row.
+func (Store) LockConfig(ctx context.Context, s db.Session, id uuid.UUID) (bool, error) {
+	_, err := New(s.Q()).LockOwnConfig(ctx, LockOwnConfigParams{ID: id, WorkspaceID: s.Workspace().ID()})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
 // ConfigFilter narrows a configuration listing.
 type ConfigFilter struct {
 	ProviderSpecID *uuid.UUID

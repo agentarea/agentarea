@@ -28,7 +28,7 @@ import (
 
 // SyncFormat is part of the stored ETag: bump it when parsing or facets
 // change, so the next sync re-applies every source.
-const SyncFormat = "9"
+const SyncFormat = "10"
 
 // Sync budgets (service.py).
 const (
@@ -808,8 +808,8 @@ func (s *Service) backfill(ctx context.Context, sess db.Session, r domain.Regist
 
 func canonicalWire(v any) any { return canonical(v) }
 
-func transports() []string          { return []string{"openai", "anthropic"} }
-func auths() []string               { return []string{"bearer", "api_key_header", "none"} }
+func transports() []string          { return []string{"openai", "anthropic", "responses"} }
+func auths() []string               { return []string{"bearer", "api_key_header", "none", "chatgpt"} }
 func listShapes() []string          { return []string{"data_id", "models_name"} }
 func reasoningParams() []string     { return []string{"reasoning_effort", "reasoning"} }
 func pricedPerTokenKinds() []string { return []string{"chat", "embedding"} }

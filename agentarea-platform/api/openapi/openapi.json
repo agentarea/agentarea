@@ -4422,6 +4422,68 @@
         "title": "CategoryFacet",
         "type": "object"
       },
+      "ChatGPTDeviceCodeResponse": {
+        "properties": {
+          "device_auth_id": {
+            "title": "Device Auth Id",
+            "type": "string"
+          },
+          "interval": {
+            "description": "Seconds to wait between checks",
+            "title": "Interval",
+            "type": "integer"
+          },
+          "user_code": {
+            "description": "The code the user enters at verification_uri",
+            "title": "User Code",
+            "type": "string"
+          },
+          "verification_uri": {
+            "title": "Verification Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_auth_id",
+          "user_code",
+          "verification_uri",
+          "interval"
+        ],
+        "title": "ChatGPTDeviceCodeResponse",
+        "type": "object"
+      },
+      "ChatGPTSignInRequest": {
+        "properties": {
+          "device_auth_id": {
+            "title": "Device Auth Id",
+            "type": "string"
+          },
+          "user_code": {
+            "title": "User Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_auth_id",
+          "user_code"
+        ],
+        "title": "ChatGPTSignInRequest",
+        "type": "object"
+      },
+      "ChatGPTSignInResponse": {
+        "properties": {
+          "signed_in": {
+            "description": "False while the user has not entered the code yet",
+            "title": "Signed In",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "signed_in"
+        ],
+        "title": "ChatGPTSignInResponse",
+        "type": "object"
+      },
       "CheckRequest": {
         "properties": {
           "namespace": {
@@ -13575,6 +13637,11 @@
       },
       "ProviderSpecResponse": {
         "properties": {
+          "auth": {
+            "description": "How a configuration authenticates: bearer, api_key_header, none, or chatgpt (a ChatGPT sign-in instead of a key)",
+            "title": "Auth",
+            "type": "string"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -13654,13 +13721,19 @@
           "is_builtin",
           "is_first_party",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "auth"
         ],
         "title": "ProviderSpecResponse",
         "type": "object"
       },
       "ProviderSpecWithModelsResponse": {
         "properties": {
+          "auth": {
+            "description": "How a configuration authenticates: bearer, api_key_header, none, or chatgpt (a ChatGPT sign-in instead of a key)",
+            "title": "Auth",
+            "type": "string"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -13748,7 +13821,8 @@
           "is_first_party",
           "created_at",
           "updated_at",
-          "models"
+          "models",
+          "auth"
         ],
         "title": "ProviderSpecWithModelsResponse",
         "type": "object"
@@ -37594,6 +37668,144 @@
           }
         ],
         "summary": "Discover Models",
+        "tags": [
+          "v1",
+          "protected",
+          "provider-configs"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in": {
+      "post": {
+        "description": "Start the ChatGPT device-code sign-in of a ChatGPT subscription provider: the user opens verification_uri and enters user_code.",
+        "operationId": "start_chatgpt_sign_in_v1_provider_configs__config_id__chatgpt_sign_in_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "config_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Config Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatGPTDeviceCodeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Chatgpt Sign In",
+        "tags": [
+          "v1",
+          "protected",
+          "provider-configs"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in/complete": {
+      "post": {
+        "description": "Check the device code; once the user entered it, the configuration keeps the sign-in and signed_in is true.",
+        "operationId": "complete_chatgpt_sign_in_v1_provider_configs__config_id__chatgpt_sign_in_complete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "config_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Config Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatGPTSignInRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatGPTSignInResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Complete Chatgpt Sign In",
         "tags": [
           "v1",
           "protected",

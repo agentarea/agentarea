@@ -33,6 +33,7 @@ func (fakeDB) Write(ctx context.Context, ws scope.Workspace, fn func(context.Con
 type fakeStore struct {
 	configs   map[string]domain.Config
 	instances map[string]domain.Instance
+	locks     int
 }
 
 func visible(ws, owner string, managed *string) bool {
@@ -90,6 +91,12 @@ func (f *fakeStore) DeleteConfig(_ context.Context, s db.Session, id uuid.UUID) 
 	}
 	delete(f.configs, id.String())
 	return true, nil
+}
+
+func (f *fakeStore) LockConfig(_ context.Context, s db.Session, id uuid.UUID) (bool, error) {
+	c, ok := f.configs[id.String()]
+	f.locks++
+	return ok && c.WorkspaceID == s.Workspace().ID(), nil
 }
 
 func (f *fakeStore) ProviderSpecIDsWithVisibleConfigs(context.Context, db.Session) ([]uuid.UUID, error) {

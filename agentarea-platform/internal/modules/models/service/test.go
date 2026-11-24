@@ -12,6 +12,7 @@ import (
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/money"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/api"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/domain"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/transport"
 )
 
@@ -87,11 +88,11 @@ func (s *Service) TestModel(ctx context.Context, configID, specID uuid.UUID, mes
 
 func (s *Service) testCall(ctx context.Context, userID string, v ConfigView, providerType, modelName string, message *string) (TestResult, error) {
 	key := ""
+	ws, _, err := caller(ctx)
+	if err != nil {
+		return TestResult{}, err
+	}
 	if v.APIKey != nil && *v.APIKey != "" {
-		ws, _, err := caller(ctx)
-		if err != nil {
-			return TestResult{}, err
-		}
 		if key, err = s.readSecret(ctx, ws, userID, *v.APIKey); err != nil {
 			return TestResult{}, err
 		}
@@ -99,6 +100,14 @@ func (s *Service) testCall(ctx context.Context, userID string, v ConfigView, pro
 	profile, err := domainProfile(*v.Spec)
 	if err != nil {
 		return TestResult{}, err
+	}
+	accountID := ""
+	if profile.Auth == domain.AuthChatGPT && key != "" {
+		t, err := s.chatGPTAccess(ctx, ws, userID, *v.APIKey, key)
+		if err != nil {
+			return TestResult{}, err
+		}
+		key, accountID = t.AccessToken, t.AccountID
 	}
 	endpoint := str(v.EndpointURL)
 	if key == "" && profile.RequiresAPIKey() {
@@ -113,7 +122,7 @@ func (s *Service) testCall(ctx context.Context, userID string, v ConfigView, pro
 	model := transport.Model{
 		ProviderType: providerType, ModelName: modelName, APIKey: key, EndpointURL: s.localEndpoint(endpoint),
 		Profile: profile, Transport: s.roundTripper(str(v.ManagedBy)),
-		Deadline: testDeadline, BodyLimit: testBodyLimit,
+		Deadline: testDeadline, BodyLimit: testBodyLimit, AccountID: accountID,
 	}
 	msg := api.Message{Role: "user"}
 	if message != nil {

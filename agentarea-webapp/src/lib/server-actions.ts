@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { ZodError } from "zod";
 import type {
   CatalogConnectRequest,
+  ChatGptSignInRequest,
   ContinueTaskPayload,
   CreateWalletRequest,
   CreateWorkspaceDirectoryRequest,
@@ -32,6 +33,7 @@ import type {
 } from "@/api/client/types.gen";
 import {
   zCatalogConnectRequest,
+  zChatGptSignInRequest,
   zCreateWorkspaceDirectoryRequest,
   zListSecretsV1SecretsGetResponse,
   zModelSpecCreate,
@@ -59,6 +61,7 @@ import {
   bulkCreateModelInstances,
   cancelAgentTask,
   checkMCPServerInstanceConfiguration,
+  completeChatGptSignIn,
   connectCatalogApi,
   continueAgentTask,
   createAgentWallet,
@@ -137,6 +140,7 @@ import {
   sendTaskCommand,
   setMCPServerInstanceSharing,
   setOpenAPIConnectionSharing,
+  startChatGptSignIn,
   submitTaskInput,
   updateAgentWallet,
   updateAllSkills,
@@ -415,6 +419,29 @@ export async function upsertModelSpecAction(spec: ModelSpecCreate) {
 
 export async function discoverModelsAction(configId: string) {
   return await discoverModels(configId);
+}
+
+export async function startChatGptSignInAction(configId: string) {
+  return await startChatGptSignIn(configId);
+}
+
+export async function completeChatGptSignInAction(
+  configId: string,
+  body: ChatGptSignInRequest
+) {
+  const parsed = zChatGptSignInRequest.safeParse(body);
+  if (!parsed.success) {
+    return {
+      data: undefined,
+      error: {
+        detail: parsed.error.issues.map((issue) => ({
+          msg: `${issue.path.join(".")}: ${issue.message}`,
+        })),
+      },
+      status: undefined,
+    };
+  }
+  return await completeChatGptSignIn(configId, parsed.data);
 }
 
 export async function discoverModelsPreviewAction(body: {

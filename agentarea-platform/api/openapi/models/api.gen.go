@@ -59,6 +59,30 @@ func (e ModelKind) Valid() bool {
 	}
 }
 
+// ChatGPTDeviceCodeResponse defines model for ChatGPTDeviceCodeResponse.
+type ChatGPTDeviceCodeResponse struct {
+	DeviceAuthId string `json:"device_auth_id"`
+
+	// Interval Seconds to wait between checks
+	Interval int `json:"interval"`
+
+	// UserCode The code the user enters at verification_uri
+	UserCode        string `json:"user_code"`
+	VerificationUri string `json:"verification_uri"`
+}
+
+// ChatGPTSignInRequest defines model for ChatGPTSignInRequest.
+type ChatGPTSignInRequest struct {
+	DeviceAuthId string `json:"device_auth_id"`
+	UserCode     string `json:"user_code"`
+}
+
+// ChatGPTSignInResponse defines model for ChatGPTSignInResponse.
+type ChatGPTSignInResponse struct {
+	// SignedIn False while the user has not entered the code yet
+	SignedIn bool `json:"signed_in"`
+}
+
 // DiscoverPreviewModelResponse defines model for DiscoverPreviewModelResponse.
 type DiscoverPreviewModelResponse struct {
 	CacheCreationInputCostPerToken *string `json:"cache_creation_input_cost_per_token"`
@@ -356,6 +380,9 @@ type PatchProviderConfigV1ProviderConfigsConfigIdPatchJSONRequestBody = Provider
 // UpdateProviderConfigV1ProviderConfigsConfigIdPutJSONRequestBody defines body for UpdateProviderConfigV1ProviderConfigsConfigIdPut for application/json ContentType.
 type UpdateProviderConfigV1ProviderConfigsConfigIdPutJSONRequestBody = ProviderConfigUpdate
 
+// CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostJSONRequestBody defines body for CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost for application/json ContentType.
+type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostJSONRequestBody = ChatGPTSignInRequest
+
 // AsValidationErrorLoc0 returns the union data inside the ValidationError_Loc_Item as a ValidationErrorLoc0
 func (t ValidationError_Loc_Item) AsValidationErrorLoc0() (ValidationErrorLoc0, error) {
 	var body ValidationErrorLoc0
@@ -468,6 +495,12 @@ type ServerInterface interface {
 	// UpdateProviderConfigV1ProviderConfigsConfigIdPut Update Provider Config
 	// (PUT /v1/workspaces/{workspace}/provider-configs/{config_id})
 	UpdateProviderConfigV1ProviderConfigsConfigIdPut(w http.ResponseWriter, r *http.Request, workspace string, configId openapi_types.UUID)
+	// StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost Start Chatgpt Sign In
+	// (POST /v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in)
+	StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost(w http.ResponseWriter, r *http.Request, workspace string, configId openapi_types.UUID)
+	// CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost Complete Chatgpt Sign In
+	// (POST /v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in/complete)
+	CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost(w http.ResponseWriter, r *http.Request, workspace string, configId openapi_types.UUID)
 	// DiscoverModelsV1ProviderConfigsConfigIdDiscoverPost Discover Models
 	// (POST /v1/workspaces/{workspace}/provider-configs/{config_id}/discover)
 	DiscoverModelsV1ProviderConfigsConfigIdDiscoverPost(w http.ResponseWriter, r *http.Request, workspace string, configId openapi_types.UUID)
@@ -570,6 +603,18 @@ func (_ Unimplemented) PatchProviderConfigV1ProviderConfigsConfigIdPatch(w http.
 // UpdateProviderConfigV1ProviderConfigsConfigIdPut Update Provider Config
 // (PUT /v1/workspaces/{workspace}/provider-configs/{config_id})
 func (_ Unimplemented) UpdateProviderConfigV1ProviderConfigsConfigIdPut(w http.ResponseWriter, r *http.Request, workspace string, configId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost Start Chatgpt Sign In
+// (POST /v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in)
+func (_ Unimplemented) StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost(w http.ResponseWriter, r *http.Request, workspace string, configId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost Complete Chatgpt Sign In
+// (POST /v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in/complete)
+func (_ Unimplemented) CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost(w http.ResponseWriter, r *http.Request, workspace string, configId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1168,6 +1213,76 @@ func (siw *ServerInterfaceWrapper) UpdateProviderConfigV1ProviderConfigsConfigId
 	handler.ServeHTTP(w, r)
 }
 
+// StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost operation middleware
+func (siw *ServerInterfaceWrapper) StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", chi.URLParam(r, "workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "config_id" -------------
+	var configId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "config_id", chi.URLParam(r, "config_id"), &configId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "config_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost(w, r, workspace, configId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost operation middleware
+func (siw *ServerInterfaceWrapper) CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", chi.URLParam(r, "workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "config_id" -------------
+	var configId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "config_id", chi.URLParam(r, "config_id"), &configId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "config_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost(w, r, workspace, configId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DiscoverModelsV1ProviderConfigsConfigIdDiscoverPost operation middleware
 func (siw *ServerInterfaceWrapper) DiscoverModelsV1ProviderConfigsConfigIdDiscoverPost(w http.ResponseWriter, r *http.Request) {
 
@@ -1363,6 +1478,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/v1/workspaces/{workspace}/provider-configs/{config_id}", wrapper.UpdateProviderConfigV1ProviderConfigsConfigIdPut)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in", wrapper.StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in/complete", wrapper.CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/workspaces/{workspace}/provider-configs/{config_id}/discover", wrapper.DiscoverModelsV1ProviderConfigsConfigIdDiscoverPost)
@@ -1949,6 +2070,81 @@ func (response UpdateProviderConfigV1ProviderConfigsConfigIdPut422JSONResponse) 
 	return err
 }
 
+type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostRequestObject struct {
+	Workspace string             `json:"workspace"`
+	ConfigId  openapi_types.UUID `json:"config_id"`
+}
+
+type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponseObject interface {
+	VisitStartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponse(w http.ResponseWriter) error
+}
+
+type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost200JSONResponse ChatGPTDeviceCodeResponse
+
+func (response StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost200JSONResponse) VisitStartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost422JSONResponse HTTPValidationError
+
+func (response StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost422JSONResponse) VisitStartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostRequestObject struct {
+	Workspace string             `json:"workspace"`
+	ConfigId  openapi_types.UUID `json:"config_id"`
+	Body      *CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostJSONRequestBody
+}
+
+type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponseObject interface {
+	VisitCompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponse(w http.ResponseWriter) error
+}
+
+type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost200JSONResponse ChatGPTSignInResponse
+
+func (response CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost200JSONResponse) VisitCompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost422JSONResponse HTTPValidationError
+
+func (response CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost422JSONResponse) VisitCompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostRequestObject struct {
 	Workspace string             `json:"workspace"`
 	ConfigId  openapi_types.UUID `json:"config_id"`
@@ -2036,6 +2232,12 @@ type StrictServerInterface interface {
 	// UpdateProviderConfigV1ProviderConfigsConfigIdPut Update Provider Config
 	// (PUT /v1/workspaces/{workspace}/provider-configs/{config_id})
 	UpdateProviderConfigV1ProviderConfigsConfigIdPut(ctx context.Context, request UpdateProviderConfigV1ProviderConfigsConfigIdPutRequestObject) (UpdateProviderConfigV1ProviderConfigsConfigIdPutResponseObject, error)
+	// StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost Start Chatgpt Sign In
+	// (POST /v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in)
+	StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost(ctx context.Context, request StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostRequestObject) (StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponseObject, error)
+	// CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost Complete Chatgpt Sign In
+	// (POST /v1/workspaces/{workspace}/provider-configs/{config_id}/chatgpt-sign-in/complete)
+	CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost(ctx context.Context, request CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostRequestObject) (CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponseObject, error)
 	// DiscoverModelsV1ProviderConfigsConfigIdDiscoverPost Discover Models
 	// (POST /v1/workspaces/{workspace}/provider-configs/{config_id}/discover)
 	DiscoverModelsV1ProviderConfigsConfigIdDiscoverPost(ctx context.Context, request DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostRequestObject) (DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponseObject, error)
@@ -2546,6 +2748,67 @@ func (sh *strictHandler) UpdateProviderConfigV1ProviderConfigsConfigIdPut(w http
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateProviderConfigV1ProviderConfigsConfigIdPutResponseObject); ok {
 		if err := validResponse.VisitUpdateProviderConfigV1ProviderConfigsConfigIdPutResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost operation middleware
+func (sh *strictHandler) StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost(w http.ResponseWriter, r *http.Request, workspace string, configId openapi_types.UUID) {
+	var request StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostRequestObject
+
+	request.Workspace = workspace
+	request.ConfigId = configId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost(ctx, request.(StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPost")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponseObject); ok {
+		if err := validResponse.VisitStartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost operation middleware
+func (sh *strictHandler) CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost(w http.ResponseWriter, r *http.Request, workspace string, configId openapi_types.UUID) {
+	var request CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostRequestObject
+
+	request.Workspace = workspace
+	request.ConfigId = configId
+
+	var body CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost(ctx, request.(CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePost")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponseObject); ok {
+		if err := validResponse.VisitCompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

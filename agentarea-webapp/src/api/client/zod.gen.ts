@@ -786,6 +786,31 @@ export const zCategoryFacet = z.object({
 });
 
 /**
+ * ChatGPTDeviceCodeResponse
+ */
+export const zChatGptDeviceCodeResponse = z.object({
+  device_auth_id: z.string(),
+  interval: z.int(),
+  user_code: z.string(),
+  verification_uri: z.string(),
+});
+
+/**
+ * ChatGPTSignInRequest
+ */
+export const zChatGptSignInRequest = z.object({
+  device_auth_id: z.string(),
+  user_code: z.string(),
+});
+
+/**
+ * ChatGPTSignInResponse
+ */
+export const zChatGptSignInResponse = z.object({
+  signed_in: z.boolean(),
+});
+
+/**
  * CheckRequest
  */
 export const zCheckRequest = z.object({
@@ -2948,6 +2973,7 @@ export const zProviderConfigUpdate = z.object({
  * ProviderSpecResponse
  */
 export const zProviderSpecResponse = z.object({
+  auth: z.string(),
   created_at: z.iso.datetime(),
   description: z.string().nullable(),
   icon: z.string().nullable(),
@@ -5270,6 +5296,7 @@ export const zAgentareaApiApiV1ProviderSpecsModelSpecResponse = z.object({
  * ProviderSpecWithModelsResponse
  */
 export const zProviderSpecWithModelsResponse = z.object({
+  auth: z.string(),
   created_at: z.iso.datetime(),
   description: z.string().nullable(),
   icon: z.string().nullable(),
@@ -7509,6 +7536,31 @@ export const zDiscoverModelsV1ProviderConfigsConfigIdDiscoverPostPath =
  */
 export const zDiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponse =
   zDiscoveryResponse;
+
+export const zStartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostPath =
+  z.object({
+    config_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zStartChatgptSignInV1ProviderConfigsConfigIdChatgptSignInPostResponse =
+  zChatGptDeviceCodeResponse;
+
+export const zCompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostBody =
+  zChatGptSignInRequest;
+
+export const zCompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostPath =
+  z.object({
+    config_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zCompleteChatgptSignInV1ProviderConfigsConfigIdChatgptSignInCompletePostResponse =
+  zChatGptSignInResponse;
 
 export const zListProviderSpecsV1ProviderSpecsGetQuery = z.object({
   is_builtin: z.boolean().nullish(),

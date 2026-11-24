@@ -23,6 +23,7 @@ type Store interface {
 	InsertConfig(ctx context.Context, s db.Session, c domain.Config, now time.Time) error
 	UpdateConfig(ctx context.Context, s db.Session, c domain.Config, now time.Time) (bool, error)
 	DeleteConfig(ctx context.Context, s db.Session, id uuid.UUID) (bool, error)
+	LockConfig(ctx context.Context, s db.Session, id uuid.UUID) (bool, error)
 	ProviderSpecIDsWithVisibleConfigs(ctx context.Context, s db.Session) ([]uuid.UUID, error)
 	Instance(ctx context.Context, s db.Session, id uuid.UUID) (domain.Instance, bool, error)
 	Instances(ctx context.Context, s db.Session, f store.InstanceFilter) ([]domain.Instance, error)
@@ -66,5 +67,7 @@ type Deps struct {
 	LocalHost string
 	// APIURL is the public base built-in icons are served from.
 	APIURL string
-	Now    func() time.Time
+	// ChatGPTIssuer is the OpenAI sign-in a ChatGPT provider logs in and refreshes at.
+	ChatGPTIssuer string
+	Now           func() time.Time
 }

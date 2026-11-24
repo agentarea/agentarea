@@ -1670,6 +1670,8 @@ type PreviewIssue struct {
 
 // ProviderSpecResponse defines model for ProviderSpecResponse.
 type ProviderSpecResponse struct {
+	// Auth How a configuration authenticates: bearer, api_key_header, none, or chatgpt (a ChatGPT sign-in instead of a key)
+	Auth         string    `json:"auth"`
 	CreatedAt    time.Time `json:"created_at"`
 	Description  *string   `json:"description"`
 	Icon         *string   `json:"icon"`
@@ -1685,6 +1687,8 @@ type ProviderSpecResponse struct {
 
 // ProviderSpecWithModelsResponse defines model for ProviderSpecWithModelsResponse.
 type ProviderSpecWithModelsResponse struct {
+	// Auth How a configuration authenticates: bearer, api_key_header, none, or chatgpt (a ChatGPT sign-in instead of a key)
+	Auth         string                                            `json:"auth"`
 	CreatedAt    time.Time                                         `json:"created_at"`
 	Description  *string                                           `json:"description"`
 	Icon         *string                                           `json:"icon"`

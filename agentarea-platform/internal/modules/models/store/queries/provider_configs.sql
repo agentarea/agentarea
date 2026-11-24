@@ -49,3 +49,9 @@ WHERE workspace_id = @workspace_id OR managed_by = 'platform';
 
 -- name: UsedProviderSpecs :many
 SELECT DISTINCT provider_spec_id FROM provider_configs WHERE provider_spec_id = ANY(@ids::uuid[]);
+
+-- LockOwnConfig holds the workspace's own configuration row until the transaction ends.
+-- name: LockOwnConfig :one
+SELECT id FROM provider_configs
+WHERE id = @id AND workspace_id = @workspace_id
+FOR UPDATE;
