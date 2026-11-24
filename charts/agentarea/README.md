@@ -464,9 +464,9 @@ The following table lists configurable parameters of the chart and their default
 | temporal.enabled | bool | `true` |  |
 | temporal.replicaCount | int | `1` |  |
 | temporal.image.repository | string | `"temporalio/server"` |  |
-| temporal.image.tag | string | `"1.32.1"` |  |
+| temporal.image.tag | string | `"1.32.2"` |  |
 | temporal.adminTools.image.repository | string | `"temporalio/admin-tools"` |  |
-| temporal.adminTools.image.tag | string | `"1.32.1"` |  |
+| temporal.adminTools.image.tag | string | `"1.32.2"` |  |
 | temporal.namespaceRetention | string | `"24h"` |  |
 | temporal.database.name | string | `"temporal"` |  |
 | temporal.service.type | string | `"ClusterIP"` |  |
@@ -475,7 +475,7 @@ The following table lists configurable parameters of the chart and their default
 | temporal.extraEnv | list | `[]` |  |
 | postgresql.enabled | bool | `true` |  |
 | postgresql.image.repository | string | `"postgres"` |  |
-| postgresql.image.tag | string | `"16.15-alpine"` |  |
+| postgresql.image.tag | string | `"16.16-alpine"` |  |
 | postgresql.resources.limits.cpu | string | `"500m"` |  |
 | postgresql.resources.limits.memory | string | `"512Mi"` |  |
 | postgresql.resources.requests.cpu | string | `"250m"` |  |
@@ -484,6 +484,7 @@ The following table lists configurable parameters of the chart and their default
 | postgresql.persistence.size | string | `"8Gi"` |  |
 | postgresql.persistence.storageClass | string | `""` |  |
 | redis.enabled | bool | `true` |  |
+| valkey.image.tag | string | `"9.1.4"` |  |
 | valkey.auth.enabled | bool | `true` |  |
 | valkey.auth.usersExistingSecret | string | `"agentarea-redis-secret"` |  |
 | valkey.auth.aclUsers.default.permissions | string | `"~* &* +@all"` |  |
@@ -500,7 +501,7 @@ The following table lists configurable parameters of the chart and their default
 | valkey.resources.requests.memory | string | `"1Gi"` |  |
 | rustfs.enabled | bool | `true` |  |
 | rustfs.image.repository | string | `"rustfs/rustfs"` |  |
-| rustfs.image.tag | string | `"1.0.3"` |  |
+| rustfs.image.tag | string | `"1.0.6"` |  |
 | rustfs.auth.existingSecret | string | `"agentarea-rustfs-secret"` |  |
 | rustfs.defaultBuckets | string | `""` |  |
 | rustfs.resources.limits.cpu | string | `"500m"` |  |
@@ -557,7 +558,7 @@ The following table lists configurable parameters of the chart and their default
 | openfga.enabled | bool | `true` |  |
 | openfga.replicaCount | int | `1` |  |
 | openfga.image.repository | string | `"openfga/openfga"` |  |
-| openfga.image.tag | string | `"v1.22.0"` |  |
+| openfga.image.tag | string | `"v1.23.0"` |  |
 | openfga.database.name | string | `"openfga"` |  |
 | openfga.database.createJob.enabled | bool | `true` |  |
 | openfga.log.level | string | `"info"` |  |

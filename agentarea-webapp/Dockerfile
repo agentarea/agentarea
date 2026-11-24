@@ -1,6 +1,6 @@
 # syntax=docker.io/docker/dockerfile:1
 
-FROM node:24.22.0-alpine3.24 AS base
+FROM node:24.22.3-alpine3.24 AS base
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -40,7 +40,11 @@ ARG APP_VERSION=0.0.0
 ENV NODE_ENV=production
 ENV NEXT_PUBLIC_APP_VERSION=$APP_VERSION
 
-RUN addgroup --system --gid 1001 nodejs && \
+# The standalone server needs node alone; npm and corepack only add CVEs.
+RUN apk upgrade --no-cache && \
+    rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack && \
+    addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
