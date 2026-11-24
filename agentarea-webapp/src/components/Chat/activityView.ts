@@ -137,6 +137,7 @@ export function buildActivitySegments(
       terminalType: "",
       terminalMessage: null,
       terminalAnswer: null,
+      endedAt: null,
     });
   }
 

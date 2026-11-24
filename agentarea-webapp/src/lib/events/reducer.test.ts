@@ -201,6 +201,23 @@ describe("reducer timeline and terminal message", () => {
     expect(state.completedRuns[0].terminalMessage).toBe("no evidence");
   });
 
+  it("records when each run ended, for the files it published", () => {
+    const state = feed([
+      { eventType: "tool.call", data: { tool_call_id: "t1" } },
+      {
+        eventType: "task.awaiting_follow_up",
+        data: { final_response: "one", timestamp: "2026-11-24T10:00:00Z" },
+      },
+      { eventType: "task.continued", data: {} },
+      { eventType: "tool.call", data: { tool_call_id: "t2" } },
+      { eventType: "task.completed", data: { result: "two" } },
+    ]);
+    expect(state.completedRuns.map((run) => run.endedAt)).toEqual([
+      "2026-11-24T10:00:00Z",
+      null,
+    ]);
+  });
+
   it("keeps a run that ended waiting for follow-up when a cancel arrives later", () => {
     const state = feed([
       { eventType: "tool.call", data: { tool_call_id: "t" } },

@@ -22,7 +22,7 @@ import { StatusIndicator } from "@/components/ui/status-indicator";
 import type { StatusKind } from "@/lib/status";
 import type { Part } from "../contract";
 import { readableToolText } from "../toolText";
-import { ArtifactMedia } from "./ArtifactMedia";
+import { ArtifactFileList } from "./ArtifactFileList";
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object"
@@ -499,17 +499,11 @@ export const ToolPart: React.FC<{
         </>
       )}
       {artifactPaths.length > 0 ? (
-        <div className="flex flex-col gap-1 px-3 pb-2">
-          <span className="text-[11px] text-muted-foreground">
-            Wrote {artifactPaths.length}{" "}
-            {artifactPaths.length === 1 ? "file" : "files"}
-          </span>
-          <div className="flex flex-wrap gap-2">
-            {artifactPaths.map((path) => (
-              <ArtifactMedia key={path} path={path} name={fileBasename(path)} />
-            ))}
-          </div>
-        </div>
+        <ArtifactFileList
+          className="px-3 pb-2"
+          label={`Wrote ${artifactPaths.length} ${artifactPaths.length === 1 ? "file" : "files"}`}
+          files={artifactPaths.map((path) => ({ path }))}
+        />
       ) : null}
     </div>
   );

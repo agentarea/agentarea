@@ -1,7 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslations } from "next-intl";
+import type { TaskArtifactItem } from "@/api/client/types.gen";
 import {
   ApprovalDecisionCard,
   type ApprovalDecisionResult,
@@ -19,6 +27,13 @@ import { ContinuationGrantForm } from "@/components/Chat/ContinuationGrantForm";
 import { useA2UIActions } from "@/components/Chat/hooks/useA2UIActions";
 import { useFileUpload } from "@/components/Chat/hooks/useFileUpload";
 import { useScrollManagement } from "@/components/Chat/hooks/useScrollManagement";
+import {
+  linkedTaskFiles,
+  publishedByRun,
+  publishedFile,
+  runEnds,
+  segmentRuns,
+} from "@/components/Chat/turnFiles";
 import type {
   A2UIActionHandler,
   HumanInputSecretValue,
@@ -39,15 +54,19 @@ import {
 } from "@/hooks/useWorkspaceNavigation";
 import type { TaskWithAgent } from "@/lib/api";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
+import { apiProxyUrl } from "@/lib/api-proxy-url";
 import { latestContinuationReason } from "@/lib/continuation";
 import type { Part } from "@/lib/events/contract";
+import { ArtifactFileList } from "@/lib/events/parts/ArtifactFileList";
 import { PartRenderer } from "@/lib/events/parts/PartRenderer";
 import {
   TaskFileLinkContext,
   TaskFileOpenContext,
   TaskFileUrlContext,
+  TaskPublishedFileUrlContext,
 } from "@/lib/events/parts/TaskFileUrl";
 import { useTaskEvents } from "@/lib/events/useTaskEvents";
+import { listTaskArtifactsAction } from "@/lib/server-actions";
 import { getTaskStatusPresentation } from "@/lib/status";
 import { taskSandboxFileUrl } from "@/lib/task-files";
 import { prefixWorkspaceHref } from "@/lib/workspace-routes";
@@ -171,6 +190,47 @@ export function TaskConversation({
         completedRuns
       ),
     [completedRuns, parts, task.description]
+  );
+  // What the task published, as its Artifacts tab lists it; read again as
+  // each run ends, which is when a run's files have been published.
+  const [artifacts, setArtifacts] = useState<TaskArtifactItem[]>([]);
+  const endedRuns = completedRuns.length;
+  useEffect(() => {
+    if (endedRuns === 0) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await listTaskArtifactsAction(task.agent_id, task.id);
+        if (cancelled) return;
+        // 404 is a task with nowhere artifacts were ever kept: none published.
+        if (result.error && result.status !== 404) {
+          console.error("Failed to list task artifacts", result.error);
+          return;
+        }
+        setArtifacts(result.error ? [] : (result.data ?? []));
+      } catch (err) {
+        if (!cancelled) console.error("Failed to list task artifacts", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [endedRuns, task.agent_id, task.id]);
+  const filesByRun = useMemo(
+    () => publishedByRun(artifacts, completedRuns),
+    [artifacts, completedRuns]
+  );
+  const segmentOwners = useMemo(
+    () => segmentRuns(activitySegments, completedRuns),
+    [activitySegments, completedRuns]
+  );
+  const runEndIndexes = useMemo(() => runEnds(segmentOwners), [segmentOwners]);
+  const publishedFileUrl = useCallback(
+    (path: string, endedAt?: string | null) => {
+      const file = publishedFile(artifacts, path, endedAt);
+      return file ? apiProxyUrl(file.download_url) : null;
+    },
+    [artifacts]
   );
   const historyReady = !eventsLoading && !eventsError;
   const streamKnown = historyReady && (parts.length > 0 || timeline.length > 0);
@@ -360,26 +420,80 @@ export function TaskConversation({
           <TaskFileUrlContext.Provider value={taskFileUrl}>
             <TaskFileLinkContext.Provider value={taskFileLink}>
               <TaskFileOpenContext.Provider value={onOpenFile ?? null}>
-                {activitySegments.map((segment) =>
-                  segment.kind === "work" ? (
-                    <ActivityGroup
-                      key={segment.run.id}
-                      run={segment.run}
-                      onFormSubmit={handleFormSubmit}
-                      isInteractionClosed={isInteractionClosed}
-                      onA2UIAction={dispatchA2UIAction}
-                      paused={streamStatus === "paused"}
-                    />
-                  ) : (
-                    <PartRenderer
-                      key={segment.part.partId}
-                      part={segment.part}
-                      interactionClosed={isInteractionClosed(segment.part)}
-                      onFormSubmit={handleFormSubmit}
-                      onA2UIAction={dispatchA2UIAction}
-                    />
-                  )
-                )}
+                <TaskPublishedFileUrlContext.Provider value={publishedFileUrl}>
+                  {activitySegments.map((segment, index) => {
+                    const run = segmentOwners[index];
+                    const linked =
+                      segment.kind === "answer" &&
+                      typeof segment.part.data.content === "string"
+                        ? linkedTaskFiles(segment.part.data.content)
+                        : null;
+                    // A file the message links to shows there already.
+                    const files =
+                      run && runEndIndexes.has(index)
+                        ? (filesByRun.get(run.id) ?? []).filter(
+                            (file) => !linked?.has(file.path)
+                          )
+                        : [];
+                    return (
+                      <Fragment
+                        key={
+                          segment.kind === "work"
+                            ? segment.run.id
+                            : segment.part.partId
+                        }
+                      >
+                        {segment.kind === "work" ? (
+                          <ActivityGroup
+                            run={segment.run}
+                            onFormSubmit={handleFormSubmit}
+                            isInteractionClosed={isInteractionClosed}
+                            onA2UIAction={dispatchA2UIAction}
+                            paused={streamStatus === "paused"}
+                          />
+                        ) : segment.kind === "answer" && run ? (
+                          // The answer's links open the files as its run left them.
+                          <TaskPublishedFileUrlContext.Provider
+                            value={(path) =>
+                              publishedFileUrl(path, run.endedAt)
+                            }
+                          >
+                            <PartRenderer
+                              part={segment.part}
+                              interactionClosed={isInteractionClosed(
+                                segment.part
+                              )}
+                              onFormSubmit={handleFormSubmit}
+                              onA2UIAction={dispatchA2UIAction}
+                            />
+                          </TaskPublishedFileUrlContext.Provider>
+                        ) : (
+                          <PartRenderer
+                            part={segment.part}
+                            interactionClosed={isInteractionClosed(
+                              segment.part
+                            )}
+                            onFormSubmit={handleFormSubmit}
+                            onA2UIAction={dispatchA2UIAction}
+                          />
+                        )}
+                        {files.length > 0 && (
+                          <ArtifactFileList
+                            className="px-2"
+                            label={tc("publishedFiles", {
+                              count: files.length,
+                            })}
+                            files={files.map((file) => ({
+                              path: file.path,
+                              href: apiProxyUrl(file.download_url),
+                              mimeType: file.content_type,
+                            }))}
+                          />
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </TaskPublishedFileUrlContext.Provider>
               </TaskFileOpenContext.Provider>
             </TaskFileLinkContext.Provider>
           </TaskFileUrlContext.Provider>

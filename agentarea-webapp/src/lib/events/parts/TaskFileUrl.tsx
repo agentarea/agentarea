@@ -10,6 +10,15 @@ export const TaskFileUrlContext = createContext<
 
 export const useTaskFileUrl = () => useContext(TaskFileUrlContext);
 
+/** Resolves a task path to the URL of the copy the task published, null when
+ * it published none. Absent outside a task. */
+export const TaskPublishedFileUrlContext = createContext<
+  ((path: string) => string | null) | null
+>(null);
+
+export const useTaskPublishedFileUrl = () =>
+  useContext(TaskPublishedFileUrlContext);
+
 /** Where a link to a task file takes the reader: the file open in the task's
  * Files tab, to read rather than download. Absent outside a task. */
 export const TaskFileLinkContext = createContext<
