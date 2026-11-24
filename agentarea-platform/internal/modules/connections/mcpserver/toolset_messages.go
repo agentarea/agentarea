@@ -16,15 +16,19 @@ func messageTools(m streamsapi.PlatformMessages, members identityapi.Members) ma
 	return map[string]toolDef{
 		"send_message": {title: "Send a message to a member", effect: effectWrite, openWorld: true, call: func(ctx context.Context, c authn.Caller, args json.RawMessage) (any, error) {
 			in, err := decodeArgs[struct {
-				Text   string `json:"text"`
-				To     string `json:"to"`
-				Stream string `json:"stream"`
+				Text   string   `json:"text"`
+				To     string   `json:"to"`
+				Stream string   `json:"stream"`
+				Files  []string `json:"files"`
 			}](args)
 			if err != nil {
 				return nil, err
 			}
-			if strings.TrimSpace(in.Text) == "" {
+			if strings.TrimSpace(in.Text) == "" && len(in.Files) == 0 {
 				return nil, &toolError{"text must not be empty"}
+			}
+			if len(in.Files) > 0 && c.BoundTaskID == "" {
+				return nil, &toolError{"files can be sent only from a run: they are paths of the run's own files"}
 			}
 			to := strings.TrimSpace(in.To)
 			if to == "" {
@@ -41,7 +45,7 @@ func messageTools(m streamsapi.PlatformMessages, members identityapi.Members) ma
 						name = *mb.Email
 					}
 					return m.Send(ctx, c, streamsapi.MessageSend{UserID: mb.UserID, Recipient: name,
-						Stream: strings.TrimSpace(in.Stream), Text: in.Text})
+						Stream: strings.TrimSpace(in.Stream), Text: in.Text, Files: in.Files, TaskID: c.BoundTaskID})
 				}
 			}
 			return nil, &toolError{to + " is not a member of this workspace; name a member by the user id or email members_list shows"}

@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"mime"
 	"net/http"
+	"path"
 	"strings"
 
 	"github.com/google/uuid"
@@ -12,6 +15,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/netguard"
+	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/domain"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/replies"
@@ -78,8 +82,16 @@ func (s *Service) SendMessage(ctx context.Context, in api.MessageSend) (api.Mess
 	if creds["bot_token"] == "" {
 		return api.MessageSent{}, domain.Refused(fmt.Sprintf("The Telegram source of stream %s has no bot token", domain.PyRepr(bot.stream.Name)))
 	}
+	files, err := s.runFiles(ctx, c, in)
+	if err != nil {
+		return api.MessageSent{}, err
+	}
 	tg := replies.TelegramLive{Client: &http.Client{Transport: s.d.Out.Transport(netguard.Vendor)}}
-	id, cut, err := tg.Message(ctx, creds["bot_token"], accounts[0], in.Text)
+	var id int64
+	var cut bool
+	if strings.TrimSpace(in.Text) != "" {
+		id, cut, err = tg.Message(ctx, creds["bot_token"], accounts[0], in.Text)
+	}
 	var refused *replies.TelegramRefused
 	if errors.As(err, &refused) && refused.Status == http.StatusForbidden {
 		return api.MessageSent{}, domain.Refused(fmt.Sprintf("Telegram refused the message: %s. %s must open the bot of stream %s "+
@@ -91,10 +103,75 @@ func (s *Service) SendMessage(ctx context.Context, in api.MessageSend) (api.Mess
 	if err != nil {
 		return api.MessageSent{}, err
 	}
+	var sent []string
+	for _, f := range files {
+		err := tg.File(ctx, creds["bot_token"], accounts[0], path.Base(f.path), f.contentType, f.data)
+		var refusedFile *replies.FileRefused
+		if errors.As(err, &refusedFile) {
+			return api.MessageSent{}, domain.Refused(fmt.Sprintf("Telegram refused %s: %s (sent before it: %v)", f.path, refusedFile.Description, sent))
+		}
+		if err != nil {
+			return api.MessageSent{}, err
+		}
+		sent = append(sent, f.path)
+	}
 	s.log.InfoContext(ctx, "Message sent to a workspace member", "stream_id", bot.stream.ID, "source_id", bot.source.ID,
 		"user_id", in.UserID, "agent_id", agentOf(c))
-	return api.MessageSent{Sent: true, To: in.Recipient, Stream: api.StreamRef{ID: bot.stream.ID, Name: bot.stream.Name},
-		Messenger: Telegram, MessageID: &id, Truncated: cut}, nil
+	out := api.MessageSent{Sent: true, To: in.Recipient, Stream: api.StreamRef{ID: bot.stream.ID, Name: bot.stream.Name},
+		Messenger: Telegram, Truncated: cut, Files: sent}
+	if id != 0 {
+		out.MessageID = &id
+	}
+	return out, nil
+}
+
+type runFile struct {
+	path, contentType string
+	data              []byte
+}
+
+// runFiles reads the files in.Files names from the run's sandbox before anything is sent: a
+// path outside it, a file that is not there or one over Telegram's upload limit is refused.
+func (s *Service) runFiles(ctx context.Context, c authn.Caller, in api.MessageSend) ([]runFile, error) {
+	if len(in.Files) == 0 {
+		return nil, nil
+	}
+	if in.TaskID == "" {
+		return nil, domain.Refused("files can be sent only from a run: they are paths of the run's own files")
+	}
+	if s.d.TaskFiles == nil {
+		return nil, ErrMessagesUnwired
+	}
+	out := make([]runFile, 0, len(in.Files))
+	for _, raw := range in.Files {
+		p := strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(raw), "/workspace/"), "./")
+		clean := path.Clean(p)
+		if p == "" || strings.HasPrefix(clean, "/") || clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
+			return nil, domain.Refused(fmt.Sprintf("%s is not a path in the run's workspace, such as outputs/report.pdf", domain.PyRepr(raw)))
+		}
+		d, err := s.d.TaskFiles.ReadFile(ctx, c.Workspace.ID(), in.TaskID, clean, false)
+		var tfe *sandboxapi.TaskFileError
+		if errors.As(err, &tfe) && tfe.Status < 500 {
+			return nil, domain.Refused(fmt.Sprintf("%s cannot be read: %s", clean, tfe.Detail))
+		}
+		if err != nil {
+			return nil, err
+		}
+		data, err := io.ReadAll(io.LimitReader(d.Body, replies.TelegramUploadLimit+1))
+		_ = d.Body.Close()
+		if err != nil {
+			return nil, err
+		}
+		if len(data) > replies.TelegramUploadLimit {
+			return nil, domain.Refused(fmt.Sprintf("%s is larger than the 50 MB a Telegram bot sends", clean))
+		}
+		ct := d.Header.Get("Content-Type")
+		if ct == "" || strings.HasPrefix(ct, "application/octet-stream") {
+			ct = mime.TypeByExtension(strings.ToLower(path.Ext(clean)))
+		}
+		out = append(out, runFile{path: clean, contentType: ct, data: data})
+	}
+	return out, nil
 }
 
 func agentOf(c authn.Caller) string {

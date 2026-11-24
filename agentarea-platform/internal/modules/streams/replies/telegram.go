@@ -15,6 +15,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+
+	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 )
 
 // TelegramAPI is where the Telegram Bot API answers.
@@ -39,6 +41,9 @@ type TelegramLive struct {
 	// Client calls the Bot API (netguard.Vendor); API is its base, TelegramAPI when empty.
 	Client *http.Client
 	API    string
+	// Files reads the files a task published; at the end of a turn the chat gets each new one.
+	// Nil sends text only.
+	Files sandboxapi.TaskFiles
 }
 
 func (t TelegramLive) Format(s Send) (string, error) { return formatInMarkup(s) }
@@ -122,6 +127,7 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 	if err != nil {
 		return err
 	}
+	outer := ctx
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if msgID := state["message_id"]; msgID == "" {
@@ -183,6 +189,11 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 			return err
 		}
 	}
+	if end && CanonicalType(s.Event.Type) == "task.completed" {
+		if err := t.sendOutputs(outer, s, token, chatID); err != nil {
+			return err
+		}
+	}
 	if end {
 		if err := t.Redis.Set(ctx, telegramDonePrefix+s.Event.TaskID, endMark(s.Event.Timestamp), telegramStateTTL).Err(); err != nil {
 			return err
@@ -234,7 +245,7 @@ func (t TelegramLive) Message(ctx context.Context, token string, chatID any, tex
 	return answer.Result.MessageID, cut != text, nil
 }
 
-const unlockScript =`if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) end return 0`
+const unlockScript = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) end return 0`
 
 // lock serializes the sends of one task across replicas, so a retried progress update cannot
 // interleave with the end; the returned func frees it.

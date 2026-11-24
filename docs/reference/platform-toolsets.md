@@ -63,9 +63,10 @@ member linked to AgentArea; there is no chat id to give.
 
 | Name | Type | Default | Description |
 |---|---|---|---|
-| `text` | string | — | Required. The message, sent as plain text. Longer than 4096 characters is cut and ends with `(truncated)` |
+| `text` | string | `""` | The message, sent as plain text. Longer than 4096 characters is cut and ends with `(truncated)`. Required unless `files` is given |
 | `to` | string | `""` | The member: their user id or email. Empty is the person the run acts for |
 | `stream` | string | `""` | A stream name or id. Empty is the only messenger stream the caller may read |
+| `files` | string[] | `[]` | Paths of the run's own files, such as `outputs/clip.subtitled.mp4`, sent after the text, each as a message of its own: an mp4 as a video, a JPEG, PNG or WebP up to 10 MB as a photo, anything else as a document. At most 50 MB each |
 
 A messenger stream is one with a source whose type admits Telegram senders;
 the first such source of the stream sends.
@@ -78,8 +79,9 @@ the first such source of the stream sends.
 | `to` | string | The member's email, or user id when there is none |
 | `stream` | object | `id` and `name` of the stream whose bot sent |
 | `messenger` | string | `telegram` |
-| `message_id` | integer | Telegram's id of the message |
+| `message_id` | integer | Telegram's id of the message; absent when only files were sent |
 | `truncated` | boolean | Whether the text was cut |
+| `files` | string[] | The files sent, as normalized paths; absent when none |
 
 When the member answers, the update reaches the stream like any message they
 send: its session key is their chat, so a trigger with `session.continue`
@@ -95,6 +97,12 @@ carries the conversation on.
 | `Several messenger streams reach <member>` | More than one stream qualifies | Pass `stream` |
 | `Stream '<name>' has no Telegram source to write from` | `stream` names a stream without one | Name a messenger stream |
 | `Telegram refused the message: Forbidden: …` | The member never started the bot, or blocked it | They open the bot in Telegram and press Start |
+| `files can be sent only from a run` | `files` was given outside a run | Send files from the run that made them |
+| `'<path>' is not a path in the run's workspace` | The path is absolute outside `/workspace/` or climbs out | Pass a path such as `outputs/report.pdf` |
+| `<path> cannot be read: …` | The file is not in the run's sandbox, or the sandbox expired | Write it first; check the path |
+| `<path> is larger than the 50 MB a Telegram bot sends` | A bot cannot upload it | Compress or split the file |
+
+Every file is read before anything is sent, so a refused path sends nothing.
 
 ## Example
 

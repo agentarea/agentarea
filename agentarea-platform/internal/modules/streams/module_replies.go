@@ -57,7 +57,7 @@ func (m *Module) Replies(p ReplyDeps) ([]lifecycle.Component, error) {
 		},
 		Senders: map[string]replies.Sender{
 			"http":          replies.HTTPReply{Credentials: creds, Client: vendor},
-			"telegram_live": replies.TelegramLive{Credentials: creds, Redis: p.Redis, Client: vendor},
+			"telegram_live": replies.TelegramLive{Credentials: creds, Redis: p.Redis, Client: vendor, Files: m.d.TaskFiles},
 			"smtp":          replies.Email{Credentials: creds, Dialer: m.d.Out.Dialer()},
 			"task_webhook":  replies.TaskWebhook{Secret: m.taskSecret, Client: member, Now: m.d.Now},
 			"a2a_webhook":   replies.A2APush{Secret: m.taskSecret, Client: public},
