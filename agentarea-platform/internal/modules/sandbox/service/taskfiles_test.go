@@ -252,6 +252,50 @@ func TestTaskArtifactDownload(t *testing.T) {
 	}
 }
 
+func TestTaskArtifactPublish(t *testing.T) {
+	var got struct {
+		method, contentType string
+		length              int64
+		body                string
+	}
+	m := newFakeManager(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		got.method, got.contentType, got.length, got.body = r.Method, r.Header.Get("Content-Type"), r.ContentLength, string(b)
+		if r.URL.Query().Get("path") == "outputs/full.png" {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			_, _ = io.WriteString(w, `{"error":"artifact_quota_exceeded"}`)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		_, _ = io.WriteString(w, `{"id":"art_1","path":"outputs/logo.png","name":"logo.png","size":3,"content_type":"image/png","sha256":"ab","created_at":"2026-11-24T10:00:00Z"}`)
+	})
+	tf, _ := taskFilesOver(t, m.srv.URL, fileKey)
+	ctx := context.Background()
+	a, err := tf.PublishArtifact(ctx, wsID, taskID, "outputs/logo.png", "image/png", []byte("png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := m.last(t)
+	if c.path != "/sandbox/artifacts" || c.auth != "Bearer "+fileKey || got.method != http.MethodPut {
+		t.Fatalf("call = %+v %s", c, got.method)
+	}
+	wantQuery(t, c.query, map[string]string{"workspace_id": wsID, "task_id": taskID, "path": "outputs/logo.png"})
+	if got.contentType != "image/png" || got.length != 3 || got.body != "png" {
+		t.Fatalf("sent = %+v", got)
+	}
+	if a.ID != "art_1" || a.Path != "outputs/logo.png" || a.Size != 3 {
+		t.Fatalf("artifact = %+v", a)
+	}
+	if _, err := tf.PublishArtifact(ctx, wsID, taskID, "outputs/full.png", "image/png", []byte("png")); !errors.Is(err, api.ErrTaskFilesUnavailable) {
+		t.Fatalf("refused publish err = %v", err)
+	}
+
+	unset, _ := taskFilesOver(t, m.srv.URL, "")
+	if _, err := unset.PublishArtifact(ctx, wsID, taskID, "outputs/logo.png", "image/png", []byte("png")); !errors.Is(err, api.ErrTaskFilesNotConfigured) {
+		t.Fatalf("unconfigured err = %v", err)
+	}
+}
+
 func TestTaskArtifactDownloadStatusMapping(t *testing.T) {
 	for status, want := range map[int][2]string{
 		404: {"404", "Artifact not found"},

@@ -365,6 +365,45 @@ func TestSandboxArtifactPublicationUsesWorkspaceReadUseCase(t *testing.T) {
 	}
 }
 
+func TestSandboxArtifactUploadPublishesTheBodyWithoutASandbox(t *testing.T) {
+	runtime := &retiringSandboxRuntime{}
+	store := &recordingArtifactStore{}
+	handler := &Handler{secrets: Secrets{File: "file-secret-for-tests"}, logger: slog.Default(), sandboxRuntime: runtime, sandboxArtifacts: store}
+	recorder := httptest.NewRecorder()
+	requestContext := &reqctx{Writer: recorder}
+	requestContext.Request = httptest.NewRequest(http.MethodPut,
+		"/sandbox/artifacts?workspace_id=workspace-1&task_id=task-1&path=outputs%2Flogo.png", strings.NewReader("png bytes"))
+	requestContext.Request.Header.Set("Content-Type", "image/png")
+	requestContext.Request.Header.Set("Authorization", "Bearer file-secret-for-tests")
+
+	handler.sandboxArtifactsCollection(requestContext)
+
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body=%s", recorder.Code, recorder.Body.String())
+	}
+	if runtime.fileRead != nil {
+		t.Fatalf("an uploaded artifact read the sandbox: %+v", runtime.fileRead)
+	}
+	if string(store.published) != "png bytes" || !strings.Contains(recorder.Body.String(), `"path":"outputs/logo.png"`) ||
+		!strings.Contains(recorder.Body.String(), `"content_type":"image/png"`) {
+		t.Fatalf("published %q answered %s", store.published, recorder.Body.String())
+	}
+
+	for _, target := range []string{
+		"/sandbox/artifacts?task_id=task-1&path=a.png",
+		"/sandbox/artifacts?workspace_id=workspace-1&path=a.png",
+		"/sandbox/artifacts?workspace_id=workspace-1&task_id=task-1",
+	} {
+		recorder := httptest.NewRecorder()
+		requestContext := &reqctx{Writer: recorder, Request: httptest.NewRequest(http.MethodPut, target, strings.NewReader("x"))}
+		requestContext.Request.Header.Set("Authorization", "Bearer file-secret-for-tests")
+		handler.sandboxArtifactsCollection(requestContext)
+		if recorder.Code != http.StatusBadRequest {
+			t.Errorf("%s: status = %d, want 400", target, recorder.Code)
+		}
+	}
+}
+
 func TestSandboxArtifactDownloadVerifiesBeforeCommittingResponse(t *testing.T) {
 	corrupt := []byte("corrupt artifact")
 	store := &recordingArtifactStore{

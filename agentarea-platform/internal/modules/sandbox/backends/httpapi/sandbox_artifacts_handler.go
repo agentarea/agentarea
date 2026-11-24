@@ -42,6 +42,8 @@ func (h *Handler) sandboxArtifactsCollection(c *reqctx) {
 	switch c.Request.Method {
 	case http.MethodPost:
 		h.publishSandboxArtifact(c)
+	case http.MethodPut:
+		h.uploadSandboxArtifact(c)
 	case http.MethodGet:
 		h.listSandboxArtifacts(c)
 	default:
@@ -86,6 +88,31 @@ func (h *Handler) publishSandboxArtifact(c *reqctx) {
 			c.JSON(http.StatusRequestEntityTooLarge, jsonObject{"error": "artifact_quota_exceeded", "message": err.Error()})
 			return
 		}
+		c.JSON(http.StatusBadGateway, jsonObject{"error": "artifact_publish_failed", "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, artifact)
+}
+
+// uploadSandboxArtifact publishes the request body, a file made outside any
+// sandbox (a runner's), as the task's artifact at path.
+func (h *Handler) uploadSandboxArtifact(c *reqctx) {
+	workspaceID, taskID, filePath := c.Query("workspace_id"), c.Query("task_id"), c.Query("path")
+	if workspaceID == "" || taskID == "" || filePath == "" {
+		c.JSON(http.StatusBadRequest, jsonObject{"error": "invalid_request", "message": "workspace_id, task_id and path are required"})
+		return
+	}
+	if c.Request.ContentLength < 0 {
+		c.JSON(http.StatusLengthRequired, jsonObject{"error": "invalid_request", "message": "Content-Length is required"})
+		return
+	}
+	artifact, err := h.sandboxArtifacts.PublishStream(c.Request.Context(), workspaceID, taskID, filePath, c.GetHeader("Content-Type"), c.Request.Body, c.Request.ContentLength)
+	if err != nil {
+		if errors.Is(err, artifactstore.ErrArtifactQuotaExceeded) {
+			c.JSON(http.StatusRequestEntityTooLarge, jsonObject{"error": "artifact_quota_exceeded", "message": err.Error()})
+			return
+		}
+		h.logger.Error("artifact upload failed", "task_id", taskID, "error", err)
 		c.JSON(http.StatusBadGateway, jsonObject{"error": "artifact_publish_failed", "message": err.Error()})
 		return
 	}

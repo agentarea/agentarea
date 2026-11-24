@@ -21,6 +21,9 @@ type TaskFiles interface {
 	ListFiles(ctx context.Context, workspaceID, taskID, prefix string, harness bool) ([]string, error)
 	// ReadFile streams one file; path is already normalized.
 	ReadFile(ctx context.Context, workspaceID, taskID, path string, harness bool) (Download, error)
+	// PublishArtifact publishes a file made outside the sandbox, a runner's,
+	// as the task's artifact at path, as a file published from the sandbox is.
+	PublishArtifact(ctx context.Context, workspaceID, taskID, path, contentType string, body []byte) (TaskArtifact, error)
 }
 
 // TaskArtifact is a published artifact; ContentType and SHA256 are "" when absent.
