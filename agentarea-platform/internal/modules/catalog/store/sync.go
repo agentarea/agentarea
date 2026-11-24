@@ -367,7 +367,8 @@ func (Sync) InstalledItems(ctx context.Context, s db.Session, registryID string)
 type ProviderContract struct {
 	BaseURL, Transport, Auth, ModelsPath, ListShape, ModelsQuery, ReasoningParam *Opt[string]
 	ReasoningEfforts                                                             *Opt[[]byte]
-	CacheBreakpoints                                                             *Opt[bool]
+	CacheBreakpoints, PDFInput                                                   *Opt[bool]
+	MaxImageBytes, MaxImageEdge                                                  *Opt[int]
 }
 
 // Opt is a stated value that may be null.
@@ -381,6 +382,13 @@ func optText(o *Opt[string]) (pgtype.Text, any, bool) {
 		return pgtype.Text{}, nil, o != nil
 	}
 	return pgtype.Text{String: o.Value, Valid: true}, o.Value, true
+}
+
+func optInt4(o *Opt[int]) (pgtype.Int4, bool) {
+	if o == nil || o.Null {
+		return pgtype.Int4{}, o != nil
+	}
+	return int4(&o.Value), true
 }
 
 // ProviderRow is a provider spec as a catalog entry states it.
@@ -417,6 +425,14 @@ func (Sync) UpsertProvider(ctx context.Context, s db.Session, p ProviderRow, now
 			arg.CacheBreakpoints = boolean(c.CacheBreakpoints.Value)
 		}
 	}
+	if c.PDFInput != nil {
+		arg.SetPdfInput = true
+		if !c.PDFInput.Null {
+			arg.PdfInput = boolean(c.PDFInput.Value)
+		}
+	}
+	arg.MaxImageBytes, arg.SetMaxImageBytes = optInt4(c.MaxImageBytes)
+	arg.MaxImageEdge, arg.SetMaxImageEdge = optInt4(c.MaxImageEdge)
 	return New(s.Q()).UpsertProviderSpec(ctx, arg)
 }
 

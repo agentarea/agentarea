@@ -169,13 +169,15 @@ ORDER BY ri.external_id;
 -- name: UpsertProviderSpec :one
 INSERT INTO provider_specs (id, provider_key, name, description, provider_type, icon, is_builtin, is_first_party,
     workspace_id, created_by, created_at, updated_at,
-    base_url, transport, auth, models_path, list_shape, models_query, reasoning_param, reasoning_efforts, cache_breakpoints)
+    base_url, transport, auth, models_path, list_shape, models_query, reasoning_param, reasoning_efforts, cache_breakpoints,
+    max_image_bytes, max_image_edge, pdf_input)
 VALUES (@id, @provider_key, @name, sqlc.narg(description), @provider_type, sqlc.narg(icon), @is_builtin, @is_first_party,
     'platform', 'platform', @now, @now,
     sqlc.narg(base_url), COALESCE(sqlc.narg(transport), 'openai'), COALESCE(sqlc.narg(auth), 'bearer'),
     sqlc.narg(models_path), COALESCE(sqlc.narg(list_shape), 'data_id'), sqlc.narg(models_query),
     COALESCE(sqlc.narg(reasoning_param), 'reasoning_effort'), sqlc.narg(reasoning_efforts)::jsonb,
-    COALESCE(sqlc.narg(cache_breakpoints)::bool, false))
+    COALESCE(sqlc.narg(cache_breakpoints)::bool, false), sqlc.narg(max_image_bytes)::int, sqlc.narg(max_image_edge)::int,
+    COALESCE(sqlc.narg(pdf_input)::bool, false))
 ON CONFLICT (provider_key) DO UPDATE SET
     name = EXCLUDED.name, description = EXCLUDED.description, provider_type = EXCLUDED.provider_type,
     icon = EXCLUDED.icon, is_builtin = EXCLUDED.is_builtin, is_first_party = EXCLUDED.is_first_party,
@@ -188,6 +190,9 @@ ON CONFLICT (provider_key) DO UPDATE SET
     reasoning_param = CASE WHEN @set_reasoning_param::bool THEN EXCLUDED.reasoning_param ELSE provider_specs.reasoning_param END,
     reasoning_efforts = CASE WHEN @set_reasoning_efforts::bool THEN EXCLUDED.reasoning_efforts ELSE provider_specs.reasoning_efforts END,
     cache_breakpoints = CASE WHEN @set_cache_breakpoints::bool THEN EXCLUDED.cache_breakpoints ELSE provider_specs.cache_breakpoints END,
+    max_image_bytes = CASE WHEN @set_max_image_bytes::bool THEN EXCLUDED.max_image_bytes ELSE provider_specs.max_image_bytes END,
+    max_image_edge = CASE WHEN @set_max_image_edge::bool THEN EXCLUDED.max_image_edge ELSE provider_specs.max_image_edge END,
+    pdf_input = CASE WHEN @set_pdf_input::bool THEN EXCLUDED.pdf_input ELSE provider_specs.pdf_input END,
     updated_at = @now
 RETURNING id;
 

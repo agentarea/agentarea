@@ -18,17 +18,19 @@ func TestUpsertProviderKeepsWhatTheEntryLeavesOut(t *testing.T) {
 	base := "https://llm.example/v1"
 	id, err := st.UpsertProvider(ctx, s, ProviderRow{Key: key, Name: "K", Type: key, IsBuiltin: true, Contract: ProviderContract{
 		BaseURL: &Opt[string]{Value: base}, Transport: &Opt[string]{Value: "anthropic"},
+		MaxImageBytes: &Opt[int]{Value: 7864320}, MaxImageEdge: &Opt[int]{Value: 8000}, PDFInput: &Opt[bool]{Value: true},
 	}}, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
 	again, err := st.UpsertProvider(ctx, s, ProviderRow{Key: key, Name: "K2", Type: key, IsBuiltin: true,
-		Contract: ProviderContract{BaseURL: &Opt[string]{Null: true}}}, time.Now())
+		Contract: ProviderContract{BaseURL: &Opt[string]{Null: true}, MaxImageEdge: &Opt[int]{Null: true}}}, time.Now())
 	if err != nil || again != id {
 		t.Fatalf("%s %s %v", again, id, err)
 	}
 	p, ok, err := Specs{}.ProviderSpecByKey(ctx, s, key)
-	if err != nil || !ok || p.Name != "K2" || p.BaseURL != nil || p.Transport != "anthropic" {
+	if err != nil || !ok || p.Name != "K2" || p.BaseURL != nil || p.Transport != "anthropic" ||
+		p.MaxImageBytes == nil || *p.MaxImageBytes != 7864320 || p.MaxImageEdge != nil || !p.PDFInput {
 		t.Fatalf("%+v %v", p, err)
 	}
 
