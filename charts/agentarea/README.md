@@ -406,7 +406,7 @@ The following table lists configurable parameters of the chart and their default
 | sandboxRuntime.executionQueueTimeout | string | `"5m"` |  |
 | sandboxRuntime.executionCompletionGrace | string | `"2m"` |  |
 | sandboxRuntime.workspace.maxFiles | string | `"10000"` |  |
-| sandboxRuntime.workspace.maxFileBytes | string | `"268435456"` |  |
+| sandboxRuntime.workspace.maxFileBytes | string | `"1073741824"` |  |
 | sandboxRuntime.workspace.maxBytes | string | `"2147483648"` |  |
 | sandboxRuntime.workspace.signedUrlTTL | string | `"1h"` |  |
 | sandboxRuntime.workspace.forcePathStyle | bool | `true` |  |

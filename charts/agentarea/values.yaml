@@ -1042,7 +1042,7 @@ sandboxRuntime:
     # runtime additionally applies emptyDir.sizeLimit and an ephemeral-storage
     # container limit. The manager refuses malformed or missing values.
     maxFiles: "10000"
-    maxFileBytes: "268435456"
+    maxFileBytes: "1073741824"
     maxBytes: "2147483648"
     signedUrlTTL: "1h"
     forcePathStyle: true
