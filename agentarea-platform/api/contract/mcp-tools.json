@@ -4005,6 +4005,31 @@
     "toolset": "streams"
    },
    {
+    "name": "streams_replay_event",
+    "description": "Replay a stored stream event: append a copy of it to its stream as a new arrival.\n\nEvery subscription of the stream reacts to the copy as to a new event: a trigger fires\n(admitting the same sender, replying to the same chat, continuing the same session), with the\nsame body and files, received now. Use it to re-run what an event started, e.g. after a fix.\nThe copy's ``replay_of`` names the original. Find event ids with ``streams_list_events``.\nThe caller must be able to edit the stream.",
+    "inputSchema": {
+     "properties": {
+      "workspace": {
+       "description": "Slug or id of the workspace to act in.",
+       "title": "Workspace",
+       "type": "string"
+      },
+      "event_id": {
+       "description": "Id (UUID) of the stored event to replay, from `streams_list_events`.",
+       "title": "Event Id",
+       "type": "string"
+      }
+     },
+     "required": [
+      "workspace",
+      "event_id"
+     ],
+     "title": "replay_eventArguments",
+     "type": "object"
+    },
+    "toolset": "streams"
+   },
+   {
     "name": "streams_list_source_types",
     "description": "Source types of the catalog, with the credentials and settings each needs.",
     "inputSchema": {
@@ -9389,6 +9414,25 @@
       }
      },
      "title": "list_eventsArguments",
+     "type": "object"
+    },
+    "toolset": "streams"
+   },
+   {
+    "name": "streams_replay_event",
+    "description": "Replay a stored stream event: append a copy of it to its stream as a new arrival.\n\nEvery subscription of the stream reacts to the copy as to a new event: a trigger fires\n(admitting the same sender, replying to the same chat, continuing the same session), with the\nsame body and files, received now. Use it to re-run what an event started, e.g. after a fix.\nThe copy's ``replay_of`` names the original. Find event ids with ``streams_list_events``.\nThe caller must be able to edit the stream.",
+    "inputSchema": {
+     "properties": {
+      "event_id": {
+       "description": "Id (UUID) of the stored event to replay, from `streams_list_events`.",
+       "title": "Event Id",
+       "type": "string"
+      }
+     },
+     "required": [
+      "event_id"
+     ],
+     "title": "replay_eventArguments",
      "type": "object"
     },
     "toolset": "streams"

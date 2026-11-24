@@ -116,6 +116,7 @@ func ClientPlatformToolsets() []ClientPlatformToolset {
 			{Name: "list_source_types", DisplayName: "List stream source types", Description: "Source types of the catalog, with the credentials and settings each needs.", Effect: "read"},
 			{Name: "list_sources", DisplayName: "List stream sources", Description: "List where a stream's events come from, with the public webhook URL.", Effect: "read"},
 			{Name: "list_subscriptions", DisplayName: "List stream subscriptions", Description: "List the triggers, forwards and processors that receive a stream's events.", Effect: "read"},
+			{Name: "replay_event", DisplayName: "Replay a stream event", Description: "Append a copy of a stored event to its stream as a new arrival; its subscriptions react again.", Effect: "write"},
 			{Name: "update_processor", DisplayName: "Update stream processor", Description: "Change a processor's code, outputs or filter; the next event runs the change.", Effect: "write"},
 			{Name: "update_source", DisplayName: "Change who may write to a source", Description: "Change who may write to a source whose type admits senders (Telegram).", Effect: "write"},
 		}},

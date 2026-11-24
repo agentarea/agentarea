@@ -122,6 +122,8 @@ type PlatformStreams interface {
 	UpdateProcessor(ctx context.Context, c authn.Caller, streamID, subscriptionID string, ch ProcessorChange) (any, error)
 	DeleteProcessor(ctx context.Context, c authn.Caller, streamID, subscriptionID string) error
 	ListEvents(ctx context.Context, c authn.Caller, q EventQuery) (any, error)
+	// ReplayEvent appends a copy of a stored event to its stream as a new arrival.
+	ReplayEvent(ctx context.Context, c authn.Caller, eventID string) (any, error)
 }
 
 // StreamRef names the stream stream_events_read_stream read.

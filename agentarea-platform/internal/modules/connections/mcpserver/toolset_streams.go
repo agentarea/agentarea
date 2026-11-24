@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authn"
 	streamsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/api"
 )
@@ -190,6 +192,18 @@ func streamTools(s streamsapi.PlatformStreams) map[string]toolDef {
 				return nil, err
 			}
 			return s.CreateForward(ctx, c, in.StreamID, in.Outputs, in.EventFilter)
+		}},
+		"replay_event": {title: "Replay a stream event", effect: effectWrite, call: func(ctx context.Context, c authn.Caller, args json.RawMessage) (any, error) {
+			in, err := decodeArgs[struct {
+				EventID string `json:"event_id"`
+			}](args)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := uuid.Parse(in.EventID); err != nil {
+				return nil, &toolError{"event_id: Input should be a valid UUID"}
+			}
+			return s.ReplayEvent(ctx, c, in.EventID)
 		}},
 		"delete_forward": {title: "Delete stream forward", effect: effectDestructive, idempotent: true, call: subscriptionDelete(s.DeleteForward)},
 		"create_processor": {title: "Create stream processor", effect: effectWrite, call: func(ctx context.Context, c authn.Caller, args json.RawMessage) (any, error) {
