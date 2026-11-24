@@ -26,11 +26,13 @@ type DelegationInput struct {
 }
 
 // DelegationOutput: Status created with TaskID and Policy, or failed with Error.
+// RunnerClientID is the client whose runner runs the child's turns, if any.
 type DelegationOutput struct {
-	Status string
-	TaskID string
-	Policy api.Policy
-	Error  string
+	Status         string
+	TaskID         string
+	Policy         api.Policy
+	Error          string
+	RunnerClientID string
 }
 
 // runnerClientKey names, in task metadata, the client whose runner runs the task's turns.
@@ -61,7 +63,7 @@ func (s *Service) CreateDelegationTask(ctx context.Context, p Principal, in Dele
 		return DelegationOutput{}, err
 	case def.Archived:
 		return failed(fmt.Errorf("agent %s is archived", in.TargetAgentID))
-	case agent.ModelID == "":
+	case def.ClientID == "" && agent.ModelID == "":
 		return failed(fmt.Errorf("agent %s has no model configured", in.TargetAgentID))
 	}
 	taskID := uuid.NewString()
@@ -101,5 +103,5 @@ func (s *Service) CreateDelegationTask(ctx context.Context, p Principal, in Dele
 		return DelegationOutput{}, taskNotFound(err)
 	}
 	s.d.Log.InfoContext(ctx, "created delegation task", "task_id", taskID, "agent", in.TargetAgentName)
-	return DelegationOutput{Status: "created", TaskID: taskID, Policy: toRunPolicy(policy)}, nil
+	return DelegationOutput{Status: "created", TaskID: taskID, Policy: toRunPolicy(policy), RunnerClientID: def.ClientID}, nil
 }

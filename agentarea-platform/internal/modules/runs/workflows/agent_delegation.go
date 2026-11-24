@@ -26,9 +26,11 @@ type delegation struct {
 	req     ToolCallRequest
 
 	childTaskID string
-	res         AgentRunResult
-	answer      RemoteDelegationResult
-	err         error
+	// onRunner: the child runs on its client's runner, whose spend only the ledger knows.
+	onRunner bool
+	res      AgentRunResult
+	answer   RemoteDelegationResult
+	err      error
 	// content is the call's tool message once it settled.
 	content string
 	settled bool
@@ -135,7 +137,7 @@ func (r *agentRun) childOptions(ctx workflow.Context, id string) workflow.Contex
 func (r *agentRun) runDelegation(ctx workflow.Context, d *delegation) {
 	c := d.call
 	if d.local != nil {
-		d.res, d.err = r.runChild(ctx, c, *d.local, d.message, d.budget, "delegation-"+r.executionID+"-"+c.ID, &d.childTaskID)
+		d.res, d.err = r.runChild(ctx, c, *d.local, d.message, d.budget, "delegation-"+r.executionID+"-"+c.ID, &d.childTaskID, &d.onRunner)
 		return
 	}
 	req := RemoteDelegationRequest{Call: d.req, Deadline: r.remoteDeadline(ctx)}
@@ -278,7 +280,7 @@ func (r *agentRun) settleRemote(ctx workflow.Context, d *delegation) error {
 	return nil
 }
 
-func (r *agentRun) runChild(ctx workflow.Context, c ToolCall, target api.Delegate, message string, budget money.Decimal, childID string, childTaskID *string) (AgentRunResult, error) {
+func (r *agentRun) runChild(ctx workflow.Context, c ToolCall, target api.Delegate, message string, budget money.Decimal, childID string, childTaskID *string, onRunner *bool) (AgentRunResult, error) {
 	req := CreateDelegationTaskRequest{
 		Principal: r.principal, ParentTaskID: r.taskID, TargetAgentID: target.AgentID, TargetAgentName: target.AgentName,
 		Message: message, ParentPolicy: r.cfg.Policy, RunBudget: &budget, ExecutionID: childID,
@@ -299,9 +301,23 @@ func (r *agentRun) runChild(ctx workflow.Context, c ToolCall, target api.Delegat
 			"parent_agent_id": r.principal.AgentID, "parent_task_id": r.taskID,
 		},
 	}
+	if created.RunnerClientID != "" {
+		child.WorkflowMetadata[runnerClientKey] = created.RunnerClientID // pragma: allowlist secret
+		*onRunner = true
+	}
 	var res AgentRunResult
-	err := workflow.ExecuteChildWorkflow(r.childOptions(ctx, childID), api.WorkflowAgentExecution, child).Get(ctx, &res)
-	return res, err
+	if err := workflow.ExecuteChildWorkflow(r.childOptions(ctx, childID), api.WorkflowAgentExecution, child).Get(ctx, &res); err != nil {
+		return res, err
+	}
+	if *onRunner {
+		var s DelegatedSpendResult
+		req := DelegatedSpendRequest{Principal: r.principal, TaskID: created.TaskID}
+		if err := workflow.ExecuteActivity(activityCtx(ctx, api.ActivityDelegatedTaskSpend, "", 0), api.ActivityDelegatedTaskSpend, req).Get(ctx, &s); err != nil {
+			return res, err
+		}
+		res.TotalCost = s.Spent
+	}
+	return res, nil
 }
 
 func (r *agentRun) recordStoppedDelegation(ctx workflow.Context, d *delegation, target api.Delegate, reserved *money.Decimal) {

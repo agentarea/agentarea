@@ -336,17 +336,14 @@ func (s *Service) CallInstanceTool(ctx context.Context, c authn.Caller, inst dom
 		return nil, err
 	}
 	name := toolname.AggregateNamespace(nil, inst.ID, inst.Name) + toolname.NSSep + raw
-	d := governanceapi.DecideToolPolicy(&policy, name, governanceapi.ToolNames{
-		Aliases:     []string{toolname.MCPToolTarget(inst.ID, raw)},
-		Restricting: toolname.MCPNarrowingNames(inst.Name, raw),
-	})
+	names := governanceapi.ToolNames{Aliases: []string{toolname.MCPToolTarget(inst.ID, raw)}, Restricting: toolname.MCPNarrowingNames(inst.Name, raw)}
+	d := governanceapi.DecideToolPolicy(&policy, name, names)
 	audit := toolAudit{resourceType: "mcp_instance", resourceID: inst.ID, actorType: actorOf(c), name: name, args: args,
 		extra: map[string]any{"mcp_instance_id": inst.ID}}
 	held := func() runsapi.HeldCall {
-		names := governanceapi.ToolNames{Aliases: []string{toolname.MCPToolTarget(inst.ID, raw)}, Restricting: toolname.MCPNarrowingNames(inst.Name, raw)}
 		return heldCall(c, &policy, name, names, inst.ID, inst.Name, raw, "", args, d.Reason)
 	}
-	out, refused, err := s.judged(ctx, c, c.ClientID, audit, d, held, mcpBinding(inst.ID, raw), func() (any, error) {
+	out, refused, err := s.judged(ctx, c, c.ClientID, audit, d, held, named(mcpBinding(inst.ID, raw), names), func() (any, error) {
 		return s.runInstanceTool(ctx, c, inst, raw, args)
 	})
 	if err != nil {

@@ -386,10 +386,11 @@ type CreateDelegationTaskRequest struct {
 // CreateDelegationTaskResult: Status created with TaskID and the child's
 // Policy, or failed with Error (the workflow records delegation.failed).
 type CreateDelegationTaskResult struct {
-	Status string     `json:"status"`
-	TaskID string     `json:"task_id"`
-	Policy api.Policy `json:"policy"`
-	Error  string     `json:"error"`
+	Status         string     `json:"status"`
+	TaskID         string     `json:"task_id"`
+	Policy         api.Policy `json:"policy"`
+	Error          string     `json:"error"`
+	RunnerClientID string     `json:"runner_client_id,omitempty"`
 }
 
 type ArtifactValidationRequest struct {
