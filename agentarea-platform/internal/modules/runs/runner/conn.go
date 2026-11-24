@@ -647,7 +647,8 @@ func (c *conn) RunTurn(ctx context.Context, call workflows.RunnerTurnCall) (work
 				return c.failed(ctx, t, err)
 			}
 			f := t.finished
-			return workflows.RunnerTurnResult{Status: *f.Status, Response: taskRelative(deref(f.Response), call.Request.TaskID), Error: deref(f.Error)}, nil
+			res := workflows.RunnerTurnResult{Status: *f.Status, Response: taskRelative(deref(f.Response), call.Request.TaskID), Error: deref(f.Error)}
+			return c.withLostOutputs(ctx, call.Request.TaskID, res), nil
 		case <-ctx.Done():
 			if c.closed.Load() {
 				c.reportLost(ctx, t)
@@ -792,6 +793,24 @@ func (c *conn) assignment(ctx context.Context, req workflows.RunnerTurnRequest) 
 		"model": nullable(model), "reasoning_effort": nullable(effort), "instructions": withOutputsLimit(agent.Instructions),
 		"allow_domains": domains, "sandbox": client.Sandbox,
 	}, actor, task.CreatedBy, nil
+}
+
+// withLostOutputs fails a turn whose outputs did not all reach the task, naming each one, so
+// whoever reads its result (a delegating agent) does not take it for done.
+func (c *conn) withLostOutputs(ctx context.Context, taskID string, res workflows.RunnerTurnResult) workflows.RunnerTurnResult {
+	lost, err := c.d.Tasks.TakeLostOutputs(ctx, c.caller.Workspace, taskID)
+	if err != nil {
+		c.log.Error("Could not read the outputs of the turn that did not reach its task", "task_id", taskID, "error", err.Error())
+		return res
+	}
+	if len(lost) == 0 || res.Status != "completed" {
+		return res
+	}
+	text := "The CLI finished, but these files it wrote did not reach the task: " + strings.Join(lost, "; ") + "."
+	if res.Response != "" {
+		text += " Its answer was: " + res.Response
+	}
+	return workflows.RunnerTurnResult{Status: "failed", Error: text}
 }
 
 func nullable(s string) any {

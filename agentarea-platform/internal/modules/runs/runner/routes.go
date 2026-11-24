@@ -49,10 +49,10 @@ type Artifacts interface {
 	PublishArtifact(ctx context.Context, workspaceID, taskID, path, contentType string, body []byte) (sandboxapi.TaskArtifact, error)
 }
 
-// Store writes the live files of the task a subtask works on (sandbox Runtime), bringing its
-// store up on demand.
+// Store commits files into a task's durable workspace (sandbox TaskWorkspace), the store a
+// sandbox hydrates from; it needs no live sandbox.
 type Store interface {
-	PutFile(ctx context.Context, workspaceID, taskID, path string, data []byte) (sandboxapi.StoredFile, error)
+	PutFiles(ctx context.Context, workspaceID, taskID string, files []sandboxapi.WorkspaceFile, opts sandboxapi.WriteOptions) (sandboxapi.ManifestRef, error)
 }
 
 // Presence marks a client's runner connected (runner_presence.py).
@@ -299,29 +299,54 @@ func (h *handlers) upload(w http.ResponseWriter, r *http.Request) {
 		h.errs.Write(w, r, httpx.HTTPError(http.StatusRequestEntityTooLarge, detailTooLarge))
 		return
 	}
+	contentType := contentTypeOf(filePath)
 	if shared, _ := task.Metadata[workspaceTaskKey].(string); shared != "" && strings.HasPrefix(filePath, outputsDir) {
-		if _, err := h.d.Store.PutFile(ctx, c.Workspace.ID(), shared, filePath, body); err != nil {
-			h.d.Log.ErrorContext(ctx, "Could not write the runner's file into the task it works on", "task_id", taskID, "path", filePath, "error", err.Error())
-			h.errs.Write(w, r, err)
+		if err := h.deliverShared(ctx, c, taskID, shared, filePath, contentType, body); err != nil {
+			h.outputLost(w, r, c, taskID, filePath, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	key := "harness-files/" + c.Workspace.ID() + "/" + taskID + "/" + filePath
-	contentType := contentTypeOf(filePath)
 	if err := h.d.Files.Put(ctx, key, bytes.NewReader(body), int64(len(body)), blob.PutOptions{ContentType: contentType}); err != nil {
+		if strings.HasPrefix(filePath, outputsDir) {
+			h.outputLost(w, r, c, taskID, filePath, err)
+			return
+		}
 		h.errs.Write(w, r, err)
 		return
 	}
 	if strings.HasPrefix(filePath, outputsDir) {
 		if _, err := h.d.Artifacts.PublishArtifact(ctx, c.Workspace.ID(), taskID, filePath, contentType, body); err != nil {
-			h.d.Log.ErrorContext(ctx, "Could not publish the runner's output as a task artifact", "task_id", taskID, "path", filePath, "error", err.Error())
-			h.errs.Write(w, r, err)
+			h.outputLost(w, r, c, taskID, filePath, err)
 			return
 		}
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// deliverShared commits a subtask's output into the durable workspace of the task it works on
+// and publishes it as that task's artifact: neither needs the task's sandbox to be up.
+func (h *handlers) deliverShared(ctx context.Context, c authn.Caller, taskID, shared, filePath, contentType string, body []byte) error {
+	files := []sandboxapi.WorkspaceFile{{Path: filePath, Data: body, ContentType: contentType}}
+	if _, err := h.d.Store.PutFiles(ctx, c.Workspace.ID(), shared, files, sandboxapi.WriteOptions{Owner: "runner-outputs-" + taskID}); err != nil {
+		return err
+	}
+	_, err := h.d.Artifacts.PublishArtifact(ctx, c.Workspace.ID(), shared, filePath, contentType, body)
+	return err
+}
+
+// outputLost: an output that did not reach the task is noted on it, so the turn that made it
+// ends failed naming the file, and the runner is told to try again later.
+func (h *handlers) outputLost(w http.ResponseWriter, r *http.Request, c authn.Caller, taskID, filePath string, cause error) {
+	ctx := r.Context()
+	h.d.Log.ErrorContext(ctx, "A runner's output did not reach the task", "task_id", taskID, "path", filePath, "error", cause.Error())
+	if err := h.d.Tasks.NoteLostOutput(ctx, c.Workspace, taskID, filePath+" ("+cause.Error()+")"); err != nil {
+		h.d.Log.ErrorContext(ctx, "Could not note the runner's lost output on its task", "task_id", taskID, "path", filePath, "error", err.Error())
+	}
+	w.Header().Set("Retry-After", "5")
+	h.errs.Write(w, r, httpx.HTTPError(http.StatusServiceUnavailable, "The file did not reach the task: "+cause.Error()))
 }
 
 // connect is connect_runner: only a client's runner key, as Authorization:
