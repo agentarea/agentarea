@@ -35,6 +35,7 @@ import EmptyState from "@/components/EmptyState";
 import EntityMark from "@/components/EntityMark";
 import FormError from "@/components/FormError";
 import HeaderTabs from "@/components/HeaderTabs";
+import LoadMoreSentinel from "@/components/LoadMoreSentinel";
 import { RegistryBadge } from "@/components/RegistryBadge";
 import Table, { type Column } from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
@@ -114,7 +115,6 @@ import {
   type SortMode,
 } from "./catalog-data";
 import {
-  canFetchMore,
   catalogPagingReducer,
   hasMore as hasMoreItems,
   initialPaging,
@@ -487,7 +487,6 @@ export default function CatalogGallery({
   const tBundle = useTranslations("BundleInstall");
   const tCommon = useTranslations("Common");
   const tCatalog = useTranslations("CatalogPage");
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Re-seed whenever a server round-trip lands with a different page. The props
   // object identity changes on every SSR render, so a ref comparison is what
@@ -567,22 +566,6 @@ export default function CatalogGallery({
     paging.entries,
     tBundle,
   ]);
-
-  // Infinite scroll: auto-load the next page when the sentinel nears the
-  // viewport. `canFetchMore` is the in-flight guard — a short page leaves the
-  // sentinel inside the viewport, so without it this fires page after page.
-  useEffect(() => {
-    const node = sentinelRef.current;
-    if (!node || !canFetchMore(paging)) return;
-    const io = new IntersectionObserver(
-      (obs) => {
-        if (obs[0]?.isIntersecting) void loadMore();
-      },
-      { rootMargin: "600px" }
-    );
-    io.observe(node);
-    return () => io.disconnect();
-  }, [paging, loadMore]);
 
   // Deep-link fallback: if ?item= points at an entry that isn't in the loaded
   // page(s) (e.g. a shared link to something deep in the catalog), fetch that
@@ -809,22 +792,13 @@ export default function CatalogGallery({
                 />
               )}
             </div>
-            {paging.error && (
-              <div className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
+            {/* A first page that failed to load. A later page's failure is
+                the sentinel's to show, with its retry, at the end of the list. */}
+            {paging.error && !moreAvailable && (
+              <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
                 <StatusIndicator kind="failed" size="sm" className="text-sm">
                   {paging.error}
                 </StatusIndicator>
-                {/* A failed page used to end infinite scroll for good. It's a
-                  retry, not the end of the catalog. */}
-                {moreAvailable && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void loadMore()}
-                  >
-                    {tCommon("retry")}
-                  </Button>
-                )}
               </div>
             )}
             {busy && <ContentSkeleton view={view} />}
@@ -941,30 +915,18 @@ export default function CatalogGallery({
               </div>
             )}
 
-            {/* Infinite-scroll sentinel + manual fallback. Mounted whenever the
-              catalog has more, including when this page rendered nothing — a
-              filter whose matches all sit further in used to render "No matches"
-              here and strand the rest of the catalog. */}
-            {!busy && !refreshing && moreAvailable && (
-              <>
-                <div ref={sentinelRef} className="h-px" aria-hidden />
-                <div className="flex justify-center pt-2">
-                  {paging.status === "appending" ? (
-                    <StatusIndicator
-                      kind="running"
-                      size="sm"
-                      aria-label={tCatalog("loading")}
-                      title={tCatalog("loading")}
-                    />
-                  ) : (
-                    !paging.error && (
-                      <Button variant="outline" onClick={() => void loadMore()}>
-                        {tCatalog("loadMore")}
-                      </Button>
-                    )
-                  )}
-                </div>
-              </>
+            {/* The shared infinite-list end (Tasks, Audit log): loads the next
+              page as it nears the viewport, and after a failure waits for a
+              retry. Mounted whenever the catalog has more, including when
+              this page rendered nothing — a filter whose matches all sit
+              further in must not strand the rest of the catalog. */}
+            {!busy && !refreshing && (
+              <LoadMoreSentinel
+                hasMore={moreAvailable}
+                pending={paging.status !== "idle"}
+                error={paging.error}
+                onLoadMore={() => void loadMore()}
+              />
             )}
           </>
         )}

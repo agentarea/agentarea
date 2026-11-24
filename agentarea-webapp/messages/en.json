@@ -4277,7 +4277,6 @@
       "priceUnavailable": "{price} · price unavailable, vendor cost without markup"
     },
     "loading": "Loading…",
-    "loadMore": "Load more",
     "card": {
       "verified": "Verified",
       "featured": "Featured"
