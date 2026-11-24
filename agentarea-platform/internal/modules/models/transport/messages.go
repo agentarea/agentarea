@@ -19,9 +19,12 @@ func openAIMessages(ms []api.Message) []msg {
 		if m.Parts != nil {
 			parts := make([]any, len(m.Parts))
 			for j, p := range m.Parts {
-				if p.Type == "image_url" {
+				switch p.Type {
+				case "image_url":
 					parts[j] = map[string]any{"type": "image_url", "image_url": map[string]any{"url": p.ImageURL}}
-				} else {
+				case "file":
+					parts[j] = map[string]any{"type": "file", "file": map[string]any{"filename": p.Filename, "file_data": p.FileData}}
+				default:
 					parts[j] = map[string]any{"type": p.Type, "text": p.Text}
 				}
 			}
@@ -155,6 +158,15 @@ func anthropicImage(part map[string]any) map[string]any {
 	return map[string]any{"type": "image", "source": map[string]any{"type": "url", "url": url}}
 }
 
+// anthropicDocument is an OpenAI file part as a document block; the file is a base64 data URL.
+func anthropicDocument(part map[string]any) map[string]any {
+	file, _ := part["file"].(map[string]any)
+	data, _ := file["file_data"].(string)
+	header, payload, _ := strings.Cut(data, ",")
+	mediaType, _, _ := strings.Cut(strings.TrimPrefix(header, "data:"), ";")
+	return map[string]any{"type": "document", "source": map[string]any{"type": "base64", "media_type": mediaType, "data": payload}}
+}
+
 func anthropicBlocks(content any) []any {
 	switch c := content.(type) {
 	case string:
@@ -179,6 +191,8 @@ func anthropicBlocks(content any) []any {
 			blocks = append(blocks, map[string]any{"type": "text", "text": textOf(p)})
 		case part["type"] == "image_url":
 			blocks = append(blocks, anthropicImage(part))
+		case part["type"] == "file":
+			blocks = append(blocks, anthropicDocument(part))
 		case part["type"] == "text":
 			if t, _ := part["text"].(string); t != "" {
 				blocks = append(blocks, map[string]any{"type": "text", "text": t})
