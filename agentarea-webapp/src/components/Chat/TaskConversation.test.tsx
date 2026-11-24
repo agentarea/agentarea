@@ -30,6 +30,10 @@ vi.mock("@/lib/server-actions", () => ({
     data: [],
     error: undefined,
   })),
+  listTaskArtifactsAction: vi.fn(async () => ({
+    data: [],
+    error: undefined,
+  })),
 }));
 
 vi.mock("next-intl", () => ({

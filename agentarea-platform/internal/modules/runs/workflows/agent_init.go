@@ -167,6 +167,51 @@ func (r *agentRun) configure(ctx workflow.Context, selections RunSelections) err
 	return nil
 }
 
+// reloadConfig reads the agent's current definition at the start of a follow-up turn: its tools,
+// delegates, instructions and model. The conversation, the workspace, the inputs and the
+// governance snapshot stay the run's. An archived or deleted agent fails the turn.
+func (r *agentRun) reloadConfig(ctx workflow.Context) error {
+	if r.runner.on || !r.configured || r.goal == nil {
+		return nil
+	}
+	selections := selectionsOf(r.goal.Context, r.metadata)
+	selections.FileIDs, selections.TriggerEvent, selections.TriggerEventFileName = nil, nil, ""
+	if r.modelOverride != "" {
+		selections.ModelOverride = r.modelOverride
+	}
+	req := ResolveRunConfigRequest{Principal: r.principal, TaskID: r.taskID, Selections: selections, Policy: r.cfg.Policy, Governance: r.cfg.Governance}
+	var cfg api.RunConfig
+	if err := workflow.ExecuteActivity(activityCtx(ctx, api.ActivityResolveRunConfig, "", 0), api.ActivityResolveRunConfig, req).Get(ctx, &cfg); err != nil {
+		return err
+	}
+	if cfg.Model.ContextWindow <= 0 {
+		return nonRetryable("agent configuration has no valid ModelSpec context_window", ErrInvalidExecutionSnapshot)
+	}
+	before := r.instruction()
+	cfg.Policy, cfg.Governance, cfg.Inputs = r.cfg.Policy, r.cfg.Governance, r.cfg.Inputs
+	r.cfg = cfg
+	if cfg.Model.ContextWindow != r.contextWindow {
+		r.contextWindow = cfg.Model.ContextWindow
+		r.contextUsage = 0
+		r.contextWarningSent = false
+	}
+	tools, err := r.buildTools()
+	if err != nil {
+		return err
+	}
+	r.tools = tools
+	if instruction := r.instruction(); instruction != before {
+		name := firstNonEmpty(r.cfg.Agent.Name, "AI Agent")
+		started := workflow.Now(ctx)
+		if r.runStartedAt != nil {
+			started = *r.runStartedAt
+		}
+		prompt := domain.SystemPrompt(name, instruction, domain.FirstMessageIsTheTask, r.goal.SuccessCriteria, r.a2uiAvailable(), started)
+		r.messages = append(r.messages, Message{Role: "system", Content: prompt})
+	}
+	return nil
+}
+
 func runtimeEventData(cfg *api.RunConfig) map[string]any {
 	if cfg.Runtime == nil {
 		if cfg.RuntimeError != "" {
@@ -311,6 +356,7 @@ func (r *agentRun) restore(ctx workflow.Context, req AgentRunRequest, s *Continu
 	r.monthlyCapMessage = s.MonthlyCapMessage
 	r.recordedTurnCalls = s.RecordedTurnCalls
 	r.recordedTurnAnswered = s.RecordedTurnAnswered
+	r.modelOverride = s.ModelOverride
 	r.adoptRunner()
 	r.contextWindow = r.cfg.Model.ContextWindow
 	if r.contextWindow <= 0 && !r.runner.on {

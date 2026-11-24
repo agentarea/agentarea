@@ -277,7 +277,7 @@ func (a *Activities) Record(ctx context.Context, req RecordRequest) (RecordResul
 		in.Live = append(in.Live, domain.StoredEvent{ID: e.ID, Type: e.Type, Timestamp: e.Timestamp, Data: e.Data})
 	}
 	out, err := a.svc.Record(ctx, principal(req.Principal), in)
-	return RecordResult{Rows: out.Rows, Events: out.Events}, err
+	return RecordResult{Rows: out.Rows, Events: out.Events, TurnStart: req.TurnStart}, err
 }
 
 // ActivateSkill is activate_skill_activity.

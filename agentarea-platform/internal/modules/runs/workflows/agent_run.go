@@ -26,6 +26,8 @@ type agentRun struct {
 	tools       []api.ToolDefinition
 	metadata    map[string]any
 	interaction domain.InteractionCapabilities
+	// modelOverride is the model a change_model command chose; a turn's reloaded config keeps it.
+	modelOverride string
 
 	status             string
 	iteration          int
@@ -170,10 +172,17 @@ func sanitizeLLMCompleted(data map[string]any) map[string]any {
 // record writes the pending rows, the task status and the events in one
 // record activity; every row carries an id the workflow assigned.
 func (r *agentRun) record(ctx workflow.Context, status *TaskStatus) error {
+	_, err := r.recordTurn(ctx, status, false)
+	return err
+}
+
+// recordTurn is record that also marks the start of a follow-up turn; it answers whether the
+// recorded result confirmed the mark.
+func (r *agentRun) recordTurn(ctx workflow.Context, status *TaskStatus, turnStart bool) (bool, error) {
 	events := r.pending
 	messages := r.messages
 	if len(events) == 0 && len(messages) == 0 && status == nil {
-		return nil
+		return false, nil
 	}
 	r.pending = nil
 	iteration := r.iteration
@@ -197,10 +206,10 @@ func (r *agentRun) record(ctx workflow.Context, status *TaskStatus) error {
 			Meta: e.Data, Iteration: ptr(iteration), Timestamp: &ts,
 		})
 	}
-	req := RecordRequest{Principal: r.principal, TaskID: r.taskID, ExecutionID: r.executionID, Rows: rows, Live: live, Status: status}
+	req := RecordRequest{Principal: r.principal, TaskID: r.taskID, ExecutionID: r.executionID, Rows: rows, Live: live, Status: status, TurnStart: turnStart}
 	var res RecordResult
 	if err := workflow.ExecuteActivity(activityCtx(ctx, api.ActivityRecord, "", 0), api.ActivityRecord, req).Get(ctx, &res); err != nil {
-		return err
+		return false, err
 	}
 	r.rememberExternalURLs(messages)
 	r.messages = slices.Clone(r.messages[len(messages):])
@@ -214,7 +223,7 @@ func (r *agentRun) record(ctx workflow.Context, status *TaskStatus) error {
 			r.recordedTurnAnswered = append(r.recordedTurnAnswered, m.ToolCallID)
 		}
 	}
-	return nil
+	return res.TurnStart, nil
 }
 
 func kindOf(m Message) string {

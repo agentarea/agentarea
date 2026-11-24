@@ -36,6 +36,7 @@ const completed = (
   terminalType: "task.completed",
   terminalMessage: "Task completed.",
   terminalAnswer,
+  endedAt: null,
 });
 describe("activity view", () => {
   it("keeps the record fallback for a settled transcript with no answer", () => {

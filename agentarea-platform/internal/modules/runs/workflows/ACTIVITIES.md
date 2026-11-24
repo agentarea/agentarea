@@ -39,7 +39,9 @@ greppable specification.
   activity reads an agent, model, provider, MCP instance, server spec, OpenAPI
   connection, catalog entry, skill row, project or delegate. The workflow
   passes each activity the slice of `RunConfig` it needs (a model call gets
-  `ResolvedModel`, a tool call the one `ToolBinding`).
+  `ResolvedModel`, a tool call the one `ToolBinding`). A follow-up turn of a
+  session resolves again, so a redeployed agent answers the next message with
+  its current tools, delegates, instructions and model (step 6).
 - **Live reads** allowed after resolve, because they change during a run by
   design or are values, not definitions: credential values by reference
   (provider key named by `APIKeySecret`, MCP auth headers and OAuth refresh by
@@ -153,6 +155,11 @@ flagged agents only once steps 1 to 12 exist. Steps 13 and 14 belong to phase
 - Writes: `tasks.metadata.agent_config_hash`; selected files copied to
   `inputs/attachments/selected-<sha16>-<name>` (deterministic, a retry reuses
   the first copy); the trigger event file.
+- Also the first activity of a follow-up turn, once that turn's
+  `record_activity` result confirms `turn_start` (step 7). It passes no files
+  or trigger event; the run keeps its inputs, its governance snapshot and a
+  model a `change_model` command chose. An instruction that changed adds a
+  system row, and the model window leads with the latest one.
 - 5 min, 3 attempts. Non-retryable: bad references, denied connections,
   archived agent, missing model.
 - Deps: `agents/api`, `catalog/api`, `models/api`, `connections/api`,
@@ -178,6 +185,10 @@ flagged agents only once steps 1 to 12 exist. Steps 13 and 14 belong to phase
   is published once to the `tasks.events` stream, and `live` events are
   broadcast. Idempotent by event id; retried without limit for 1 h.
   `TaskNotFound` and `TaskLogRejected` are non-retryable.
+- `turn_start` marks the record that starts a follow-up turn and comes back in
+  the result. The workflow reloads the config only on a result that carries
+  it, so a history recorded before the mark existed replays without a
+  `resolve_run_config_activity` it never scheduled.
 - Snapshot: `tasks.metadata.governance_snapshot`; 5 min bookkeeping.
 - Kind: control, because the status, ledger and audit lines must commit with
   the rows. It is written as two store calls behind two ports (content rows;

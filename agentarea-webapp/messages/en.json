@@ -1722,7 +1722,8 @@
       "attachmentNotice": "Files will be sent in a new task with {agent}.",
       "agentFallback": "agent",
       "compacted": "Context compacted: {count, plural, one {# earlier message was} other {# earlier messages were}} summarized",
-      "messageStoredSeparately": "The message is stored separately and is not shown here."
+      "messageStoredSeparately": "The message is stored separately and is not shown here.",
+      "publishedFiles": "{count, plural, one {Published # file} other {Published # files}}"
     },
     "runnerOffline": "{name} is offline: the task waits up to 10 minutes for it to come back."
   },
