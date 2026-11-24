@@ -20,13 +20,18 @@ type ToolCosts interface {
 	ToolCost(ctx context.Context, ws scope.Workspace, b ToolBinding) (*ToolCost, error)
 }
 
-// ClientToolCall is one call a person or a registered client makes outside any run. Binding
-// names the connection it runs on (Source mcp or openapi); a platform tool has none.
+// ClientToolCall is one call a person or a registered client makes through the client gateway.
+// Binding names the connection it runs on (Source mcp or openapi) and the names a policy may
+// use for the tool; a platform tool has no connection. TaskID is the run a runner's turn acts
+// in: the call is then held to that run's policy and budget and charged to it. Approved: a
+// person approved the call before it got here.
 type ClientToolCall struct {
 	UserID, ClientID string
+	TaskID           string
 	ToolName         string
 	Args             map[string]any
 	Binding          ToolBinding
+	Approved         bool
 }
 
 // ClientToolAnswer is what the call answered, as metering reads it.

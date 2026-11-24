@@ -101,8 +101,8 @@ func TestDelegatedAgentOnAClientRunsItsTurnOnTheRunner(t *testing.T) {
 	env.RegisterActivityWithOptions(runner.deliver, activity.RegisterOptions{Name: api.ActivityDeliverToRunner})
 	env.ExecuteWorkflow(AgentExecutionWorkflow, request(nil))
 
-	if res := result(t, env); !res.Success {
-		t.Fatalf("result = %+v", res)
+	if res := result(t, env); !res.Success || res.TotalCost.String() != "0.04" {
+		t.Fatalf("result = %+v (the run's own 0.02 and the 0.02 its runner child spent)", res)
 	}
 	if len(runner.turns) != 1 || runner.turns[0].TaskID != childTask || runner.turns[0].AgentID != "agent-2" || runner.turns[0].Message != "draw a logo" {
 		t.Fatalf("runner turns = %+v", runner.turns)
@@ -110,7 +110,7 @@ func TestDelegatedAgentOnAClientRunsItsTurnOnTheRunner(t *testing.T) {
 	if f.llmCalls[childTask] != 0 {
 		t.Fatalf("the delegated run called the platform model %d times", f.llmCalls[childTask])
 	}
-	if d := f.eventData(parentTask, domain.EventDelegationCompleted); len(d) != 1 || d[0]["success"] != true {
+	if d := f.eventData(parentTask, domain.EventDelegationCompleted); len(d) != 1 || d[0]["success"] != true || d[0]["child_cost"] != 0.02 {
 		t.Fatalf("delegation.completed = %+v", d)
 	}
 	tools := f.messages(parentTask, "tool")

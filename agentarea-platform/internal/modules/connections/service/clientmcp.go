@@ -580,7 +580,7 @@ func (b *clientBackend) governed(ctx context.Context, name string, args json.Raw
 		return heldCall(b.c, &b.policy, name, b.names(name), instanceID, connector, raw, b.clientName, args, d.Reason)
 	}
 	a := toolAudit{resourceType: "client", resourceID: b.clientID, actorType: b.actorType, name: name, args: args, extra: meta}
-	out, refused, err := b.s.judged(ctx, b.c, b.clientID, a, d, held, binding, run)
+	out, refused, err := b.s.judged(ctx, b.c, b.clientID, a, d, held, named(binding, b.names(name)), run)
 	if err != nil {
 		return nil, err
 	}
