@@ -1,15 +1,12 @@
 "use client";
 
 import React, {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useReducer,
   useRef,
   useState,
-  useTransition,
 } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
@@ -130,6 +127,8 @@ import {
   monthlyFromHourly,
 } from "./catalog-pricing";
 import type { CatalogSection, CatalogSectionKey } from "./catalog-sections";
+import { useExplorePending } from "./explore-pending";
+import { ExploreSearch } from "./ExploreFilters";
 import { PriceChip, PricingBadge, usePriceLabel } from "./PricingBadge";
 
 // ── Registry types ──────────────────────────────────────────────────────────
@@ -210,73 +209,6 @@ async function fetchPage(params: BrowseParams) {
   });
 }
 
-// ── Shared "type switch in flight" signal ──
-// The type tabs live in the ContentBlock subheader while the gallery lives in
-// the content area, so the transition that wraps the SSR round-trip is owned
-// here and consumed by both: the tabs trigger it, the gallery skeletons its
-// content on `isPending` for the whole round-trip. This keeps the persistent
-// chrome mounted and — crucially — avoids any flash of the previous type's data
-// mid-switch (React holds the old tree during a transition, so a type-vs-seed
-// comparison would briefly read stale; `isPending` doesn't).
-//
-// The kind of switch matters for how the wait is shown. Changing type makes the
-// current results wrong, so they're replaced by a skeleton. Changing a filter
-// within a type only narrows them, and search round-trips on every debounced
-// keystroke — skeletoning there would strobe the whole list while you type — so
-// the previous results stay on screen, dimmed, until the new page lands.
-type PendingKind = "type" | "filters" | null;
-
-type ExplorePending = {
-  isPending: boolean;
-  pendingKind: PendingKind;
-  startTypeTransition: React.TransitionStartFunction;
-  startFilterTransition: React.TransitionStartFunction;
-};
-const ExplorePendingContext = createContext<ExplorePending | null>(null);
-
-export function ExplorePendingProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const [isPending, startTransition] = useTransition();
-  const [pendingKind, setPendingKind] = useState<PendingKind>(null);
-
-  const startTypeTransition = useCallback<React.TransitionStartFunction>(
-    (fn) => {
-      setPendingKind("type");
-      startTransition(fn);
-    },
-    [startTransition]
-  );
-  const startFilterTransition = useCallback<React.TransitionStartFunction>(
-    (fn) => {
-      setPendingKind("filters");
-      startTransition(fn);
-    },
-    [startTransition]
-  );
-
-  const value = useMemo(
-    () => ({
-      isPending,
-      pendingKind,
-      startTypeTransition,
-      startFilterTransition,
-    }),
-    [isPending, pendingKind, startTypeTransition, startFilterTransition]
-  );
-  return (
-    <ExplorePendingContext.Provider value={value}>
-      {children}
-    </ExplorePendingContext.Provider>
-  );
-}
-
-export function useExplorePending() {
-  return useContext(ExplorePendingContext);
-}
-
 // ── Type switcher (lives in the ContentBlock subheader) ──
 // Lifted out of the gallery into the standard bordered subheader band — same
 // pattern as the agents / connections pages — so it no longer sits inside the
@@ -309,9 +241,13 @@ export function ExploreTypeTabs({ initialType }: { initialType: CatalogType }) {
       items={TYPES.map(({ key, icon: Icon }) => ({
         value: key,
         label: (
-          <span className="flex items-center gap-1.5 whitespace-nowrap">
+          <span
+            className="flex items-center gap-1.5 whitespace-nowrap"
+            title={t(key)}
+          >
             <Icon className="h-4 w-4" />
-            {t(key)}
+            {/* A phone has room for the four icons, not their names. */}
+            <span className="max-sm:sr-only">{t(key)}</span>
           </span>
         ),
       }))}
@@ -403,7 +339,7 @@ export function ExploreSortSelect({
   if (itemId) return null;
 
   return (
-    <DisplayMenu>
+    <DisplayMenu labelClassName="explore-display-label">
       <MenuSectionLabel>{t("ordering")}</MenuSectionLabel>
       <MenuRow
         icon={<Sparkles className="h-3.5 w-3.5" />}
@@ -827,12 +763,24 @@ export default function CatalogGallery({
         ) : (
           <>
             {/* Below lg the facet sidebar is hidden; the categories ride along
-                as a strip pinned to the top of the scroll area instead. */}
-            {categories.length > 0 && (
-              <div className="sticky -top-5 z-10 -mx-4 -mt-5 border-b border-zinc-200 bg-white px-2 py-1 dark:border-zinc-700 dark:bg-zinc-800 lg:hidden">
+                as a strip pinned to the top of the scroll area instead. On a
+                phone the subheader keeps the type tabs, filters, ordering and
+                view switch; search joins the strip as a row of its own. */}
+            <div
+              className={cn(
+                "sticky -top-5 z-10 -mx-4 -mt-5 border-b border-zinc-200 bg-white py-1 dark:border-zinc-700 dark:bg-zinc-800 lg:hidden",
+                categories.length === 0 && "sm:hidden"
+              )}
+            >
+              <div className="px-4 pb-1 sm:hidden">
+                <ExploreSearch initialType={type} />
+              </div>
+              {categories.length > 0 && (
                 <CountSegmentedControl
                   layoutId="explore-category-strip"
-                  className="w-full"
+                  // The padding sits inside the scroller, so the categories
+                  // run out under the strip's edge rather than its inset.
+                  className="w-full px-2"
                   itemClassName="capitalize"
                   items={[
                     { value: ALL, label: tCatalog("filters.all") },
@@ -848,8 +796,8 @@ export default function CatalogGallery({
                     void setItemId(null);
                   }}
                 />
-              </div>
-            )}
+              )}
+            </div>
             {paging.error && (
               <div className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
                 <StatusIndicator kind="failed" size="sm" className="text-sm">

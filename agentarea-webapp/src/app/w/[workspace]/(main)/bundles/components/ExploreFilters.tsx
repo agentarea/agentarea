@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import {
   CircleDollarSign,
@@ -8,6 +8,7 @@ import {
   Gift,
   Globe,
   KeyRound,
+  ListFilter,
   Plug,
   Server,
   Wallet,
@@ -16,6 +17,16 @@ import {
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import SearchInput from "@/components/SearchInput";
 import ToolbarSelect from "@/components/ToolbarSelect";
+import {
+  MenuRow,
+  MenuSectionLabel,
+  MenuSeparator,
+} from "@/components/ui/menu-row";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { ToolbarButton } from "@/components/ui/toolbar";
 import {
   ALL,
@@ -24,7 +35,7 @@ import {
   type CatalogType,
 } from "./catalog-data";
 import type { CategoryFacet } from "./catalog-paging";
-import { useExplorePending } from "./CatalogGallery";
+import { useExplorePending } from "./explore-pending";
 
 const GLYPH = "h-3.5 w-3.5";
 
@@ -85,11 +96,14 @@ export function ExploreConnectionFilters({
   protocols,
   hostings,
   pricings,
+  compact = false,
 }: {
   initialType: CatalogType;
   protocols: CategoryFacet[];
   hostings: CategoryFacet[];
   pricings: CategoryFacet[];
+  /** One Filters button instead of three dropdowns — for a phone. */
+  compact?: boolean;
 }) {
   const pending = useExplorePending();
   const options = {
@@ -129,94 +143,170 @@ export function ExploreConnectionFilters({
     void setItemId(null);
   };
 
-  const select = (
-    facet: Facet,
-    label: string,
-    allIcon: ReactNode,
-    facets: CategoryFacet[],
-    value: string,
-    name: (v: string) => string,
-    icon: (v: string) => ReactNode
-  ) =>
-    // Nothing to choose between — unless a link already chose, so it can be undone.
-    (facets.length > 1 || value !== ALL) && (
-      <ToolbarSelect
-        label={label}
-        value={value}
-        onChange={choose(facet)}
-        groups={[
-          [{ value: ALL, label: t("all"), triggerLabel: label, icon: allIcon }],
-          facets.map((f) => ({
-            value: f.value,
-            label: <CountedLabel name={name(f.value)} count={f.count} />,
-            triggerLabel: name(f.value),
-            icon: icon(f.value),
-          })),
-        ]}
-      />
-    );
+  type FacetDef = {
+    facet: Facet;
+    label: string;
+    allIcon: ReactNode;
+    facets: CategoryFacet[];
+    value: string;
+    name: (v: string) => string;
+    icon: (v: string) => ReactNode;
+  };
+  const allDefs: FacetDef[] = [
+    {
+      facet: "protocol",
+      label: t("protocol"),
+      allIcon: <Plug className={`${GLYPH} text-muted-foreground`} />,
+      facets: protocols,
+      value: protocol,
+      name: (v) => PROTOCOL_LABELS[v as keyof typeof PROTOCOL_LABELS] ?? v,
+      icon: (v) => (v === "mcp" ? <McpGlyph /> : <Globe className={GLYPH} />),
+    },
+    {
+      facet: "hosting",
+      label: t("hosting"),
+      allIcon: <Server className={`${GLYPH} text-muted-foreground`} />,
+      facets: hostings,
+      value: hosting,
+      name: (v) =>
+        v === "vendor" || v === "agentarea" ? t(`hostings.${v}`) : v,
+      icon: (v) =>
+        v === "vendor" ? (
+          <Cloud className={GLYPH} />
+        ) : (
+          <Server className={GLYPH} />
+        ),
+    },
+    {
+      facet: "pricing",
+      label: tPricing("facet"),
+      allIcon: <Wallet className={`${GLYPH} text-muted-foreground`} />,
+      facets: pricings,
+      value: pricing,
+      name: (v) =>
+        v === "paid" || v === "own_key" || v === "free"
+          ? tPricing(`kinds.${v}`)
+          : v,
+      icon: (v) =>
+        v === "paid" ? (
+          <CircleDollarSign className={GLYPH} />
+        ) : v === "own_key" ? (
+          <KeyRound className={GLYPH} />
+        ) : (
+          <Gift className={GLYPH} />
+        ),
+    },
+  ];
+  // Nothing to choose between — unless a link already chose, so it can be undone.
+  const defs = allDefs.filter((d) => d.facets.length > 1 || d.value !== ALL);
 
-  const anyFilter = protocol !== ALL || hosting !== ALL || pricing !== ALL;
+  const active = defs.filter((d) => d.value !== ALL).length;
+  const reset = () => {
+    void setProtocol(null);
+    void setHosting(null);
+    void setPricing(null);
+  };
+
+  if (compact) {
+    if (defs.length === 0) return null;
+    // On a phone the three dropdowns are one: a Filters button whose popover
+    // lists each facet as a section, the same rows as the dropdowns.
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <ToolbarButton aria-label={t("title")}>
+            <ListFilter className={`${GLYPH} text-muted-foreground`} />
+            {active > 0 && (
+              <span className="rounded-full bg-primary px-1.5 text-[11px] leading-4 text-primary-foreground">
+                {active}
+              </span>
+            )}
+          </ToolbarButton>
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          className="max-h-[var(--radix-popover-content-available-height)] w-64 overflow-y-auto p-1.5"
+          aria-label={t("title")}
+        >
+          {defs.map((d, index) => (
+            <Fragment key={d.facet}>
+              {index > 0 && <MenuSeparator />}
+              <MenuSectionLabel>{d.label}</MenuSectionLabel>
+              <MenuRow
+                icon={d.allIcon}
+                label={t("all")}
+                selected={d.value === ALL}
+                onClick={() => choose(d.facet)(ALL)}
+              />
+              {d.facets.map((f) => (
+                <MenuRow
+                  key={f.value}
+                  icon={d.icon(f.value)}
+                  label={
+                    <CountedLabel name={d.name(f.value)} count={f.count} />
+                  }
+                  selected={d.value === f.value}
+                  onClick={() => choose(d.facet)(f.value)}
+                />
+              ))}
+            </Fragment>
+          ))}
+          {active > 0 && (
+            <>
+              <MenuSeparator />
+              <MenuRow
+                icon={<X className={GLYPH} />}
+                label={t("clear")}
+                onClick={reset}
+              />
+            </>
+          )}
+        </PopoverContent>
+      </Popover>
+    );
+  }
 
   return (
     <>
       {/* Reset leads the filters, as on the audit log. */}
-      {anyFilter && (
+      {active > 0 && (
         <ToolbarButton
           aria-label={t("clear")}
           className="text-muted-foreground"
-          onClick={() => {
-            void setProtocol(null);
-            void setHosting(null);
-            void setPricing(null);
-          }}
+          onClick={reset}
         >
           <X className={GLYPH} />
-          <span className="max-sm:sr-only">{t("clear")}</span>
+          <span className="explore-filter-label max-sm:sr-only">
+            {t("clear")}
+          </span>
         </ToolbarButton>
       )}
-      {select(
-        "protocol",
-        t("protocol"),
-        <Plug className={`${GLYPH} text-muted-foreground`} />,
-        protocols,
-        protocol,
-        (v) => PROTOCOL_LABELS[v as keyof typeof PROTOCOL_LABELS] ?? v,
-        (v) => (v === "mcp" ? <McpGlyph /> : <Globe className={GLYPH} />)
-      )}
-      {select(
-        "hosting",
-        t("hosting"),
-        <Server className={`${GLYPH} text-muted-foreground`} />,
-        hostings,
-        hosting,
-        (v) => (v === "vendor" || v === "agentarea" ? t(`hostings.${v}`) : v),
-        (v) =>
-          v === "vendor" ? (
-            <Cloud className={GLYPH} />
-          ) : (
-            <Server className={GLYPH} />
-          )
-      )}
-      {select(
-        "pricing",
-        tPricing("facet"),
-        <Wallet className={`${GLYPH} text-muted-foreground`} />,
-        pricings,
-        pricing,
-        (v) =>
-          v === "paid" || v === "own_key" || v === "free"
-            ? tPricing(`kinds.${v}`)
-            : v,
-        (v) =>
-          v === "paid" ? (
-            <CircleDollarSign className={GLYPH} />
-          ) : v === "own_key" ? (
-            <KeyRound className={GLYPH} />
-          ) : (
-            <Gift className={GLYPH} />
-          )
-      )}
+      {defs.map((d) => (
+        <ToolbarSelect
+          key={d.facet}
+          label={d.label}
+          value={d.value}
+          onChange={choose(d.facet)}
+          // Icon-only when the subheader runs short (globals.css, explore-cq).
+          labelClassName="explore-filter-label"
+          groups={[
+            [
+              {
+                value: ALL,
+                label: t("all"),
+                triggerLabel: d.label,
+                icon: d.allIcon,
+              },
+            ],
+            d.facets.map((f) => ({
+              value: f.value,
+              label: <CountedLabel name={d.name(f.value)} count={f.count} />,
+              triggerLabel: d.name(f.value),
+              icon: d.icon(f.value),
+            })),
+          ]}
+        />
+      ))}
     </>
   );
 }

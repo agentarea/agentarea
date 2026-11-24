@@ -186,6 +186,25 @@
       display: none;
     }
   }
+
+  /* ---- Explore subheader (container-query driven) ---- */
+  /* Type tabs, search, three connection filters and the display controls
+     share one row. Their labels give way to icons by the band's own width,
+     not the viewport's, so a collapsed sidebar keeps them. */
+  .explore-cq {
+    container-type: inline-size;
+    container-name: explore;
+  }
+  @container explore (max-width: 880px) {
+    .explore-filter-label {
+      @apply sr-only;
+    }
+  }
+  @container explore (max-width: 720px) {
+    .explore-display-label {
+      @apply sr-only;
+    }
+  }
 }
 
 @layer base {

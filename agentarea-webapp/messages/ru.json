@@ -4292,7 +4292,8 @@
       "hostings": {
         "vendor": "У вендора",
         "agentarea": "На AgentArea"
-      }
+      },
+      "title": "Фильтры"
     }
   },
   "BundleInstall": {

@@ -26,11 +26,11 @@ import {
   showsSections,
 } from "../bundles/components/catalog-sections";
 import CatalogGallery, {
-  ExplorePendingProvider,
   ExploreSortSelect,
   ExploreTypeTabs,
   ExploreViewToggle,
 } from "../bundles/components/CatalogGallery";
+import { ExplorePendingProvider } from "../bundles/components/explore-pending";
 import {
   ExploreConnectionFilters,
   ExploreSearch,
@@ -140,22 +140,39 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
           description: t("description"),
         }}
         subheader={
-          <SubheaderToolbar
-            categories={<ExploreTypeTabs initialType={type} />}
-            search={<ExploreSearch initialType={type} />}
-            controls={
-              <>
-                <ExploreConnectionFilters
-                  initialType={type}
-                  protocols={protocols ?? []}
-                  hostings={hostings ?? []}
-                  pricings={pricings ?? []}
-                />
-                <ExploreSortSelect initialSort={sort} />
-                <ExploreViewToggle initialView={initialView} />
-              </>
-            }
-          />
+          // A size container, so the labels fold by the band's own width.
+          <div className="explore-cq flex h-full min-w-0 flex-1 items-center">
+            <SubheaderToolbar
+              categories={<ExploreTypeTabs initialType={type} />}
+              // On a phone the search moves to the strip under the subheader
+              // and the three filters fold into one Filters button.
+              search={<ExploreSearch initialType={type} />}
+              searchClassName="max-sm:hidden"
+              controls={
+                <>
+                  <div className="flex items-center gap-3 max-sm:hidden">
+                    <ExploreConnectionFilters
+                      initialType={type}
+                      protocols={protocols ?? []}
+                      hostings={hostings ?? []}
+                      pricings={pricings ?? []}
+                    />
+                  </div>
+                  <div className="flex items-center sm:hidden">
+                    <ExploreConnectionFilters
+                      initialType={type}
+                      protocols={protocols ?? []}
+                      hostings={hostings ?? []}
+                      pricings={pricings ?? []}
+                      compact
+                    />
+                  </div>
+                  <ExploreSortSelect initialSort={sort} />
+                  <ExploreViewToggle initialView={initialView} />
+                </>
+              }
+            />
+          </div>
         }
       >
         <CatalogGallery

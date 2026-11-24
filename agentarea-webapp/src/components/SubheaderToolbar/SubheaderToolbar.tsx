@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ToolbarDivider } from "@/components/ui/toolbar";
+import { cn } from "@/lib/utils";
 
 export interface SubheaderToolbarProps {
   /** Category tabs — a `CountSegmentedControl`. */
@@ -8,6 +9,8 @@ export interface SubheaderToolbarProps {
   search?: ReactNode;
   /** Right side: `DisplayMenu`, `HeaderTabs`, any other control. */
   controls?: ReactNode;
+  /** Class for the search slot and its divider, e.g. to move it out on a phone. */
+  searchClassName?: string;
 }
 
 /**
@@ -22,15 +25,20 @@ export default function SubheaderToolbar({
   categories,
   search,
   controls,
+  searchClassName,
 }: SubheaderToolbarProps) {
   return (
     <div className="flex h-full min-w-0 flex-1 items-center gap-1.5">
       {categories && (
         <div className="flex min-w-0 items-center">{categories}</div>
       )}
-      {categories && search && <ToolbarDivider />}
+      {categories && search && <ToolbarDivider className={searchClassName} />}
       <div className="flex flex-1 items-center justify-end gap-3">
-        {search && <div className="min-w-[7rem] flex-1">{search}</div>}
+        {search && (
+          <div className={cn("min-w-[7rem] flex-1", searchClassName)}>
+            {search}
+          </div>
+        )}
         {controls && (
           <div className="flex shrink-0 items-center gap-3">{controls}</div>
         )}

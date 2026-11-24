@@ -35,16 +35,21 @@ export default async function Loading() {
         description: t("description"),
       }}
       subheader={
-        <SubheaderToolbar
-          categories={<ExploreTypeTabs initialType="bundles" />}
-          search={<ExploreSearch initialType="bundles" />}
-          controls={
-            <>
-              <ExploreSortSelect />
-              <ExploreViewToggle initialView={initialView} />
-            </>
-          }
-        />
+        // Same size container as the page, so the labels fold alike.
+        <div className="explore-cq flex h-full min-w-0 flex-1 items-center">
+          <SubheaderToolbar
+            categories={<ExploreTypeTabs initialType="bundles" />}
+            // On a phone the search moves to the strip under the subheader.
+            search={<ExploreSearch initialType="bundles" />}
+            searchClassName="max-sm:hidden"
+            controls={
+              <>
+                <ExploreSortSelect />
+                <ExploreViewToggle initialView={initialView} />
+              </>
+            }
+          />
+        </div>
       }
     >
       <CatalogGallerySkeleton initialView={initialView} />

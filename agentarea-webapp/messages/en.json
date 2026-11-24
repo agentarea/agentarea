@@ -4291,7 +4291,8 @@
       "hostings": {
         "vendor": "Hosted by vendor",
         "agentarea": "Runs on AgentArea"
-      }
+      },
+      "title": "Filters"
     }
   },
   "BundleInstall": {
