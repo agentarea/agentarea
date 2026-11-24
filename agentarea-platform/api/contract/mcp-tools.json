@@ -4489,7 +4489,7 @@
       },
       "files": {
        "default": [],
-       "description": "Paths of this run's files to send after the text, each as a file of its own, e.g. outputs/clip.subtitled.mp4: an mp4 as a video, a jpeg/png/webp up to 10 MB as a photo, anything else as a document, each at most 50 MB; at most 10 files.",
+       "description": "Paths of this run's files to send after the text, each as a file of its own, e.g. outputs/clip.subtitled.mp4: an mp4 as a video, a jpeg/png/webp up to 10 MB as a photo, anything else as a document, at most 10 files; one over 50 MB is sent as a link to it in the web app.",
        "items": {
         "type": "string"
        },
@@ -9822,7 +9822,7 @@
       },
       "files": {
        "default": [],
-       "description": "Paths of this run's files to send after the text, each as a file of its own, e.g. outputs/clip.subtitled.mp4: an mp4 as a video, a jpeg/png/webp up to 10 MB as a photo, anything else as a document, each at most 50 MB; at most 10 files.",
+       "description": "Paths of this run's files to send after the text, each as a file of its own, e.g. outputs/clip.subtitled.mp4: an mp4 as a video, a jpeg/png/webp up to 10 MB as a photo, anything else as a document, at most 10 files; one over 50 MB is sent as a link to it in the web app.",
        "items": {
         "type": "string"
        },

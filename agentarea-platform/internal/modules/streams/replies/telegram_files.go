@@ -30,8 +30,12 @@ const (
 	maxFilesPerTurn     = 10
 )
 
-// FileRefused is the Bot API refusing a file: what it said, for the chat.
-type FileRefused struct{ Description string }
+// FileRefused is the Bot API refusing a file: what it said, for the chat. TooLarge is a file
+// over what a bot uploads (413, or over TelegramUploadLimit before sending).
+type FileRefused struct {
+	Description string
+	TooLarge    bool
+}
 
 func (e *FileRefused) Error() string { return "telegram refused the file: " + e.Description }
 
@@ -75,7 +79,7 @@ func (t TelegramLive) File(ctx context.Context, token string, chatID any, name, 
 		if answer.Description == "" {
 			answer.Description = fmt.Sprintf("HTTP %d", status)
 		}
-		return &FileRefused{Description: answer.Description}
+		return &FileRefused{Description: answer.Description, TooLarge: status == http.StatusRequestEntityTooLarge}
 	}
 	return nil
 }
@@ -156,15 +160,33 @@ func (t TelegramLive) sendOutputs(ctx context.Context, s Send, token string, cha
 			notes = append(notes, fmt.Sprintf("More files are in the task; the chat gets the first %d.", maxFilesPerTurn))
 			break
 		}
-		switch {
-		case f.Size > TelegramUploadLimit:
-			notes = append(notes, fmt.Sprintf("%s is %.1f MB; a Telegram bot sends files up to 50 MB.", name, float64(f.Size)/(1<<20)))
-		default:
+		tooLarge := func() error {
+			page, err := t.taskPage(ctx, s)
+			if err != nil {
+				return err
+			}
+			if page == "" {
+				notes = append(notes, fmt.Sprintf("%s is %.1f MB; a Telegram bot sends files up to 50 MB.", name, float64(f.Size)/(1<<20)))
+				return nil
+			}
+			notes = append(notes, LinkedFile(name, f.Size, TaskFileURL(page, f.Path)))
+			return nil
+		}
+		if f.Size > TelegramUploadLimit {
+			if err := tooLarge(); err != nil {
+				return err
+			}
+		} else {
 			err := t.sendArtifact(ctx, s, token, chatID, f, name)
 			var refused *FileRefused
-			if errors.As(err, &refused) {
+			switch {
+			case errors.As(err, &refused) && refused.TooLarge:
+				if err := tooLarge(); err != nil {
+					return err
+				}
+			case errors.As(err, &refused):
 				notes = append(notes, fmt.Sprintf("Could not send %s: %s", name, refused.Description))
-			} else if err != nil {
+			case err != nil:
 				return err
 			}
 			sent++
@@ -198,7 +220,7 @@ func (t TelegramLive) sendArtifact(ctx context.Context, s Send, token string, ch
 		return fmt.Errorf("file %s of task %s: %w", f.Path, s.Event.TaskID, err)
 	}
 	if len(data) > TelegramUploadLimit {
-		return &FileRefused{Description: "larger than the 50 MB a Telegram bot sends"}
+		return &FileRefused{Description: "larger than the 50 MB a Telegram bot sends", TooLarge: true}
 	}
 	ct := f.ContentType
 	if ct == "" || ct == "application/octet-stream" {

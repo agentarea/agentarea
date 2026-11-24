@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/authn"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/netguard"
 	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/api"
@@ -93,7 +94,7 @@ type sandboxFiles struct {
 
 func (f *sandboxFiles) ReadFile(_ context.Context, _, taskID, p string, _ bool) (sandboxapi.Download, error) {
 	if p == "outputs/huge.mp4" {
-		return sandboxapi.Download{Body: io.NopCloser(strings.NewReader("")), Header: http.Header{"Content-Length": {"60000000"}}}, nil
+		return sandboxapi.Download{Body: io.NopCloser(strings.NewReader("")), Header: http.Header{"Content-Length": {"62914560"}}}, nil
 	}
 	data, ok := f.files[taskID+"/"+p]
 	if !ok {
@@ -104,18 +105,25 @@ func (f *sandboxFiles) ReadFile(_ context.Context, _, taskID, p string, _ bool) 
 
 func newMessaging(t *testing.T) messaging {
 	t.Helper()
+	return newMessagingWith(t, func(*service.Deps) {})
+}
+
+func newMessagingWith(t *testing.T, with func(*service.Deps)) messaging {
+	t.Helper()
 	pool := storetest.Pool(t)
 	ws := storetest.Workspace(t, pool)
 	ctx, _ := storetest.Caller(context.Background(), ws, "owner")
 	secrets := storetest.NewSecrets()
 	m := messaging{ctx: ctx, tg: &telegramServer{}, graph: &storetest.Graph{AllowAll: true},
 		links: &links{accounts: map[string][]string{}}, files: &sandboxFiles{files: map[string]string{}}}
-	m.svc = service.New(service.Deps{
+	deps := service.Deps{
 		DB: storetest.DB{Pool: pool}, Graph: m.graph, SourceTypes: storetest.ShippedSourceTypes(t),
 		Secrets: secrets, SecretCatalog: secrets.Catalog, Blob: &storetest.Blob{}, Bus: &storetest.Bus{},
 		Dedup: &storetest.Dedup{}, Quota: &storetest.Quota{}, Out: m.tg, APIURL: "https://api.example.test",
 		Links: m.links, Owners: owners{owner: "owner"}, Notices: &storetest.Dedup{}, TaskFiles: m.files,
-	})
+	}
+	with(&deps)
+	m.svc = service.New(deps)
 	return m
 }
 
@@ -280,5 +288,26 @@ func TestAMessageCarriesTheRunsFiles(t *testing.T) {
 	}
 	if sent := m.tg.take(); len(sent) != 0 {
 		t.Fatalf("a refused file sent %q", sent)
+	}
+}
+
+func TestAFileTooLargeToSendIsLinkedToTheTask(t *testing.T) {
+	m := newMessagingWith(t, func(d *service.Deps) { d.AppURL = "https://app.example.test/" })
+	m.stream(t, "tg-"+uuid.NewString()[:8], "telegram", "TOKEN")
+	m.links.accounts["owner"] = []string{"42"}
+	m.files.files["task-1/outputs/clip.srt"] = "1"
+	c, _ := authn.CallerFrom(m.ctx)
+	out, err := m.svc.SendMessage(m.ctx, api.MessageSend{UserID: "owner", Recipient: "owner@example.com", TaskID: "task-1",
+		Files: []string{"outputs/huge.mp4", "outputs/clip.srt"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Linked) != 1 || out.Linked[0] != "outputs/huge.mp4" || len(out.Files) != 1 {
+		t.Fatalf("sent %+v", out)
+	}
+	link := "https://app.example.test/w/" + c.Workspace.Slug() + "/tasks/task-1/files?file=outputs%2Fhuge.mp4"
+	sent := m.tg.take()
+	if len(sent) != 2 || sent[0] != "TOKEN 42 huge.mp4 (60.0 MB): "+link || sent[1] != "TOKEN sendDocument 42 document=clip.srt:1" {
+		t.Fatalf("telegram got %q", sent)
 	}
 }
