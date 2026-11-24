@@ -2,6 +2,7 @@ package replies_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -16,6 +17,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
+	identityapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/identity/api"
 	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/domain"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/streams/replies"
@@ -147,5 +149,58 @@ func TestTheEndOfATurnSendsTheChatTheFilesItPublished(t *testing.T) {
 	send("task.failed", "2026-11-24T10:09:00Z", "Failed")
 	if got := bot.take(); len(got) != 1 || got[0] != "sendMessage Failed" {
 		t.Fatalf("a failed turn sends no files: %q", got)
+	}
+}
+
+type slugs map[string]string
+
+func (s slugs) Slug(_ context.Context, id string) (string, error) {
+	slug, ok := s[id]
+	if !ok {
+		return "", identityapi.ErrWorkspaceNotFound
+	}
+	return slug, nil
+}
+
+func TestTheAnswerLinksTheTaskPage(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	var texts []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var p map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&p)
+		text, _ := p["text"].(string)
+		texts = append(texts, text)
+		if strings.Contains(text, "(parse me)") && p["parse_mode"] != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"ok":false,"description":"Bad Request: can't parse entities"}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"ok":true,"result":{"message_id":77}}`)
+	}))
+	t.Cleanup(srv.Close)
+	ws, _ := scope.NewWorkspace(uuid.NewString(), "")
+	tg := replies.TelegramLive{Credentials: creds(map[string]string{"bot_token": "TOKEN"}), Redis: rdb, Client: srv.Client(), API: srv.URL,
+		AppURL: "https://app.example.test/", Slugs: slugs{ws.ID(): "acme"}}
+	send := func(kind, task, msg string) {
+		t.Helper()
+		if err := tg.Send(context.Background(), replies.Send{
+			Event: replies.Event{Type: kind, TaskID: task}, Reply: &domain.Reply{Markup: "telegram"}, Workspace: ws,
+			Target: replies.Target{Config: map[string]any{"credential_type": "telegram", "credential_key": "k",
+				"target": map[string]any{"chat_id": 42, "message_id": 9}}},
+		}, msg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	send("task.started", "t1", "Working")
+	send("task.completed", "t1", "Done")
+	if len(texts) != 2 || texts[0] != "Working" || texts[1] != "Done\n\n[Open in AgentArea](https://app.example.test/w/acme/tasks/t1)" {
+		t.Fatalf("texts %q: only the end links the task", texts)
+	}
+	texts = nil
+	send("task.completed", "t2", "(parse me)")
+	if len(texts) != 2 || texts[1] != "(parse me)\n\nOpen in AgentArea: https://app.example.test/w/acme/tasks/t2" {
+		t.Fatalf("a plain resend keeps the link readable: %q", texts)
 	}
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
+	identityapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/identity/api"
 	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 )
 
@@ -44,6 +45,10 @@ type TelegramLive struct {
 	// Files reads the files a task published; at the end of a turn the chat gets each new one.
 	// Nil sends text only.
 	Files sandboxapi.TaskFiles
+	// AppURL is the webapp (AGENTAREA_APP_URL) and Slugs the workspaces' URL slugs: the end of a
+	// turn links the task's page. Either empty leaves the link out.
+	AppURL string
+	Slugs  identityapi.WorkspaceSlugs
 }
 
 func (t TelegramLive) Format(s Send) (string, error) { return formatInMarkup(s) }
@@ -120,6 +125,21 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 	if text == "" {
 		return nil
 	}
+	link, plainLink := "", ""
+	if end {
+		if link, plainLink, err = t.taskLink(ctx, s); err != nil {
+			return err
+		}
+		if link != "" {
+			text += "\n\n" + link
+		}
+	}
+	plain := func(text string) string {
+		if link == "" {
+			return StripMarkup(text)
+		}
+		return strings.Replace(StripMarkup(text), StripMarkup(link), plainLink, 1)
+	}
 	if r := []rune(text); len(r) > telegramLimit {
 		text = "…\n" + string(r[len(r)-(telegramLimit-3):])
 	}
@@ -132,13 +152,13 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 	defer cancel()
 	if msgID := state["message_id"]; msgID == "" {
 		payload := map[string]any{"chat_id": chatID, "text": text, "parse_mode": "MarkdownV2"}
-		if replyTo := target["message_id"]; truthy(replyTo) && !privateChat(chatID) {
+		if replyTo := target["message_id"]; truthy(replyTo) {
 			payload["reply_to_message_id"] = replyTo
 			payload["allow_sending_without_reply"] = true
 		}
 		status, body, err := t.call(ctx, token, "sendMessage", payload)
 		if err == nil && status == http.StatusBadRequest && strings.Contains(strings.ToLower(string(body)), "parse") {
-			payload["text"] = StripMarkup(text)
+			payload["text"] = plain(text)
 			delete(payload, "parse_mode")
 			status, body, err = t.call(ctx, token, "sendMessage", payload)
 		}
@@ -174,7 +194,7 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 		lower := strings.ToLower(string(body))
 		notModified := status == http.StatusBadRequest && strings.Contains(lower, "not modified")
 		if !notModified && status == http.StatusBadRequest && strings.Contains(lower, "parse") {
-			payload["text"] = StripMarkup(text)
+			payload["text"] = plain(text)
 			delete(payload, "parse_mode")
 			if status, body, err = t.call(ctx, token, "editMessageText", payload); err != nil {
 				return err
@@ -201,6 +221,23 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 		return t.Redis.Del(ctx, key).Err()
 	}
 	return nil
+}
+
+// taskLink is the line that links the task's page in the webapp, as MarkdownV2 and as plain
+// text; empty when the webapp or the workspace's slug is unknown.
+func (t TelegramLive) taskLink(ctx context.Context, s Send) (string, string, error) {
+	if t.AppURL == "" || t.Slugs == nil || s.Workspace.ID() == "" || s.Event.TaskID == "" {
+		return "", "", nil
+	}
+	slug, err := t.Slugs.Slug(ctx, s.Workspace.ID())
+	if errors.Is(err, identityapi.ErrWorkspaceNotFound) {
+		return "", "", nil
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("slug of workspace %s: %w", s.Workspace.ID(), err)
+	}
+	page := strings.TrimRight(t.AppURL, "/") + "/w/" + url.PathEscape(slug) + "/tasks/" + url.PathEscape(s.Event.TaskID)
+	return "[Open in AgentArea](" + strings.NewReplacer(`\`, `\\`, `)`, `\)`).Replace(page) + ")", "Open in AgentArea: " + page, nil
 }
 
 // TelegramRefused is the Bot API refusing a message: its HTTP status and description.
@@ -310,16 +347,6 @@ func raiseFor(status int, body []byte, permanent []string) error {
 
 var _ Sender = TelegramLive{}
 var _ Sender = HTTPReply{}
-
-// privateChat is whether chatID is a user's own chat with the bot, where a quote of the message
-// answered is noise: Telegram gives users positive ids, groups and channels negative ones.
-func privateChat(chatID any) bool {
-	if f, ok := chatID.(float64); ok {
-		return f > 0
-	}
-	id, err := strconv.ParseInt(fmt.Sprint(chatID), 10, 64)
-	return err == nil && id > 0
-}
 
 // endMark is what the end of a turn records: its time, or "1" when the event has none, which no
 // later event is after.

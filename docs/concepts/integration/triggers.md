@@ -197,7 +197,7 @@ target, starts a task that does not reply.
 | Reply sender | Used by | Shows |
 |---|---|---|
 | `http` | Slack, Discord, from the entry's `reply.request` | `concise`: result, questions to the user, status |
-| `telegram_live` | Telegram: one message edited in place as the run goes | `concise` |
+| `telegram_live` | Telegram: one message per turn, quoting the message it answers, edited in place as the run goes; the answer ends with a link to the task's page in the web app | `concise` |
 | `smtp` | email and IMAP sources | `summary`: result and questions, at the end |
 | `task_webhook` | the webhook a caller gave when starting a task | |
 | `a2a_webhook` | A2A push notification configs | |

@@ -300,6 +300,7 @@ func streamsDeps(e *edge, d coreDeps, m *moduleSet) streams.Deps {
 		Out: d.Outbound, APIURL: d.APIURL, WebhookURL: p.WebhookURL, Settings: p.Settings, Processors: processorRunner{p: m.sandbox.Processors()},
 		Links: m.identity.MessengerLinks(), Owners: m.identity.WorkspaceOwners(), AppURL: d.AppURL,
 		MCPEventSources: mcpEventSources{s: m.connections.MCPEventSources()}, TaskFiles: m.sandbox.TaskFiles(),
+		Slugs:      m.identity.WorkspaceSlugs(),
 		ModelKinds: m.models.ModelKinds(), Models: lateOneShotModels{m: m}, AgentModels: agentModels{d: m.agents.Definitions()}}
 	if d.Outbound != nil {
 		sd.Guard = d.Outbound.Guard

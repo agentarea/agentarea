@@ -87,6 +87,8 @@ type Deps struct {
 	Processors service.ProcessorRunner
 	// TaskFiles reads a task's files: what a messenger reply and send_message send as files.
 	TaskFiles sandboxapi.TaskFiles
+	// Slugs is the workspaces' URL slugs: a messenger reply links the task's page under AppURL.
+	Slugs identityapi.WorkspaceSlugs
 	// Audit writes the trigger audit rows.
 	Audit governanceapi.AuditWriter
 	// APIURL and WebhookURL are the public bases of webhook URLs.
