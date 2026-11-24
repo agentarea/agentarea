@@ -399,10 +399,18 @@ type SourceTypeEntry struct {
 
 var slugRE = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
-// ParseSourceTypeEntry is SourceTypeEntry.model_validate over a catalog spec.
+// ParseSourceTypeEntry is SourceTypeEntry.model_validate over a catalog spec. The keys the
+// catalog reads off an entry for its own columns (version, rank) are ignored; any other
+// unknown key is refused.
 func ParseSourceTypeEntry(raw json.RawMessage) (SourceTypeEntry, error) {
 	type plain SourceTypeEntry
-	p := plain{Icon: "webhook"}
+	var p struct {
+		plain
+		Version      json.RawMessage `json:"version"`
+		Rank         json.RawMessage `json:"recommendation_rank"`
+		PrefixedRank json.RawMessage `json:"agentarea:recommendation_rank"`
+	}
+	p.plain = plain{Icon: "webhook"}
 	var probe map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &probe); err != nil {
 		return SourceTypeEntry{}, &ValidationError{Msg: err.Error()}
@@ -415,7 +423,7 @@ func ParseSourceTypeEntry(raw json.RawMessage) (SourceTypeEntry, error) {
 	if err := strict(raw, &p); err != nil {
 		return SourceTypeEntry{}, err
 	}
-	e := SourceTypeEntry(p)
+	e := SourceTypeEntry(p.plain)
 	if !slugRE.MatchString(e.Slug) {
 		return e, &ValidationError{Msg: "slug: String should match pattern '^[a-z][a-z0-9_]*$'"}
 	}

@@ -49,6 +49,36 @@ func TestEveryShippedEntryParses(t *testing.T) {
 	}
 }
 
+func TestEveryShippedEntryParsesWithTheKeysTheCatalogReads(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "data", "catalog", "source-types.json"))
+	if err != nil {
+		t.Skipf("shipped catalog not readable: %v", err)
+	}
+	var doc struct {
+		SourceTypes []map[string]any `json:"source_types"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	plain := shippedEntries(t)
+	for _, entry := range doc.SourceTypes {
+		entry["version"], entry["recommendation_rank"], entry["agentarea:recommendation_rank"] = "1.1.0", 2, 3
+		b, err := json.Marshal(entry)
+		if err != nil {
+			t.Fatal(err)
+		}
+		e, err := ParseSourceTypeEntry(b)
+		if err != nil {
+			t.Fatalf("%s with catalog keys: %v", entry["slug"], err)
+		}
+		want, _ := json.Marshal(plain[e.Slug])
+		got, _ := json.Marshal(e)
+		if string(got) != string(want) {
+			t.Fatalf("%s parsed differently with catalog keys:\n%s\n%s", e.Slug, got, want)
+		}
+	}
+}
+
 func TestAnEntryRefusesExtraKeysAndBadLiterals(t *testing.T) {
 	for _, raw := range []string{
 		`{"slug":"x","name":"X","delivery":"webhook","event":{"kind":"k"},"extra":1}`,

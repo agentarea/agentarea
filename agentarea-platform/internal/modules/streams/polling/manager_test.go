@@ -21,9 +21,11 @@ type fakeSources struct {
 	polled     map[string]string
 	failed     map[string]string
 	registered map[string]string
-	subscribed []subscribed
-	retryIn    map[string]time.Duration
-	pollErr    error
+	// unregistered are the sources whose registered URL was cleared.
+	unregistered []string
+	subscribed   []subscribed
+	retryIn      map[string]time.Duration
+	pollErr      error
 }
 
 type subscribed struct {
@@ -81,6 +83,18 @@ func (f *fakeSources) Registered(_ context.Context, id, url string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.registered[id] = url
+	return nil
+}
+
+func (f *fakeSources) Unregistered(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.unregistered = append(f.unregistered, id)
+	for i := range f.list {
+		if f.list[i].ID == id {
+			f.list[i].RegisteredURL = ""
+		}
+	}
 	return nil
 }
 
@@ -347,5 +361,81 @@ func TestADeletedSourceIsUnregistered(t *testing.T) {
 	m.reconcile(context.Background())
 	if len(caller.calls) != 2 {
 		t.Fatalf("unregistered twice: %+v", caller.calls)
+	}
+	if len(src.unregistered) != 1 || src.unregistered[0] != "src-w" {
+		t.Fatalf("the registered URL was not cleared: %v", src.unregistered)
+	}
+}
+
+func TestASourceWhoseTypeIsMissingKeepsItsWebhook(t *testing.T) {
+	src := newFakeSources(webhookSource(""))
+	caller := &fakeCaller{}
+	m := newManager(src, &fakePublisher{}, caller, &fixedTransport{})
+	ctx := context.Background()
+
+	m.reconcile(ctx)
+	registered := src.registered["src-w"]
+	src.mu.Lock()
+	src.list = []Source{{ID: "src-w", Kind: KindWebhook, Slug: "chat", Held: true}}
+	src.mu.Unlock()
+	m.reconcile(ctx)
+	m.reconcile(ctx)
+	if len(caller.calls) != 1 || len(src.unregistered) != 0 {
+		t.Fatalf("a source whose type is missing was taken for deleted: calls = %+v, unregistered = %v", caller.calls, src.unregistered)
+	}
+
+	src.mu.Lock()
+	src.list = []Source{webhookSource(registered)}
+	src.mu.Unlock()
+	m.reconcile(ctx)
+	if len(caller.calls) != 1 {
+		t.Fatalf("registered again though the provider still has it: %+v", caller.calls)
+	}
+
+	src.mu.Lock()
+	src.list = nil
+	src.mu.Unlock()
+	m.reconcile(ctx)
+	if len(caller.calls) != 2 || caller.calls[1].url != "https://chat.example/delete" {
+		t.Fatalf("the deleted source was not unregistered: %+v", caller.calls)
+	}
+}
+
+func TestAHeldPollSourceIsNotPolled(t *testing.T) {
+	src := newFakeSources(Source{ID: "src-1", Kind: KindPoll, Slug: "gone", Held: true})
+	m := newManager(src, &fakePublisher{}, &fakeCaller{}, &fixedTransport{})
+
+	m.reconcile(context.Background())
+	m.mu.Lock()
+	pollers := len(m.pollers)
+	m.mu.Unlock()
+	time.Sleep(50 * time.Millisecond)
+	src.mu.Lock()
+	defer src.mu.Unlock()
+	if pollers != 0 || len(src.failed) != 0 {
+		t.Fatalf("pollers = %d, failed = %v", pollers, src.failed)
+	}
+}
+
+func TestAPollerThatClearsTheWebhookForgetsItsURL(t *testing.T) {
+	src := webhookSource("https://api.example.com/webhooks/w1")
+	src.Kind = KindPoll
+	fake := newFakeSources(src)
+	caller := &fakeCaller{}
+	m := newManager(fake, &fakePublisher{}, caller, &fixedTransport{})
+
+	m.clearWebhook(context.Background(), src)
+	if len(caller.calls) != 1 || caller.calls[0].url != "https://chat.example/delete" {
+		t.Fatalf("calls = %+v", caller.calls)
+	}
+	if len(fake.unregistered) != 1 || fake.unregistered[0] != "src-w" {
+		t.Fatalf("the registered URL was not cleared: %v", fake.unregistered)
+	}
+
+	failing := newFakeSources(src)
+	m = newManager(failing, &fakePublisher{}, &fakeCaller{err: errors.New("HTTP 500")}, &fixedTransport{})
+	m.clearWebhook(context.Background(), src)
+	if len(failing.unregistered) != 0 {
+		t.Fatalf("cleared after a failed unregister: %v", failing.unregistered)
 	}
 }

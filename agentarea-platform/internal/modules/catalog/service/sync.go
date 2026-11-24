@@ -28,7 +28,7 @@ import (
 
 // SyncFormat is part of the stored ETag: bump it when parsing or facets
 // change, so the next sync re-applies every source.
-const SyncFormat = "8"
+const SyncFormat = "9"
 
 // Sync budgets (service.py).
 const (
