@@ -355,6 +355,11 @@ func TestTelegramLiveSendsThenEditsThenForgets(t *testing.T) {
 		calls[3].payload["text"] != "Answer" {
 		t.Fatalf("calls = %+v", calls)
 	}
+	for _, c := range calls {
+		if preview, _ := c.payload["link_preview_options"].(map[string]any); preview["is_disabled"] != true {
+			t.Fatalf("%s shows a link preview: %+v", c.method, c.payload)
+		}
+	}
 }
 
 type smtpServer struct {

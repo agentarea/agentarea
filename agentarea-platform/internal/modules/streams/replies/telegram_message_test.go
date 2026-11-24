@@ -38,7 +38,8 @@ func TestATelegramMessageIsPlainTextCutAtTheLimit(t *testing.T) {
 	if err != nil || id != 77 || cut {
 		t.Fatalf("sent %d cut=%v %v", id, cut, err)
 	}
-	if got[0]["chat_id"] != "42" || got[0]["text"] != "The *report* is ready_" || got[0]["parse_mode"] != nil {
+	preview, _ := got[0]["link_preview_options"].(map[string]any)
+	if got[0]["chat_id"] != "42" || got[0]["text"] != "The *report* is ready_" || got[0]["parse_mode"] != nil || preview["is_disabled"] != true {
 		t.Fatalf("payload %v", got[0])
 	}
 

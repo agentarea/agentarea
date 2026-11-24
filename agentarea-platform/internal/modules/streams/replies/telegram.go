@@ -23,6 +23,10 @@ import (
 // TelegramAPI is where the Telegram Bot API answers.
 const TelegramAPI = "https://api.telegram.org"
 
+// NoLinkPreview is the link_preview_options every bot message carries: a reply ends with a link to
+// the task's page, and Telegram would render a preview card of the webapp under every answer.
+func NoLinkPreview() map[string]any { return map[string]any{"is_disabled": true} }
+
 const (
 	telegramLimit    = 4096
 	telegramStateTTL = time.Hour
@@ -156,7 +160,7 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if msgID := state["message_id"]; msgID == "" {
-		payload := map[string]any{"chat_id": chatID, "text": text, "parse_mode": "MarkdownV2"}
+		payload := map[string]any{"chat_id": chatID, "text": text, "parse_mode": "MarkdownV2", "link_preview_options": NoLinkPreview()}
 		if replyTo := target["message_id"]; truthy(replyTo) {
 			payload["reply_to_message_id"] = replyTo
 			payload["allow_sending_without_reply"] = true
@@ -191,7 +195,7 @@ func (t TelegramLive) Send(ctx context.Context, s Send, message string) error {
 		if err != nil {
 			return fatalf("the live message id %q is not a number", msgID)
 		}
-		payload := map[string]any{"chat_id": chatID, "message_id": id, "text": text, "parse_mode": "MarkdownV2"}
+		payload := map[string]any{"chat_id": chatID, "message_id": id, "text": text, "parse_mode": "MarkdownV2", "link_preview_options": NoLinkPreview()}
 		status, body, err := t.call(ctx, token, "editMessageText", payload)
 		if err != nil {
 			return err
@@ -295,7 +299,7 @@ func (t TelegramLive) Message(ctx context.Context, token string, chatID any, tex
 	cut := Limited(plain, text, &limit)
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	status, body, err := t.call(ctx, token, "sendMessage", map[string]any{"chat_id": chatID, "text": cut})
+	status, body, err := t.call(ctx, token, "sendMessage", map[string]any{"chat_id": chatID, "text": cut, "link_preview_options": NoLinkPreview()})
 	if err != nil {
 		return 0, false, err
 	}
