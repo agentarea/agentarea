@@ -38,6 +38,7 @@ type fakeRun struct {
 	toolCalls []ToolCallRequest
 	tool      func(ToolCallRequest) (ToolCallResult, error)
 	created   []CreateDelegationTaskRequest
+	client    string
 	remoteGet func(RemoteTaskRequest) (ToolCallResult, error)
 	gets      []RemoteTaskRequest
 	cancels   []RemoteTaskRequest
@@ -152,7 +153,7 @@ func (f *fakeRun) createDelegation(_ context.Context, req CreateDelegationTaskRe
 	f.mu.Lock()
 	f.created = append(f.created, req)
 	f.mu.Unlock()
-	return CreateDelegationTaskResult{Status: "created", TaskID: childTask, Policy: testPolicy()}, nil
+	return CreateDelegationTaskResult{Status: "created", TaskID: childTask, Policy: testPolicy(), RunnerClientID: f.client}, nil
 }
 
 func (f *fakeRun) delegatedSpend(_ context.Context, _ DelegatedSpendRequest) (DelegatedSpendResult, error) {
