@@ -429,6 +429,8 @@ export function BundlePlan({
           <div className="flex items-center gap-2">
             <StartAgentButton
               size="xs"
+              // Sized to its label, as the plan's other start button is.
+              className="w-auto"
               onClick={() =>
                 ready ? runInstall(draft, ready) : plan(draft, false)
               }
