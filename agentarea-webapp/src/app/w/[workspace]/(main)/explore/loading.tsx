@@ -32,7 +32,6 @@ export default async function Loading() {
     <ContentBlock
       header={{
         breadcrumb: [{ label: t("title") }],
-        description: t("description"),
       }}
       subheader={
         // Same size container as the page, so the labels fold alike.

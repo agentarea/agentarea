@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import ContentBlock from "@/components/ContentBlock";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { browseCatalog } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
@@ -31,6 +30,7 @@ import CatalogGallery, {
   ExploreViewToggle,
 } from "../bundles/components/CatalogGallery";
 import { ExplorePendingProvider } from "../bundles/components/explore-pending";
+import ExploreContentBlock from "../bundles/components/ExploreContentBlock";
 import {
   ExploreConnectionFilters,
   ExploreSearch,
@@ -115,7 +115,6 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       : null,
   ]);
   const tBundle = await getTranslations("BundleInstall");
-  const t = await getTranslations("CatalogPage");
   const entries: CatalogEntry[] = (items as RegistryItem[]).map((it) =>
     normalize(type, it)
   );
@@ -134,11 +133,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     // Provider wraps both the subheader (type tabs trigger the transition) and
     // the content (gallery skeletons on isPending) so the switch is flash-free.
     <ExplorePendingProvider>
-      <ContentBlock
-        header={{
-          breadcrumb: [{ label: t("title") }],
-          description: t("description"),
-        }}
+      <ExploreContentBlock
         subheader={
           // A size container, so the labels fold by the band's own width.
           <div className="explore-cq flex h-full min-w-0 flex-1 items-center">
@@ -191,7 +186,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
           initialView={initialView}
           initialSections={sections}
         />
-      </ContentBlock>
+      </ExploreContentBlock>
     </ExplorePendingProvider>
   );
 }

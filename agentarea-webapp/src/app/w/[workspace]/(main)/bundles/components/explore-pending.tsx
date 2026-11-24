@@ -31,12 +31,19 @@ type ExplorePending = {
   pendingKind: PendingKind;
   startTypeTransition: TransitionStartFunction;
   startFilterTransition: TransitionStartFunction;
+  /**
+   * Title of the item open in the gallery (?item=), so the page header can
+   * read "Catalog › GitHub". The gallery resolves it; the header shows it.
+   */
+  activeTitle: string | null;
+  setActiveTitle: (title: string | null) => void;
 };
 const ExplorePendingContext = createContext<ExplorePending | null>(null);
 
 export function ExplorePendingProvider({ children }: { children: ReactNode }) {
   const [isPending, startTransition] = useTransition();
   const [pendingKind, setPendingKind] = useState<PendingKind>(null);
+  const [activeTitle, setActiveTitle] = useState<string | null>(null);
 
   const startTypeTransition = useCallback<TransitionStartFunction>(
     (fn) => {
@@ -59,8 +66,16 @@ export function ExplorePendingProvider({ children }: { children: ReactNode }) {
       pendingKind,
       startTypeTransition,
       startFilterTransition,
+      activeTitle,
+      setActiveTitle,
     }),
-    [isPending, pendingKind, startTypeTransition, startFilterTransition]
+    [
+      isPending,
+      pendingKind,
+      startTypeTransition,
+      startFilterTransition,
+      activeTitle,
+    ]
   );
   return (
     <ExplorePendingContext.Provider value={value}>

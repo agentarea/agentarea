@@ -3,6 +3,7 @@
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
@@ -14,7 +15,6 @@ import {
   BadgeCheck,
   Blocks,
   Bot,
-  ChevronLeft,
   Compass,
   ExternalLink,
   FileText,
@@ -646,6 +646,12 @@ export default function CatalogGallery({
           .find((e) => e.id === itemId) ??
         null)
       : null) ?? (deepItem?.id === itemId ? deepItem : null);
+  // The page header names the open item ("Catalog › GitHub").
+  const setActiveTitle = explorePending?.setActiveTitle;
+  const activeTitle = active?.title ?? null;
+  useEffect(() => {
+    setActiveTitle?.(activeTitle);
+  }, [setActiveTitle, activeTitle]);
   // Drives the empty-state copy + "Clear filters" affordance.
   const hasFilters =
     query.trim() !== "" ||
@@ -672,22 +678,27 @@ export default function CatalogGallery({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const listScroll = useRef<number | null>(null);
   const openItem = useCallback(
-    (id: string) => {
-      const scroller = scrollContainerOf(rootRef.current);
-      listScroll.current = scroller.scrollTop;
-      void setItemId(id);
-      scroller.scrollTop = 0;
+    (entry: CatalogEntry) => {
+      listScroll.current = scrollContainerOf(rootRef.current).scrollTop;
+      // The title goes in with the item, so the header never paints
+      // "Catalog › Loading…" for a card that was right there.
+      setActiveTitle?.(entry.title);
+      void setItemId(entry.id);
     },
-    [setItemId]
+    [setItemId, setActiveTitle]
   );
-  const closeItem = useCallback(() => void setItemId(null), [setItemId]);
-  useEffect(() => {
-    if (itemId || listScroll.current == null) return;
-    const top = listScroll.current;
+  // Scroll moves in a layout effect, after the swap and before paint: moved
+  // at click time, the list jumped to the top for a frame before the detail
+  // replaced it, and restored a frame late, the list flashed at the top.
+  useLayoutEffect(() => {
+    const scroller = scrollContainerOf(rootRef.current);
+    if (itemId) {
+      scroller.scrollTop = 0;
+      return;
+    }
+    if (listScroll.current == null) return;
+    scroller.scrollTop = listScroll.current;
     listScroll.current = null;
-    requestAnimationFrame(() => {
-      scrollContainerOf(rootRef.current).scrollTop = top;
-    });
   }, [itemId]);
   const moreAvailable = hasMoreItems(paging);
 
@@ -726,9 +737,9 @@ export default function CatalogGallery({
       {/* Main */}
       <div className="min-w-0 flex-1 space-y-4">
         {active ? (
-          <DetailView entry={active} onBack={closeItem} />
+          <DetailView entry={active} />
         ) : itemId ? (
-          <DeepItemStatus onBack={closeItem}>
+          <div className="space-y-6">
             {deepLoading ? (
               <StatusIndicator kind="running" size="sm">
                 {tCatalog("loading")}
@@ -759,7 +770,7 @@ export default function CatalogGallery({
                 }}
               />
             )}
-          </DeepItemStatus>
+          </div>
         ) : (
           <>
             {/* Below lg the facet sidebar is hidden; the categories ride along
@@ -879,15 +890,12 @@ export default function CatalogGallery({
                         <CatalogCard
                           key={e.id}
                           entry={e}
-                          onOpen={() => openItem(e.id)}
+                          onOpen={() => openItem(e)}
                         />
                       ))}
                     </div>
                   ) : (
-                    <CatalogTable
-                      entries={sec.entries}
-                      onOpen={(e) => openItem(e.id)}
-                    />
+                    <CatalogTable entries={sec.entries} onOpen={openItem} />
                   )}
                 </section>
               ))}
@@ -923,15 +931,12 @@ export default function CatalogGallery({
                       <CatalogCard
                         key={e.id}
                         entry={e}
-                        onOpen={() => openItem(e.id)}
+                        onOpen={() => openItem(e)}
                       />
                     ))}
                   </div>
                 ) : (
-                  <CatalogTable
-                    entries={paging.entries}
-                    onOpen={(e) => openItem(e.id)}
-                  />
+                  <CatalogTable entries={paging.entries} onOpen={openItem} />
                 )}
               </div>
             )}
@@ -1343,13 +1348,7 @@ type SetupTier =
   | "needs_tenant_config"
   | "unverified";
 
-function DetailView({
-  entry,
-  onBack,
-}: {
-  entry: CatalogEntry;
-  onBack: () => void;
-}) {
+function DetailView({ entry }: { entry: CatalogEntry }) {
   const [state, setState] = useState<InstallState>({ phase: "idle" });
   const tBundle = useTranslations("BundleInstall");
   const tConnected = useTranslations("CatalogPage.connected");
@@ -1426,14 +1425,6 @@ function DetailView({
         isBundle ? "max-w-[1120px]" : "max-w-2xl"
       )}
     >
-      <button
-        onClick={onBack}
-        className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        {tCatalog("empty.backToCatalog")}
-      </button>
-
       {/* header — icon, title/badges, description, primary action */}
       <div className="flex flex-col gap-4 md:flex-row md:items-start">
         <div className="flex min-w-0 flex-1 items-start gap-4">
@@ -2844,30 +2835,6 @@ function CatalogTableSkeleton() {
         data={Array.from({ length: 8 }, (_, id) => ({ id }))}
         columns={SKELETON_COLUMNS}
       />
-    </div>
-  );
-}
-
-// Back-button shell for the deep-link states (loading / not-found), so an
-// ?item= link that isn't in the loaded page still shows chrome to return.
-function DeepItemStatus({
-  onBack,
-  children,
-}: {
-  onBack: () => void;
-  children: React.ReactNode;
-}) {
-  const tCatalog = useTranslations("CatalogPage");
-  return (
-    <div className="space-y-6">
-      <button
-        onClick={onBack}
-        className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        {tCatalog("empty.backToCatalog")}
-      </button>
-      {children}
     </div>
   );
 }
