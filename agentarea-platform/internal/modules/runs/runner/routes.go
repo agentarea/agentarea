@@ -27,6 +27,7 @@ import (
 	identityapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/identity/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/store"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/workflows"
+	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 )
 
 // Gate is the edge's authentication as the runner routes use it.
@@ -43,6 +44,11 @@ type Workers interface {
 	Executor() durable.Executor
 }
 
+// Artifacts publishes a task's file as its artifact (sandbox TaskFiles).
+type Artifacts interface {
+	PublishArtifact(ctx context.Context, workspaceID, taskID, path, contentType string, body []byte) (sandboxapi.TaskArtifact, error)
+}
+
 // Presence marks a client's runner connected (runner_presence.py).
 type Presence interface {
 	Mark(ctx context.Context, clientID string) error
@@ -57,12 +63,14 @@ type Deps struct {
 	Broker   events.Broker
 	Presence Presence
 	// Files is the default bucket, where harness files live.
-	Files   blob.Store
-	Workers Workers
-	Tokens  authn.TurnTokens
-	Live    authn.LiveTurns
-	Log     *slog.Logger
-	Now     func() time.Time
+	Files blob.Store
+	// Artifacts publishes what a runner puts under outputs/ as the task's artifacts.
+	Artifacts Artifacts
+	Workers   Workers
+	Tokens    authn.TurnTokens
+	Live      authn.LiveTurns
+	Log       *slog.Logger
+	Now       func() time.Time
 
 	register registrar
 }
@@ -103,7 +111,8 @@ type handlers struct {
 }
 
 // Mount registers GET /v1/runner/whoami, PUT /v1/runner/tasks/{task_id}/files/*
-// and the socket /v1/runner/connect.
+// and the socket /v1/runner/connect. A file under outputs/ is also published
+// as the task's artifact, as a run in a sandbox publishes its outputs/.
 func Mount(r chi.Router, errs *httpx.Errors, d Deps) {
 	if d.Log == nil {
 		d.Log = slog.Default()
@@ -126,6 +135,8 @@ const (
 	detailNoTask        = "Task not found"
 	detailRelative      = "File path must be relative"
 	detailTooLarge      = "File too large"
+	// outputsDir holds what a task delivers; its files are the task's artifacts.
+	outputsDir = "outputs/"
 )
 
 // runnerClient is _runner_client: the client the key is bound to, if it is
@@ -267,9 +278,17 @@ func (h *handlers) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := "harness-files/" + c.Workspace.ID() + "/" + taskID + "/" + filePath
-	if err := h.d.Files.Put(ctx, key, bytes.NewReader(body), int64(len(body)), blob.PutOptions{ContentType: contentTypeOf(filePath)}); err != nil {
+	contentType := contentTypeOf(filePath)
+	if err := h.d.Files.Put(ctx, key, bytes.NewReader(body), int64(len(body)), blob.PutOptions{ContentType: contentType}); err != nil {
 		h.errs.Write(w, r, err)
 		return
+	}
+	if strings.HasPrefix(filePath, outputsDir) {
+		if _, err := h.d.Artifacts.PublishArtifact(ctx, c.Workspace.ID(), taskID, filePath, contentType, body); err != nil {
+			h.d.Log.ErrorContext(ctx, "Could not publish the runner's output as a task artifact", "task_id", taskID, "path", filePath, "error", err.Error())
+			h.errs.Write(w, r, err)
+			return
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

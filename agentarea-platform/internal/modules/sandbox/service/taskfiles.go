@@ -82,6 +82,33 @@ func (t taskFiles) ReadFile(ctx context.Context, workspaceID, taskID, p string, 
 	return t.download(ctx, "/sandbox/file-content", q, "Sandbox file", path.Base(p), domain.ContentTypeOf(p))
 }
 
+func (t taskFiles) PublishArtifact(ctx context.Context, workspaceID, taskID, p, contentType string, body []byte) (api.TaskArtifact, error) {
+	secret := t.s.d.Manager.FileSecret
+	if secret == "" {
+		return api.TaskArtifact{}, api.ErrTaskFilesNotConfigured
+	}
+	q := taskQuery(workspaceID, taskID)
+	q.Set("path", p)
+	h := bearer(secret)
+	h.Set("Content-Type", contentType)
+	resp, err := t.s.call(ctx, http.MethodPut, t.s.managerURL("/sandbox/artifacts", q), h, body, fileTimeout)
+	if err != nil {
+		if ctx.Err() != nil {
+			return api.TaskArtifact{}, ctx.Err()
+		}
+		t.s.d.Log.WarnContext(ctx, "Sandbox manager request failed", "error", err)
+		return api.TaskArtifact{}, api.ErrTaskFilesUnavailable
+	}
+	if err := t.statusError(ctx, resp.Status, resp.Body, "Artifact"); err != nil {
+		return api.TaskArtifact{}, err
+	}
+	item, err := decodeObject(resp.Body)
+	if err != nil {
+		return api.TaskArtifact{}, err
+	}
+	return parseArtifact(item)
+}
+
 // open sends a GET to the manager with the file secret; redirects are not
 // followed, as httpx does not. The body cancels the exchange once it has
 // been idle for idle.

@@ -411,7 +411,7 @@ func (c *conn) onEvent(ctx context.Context, t *turn, f *upFrame) {
 		return
 	case "message":
 		t.events = append(t.events, workflows.RunnerTurnEvent{
-			Seq: *f.Seq, Kind: "message", ItemID: *b.ItemID, Text: *b.Text, Model: deref(b.Model),
+			Seq: *f.Seq, Kind: "message", ItemID: *b.ItemID, Text: taskRelative(*b.Text, t.call.Request.TaskID), Model: deref(b.Model),
 		})
 		t.live.forget(*b.ItemID)
 	case "tool.call":
@@ -645,7 +645,7 @@ func (c *conn) RunTurn(ctx context.Context, call workflows.RunnerTurnCall) (work
 				return c.failed(ctx, t, err)
 			}
 			f := t.finished
-			return workflows.RunnerTurnResult{Status: *f.Status, Response: deref(f.Response), Error: deref(f.Error)}, nil
+			return workflows.RunnerTurnResult{Status: *f.Status, Response: taskRelative(deref(f.Response), call.Request.TaskID), Error: deref(f.Error)}, nil
 		case <-ctx.Done():
 			if c.closed.Load() {
 				c.reportLost(ctx, t)

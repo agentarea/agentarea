@@ -27,6 +27,7 @@ import (
 	agentsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/agents/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/store"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/workflows"
+	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 )
 
 const (
@@ -175,6 +176,27 @@ func (f *fakeFiles) Put(_ context.Context, key string, body io.Reader, _ int64, 
 	return err
 }
 
+type published struct {
+	workspaceID, taskID, path, contentType string
+	body                                   []byte
+}
+
+type fakeArtifacts struct {
+	mu   sync.Mutex
+	pubs []published
+	err  error
+}
+
+func (f *fakeArtifacts) PublishArtifact(_ context.Context, workspaceID, taskID, p, contentType string, body []byte) (sandboxapi.TaskArtifact, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return sandboxapi.TaskArtifact{}, f.err
+	}
+	f.pubs = append(f.pubs, published{workspaceID, taskID, p, contentType, body})
+	return sandboxapi.TaskArtifact{Path: p}, nil
+}
+
 type fakeWorker struct {
 	queue  string
 	limits durable.Limits
@@ -256,6 +278,7 @@ type rig struct {
 	clients  *fakeClients
 	broker   *fakeBroker
 	files    *fakeFiles
+	outputs  *fakeArtifacts
 	workers  *fakeWorkers
 	tasks    *fakeTasks
 	live     *fakeLiveTurns
@@ -274,6 +297,7 @@ func newRig(t *testing.T) *rig {
 		}},
 		broker:   &fakeBroker{notes: make(chan notified, 64), deliveries: make(chan map[string]string, 4)},
 		files:    &fakeFiles{},
+		outputs:  &fakeArtifacts{},
 		workers:  &fakeWorkers{},
 		live:     &fakeLiveTurns{alive: map[string]bool{}},
 		tokens:   fakeTokens{claims: make(chan authn.TurnClaims, 4)},
@@ -297,7 +321,7 @@ func newRig(t *testing.T) *rig {
 	mux := chi.NewRouter()
 	Mount(mux, errs, Deps{
 		Tasks: r.tasks, Gate: gate, Clients: r.clients, Slugs: fakeSlugs{}, Broker: r.broker, Presence: r.presence,
-		Files: r.files, Workers: r.workers, Tokens: r.tokens, Live: r.live, Log: log,
+		Files: r.files, Artifacts: r.outputs, Workers: r.workers, Tokens: r.tokens, Live: r.live, Log: log,
 		register: func(_ durable.Worker, turns workflows.RunnerTurns, _ durable.Executor) { r.turns <- turns },
 	})
 	r.srv = httptest.NewServer(mux)
@@ -384,6 +408,46 @@ func TestUploadStoresTheFileInItsTaskFolder(t *testing.T) {
 	status, body = r.do(t, http.MethodPut, "/v1/runner/tasks/"+turnTaskID+"/files/big.bin", runnerKey, bytes.NewReader(make([]byte, fileMaxBytes+1)))
 	if status != http.StatusRequestEntityTooLarge || !strings.Contains(body, detailTooLarge) {
 		t.Errorf("too large: %d %s", status, body)
+	}
+	if len(r.outputs.pubs) != 0 {
+		t.Errorf("a file outside outputs/ was published: %+v", r.outputs.pubs)
+	}
+}
+
+func TestUploadPublishesAFileUnderOutputsAsATaskArtifact(t *testing.T) {
+	r := newRig(t)
+	status, body := r.do(t, http.MethodPut, "/v1/runner/tasks/"+turnTaskID+"/files/outputs/logo.png", runnerKey, strings.NewReader("png"))
+	if status != http.StatusNoContent {
+		t.Fatalf("upload: %d %s", status, body)
+	}
+	if len(r.files.puts) != 1 || r.files.puts[0].key != "harness-files/"+wsID+"/"+turnTaskID+"/outputs/logo.png" {
+		t.Fatalf("puts: %+v", r.files.puts)
+	}
+	want := published{wsID, turnTaskID, "outputs/logo.png", "image/png", []byte("png")}
+	if len(r.outputs.pubs) != 1 || r.outputs.pubs[0].path != want.path || r.outputs.pubs[0].workspaceID != want.workspaceID ||
+		r.outputs.pubs[0].taskID != want.taskID || r.outputs.pubs[0].contentType != want.contentType || string(r.outputs.pubs[0].body) != "png" {
+		t.Fatalf("published: %+v", r.outputs.pubs)
+	}
+
+	r.outputs.err = errors.New("artifact store down")
+	status, body = r.do(t, http.MethodPut, "/v1/runner/tasks/"+turnTaskID+"/files/outputs/clip.mp4", runnerKey, strings.NewReader("mp4"))
+	if status < 500 {
+		t.Fatalf("a file that could not be published was accepted: %d %s", status, body)
+	}
+}
+
+func TestTaskRelativeTurnsTheRunnersTaskFolderIntoTaskPaths(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"Saved to /data/tasks/" + turnTaskID + "/outputs/agentarea.png.", "Saved to outputs/agentarea.png."},
+		{"![logo](/home/me/.agentarea/runner/tasks/" + turnTaskID + "/outputs/a%20b.png)", "![logo](outputs/a%20b.png)"},
+		{"[clip](file:///data/tasks/" + turnTaskID + "/outputs/clip.mp4)", "[clip](outputs/clip.mp4)"},
+		{"See `/data/tasks/" + turnTaskID + "/notes.md`", "See `notes.md`"},
+		{"Another task: /data/tasks/" + otherTask + "/outputs/x.png", "Another task: /data/tasks/" + otherTask + "/outputs/x.png"},
+		{"No paths here.", "No paths here."},
+	} {
+		if got := taskRelative(c.in, turnTaskID); got != c.want {
+			t.Errorf("taskRelative(%q) = %q, want %q", c.in, got, c.want)
+		}
 	}
 }
 
@@ -586,11 +650,11 @@ func TestSocketRoundTripOfATurn(t *testing.T) {
 	}
 	sendFrame(t, ctx, c, map[string]any{"type": "steer.accepted", "turn_id": turnID, "message_id": "q1"})
 	sendFrame(t, ctx, c, map[string]any{"type": "turn.event", "turn_id": turnID, "seq": 4,
-		"event": map[string]any{"kind": "message", "item_id": "m1", "text": "Hello", "model": "gpt-5"}})
-	sendFrame(t, ctx, c, map[string]any{"type": "turn.finished", "turn_id": turnID, "status": "completed", "response": "Hello"})
+		"event": map[string]any{"kind": "message", "item_id": "m1", "text": "Hello: /data/tasks/" + turnTaskID + "/outputs/a.png", "model": "gpt-5"}})
+	sendFrame(t, ctx, c, map[string]any{"type": "turn.finished", "turn_id": turnID, "status": "completed", "response": "Hello: /data/tasks/" + turnTaskID + "/outputs/a.png"})
 
 	got := <-done
-	if got.err != nil || got.res.Status != "completed" || got.res.Response != "Hello" {
+	if got.err != nil || got.res.Status != "completed" || got.res.Response != "Hello: outputs/a.png" {
 		t.Fatalf("turn: %+v", got)
 	}
 	close(updates)
@@ -605,6 +669,9 @@ func TestSocketRoundTripOfATurn(t *testing.T) {
 	}
 	if len(evs) != 3 || evs[0].Kind != "tool.call" || evs[1].Kind != "tool.result" || evs[2].Kind != "message" {
 		t.Fatalf("events: %+v", evs)
+	}
+	if evs[2].Text != "Hello: outputs/a.png" {
+		t.Errorf("message: %q", evs[2].Text)
 	}
 	if !strings.HasSuffix(evs[1].Output, clippedNote) || evs[1].ExitCode == nil || *evs[1].Success != true {
 		t.Errorf("tool result: %+v", evs[1])

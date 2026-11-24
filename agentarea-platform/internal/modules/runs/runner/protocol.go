@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"time"
 	"unicode/utf8"
 
@@ -293,6 +294,13 @@ func clipped(output string) string {
 		return output
 	}
 	return string([]rune(output)[:toolOutputMax]) + clippedNote
+}
+
+// taskRelative cuts the runner's own folder of the task from each path in
+// text, so the paths name the task's files (outputs/x.png).
+func taskRelative(text, taskID string) string {
+	folder := regexp.MustCompile("(?:file://)?(?:/[^/\\s()\\[\\]<>\"'`]+)*/tasks/" + regexp.QuoteMeta(taskID) + "/")
+	return folder.ReplaceAllString(text, "")
 }
 
 func tail(s string, n int) string {
