@@ -51,6 +51,9 @@ type TelegramLive struct {
 	Slugs  identityapi.WorkspaceSlugs
 	// LockTTL is how long the per-task lock lives between renewals; zero is 30s.
 	LockTTL time.Duration
+	// renewals, when set, drives the lock's renewals instead of a ticker; renewed hears each one done.
+	renewals <-chan time.Time
+	renewed  chan<- struct{}
 }
 
 func (t TelegramLive) Format(s Send) (string, error) { return formatInMarkup(s) }
@@ -310,16 +313,23 @@ func (t TelegramLive) lock(ctx context.Context, taskID string) (func(), error) {
 			stop, stopped := make(chan struct{}), make(chan struct{})
 			go func() {
 				defer close(stopped)
-				tick := time.NewTicker(ttl / 3)
-				defer tick.Stop()
+				ticks := t.renewals
+				if ticks == nil {
+					tick := time.NewTicker(ttl / 3)
+					defer tick.Stop()
+					ticks = tick.C
+				}
 				for {
 					select {
 					case <-stop:
 						return
-					case <-tick.C:
+					case <-ticks:
 						renew, done := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 						_ = redis.NewScript(renewScript).Run(renew, t.Redis, []string{key}, token, ttl.Milliseconds()).Err()
 						done()
+						if t.renewed != nil {
+							t.renewed <- struct{}{}
+						}
 					}
 				}
 			}()
