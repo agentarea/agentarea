@@ -6,7 +6,6 @@ import type {
   Core,
   EdgeSingular,
   ElementDefinition,
-  LayoutOptions,
   NodeSingular,
   StylesheetJson,
 } from "cytoscape";
@@ -50,11 +49,7 @@ const PALETTE = {
   background: "text-background",
   destructive: "text-destructive",
   attention: "text-[color:var(--status-attention)]",
-  internal: "text-emerald-600 dark:text-emerald-400",
-  external: "text-amber-600 dark:text-amber-400",
-  trigger: "text-violet-600 dark:text-violet-400",
   person: "text-slate-500 dark:text-slate-400",
-  match: "text-amber-500",
 } as const;
 type Palette = Record<keyof typeof PALETTE, string>;
 
@@ -88,7 +83,7 @@ function smoothPath(loops: Point[][]) {
 }
 
 const controlClass =
-  "flex h-9 w-9 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
+  "flex h-7 w-7 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
 
 export interface NetworkCanvasProps {
   graph: NetworkGraph;
@@ -172,18 +167,14 @@ function stylesheet(
     const markup = glyphs[KINDS[kind]];
     return markup ? svgUri(markup, color) : "none";
   };
-  const scopeColor = (scope: string | null) =>
-    scope === "egress"
-      ? palette.external
-      : scope === "private"
-        ? palette.internal
-        : palette.muted;
+  // Colour on the canvas means status only; what a resource can reach is
+  // drawn by the Data flow lens, not by the ring around it.
   const image = (node: NodeSingular) => {
     const kind = node.data("kind") as GraphKind;
-    if (kind === "agent" || kind === "person") return glyph(kind, "#ffffff");
-    if (kind === "trigger")
-      return glyph(kind, node.data("off") ? palette.muted : palette.trigger);
-    return logos.get(node.id()) ?? glyph(kind, scopeColor(node.data("scope")));
+    if (kind === "agent" || kind === "person")
+      return glyph(kind, palette.background);
+    if (kind === "trigger") return glyph(kind, palette.muted);
+    return logos.get(node.id()) ?? glyph(kind, palette.muted);
   };
 
   const nodeStyle = {
@@ -206,7 +197,7 @@ function stylesheet(
     "text-background-shape": "roundrectangle",
     "text-wrap": "ellipsis",
     "text-max-width": "140px",
-    "min-zoomed-font-size": 9,
+    "min-zoomed-font-size": 6,
     "transition-property":
       "opacity, border-width, border-color, background-color, underlay-opacity",
     "transition-duration": transition,
@@ -229,7 +220,7 @@ function stylesheet(
     {
       selector: "node[kind = 'agent']",
       style: {
-        "background-color": palette.primary,
+        "background-color": palette.foreground,
         "border-color": palette.background,
         "border-width": 3,
         "font-size": 12,
@@ -245,11 +236,9 @@ function stylesheet(
       selector:
         "node[kind = 'mcp_instance'], node[kind = 'openapi_connection'], node[kind = 'skill']",
       style: {
-        "border-width": 2.5,
-        "border-color": (node: NodeSingular) => scopeColor(node.data("scope")),
+        "border-width": 2,
       },
     },
-    { selector: "node[kind = 'skill']", style: { shape: "round-rectangle" } },
     {
       selector: "node[?failed]",
       style: { "border-color": palette.destructive },
@@ -257,8 +246,6 @@ function stylesheet(
     {
       selector: "node[kind = 'trigger']",
       style: {
-        shape: "round-diamond",
-        "border-color": palette.trigger,
         "font-size": 10,
         color: palette.muted,
       },
@@ -285,7 +272,7 @@ function stylesheet(
         "target-arrow-color": palette.muted,
         "target-arrow-shape": "triangle",
         "arrow-scale": 0.8,
-        opacity: 0.55,
+        opacity: 0.75,
         "font-family": font,
         "font-size": 10,
         color: palette.muted,
@@ -312,12 +299,8 @@ function stylesheet(
       style: { "line-style": "dashed", "line-dash-pattern": [5, 4] },
     },
     {
-      selector: "edge[relation = 'has_trigger'], edge[relation = 'member_of']",
-      style: {
-        "line-style": "dotted",
-        "line-color": palette.trigger,
-        "target-arrow-color": palette.trigger,
-      },
+      selector: "edge[relation = 'member_of']",
+      style: { "line-style": "dotted" },
     },
     {
       selector: "edge[relation = 'has_trigger'][?off]",
@@ -337,16 +320,6 @@ function stylesheet(
       },
     },
     {
-      selector: "edge[relation = 'person_access'][?off]",
-      style: {
-        "line-color": palette.destructive,
-        "target-arrow-color": palette.destructive,
-        "target-arrow-shape": "tee",
-        "line-style": "dashed",
-        opacity: 0.85,
-      },
-    },
-    {
       selector: "edge[?routed]",
       style: {
         "curve-style": "round-segments",
@@ -360,9 +333,9 @@ function stylesheet(
       selector: "edge[crossing = 'outbound']",
       style: {
         width: 2,
-        "line-color": palette.external,
-        "target-arrow-color": palette.external,
-        opacity: 0.9,
+        "line-color": palette.foreground,
+        "target-arrow-color": palette.foreground,
+        opacity: 0.8,
       },
     },
     {
@@ -397,11 +370,20 @@ function stylesheet(
         color: palette.muted,
       },
     },
-    { selector: ".faded", style: { opacity: 0.1 } },
+    { selector: ".faded", style: { opacity: 0.3 } },
     {
       selector: "edge.lit",
-      style: { opacity: 1, width: 2.4, label: "data(label)", "z-index": 10 },
+      style: { opacity: 1, width: 2.4, "z-index": 10 },
     },
+    {
+      selector: "node.issue",
+      style: { "border-width": 3, "border-color": palette.attention },
+    },
+    {
+      selector: "node.match",
+      style: { "border-width": 4, "border-color": palette.primary },
+    },
+    // Last, so a selected node keeps its ring when it also matches the search.
     {
       selector: "node.focus",
       style: { "border-width": 4, "border-color": palette.foreground },
@@ -410,18 +392,32 @@ function stylesheet(
       selector: "edge.focus",
       style: { width: 3, opacity: 1, label: "data(label)", "z-index": 11 },
     },
-    {
-      selector: "node.match",
-      style: { "border-width": 4, "border-color": palette.match },
-    },
-    {
-      selector: "node.issue",
-      style: { "border-width": 3, "border-color": palette.attention },
-    },
   ];
 }
 
 const MOTION_MS = 450;
+
+/** The viewport that shows every element, never zoomed in past 100%. */
+function fitAtMostNatural(cy: Core, padding = 40) {
+  const box = cy.elements().boundingBox();
+  const zoom = Math.min(
+    1,
+    Math.max(
+      cy.minZoom(),
+      Math.min(
+        (cy.width() - 2 * padding) / Math.max(box.w, 1),
+        (cy.height() - 2 * padding) / Math.max(box.h, 1)
+      )
+    )
+  );
+  return {
+    zoom,
+    pan: {
+      x: cy.width() / 2 - zoom * (box.x1 + box.w / 2),
+      y: cy.height() / 2 - zoom * (box.y1 + box.h / 2),
+    },
+  };
+}
 
 /**
  * Bring the canvas to `elements` by difference: keep what stays, so it can
@@ -521,49 +517,44 @@ export default function NetworkCanvas({
   useEffect(() => {
     let disposed = false;
     let cy: Core | null = null;
-    void Promise.all([import("cytoscape"), import("cytoscape-fcose")]).then(
-      ([{ default: cytoscape }, { default: fcose }]) => {
-        if (disposed || !container.current) return;
-        cytoscape.use(fcose);
-        cy = cytoscape({
-          container: container.current,
-          minZoom: 0.1,
-          maxZoom: 2.5,
-          wheelSensitivity: 0.25,
-          boxSelectionEnabled: false,
-          autoungrabify: false,
-        });
-        cy.on("tap", "node", (event) =>
-          event.target.id() === ISOLATED_GROUP
-            ? handlers.current.onClear()
-            : handlers.current.onSelectNode(event.target.id())
-        );
-        cy.on("tap", "edge", (event) =>
-          handlers.current.onSelectEdge(event.target.id())
-        );
-        cy.on("tap", (event) => {
-          if (event.target === cy) handlers.current.onClear();
-        });
-        cy.on("mouseover", "node", (event) => {
-          if (selection.current || !cy) return;
-          if (event.target.id() === ISOLATED_GROUP) return;
-          const hood = event.target.closedNeighborhood();
-          cy.elements().not(hood).addClass("faded");
-          hood.edges().addClass("lit");
-        });
-        cy.on("mouseout", "node", () => {
-          if (selection.current || !cy) return;
-          cy.elements().removeClass("faded lit");
-        });
-        cy.on("viewport", () => {
-          if (!cy) return;
-          const { x, y } = cy.pan();
-          setViewport({ zoom: cy.zoom(), x, y });
-        });
-        cyRef.current = cy;
-        setReady(true);
-      }
-    );
+    void import("cytoscape").then(({ default: cytoscape }) => {
+      if (disposed || !container.current) return;
+      cy = cytoscape({
+        container: container.current,
+        minZoom: 0.1,
+        maxZoom: 2.5,
+        wheelSensitivity: 0.25,
+        boxSelectionEnabled: false,
+        autoungrabify: false,
+      });
+      cy.on("tap", "node", (event) =>
+        event.target.id() === ISOLATED_GROUP
+          ? handlers.current.onClear()
+          : handlers.current.onSelectNode(event.target.id())
+      );
+      cy.on("tap", "edge", (event) =>
+        handlers.current.onSelectEdge(event.target.id())
+      );
+      cy.on("tap", (event) => {
+        if (event.target === cy) handlers.current.onClear();
+      });
+      cy.on("mouseover", "node", (event) => {
+        if (selection.current || !cy) return;
+        if (event.target.id() === ISOLATED_GROUP) return;
+        event.target.closedNeighborhood().edges().addClass("lit");
+      });
+      cy.on("mouseout", "node", () => {
+        if (selection.current || !cy) return;
+        cy.elements().removeClass("lit");
+      });
+      cy.on("viewport", () => {
+        if (!cy) return;
+        const { x, y } = cy.pan();
+        setViewport({ zoom: cy.zoom(), x, y });
+      });
+      cyRef.current = cy;
+      setReady(true);
+    });
     const observer = new ResizeObserver(() => cyRef.current?.resize());
     if (container.current) observer.observe(container.current);
     return () => {
@@ -583,8 +574,10 @@ export default function NetworkCanvas({
   );
   const elements = useMemo<ElementDefinition[]>(() => {
     const isolated = new Set(isolatedNodes(graph).map((node) => node.id));
+    // The delegation lens hides resources, so an agent that only uses tools
+    // would read as unconnected there.
     const framed =
-      lens !== "flow" &&
+      (lens === "overview" || lens === "access") &&
       isolated.size > 0 &&
       isolated.size < graph.nodes.length;
     const segments = (source: string, target: string, id: string) => {
@@ -700,52 +693,22 @@ export default function NetworkCanvas({
         (node) => flow.positions.get(node.id()) ?? { x: 0, y: 0 }
       );
     } else if (connected.nonempty()) {
-      if (lens === "overview") {
-        // fcose starts from random positions; a fixed seed keeps the same
-        // workspace looking the same between visits.
-        const random = Math.random;
-        let seed = 7;
-        Math.random = () => {
-          seed = (seed * 16807) % 2147483647;
-          return (seed - 1) / 2147483646;
-        };
-        try {
-          connected
-            .layout({
-              name: "fcose",
-              quality: "proof",
-              randomize: true,
-              animate: false,
-              nodeDimensionsIncludeLabels: true,
-              nodeRepulsion: () => 9000,
-              idealEdgeLength: (edge: { data: (key: string) => string }) =>
-                edge.data("relation") === "delegates_to" ? 90 : 120,
-              nodeSeparation: 80,
-              packComponents: true,
-              tilingPaddingVertical: 40,
-              tilingPaddingHorizontal: 60,
-              fit: false,
-            } as LayoutOptions)
-            .run();
-        } finally {
-          Math.random = random;
-        }
-      } else {
-        const positions = hierarchyPositions(
-          connected.nodes().map((node) => ({
-            id: node.id(),
-            size: node.data("size") as number,
-          })),
-          connected.edges().map((edge) => ({
-            source: edge.source().id(),
-            target: edge.target().id(),
-          })),
-          lens === "delegation" ? "TB" : "LR"
-        );
-        connected
-          .nodes()
-          .positions((node) => positions.get(node.id()) ?? { x: 0, y: 0 });
-      }
+      const positions = hierarchyPositions(
+        connected.nodes().map((node) => ({
+          id: node.id(),
+          size: node.data("size") as number,
+        })),
+        connected.edges().map((edge) => ({
+          source: edge.source().id(),
+          target: edge.target().id(),
+        })),
+        // Triggers above the agent they start, resources below what uses
+        // them; access reads left to right, from people to agents.
+        lens === "access" ? "LR" : "TB"
+      );
+      connected
+        .nodes()
+        .positions((node) => positions.get(node.id()) ?? { x: 0, y: 0 });
     }
     if (!flow && isolated.nonempty()) {
       const ids = isolated.map((node) => node.id());
@@ -788,8 +751,9 @@ export default function NetworkCanvas({
     }
     const padding = 40;
     const top = padding;
+    // A small graph opens at its natural size, not blown up to fill the pane.
     const zoom = Math.min(
-      cy.maxZoom(),
+      1,
       Math.max(
         cy.minZoom(),
         Math.min(
@@ -884,7 +848,7 @@ export default function NetworkCanvas({
   };
 
   return (
-    <div className="relative h-full w-full bg-[radial-gradient(hsl(var(--border))_1px,transparent_1px)] [background-size:22px_22px]">
+    <div className="relative h-full w-full">
       {flow && flow.perimeter.length > 0 && (
         <svg
           aria-hidden="true"
@@ -955,7 +919,7 @@ export default function NetworkCanvas({
           <span key={role} data-role={role} className={className} />
         ))}
       </div>
-      <div className="absolute bottom-4 left-4 flex items-center overflow-hidden rounded-lg border border-border bg-background shadow-sm">
+      <div className="absolute bottom-4 left-4 flex items-center overflow-hidden rounded-md border border-border bg-background shadow-sm">
         <button
           type="button"
           className={controlClass}
@@ -980,10 +944,9 @@ export default function NetworkCanvas({
           type="button"
           className={controlClass}
           onClick={() =>
-            cyRef.current?.animate(
-              { fit: { eles: cyRef.current.elements(), padding: 40 } },
-              { duration: 300 }
-            )
+            cyRef.current?.animate(fitAtMostNatural(cyRef.current), {
+              duration: 300,
+            })
           }
           aria-label={t("fit")}
           title={t("fit")}

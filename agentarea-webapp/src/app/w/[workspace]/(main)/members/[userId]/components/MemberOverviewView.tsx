@@ -365,8 +365,8 @@ export async function MemberOverviewView({
                   title={t("directAccess")}
                   count={model.grants?.length}
                   link={{
-                    label: t("accessView"),
-                    href: "/policies?view=access",
+                    label: t("openInNetwork"),
+                    href: "/network?view=access",
                   }}
                 />
                 {model.grants === null ? (

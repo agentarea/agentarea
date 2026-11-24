@@ -318,7 +318,11 @@ func (b BundleAgents) ReplaceSkillFiles(ctx context.Context, c authn.Caller, id 
 	for i, f := range files {
 		texts[i] = api.SkillFileText{Path: f.Path, Text: f.Text}
 	}
-	_, err := SkillToolset(b).ReplaceFiles(ctx, c, id, texts)
+	u, err := skillID(id)
+	if err != nil {
+		return bundleRefusal(err)
+	}
+	_, err = SkillToolset(b).replaceFiles(ctx, c, id, u, texts)
 	return bundleRefusal(err)
 }
 

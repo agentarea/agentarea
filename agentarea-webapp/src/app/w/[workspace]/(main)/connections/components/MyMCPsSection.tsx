@@ -4,16 +4,17 @@ import { useMemo, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { formatDistanceToNow } from "date-fns";
 import { Activity, CircleAlert, CircleDashed, Server } from "lucide-react";
 import CatalogSuggestions from "@/components/CatalogSuggestions";
 import EmptyState from "@/components/EmptyState";
+import ConnectionsScene from "@/components/illustrations/ConnectionsScene";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { CollapsibleGroup } from "@/components/ui/group-header";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { deterministicHue } from "@/lib/avatar-hue";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
 import { getMCPConnectionIconSrc } from "@/lib/entity-identity";
@@ -343,6 +344,7 @@ export function MyMCPsSection({
       <div className="py-1">
         <EmptyState
           title={hasNoData ? "No connections yet" : "No matching connections"}
+          visual={hasNoData ? <ConnectionsScene /> : undefined}
           description={
             hasNoData
               ? "A connection is an outside system — an MCP server or an OpenAPI service — whose tools your agents are allowed to call."
@@ -403,7 +405,9 @@ export function MyMCPsSection({
 
   // Grouped by type, the heading already names the protocol of every row.
   const columns =
-    groupBy === "type" && showSectionHeadings ? instanceColumns : unifiedColumns;
+    groupBy === "type" && showSectionHeadings
+      ? instanceColumns
+      : unifiedColumns;
 
   const openRow = (row: TableRow) => {
     router.push(

@@ -20,7 +20,7 @@ var _ api.PlatformInbox = PlatformInbox{}
 func (s *Surface) PlatformInbox() PlatformInbox { return PlatformInbox{s: s} }
 
 func (p PlatformInbox) List(ctx context.Context, c authn.Caller, status *string, agentID string, page, pageSize int) (api.InboxPage, error) {
-	statuses := InboxStatuses()
+	statuses := api.InboxStatuses()
 	if status != nil {
 		statuses = []string{*status}
 	}

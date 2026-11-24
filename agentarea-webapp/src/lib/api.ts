@@ -57,8 +57,6 @@ import type {
   ProviderConfigUpdate,
   ProviderSpecResponse,
   ProviderSpecWithModelsResponse,
-  RelationshipWriteRequest,
-  ResolveRequest,
   ScheduleTaskCreate,
   SkillContentResponse,
   SkillCreateRequest,
@@ -2451,13 +2449,6 @@ export const previewEffectivePolicy = async (body?: {
   return withStatus(result);
 };
 
-export const getAccessControlGraph = async () => {
-  const { data, error } = await sdk.getGraphV1AccessControlGraphGet({
-    client: serverClient,
-  });
-  return { data, error };
-};
-
 export const listAccessControlRelationships = async (
   params?: ListRelationshipsV1AccessControlRelationshipsGetData["query"]
 ) => {
@@ -2465,36 +2456,6 @@ export const listAccessControlRelationships = async (
     await sdk.listRelationshipsV1AccessControlRelationshipsGet({
       client: serverClient,
       query: params,
-    });
-  return { data, error };
-};
-
-export const resolveAccessControl = async (body: ResolveRequest) => {
-  const { data, error } = await sdk.resolveAccessV1AccessControlResolvePost({
-    client: serverClient,
-    body,
-  });
-  return { data, error };
-};
-
-export const createAccessControlRelationship = async (
-  body: RelationshipWriteRequest
-) => {
-  const { data, error } =
-    await sdk.createRelationshipV1AccessControlRelationshipsPost({
-      client: serverClient,
-      body,
-    });
-  return { data, error };
-};
-
-export const deleteAccessControlRelationship = async (
-  body: RelationshipWriteRequest
-) => {
-  const { data, error } =
-    await sdk.deleteRelationshipV1AccessControlRelationshipsDelete({
-      client: serverClient,
-      body,
     });
   return { data, error };
 };

@@ -81,9 +81,7 @@ export async function PolicyEditorPageData({
   if (!canAdminister) {
     return (
       <ContentBlock header={header}>
-        <div className="main-content">
-          <AdminOnlyState what="policyEditor" />
-        </div>
+        <AdminOnlyState what="policyEditor" />
       </ContentBlock>
     );
   }
@@ -130,13 +128,11 @@ export async function PolicyEditorPageData({
     if (policyId) {
       return (
         <ContentBlock header={header}>
-          <div className="main-content">
-            <RetryEmptyState
-              title={t("loadFailedTitle")}
-              description={apiErrorMessage(policiesRes, t("loadFailed"))}
-              iconsType="audit"
-            />
-          </div>
+          <RetryEmptyState
+            title={t("loadFailedTitle")}
+            description={apiErrorMessage(policiesRes, t("loadFailed"))}
+            iconsType="audit"
+          />
         </ContentBlock>
       );
     }
@@ -246,18 +242,16 @@ export async function PolicyEditorPageData({
 
   return (
     <ContentBlock header={header}>
-      <div className="main-content">
-        <PolicyEditor
-          target={target}
-          agents={agents}
-          mcpInstances={mcpInstances}
-          mcpServers={mcpServers}
-          openapiConnections={openapiConnections}
-          members={members}
-          registries={registries}
-          workspaceId={authContext.workspaceId}
-        />
-      </div>
+      <PolicyEditor
+        target={target}
+        agents={agents}
+        mcpInstances={mcpInstances}
+        mcpServers={mcpServers}
+        openapiConnections={openapiConnections}
+        members={members}
+        registries={registries}
+        workspaceId={authContext.workspaceId}
+      />
     </ContentBlock>
   );
 }

@@ -1,29 +1,22 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Copy, Star } from "lucide-react";
+import { Copy } from "lucide-react";
 import { SkillTile } from "@/components/SkillTile";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import type { Skill } from "@/types/skill";
 import SkillProvenance from "./SkillProvenance";
-import { scopeMeta, shortAge } from "./skillsMeta";
+import SkillVersion from "./SkillVersion";
 
 interface SkillRowProps {
   skill: Skill;
-  isFavorite: boolean;
-  onToggleFavorite: (id: string) => void;
+  onUpdated: () => void;
 }
 
-export default function SkillRow({
-  skill,
-  isFavorite,
-  onToggleFavorite,
-}: SkillRowProps) {
+export default function SkillRow({ skill, onUpdated }: SkillRowProps) {
   const router = useWorkspaceRouter();
   const t = useTranslations("SkillsPage");
-  const scope = scopeMeta(skill.network_scope);
-  const ScopeIcon = scope.icon;
 
   const open = () => router.push(`/skills/${skill.id}`);
 
@@ -35,41 +28,24 @@ export default function SkillRow({
       end={
         <>
           <SkillProvenance skill={skill} />
-          <span className="skill-col-scope inline-flex items-center gap-1 text-[11.5px] text-muted-foreground">
-            <ScopeIcon className="h-3 w-3" strokeWidth={1.7} />
-            {scope.label}
+          <span className="flex min-w-[56px] justify-end">
+            <SkillVersion skill={skill} onUpdated={onUpdated} />
           </span>
-          <span className="skill-col-date w-12 text-right text-[11.5px] text-muted-foreground">
-            {shortAge(skill.created_at)}
+          <span className="skill-col-agents w-[76px] text-right text-[11.5px] tabular-nums text-muted-foreground">
+            {t("agentCount", { count: skill.agent_count ?? 0 })}
           </span>
         </>
       }
       hoverActions={
-        <>
-          <button
-            type="button"
-            title={t("rowActions.favorite")}
-            aria-label={t("rowActions.favorite")}
-            aria-pressed={isFavorite}
-            onClick={() => onToggleFavorite(skill.id)}
-            className="grid h-[26px] w-[26px] place-items-center rounded-md text-muted-foreground hover:bg-zinc-200/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-zinc-700 max-[767px]:h-11 max-[767px]:w-11"
-          >
-            <Star
-              className="h-[15px] w-[15px]"
-              fill={isFavorite ? "currentColor" : "none"}
-              style={isFavorite ? { color: "#d99a00" } : undefined}
-            />
-          </button>
-          <button
-            type="button"
-            title={t("rowActions.duplicate")}
-            aria-label={t("rowActions.duplicate")}
-            onClick={() => router.push(`/skills/create?from=${skill.id}`)}
-            className="grid h-[26px] w-[26px] place-items-center rounded-md text-muted-foreground hover:bg-zinc-200/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-zinc-700 max-[767px]:h-11 max-[767px]:w-11"
-          >
-            <Copy className="h-[15px] w-[15px]" />
-          </button>
-        </>
+        <button
+          type="button"
+          title={t("rowActions.duplicate")}
+          aria-label={t("rowActions.duplicate")}
+          onClick={() => router.push(`/skills/create?from=${skill.id}`)}
+          className="grid h-[26px] w-[26px] place-items-center rounded-md text-muted-foreground hover:bg-zinc-200/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-zinc-700 max-[767px]:h-11 max-[767px]:w-11"
+        >
+          <Copy className="h-[15px] w-[15px]" />
+        </button>
       }
     >
       <>

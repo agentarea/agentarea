@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
+	runsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/domain"
 )
 
@@ -91,15 +92,24 @@ func TestSurfaceCancelScheduledKeepsAnEarlierCancellationTime(t *testing.T) {
 	}
 }
 
-func TestSurfaceInboxOrdersEndedByCompletion(t *testing.T) {
+func TestSurfaceInboxListsWhatWaitsOnAPerson(t *testing.T) {
 	ctx := context.Background()
 	pool := openPool(t)
 	s := workspace(t, pool)
 	q := New(s.Q())
 	agent := uuid.New()
 	waiting := makeSurfaceTask(t, s, agent, "w", "waiting_for_input")
-	makeSurfaceTask(t, s, agent, "r", "running")
-	statuses := []string{"waiting_for_approval", "waiting_for_input", "completed", "failed"}
+	blocked := makeSurfaceTask(t, s, agent, "b", "blocked")
+	for _, status := range []string{"running", "completed", "failed"} {
+		makeSurfaceTask(t, s, agent, status, status)
+	}
+	if err := (Runs{}).CreateTask(ctx, s, NewTask{
+		ID: uuid.NewString(), AgentID: agent.String(), Description: "child", Status: "blocked", CreatedBy: "user-1",
+		Metadata: map[string]any{"created_via": "agent_delegation"},
+	}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	statuses := runsapi.InboxStatuses()
 	rows, err := q.SurfaceInboxPage(ctx, SurfaceInboxPageParams{WorkspaceID: s.Workspace().ID(), Statuses: statuses, MaxRows: 10})
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +118,11 @@ func TestSurfaceInboxOrdersEndedByCompletion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 1 || rows[0].ID != waiting || n != 1 {
+	got := map[uuid.UUID]bool{}
+	for _, r := range rows {
+		got[r.ID] = true
+	}
+	if len(rows) != 2 || !got[waiting] || !got[blocked] || n != 2 {
 		t.Fatalf("inbox %v total %d", rows, n)
 	}
 }

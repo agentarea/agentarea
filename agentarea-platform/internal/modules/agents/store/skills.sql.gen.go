@@ -12,6 +12,43 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const skillAgentCounts = `-- name: SkillAgentCounts :many
+SELECT a.skill_id, count(*)::bigint AS agents
+FROM agent_skills a JOIN agents g ON g.id = a.agent_id
+WHERE g.workspace_id = $1 AND g.status <> 'archived' AND a.skill_id = ANY($2::uuid[])
+GROUP BY a.skill_id
+`
+
+type SkillAgentCountsParams struct {
+	WorkspaceID string
+	Ids         []uuid.UUID
+}
+
+type SkillAgentCountsRow struct {
+	SkillID uuid.UUID
+	Agents  int64
+}
+
+func (q *Queries) SkillAgentCounts(ctx context.Context, arg SkillAgentCountsParams) ([]SkillAgentCountsRow, error) {
+	rows, err := q.db.Query(ctx, skillAgentCounts, arg.WorkspaceID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SkillAgentCountsRow
+	for rows.Next() {
+		var i SkillAgentCountsRow
+		if err := rows.Scan(&i.SkillID, &i.Agents); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const skillClearContent = `-- name: SkillClearContent :exec
 UPDATE skills SET content = NULL, updated_at = $1 WHERE workspace_id = $2 AND id = $3
 `
@@ -530,6 +567,43 @@ func (q *Queries) SkillMovedOwnCopies(ctx context.Context, movedBefore pgtype.Ti
 			return nil, err
 		}
 		items = append(items, prefix)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const skillRevisions = `-- name: SkillRevisions :many
+SELECT skill_id, count(*)::bigint AS revisions
+FROM skill_versions
+WHERE workspace_id = $1 AND skill_id = ANY($2::uuid[])
+GROUP BY skill_id
+`
+
+type SkillRevisionsParams struct {
+	WorkspaceID string
+	Ids         []uuid.UUID
+}
+
+type SkillRevisionsRow struct {
+	SkillID   uuid.UUID
+	Revisions int64
+}
+
+func (q *Queries) SkillRevisions(ctx context.Context, arg SkillRevisionsParams) ([]SkillRevisionsRow, error) {
+	rows, err := q.db.Query(ctx, skillRevisions, arg.WorkspaceID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SkillRevisionsRow
+	for rows.Next() {
+		var i SkillRevisionsRow
+		if err := rows.Scan(&i.SkillID, &i.Revisions); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

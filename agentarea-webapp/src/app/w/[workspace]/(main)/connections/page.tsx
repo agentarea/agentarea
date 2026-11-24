@@ -78,6 +78,7 @@ export default async function MCPServersPage({
             <Suspense fallback={<div className="h-7" />}>
               <ConnectionsFilterSection
                 currentFilter={filter}
+                groupBy={groupBy}
                 source={source}
               />
             </Suspense>

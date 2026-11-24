@@ -3,8 +3,7 @@
 import { useTranslations } from "next-intl";
 import {
   CircleAlert,
-  CircleCheck,
-  CircleX,
+  CircleSlash,
   History,
   Inbox,
   MessageCircleQuestion,
@@ -28,8 +27,7 @@ const FILTER_ICON: Record<FilterValue, LucideIcon> = {
   all: Inbox,
   pending: CircleAlert,
   input: MessageCircleQuestion,
-  completed: CircleCheck,
-  failed: CircleX,
+  blocked: CircleSlash,
   decided: History,
 };
 

@@ -372,3 +372,69 @@ func TestSkillMoveBodiesToPackages(t *testing.T) {
 		t.Error("no blob answers unwired")
 	}
 }
+
+func TestListAndGetCountTheAgentsASkillIsAttachedTo(t *testing.T) {
+	ctx := context.Background()
+	d, _, _, _, k, c := skillSetup(t)
+	r := RunSkills{K: k}
+	used := newRunSkill(t, r, c, "---\nname: Used\ndescription: d\n---\nbody")
+	idle := newRunSkill(t, r, c, "---\nname: Idle\ndescription: d\n---\nbody")
+	runAgent(t, d, c, used)
+	archived := runAgent(t, d, c, used)
+	if err := d.Write(ctx, c.Workspace, func(ctx context.Context, s db.Session) error {
+		_, err := s.Q().Exec(ctx, `UPDATE agents SET status = 'archived' WHERE id = $1`, archived)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	views, _, err := k.List(ctx, c, SkillListQuery{Limit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]int{}
+	for _, v := range views {
+		got[v.ID] = v.Agents
+	}
+	if got[used] != 1 || got[idle] != 0 {
+		t.Fatalf("agent counts %v", got)
+	}
+	one, err := k.Get(ctx, c, uuid.MustParse(used))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if one.Agents != 1 {
+		t.Fatalf("get: %d agents", one.Agents)
+	}
+}
+
+func TestListAndGetNumberEachSavedVersionOfASkill(t *testing.T) {
+	ctx := context.Background()
+	_, _, _, _, k, c := skillSetup(t)
+	id := newRunSkill(t, RunSkills{K: k}, c, "---\nname: Draft\ndescription: d\n---\none")
+	revision := func() int {
+		t.Helper()
+		v, err := k.Get(ctx, c, uuid.MustParse(id))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v.Revision
+	}
+	if got := revision(); got != 1 {
+		t.Fatalf("created: revision %d", got)
+	}
+	body := "---\nname: Draft\ndescription: d\n---\ntwo"
+	if _, err := k.Update(ctx, c, uuid.MustParse(id), nil, nil, &body); err != nil {
+		t.Fatal(err)
+	}
+	if got := revision(); got != 2 {
+		t.Fatalf("edited: revision %d", got)
+	}
+	views, _, err := k.List(ctx, c, SkillListQuery{Limit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(views) != 1 || views[0].Revision != 2 {
+		t.Fatalf("listed %+v", views)
+	}
+}

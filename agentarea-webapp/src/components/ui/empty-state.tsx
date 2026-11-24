@@ -15,6 +15,8 @@ interface EmptyStateProps {
   description: string;
   hints?: EmptyStateHint[];
   icons?: LucideIcon[];
+  /** A picture of what the page holds once filled, in place of the icons. */
+  visual?: React.ReactNode;
   action?: {
     label: string;
     onClick: () => void;
@@ -54,6 +56,7 @@ export function EmptyState({
   description,
   hints,
   icons = [],
+  visual,
   action,
   className,
   additionAction,
@@ -69,7 +72,9 @@ export function EmptyState({
       )}
     >
       <div className="isolate flex justify-center">
-        {icons.length === 3 ? (
+        {visual ? (
+          visual
+        ) : icons.length === 3 ? (
           <>
             <IconTile
               icon={icons[0]}
@@ -95,28 +100,28 @@ export function EmptyState({
           )
         )}
       </div>
-      <h3 className="mt-5 text-[13.5px] font-semibold text-foreground">
+      <h3 className="mt-6 text-base font-semibold text-foreground">
         {title}
       </h3>
-      <p className="mx-auto mt-1 max-w-[320px] whitespace-pre-line text-[12px] leading-relaxed text-muted-foreground">
+      <p className="mx-auto mt-1.5 max-w-[440px] whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
         {description}
       </p>
       {hints && hints.length > 0 && (
         // Left-aligned inside a centered block: a ragged-right list stays
         // scannable, while centering each line turns it into prose again.
-        <ul className="mx-auto mt-4 flex w-fit max-w-[360px] flex-col gap-1.5 text-left">
+        <ul className="mx-auto mt-5 flex w-fit max-w-[440px] flex-col gap-2 text-left">
           {hints.map((hint) => (
             <li key={hint.text} className="flex items-start gap-2">
-              <ArrowRight className="mt-[3px] size-3 shrink-0 text-muted-foreground/50" />
+              <ArrowRight className="mt-[4px] size-3.5 shrink-0 text-muted-foreground/60" />
               {hint.href ? (
                 <Link
                   href={hint.href}
-                  className="text-[12px] leading-relaxed text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                  className="text-sm leading-relaxed text-foreground/80 underline-offset-4 hover:text-foreground hover:underline"
                 >
                   {hint.text}
                 </Link>
               ) : (
-                <span className="text-[12px] leading-relaxed text-muted-foreground">
+                <span className="text-sm leading-relaxed text-foreground/80">
                   {hint.text}
                 </span>
               )}
@@ -124,10 +129,9 @@ export function EmptyState({
           ))}
         </ul>
       )}
-      <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
+      <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
         {action && (
           <Button
-            size="sm"
             onClick={action.onClick}
             className={cn("shadow-sm active:shadow-none")}
           >
@@ -137,7 +141,6 @@ export function EmptyState({
 
         {additionAction && (
           <Button
-            size="sm"
             onClick={additionAction.onClick}
             variant="outline"
             className={cn("shadow-sm active:shadow-none")}

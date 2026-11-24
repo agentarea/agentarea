@@ -134,6 +134,7 @@ const surfaceInboxCount = `-- name: SurfaceInboxCount :one
 SELECT count(id) FROM tasks
 WHERE workspace_id = $1 AND status = ANY($2::text[])
   AND ($3::uuid IS NULL OR agent_id = $3::uuid)
+  AND (status <> 'blocked' OR COALESCE(task_metadata->>'created_via', '') <> 'agent_delegation')
 `
 
 type SurfaceInboxCountParams struct {
@@ -158,8 +159,8 @@ SELECT id, agent_id, description, COALESCE(parameters::text, '')::text AS parame
 FROM tasks
 WHERE workspace_id = $1 AND status = ANY($2::text[])
   AND ($3::uuid IS NULL OR agent_id = $3::uuid)
-ORDER BY CASE WHEN status IN ('blocked', 'completed', 'failed', 'cancelled')
-    THEN COALESCE(completed_at, updated_at) ELSE updated_at END DESC, id
+  AND (status <> 'blocked' OR COALESCE(task_metadata->>'created_via', '') <> 'agent_delegation')
+ORDER BY CASE WHEN status = 'blocked' THEN COALESCE(completed_at, updated_at) ELSE updated_at END DESC, id
 LIMIT $5 OFFSET $4
 `
 

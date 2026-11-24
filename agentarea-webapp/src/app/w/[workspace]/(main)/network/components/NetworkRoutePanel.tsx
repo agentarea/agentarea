@@ -59,7 +59,7 @@ export default function NetworkRoutePanel({
   return (
     <aside
       aria-label={t("title")}
-      className="z-10 flex max-h-[45%] w-full shrink-0 flex-col overflow-hidden border-t border-border bg-background md:h-full md:max-h-none md:w-80 md:border-l md:border-t-0 xl:w-96"
+      className="z-10 flex max-h-[45%] w-full shrink-0 flex-col overflow-hidden border-t border-border bg-white dark:bg-zinc-800 md:absolute md:inset-y-0 md:right-0 md:max-h-none md:w-80 md:border-l md:border-t-0 md:shadow-lg xl:w-96"
     >
       <header className="flex shrink-0 items-center gap-3 border-b border-border p-4">
         <Route className="h-4 w-4 shrink-0 text-primary" />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
+import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 import {
   Ban,
@@ -40,6 +41,8 @@ type EmptyStateProps = {
   /** What you can do from here — one line per concrete route forward. */
   hints?: EmptyStateHint[];
   icons?: LucideIcon[];
+  /** A picture of what the page holds once filled, in place of the icons. */
+  visual?: ReactNode;
   iconsType?:
     | "404"
     | "agent"
@@ -75,6 +78,7 @@ export default function EmptyState({
   action,
   additionAction,
   icons,
+  visual,
   iconsType,
   className,
   accentClassName,
@@ -124,6 +128,7 @@ export default function EmptyState({
         description={description || ""}
         hints={hints}
         icons={resolvedIcons}
+        visual={visual}
         accentClassName={accentClassName}
         action={
           action

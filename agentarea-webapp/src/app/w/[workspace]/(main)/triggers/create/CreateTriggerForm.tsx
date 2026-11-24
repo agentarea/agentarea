@@ -50,8 +50,7 @@ import {
   normalizeTaskParameters,
   type TaskParameterRef,
 } from "../components/taskParameters";
-import { renderTriggerIcon } from "../components/triggerDisplay";
-import { LANE_ICON } from "../components/TriggersTypeFilter";
+import { LANE_ICON, renderTriggerIcon } from "../components/triggerDisplay";
 import {
   createTriggerAction,
   updateTriggerAction,
@@ -235,7 +234,7 @@ export function CreateTriggerForm({
 
   const typeGroups: GroupedSelectGroup[] = TYPE_KINDS.map(
     ({ lane, label, types }) => {
-      const Icon = LANE_ICON[lane] ?? ENTITY_ICONS.trigger;
+      const Icon = LANE_ICON[lane];
       return {
         id: lane,
         label: tFilter(label),

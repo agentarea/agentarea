@@ -1,4 +1,6 @@
+import { listSkills } from "@/lib/api";
 import { readUiPrefs } from "@/lib/ui-prefs-server";
+import type { Skill } from "@/types/skill";
 import SkillsView from "./components/SkillsView";
 
 export const metadata = {
@@ -14,10 +16,13 @@ export default async function SkillsPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const resolvedSearchParams = await searchParams;
+  const [resolvedSearchParams, uiPrefs, skillsRes] = await Promise.all([
+    searchParams,
+    readUiPrefs(),
+    listSkills(),
+  ]);
 
   // View mode: prefer URL, fall back to cookie, default to the Linear list.
-  const uiPrefs = await readUiPrefs();
   const cookieView = uiPrefs.views["view_skills"];
   const urlView = asString(resolvedSearchParams.view);
   const view: "list" | "grid" =
@@ -27,16 +32,20 @@ export default async function SkillsPage({
         ? "grid"
         : "list";
 
-  const groupParam = asString(resolvedSearchParams.group);
-  const group: "scope" | "none" = groupParam === "scope" ? "scope" : "none";
-
   const orderParam = asString(resolvedSearchParams.order);
   const order: "name" | "created" =
     orderParam === "created" ? "created" : "name";
 
-  const scope = asString(resolvedSearchParams.network_scope);
+  if (skillsRes.error) {
+    console.error("Failed to load skills:", skillsRes.error);
+  }
 
-  // SkillsView owns the page chrome (header, scope tabs, search, display): the
-  // tab counts come from the same client-side fetch as the list.
-  return <SkillsView initial={{ view, group, order, scope }} />;
+  // SkillsView owns the page chrome (header, search, display).
+  return (
+    <SkillsView
+      initial={{ view, order }}
+      skills={(skillsRes.data ?? []) as Skill[]}
+      loadFailed={Boolean(skillsRes.error)}
+    />
+  );
 }

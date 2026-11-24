@@ -275,8 +275,11 @@ func mapSkillError(err error) (*httpx.Error, bool) {
 		file    *service.SkillFileNotFoundError
 		edited  *service.SkillCustomizedError
 		notFrom *service.SkillNotFromCatalogError
+		managed *service.SkillBundleManagedError
 	)
 	switch {
+	case errors.As(err, &managed):
+		return httpx.NewError(http.StatusConflict, "skill_bundle_managed", managed.Error()), true
 	case errors.As(err, &edited):
 		return httpx.NewError(http.StatusConflict, "skill_customized", edited.Msg), true
 	case errors.As(err, &notFrom):
@@ -329,6 +332,8 @@ func skillJSON(v service.SkillView) wirejson.Object {
 		{Key: "customized", Value: domain.SkillIsCustomized(v.Skill)}, {Key: "registry_name", Value: orNil(v.RegistryName)},
 		{Key: "registry_scope", Value: orNil(v.RegistryScope)}, {Key: "registry_trust", Value: orNil(v.RegistryTrust)},
 		{Key: "removed_upstream", Value: v.RemovedUpstream},
+		{Key: "version", Value: orNil(v.Version)}, {Key: "latest_version", Value: orNil(v.LatestVersion)},
+		{Key: "agent_count", Value: v.Agents}, {Key: "revision", Value: v.Revision}, {Key: "bundle", Value: orNil(v.Bundle)},
 	}
 }
 
@@ -574,6 +579,9 @@ func (s *Server) UpdateSkillV1SkillsSkillIdPut(ctx context.Context, rq gen.Updat
 		return nil, err
 	}
 	si := areaInput[skillInput](ctx)
+	if err := s.skills().RequireUnmanaged(ctx, c.Workspace, uuid.UUID(rq.SkillId)); err != nil {
+		return nil, err
+	}
 	v, err := s.skills().Update(ctx, c, uuid.UUID(rq.SkillId), si.name, si.description, si.content)
 	if err != nil {
 		return nil, err

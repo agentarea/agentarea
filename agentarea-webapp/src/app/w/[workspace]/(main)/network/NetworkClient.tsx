@@ -3,16 +3,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import { Check, Network, RefreshCw, Route, Users } from "lucide-react";
+import { Check, Network, Users } from "lucide-react";
 import DisplayMenu from "@/components/DisplayMenu";
+import EmptyState from "@/components/EmptyState";
 import HeaderTabs from "@/components/HeaderTabs";
+import NoticeBanner from "@/components/NoticeBanner";
 import SearchInput from "@/components/SearchInput";
-import { AnimatedTabs } from "@/components/ui/animated-tabs";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
+import ToolbarRefreshButton from "@/components/ToolbarRefreshButton";
 import { Button } from "@/components/ui/button";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import { MenuRow, MenuSectionLabel } from "@/components/ui/menu-row";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { ToolbarButton, ToolbarDivider } from "@/components/ui/toolbar";
+import { ToolbarButton } from "@/components/ui/toolbar";
+import { ENTITY_ICONS } from "@/lib/entity-icons";
 import {
   getNetworkPeopleAccessAction,
   previewNetworkPolicyAction,
@@ -39,6 +44,8 @@ export function NetworkToolbar() {
     setShowIssues,
     showPeople,
     setShowPeople,
+    loading,
+    fetchTopology,
   } = useNetwork();
   const issues = useMemo(
     () => (topology ? issueCount(buildNetworkGraph(topology)) : 0),
@@ -56,87 +63,75 @@ export function NetworkToolbar() {
   };
 
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-1.5">
-      <AnimatedTabs
-        tabs={[
-          { value: "overview", label: lenses("overview.tab") },
-          { value: "delegation", label: lenses("delegation.tab") },
-          { value: "access", label: lenses("access.tab") },
-          { value: "flow", label: lenses("flow.tab") },
-        ]}
-        activeTab={view}
-        onChange={setView}
-        size="sm"
-        className="w-auto"
-      />
-      <ToolbarDivider />
-      <div className="w-[240px] min-w-0 max-w-full">
+    <SubheaderToolbar
+      categories={
+        <CountSegmentedControl
+          items={(["overview", "delegation", "access", "flow"] as const).map(
+            (value) => ({ value, label: lenses(`${value}.tab`) })
+          )}
+          value={view}
+          onChange={setView}
+          variant="solid"
+          className="max-w-full"
+          layoutId="network-lens-control"
+        />
+      }
+      search={
         <SearchInput
           delay={150}
           initialValue={query}
           placeholder={t("search")}
           onDebouncedChange={setQuery}
         />
-      </div>
-      <div className="flex-1" />
-      {issues > 0 && (
-        <ToolbarButton
-          active={showIssues}
-          aria-pressed={showIssues}
-          onClick={() => setShowIssues(!showIssues)}
-        >
-          <StatusIndicator kind="attention" aria-hidden />
-          {t("issues")}
-          <span className="tabular-nums text-muted-foreground">{issues}</span>
-        </ToolbarButton>
-      )}
-      <HeaderTabs
-        tabs={[
-          {
-            value: "graph",
-            label: t("modes.graph"),
-            icon: <Network className="h-4 w-4" />,
-          },
-          { value: "list", label: t("modes.list") },
-        ]}
-        value={mode}
-        onChange={(next) => setMode(next as NetworkMode)}
-      />
-      {peopleLens && (
-        <DisplayMenu>
-          <MenuSectionLabel>{t("show")}</MenuSectionLabel>
-          <MenuRow
-            icon={<Users className="h-3.5 w-3.5" />}
-            label={peopleText("title")}
-            selected={showPeople}
-            onClick={() => setShowPeople(!showPeople)}
-            trailing={
-              showPeople ? <Check className="h-3.5 w-3.5" /> : undefined
-            }
+      }
+      controls={
+        <>
+          <ToolbarButton
+            active={showIssues}
+            aria-pressed={showIssues}
+            disabled={issues === 0}
+            onClick={() => setShowIssues(!showIssues)}
+          >
+            <StatusIndicator
+              kind={issues > 0 ? "attention" : "done"}
+              aria-hidden
+            />
+            {t("issues")}
+            <span className="tabular-nums text-muted-foreground">{issues}</span>
+          </ToolbarButton>
+          <HeaderTabs
+            tabs={[
+              {
+                value: "graph",
+                label: t("modes.graph"),
+                icon: <Network className="h-4 w-4" />,
+              },
+              { value: "list", label: t("modes.list") },
+            ]}
+            value={mode}
+            onChange={(next) => setMode(next as NetworkMode)}
           />
-        </DisplayMenu>
-      )}
-    </div>
-  );
-}
-
-export function NetworkHeaderControls() {
-  const t = useTranslations("NetworkPage");
-  const { loading, fetchTopology } = useNetwork();
-
-  return (
-    <div className="flex items-center gap-2">
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={fetchTopology}
-        disabled={loading}
-        className="h-7 w-7 text-muted-foreground"
-        aria-label={t("refreshTopology")}
-      >
-        <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-      </Button>
-    </div>
+          {peopleLens && (
+            <DisplayMenu>
+              <MenuSectionLabel>{t("show")}</MenuSectionLabel>
+              <MenuRow
+                icon={<Users className="h-3.5 w-3.5" />}
+                label={peopleText("title")}
+                selected={showPeople}
+                onClick={() => setShowPeople(!showPeople)}
+                trailing={
+                  showPeople ? <Check className="h-3.5 w-3.5" /> : undefined
+                }
+              />
+            </DisplayMenu>
+          )}
+          <ToolbarRefreshButton
+            onRefresh={fetchTopology}
+            refreshing={loading}
+          />
+        </>
+      }
+    />
   );
 }
 
@@ -164,56 +159,42 @@ export default function NetworkClient() {
 
   if (error && !topology) {
     return (
-      <div
-        className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center"
-        role="alert"
-      >
-        <p className="text-sm font-medium">{t("loadError")}</p>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={fetchTopology}
-          disabled={loading}
-        >
-          {t("retry")}
-        </Button>
-      </div>
+      <EmptyState
+        title={t("loadError")}
+        icons={[Network]}
+        action={{ label: t("retry"), onClick: fetchTopology }}
+      />
     );
   }
 
   if (!topology || topology.nodes.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center bg-layoutBackground px-6 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-dashed border-primary/40 bg-background text-primary shadow-sm">
-          <Route className="h-6 w-6" />
-        </div>
-        <p className="mt-4 text-sm font-semibold text-foreground">
-          {t("emptyTitle")}
-        </p>
-        <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">
-          {t("emptyDescription")}
-        </p>
-      </div>
+      <EmptyState
+        title={t("emptyTitle")}
+        description={t("emptyDescription")}
+        icons={[ENTITY_ICONS.agent, ENTITY_ICONS.mcp, ENTITY_ICONS.trigger]}
+        action={{ label: t("emptyAction"), href: "/agents" }}
+      />
     );
   }
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
       {error && (
-        <div
-          className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4 py-2 text-xs"
-          role="alert"
-        >
-          <span>{t("refreshError")}</span>
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={fetchTopology}
-            disabled={loading}
-          >
-            {t("retry")}
-          </Button>
-        </div>
+        <NoticeBanner
+          title={t("refreshError")}
+          className="m-3 mb-0 shrink-0"
+          action={
+            <Button
+              size="xs"
+              variant="outline"
+              onClick={fetchTopology}
+              disabled={loading}
+            >
+              {t("retry")}
+            </Button>
+          }
+        />
       )}
       <div className="relative min-h-0 flex-1">
         <NetworkGraphView
@@ -231,7 +212,7 @@ export default function NetworkClient() {
 
 // Placeholder for the graph canvas — scattered node bubbles while the topology
 // loads. The header tabs stay mounted above (page subheader).
-function NetworkGraphSkeleton() {
+export function NetworkGraphSkeleton() {
   const nodes = [
     { top: "30%", left: "22%" },
     { top: "18%", left: "55%" },

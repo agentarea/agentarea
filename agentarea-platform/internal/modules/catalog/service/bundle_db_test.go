@@ -307,3 +307,28 @@ func TestBundleRowUpdateRefusesAStaleRevision(t *testing.T) {
 		}
 	}
 }
+
+// A skill a bundle created stays that bundle's; one it only linked does not.
+func TestBundleOwnedNamesTheBundleThatCreatedAnEntity(t *testing.T) {
+	b, _, ctx := newDBBundles(t)
+	c, _ := authn.CallerFrom(ctx)
+	result := InstallResult{BundleName: "demo", Entities: []InstalledEntity{
+		{Kind: KindSkill, Key: "s1", Name: "Writer", Action: ActionUnchanged, ID: strp("skill-owned")},
+		{Kind: KindSkill, Key: "s2", Name: "Shared", Action: ActionReused, ID: strp("skill-linked")},
+		{Kind: KindAgent, Key: "agent", Name: "Demo", Action: ActionCreated, ID: strp("agent-1")},
+	}}
+	pkg := mustParse(t, demoBundle)
+	own := func(ctx context.Context, fn func(context.Context, db.Session) error) error {
+		return b.d.DB.Write(ctx, c.Workspace, fn)
+	}
+	if _, _, err := b.recordID(ctx, own, c, &pkg, result, "installed", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Installs{DB: b.d.DB}.BundleOwned(ctx, c.Workspace, string(KindSkill), []string{"skill-owned", "skill-linked", "agent-1", "skill-other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, map[string]string{"skill-owned": "demo"}) {
+		t.Fatalf("owned = %v", got)
+	}
+}

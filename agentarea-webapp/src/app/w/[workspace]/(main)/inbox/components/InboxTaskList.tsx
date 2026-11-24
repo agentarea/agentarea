@@ -4,9 +4,9 @@ import type { MouseEventHandler } from "react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { Check, X } from "lucide-react";
 import { InboxEmptyState } from "@/app/w/[workspace]/(main)/inbox/components/InboxEmptyState";
-import { inboxResultPreview } from "@/app/w/[workspace]/(main)/inbox/components/inboxResult";
 import {
   formatRelative,
+  inboxRowPreview,
   isPending,
   type FilterValue,
   type InboxCounts,
@@ -60,11 +60,15 @@ export function InboxTaskList({
         const isSelected = id === selectedId;
         const isChecked = checked.has(id);
         const agentName = task.agent_name || t("row.unknownAgent");
+        const preview = inboxRowPreview(
+          status,
+          task.error || task.failure_reason
+        );
         const actionPreview = task.escalation_tool_name
           ? t("row.request", { tool: task.escalation_tool_name })
-          : pending
-            ? t("row.waiting")
-            : t(inboxResultPreview(status, task));
+          : "text" in preview
+            ? preview.text
+            : t(preview.key);
 
         // Same row as the Skills list: the shared InteractiveListRow with its
         // own dividers, hover hatch and indicator, not a restyled card.

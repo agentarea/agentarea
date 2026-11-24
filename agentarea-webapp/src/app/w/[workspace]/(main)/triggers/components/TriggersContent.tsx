@@ -2,20 +2,17 @@ import { getTranslations } from "next-intl/server";
 import type { AgentResponse } from "@/api/client/types.gen";
 import { listAgents } from "@/lib/api";
 import { getTriggersCached } from "./triggersData";
-import { getTriggerLane } from "./triggerDisplay";
 import TriggersList from "./TriggersList";
 
 interface TriggersContentProps {
   viewMode: "grid" | "table";
   searchQuery: string;
-  typeFilter: string;
   groupBy: "channel" | "none";
 }
 
 export default async function TriggersContent({
   viewMode,
   searchQuery,
-  typeFilter,
   groupBy,
 }: TriggersContentProps) {
   const t = await getTranslations("TriggersPage");
@@ -40,17 +37,10 @@ export default async function TriggersContent({
   const agentMap = new Map(agents.map((a) => [a.id, a.name]));
 
   // Enrich triggers with agent names
-  let enrichedTriggers = triggers.map((trigger) => ({
+  const enrichedTriggers = triggers.map((trigger) => ({
     ...trigger,
     agent_name: agentMap.get(trigger.agent_id) || "Unknown Agent",
   }));
-
-  // Filter by what starts the automation (All / Channels / Events / Schedules)
-  if (typeFilter !== "all") {
-    enrichedTriggers = enrichedTriggers.filter(
-      (trigger) => getTriggerLane(trigger) === typeFilter
-    );
-  }
 
   // Filter triggers based on search query
   const filteredTriggers = searchQuery.trim()
@@ -58,7 +48,9 @@ export default async function TriggersContent({
         (trigger) =>
           trigger.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (trigger.agent_name &&
-            trigger.agent_name.toLowerCase().includes(searchQuery.toLowerCase()))
+            trigger.agent_name
+              .toLowerCase()
+              .includes(searchQuery.toLowerCase()))
       )
     : enrichedTriggers;
 

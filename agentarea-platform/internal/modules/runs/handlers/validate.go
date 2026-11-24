@@ -17,6 +17,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx/wirejson"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/money"
+	runsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/domain"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/service"
 )
@@ -251,11 +252,11 @@ func streamQuery(q url.Values, in *input, errs *[]httpx.FieldError) url.Values {
 func inboxQuery(q url.Values, in *input, errs *[]httpx.FieldError) url.Values {
 	out := url.Values{}
 	if v, ok := last(q, "status"); ok {
-		if oneOf(v, service.InboxStatuses()) {
+		if oneOf(v, runsapi.InboxStatuses()) {
 			in.status = &v
 			out.Set("status", v)
 		} else {
-			*errs = append(*errs, httpx.LiteralError(service.InboxStatuses(), "query", "status"))
+			*errs = append(*errs, httpx.LiteralError(runsapi.InboxStatuses(), "query", "status"))
 		}
 	}
 	if v, ok := last(q, "agent_id"); ok {

@@ -38,6 +38,11 @@ type SkillNotFromCatalogError struct{ Msg string }
 
 func (e *SkillNotFromCatalogError) Error() string { return e.Msg }
 
+// updateWaits is whether an install's item has moved past the version it runs.
+func updateWaits(v catalogapi.ItemVersions) bool {
+	return v.Current != nil && *v.Current != "" && !samePtr(v.Current, v.Installed)
+}
+
 func samePtr(a, b *string) bool {
 	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
 }
@@ -146,8 +151,7 @@ func (x CatalogSkills) UpdateAll(ctx context.Context, c authn.Caller) ([]SkillUp
 	}
 	results := []SkillUpdateResult{}
 	for _, sk := range installed {
-		v := versions[*sk.RegistryItemID]
-		if v.Current == nil || *v.Current == "" || samePtr(v.Current, v.Installed) {
+		if !updateWaits(versions[*sk.RegistryItemID]) {
 			continue
 		}
 		if domain.SkillIsCustomized(sk) {

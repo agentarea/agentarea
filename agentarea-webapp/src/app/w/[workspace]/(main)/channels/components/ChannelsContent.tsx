@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
+import ChannelsScene from "@/components/illustrations/ChannelsScene";
 import { listAgents, listStreams, listStreamSourceTypes } from "@/lib/api";
 import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
 import { getTriggerLane } from "../../triggers/components/triggerDisplay";
@@ -62,8 +63,8 @@ export default async function ChannelsContent() {
     return (
       <EmptyState
         title={t("empty")}
+        visual={<ChannelsScene />}
         description={t("emptyDescription")}
-        iconsType="triggers"
         action={{ label: t("new"), href: "/channels/new" }}
       />
     );

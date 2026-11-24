@@ -57,6 +57,9 @@ type Installs interface {
 	// SkillProvenance is provenance_for: the source of each item id that still has an
 	// item, a retired registry's included.
 	SkillProvenance(ctx context.Context, ws scope.Workspace, itemIDs []string) (map[string]ItemSource, error)
+	// BundleOwned is, of ids, the entities of kind a bundle install created and
+	// still manages, by id, with that bundle's name. An entity it only linked is not its.
+	BundleOwned(ctx context.Context, ws scope.Workspace, kind string, ids []string) (map[string]string, error)
 	// Folder is download_folder: folder of repo at ref (the default branch
 	// when nil), which must be tree treeSHA when set. Without a token it reads
 	// the commit archive, with one the REST API and raw files as that token.

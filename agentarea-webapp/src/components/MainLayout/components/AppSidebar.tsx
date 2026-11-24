@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useTranslations } from "next-intl";
 import { SquarePen } from "lucide-react";
-import { getPendingApprovalCountAction } from "@/components/Approvals/actions";
+import { getInboxCountAction } from "@/components/Approvals/actions";
 import { Kbd } from "@/components/ui/kbd";
 import {
   SidebarGroup,
@@ -48,24 +48,24 @@ export function AppSidebarContent({
   const t = useTranslations("Sidebar");
   const pathname = useWorkspacePathname();
   const newTaskActive = pathname === "/workplace";
-  const [pendingApprovals, setPendingApprovals] = React.useState(0);
+  const [inboxCount, setInboxCount] = React.useState(0);
 
   // Re-read on every navigation (deciding in the inbox or on a task page
   // changes it) and periodically, so new escalations surface while idle.
   React.useEffect(() => {
     let cancelled = false;
     const load = () =>
-      getPendingApprovalCountAction()
+      getInboxCountAction()
         .then((result) => {
           if (cancelled) return;
           if (result.error) {
-            console.error("Failed to count pending approvals", result.error);
+            console.error("Failed to count inbox items", result.error);
             return;
           }
-          setPendingApprovals(result.data ?? 0);
+          setInboxCount(result.data ?? 0);
         })
         .catch((error: unknown) => {
-          console.error("Failed to count pending approvals", error);
+          console.error("Failed to count inbox items", error);
         });
     void load();
     const interval = window.setInterval(load, 30_000);
@@ -118,7 +118,7 @@ export function AppSidebarContent({
       <SidebarNavScroll>
         <NavMain
           sections={data.navSections}
-          counts={{ "/inbox": pendingApprovals }}
+          counts={{ "/inbox": inboxCount }}
         />
       </SidebarNavScroll>
       <SidebarGroup className="gap-0 py-1 before:mx-2 before:mb-1 before:block before:border-t before:border-sidebar-border">
