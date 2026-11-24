@@ -42,6 +42,8 @@ export interface CompletedRun {
   terminalType: string;
   terminalMessage: string | null;
   terminalAnswer: string | null;
+  /** The terminal event's timestamp as the event carried it; null without one. */
+  endedAt: string | null;
 }
 
 export type TaskStatus =
@@ -292,6 +294,7 @@ export function applyEvent(state: EventState, event: EventInput): EventState {
           : typeof event.data.result === "string"
             ? event.data.result
             : null,
+      endedAt: asStr(event.data.timestamp ?? event.data.original_timestamp),
     };
     const lastRun = state.completedRuns[state.completedRuns.length - 1];
     // A failure reported after the run already closed, with nothing run in
@@ -320,6 +323,7 @@ export function applyEvent(state: EventState, event: EventInput): EventState {
               ...lastRun,
               terminalType: canonical,
               terminalMessage: completedRun.terminalMessage,
+              endedAt: completedRun.endedAt ?? lastRun.endedAt,
             },
           ]
         : hasNewParts ||

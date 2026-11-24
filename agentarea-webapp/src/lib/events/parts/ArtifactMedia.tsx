@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { FileChip, getFileMeta } from "@/components/Chat/utils/fileIcon";
 import { sniffMedia, type MediaKind } from "@/components/files/content-sniff";
 import { MediaPreview } from "@/components/files/file-viewer";
@@ -17,12 +17,18 @@ export function ArtifactMedia({
   href,
   mimeType,
   className,
+  inline = false,
+  caption,
 }: {
   path?: string;
   name?: string;
   href?: string;
   mimeType?: string | null;
   className?: string;
+  /** Inside a paragraph: drawn with spans, and the chip alone has no wrapper. */
+  inline?: boolean;
+  /** Shown under the media in place of the file's own chip. */
+  caption?: ReactNode;
 }) {
   const taskFileUrl = useTaskFileUrl();
   const label = name ?? path ?? "";
@@ -60,7 +66,7 @@ export function ArtifactMedia({
     return () => controller.abort();
   }, [url, mimeType, mayBeMedia, previewable]);
 
-  const chip = (
+  const chip = caption ?? (
     <FileChip
       name={label}
       iconName={path ?? label}
@@ -71,13 +77,25 @@ export function ArtifactMedia({
   );
 
   if (!url || (kind !== "image" && kind !== "video")) {
-    return <div className={cn("min-w-0", className)}>{chip}</div>;
+    return inline ? (
+      chip
+    ) : (
+      <div className={cn("min-w-0", className)}>{chip}</div>
+    );
   }
 
+  // A paragraph cannot hold a figure.
+  const Frame = inline ? "span" : "figure";
+  const Caption = inline ? "span" : "figcaption";
   return (
-    <figure className={cn("flex min-w-0 flex-col gap-1", className)}>
+    <Frame className={cn("flex min-w-0 flex-col gap-1", className)}>
       {kind === "image" ? (
-        <a href={url} target="_blank" rel="noopener noreferrer" className="w-fit">
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-fit"
+        >
           <MediaPreview
             kind="image"
             url={url}
@@ -93,7 +111,7 @@ export function ArtifactMedia({
           className="max-h-72 max-w-full rounded-md border bg-black"
         />
       )}
-      <figcaption className="text-[11px]">{chip}</figcaption>
-    </figure>
+      <Caption className={inline ? undefined : "text-[11px]"}>{chip}</Caption>
+    </Frame>
   );
 }

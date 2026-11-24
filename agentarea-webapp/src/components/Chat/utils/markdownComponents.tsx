@@ -1,9 +1,17 @@
 import React from "react";
 import type { Components, ExtraProps } from "streamdown";
+import { ArtifactMedia } from "@/lib/events/parts/ArtifactMedia";
 import {
   useTaskFileLink,
   useTaskFileOpen,
+  useTaskPublishedFileUrl,
 } from "@/lib/events/parts/TaskFileUrl";
+import {
+  isPreviewableImage,
+  isTaskRelative,
+  TASK_FILE_PATH,
+  taskFilePath,
+} from "../turnFiles";
 import { fileBasename, FileChip, isFileLike } from "./fileIcon";
 import { SiteLink } from "./SiteLink";
 
@@ -33,33 +41,6 @@ export function preprocessFileLinks(md: string): string {
     }
     return full;
   });
-}
-
-/** A link to a file in the task's own folder: no scheme, not rooted, not an anchor. */
-function isTaskRelative(href: string): boolean {
-  return href !== "" && !/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(href);
-}
-
-const TASK_FILE_PATH = "/__task-file/";
-
-/** The task-folder path a marked link points at, or null for any other link. */
-function taskFilePath(href: string): string | null {
-  try {
-    const { pathname } = new URL(href, "http://task.invalid");
-    return pathname.startsWith(TASK_FILE_PATH)
-      ? decodePath(pathname.slice(TASK_FILE_PATH.length))
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function decodePath(href: string): string {
-  try {
-    return decodeURIComponent(href);
-  } catch {
-    return href;
-  }
 }
 
 /** Flatten a React children tree into its text content. */
@@ -117,6 +98,7 @@ export const fileAwareMarkdownComponents: Components = {
   }: React.ComponentProps<"a"> & ExtraProps) {
     const taskFileLink = useTaskFileLink();
     const openTaskFile = useTaskFileOpen();
+    const publishedFileUrl = useTaskPublishedFileUrl();
     const taskPath = typeof href === "string" ? taskFilePath(href) : null;
     // Inside a task a link to its folder opens the file in the task's Files
     // tab; real web URLs stay clickable; sandbox:/file: and other schemes would
@@ -132,7 +114,7 @@ export const fileAwareMarkdownComponents: Components = {
     if (isFileLike(text) || isFileLike(href) || taskPath !== null) {
       const iconName = isFileLike(text) ? text : (taskPath ?? href ?? "");
       const name = text || fileBasename(iconName);
-      return (
+      const chip = (
         <FileChip
           name={name}
           iconName={iconName}
@@ -145,6 +127,20 @@ export const fileAwareMarkdownComponents: Components = {
           }
         />
       );
+      // A picture of the task's shows above its link; the link stays as written.
+      if (taskPath !== null && isPreviewableImage(taskPath)) {
+        return (
+          <ArtifactMedia
+            inline
+            path={taskPath}
+            name={name}
+            href={publishedFileUrl?.(taskPath) ?? undefined}
+            caption={chip}
+            className="my-1"
+          />
+        );
+      }
+      return chip;
     }
 
     if (!reachableHref) {
