@@ -29,7 +29,9 @@ func TestTheTaskLockLastsAsLongAsItsSend(t *testing.T) {
 	if mr.Exists(telegramLockPrefix + "t1") {
 		t.Fatal("a released lock is still held")
 	}
-	mr.Set(telegramLockPrefix+"t2", "someone-else")
+	if err := mr.Set(telegramLockPrefix+"t2", "someone-else"); err != nil {
+		t.Fatal(err)
+	}
 	busy, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	if _, err := (TelegramLive{Redis: rdb, LockTTL: 90 * time.Millisecond}).lock(busy, "t2"); err == nil {
