@@ -1471,9 +1471,9 @@ export type BundleAgent = {
     /**
      * Toolsets
      *
-     * Built-in toolsets to attach, e.g. ["agentarea/shell", "agentarea/files"].
+     * Built-in toolsets to attach: a name, e.g. "agentarea/files", or a BundleToolset with the toolset's settings.
      */
-    toolsets?: Array<string>;
+    toolsets?: Array<string | BundleToolset>;
 };
 
 /**
@@ -2221,6 +2221,30 @@ export type BundleTask = {
      * The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
      */
     renamed_from?: string | null;
+};
+
+/**
+ * BundleToolset
+ *
+ * A built-in toolset with its settings. agentarea/media needs image_model or video_model.
+ */
+export type BundleToolset = {
+    /**
+     * Image Model
+     *
+     * The image model instance the toolset generates with: its id, its name, or its model's name, as the agent's model; a literal or ${setup.x}.
+     */
+    image_model?: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Video Model
+     *
+     * The video model instance the toolset generates with, named as image_model.
+     */
+    video_model?: string | null;
 };
 
 /**

@@ -11,6 +11,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx/wirejson"
 	catalogapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/catalog/api"
 	identityapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/identity/api"
+	modelsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/api"
 )
 
 const (
@@ -396,7 +397,7 @@ type bundleExistence interface {
 // deployChecks are the questions only the workspace answers, asked of every write.
 type deployChecks interface {
 	catalogMCP(ctx context.Context, catalogID string) (*catalogMCP, error)
-	agentProblem(ctx context.Context, a BundleAgent, modelID string, clientID *string) (string, error)
+	agentProblem(ctx context.Context, a BundleAgent, modelID string, toolsets []catalogapi.BundleTool, clientID *string) (string, error)
 	automationProblem(ctx context.Context, b *Bundle, a BundleAutomation) (string, error)
 	mayEdit(ctx context.Context, kind EntityKind, id string) (bool, error)
 	// secretsDiffer reports a supplied secret the MCP instance does not store already.
@@ -406,8 +407,9 @@ type deployChecks interface {
 	secretProblem(ctx context.Context, name string) (string, error)
 	// existing is the one connection of kind the workspace has under name; problem when it has none or several.
 	existing(ctx context.Context, kind EntityKind, name string) (id, problem string, err error)
-	// modelID is the model instance ref names: its id, or the name of one; problem when it names none or several.
-	modelID(ctx context.Context, ref string) (id, problem string, err error)
+	// modelID is the model instance of kind ref names: its id, or the name of
+	// one; problem, about setting, when it names none or several.
+	modelID(ctx context.Context, setting, kind, ref string) (id, problem string, err error)
 	billingCurrency() string
 	streamProblem(ctx context.Context, spec catalogapi.BundleStreamSpec) (string, error)
 	openAPIProblem(ctx context.Context, spec catalogapi.BundleOpenAPISpec) (string, error)
@@ -942,7 +944,19 @@ func (a *bundleAnalyzer) checkWrites(ctx context.Context, b *Bundle, issues *[]P
 			clientText = *client
 		}
 		unresolved := false
-		for _, s := range []struct{ setting, value string }{{"model", modelID}, {"client", clientText}} {
+		settings := []struct{ setting, value string }{{"model", modelID}, {"client", clientText}}
+		for _, ts := range ag.Toolsets {
+			for _, m := range []struct {
+				setting string
+				ref     *string
+			}{{"image_model", ts.ImageModel}, {"video_model", ts.VideoModel}} {
+				if m.ref != nil {
+					settings = append(settings, struct{ setting, value string }{
+						fmt.Sprintf("toolset '%s' %s", ts.Name, m.setting), resolvePlaceholders(*m.ref, a.values)})
+				}
+			}
+		}
+		for _, s := range settings {
 			var optional []string
 			for _, key := range setupRefsOf(s.value) {
 				if f, ok := b.SetupField(key); ok && !f.Required {
@@ -958,7 +972,7 @@ func (a *bundleAnalyzer) checkWrites(ctx context.Context, b *Bundle, issues *[]P
 		if modelID == "" || unresolved {
 			continue
 		}
-		resolved, problem, err := a.checks.modelID(ctx, modelID)
+		resolved, problem, err := a.checks.modelID(ctx, "model", modelsapi.KindChat, modelID)
 		if err != nil {
 			return err
 		}
@@ -966,7 +980,15 @@ func (a *bundleAnalyzer) checkWrites(ctx context.Context, b *Bundle, issues *[]P
 			*issues = append(*issues, blockIssue(ag.Key, fmt.Sprintf("agent '%s': %s", ag.Key, problem)))
 			continue
 		}
-		problem, err = a.checks.agentProblem(ctx, ag, resolved, client)
+		toolsets, problem, err := codeTools(ctx, a.checks, ag, a.values)
+		if err != nil {
+			return err
+		}
+		if problem != "" {
+			*issues = append(*issues, blockIssue(ag.Key, fmt.Sprintf("agent '%s': %s", ag.Key, problem)))
+			continue
+		}
+		problem, err = a.checks.agentProblem(ctx, ag, resolved, toolsets, client)
 		if err != nil {
 			return err
 		}
@@ -1336,6 +1358,34 @@ func agentDeps(ag BundleAgent) []entityRef {
 	return deps
 }
 
+// codeTools are the agent's code toolsets with the model instances their
+// settings name, setup placeholders resolved; problem when one names none or several.
+func codeTools(ctx context.Context, checks deployChecks, ag BundleAgent, values wirejson.Object) ([]catalogapi.BundleTool, string, error) {
+	out := make([]catalogapi.BundleTool, 0, len(ag.Toolsets))
+	for _, ts := range ag.Toolsets {
+		t := catalogapi.BundleTool{Type: "code", Name: ts.Name}
+		for _, m := range []struct {
+			setting, kind string
+			ref           *string
+			dst           **string
+		}{{"image_model", modelsapi.KindImage, ts.ImageModel, &t.ImageModelID}, {"video_model", modelsapi.KindVideo, ts.VideoModel, &t.VideoModelID}} {
+			if m.ref == nil {
+				continue
+			}
+			id, problem, err := checks.modelID(ctx, m.setting, m.kind, resolvePlaceholders(*m.ref, values))
+			if err != nil {
+				return nil, "", err
+			}
+			if problem != "" {
+				return nil, fmt.Sprintf("toolset '%s': %s", ts.Name, problem), nil
+			}
+			*m.dst = &id
+		}
+		out = append(out, t)
+	}
+	return out, "", nil
+}
+
 func (a *bundleAnalyzer) populateAgentEntities(ctx context.Context, b *Bundle, entities *[]PreviewEntity) error {
 	order, _ := agentOrder(b.Agents)
 	for _, ag := range order {
@@ -1669,7 +1719,7 @@ func (a *bundleAnalyzer) modelMoved(ctx context.Context, ag BundleAgent) (Entity
 	if name == "" || a.checks == nil || owned == nil || owned.ModelID == nil {
 		return StatusUnchanged, nil, nil
 	}
-	id, problem, err := a.checks.modelID(ctx, name)
+	id, problem, err := a.checks.modelID(ctx, "model", modelsapi.KindChat, name)
 	if err != nil {
 		return "", nil, err
 	}

@@ -488,6 +488,7 @@ export type {
   BundleStreamProcessor,
   BundleStreamSource,
   BundleTask,
+  BundleToolset,
   BundleTriggerOn,
   CancelAgentTaskV1AgentsAgentIdTasksTaskIdDeleteData,
   CancelAgentTaskV1AgentsAgentIdTasksTaskIdDeleteError,

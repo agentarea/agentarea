@@ -158,7 +158,7 @@ type workspace struct {
 	b        *Bundles
 	c        authn.Caller
 	catalogs map[string]*catalogMCP
-	models   []modelsapi.InstanceName
+	models   map[string][]modelsapi.InstanceName
 	people   []identityapi.Member
 }
 
@@ -316,8 +316,9 @@ func int32Of(v *int64) *int32 {
 	return &n
 }
 
-func (w *workspace) agentProblem(ctx context.Context, a BundleAgent, modelID string, clientID *string) (string, error) {
-	problem, err := w.b.d.Agents.AgentProblem(ctx, w.c, catalogapi.BundleAgentConfig{ModelID: modelID, Toolsets: a.Toolsets,
+func (w *workspace) agentProblem(ctx context.Context, a BundleAgent, modelID string, toolsets []catalogapi.BundleTool,
+	clientID *string) (string, error) {
+	problem, err := w.b.d.Agents.AgentProblem(ctx, w.c, catalogapi.BundleAgentConfig{ModelID: modelID, Toolsets: toolsets,
 		ClientID: clientID, ReasoningEffort: a.ReasoningEffort, ReasoningMaxTokens: int32Of(a.ReasoningMaxTokens)})
 	if err != nil || problem != "" || a.ReasoningEffort == nil || *a.ReasoningEffort == "" || modelID == "" {
 		return problem, err
@@ -365,21 +366,27 @@ func (w *workspace) billingCurrency() string { return w.b.d.ModelNames.BillingCu
 
 const maxModelCandidates = 10
 
-// modelID is ref when it is an id, else the one active chat instance named
-// ref: by its own name first, then by its model's name.
-func (w *workspace) modelID(ctx context.Context, ref string) (string, string, error) {
+// modelID is ref when it is an id, else the one active instance of kind
+// named ref: by its own name first, then by its model's name. setting is
+// the field that names it.
+func (w *workspace) modelID(ctx context.Context, setting, kind, ref string) (string, string, error) {
 	if u, err := uuid.Parse(ref); err == nil {
 		return u.String(), "", nil
 	}
 	if w.models == nil {
-		found, err := w.b.d.ModelNames.ChatInstances(ctx, w.c.Workspace)
+		w.models = map[string][]modelsapi.InstanceName{}
+	}
+	all, ok := w.models[kind]
+	if !ok {
+		found, err := w.b.d.ModelNames.InstancesOfKind(ctx, w.c.Workspace, kind)
 		if err != nil {
 			return "", "", err
 		}
-		w.models = found
+		all = found
+		w.models[kind] = all
 	}
 	var byName, byModel []modelsapi.InstanceName
-	for _, m := range w.models {
+	for _, m := range all {
 		if m.Name == ref {
 			byName = append(byName, m)
 		} else if m.ModelName == ref {
@@ -409,13 +416,14 @@ func (w *workspace) modelID(ctx context.Context, ref string) (string, string, er
 	case 1:
 		return matches[0].ID, "", nil
 	case 0:
-		if len(w.models) == 0 {
-			return "", fmt.Sprintf("model '%s' names no model instance: this workspace has no active chat model instance", ref), nil
+		if len(all) == 0 {
+			return "", fmt.Sprintf("%s '%s' names no model instance: this workspace has no active %s model instance", setting, ref, kind), nil
 		}
-		return "", fmt.Sprintf("model '%s' names no active chat model instance in this workspace; the workspace has %s", ref, describe(w.models, false)), nil
+		return "", fmt.Sprintf("%s '%s' names no active %s model instance in this workspace; the workspace has %s", setting, ref, kind,
+			describe(all, false)), nil
 	}
-	return "", fmt.Sprintf("model '%s' names %d model instances here: %s; give the instance's id or a name only one of them has",
-		ref, len(matches), describe(matches, true)), nil
+	return "", fmt.Sprintf("%s '%s' names %d model instances here: %s; give the instance's id or a name only one of them has",
+		setting, ref, len(matches), describe(matches, true)), nil
 }
 
 func containsString(l []string, s string) bool {

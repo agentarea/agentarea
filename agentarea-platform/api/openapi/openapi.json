@@ -2730,9 +2730,16 @@
             "type": "array"
           },
           "toolsets": {
-            "description": "Built-in toolsets to attach, e.g. [\"agentarea/shell\", \"agentarea/files\"].",
+            "description": "Built-in toolsets to attach: a name, e.g. \"agentarea/files\", or a BundleToolset with the toolset's settings.",
             "items": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/components/schemas/BundleToolset"
+                }
+              ]
             },
             "title": "Toolsets",
             "type": "array"
@@ -3862,6 +3869,46 @@
           "prompt"
         ],
         "title": "BundleTask",
+        "type": "object"
+      },
+      "BundleToolset": {
+        "additionalProperties": false,
+        "description": "A built-in toolset with its settings. agentarea/media needs image_model or video_model.",
+        "properties": {
+          "image_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The image model instance the toolset generates with: its id, its name, or its model's name, as the agent's model; a literal or ${setup.x}.",
+            "title": "Image Model"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "video_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The video model instance the toolset generates with, named as image_model.",
+            "title": "Video Model"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "BundleToolset",
         "type": "object"
       },
       "BundleTriggerOn": {

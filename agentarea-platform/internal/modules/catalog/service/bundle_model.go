@@ -126,11 +126,19 @@ type BundleSkill struct {
 	RenamedFrom           *string
 }
 
+// BundleToolset is a code toolset of an agent and the image and video models
+// it generates with, each named as an agent's model is.
+type BundleToolset struct {
+	Name                   string
+	ImageModel, VideoModel *string
+}
+
 // BundleAgent is an agent the bundle creates.
 type BundleAgent struct {
 	Key, Name, Description, Instruction string
 	Model                               *string
-	MCPs, Skills, Toolsets              []string
+	MCPs, Skills                        []string
+	Toolsets                            []BundleToolset
 	// Delegates are the keys of the bundle's agents this one may hand work to.
 	Delegates []string
 	// OpenAPI are the keys of the bundle's OpenAPI connections the agent calls.
@@ -807,7 +815,7 @@ func bundleAgentFrom(c *checker, v any, loc []any) (BundleAgent, bool) {
 	f := fields{o, loc}
 	before := c.count()
 	out := BundleAgent{Key: c.entityKey(f, "agent"), Name: c.requiredStr(f, "name", 1, BundleMaxNameLength),
-		MCPs: []string{}, Skills: []string{}, Toolsets: []string{}, Delegates: []string{}, OpenAPI: []string{}}
+		MCPs: []string{}, Skills: []string{}, Toolsets: []BundleToolset{}, Delegates: []string{}, OpenAPI: []string{}}
 	if out.Key == "workspace" {
 		c.valueError("agent key 'workspace' is reserved: a policy subject 'workspace' would mean the whole workspace; name the agent something else",
 			f.at("key"))
@@ -824,13 +832,14 @@ func bundleAgentFrom(c *checker, v any, loc []any) (BundleAgent, bool) {
 	for _, l := range []struct {
 		key string
 		dst *[]string
-	}{{"mcps", &out.MCPs}, {"skills", &out.Skills}, {"toolsets", &out.Toolsets}, {"delegates", &out.Delegates}, {"openapi", &out.OpenAPI}} {
+	}{{"mcps", &out.MCPs}, {"skills", &out.Skills}, {"delegates", &out.Delegates}, {"openapi", &out.OpenAPI}} {
 		if v, ok := f.get(l.key); ok {
 			if got, ok := c.strList(v, f.at(l.key)); ok {
 				*l.dst = got
 			}
 		}
 	}
+	out.Toolsets = listOf(c, f, "toolsets", bundleToolsetFrom)
 	if v, ok := f.get("reasoning_effort"); ok {
 		out.ReasoningEffort = c.reasoningEffort(v, f.at("reasoning_effort"))
 	}
@@ -860,6 +869,33 @@ func bundleAgentFrom(c *checker, v any, loc []any) (BundleAgent, bool) {
 		return out, false
 	}
 	return out, true
+}
+
+// bundleToolsetFrom is a toolset's name, or a mapping of its name and settings.
+func bundleToolsetFrom(c *checker, v any, loc []any) (BundleToolset, bool) {
+	if s, ok := v.(string); ok {
+		return BundleToolset{Name: s}, true
+	}
+	o, ok := v.(wirejson.Object)
+	if !ok {
+		c.valueError("a toolset is its name, or a mapping of name, image_model and video_model", loc)
+		return BundleToolset{}, false
+	}
+	f := fields{o, loc}
+	before := c.count()
+	out := BundleToolset{Name: c.requiredStr(f, "name", 1, 0)}
+	for _, s := range []struct {
+		key string
+		dst **string
+	}{{"image_model", &out.ImageModel}, {"video_model", &out.VideoModel}} {
+		if v, ok := f.get(s.key); ok {
+			if got, ok := c.optStr(v, 0, f.at(s.key)); ok && got != nil && *got != "" {
+				*s.dst = got
+			}
+		}
+	}
+	c.extra(o, []string{"name", "image_model", "video_model"}, loc)
+	return out, c.count() == before
 }
 
 func bundleAutomationFrom(c *checker, v any, loc []any) (BundleAutomation, bool) {
@@ -1392,7 +1428,7 @@ func (a BundleAgent) dump() wirejson.Object {
 	}
 	out := wirejson.Object{{Key: "key", Value: a.Key}, {Key: "name", Value: a.Name}, {Key: "description", Value: a.Description},
 		{Key: "instruction", Value: a.Instruction}, {Key: "model", Value: optStrValue(a.Model)}, {Key: "mcps", Value: strList(a.MCPs)},
-		{Key: "skills", Value: strList(a.Skills)}, {Key: "toolsets", Value: strList(a.Toolsets)},
+		{Key: "skills", Value: strList(a.Skills)}, {Key: "toolsets", Value: toolsetList(a.Toolsets)},
 		{Key: "reasoning_effort", Value: optStrValue(a.ReasoningEffort)}, {Key: "reasoning_max_tokens", Value: tokens},
 		{Key: "client", Value: optStrValue(a.Client)}}
 	if len(a.Delegates) > 0 {
@@ -1402,6 +1438,27 @@ func (a BundleAgent) dump() wirejson.Object {
 		out = append(out, wirejson.Member{Key: "openapi", Value: strList(a.OpenAPI)})
 	}
 	return withRenamedFrom(out, a.RenamedFrom)
+}
+
+// toolsetList dumps a toolset without settings as its name, so the
+// fingerprint of an agent that sets none stays what it was.
+func toolsetList(l []BundleToolset) []any {
+	out := make([]any, len(l))
+	for i, t := range l {
+		if t.ImageModel == nil && t.VideoModel == nil {
+			out[i] = t.Name
+			continue
+		}
+		o := wirejson.Object{{Key: "name", Value: t.Name}}
+		if t.ImageModel != nil {
+			o = append(o, wirejson.Member{Key: "image_model", Value: *t.ImageModel})
+		}
+		if t.VideoModel != nil {
+			o = append(o, wirejson.Member{Key: "video_model", Value: *t.VideoModel})
+		}
+		out[i] = o
+	}
+	return out
 }
 
 func (a BundleAutomation) dump() wirejson.Object {

@@ -891,8 +891,16 @@ type BundleAgent struct {
 	// Skills BundleSkill keys to attach.
 	Skills *[]string `json:"skills,omitempty"`
 
-	// Toolsets Built-in toolsets to attach, e.g. ["agentarea/shell", "agentarea/files"].
-	Toolsets *[]string `json:"toolsets,omitempty"`
+	// Toolsets Built-in toolsets to attach: a name, e.g. "agentarea/files", or a BundleToolset with the toolset's settings.
+	Toolsets *[]BundleAgent_Toolsets_Item `json:"toolsets,omitempty"`
+}
+
+// BundleAgentToolsets0 defines model for BundleAgent.Toolsets.0.
+type BundleAgentToolsets0 = string
+
+// BundleAgent_Toolsets_Item defines model for BundleAgent.toolsets.Item.
+type BundleAgent_Toolsets_Item struct {
+	union json.RawMessage
 }
 
 // BundleAutomation A run of one of the package's agents: on a cron schedule, or on the events of a stream (`on`). Exactly one of `cron` and `on`, and either `task` or `agent` with `prompt`.
@@ -1229,6 +1237,16 @@ type BundleTask struct {
 
 	// RenamedFrom The key an earlier install of this bundle knew the object by; the redeploy updates that object in place under the new key.
 	RenamedFrom *string `json:"renamed_from"`
+}
+
+// BundleToolset A built-in toolset with its settings. agentarea/media needs image_model or video_model.
+type BundleToolset struct {
+	// ImageModel The image model instance the toolset generates with: its id, its name, or its model's name, as the agent's model; a literal or ${setup.x}.
+	ImageModel *string `json:"image_model"`
+	Name       string  `json:"name"`
+
+	// VideoModel The video model instance the toolset generates with, named as image_model.
+	VideoModel *string `json:"video_model"`
 }
 
 // BundleTriggerOn The stream an automation runs on and the events it takes.
@@ -2164,6 +2182,68 @@ type CreateWorkspaceRegistryV1WorkspaceRegistriesPostJSONRequestBody = Workspace
 
 // UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchJSONRequestBody defines body for UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatch for application/json ContentType.
 type UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchJSONRequestBody = WorkspaceRegistryUpdate
+
+// AsBundleAgentToolsets0 returns the union data inside the BundleAgent_Toolsets_Item as a BundleAgentToolsets0
+func (t BundleAgent_Toolsets_Item) AsBundleAgentToolsets0() (BundleAgentToolsets0, error) {
+	var body BundleAgentToolsets0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromBundleAgentToolsets0 overwrites any union data inside the BundleAgent_Toolsets_Item as the provided BundleAgentToolsets0
+func (t *BundleAgent_Toolsets_Item) FromBundleAgentToolsets0(v BundleAgentToolsets0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeBundleAgentToolsets0 performs a merge with any union data inside the BundleAgent_Toolsets_Item, using the provided BundleAgentToolsets0
+func (t *BundleAgent_Toolsets_Item) MergeBundleAgentToolsets0(v BundleAgentToolsets0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsBundleToolset returns the union data inside the BundleAgent_Toolsets_Item as a BundleToolset
+func (t BundleAgent_Toolsets_Item) AsBundleToolset() (BundleToolset, error) {
+	var body BundleToolset
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromBundleToolset overwrites any union data inside the BundleAgent_Toolsets_Item as the provided BundleToolset
+func (t *BundleAgent_Toolsets_Item) FromBundleToolset(v BundleToolset) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeBundleToolset performs a merge with any union data inside the BundleAgent_Toolsets_Item, using the provided BundleToolset
+func (t *BundleAgent_Toolsets_Item) MergeBundleToolset(v BundleToolset) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t BundleAgent_Toolsets_Item) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *BundleAgent_Toolsets_Item) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // AsBundlePolicyInputSubject0 returns the union data inside the BundlePolicyInput_Subject as a BundlePolicyInputSubject0
 func (t BundlePolicyInput_Subject) AsBundlePolicyInputSubject0() (BundlePolicyInputSubject0, error) {

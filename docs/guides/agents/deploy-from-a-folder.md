@@ -9,7 +9,7 @@ related:
   - /guides/agents/attach-skills
   - /guides/triggers/schedule-an-agent
   - /guides/governance/set-a-budget
-last_updated: 2026-11-22
+last_updated: 2026-11-26
 ---
 
 A bundle folder is a directory with `agentarea.yaml` at its root. That file
@@ -127,7 +127,7 @@ change the object; changing its `name` does — see
     | `model` | A model instance id, an instance name, or a model name that exactly one active chat instance of the workspace has. A literal or `${setup.<key>}` |
     | `reasoning_effort` or `reasoning_max_tokens` | A reasoning level the model lists, or a token budget. Not both |
     | `client` | The id of a Codex or Claude Code client whose runner runs the agent's tasks |
-    | `toolsets` | Built-in toolsets, such as `agentarea/shell` |
+    | `toolsets` | Built-in toolsets, such as `agentarea/shell`. An entry is a name, or a mapping of `name` and the toolset's settings |
     | `skills`, `mcp` | Keys of skills and MCP servers of this bundle the agent uses |
     | `openapi` | Keys of OpenAPI connections of this bundle the agent calls |
     | `delegates` | Keys of agents of this bundle this agent may hand work to |
@@ -140,6 +140,21 @@ change the object; changing its `name` does — see
     so every grant of access is a line in that agent's file. A delegate that
     is not an agent of the bundle, or agents that delegate in a cycle, fail
     the plan.
+
+    `agentarea/media` generates with an image or a video model, so it takes
+    `image_model`, `video_model` or both, each named as `model` is, among the
+    workspace's active image or video instances:
+
+    ```yaml
+    toolsets:
+      - agentarea/files
+      - name: agentarea/media
+        image_model: ${setup.image_model}
+        video_model: veo-3
+    ```
+
+    On a redeploy the agent's toolset takes the models the file names, and a
+    change of either one is an update in the plan.
 
     A model name that matches no instance, or several, blocks the plan and
     lists the candidates. `<cur>` in a limit is the deployment's billing
