@@ -33,7 +33,11 @@ func TestIdentityClaimsFollowTheGrantedScopes(t *testing.T) {
 	}
 	unverified := map[string]any{"traits": ann["traits"], "verifiable_addresses": []any{map[string]any{"value": "ann@example.com", "via": "email", "verified": false}}}
 	bare := map[string]any{"traits": map[string]any{"email": "b@example.com", "name": map[string]any{"first": " ", "last": ""}}}
-	svc := newOAuthFixture(t, nil, Config{KratosAdminURL: kratosWith(t, map[string]any{"ann": ann, "unverified": unverified, "bare": bare})}).svc
+	flat := map[string]any{"traits": map[string]any{"email": "f@example.com", "name": " Flat Name "}}
+	odd := map[string]any{"traits": map[string]any{"email": "o@example.com", "name": 42}}
+	svc := newOAuthFixture(t, nil, Config{KratosAdminURL: kratosWith(t, map[string]any{
+		"ann": ann, "unverified": unverified, "bare": bare, "flat": flat, "odd": odd,
+	})}).svc
 	cases := []struct {
 		user   string
 		scopes []string
@@ -47,6 +51,8 @@ func TestIdentityClaimsFollowTheGrantedScopes(t *testing.T) {
 		{"ann", []string{"openid", "offline_access"}, map[string]any{}},
 		{"unverified", []string{"email"}, map[string]any{"email": "Ann@Example.com", "email_verified": false}},
 		{"bare", []string{"email", "profile"}, map[string]any{"email": "b@example.com", "email_verified": false}},
+		{"flat", []string{"profile"}, map[string]any{"name": "Flat Name"}},
+		{"odd", []string{"email", "profile"}, map[string]any{"email": "o@example.com", "email_verified": false}},
 	}
 	for _, c := range cases {
 		got, err := svc.identityClaims(context.Background(), c.user, c.scopes)
