@@ -43,8 +43,25 @@ func bundleTool(t catalogapi.BundleTool) domain.Tool {
 		out.Settings = &domain.Settings{AgentID: t.AgentID}
 	case t.ConnectionID != nil:
 		out.Settings = &domain.Settings{OpenAPIConnectionID: t.ConnectionID}
+	case t.ImageModelID != nil || t.VideoModelID != nil:
+		out.Settings = &domain.Settings{ImageModelID: t.ImageModelID, VideoModelID: t.VideoModelID}
 	}
 	return out
+}
+
+// withFolderModels is a code tool with the image and video models the folder
+// sets on it; its other settings stay.
+func withFolderModels(t domain.Tool, d catalogapi.BundleTool) domain.Tool {
+	st := domain.Settings{}
+	if t.Settings != nil {
+		st = *t.Settings
+	}
+	st.ImageModelID, st.VideoModelID = d.ImageModelID, d.VideoModelID
+	t.Settings = nil
+	if st != (domain.Settings{}) {
+		t.Settings = &st
+	}
+	return t
 }
 
 func bundleTools(tools []catalogapi.BundleTool) []domain.Tool {
@@ -74,9 +91,9 @@ func (b BundleAgents) AgentProblem(ctx context.Context, c authn.Caller, cfg cata
 	}
 	known := s.d.CodeTools.Names()
 	var unknown []string
-	for _, n := range cfg.Toolsets {
-		if !slices.Contains(known, n) {
-			unknown = append(unknown, n)
+	for _, t := range cfg.Toolsets {
+		if !slices.Contains(known, t.Name) {
+			unknown = append(unknown, t.Name)
 		}
 	}
 	if len(unknown) > 0 {
@@ -92,8 +109,9 @@ func (b BundleAgents) AgentProblem(ctx context.Context, c authn.Caller, cfg cata
 		*client = u.String()
 	}
 	tools := make([]domain.Tool, len(cfg.Toolsets))
-	for i, n := range cfg.Toolsets {
-		tools[i] = domain.Tool{Type: domain.ToolCode, Name: n}
+	for i, t := range cfg.Toolsets {
+		t.Type = domain.ToolCode
+		tools[i] = bundleTool(t)
 	}
 	problem := func(err error) (string, error) {
 		var invalid *domain.InvalidError
@@ -133,11 +151,12 @@ func (b BundleAgents) CreateAgent(ctx context.Context, c authn.Caller, in catalo
 // managed ones replaced by what the folder declares, the ones added in the
 // workspace kept. A delegate is matched by the agent it reaches, then by name,
 // and keeps the settings set on it; only its name and agent id follow the folder.
+// A code toolset the folder declares takes the folder's image and video models.
 func bundleToolsAfter(current []domain.Tool, in catalogapi.BundleAgentUpdate) []domain.Tool {
 	type ref struct{ typ, name string }
 	managed, wanted := map[ref]bool{}, map[ref]bool{}
 	managedAgents := map[string]bool{}
-	byAgent, byName := map[string]catalogapi.BundleTool{}, map[string]catalogapi.BundleTool{}
+	byAgent, byName, byCode := map[string]catalogapi.BundleTool{}, map[string]catalogapi.BundleTool{}, map[string]catalogapi.BundleTool{}
 	for _, t := range append(append([]catalogapi.BundleTool{}, in.ManagedTools...), in.Tools...) {
 		managed[ref{t.Type, t.Name}] = true
 		if t.Type == domain.ToolAgent && t.AgentID != nil {
@@ -146,6 +165,9 @@ func bundleToolsAfter(current []domain.Tool, in catalogapi.BundleAgentUpdate) []
 	}
 	for _, t := range in.Tools {
 		wanted[ref{t.Type, t.Name}] = true
+		if t.Type == domain.ToolCode {
+			byCode[t.Name] = t
+		}
 		if t.Type == domain.ToolAgent {
 			byName[t.Name] = t
 			if t.AgentID != nil {
@@ -158,6 +180,9 @@ func bundleToolsAfter(current []domain.Tool, in catalogapi.BundleAgentUpdate) []
 	for _, t := range current {
 		r := ref{t.Type, t.Name}
 		if t.Type != domain.ToolAgent {
+			if d, ok := byCode[t.Name]; ok && t.Type == domain.ToolCode {
+				t = withFolderModels(t, d)
+			}
 			if wanted[r] || !managed[r] {
 				tools = append(tools, t)
 				present[r] = true

@@ -354,28 +354,6 @@ export const zBrokenTrigger = z.object({
 export const zBudgetPeriod = z.enum(["execution", "daily", "monthly"]);
 
 /**
- * BundleAgent
- *
- * An agent to create for the package.
- */
-export const zBundleAgent = z.object({
-  client: z.string().nullish(),
-  delegates: z.array(z.string()).optional(),
-  description: z.string().max(1000).optional().default(""),
-  instruction: z.string().max(20000).optional().default(""),
-  key: z.string().min(1),
-  mcps: z.array(z.string()).optional(),
-  model: z.string().nullish(),
-  name: z.string().min(1).max(255),
-  openapi: z.array(z.string()).optional(),
-  reasoning_effort: z.string().nullish(),
-  reasoning_max_tokens: z.int().nullish(),
-  renamed_from: z.string().nullish(),
-  skills: z.array(z.string()).optional(),
-  toolsets: z.array(z.string()).optional(),
-});
-
-/**
  * BundleChannel
  *
  * An inbound webhook trigger bound to one of the package's agents.
@@ -608,6 +586,39 @@ export const zBundleTask = z.object({
   parameters: z.record(z.string(), z.unknown()).optional(),
   prompt: z.string().min(1),
   renamed_from: z.string().nullish(),
+});
+
+/**
+ * BundleToolset
+ *
+ * A built-in toolset with its settings. agentarea/media needs image_model or video_model.
+ */
+export const zBundleToolset = z.object({
+  image_model: z.string().nullish(),
+  name: z.string().min(1),
+  video_model: z.string().nullish(),
+});
+
+/**
+ * BundleAgent
+ *
+ * An agent to create for the package.
+ */
+export const zBundleAgent = z.object({
+  client: z.string().nullish(),
+  delegates: z.array(z.string()).optional(),
+  description: z.string().max(1000).optional().default(""),
+  instruction: z.string().max(20000).optional().default(""),
+  key: z.string().min(1),
+  mcps: z.array(z.string()).optional(),
+  model: z.string().nullish(),
+  name: z.string().min(1).max(255),
+  openapi: z.array(z.string()).optional(),
+  reasoning_effort: z.string().nullish(),
+  reasoning_max_tokens: z.int().nullish(),
+  renamed_from: z.string().nullish(),
+  skills: z.array(z.string()).optional(),
+  toolsets: z.array(z.union([z.string(), zBundleToolset])).optional(),
 });
 
 /**

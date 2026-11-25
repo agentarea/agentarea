@@ -432,7 +432,7 @@ func LoadBundleFolder(files StrPairs) (Bundle, []PreviewIssue, error) {
 		skillKeyList[i] = s.Key
 	}
 	agentData := wirejson.Object{{Key: "key", Value: RootAgentKey}, {Key: "name", Value: af.name}, {Key: "description", Value: af.description},
-		{Key: "instruction", Value: instruction}, {Key: "model", Value: optStrValue(af.model)}, {Key: "toolsets", Value: strList(af.toolsets)},
+		{Key: "instruction", Value: instruction}, {Key: "model", Value: optStrValue(af.model)}, {Key: "toolsets", Value: af.toolsets},
 		{Key: "reasoning_effort", Value: af.reasoningEffort}, {Key: "reasoning_max_tokens", Value: af.reasoningMaxTokens},
 		{Key: "client", Value: optStrValue(af.client)}, {Key: "mcps", Value: mcpKeys}, {Key: "skills", Value: skillKeyList}}
 	var c checker
@@ -467,7 +467,7 @@ func LoadBundleFolder(files StrPairs) (Bundle, []PreviewIssue, error) {
 type agentFile struct {
 	name, description                   string
 	displayName, model, client          *string
-	toolsets                            []string
+	toolsets                            any
 	reasoningEffort, reasoningMaxTokens any
 	setup                               []SetupField
 }
@@ -479,7 +479,7 @@ func agentFileFrom(c *checker, v any, loc []any) (agentFile, bool) {
 	}
 	f := fields{o, loc}
 	before := c.count()
-	out := agentFile{name: c.requiredStr(f, "name", 1, 0), toolsets: []string{}}
+	out := agentFile{name: c.requiredStr(f, "name", 1, 0), toolsets: []any{}}
 	if v, ok := f.get("display_name"); ok {
 		out.displayName, _ = c.optStr(v, 0, f.at("display_name"))
 	}
@@ -490,9 +490,7 @@ func agentFileFrom(c *checker, v any, loc []any) (agentFile, bool) {
 		out.model, _ = c.optStr(v, 0, f.at("model"))
 	}
 	if v, ok := f.get("toolsets"); ok {
-		if l, ok := c.strList(v, f.at("toolsets")); ok {
-			out.toolsets = l
-		}
+		out.toolsets = v
 	}
 	out.reasoningEffort, _ = f.get("reasoning_effort")
 	out.reasoningMaxTokens, _ = f.get("reasoning_max_tokens")

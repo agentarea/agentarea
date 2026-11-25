@@ -10,8 +10,8 @@ import (
 
 var _ api.Directory = (*Service)(nil)
 
-// ChatInstances are the active chat instances the workspace sees (the newest 100, as list_model_instances).
-func (s *Service) ChatInstances(ctx context.Context, ws scope.Workspace) ([]api.InstanceName, error) {
+// InstancesOfKind are the active instances of kind the workspace sees (the newest 100, as list_model_instances).
+func (s *Service) InstancesOfKind(ctx context.Context, ws scope.Workspace, kind string) ([]api.InstanceName, error) {
 	sess, release, err := s.d.DB.Read(ctx, ws)
 	if err != nil {
 		return nil, err
@@ -28,7 +28,7 @@ func (s *Service) ChatInstances(ctx context.Context, ws scope.Workspace) ([]api.
 	}
 	out := []api.InstanceName{}
 	for _, v := range views {
-		if v.Model == nil || v.Model.Kind != api.KindChat {
+		if v.Model == nil || v.Model.Kind != kind {
 			continue
 		}
 		out = append(out, api.InstanceName{ID: v.ID, Name: v.Name, ModelName: v.Model.ModelName})

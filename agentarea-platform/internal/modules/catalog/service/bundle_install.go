@@ -11,6 +11,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx/wirejson"
 	catalogapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/catalog/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/catalog/store"
+	modelsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/api"
 )
 
 // created is one thing an install created and how to delete it again.
@@ -878,7 +879,7 @@ func (in *bundleInstaller) modelID(ctx context.Context, a BundleAgent) (string, 
 	if a.Model != nil {
 		model = *a.Model
 	}
-	id, problem, err := in.w.modelID(ctx, resolvePlaceholders(model, in.values))
+	id, problem, err := in.w.modelID(ctx, "model", modelsapi.KindChat, resolvePlaceholders(model, in.values))
 	if err != nil {
 		return "", err
 	}
@@ -888,6 +889,18 @@ func (in *bundleInstaller) modelID(ctx context.Context, a BundleAgent) (string, 
 	return id, nil
 }
 
+// tools are the agent's code toolsets, their models resolved, then others.
+func (in *bundleInstaller) tools(ctx context.Context, a BundleAgent, others []catalogapi.BundleTool) ([]catalogapi.BundleTool, error) {
+	code, problem, err := codeTools(ctx, in.w, a, in.values)
+	if err != nil {
+		return nil, err
+	}
+	if problem != "" {
+		return nil, invalidError(fmt.Sprintf("agent '%s': %s", a.Key, problem))
+	}
+	return append(code, others...), nil
+}
+
 // installAgents writes the agents delegates first, so a delegate tool names an agent that exists.
 func (in *bundleInstaller) installAgents(ctx context.Context) error {
 	w := in.w
@@ -895,9 +908,6 @@ func (in *bundleInstaller) installAgents(ctx context.Context) error {
 	order, _ := agentOrder(in.pkg.Agents)
 	for _, a := range order {
 		var tools []catalogapi.BundleTool
-		for _, n := range a.Toolsets {
-			tools = append(tools, catalogapi.BundleTool{Type: "code", Name: n})
-		}
 		for _, ref := range a.MCPs {
 			if id, ok := in.mcpIDs[ref]; ok {
 				tools = append(tools, catalogapi.BundleTool{Type: "mcp", Name: id})
@@ -937,7 +947,11 @@ func (in *bundleInstaller) installAgents(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
-				if err := in.updateAgent(ctx, *id, a, modelID, tools, skillIDs); err != nil {
+				all, err := in.tools(ctx, a, tools)
+				if err != nil {
+					return err
+				}
+				if err := in.updateAgent(ctx, *id, a, modelID, all, skillIDs); err != nil {
 					return err
 				}
 				in.updatedInPlace = true
@@ -963,6 +977,10 @@ func (in *bundleInstaller) installAgents(ctx context.Context) error {
 			return err
 		}
 		modelID, err := in.modelID(ctx, a)
+		if err != nil {
+			return err
+		}
+		tools, err = in.tools(ctx, a, tools)
 		if err != nil {
 			return err
 		}
@@ -1001,8 +1019,8 @@ func (in *bundleInstaller) updateAgent(ctx context.Context, id string, a BundleA
 	u := catalogapi.BundleAgentUpdate{Name: a.Name, Description: a.Description, Instruction: a.Instruction, ModelID: modelID,
 		Tools: tools, SkillIDs: skillIDs}
 	if before != nil {
-		for _, n := range before.Toolsets {
-			u.ManagedTools = append(u.ManagedTools, catalogapi.BundleTool{Type: "code", Name: n})
+		for _, t := range before.Toolsets {
+			u.ManagedTools = append(u.ManagedTools, catalogapi.BundleTool{Type: "code", Name: t.Name})
 		}
 		for _, mid := range in.linkedBefore(KindMCP, before.MCPs) {
 			u.ManagedTools = append(u.ManagedTools, catalogapi.BundleTool{Type: "mcp", Name: mid})
