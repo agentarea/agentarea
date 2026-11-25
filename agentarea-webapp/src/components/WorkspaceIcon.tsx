@@ -7,7 +7,7 @@ export function WorkspaceIcon({
   workspace,
   size,
 }: {
-  workspace: Workspace;
+  workspace: Pick<Workspace, "id" | "name" | "logo_url">;
   size: number;
 }) {
   return (

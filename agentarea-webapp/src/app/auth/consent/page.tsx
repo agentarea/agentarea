@@ -108,7 +108,12 @@ export default async function ConsentPage({
       <ConsentForm
         challenge={challenge}
         access={consent.access}
-        workspaces={workspaces.map(({ slug, name }) => ({ slug, name }))}
+        workspaces={workspaces.map(({ id, slug, name, logo_url }) => ({
+          id,
+          slug,
+          name,
+          logo_url,
+        }))}
         canAllow={target !== null}
       />
 

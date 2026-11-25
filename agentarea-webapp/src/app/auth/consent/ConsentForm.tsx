@@ -4,6 +4,8 @@ import { useActionState, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { WorkspaceIcon } from "@/components/WorkspaceIcon";
+import type { Workspace } from "@/lib/workspaces";
 import { decideConsent, type ConsentState } from "./actions";
 
 export function ConsentForm({
@@ -14,7 +16,7 @@ export function ConsentForm({
 }: {
   challenge: string;
   access: "mcp" | "api";
-  workspaces: { slug: string; name: string }[];
+  workspaces: Pick<Workspace, "id" | "slug" | "name" | "logo_url">[];
   canAllow: boolean;
 }) {
   const t = useTranslations("AuthConsent");
@@ -60,8 +62,12 @@ export function ConsentForm({
                         )
                       }
                     />
-                    <label htmlFor={id} className="text-foreground text-sm">
-                      {workspace.name}
+                    <label
+                      htmlFor={id}
+                      className="text-foreground flex min-w-0 items-center gap-2 text-sm"
+                    >
+                      <WorkspaceIcon workspace={workspace} size={20} />
+                      <span className="truncate">{workspace.name}</span>
                     </label>
                   </li>
                 );
