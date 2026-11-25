@@ -342,10 +342,7 @@ func (s *Service) identityClaims(ctx context.Context, userID string, scopes []st
 			Email    any `json:"email"`
 			Username any `json:"username"`
 			Picture  any `json:"picture"`
-			Name     struct {
-				First any `json:"first"`
-				Last  any `json:"last"`
-			} `json:"name"`
+			Name     any `json:"name"`
 		} `json:"traits"`
 		Addresses []kratosAddress `json:"verifiable_addresses"`
 	}
@@ -366,8 +363,15 @@ func (s *Service) identityClaims(ctx context.Context, userID string, scopes []st
 		}
 	}
 	if slices.Contains(scopes, "profile") {
-		given, family := text(identity.Traits.Name.First), text(identity.Traits.Name.Last)
-		if full := strings.TrimSpace(given + " " + family); full != "" {
+		var given, family, full string
+		switch name := identity.Traits.Name.(type) {
+		case map[string]any:
+			given, family = text(name["first"]), text(name["last"])
+			full = strings.TrimSpace(given + " " + family)
+		case string:
+			full = strings.TrimSpace(name)
+		}
+		if full != "" {
 			claims["name"] = full
 		}
 		for key, v := range map[string]string{
