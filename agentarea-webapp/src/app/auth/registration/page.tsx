@@ -16,11 +16,17 @@ export const metadata: Metadata = {
   title: "Registration",
 };
 
+const PROVIDER_TRAITS = new Set([
+  "traits.picture",
+  "traits.name.first",
+  "traits.name.last",
+]);
+
 /**
- * The picture trait comes from the sign-in provider; nobody types an image URL
- * into a signup form, so the form does not offer one.
+ * Picture and name come from the sign-in provider or are set later in the
+ * profile; the signup form asks only for what an account needs.
  */
-function withoutPicture(flow: RegistrationFlow): RegistrationFlow {
+function withoutProviderTraits(flow: RegistrationFlow): RegistrationFlow {
   return {
     ...flow,
     ui: {
@@ -29,7 +35,7 @@ function withoutPicture(flow: RegistrationFlow): RegistrationFlow {
         ({ attributes }) =>
           !(
             isUiNodeInputAttributes(attributes) &&
-            attributes.name === "traits.picture"
+            PROVIDER_TRAITS.has(attributes.name)
           )
       ),
     },
@@ -43,7 +49,7 @@ export default async function RegistrationPage(props: OryPageParams) {
     return null;
   }
 
-  const browserFlow = withoutPicture(rewriteFlowForBrowser(flow));
+  const browserFlow = withoutProviderTraits(rewriteFlowForBrowser(flow));
   const registrationConfig = await getAuthPageConfig();
 
   return (
