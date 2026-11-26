@@ -11,7 +11,9 @@ import (
 // DeclaredModelSpec is a model a deployment declares for a provider: the whole truth for the
 // fields it sets, nil leaving an existing row's value.
 type DeclaredModelSpec struct {
-	ModelName, DisplayName                                                                         string
+	ModelName, DisplayName string
+	// Kind is the model kind (chat, decision, image, video); empty is chat.
+	Kind                                                                                           string
 	Description                                                                                    *string
 	ContextWindow                                                                                  int
 	MaxOutputTokens                                                                                *int

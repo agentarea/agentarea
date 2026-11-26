@@ -78,6 +78,10 @@ spec:
                       displayName:
                         type: string
                         description: "Override display name"
+                      kind:
+                        type: string
+                        enum: [chat, decision, image, video]
+                        description: "Model kind; unset is chat. A decision model answers questions with probabilities (POST /systemone)"
                       description:
                         type: string
                       contextWindow:

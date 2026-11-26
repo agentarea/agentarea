@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -251,6 +252,9 @@ func (r *Reconciler) syncProvider(ctx context.Context, namespace, name string, s
 	return configID, len(declared), nil
 }
 
+// declarableKinds are the model kinds a spec.models entry may declare.
+func declarableKinds() []string { return []string{"chat", "decision", "image", "video"} }
+
 // explicitModel is one spec.models entry: the resource is the whole truth about its tags.
 func explicitModel(raw any) (api.DeclaredModelSpec, []string, error) {
 	em, ok := raw.(map[string]any)
@@ -262,6 +266,12 @@ func explicitModel(raw any) (api.DeclaredModelSpec, []string, error) {
 		SupportsVision: boolPtr(boolOr(em["supportsVision"], false)), SupportsReasoning: boolPtr(boolOr(em["supportsReasoning"], false))}
 	if v := str(em["displayName"]); v != "" {
 		m.DisplayName = v
+	}
+	if v := str(em["kind"]); v != "" {
+		if !slices.Contains(declarableKinds(), v) {
+			return api.DeclaredModelSpec{}, nil, fmt.Errorf("kind of %s is %q; one of %s", name, v, strings.Join(declarableKinds(), ", "))
+		}
+		m.Kind = v
 	}
 	description := str(em["description"])
 	m.Description = &description

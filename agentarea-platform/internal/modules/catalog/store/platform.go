@@ -40,12 +40,12 @@ func (Platform) DeclareModelSpec(ctx context.Context, s db.Session, providerSpec
 		_, err = s.Q().Exec(ctx, `INSERT INTO model_specs (id, provider_spec_id, model_name, display_name, description,
 			context_window, max_output_tokens, supports_vision, supports_reasoning, reasoning_efforts,
 			input_cost_per_token, output_cost_per_token, cached_input_cost_per_token, cache_creation_input_cost_per_token,
-			is_active, workspace_id, created_by, created_at, updated_at)
+			is_active, workspace_id, created_by, created_at, updated_at, kind)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, false), COALESCE($9, false), $10::jsonb,
-			$11::text::numeric, $12::text::numeric, $13::text::numeric, $14::text::numeric, true, $15, $16, $17, $17)`,
+			$11::text::numeric, $12::text::numeric, $13::text::numeric, $14::text::numeric, true, $15, $16, $17, $17, $18)`,
 			id, providerSpecID, m.ModelName, m.DisplayName, description, m.ContextWindow, m.MaxOutputTokens,
 			m.SupportsVision, m.SupportsReasoning, efforts, priceText(m.InputCostPerToken), priceText(m.OutputCostPerToken),
-			priceText(m.CachedInputCostPerToken), priceText(m.CacheCreationInputCostPerToken), s.Workspace().ID(), createdBy, naive(now))
+			priceText(m.CachedInputCostPerToken), priceText(m.CacheCreationInputCostPerToken), s.Workspace().ID(), createdBy, naive(now), kindOf(m))
 		return id, err
 	case err != nil:
 		return uuid.Nil, err
@@ -57,11 +57,18 @@ func (Platform) DeclareModelSpec(ctx context.Context, s db.Session, providerSpec
 		output_cost_per_token = COALESCE($9::text::numeric, output_cost_per_token),
 		cached_input_cost_per_token = COALESCE($10::text::numeric, cached_input_cost_per_token),
 		cache_creation_input_cost_per_token = COALESCE($11::text::numeric, cache_creation_input_cost_per_token),
-		updated_at = $12 WHERE id = $1 AND workspace_id = $13`,
+		updated_at = $12, kind = $14 WHERE id = $1 AND workspace_id = $13`,
 		id, m.DisplayName, m.ContextWindow, m.MaxOutputTokens, m.SupportsVision, m.SupportsReasoning, efforts,
 		priceText(m.InputCostPerToken), priceText(m.OutputCostPerToken), priceText(m.CachedInputCostPerToken),
-		priceText(m.CacheCreationInputCostPerToken), naive(now), s.Workspace().ID())
+		priceText(m.CacheCreationInputCostPerToken), naive(now), s.Workspace().ID(), kindOf(m))
 	return id, err
+}
+
+func kindOf(m api.DeclaredModelSpec) string {
+	if m.Kind == "" {
+		return "chat"
+	}
+	return m.Kind
 }
 
 // CatalogItem is the active registry item with external_id, preferred registry first.
