@@ -496,7 +496,7 @@ func (c *Checker) spendCap(v any, loc []any) (SpendCap, bool) {
 	for _, f := range []struct {
 		key string
 		dst **string
-	}{{"client_id", &sc.ClientID}, {"connection_id", &sc.ConnectionID}, {"tool", &sc.Tool}, {"currency", &sc.Currency}} {
+	}{{"client_id", &sc.ClientID}, {"connection_id", &sc.ConnectionID}, {"tool", &sc.Tool}, {"model", &sc.Model}, {"currency", &sc.Currency}} {
 		x, pr := get(m, f.key)
 		*f.dst = c.OptStr(x, pr, at(loc, f.key), 0, 0)
 	}
@@ -510,7 +510,7 @@ func (c *Checker) spendCap(v any, loc []any) (SpendCap, bool) {
 			sc.Period = &s
 		}
 	}
-	c.Extra(m, []string{"amount_usd", "own_agent", "client_id", "connection_id", "tool", "currency", "category", "period"}, loc)
+	c.Extra(m, []string{"amount_usd", "own_agent", "client_id", "connection_id", "tool", "model", "currency", "category", "period"}, loc)
 	return sc, len(c.Errs) == before
 }
 

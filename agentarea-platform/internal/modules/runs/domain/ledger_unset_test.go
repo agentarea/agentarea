@@ -31,3 +31,13 @@ func TestAChargeWithoutSettlementDoesNotWaitOnOne(t *testing.T) {
 		}
 	}
 }
+
+func TestAModelLineAToolWritesKeepsItsModelInEvidence(t *testing.T) {
+	lines := CostLines(StoredEvent{ID: "e1", Type: EventToolResult, Timestamp: time.Unix(0, 0), Data: map[string]any{
+		"task_id": "0b6e7d5c-1d2a-4c3b-9e8f-7a6b5c4d3e2f", "tool_name": "llm_call",
+		"model_billing": map[string]any{"amount": "0.5", "model_instance_id": "i1", "model": "gemini-4-argon"},
+	}}, "USD")
+	if len(lines) != 1 || *lines[0].SubjectName != "llm_call" || *lines[0].SubjectID != "i1" || lines[0].Evidence["model"] != "gemini-4-argon" {
+		t.Fatalf("lines %+v", lines)
+	}
+}

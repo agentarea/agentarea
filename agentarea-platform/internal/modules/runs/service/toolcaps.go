@@ -57,7 +57,7 @@ func toolSpendCaps(budget *api.BudgetPolicy, call toolCallScope, billing string)
 	for _, c := range budget.SpendCaps {
 		perRun := c.Period == "run"
 		switch {
-		case c.Category == "llm",
+		case c.Category == "llm", c.Model != "",
 			c.Category == "tools" && !call.HasConnection && c.Tool == "",
 			perRun && call.TaskID == "",
 			c.ClientID != "" && c.ClientID != call.ClientID,

@@ -177,7 +177,7 @@ func CostLines(e StoredEvent, billingCurrency string) []CostLine {
 			if present(mb["cost_unknown"]) {
 				unknown = mb["cost_unknown"]
 			}
-			l.Evidence = compact(merge(toolEvidence, map[string]any{"hold_id": unset(mb["hold_id"]), "settle": unset(mb["settle"]), "cost_unknown": unknown}))
+			l.Evidence = compact(merge(toolEvidence, map[string]any{"hold_id": unset(mb["hold_id"]), "settle": unset(mb["settle"]), "cost_unknown": unknown, "model": unset(mb["model"])}))
 			lines = append(lines, l)
 		}
 	} else if amount, value := Amount(d["model_cost"]); value.Sign() > 0 {

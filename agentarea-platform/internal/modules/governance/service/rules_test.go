@@ -73,6 +73,35 @@ func TestAssertEnforceable(t *testing.T) {
 	}
 }
 
+func TestModelAndLLMToolSpendCaps(t *testing.T) {
+	for _, r := range []Rule{
+		mkRule("spend", "cap", param("amount_usd", "5"), param("model", "gemini-4-argon")),
+		mkRule("spend", "cap", param("amount_usd", "1"), param("period", "run"), param("model", "gemini-4-argon")),
+		mkRule("spend", "cap", param("amount_usd", "2"), param("tool", "llm_call")),
+		mkRule("spend", "cap", param("amount_usd", "2"), param("period", "run"), param("tool", "llm_decide")),
+	} {
+		if err := AssertEnforceable(r); err != nil {
+			t.Errorf("%v refused: %v", r.Params, err)
+		}
+	}
+	for _, c := range []struct {
+		want string
+		r    Rule
+	}{
+		{"a model spend cap", mkRule("spend", "cap", param("amount_usd", "5"), param("model", "m"), param("category", "llm"))},
+		{"a model spend cap", mkRule("spend", "cap", param("amount_usd", "5"), param("model", "m"), param("tool", "llm_call"))},
+		{"names the connection_id", mkRule("spend", "cap", param("amount_usd", "5"), param("tool", "search"))},
+	} {
+		if err := AssertEnforceable(c.r); !errors.Is(err, ErrNotEnforceable) || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%v: got %v", c.r.Params, err)
+		}
+	}
+	doc, err := RulesToDocument([]Rule{mkRule("spend", "cap", param("amount_usd", "5"), param("model", "gemini-4-argon"))}, slog.Default())
+	if err != nil || doc.Budget.MonthlySpendCapUSD != nil || len(doc.Budget.SpendCaps) != 1 || *doc.Budget.SpendCaps[0].Model != "gemini-4-argon" {
+		t.Fatalf("budget %+v %v", doc.Budget, err)
+	}
+}
+
 func TestRulesToDocument(t *testing.T) {
 	doc, err := RulesToDocument([]Rule{
 		mkRule("spend", "cap", param("amount_usd", "10.00"), param("period", "month")),

@@ -22,4 +22,5 @@ WHERE c.workspace_id = @workspace_id AND c.occurred_at >= @since
   AND (sqlc.narg(category)::text IS NULL OR c.category = sqlc.narg(category)::text)
   AND (sqlc.narg(connection_id)::text IS NULL OR (c.subject_type = 'tool' AND c.subject_id = sqlc.narg(connection_id)::text))
   AND (sqlc.narg(tool)::text IS NULL OR c.subject_name = sqlc.narg(tool)::text)
+  AND (sqlc.narg(model)::text IS NULL OR (c.subject_type = 'model_instance' AND COALESCE(c.evidence->>'model', c.subject_name) = sqlc.narg(model)::text))
   AND (sqlc.narg(client_id)::uuid IS NULL OR c.client_id = sqlc.narg(client_id)::uuid);

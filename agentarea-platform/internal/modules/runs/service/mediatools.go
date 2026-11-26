@@ -155,7 +155,7 @@ func (t mediaTools) generateImage(ctx context.Context, inv ToolInvocation) (Tool
 	if err != nil {
 		return ToolOutput{}, err
 	}
-	if err := s.refuseAtSpendCap(ctx, p, t.budget); err != nil {
+	if err := s.refuseAtSpendCap(ctx, p, t.budget, modelCall{TaskID: inv.TaskID, Model: model.ModelName, Tool: inv.ToolName}); err != nil {
 		return ToolOutput{}, err
 	}
 	f, err := s.holdModelCall(ctx, p, model, model.Prices.Image, mediaHoldKey(inv.CallRef))
@@ -220,7 +220,7 @@ func (t mediaTools) generateVideo(ctx context.Context, inv ToolInvocation) (Tool
 	if err != nil {
 		return ToolOutput{}, err
 	}
-	if err := s.refuseAtSpendCap(ctx, p, t.budget); err != nil {
+	if err := s.refuseAtSpendCap(ctx, p, t.budget, modelCall{TaskID: inv.TaskID, Model: model.ModelName, Tool: inv.ToolName}); err != nil {
 		return ToolOutput{}, err
 	}
 	var estimate *money.Decimal
@@ -435,12 +435,13 @@ type storedBilling struct {
 	CostUnknown     bool    `json:"cost_unknown"`
 	Payer           string  `json:"payer"`
 	ModelInstanceID string  `json:"model_instance_id"`
+	Model           string  `json:"model"`
 }
 
 func storedBillingOf(c ChargeLine) storedBilling {
 	out := storedBilling{
 		Amount: c.Amount.String(), Currency: c.Currency, VendorCost: c.VendorCost.String(), VendorCurrency: c.VendorCurrency,
-		Estimate: c.Estimate, CostUnknown: c.CostUnknown, Payer: c.Payer, ModelInstanceID: c.ModelInstanceID,
+		Estimate: c.Estimate, CostUnknown: c.CostUnknown, Payer: c.Payer, ModelInstanceID: c.ModelInstanceID, Model: c.Model,
 	}
 	if c.Settle != "" {
 		settle := c.Settle
@@ -467,7 +468,7 @@ func chargeLineOf(raw []byte) (ChargeLine, error) {
 		return ChargeLine{}, fmt.Errorf("a saved video's vendor cost: %w", err)
 	}
 	line := ChargeLine{
-		ModelInstanceID: st.ModelInstanceID, Amount: amount, Currency: st.Currency, VendorCost: vendor, VendorCurrency: st.VendorCurrency,
+		ModelInstanceID: st.ModelInstanceID, Model: st.Model, Amount: amount, Currency: st.Currency, VendorCost: vendor, VendorCurrency: st.VendorCurrency,
 		Estimate: st.Estimate, CostUnknown: st.CostUnknown, Payer: st.Payer, PlatformFunded: st.Payer == domain.PayerPlatform,
 	}
 	if st.Settle != nil {

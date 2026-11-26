@@ -105,6 +105,7 @@ type LLMCallRequest struct {
 // ChargeLine is how a paid model call's spend line settles.
 type ChargeLine struct {
 	ModelInstanceID string        `json:"model_instance_id"`
+	Model           string        `json:"model"`
 	Amount          money.Decimal `json:"amount"`
 	Currency        string        `json:"currency"`
 	VendorCost      money.Decimal `json:"vendor_cost"`

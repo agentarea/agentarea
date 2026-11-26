@@ -15401,7 +15401,7 @@
       },
       "ScopedSpendCap-Input": {
         "additionalProperties": false,
-        "description": "A cap on part of the spend: one kind, client, connection or tool of a connection.\n\n``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``\n``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``\nnarrows it further to the calling agent's lines: the rule was bound to that\nagent. ``currency`` is the cap's currency, the billing currency when absent; it\nsums only lines in it. Absent fields are left out of the snapshot, so a cap\nthat sets none serializes as it did before they existed.",
+        "description": "A cap on part of the spend: one kind, client, connection, tool of a connection or of agentarea/llm, or model.\n\n``model`` counts only the lines of the model of that name. ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``\n``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``\nnarrows it further to the calling agent's lines: the rule was bound to that\nagent. ``currency`` is the cap's currency, the billing currency when absent; it\nsums only lines in it. Absent fields are left out of the snapshot, so a cap\nthat sets none serializes as it did before they existed.",
         "properties": {
           "amount_usd": {
             "anyOf": [
@@ -15464,6 +15464,17 @@
             ],
             "title": "Currency"
           },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
           "own_agent": {
             "default": false,
             "title": "Own Agent",
@@ -15501,7 +15512,7 @@
       },
       "ScopedSpendCap-Output": {
         "additionalProperties": false,
-        "description": "A cap on part of the spend: one kind, client, connection or tool of a connection.\n\n``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``\n``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``\nnarrows it further to the calling agent's lines: the rule was bound to that\nagent. ``currency`` is the cap's currency, the billing currency when absent; it\nsums only lines in it. Absent fields are left out of the snapshot, so a cap\nthat sets none serializes as it did before they existed.",
+        "description": "A cap on part of the spend: one kind, client, connection, tool of a connection or of agentarea/llm, or model.\n\n``model`` counts only the lines of the model of that name. ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``\n``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``\nnarrows it further to the calling agent's lines: the rule was bound to that\nagent. ``currency`` is the cap's currency, the billing currency when absent; it\nsums only lines in it. Absent fields are left out of the snapshot, so a cap\nthat sets none serializes as it did before they existed.",
         "properties": {
           "amount_usd": {
             "title": "Amount Usd",
@@ -15554,6 +15565,17 @@
               }
             ],
             "title": "Currency"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
           },
           "own_agent": {
             "default": false,

@@ -159,9 +159,51 @@ func (s *Service) DelegatedSpend(ctx context.Context, p Principal, taskID string
 	return spent, err
 }
 
+// modelCall is what of a model call its caps narrow by: the model's name, and
+// the agentarea/llm tool that makes it.
+type modelCall struct{ TaskID, Model, Tool string }
+
+// modelCallCaps are the caps on one model, or on an agentarea/llm tool, a model call falls under.
+func modelCallCaps(budget *api.BudgetPolicy, call modelCall, agentID, billing string) []spendCap {
+	if budget == nil {
+		return nil
+	}
+	var caps []spendCap
+	for _, c := range budget.SpendCaps {
+		var on string
+		var scope store.SpendScope
+		switch {
+		case c.Model != "" && c.Model == call.Model:
+			on, scope = "model "+c.Model, store.SpendScope{Model: c.Model}
+		case c.Tool != "" && c.ConnectionID == "" && c.Tool == call.Tool:
+			on, scope = "tool "+c.Tool, store.SpendScope{Tool: c.Tool, Category: domain.CostModel}
+		default:
+			continue
+		}
+		perRun := c.Period == "run"
+		if (perRun && call.TaskID == "") || (c.OwnAgent && agentID == "") {
+			continue
+		}
+		period := "monthly"
+		if perRun {
+			period, scope.TaskID = "run", call.TaskID
+		}
+		if c.OwnAgent {
+			period, scope.AgentID = "agent "+period, agentID
+		}
+		currency := c.Currency
+		if currency == "" {
+			currency = billing
+		}
+		caps = append(caps, spendCap{Label: period + " spend cap on " + on, Amount: c.Amount, Currency: currency, Scope: scope, PerRun: perRun})
+	}
+	return caps
+}
+
 // refuseAtSpendCap raises SpendCapReachedError when a monthly cap a model
-// call falls under is reached, with the caps set now (refuse_model_call_at_spend_cap).
-func (s *Service) refuseAtSpendCap(ctx context.Context, p Principal, frozen *api.BudgetPolicy) error {
+// call falls under is reached, with the caps set now (refuse_model_call_at_spend_cap),
+// or a cap on its model or agentarea/llm tool, monthly or of the run.
+func (s *Service) refuseAtSpendCap(ctx context.Context, p Principal, frozen *api.BudgetPolicy, call modelCall) error {
 	if s.d.Caps == nil {
 		return nil
 	}
@@ -170,14 +212,18 @@ func (s *Service) refuseAtSpendCap(ctx context.Context, p Principal, frozen *api
 		return err
 	}
 	budget := mergeBudget(live, frozen)
-	if budget == nil || (budget.MonthlySpendCap == nil && budget.AgentMonthlySpendCap == nil && !hasLLMCap(budget.SpendCaps)) {
+	if budget == nil {
+		return nil
+	}
+	currency := string(s.d.Pricing.Currency())
+	scoped := modelCallCaps(budget, call, p.AgentID, currency)
+	if budget.MonthlySpendCap == nil && budget.AgentMonthlySpendCap == nil && !hasLLMCap(budget.SpendCaps) && len(scoped) == 0 {
 		return nil
 	}
 	ws, err := workspace(p)
 	if err != nil {
 		return err
 	}
-	currency := string(s.d.Pricing.Currency())
 	now := s.now()
 	return s.readSession(ctx, ws, func(tx db.Session) error {
 		if c := budget.MonthlySpendCap; c != nil {
@@ -204,6 +250,19 @@ func (s *Service) refuseAtSpendCap(ctx context.Context, p Principal, frozen *api
 		}
 		if reached != nil {
 			return spendCapReached(reached.message())
+		}
+		for _, c := range scoped {
+			since := monthStart(now)
+			if c.PerRun {
+				since = time.Unix(0, 0)
+			}
+			spent, err := s.sum(ctx, tx, since, c.Currency, c.Scope)
+			if err != nil {
+				return err
+			}
+			if spent.Cmp(c.Amount) >= 0 {
+				return spendCapReached(fmt.Sprintf("%s reached (%s %s/%s %s)", c.Label, spent, c.Currency, c.Amount, c.Currency))
+			}
 		}
 		return nil
 	})

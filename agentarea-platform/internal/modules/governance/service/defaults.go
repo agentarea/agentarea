@@ -156,7 +156,7 @@ func (sv *Service) DefaultRules(workspaceID string) ([]domain.Rule, error) {
 // tell the month and run spend caps and the scoped caps apart.
 func dimension(r domain.Rule) string {
 	parts := []any{r.Target, r.Effect}
-	for _, k := range []string{"period", "client_id", "connection_id", "tool", "currency", "category"} {
+	for _, k := range []string{"period", "client_id", "connection_id", "tool", "model", "currency", "category"} {
 		v, _ := api.Field(r.Params, k)
 		parts = append(parts, api.PyRepr(v))
 	}

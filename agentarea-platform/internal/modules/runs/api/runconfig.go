@@ -151,6 +151,7 @@ type SpendCap struct {
 	ClientID     string        `json:"client_id"`
 	ConnectionID string        `json:"connection_id"`
 	Tool         string        `json:"tool"`
+	Model        string        `json:"model"`
 	Currency     string        `json:"currency"`
 	// Category is llm, tools or empty; Period is run or empty (calendar month).
 	Category string `json:"category"`

@@ -73,10 +73,21 @@ func TestAModelCallOutsideARunIsHeldChargedAndLedgeredForItsAgent(t *testing.T) 
 	}
 
 	cap := money.MustParse("0.1")
+	argon, gpt := "gemini-4-argon", "gpt"
+	s.d.Caps = fixedBudget{b: &governanceapi.Budget{SpendCaps: []governanceapi.SpendCap{{AmountUSD: cap, Model: &argon}}}}
+	if _, err := s.Chat(context.Background(), ws, who, api.ChatOnce{ModelID: "chat", Prompt: "x", MaxTokens: 10}); err != nil || len(models.calls) != 2 {
+		t.Fatalf("another model's cap refused it: %v", err)
+	}
+	s.d.Caps = fixedBudget{b: &governanceapi.Budget{SpendCaps: []governanceapi.SpendCap{{AmountUSD: cap, Model: &gpt}}}}
+	_, err = s.Chat(context.Background(), ws, who, api.ChatOnce{ModelID: "chat", Prompt: "x", MaxTokens: 10})
+	var modelCapped *api.ModelCallRefused
+	if !errors.As(err, &modelCapped) || modelCapped.Msg != "monthly spend cap on model gpt reached (0.800000000000 EUR/0.1 EUR)" || len(models.calls) != 2 {
+		t.Fatalf("model capped = %v", err)
+	}
 	s.d.Caps = fixedBudget{b: &governanceapi.Budget{MonthlySpendCapUSD: &cap}}
 	_, err = s.Chat(context.Background(), ws, who, api.ChatOnce{ModelID: "chat", Prompt: "x", MaxTokens: 10})
 	var refused *api.ModelCallRefused
-	if !errors.As(err, &refused) || refused.Msg != "Workspace monthly spend cap reached (0.400000000000 EUR/0.1 EUR)" || len(models.calls) != 1 {
+	if !errors.As(err, &refused) || refused.Msg != "Workspace monthly spend cap reached (0.800000000000 EUR/0.1 EUR)" || len(models.calls) != 2 {
 		t.Fatalf("capped = %v", err)
 	}
 }

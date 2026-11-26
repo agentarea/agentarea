@@ -101,7 +101,8 @@ WHERE c.workspace_id = $1 AND c.occurred_at >= $2
   AND ($6::text IS NULL OR c.category = $6::text)
   AND ($7::text IS NULL OR (c.subject_type = 'tool' AND c.subject_id = $7::text))
   AND ($8::text IS NULL OR c.subject_name = $8::text)
-  AND ($9::uuid IS NULL OR c.client_id = $9::uuid)
+  AND ($9::text IS NULL OR (c.subject_type = 'model_instance' AND COALESCE(c.evidence->>'model', c.subject_name) = $9::text))
+  AND ($10::uuid IS NULL OR c.client_id = $10::uuid)
 `
 
 type SumSpendSinceParams struct {
@@ -113,6 +114,7 @@ type SumSpendSinceParams struct {
 	Category     pgtype.Text
 	ConnectionID pgtype.Text
 	Tool         pgtype.Text
+	Model        pgtype.Text
 	ClientID     uuid.NullUUID
 }
 
@@ -126,6 +128,7 @@ func (q *Queries) SumSpendSince(ctx context.Context, arg SumSpendSinceParams) (s
 		arg.Category,
 		arg.ConnectionID,
 		arg.Tool,
+		arg.Model,
 		arg.ClientID,
 	)
 	var total string

@@ -402,6 +402,7 @@ type SpendScope struct {
 	Category     string
 	ConnectionID string
 	Tool         string
+	Model        string
 	ClientID     string
 }
 
@@ -422,7 +423,7 @@ func (Runs) SumSpendSince(ctx context.Context, s db.Session, since time.Time, cu
 	return New(s.Q()).SumSpendSince(ctx, SumSpendSinceParams{
 		WorkspaceID: s.Workspace().ID(), Since: tstz(since), Currency: text(currency),
 		AgentID: agentID, TaskID: taskID, Category: text(scope.Category),
-		ConnectionID: text(scope.ConnectionID), Tool: text(scope.Tool), ClientID: clientID,
+		ConnectionID: text(scope.ConnectionID), Tool: text(scope.Tool), Model: text(scope.Model), ClientID: clientID,
 	})
 }
 

@@ -42,6 +42,8 @@ Examples assume `API=http://localhost:8000`, a bearer token in `$TOKEN`, and you
     |---|---|---|---|
     | Monthly spend | `spend`, `{"amount_usd": "...", "period": "month"}` | task creation | you need a hard stop on workspace spend per calendar month |
     | Per-run spend | `spend`, `{"amount_usd": "...", "period": "run"}` | inside the loop and before each LLM and tool call | you need to bound one runaway task |
+    | One model | `spend`, `{"amount_usd": "...", "model": "gemini-4-argon"}`, `period` `month` or `run` | before each call of that model | one model is expensive and the others are not |
+    | Calls through `agentarea/llm` | `spend`, `{"amount_usd": "...", "tool": "llm_call"}` (or `llm_decide`), `period` `month` or `run` | before each call of that tool | the agent calls other models as a tool |
     | Service spend | `service`, `{"amount_usd": "..."}` | before each tool call | the agent makes paid calls on your behalf |
     | Tokens | `tokens`, `{"max_tokens": N}` | before each LLM call | you bound by context rather than cost |
 

@@ -256,6 +256,20 @@ change the object; changing its `name` does — see
     [workspace policy](#workspace-policies). The other fields are `params`,
     `condition`, `priority`, `enabled`, `message` and `approvers`.
 
+    A spend cap takes its scope in `params`, here one model for each run:
+
+    ```yaml
+    # policies/argon-run-cap.yaml
+    name: argon-run-cap
+    subject: writer
+    target: spend
+    effect: cap
+    params: {amount_usd: "2.00", period: run, model: gemini-4-argon}
+    ```
+
+    `tool: llm_call` in place of `model` caps what the agent spends through
+    `agentarea/llm`; see [budgets and quotas](/concepts/governance/budgets-and-quotas).
+
     #### Who approves
 
     An `approval` policy may name who approves its calls:

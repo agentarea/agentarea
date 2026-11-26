@@ -393,9 +393,9 @@ type ScheduleTaskCreate struct {
 	Webhook *TaskWebhook `json:"webhook"`
 }
 
-// ScopedSpendCapInput A cap on part of the spend: one kind, client, connection or tool of a connection.
+// ScopedSpendCapInput A cap on part of the spend: one kind, client, connection, tool of a connection or of agentarea/llm, or model.
 //
-// “category“ counts only model (“llm“) or tool (“tools“) lines. “period“
+// “model“ counts only the lines of the model of that name. “category“ counts only model (“llm“) or tool (“tools“) lines. “period“
 // “run“ sums the run's own lines; absent, the calendar month's. “own_agent“
 // narrows it further to the calling agent's lines: the rule was bound to that
 // agent. “currency“ is the cap's currency, the billing currency when absent; it
@@ -407,6 +407,7 @@ type ScopedSpendCapInput struct {
 	ClientId     *string                       `json:"client_id"`
 	ConnectionId *string                       `json:"connection_id"`
 	Currency     *string                       `json:"currency"`
+	Model        *string                       `json:"model"`
 	OwnAgent     *bool                         `json:"own_agent,omitempty"`
 	Period       *ScopedSpendCapInputPeriod    `json:"period"`
 	Tool         *string                       `json:"tool"`
