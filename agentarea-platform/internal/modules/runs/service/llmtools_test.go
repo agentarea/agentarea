@@ -270,7 +270,7 @@ func TestLLMCallWritesTheAnswerToOutput(t *testing.T) {
 	f := newLLMFixture(t, "long answer")
 	out := f.call(t, llmTokens(1000), llmInvocation("call", map[string]any{"model": "flash", "prompt": "x", "output": "answers/a.md"}))
 	if !out.Success || string(f.rt.files["answers/a.md"]) != "long answer" ||
-		out.Result != "Wrote answers/a.md (11 bytes) with gemini-3.8-flash; it cost 1 EUR." {
+		out.Result != `{"file_path": "answers/a.md", "size": 11}` || out.ModelBilling == nil {
 		t.Fatalf("out = %+v", out)
 	}
 	for _, path := range []string{"../a.md", "a.pdf"} {
@@ -305,7 +305,7 @@ func TestLLMDecideAsksTheDecisionModel(t *testing.T) {
 		t.Fatalf("out = %+v", out)
 	}
 	args["output"] = "decision.json"
-	if out := f.call(t, llmTokens(1000), llmInvocation("decide", args)); !out.Success || !strings.HasPrefix(out.Result, "Wrote decision.json") ||
+	if out := f.call(t, llmTokens(1000), llmInvocation("decide", args)); !out.Success || !strings.HasPrefix(out.Result, `{"file_path": "decision.json", "size": `) ||
 		!strings.Contains(string(f.rt.files["decision.json"]), `"choice":"yes"`) {
 		t.Fatalf("out = %+v", out)
 	}

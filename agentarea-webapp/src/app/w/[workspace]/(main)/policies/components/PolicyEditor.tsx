@@ -127,7 +127,7 @@ type ScopeMode = "workspace" | "agents";
 type PolicyPeriod = "month" | "run";
 type SpendCategory = "all" | "llm" | "tools";
 // Params of a spend cap the editor shows no field for; kept as they are on save.
-const SPEND_SCOPE_KEYS = ["client_id", "connection_id", "tool", "currency"];
+const SPEND_SCOPE_KEYS = ["client_id", "connection_id", "tool", "model", "currency"];
 
 interface OpenAPIConnectionOption {
   id: string;

@@ -180,11 +180,11 @@ One request to a decision model.
 ### Response
 
 The answer as text: `llm_call`'s reply, or with `schema` its JSON;
-`llm_decide`'s answers as a JSON object, one per question. With `output`, a
-line in its place:
+`llm_decide`'s answers as a JSON object, one per question. With `output`, the
+file it wrote in its place:
 
-```text
-Wrote sheets/12.json (2311 bytes) with gemini-3.8-flash; it cost 0.0042 EUR.
+```json
+{"file_path": "sheets/12.json", "size": 2311}
 ```
 
 ### Errors

@@ -200,7 +200,7 @@ func (s *Service) callLLM(ctx context.Context, p Principal, in LLMCall) (LLMResu
 	if err != nil {
 		return LLMResult{}, err
 	}
-	if err := s.refuseAtSpendCap(ctx, p, in.Policy.Budget); err != nil {
+	if err := s.refuseAtSpendCap(ctx, p, in.Policy.Budget, modelCall{TaskID: in.TaskID, Model: in.Model.ModelName}); err != nil {
 		return LLMResult{}, err
 	}
 	f, err := s.holdModelCall(ctx, p, in.Model, estimateVendorCost(messages, maxTokens, in.Model.Prices), "llm:"+in.TaskID+":"+strings.ReplaceAll(newID(), "-", ""))
@@ -316,7 +316,7 @@ func (s *Service) compact(ctx context.Context, p Principal, in Compaction) (Comp
 		{Role: "system", Content: domain.CompactionSystemPrompt},
 		{Role: "user", Content: domain.CompactionPrompt(toCompact)},
 	}
-	if err := s.refuseAtSpendCap(ctx, p, in.Policy.Budget); err != nil {
+	if err := s.refuseAtSpendCap(ctx, p, in.Policy.Budget, modelCall{TaskID: in.TaskID, Model: in.Model.ModelName}); err != nil {
 		return Compacted{}, err
 	}
 	f, err := s.holdModelCall(ctx, p, in.Model, estimateVendorCost(messages, maxTokens, in.Model.Prices), "llm:"+in.TaskID+":compaction:"+strings.ReplaceAll(newID(), "-", ""))

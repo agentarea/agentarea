@@ -23,6 +23,7 @@ const (
 // funding is who pays one model call: billing's hold when the platform does.
 type funding struct {
 	modelID        string
+	modelName      string
 	platformFunded bool
 	holdID         string
 	held           money.Decimal
@@ -60,7 +61,7 @@ func (s *Service) billingCtx(ctx context.Context) (context.Context, context.Canc
 
 // holdModelCall funds a call before its credential is read (hold_model_call).
 func (s *Service) holdModelCall(ctx context.Context, p Principal, model api.ResolvedModel, estimate *money.Decimal, key string) (funding, error) {
-	f := funding{modelID: model.ModelID, platformFunded: model.ManagedBy == domain.ManagedByPlatform}
+	f := funding{modelID: model.ModelID, modelName: model.ModelName, platformFunded: model.ManagedBy == domain.ManagedByPlatform}
 	if !f.platformFunded || s.d.Billing == nil {
 		return f, nil
 	}
@@ -101,7 +102,7 @@ func (s *Service) releaseHold(ctx context.Context, f funding, why string) {
 
 // chargeModelCall is the line one finished call writes from its vendor cost in USD (charge_model_call).
 func (s *Service) chargeModelCall(ctx context.Context, f funding, vendorCost money.Decimal) (ChargeLine, error) {
-	line := ChargeLine{ModelInstanceID: f.modelID, VendorCost: vendorCost, VendorCurrency: providerCurrency, PlatformFunded: f.platformFunded}
+	line := ChargeLine{ModelInstanceID: f.modelID, Model: f.modelName, VendorCost: vendorCost, VendorCurrency: providerCurrency, PlatformFunded: f.platformFunded}
 	line.Payer = domain.PayerWorkspace
 	if f.platformFunded {
 		line.Payer = domain.PayerPlatform

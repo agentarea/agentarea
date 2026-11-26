@@ -21,13 +21,13 @@ var _ api.SpendCaps = (*Service)(nil)
 
 // spendCapScopeKeys narrow a spend cap to part of the spend (SPEND_CAP_SCOPE_KEYS).
 func spendCapScopeKeys() []string {
-	return []string{"client_id", "connection_id", "tool", "currency", "category"}
+	return []string{"client_id", "connection_id", "tool", "model", "currency", "category"}
 }
 
 // workspaceCapScopeKeys are the keys workspace_cap_currencies treats as narrowing;
 // currency is the cap's own currency there.
 func workspaceCapScopeKeys() []string {
-	return []string{"category", "client_id", "connection_id", "tool"}
+	return []string{"category", "client_id", "connection_id", "tool", "model"}
 }
 
 func paramOf(r domain.Rule, key string) any {

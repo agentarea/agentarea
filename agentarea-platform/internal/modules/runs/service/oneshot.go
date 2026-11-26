@@ -40,7 +40,7 @@ func (s *Service) Chat(ctx context.Context, ws scope.Workspace, who api.ModelCal
 		return "", oneShotFailure(err)
 	}
 	messages := []domain.ModelMessage{{Role: "user", Content: in.Prompt}}
-	if err := s.refuseAtSpendCap(ctx, p, nil); err != nil {
+	if err := s.refuseAtSpendCap(ctx, p, nil, modelCall{Model: model.ModelName}); err != nil {
 		return "", oneShotFailure(err)
 	}
 	f, err := s.holdModelCall(ctx, p, model, estimateVendorCost(messages, in.MaxTokens, model.Prices), "trigger:"+strings.ReplaceAll(newID(), "-", ""))
@@ -83,7 +83,7 @@ func (s *Service) Decide(ctx context.Context, ws scope.Workspace, who api.ModelC
 	if err != nil {
 		return nil, oneShotFailure(err)
 	}
-	if err := s.refuseAtSpendCap(ctx, p, nil); err != nil {
+	if err := s.refuseAtSpendCap(ctx, p, nil, modelCall{Model: model.ModelName}); err != nil {
 		return nil, oneShotFailure(err)
 	}
 	maxOut := 0
@@ -122,7 +122,7 @@ func decisionRequestText(in api.DecideOnce) string {
 func (s *Service) chargeUnknownCost(ctx context.Context, f funding) ChargeLine {
 	if f.holdID != "" {
 		s.d.Log.ErrorContext(ctx, "model reported no cost; its line is the held amount", "model", f.modelID)
-		return ChargeLine{ModelInstanceID: f.modelID, Amount: f.held, Currency: f.heldCurrency, VendorCost: f.estimate, VendorCurrency: providerCurrency,
+		return ChargeLine{ModelInstanceID: f.modelID, Model: f.modelName, Amount: f.held, Currency: f.heldCurrency, VendorCost: f.estimate, VendorCurrency: providerCurrency,
 			Estimate: true, Settle: settleCapture, HoldID: f.holdID, CostUnknown: true, PlatformFunded: true, Payer: domain.PayerPlatform}
 	}
 	s.d.Log.ErrorContext(ctx, "model reported no cost; its cost is unknown", "model", f.modelID)
@@ -131,7 +131,7 @@ func (s *Service) chargeUnknownCost(ctx context.Context, f funding) ChargeLine {
 		payer = domain.PayerPlatform
 	}
 	zero := money.FromInt(0)
-	return ChargeLine{ModelInstanceID: f.modelID, Amount: zero, Currency: providerCurrency, VendorCost: zero, VendorCurrency: providerCurrency,
+	return ChargeLine{ModelInstanceID: f.modelID, Model: f.modelName, Amount: zero, Currency: providerCurrency, VendorCost: zero, VendorCurrency: providerCurrency,
 		Estimate: true, CostUnknown: true, PlatformFunded: f.platformFunded, Payer: payer}
 }
 

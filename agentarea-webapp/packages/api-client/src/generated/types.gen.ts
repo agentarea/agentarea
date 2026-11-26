@@ -8777,9 +8777,9 @@ export type ScheduledRun = {
 /**
  * ScopedSpendCap
  *
- * A cap on part of the spend: one kind, client, connection or tool of a connection.
+ * A cap on part of the spend: one kind, client, connection, tool of a connection or of agentarea/llm, or model.
  *
- * ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
+ * ``model`` counts only the lines of the model of that name. ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
  * ``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``
  * narrows it further to the calling agent's lines: the rule was bound to that
  * agent. ``currency`` is the cap's currency, the billing currency when absent; it
@@ -8808,6 +8808,10 @@ export type ScopedSpendCapInput = {
      */
     currency?: string | null;
     /**
+     * Model
+     */
+    model?: string | null;
+    /**
      * Own Agent
      */
     own_agent?: boolean;
@@ -8824,9 +8828,9 @@ export type ScopedSpendCapInput = {
 /**
  * ScopedSpendCap
  *
- * A cap on part of the spend: one kind, client, connection or tool of a connection.
+ * A cap on part of the spend: one kind, client, connection, tool of a connection or of agentarea/llm, or model.
  *
- * ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
+ * ``model`` counts only the lines of the model of that name. ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
  * ``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``
  * narrows it further to the calling agent's lines: the rule was bound to that
  * agent. ``currency`` is the cap's currency, the billing currency when absent; it
@@ -8854,6 +8858,10 @@ export type ScopedSpendCapOutput = {
      * Currency
      */
     currency?: string | null;
+    /**
+     * Model
+     */
+    model?: string | null;
     /**
      * Own Agent
      */

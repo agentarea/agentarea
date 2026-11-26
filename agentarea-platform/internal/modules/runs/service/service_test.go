@@ -16,6 +16,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/money"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/api"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/domain"
+	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/store"
 )
 
 func intp(n int) *int { return &n }
@@ -287,6 +288,38 @@ func TestToolSpendCapsNameAndNarrowEachCap(t *testing.T) {
 	}
 	if got := caps[1].refusal(money.MustParse("1"), nil); got != "run spend cap of 1 EUR reached: 1 EUR spent in this run" {
 		t.Fatalf("refusal %q", got)
+	}
+}
+
+func TestModelCallCapsNarrowByModelAndLLMTool(t *testing.T) {
+	budget := &api.BudgetPolicy{
+		MonthlySpendCap: dec("10"),
+		SpendCaps: []api.SpendCap{
+			{Amount: money.MustParse("5"), Model: "gemini-4-argon"},
+			{Amount: money.MustParse("1"), Model: "gemini-4-argon", Period: "run", OwnAgent: true},
+			{Amount: money.MustParse("3"), Model: "other"},
+			{Amount: money.MustParse("2"), Tool: "llm_call"},
+			{Amount: money.MustParse("2"), Tool: "search", ConnectionID: "c1"},
+			{Amount: money.MustParse("4"), Category: "llm"},
+		},
+	}
+	caps := modelCallCaps(budget, modelCall{TaskID: "t1", Model: "gemini-4-argon", Tool: "llm_call"}, "a1", "EUR")
+	var labels []string
+	for _, c := range caps {
+		labels = append(labels, c.Label)
+	}
+	if strings.Join(labels, ",") != "monthly spend cap on model gemini-4-argon,agent run spend cap on model gemini-4-argon,monthly spend cap on tool llm_call" {
+		t.Fatalf("caps %v", labels)
+	}
+	if caps[0].Scope != (store.SpendScope{Model: "gemini-4-argon"}) || caps[1].Scope != (store.SpendScope{Model: "gemini-4-argon", AgentID: "a1", TaskID: "t1"}) ||
+		caps[2].Scope != (store.SpendScope{Tool: "llm_call", Category: domain.CostModel}) || caps[0].Currency != "EUR" {
+		t.Fatalf("scopes %+v", caps)
+	}
+	if got := modelCallCaps(budget, modelCall{Model: "gemini-4-argon"}, "a1", "EUR"); len(got) != 1 {
+		t.Fatalf("outside a run %+v", got)
+	}
+	if got := toolSpendCaps(&api.BudgetPolicy{SpendCaps: budget.SpendCaps[:4]}, toolCallScope{TaskID: "t1", Tool: "llm_call"}, "EUR"); len(got) != 0 {
+		t.Fatalf("a tool call fell under %+v", got)
 	}
 }
 

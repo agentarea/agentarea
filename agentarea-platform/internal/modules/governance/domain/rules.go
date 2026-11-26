@@ -233,9 +233,11 @@ func spendCapParams(c *api.Checker, p any) {
 	connection := c.OptStr(v, pr, loc("connection_id"), 0, 0)
 	v, pr = api.Field(o, "tool")
 	tool := c.OptStr(v, pr, loc("tool"), 0, 0)
+	v, pr = api.Field(o, "model")
+	model := c.OptStr(v, pr, loc("model"), 0, 0)
 	v, pr = api.Field(o, "currency")
 	currency := c.Pattern(v, pr, loc("currency"), `^[A-Z]{3}$`)
-	c.Extra(o, []string{"amount_usd", "period", "category", "client_id", "connection_id", "tool", "currency"}, nil)
+	c.Extra(o, []string{"amount_usd", "period", "category", "client_id", "connection_id", "tool", "model", "currency"}, nil)
 	if c.Count() > before {
 		return
 	}
@@ -245,9 +247,11 @@ func spendCapParams(c *api.Checker, p any) {
 		c.Fail("a per-run spend cap must be greater than 0", nil)
 	case period != "month" && (set(client) || set(currency)):
 		c.Fail("a client or currency spend cap is per month", nil)
+	case set(model) && (category != "" || set(client) || set(connection) || set(tool)):
+		c.Fail("a model spend cap counts that model's calls; it takes no category, client, connection or tool", nil)
 	case category == "llm" && (set(client) || set(connection) || set(tool)):
 		c.Fail("a client, connection or tool cap counts tool spend; it cannot be an llm cap", nil)
-	case set(tool) && !set(connection):
+	case set(tool) && !set(connection) && !LLMTool(*tool):
 		c.Fail("a tool spend cap names the connection_id the tool belongs to", nil)
 	}
 }
@@ -421,8 +425,11 @@ func (a *accumulator) apply(r Rule, kind, value string, hasValue bool) error {
 }
 
 func spendScopeKeys() []string {
-	return []string{"client_id", "connection_id", "tool", "currency", "category"}
+	return []string{"client_id", "connection_id", "tool", "model", "currency", "category"}
 }
+
+// LLMTool is a tool of agentarea/llm: a tool spend cap on it counts the model calls it makes.
+func LLMTool(name string) bool { return name == "llm_call" || name == "llm_decide" }
 
 func (a *accumulator) applyCap(r Rule, kind string, params any) error {
 	switch kind {
@@ -519,7 +526,7 @@ func (a *accumulator) addSpendCap(r Rule, amount any, run bool, params any) erro
 	for _, f := range []struct {
 		key string
 		dst **string
-	}{{"client_id", &sc.ClientID}, {"connection_id", &sc.ConnectionID}, {"tool", &sc.Tool}, {"currency", &sc.Currency}, {"category", &sc.Category}} {
+	}{{"client_id", &sc.ClientID}, {"connection_id", &sc.ConnectionID}, {"tool", &sc.Tool}, {"model", &sc.Model}, {"currency", &sc.Currency}, {"category", &sc.Category}} {
 		if v, _ := api.Field(params, f.key); api.Truthy(v) {
 			*f.dst = c.OptStr(v, true, loc("spend_caps", f.key), 0, 0)
 		}

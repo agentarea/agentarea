@@ -127,6 +127,7 @@ type RunnerSocket interface {
 // ChargeLine is how a paid model call's spend line settles.
 type ChargeLine struct {
 	ModelInstanceID string
+	Model           string
 	Amount          money.Decimal
 	Currency        string
 	VendorCost      money.Decimal

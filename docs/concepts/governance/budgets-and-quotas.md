@@ -53,6 +53,19 @@ agent cap above the workspace cap is refused; `target: service` sets the service
 `target: tokens` sets both token values. A `cap` rule missing its amount is
 skipped and logged rather than treated as zero.
 
+A spend cap can also bound one model or one tool of `agentarea/llm`:
+
+| Param | Counts | Checked |
+|---|---|---|
+| `model` | the lines of the model of that name, as the model catalog shows it (`gemini-4-argon`): the agent's own turns, its compactions, trigger conditions, and `agentarea/llm` and `agentarea/media` calls of that model | before every call of that model |
+| `tool: llm_call` or `tool: llm_decide` | the model calls made through that tool of `agentarea/llm` | before every call of that tool |
+
+Both take `period` `month` or `run`; bound to an agent they count that agent's
+own lines. A model cap takes no `category`, `client_id`, `connection_id` or
+`tool`, and a cap on another model or tool does not refuse the call. The call
+that reaches the cap fails with `monthly spend cap on model gemini-4-argon
+reached (12.40 USD/12 USD)` or `run spend cap on tool llm_call reached (…)`.
+
 The default baseline for a new workspace is 500.00 USD per month, 50.00 USD per
 run, 20,000,000 total tokens and 100,000 tokens per call.
 

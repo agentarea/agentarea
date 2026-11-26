@@ -44,6 +44,7 @@ type SpendCap struct {
 	ClientID     *string
 	ConnectionID *string
 	Tool         *string
+	Model        *string
 	Currency     *string
 	// Category is llm or tools; Period is run (nil: the calendar month).
 	Category *string
@@ -246,6 +247,7 @@ func (e emit) spendCap(c SpendCap) wirejson.Object {
 	e.str(&o, "client_id", c.ClientID)
 	e.str(&o, "connection_id", c.ConnectionID)
 	e.str(&o, "tool", c.Tool)
+	e.str(&o, "model", c.Model)
 	e.str(&o, "currency", c.Currency)
 	e.str(&o, "category", c.Category)
 	e.str(&o, "period", c.Period)

@@ -403,7 +403,7 @@ func (t llmTools) call(ctx context.Context, inv ToolInvocation) (ToolOutput, err
 	if err := s.gateModelCall(ctx, p, model, t.policy); err != nil {
 		return ToolOutput{}, err
 	}
-	if err := s.refuseAtSpendCap(ctx, p, t.policy.Budget); err != nil {
+	if err := s.refuseAtSpendCap(ctx, p, t.policy.Budget, modelCall{TaskID: inv.TaskID, Model: model.ModelName, Tool: inv.ToolName}); err != nil {
 		return ToolOutput{}, err
 	}
 	held := maxTokens
@@ -434,7 +434,7 @@ func (t llmTools) call(ctx context.Context, inv ToolInvocation) (ToolOutput, err
 			return out, nil
 		}
 	}
-	return t.deliver(ctx, inv, out, output, answer, model.ModelName, charge)
+	return t.deliver(ctx, inv, out, output, answer)
 }
 
 func (t llmTools) decide(ctx context.Context, inv ToolInvocation) (ToolOutput, error) {
@@ -462,7 +462,7 @@ func (t llmTools) decide(ctx context.Context, inv ToolInvocation) (ToolOutput, e
 	if err := s.gateModelCall(ctx, p, model, t.policy); err != nil {
 		return ToolOutput{}, err
 	}
-	if err := s.refuseAtSpendCap(ctx, p, t.policy.Budget); err != nil {
+	if err := s.refuseAtSpendCap(ctx, p, t.policy.Budget, modelCall{TaskID: inv.TaskID, Model: model.ModelName, Tool: inv.ToolName}); err != nil {
 		return ToolOutput{}, err
 	}
 	maxOut := 0
@@ -490,11 +490,11 @@ func (t llmTools) decide(ctx context.Context, inv ToolInvocation) (ToolOutput, e
 	if err != nil {
 		return ToolOutput{}, err
 	}
-	return t.deliver(ctx, inv, out, output, string(answers), model.ModelName, charge)
+	return t.deliver(ctx, inv, out, output, string(answers))
 }
 
-// deliver is the answer as the tool's result, or written to output with a short line in its place.
-func (t llmTools) deliver(ctx context.Context, inv ToolInvocation, out ToolOutput, output, answer, modelName string, charge ChargeLine) (ToolOutput, error) {
+// deliver is the answer as the tool's result, or written to output with its path and size in its place.
+func (t llmTools) deliver(ctx context.Context, inv ToolInvocation, out ToolOutput, output, answer string) (ToolOutput, error) {
 	if output == "" {
 		out.Success, out.Result = true, answer
 		return out, nil
@@ -505,11 +505,7 @@ func (t llmTools) deliver(ctx context.Context, inv ToolInvocation, out ToolOutpu
 		out.Result, out.Error = "The answer was generated but could not be saved: "+err.Error(), err.Error()
 		return out, nil
 	}
-	cost := "its cost is unknown"
-	if !charge.CostUnknown {
-		cost = fmt.Sprintf("it cost %s %s", charge.Amount, charge.Currency)
-	}
 	out.Success = true
-	out.Result = fmt.Sprintf("Wrote %s (%d bytes) with %s; %s.", output, len(answer), modelName, cost)
+	out.Result = orderedJSON{{"file_path", output}, {"size", len(answer)}}.String()
 	return out, nil
 }

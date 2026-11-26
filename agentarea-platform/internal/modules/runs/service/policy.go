@@ -56,7 +56,7 @@ func toRunBudget(b *governanceapi.Budget) *api.BudgetPolicy {
 		for i, c := range b.SpendCaps {
 			out.SpendCaps[i] = api.SpendCap{
 				Amount: c.AmountUSD, OwnAgent: c.OwnAgent, ClientID: deref(c.ClientID), ConnectionID: deref(c.ConnectionID),
-				Tool: deref(c.Tool), Currency: deref(c.Currency), Category: deref(c.Category), Period: deref(c.Period),
+				Tool: deref(c.Tool), Model: deref(c.Model), Currency: deref(c.Currency), Category: deref(c.Category), Period: deref(c.Period),
 			}
 		}
 	}
@@ -77,7 +77,7 @@ func fromRunPolicy(p api.Policy) governanceapi.Policy {
 			for i, c := range b.SpendCaps {
 				gb.SpendCaps[i] = governanceapi.SpendCap{
 					AmountUSD: c.Amount, OwnAgent: c.OwnAgent, ClientID: ref(c.ClientID), ConnectionID: ref(c.ConnectionID),
-					Tool: ref(c.Tool), Currency: ref(c.Currency), Category: ref(c.Category), Period: ref(c.Period),
+					Tool: ref(c.Tool), Model: ref(c.Model), Currency: ref(c.Currency), Category: ref(c.Category), Period: ref(c.Period),
 				}
 			}
 		}

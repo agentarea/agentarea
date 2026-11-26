@@ -207,6 +207,50 @@ func TestCostLinesOncePerEventAndSummedByScope(t *testing.T) {
 	}
 }
 
+func TestSpendScopedByModelAndByTheLLMTool(t *testing.T) {
+	ctx := context.Background()
+	pool := openPool(t)
+	s := workspace(t, pool)
+	var r Runs
+	task := newTask(t, s)
+	instance, argon, other, llmCall := "i1", "gemini-4-argon", "gemini-3.8-flash", "llm_call"
+	line := func(amount string, name *string, evidence map[string]any) domain.CostLine {
+		return domain.CostLine{
+			EventID: uuid.NewString(), Category: domain.CostModel, TaskID: task.ID, SubjectType: domain.SubjectModelInstance,
+			SubjectID: &instance, SubjectName: name, Amount: amount, Currency: "USD", Source: "rate", Payer: "workspace",
+			Evidence: evidence, OccurredAt: time.Now().UTC(),
+		}
+	}
+	for _, l := range []domain.CostLine{
+		line("1", &argon, nil),
+		line("2", &other, nil),
+		line("4", &llmCall, map[string]any{"model": argon}),
+	} {
+		if _, err := r.InsertCostLine(ctx, s, l, "user-1", task); err != nil {
+			t.Fatal(err)
+		}
+	}
+	since := time.Now().Add(-time.Hour)
+	for _, c := range []struct {
+		scope SpendScope
+		want  string
+	}{
+		{SpendScope{Model: argon}, "5"},
+		{SpendScope{Model: other}, "2"},
+		{SpendScope{Model: llmCall}, "0"},
+		{SpendScope{Tool: llmCall, Category: domain.CostModel}, "4"},
+		{SpendScope{Model: argon, TaskID: task.ID}, "5"},
+	} {
+		raw, err := r.SumSpendSince(ctx, s, since, "USD", c.scope)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := money.MustParse(raw); !got.Equal(money.MustParse(c.want)) {
+			t.Fatalf("%+v: spent %s, want %s", c.scope, got, c.want)
+		}
+	}
+}
+
 func TestTaskEventsOncePerID(t *testing.T) {
 	ctx := context.Background()
 	pool := openPool(t)

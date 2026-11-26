@@ -3366,9 +3366,9 @@ export const zSchedule = z.object({
 /**
  * ScopedSpendCap
  *
- * A cap on part of the spend: one kind, client, connection or tool of a connection.
+ * A cap on part of the spend: one kind, client, connection, tool of a connection or of agentarea/llm, or model.
  *
- * ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
+ * ``model`` counts only the lines of the model of that name. ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
  * ``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``
  * narrows it further to the calling agent's lines: the rule was bound to that
  * agent. ``currency`` is the cap's currency, the billing currency when absent; it
@@ -3384,6 +3384,7 @@ export const zScopedSpendCapInput = z.object({
   client_id: z.string().nullish(),
   connection_id: z.string().nullish(),
   currency: z.string().nullish(),
+  model: z.string().nullish(),
   own_agent: z.boolean().optional().default(false),
   period: z.literal("run").nullish(),
   tool: z.string().nullish(),
@@ -3419,9 +3420,9 @@ export const zBudgetPolicyInput = z.object({
 /**
  * ScopedSpendCap
  *
- * A cap on part of the spend: one kind, client, connection or tool of a connection.
+ * A cap on part of the spend: one kind, client, connection, tool of a connection or of agentarea/llm, or model.
  *
- * ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
+ * ``model`` counts only the lines of the model of that name. ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
  * ``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``
  * narrows it further to the calling agent's lines: the rule was bound to that
  * agent. ``currency`` is the cap's currency, the billing currency when absent; it
@@ -3434,6 +3435,7 @@ export const zScopedSpendCapOutput = z.object({
   client_id: z.string().nullish(),
   connection_id: z.string().nullish(),
   currency: z.string().nullish(),
+  model: z.string().nullish(),
   own_agent: z.boolean().optional().default(false),
   period: z.literal("run").nullish(),
   tool: z.string().nullish(),
