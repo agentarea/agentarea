@@ -2,11 +2,13 @@
 
 import { useActionState, useState } from "react";
 import { useTranslations } from "next-intl";
+import FormError from "@/components/FormError";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { WorkspaceIcon } from "@/components/WorkspaceIcon";
 import type { Workspace } from "@/lib/workspaces";
 import { decideConsent, type ConsentState } from "./actions";
+import { ConsentLabel } from "./ConsentLabel";
 
 export function ConsentForm({
   challenge,
@@ -31,43 +33,46 @@ export function ConsentForm({
   const nonePicked = picksWorkspaces && picked.length === 0;
 
   return (
-    <form action={formAction} className="flex flex-col gap-2">
+    <form action={formAction}>
       <input type="hidden" name="challenge" value={challenge} />
       {picksWorkspaces && (
-        <div className="border-border/60 bg-muted/30 mb-3 rounded-lg border p-4">
-          <p className="text-foreground mb-3 text-xs font-medium uppercase tracking-wider">
+        <div className="mb-4 space-y-3">
+          <ConsentLabel section="workspaces">
             {t("workspaceHeading")}
-          </p>
+          </ConsentLabel>
           {workspaces.length === 0 ? (
             <p className="text-muted-foreground text-sm">
               {t("workspaceNone")}
             </p>
           ) : (
-            <ul className="space-y-2.5">
+            <ul className="space-y-1.5">
               {workspaces.map((workspace) => {
                 const id = `consent-workspace-${workspace.slug}`;
+                const on = picked.includes(workspace.slug);
                 return (
-                  <li
-                    key={workspace.slug}
-                    className="flex items-center gap-2.5"
-                  >
-                    <Checkbox
-                      id={id}
-                      checked={picked.includes(workspace.slug)}
-                      onCheckedChange={(on) =>
-                        setPicked((current) =>
-                          on === true
-                            ? [...current, workspace.slug]
-                            : current.filter((slug) => slug !== workspace.slug)
-                        )
-                      }
-                    />
+                  <li key={workspace.slug}>
                     <label
                       htmlFor={id}
-                      className="text-foreground flex min-w-0 items-center gap-2 text-sm"
+                      data-checked={on}
+                      className="card-item hover:bg-muted/40 data-[checked=true]:border-primary/40 data-[checked=true]:bg-primary/[0.03] dark:data-[checked=true]:border-zinc-500 flex cursor-pointer items-center gap-3 px-3 py-2.5"
                     >
-                      <WorkspaceIcon workspace={workspace} size={20} />
-                      <span className="truncate">{workspace.name}</span>
+                      <WorkspaceIcon workspace={workspace} size={24} />
+                      <span className="text-foreground min-w-0 flex-1 truncate text-sm font-medium">
+                        {workspace.name}
+                      </span>
+                      <Checkbox
+                        id={id}
+                        checked={on}
+                        onCheckedChange={(value) =>
+                          setPicked((current) =>
+                            value === true
+                              ? [...current, workspace.slug]
+                              : current.filter(
+                                  (slug) => slug !== workspace.slug
+                                )
+                          )
+                        }
+                      />
                     </label>
                   </li>
                 );
@@ -77,35 +82,34 @@ export function ConsentForm({
           {picked.map((slug) => (
             <input key={slug} type="hidden" name="workspaces" value={slug} />
           ))}
-          <p className="text-muted-foreground mt-3 text-xs leading-relaxed">
-            {t("workspaceHint")}
-          </p>
+          <p className="note">{t("workspaceHint")}</p>
         </div>
       )}
       {state?.error && (
-        <div className="text-destructive border-destructive/30 bg-destructive/5 mb-3 rounded-md border px-3 py-2 text-sm">
-          {t(`error.${state.error}`)}
-        </div>
+        <FormError className="mb-3">{t(`error.${state.error}`)}</FormError>
       )}
-      <Button
-        type="submit"
-        name="action"
-        value="accept"
-        disabled={pending || !canAllow || nonePicked}
-        className="h-11 w-full rounded-md bg-[#2252b3] text-sm font-medium text-white shadow-sm hover:bg-[#1a3f8a]"
-      >
-        {t("allow")}
-      </Button>
-      <Button
-        type="submit"
-        name="action"
-        value="reject"
-        variant="outline"
-        disabled={pending}
-        className="h-11 w-full rounded-md text-sm font-medium"
-      >
-        {t("deny")}
-      </Button>
+      {/* Allow stays first in the DOM so Enter accepts, as before; it sits on the right. */}
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          type="submit"
+          name="action"
+          value="accept"
+          disabled={pending || !canAllow || nonePicked}
+          className="order-2 h-10 w-full rounded-md bg-[#2252b3] text-sm font-medium text-white shadow-sm hover:bg-[#1a3f8a]"
+        >
+          {t("allow")}
+        </Button>
+        <Button
+          type="submit"
+          name="action"
+          value="reject"
+          variant="outline"
+          disabled={pending}
+          className="order-1 h-10 w-full rounded-md text-sm font-medium"
+        >
+          {t("deny")}
+        </Button>
+      </div>
     </form>
   );
 }

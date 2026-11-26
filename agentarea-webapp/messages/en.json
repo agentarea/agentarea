@@ -3446,6 +3446,7 @@
     "allow": "Allow access",
     "deny": "Cancel",
     "redirectHeading": "Allowing gives access to",
+    "redirectUnverifiedTitle": "Not verified",
     "redirectUnverified": "The name “{clientName}” was chosen by the app itself and is not verified. Allow only if you recognise this address.",
     "redirectLoopback": "An app on this computer.",
     "redirectUnknown": "Where the access would go cannot be determined, so it cannot be allowed.",
@@ -3458,6 +3459,7 @@
     },
     "workspaceHeading": "Workspaces it can reach",
     "workspaceNone": "You have no workspace to give it access to.",
+    "firstPartyWarningTitle": "Started by you?",
     "firstPartyWarning": "Allow only if you just started signing in from the AgentArea CLI or AgentArea Desktop yourself. Any app on this computer can open this page under their name.",
     "workspaceHint": "It works only in the workspaces you tick. To change them, connect again."
   },

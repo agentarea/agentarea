@@ -1006,8 +1006,10 @@
 }
 
 
-/* Decorative Corner Crosses (AgentArea style) */
-.ory-elements [data-testid="ory/card"]::before {
+/* Decorative Corner Crosses (AgentArea style). `.auth-card` is the same frame
+   for auth screens that are ours, not Ory's (OAuth consent). */
+.ory-elements [data-testid="ory/card"]::before,
+.auth-card::before {
   content: '';
   position: absolute;
   top: -8px;
@@ -1031,6 +1033,10 @@
     linear-gradient(to top, #2252b3 15px, transparent 0) no-repeat calc(100% - 7px) 100% / 1px 15px;
 }
 
+.auth-card {
+  position: relative;
+}
+
 /* Mobile Full Screen Styles */
 @media (max-width: 640px) {
   .ory-elements [data-testid="ory/card"] {
@@ -1047,8 +1053,15 @@
     overflow-y: visible !important;
   }
 
-  .ory-elements [data-testid="ory/card"]::before {
+  .ory-elements [data-testid="ory/card"]::before,
+  .auth-card::before {
     display: none !important;
+  }
+
+  .auth-card {
+    min-height: 100vh;
+    border: none !important;
+    padding: 3rem 1.5rem !important;
   }
 
   .ory-elements [data-testid="ory/card"] > div {
