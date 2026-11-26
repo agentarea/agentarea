@@ -337,7 +337,8 @@ func runsDeps(d coreDeps, m *moduleSet, store kblob.Store) runs.Deps {
 		ToolCosts: m.connections.ToolCosts(),
 		Agents:    m.agents.Definitions(), CatalogAgents: m.agents.CatalogRuns(), Resolver: m.models.Resolver(), Models: m.models.Caller(),
 		Describer: m.models.Describer(), Decider: m.models.Decider(), Media: m.models.Media(), VideoJobs: m.models.VideoJobs(),
-		Runtime: m.sandbox.Runtime(), Workspace: m.sandbox.TaskWorkspace(),
+		ModelNames: m.models.ModelKinds(),
+		Runtime:    m.sandbox.Runtime(), Workspace: m.sandbox.TaskWorkspace(),
 		Tools: map[string]runsservice.ToolCaller{
 			"mcp":          mcpCaller{t: m.connections.MCPTools()},
 			"openapi":      openAPICaller{t: m.connections.OpenAPITools()},

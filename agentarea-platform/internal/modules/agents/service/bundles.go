@@ -43,20 +43,31 @@ func bundleTool(t catalogapi.BundleTool) domain.Tool {
 		out.Settings = &domain.Settings{AgentID: t.AgentID}
 	case t.ConnectionID != nil:
 		out.Settings = &domain.Settings{OpenAPIConnectionID: t.ConnectionID}
-	case t.ImageModelID != nil || t.VideoModelID != nil:
-		out.Settings = &domain.Settings{ImageModelID: t.ImageModelID, VideoModelID: t.VideoModelID}
+	case t.ImageModelID != nil || t.VideoModelID != nil || t.Models != nil:
+		out.Settings = &domain.Settings{ImageModelID: t.ImageModelID, VideoModelID: t.VideoModelID, Models: toolModelsOf(t.Models)}
 	}
 	return out
 }
 
-// withFolderModels is a code tool with the image and video models the folder
-// sets on it; its other settings stay.
+func toolModelsOf(l []catalogapi.BundleToolModel) *[]domain.ToolModel {
+	if l == nil {
+		return nil
+	}
+	out := make([]domain.ToolModel, len(l))
+	for i, m := range l {
+		out[i] = domain.ToolModel{ModelID: m.ModelID, ReasoningEffort: m.ReasoningEffort, ReasoningMaxTokens: m.ReasoningMaxTokens, MaxTokens: m.MaxTokens}
+	}
+	return &out
+}
+
+// withFolderModels is a code tool with the image, video and called models the
+// folder sets on it; its other settings stay.
 func withFolderModels(t domain.Tool, d catalogapi.BundleTool) domain.Tool {
 	st := domain.Settings{}
 	if t.Settings != nil {
 		st = *t.Settings
 	}
-	st.ImageModelID, st.VideoModelID = d.ImageModelID, d.VideoModelID
+	st.ImageModelID, st.VideoModelID, st.Models = d.ImageModelID, d.VideoModelID, toolModelsOf(d.Models)
 	t.Settings = nil
 	if st != (domain.Settings{}) {
 		t.Settings = &st
@@ -151,7 +162,7 @@ func (b BundleAgents) CreateAgent(ctx context.Context, c authn.Caller, in catalo
 // managed ones replaced by what the folder declares, the ones added in the
 // workspace kept. A delegate is matched by the agent it reaches, then by name,
 // and keeps the settings set on it; only its name and agent id follow the folder.
-// A code toolset the folder declares takes the folder's image and video models.
+// A code toolset the folder declares takes the folder's image, video and called models.
 func bundleToolsAfter(current []domain.Tool, in catalogapi.BundleAgentUpdate) []domain.Tool {
 	type ref struct{ typ, name string }
 	managed, wanted := map[ref]bool{}, map[ref]bool{}

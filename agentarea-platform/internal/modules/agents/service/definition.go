@@ -71,6 +71,12 @@ func apiTool(t domain.Tool) api.Tool {
 		out.Settings.DisabledMethods = *s.DisabledMethods
 	}
 	out.Settings.ImageModelID, out.Settings.VideoModelID = str(s.ImageModelID), str(s.VideoModelID)
+	if s.Models != nil {
+		for _, m := range *s.Models {
+			out.Settings.Models = append(out.Settings.Models, api.ToolModel{ModelID: m.ModelID, ReasoningEffort: str(m.ReasoningEffort),
+				ReasoningMaxTokens: m.ReasoningMaxTokens, MaxTokens: m.MaxTokens})
+		}
+	}
 	out.Settings.DescriptionOverride, out.Settings.AgentID = str(s.DescriptionOverride), str(s.AgentID)
 	out.Settings.A2AURL, out.Settings.AuthSecretName = str(s.A2AURL), str(s.AuthSecretName)
 	out.Settings.OpenAPIConnectionID, out.Settings.LoadMode = str(s.OpenAPIConnectionID), str(s.LoadMode)

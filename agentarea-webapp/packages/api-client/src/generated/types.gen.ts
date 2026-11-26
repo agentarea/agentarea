@@ -2226,7 +2226,7 @@ export type BundleTask = {
 /**
  * BundleToolset
  *
- * A built-in toolset with its settings. agentarea/media needs image_model or video_model.
+ * A built-in toolset with its settings. agentarea/media needs image_model or video_model; agentarea/llm needs models.
  */
 export type BundleToolset = {
     /**
@@ -2235,6 +2235,12 @@ export type BundleToolset = {
      * The image model instance the toolset generates with: its id, its name, or its model's name, as the agent's model; a literal or ${setup.x}.
      */
     image_model?: string | null;
+    /**
+     * Models
+     *
+     * agentarea/llm: the models the toolset may call, each named as the agent's model (a literal or ${setup.x}), or a BundleToolsetModel with its default reasoning and output budget.
+     */
+    models?: Array<string | BundleToolsetModel>;
     /**
      * Name
      */
@@ -2245,6 +2251,38 @@ export type BundleToolset = {
      * The video model instance the toolset generates with, named as image_model.
      */
     video_model?: string | null;
+};
+
+/**
+ * BundleToolsetModel
+ *
+ * A model agentarea/llm may call and the reasoning and output budget a call gets unless it sets its own; reasoning_effort and reasoning_max_tokens exclude each other.
+ */
+export type BundleToolsetModel = {
+    /**
+     * Max Tokens
+     *
+     * The most tokens an answer may take.
+     */
+    max_tokens?: number | null;
+    /**
+     * Name
+     *
+     * The model instance: its id, its name, or its model's name, as the agent's model; a literal or ${setup.x}.
+     */
+    name: string;
+    /**
+     * Reasoning Effort
+     *
+     * A reasoning level the model takes; a literal or ${setup.x}.
+     */
+    reasoning_effort?: string | null;
+    /**
+     * Reasoning Max Tokens
+     *
+     * A reasoning token budget, for a provider that takes one.
+     */
+    reasoning_max_tokens?: number | null;
 };
 
 /**
@@ -2876,12 +2914,47 @@ export type CodeToolConfig = {
 };
 
 /**
+ * CodeToolModel
+ *
+ * A model instance agentarea/llm may call, with the reasoning and output budget a call gets unless it sets its own.
+ *
+ * reasoning_effort and reasoning_max_tokens exclude each other; a decision model takes neither, nor max_tokens.
+ */
+export type CodeToolModel = {
+    /**
+     * Max Tokens
+     *
+     * The most tokens an answer may take.
+     */
+    max_tokens?: number | null;
+    /**
+     * Model Id
+     *
+     * The model instance's id.
+     */
+    model_id: string;
+    /**
+     * Reasoning Effort
+     *
+     * A reasoning level the model takes, such as low or high.
+     */
+    reasoning_effort?: string | null;
+    /**
+     * Reasoning Max Tokens
+     *
+     * A reasoning token budget, for a provider that takes one.
+     */
+    reasoning_max_tokens?: number | null;
+};
+
+/**
  * CodeToolSettings
  *
  * Settings for a built-in code toolset.
  *
  * The model ids are model instances of the workspace, each of the kind its
- * toolset needs: ``agentarea/media`` takes an image and/or a video model.
+ * toolset needs: ``agentarea/media`` takes an image and/or a video model,
+ * ``agentarea/llm`` the chat and decision models it may call (``models``).
  * No other toolset takes one.
  */
 export type CodeToolSettings = {
@@ -2895,6 +2968,12 @@ export type CodeToolSettings = {
      * agentarea/media: model instance generating images.
      */
     image_model_id?: string | null;
+    /**
+     * Models
+     *
+     * agentarea/llm: the model instances the toolset may call, at least one, each a chat or decision model.
+     */
+    models?: Array<CodeToolModel> | null;
     /**
      * Requires User Confirmation
      */

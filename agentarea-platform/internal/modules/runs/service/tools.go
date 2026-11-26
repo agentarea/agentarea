@@ -414,6 +414,9 @@ func (s *Service) dispatch(ctx context.Context, p Principal, in ToolCall, call *
 	if m := s.mediaCaller(in); m != nil {
 		caller, ok = m, true
 	}
+	if l := s.llmCaller(in); l != nil {
+		caller, ok = l, true
+	}
 	if !ok {
 		return ToolOutput{Result: fmt.Sprintf("MCP tool error: Unknown tool: %s", in.ToolName), Error: "Unknown tool: " + in.ToolName, Source: "builtin"}, nil
 	}

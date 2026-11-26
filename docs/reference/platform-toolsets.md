@@ -1,14 +1,14 @@
 ---
 title: Platform toolsets
 type: reference
-description: "The agentarea/* toolsets an agent can carry, and the arguments, answer and errors of agentarea/messages, which writes first to a workspace member."
+description: "The agentarea/* toolsets an agent can carry; the arguments, answer and errors of agentarea/messages, which writes first to a workspace member, and of agentarea/llm, which calls other models as a tool."
 prerequisites:
   - /concepts/agents/what-is-an-agent
 related:
   - /concepts/integration/triggers
   - /reference/policy-syntax
   - /guides/agents/deploy-from-a-folder
-last_updated: 2026-11-24
+last_updated: 2026-11-26
 ---
 
 A platform toolset is a set of AgentArea's own tools an agent carries by its
@@ -50,6 +50,7 @@ by the namespace.
 | `agentarea/audit` | observe | Inspect workspace audit log entries |
 | `agentarea/network` | observe | Inspect the workspace's network topology |
 | `agentarea/workspace_config` | build | Export the workspace configuration as YAML |
+| `agentarea/llm` | runtime | Call another model with a prompt and task files, or ask a decision model |
 
 ## agentarea/messages
 
@@ -106,7 +107,107 @@ carries the conversation on.
 
 Every file is checked before anything is sent, so a refused path or a size the sandbox reports over the limit sends nothing; files are then read and sent one at a time.
 
+## agentarea/llm
+
+`agentarea/llm` lets an agent call another model as a tool: one call, no
+tools, the answer returned or written to a file. An agent on a small model
+can read drawing sheets with a vision model, choosing per call which one from
+its instructions, and keep the long answers out of its own context.
+
+The toolset calls only the models its settings list. Each entry is a model
+instance of the workspace, chat or decision, with the reasoning and output
+budget a call gets unless it sets its own:
+
+```json
+{"type": "code", "name": "agentarea/llm", "settings": {"models": [
+  {"model_id": "6f1d…01"},
+  {"model_id": "6f1d…02", "reasoning_effort": "high", "max_tokens": 8000}
+]}}
+```
+
+| Field | Description |
+|---|---|
+| `model_id` | The model instance. Required; at least one entry, each instance once |
+| `reasoning_effort` | A level the model lists. A model that lists none takes no level |
+| `reasoning_max_tokens` | A reasoning token budget, for a provider that takes one. Not with `reasoning_effort` |
+| `max_tokens` | The most tokens an answer may take |
+
+A decision model takes none of the three. In a bundle the toolset's `models`
+names each model as the agent's `model` is; see
+[Deploy from a folder](/guides/agents/deploy-from-a-folder).
+
+Every call is held, charged and written to the run's spend ledger as the run's
+own model calls are, under the same spend caps, plan entitlements and
+per-call token limit.
+
+### llm_call
+
+One call to a chat model.
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| `model` | string | | One of the listed models: its instance name, its model's name or its id. Required |
+| `prompt` | string | | The user message. Required |
+| `system` | string | `null` | A system prompt |
+| `files` | string[] | `null` | Paths in the task workspace of images (PNG, JPEG, GIF, WebP) and PDFs, attached as `read_file` attaches them: at most 8 images and 20 PDF pages in all, a PDF at most 10 pages, each within what the model's provider takes |
+| `schema` | object | `null` | A JSON Schema the answer must match |
+| `output` | string | `null` | A task workspace path to write the answer to |
+| `reasoning_effort` | string | `null` | A level the model lists; replaces the entry's level or budget |
+| `reasoning_max_tokens` | integer | `null` | A reasoning token budget; replaces the entry's level or budget |
+| `max_tokens` | integer | `null` | The most tokens the answer may take; replaces the entry's |
+
+Without a level or budget from the call or the entry the model reasons as it
+does by default. The answer's token limit is the smallest of `max_tokens`,
+the model's maximum output and the run's per-call limit.
+
+With `schema` the call asks the provider for structured output
+(`response_format` of type `json_schema`; `text.format` on the Responses API),
+so the model answers by the schema itself. An answer that is still not JSON is
+the tool's error; a code fence around the JSON is dropped. Anthropic's own API
+takes no response schema: there the call is refused.
+
+### llm_decide
+
+One request to a decision model.
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| `model` | string | | One of the listed decision models, named as for `llm_call`. Required |
+| `state` | object | | What the questions are about. Required |
+| `questions` | object | | The questions by key: `{"type": "choice", "instructions": …, "criteria": {"<option>": "<when>"}}` or `{"type": "score", "instructions": …, "criteria": ["…"]}`. Required |
+| `output` | string | `null` | A task workspace path to write the answers to |
+
+### Response
+
+The answer as text: `llm_call`'s reply, or with `schema` its JSON;
+`llm_decide`'s answers as a JSON object, one per question. With `output`, a
+line in its place:
+
+```text
+Wrote sheets/12.json (2311 bytes) with gemini-3.8-flash; it cost 0.0042 EUR.
+```
+
+### Errors
+
+| Error | Meaning | Action |
+|---|---|---|
+| `model '<m>' is not one this agent may call; it may call …` | `model` names no listed model | Name one of those listed |
+| `model '<m>' names <n> of the models this agent may call: …` | Two listed models share the name | Give the id |
+| `model '<m>' is a decision model; ask it with llm_decide` | The kind does not fit the method | Use the other method |
+| `model <name> takes reasoning_effort low, high, not <x>` | A level the model does not list | Pass a listed level |
+| `set reasoning_effort or reasoning_max_tokens, not both` | Both in one call | Pass one |
+| `this provider takes a reasoning level (reasoning_effort), not a token budget` | The provider refuses a budget | Pass `reasoning_effort` |
+| `model <name> does not read images or PDFs` | `files` for a model without vision | Call a vision model |
+| `<path> has <n> pages; a PDF attached here has at most 10` | A long PDF | Cut the pages you need into a new PDF in the shell |
+| `<path>: … is over the … this model takes` | An image larger than the provider takes | Make a smaller copy in the shell |
+| `the model answered text that is not JSON` | The provider ignored the schema; the call is still charged | Call again, or use another model |
+| `this provider takes no response schema` | `schema` on a model served by Anthropic's own API | Call without `schema`, or another model |
+| `output <path> names a binary file; the answer is text` | `output` ends in `.pdf`, `.png` and the like | Write to `.json`, `.md` or `.txt` |
+| A spend cap or billing refusal | The call would pass a cap, or billing refused the hold | As for any model call |
+
 ## Example
+
+`agentarea/messages`:
 
 ```json
 {"text": "The weekly CEO report is ready in the workspace files."}
@@ -115,4 +216,13 @@ Every file is checked before anything is sent, so a refused path or a size the s
 ```json
 {"sent": true, "to": "ceo@example.com", "stream": {"id": "6c1f…", "name": "assistant-bot"},
  "messenger": "telegram", "message_id": 4182, "truncated": false}
+```
+
+`agentarea/llm`, reading a sheet with a vision model:
+
+```json
+{"model": "gemini-3.8-flash", "prompt": "List every socket on this sheet.",
+ "files": ["sheets/12.png"], "output": "sheets/12.json",
+ "schema": {"type": "object", "required": ["sockets"],
+            "properties": {"sockets": {"type": "array", "items": {"type": "string"}}}}}
 ```

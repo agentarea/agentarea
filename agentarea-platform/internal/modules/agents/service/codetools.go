@@ -73,6 +73,13 @@ func sandboxCodeToolsets() []CodeToolset {
 				method("generate_video", "write", "Start generating a video from a text prompt; returns a job id for get_video."),
 				method("get_video", "write", "Check a video job; once it is done the video is saved to the task workspace."),
 			}},
+		{Name: llmToolset, DisplayName: "Model Calls", Category: "llm", Plane: ref("runtime"),
+			Description: "Call one of the models this agent may use with a prompt and task files, or ask a decision model; " +
+				"the answer comes back or is saved to the task workspace.",
+			Methods: []CodeToolMethod{
+				method("call", "write", "One call to a chat model: a prompt, optionally images and PDFs from the task workspace and a JSON Schema for the answer."),
+				method("decide", "write", "Ask a decision model questions about a state; returns one answer per question."),
+			}},
 	}
 }
 

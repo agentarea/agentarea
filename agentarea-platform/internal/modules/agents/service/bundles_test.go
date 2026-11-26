@@ -11,6 +11,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/agents/domain"
 	catalogapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/catalog/api"
+	modelsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/api"
 )
 
 func TestBundleToolsAfterKeepsDelegateSettingsAndMovesTheAgentID(t *testing.T) {
@@ -99,6 +100,11 @@ type bundleFakeModels map[string]string
 func (m bundleFakeModels) ModelKind(_ context.Context, _ scope.Workspace, id string) (string, bool, error) {
 	k, ok := m[id]
 	return k, ok, nil
+}
+
+func (m bundleFakeModels) InstanceName(_ context.Context, _ scope.Workspace, id string) (modelsapi.InstanceName, bool, error) {
+	k, ok := m[id]
+	return modelsapi.InstanceName{ID: id, Kind: k}, ok, nil
 }
 
 type bundleFakeCodeTools []string

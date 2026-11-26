@@ -14,12 +14,22 @@ type MCPPermission struct {
 	RequiresUserConfirmation *bool
 }
 
+// ToolModel is a model a code toolset may call (agentarea/llm) and the
+// reasoning and output budget it calls it with unless a call says otherwise.
+type ToolModel struct {
+	ModelID            string
+	ReasoningEffort    *string
+	ReasoningMaxTokens *int
+	MaxTokens          *int
+}
+
 // Settings is every tool type's settings; a type reads and renders only its own.
 type Settings struct {
 	RequiresUserConfirmation *bool
 	DisabledMethods          *[]string
 	ImageModelID             *string
 	VideoModelID             *string
+	Models                   *[]ToolModel
 	MCPAllowed               *[]MCPPermission
 	DescriptionOverride      *string
 	AgentID                  *string

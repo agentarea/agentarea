@@ -14,6 +14,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/agents/domain"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/agents/store"
 	govapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/governance/api"
+	modelsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/api"
 )
 
 // Graph is the authorization graph agents checks, lists and writes through.
@@ -27,6 +28,8 @@ type Graph interface {
 type Models interface {
 	// ModelKind is the kind of the workspace's model instance, false when it has none.
 	ModelKind(ctx context.Context, ws scope.Workspace, id string) (kind string, found bool, err error)
+	// InstanceName is the instance's names, kind and reasoning levels, false when the workspace has none.
+	InstanceName(ctx context.Context, ws scope.Workspace, id string) (name modelsapi.InstanceName, found bool, err error)
 }
 
 // Approvals reads and writes an agent's approval policy rules (governance module).

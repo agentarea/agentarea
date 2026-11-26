@@ -80,6 +80,7 @@ export function toToolsConfig(
         requires_user_confirmation:
           t.settings?.requires_user_confirmation ?? false,
         ...toModelIds(t.settings ?? {}),
+        ...(t.settings?.models ? { models: t.settings.models } : {}),
       })),
     carried_tools: tools.filter((t) => !FORM_TOOL_TYPES.has(t.type)),
   };
@@ -168,6 +169,7 @@ export function toToolsPayload(
         disabled_methods: disabled?.length ? disabled : null,
         requires_user_confirmation: builtin.requires_user_confirmation ?? null,
         ...toModelIds(builtin),
+        ...(builtin.models ? { models: builtin.models } : {}),
       },
     });
   }

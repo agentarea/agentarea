@@ -18,6 +18,7 @@ import (
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/agents/domain"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/agents/store"
+	modelsapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/models/api"
 )
 
 // Service is AgentService and the agent routes' orchestration.
@@ -273,10 +274,16 @@ func sortedKeys(m map[string]bool) []string {
 	return out
 }
 
+// llmToolset is the toolset that calls the models its settings list.
+const llmToolset = "agentarea/llm"
+
 // toolModelSettings are the model settings each code toolset takes.
 func toolModelSettings(tool string) []string {
-	if tool == "agentarea/media" {
+	switch tool {
+	case "agentarea/media":
 		return []string{"image_model_id", "video_model_id"}
+	case llmToolset:
+		return []string{"models"}
 	}
 	return nil
 }
@@ -345,12 +352,99 @@ func (s *Service) validateToolModels(ctx context.Context, ws scope.Workspace, to
 					"Model instance '%s' is a %s model; %s of '%s' must be a %s model.", *v, kind, setting, t.Name, kinds[setting])}
 			}
 		}
+		var models *[]domain.ToolModel
+		if t.Settings != nil {
+			models = t.Settings.Models
+		}
+		if t.Name == llmToolset {
+			if err := s.validateLLMModels(ctx, ws, models); err != nil {
+				return err
+			}
+			continue
+		}
+		if models != nil {
+			return &domain.InvalidError{Code: domain.CodeInvalidModelID, Detail: fmt.Sprintf("Tool '%s' takes no models.", t.Name)}
+		}
 		if allowed != nil && given["image_model_id"] == nil && given["video_model_id"] == nil {
 			return &domain.InvalidError{Code: domain.CodeInvalidModelID, Detail: fmt.Sprintf(
 				"Tool '%s' needs an image_model_id or a video_model_id.", t.Name)}
 		}
 	}
 	return nil
+}
+
+// validateLLMModels checks the models agentarea/llm may call: chat or decision
+// instances of the workspace, each listed once, each with reasoning and output
+// budgets its model takes, as an agent's own model.
+func (s *Service) validateLLMModels(ctx context.Context, ws scope.Workspace, models *[]domain.ToolModel) error {
+	if models == nil || len(*models) == 0 {
+		return &domain.InvalidError{Code: domain.CodeInvalidModelID, Detail: fmt.Sprintf("Tool '%s' needs at least one model in models.", llmToolset)}
+	}
+	seen := map[string]bool{}
+	for _, m := range *models {
+		u, err := uuid.Parse(m.ModelID)
+		if err != nil {
+			return &domain.InvalidError{Code: domain.CodeInvalidModelID, Detail: fmt.Sprintf(
+				"Invalid models '%s': expected the UUID of a model instance. List available instances via GET /v1/model-instances.", m.ModelID)}
+		}
+		if s.d.Models == nil {
+			return &UnwiredError{Feature: "model instance validation"}
+		}
+		inst, found, err := s.d.Models.InstanceName(ctx, ws, u.String())
+		if err != nil {
+			return err
+		}
+		if !found {
+			return &domain.InvalidError{Code: domain.CodeInvalidModelID, Detail: fmt.Sprintf(
+				"Model instance '%s' does not exist in this workspace. Create one via POST /v1/model-instances.", m.ModelID)}
+		}
+		if inst.Kind != "chat" && inst.Kind != "decision" {
+			return &domain.InvalidError{Code: domain.CodeInvalidModelID, Detail: fmt.Sprintf(
+				"Model instance '%s' is a %s model; models of '%s' must be chat or decision models.", m.ModelID, inst.Kind, llmToolset)}
+		}
+		if seen[u.String()] {
+			return &domain.InvalidError{Code: domain.CodeInvalidModelID, Detail: fmt.Sprintf(
+				"Model instance '%s' is listed twice in models of '%s'.", m.ModelID, llmToolset)}
+		}
+		seen[u.String()] = true
+		if problem := toolModelProblem(m, inst); problem != "" {
+			return &domain.InvalidError{Code: domain.CodeInvalidModelID, Detail: fmt.Sprintf(
+				"Model instance '%s' in models of '%s': %s", m.ModelID, llmToolset, problem)}
+		}
+	}
+	return nil
+}
+
+// toolModelProblem is why an entry's budgets do not fit its model, "" when they do.
+func toolModelProblem(m domain.ToolModel, inst modelsapi.InstanceName) string {
+	effort := m.ReasoningEffort != nil && *m.ReasoningEffort != ""
+	if inst.Kind == "decision" {
+		if effort || m.ReasoningMaxTokens != nil || m.MaxTokens != nil {
+			return "a decision model takes no reasoning_effort, reasoning_max_tokens or max_tokens"
+		}
+		return ""
+	}
+	for _, v := range []struct {
+		name string
+		n    *int
+	}{{"reasoning_max_tokens", m.ReasoningMaxTokens}, {"max_tokens", m.MaxTokens}} {
+		if v.n != nil && *v.n <= 0 {
+			return v.name + " must be a positive integer"
+		}
+	}
+	if effort && m.ReasoningMaxTokens != nil {
+		return domain.ErrReasoningConflict.Error()
+	}
+	if !effort {
+		return ""
+	}
+	if len(inst.ReasoningLevels) == 0 {
+		return fmt.Sprintf("model %s takes no reasoning_effort", inst.ModelName)
+	}
+	if !slices.Contains(inst.ReasoningLevels, *m.ReasoningEffort) {
+		return fmt.Sprintf("model %s takes reasoning_effort %s, not %s", inst.ModelName, strings.Join(inst.ReasoningLevels, ", "), *m.ReasoningEffort)
+	}
+	return ""
 }
 
 func (s *Service) validateClientID(ctx context.Context, ws scope.Workspace, c authn.Caller, id *string) (*string, error) {

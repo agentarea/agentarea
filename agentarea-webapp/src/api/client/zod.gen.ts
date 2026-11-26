@@ -589,12 +589,25 @@ export const zBundleTask = z.object({
 });
 
 /**
+ * BundleToolsetModel
+ *
+ * A model agentarea/llm may call and the reasoning and output budget a call gets unless it sets its own; reasoning_effort and reasoning_max_tokens exclude each other.
+ */
+export const zBundleToolsetModel = z.object({
+  max_tokens: z.int().gte(1).lte(2147483647).nullish(),
+  name: z.string().min(1),
+  reasoning_effort: z.string().nullish(),
+  reasoning_max_tokens: z.int().gte(1).lte(2147483647).nullish(),
+});
+
+/**
  * BundleToolset
  *
- * A built-in toolset with its settings. agentarea/media needs image_model or video_model.
+ * A built-in toolset with its settings. agentarea/media needs image_model or video_model; agentarea/llm needs models.
  */
 export const zBundleToolset = z.object({
   image_model: z.string().nullish(),
+  models: z.array(z.union([z.string(), zBundleToolsetModel])).optional(),
   name: z.string().min(1),
   video_model: z.string().nullish(),
 });
@@ -918,17 +931,33 @@ export const zClientUpdate = z.object({
 });
 
 /**
+ * CodeToolModel
+ *
+ * A model instance agentarea/llm may call, with the reasoning and output budget a call gets unless it sets its own.
+ *
+ * reasoning_effort and reasoning_max_tokens exclude each other; a decision model takes neither, nor max_tokens.
+ */
+export const zCodeToolModel = z.object({
+  max_tokens: z.int().gte(1).nullish(),
+  model_id: z.string(),
+  reasoning_effort: z.string().nullish(),
+  reasoning_max_tokens: z.int().gte(1).nullish(),
+});
+
+/**
  * CodeToolSettings
  *
  * Settings for a built-in code toolset.
  *
  * The model ids are model instances of the workspace, each of the kind its
- * toolset needs: ``agentarea/media`` takes an image and/or a video model.
+ * toolset needs: ``agentarea/media`` takes an image and/or a video model,
+ * ``agentarea/llm`` the chat and decision models it may call (``models``).
  * No other toolset takes one.
  */
 export const zCodeToolSettings = z.object({
   disabled_methods: z.array(z.string()).nullish(),
   image_model_id: z.string().nullish(),
+  models: z.array(zCodeToolModel).nullish(),
   requires_user_confirmation: z.boolean().nullish(),
   video_model_id: z.string().nullish(),
 });

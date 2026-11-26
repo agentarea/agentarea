@@ -135,6 +135,40 @@ func runtimeToolsets() []CodeToolset {
 			{Method: "get_video", Description: "Check a video job; once it is done the video is saved to the task workspace.",
 				Parameters: obj(map[string]any{"job_id": str("The job id generate_video returned.")}, "job_id")},
 		}},
+		{Namespace: "agentarea/llm", Description: "Call one of the models this agent may use with a prompt and task files, " +
+			"or ask a decision model; the answer comes back or is saved to the task workspace.", Methods: []CodeMethod{
+			{Method: "call", Description: "One call to a chat model, without tools: a prompt, optionally images and PDFs from the task workspace " +
+				"and a JSON Schema the answer must match. Returns the answer, or with output writes it to that file and returns a short line.",
+				Parameters: obj(map[string]any{
+					"model":  str("The model to call: one this agent may use, by its instance name, its model's name or its id."),
+					"prompt": str("The user message."),
+					"system": map[string]any{"type": []any{"string", "null"}, "default": nil, "description": "A system prompt."},
+					"files": map[string]any{"type": []any{"array", "null"}, "items": map[string]any{"type": "string"}, "default": nil,
+						"description": "Task workspace paths of images (PNG, JPEG, GIF, WebP) and PDFs to attach, as read_file reads them: " +
+							"at most 8 images and 20 PDF pages in all, a PDF at most 10 pages."},
+					"schema": map[string]any{"type": []any{"object", "null"}, "default": nil,
+						"description": "A JSON Schema the answer must match; the answer is then JSON, and one that does not match is an error."},
+					"output": map[string]any{"type": []any{"string", "null"}, "default": nil,
+						"description": "A task workspace path to write the answer to instead of returning it."},
+					"reasoning_effort": map[string]any{"type": []any{"string", "null"}, "default": nil,
+						"description": "A reasoning level the model takes, such as low or high; replaces the model's configured reasoning budget."},
+					"reasoning_max_tokens": map[string]any{"type": []any{"integer", "null"}, "default": nil,
+						"description": "A reasoning token budget, for a provider that takes one; replaces the model's configured reasoning level."},
+					"max_tokens": map[string]any{"type": []any{"integer", "null"}, "default": nil,
+						"description": "The most tokens the answer may take."},
+				}, "model", "prompt")},
+			{Method: "decide", Description: "Ask a decision model questions about a state; returns one answer per question, as JSON. " +
+				"With output writes the answers to that file and returns a short line.",
+				Parameters: obj(map[string]any{
+					"model": str("The decision model to ask: one this agent may use, by its instance name, its model's name or its id."),
+					"state": map[string]any{"type": "object", "description": "What the questions are about."},
+					"questions": map[string]any{"type": "object", "description": "The questions by key. Each is " +
+						`{"type": "choice", "instructions": "...", "criteria": {"<option>": "<when it applies>", ...}} or ` +
+						`{"type": "score", "instructions": "...", "criteria": ["<what raises the score>", ...]}.`},
+					"output": map[string]any{"type": []any{"string", "null"}, "default": nil,
+						"description": "A task workspace path to write the answers to instead of returning them."},
+				}, "model", "state", "questions")},
+		}},
 	}
 }
 
