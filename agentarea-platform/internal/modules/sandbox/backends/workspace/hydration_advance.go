@@ -20,6 +20,7 @@ import (
 
 const (
 	attachmentInputPrefix   = "inputs/attachments/"
+	skillInputPrefix        = "inputs/skills/"
 	maxHydrationViewBytes   = 16 * 1024 * 1024
 	maxHydrationPinAdvances = 3
 )
@@ -41,8 +42,25 @@ func IsAttachmentInputPath(value string) bool {
 	return name != "" && !strings.Contains(name, "/")
 }
 
+// IsSkillInputPath accepts inputs/skills/<skill dir>/<path>: the files of a
+// skill the agent activates mid-task land there.
+func IsSkillInputPath(value string) bool {
+	normalized, err := NormalizeRelativePath(value)
+	if err != nil || normalized != value || !strings.HasPrefix(value, skillInputPrefix) {
+		return false
+	}
+	dir, file, found := strings.Cut(strings.TrimPrefix(value, skillInputPrefix), "/")
+	return found && dir != "" && file != ""
+}
+
+// IsAddableInputPath is an input a live sandbox may receive after it was
+// hydrated: a follow-up attachment, or a file of a skill activated mid-task.
+func IsAddableInputPath(value string) bool {
+	return IsAttachmentInputPath(value) || IsSkillInputPath(value)
+}
+
 // additiveAttachmentDiff reports the paths current adds to previous when every
-// previous entry is unchanged and every new entry is an attachment file.
+// previous entry is unchanged and every new entry is an addable input.
 func additiveAttachmentDiff(previous, current []Entry) ([]string, bool) {
 	currentByPath := make(map[string]Entry, len(current))
 	for _, entry := range current {
@@ -69,7 +87,7 @@ func additiveAttachmentDiff(previous, current []Entry) ([]string, bool) {
 		if _, ok := kept[entry.RelativePath]; ok {
 			continue
 		}
-		if !IsAttachmentInputPath(entry.RelativePath) {
+		if !IsAddableInputPath(entry.RelativePath) {
 			return nil, false
 		}
 		added = append(added, entry.RelativePath)
