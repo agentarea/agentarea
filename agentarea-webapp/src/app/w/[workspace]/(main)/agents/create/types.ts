@@ -43,6 +43,8 @@ export type BuiltinToolConfig = {
   requires_user_confirmation?: boolean;
   enabled?: boolean;
   disabled_methods?: { [methodName: string]: boolean };
+  /** The models agentarea/llm may call; the form carries them unedited. */
+  models?: CodeToolSettings["models"];
 } & CodeToolModelIds;
 
 /**

@@ -474,6 +474,17 @@ func TestOpenAIRequestBodyLeavesUnsetFieldsOut(t *testing.T) {
 	assertJSON(t, "body", body, `{"model":"m","messages":[{"role":"user","content":"hi"}],"stream":true,"stream_options":{"include_usage":true},"temperature":0}`)
 }
 
+func TestOpenAIResponseSchemaIsAskedForAsResponseFormat(t *testing.T) {
+	srv, c := serveRaw(t, 200, openAISSE(`{"choices":[{"delta":{"content":"{}"}}]}`))
+	schema := map[string]any{"type": "object", "properties": map[string]any{"n": map[string]any{"type": "integer"}}}
+	if _, err := runStream(context.Background(), openAIModel(t, srv.URL, domain.Profile{}), Request{Messages: userHi(), ResponseSchema: schema}); err != nil {
+		t.Fatalf("Stream: %v", err)
+	}
+	_, _, _, body := c.snapshot()
+	assertJSON(t, "response_format", body["response_format"],
+		`{"type":"json_schema","json_schema":{"name":"answer","schema":{"type":"object","properties":{"n":{"type":"integer"}}}}}`)
+}
+
 func TestOpenAIReasoningIsAskedForInTheProvidersForm(t *testing.T) {
 	budget := 2048
 	cases := []struct {

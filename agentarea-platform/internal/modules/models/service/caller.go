@@ -245,7 +245,7 @@ func (s *Service) call(ctx context.Context, p api.Principal, call api.Call) (api
 	}
 	return Complete(ctx, model, transport.Request{
 		Messages: call.Messages, Tools: call.Tools, Temperature: call.Temperature, MaxTokens: call.MaxTokens,
-		ReasoningEffort: call.ReasoningEffort, ReasoningMaxTokens: call.ReasoningMaxTokens,
+		ReasoningEffort: call.ReasoningEffort, ReasoningMaxTokens: call.ReasoningMaxTokens, ResponseSchema: call.ResponseSchema,
 	}, call.OnChunk)
 }
 

@@ -366,25 +366,30 @@ func (w *workspace) billingCurrency() string { return w.b.d.ModelNames.BillingCu
 
 const maxModelCandidates = 10
 
-// modelID is ref when it is an id, else the one active instance of kind
-// named ref: by its own name first, then by its model's name. setting is
-// the field that names it.
-func (w *workspace) modelID(ctx context.Context, setting, kind, ref string) (string, string, error) {
+// modelID is ref when it is an id, else the one active instance of one of
+// kinds named ref: by its own name first, then by its model's name. setting
+// is the field that names it.
+func (w *workspace) modelID(ctx context.Context, setting string, kinds []string, ref string) (string, string, error) {
 	if u, err := uuid.Parse(ref); err == nil {
 		return u.String(), "", nil
 	}
 	if w.models == nil {
 		w.models = map[string][]modelsapi.InstanceName{}
 	}
-	all, ok := w.models[kind]
-	if !ok {
-		found, err := w.b.d.ModelNames.InstancesOfKind(ctx, w.c.Workspace, kind)
-		if err != nil {
-			return "", "", err
+	var all []modelsapi.InstanceName
+	for _, kind := range kinds {
+		of, ok := w.models[kind]
+		if !ok {
+			found, err := w.b.d.ModelNames.InstancesOfKind(ctx, w.c.Workspace, kind)
+			if err != nil {
+				return "", "", err
+			}
+			of = found
+			w.models[kind] = of
 		}
-		all = found
-		w.models[kind] = all
+		all = append(all, of...)
 	}
+	kind := strings.Join(kinds, " or ")
 	var byName, byModel []modelsapi.InstanceName
 	for _, m := range all {
 		if m.Name == ref {

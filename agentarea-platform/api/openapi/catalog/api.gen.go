@@ -1239,14 +1239,40 @@ type BundleTask struct {
 	RenamedFrom *string `json:"renamed_from"`
 }
 
-// BundleToolset A built-in toolset with its settings. agentarea/media needs image_model or video_model.
+// BundleToolset A built-in toolset with its settings. agentarea/media needs image_model or video_model; agentarea/llm needs models.
 type BundleToolset struct {
 	// ImageModel The image model instance the toolset generates with: its id, its name, or its model's name, as the agent's model; a literal or ${setup.x}.
 	ImageModel *string `json:"image_model"`
-	Name       string  `json:"name"`
+
+	// Models agentarea/llm: the models the toolset may call, each named as the agent's model (a literal or ${setup.x}), or a BundleToolsetModel with its default reasoning and output budget.
+	Models *[]BundleToolset_Models_Item `json:"models,omitempty"`
+	Name   string                       `json:"name"`
 
 	// VideoModel The video model instance the toolset generates with, named as image_model.
 	VideoModel *string `json:"video_model"`
+}
+
+// BundleToolsetModels0 defines model for BundleToolset.Models.0.
+type BundleToolsetModels0 = string
+
+// BundleToolset_Models_Item defines model for BundleToolset.models.Item.
+type BundleToolset_Models_Item struct {
+	union json.RawMessage
+}
+
+// BundleToolsetModel A model agentarea/llm may call and the reasoning and output budget a call gets unless it sets its own; reasoning_effort and reasoning_max_tokens exclude each other.
+type BundleToolsetModel struct {
+	// MaxTokens The most tokens an answer may take.
+	MaxTokens *int `json:"max_tokens"`
+
+	// Name The model instance: its id, its name, or its model's name, as the agent's model; a literal or ${setup.x}.
+	Name string `json:"name"`
+
+	// ReasoningEffort A reasoning level the model takes; a literal or ${setup.x}.
+	ReasoningEffort *string `json:"reasoning_effort"`
+
+	// ReasoningMaxTokens A reasoning token budget, for a provider that takes one.
+	ReasoningMaxTokens *int `json:"reasoning_max_tokens"`
 }
 
 // BundleTriggerOn The stream an automation runs on and the events it takes.
@@ -2303,6 +2329,68 @@ func (t BundlePolicyInput_Subject) MarshalJSON() ([]byte, error) {
 }
 
 func (t *BundlePolicyInput_Subject) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsBundleToolsetModels0 returns the union data inside the BundleToolset_Models_Item as a BundleToolsetModels0
+func (t BundleToolset_Models_Item) AsBundleToolsetModels0() (BundleToolsetModels0, error) {
+	var body BundleToolsetModels0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromBundleToolsetModels0 overwrites any union data inside the BundleToolset_Models_Item as the provided BundleToolsetModels0
+func (t *BundleToolset_Models_Item) FromBundleToolsetModels0(v BundleToolsetModels0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeBundleToolsetModels0 performs a merge with any union data inside the BundleToolset_Models_Item, using the provided BundleToolsetModels0
+func (t *BundleToolset_Models_Item) MergeBundleToolsetModels0(v BundleToolsetModels0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsBundleToolsetModel returns the union data inside the BundleToolset_Models_Item as a BundleToolsetModel
+func (t BundleToolset_Models_Item) AsBundleToolsetModel() (BundleToolsetModel, error) {
+	var body BundleToolsetModel
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromBundleToolsetModel overwrites any union data inside the BundleToolset_Models_Item as the provided BundleToolsetModel
+func (t *BundleToolset_Models_Item) FromBundleToolsetModel(v BundleToolsetModel) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeBundleToolsetModel performs a merge with any union data inside the BundleToolset_Models_Item, using the provided BundleToolsetModel
+func (t *BundleToolset_Models_Item) MergeBundleToolsetModel(v BundleToolsetModel) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t BundleToolset_Models_Item) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *BundleToolset_Models_Item) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }

@@ -92,11 +92,21 @@ type ToolConfig struct {
 	Settings ToolConfigSettings `json:"settings"`
 }
 
+// ToolModel is a model a code toolset may call and the reasoning and output
+// budget it calls it with unless a call says otherwise.
+type ToolModel struct {
+	ModelID            string `json:"model_id"`
+	ReasoningEffort    string `json:"reasoning_effort"`
+	ReasoningMaxTokens *int   `json:"reasoning_max_tokens"`
+	MaxTokens          *int   `json:"max_tokens"`
+}
+
 // ToolConfigSettings holds every type's settings; a type reads only its own.
 type ToolConfigSettings struct {
-	DisabledMethods []string `json:"disabled_methods"`
-	ImageModelID    string   `json:"image_model_id"`
-	VideoModelID    string   `json:"video_model_id"`
+	DisabledMethods []string    `json:"disabled_methods"`
+	ImageModelID    string      `json:"image_model_id"`
+	VideoModelID    string      `json:"video_model_id"`
+	Models          []ToolModel `json:"models"`
 	// AllowedTools narrows an MCP server or OpenAPI connection; nil allows all.
 	AllowedTools        []string `json:"allowed_tools"`
 	OpenAPIConnectionID string   `json:"openapi_connection_id"`
@@ -275,6 +285,8 @@ type CodeBinding struct {
 	DisabledMethods []string `json:"disabled_methods"`
 	ImageModelID    string   `json:"image_model_id"`
 	VideoModelID    string   `json:"video_model_id"`
+	// Models are the models agentarea/llm may call.
+	Models []ToolModel `json:"models,omitempty"`
 }
 
 // RemoteAgentBinding is a delegate reached over A2A; AgentName is its label.

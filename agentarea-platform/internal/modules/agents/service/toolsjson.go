@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/httpx"
@@ -34,6 +35,38 @@ func permissions(v *[]domain.MCPPermission, omitNil bool) any {
 	return out
 }
 
+func toolModels(v *[]domain.ToolModel, omitNil bool) any {
+	if v == nil {
+		return nil
+	}
+	out := make([]any, len(*v))
+	for i, m := range *v {
+		o := wirejson.Object{{Key: "model_id", Value: m.ModelID}}
+		for _, f := range []struct {
+			key   string
+			value any
+			isNil bool
+		}{
+			{"reasoning_effort", strOrNil(m.ReasoningEffort), m.ReasoningEffort == nil},
+			{"reasoning_max_tokens", intOrNil(m.ReasoningMaxTokens), m.ReasoningMaxTokens == nil},
+			{"max_tokens", intOrNil(m.MaxTokens), m.MaxTokens == nil},
+		} {
+			if !f.isNil || !omitNil {
+				o = append(o, wirejson.Member{Key: f.key, Value: f.value})
+			}
+		}
+		out[i] = o
+	}
+	return out
+}
+
+func intOrNil(n *int) any {
+	if n == nil {
+		return nil
+	}
+	return *n
+}
+
 func boolOrNil(b *bool) any {
 	if b == nil {
 		return nil
@@ -65,6 +98,7 @@ func settingsObject(t domain.Tool, omitNil bool) wirejson.Object {
 		add("disabled_methods", strList(s.DisabledMethods), s.DisabledMethods == nil)
 		add("image_model_id", strOrNil(s.ImageModelID), s.ImageModelID == nil)
 		add("video_model_id", strOrNil(s.VideoModelID), s.VideoModelID == nil)
+		add("models", toolModels(s.Models, omitNil), s.Models == nil)
 	case domain.ToolMCP:
 		add("allowed_tools", permissions(s.MCPAllowed, omitNil), s.MCPAllowed == nil)
 	case domain.ToolAgent:
@@ -220,6 +254,7 @@ func parseSettings(tag string, o wirejson.Object, loc []any, errs *fieldErrs) *d
 		s.DisabledMethods = optStrList(o, "disabled_methods", loc, errs)
 		s.ImageModelID, _ = optString(o, "image_model_id", loc, errs)
 		s.VideoModelID, _ = optString(o, "video_model_id", loc, errs)
+		s.Models = parseToolModels(o, loc, errs)
 	case domain.ToolMCP:
 		s.MCPAllowed = parsePermissions(o, loc, errs)
 	case domain.ToolAgent:
@@ -237,6 +272,69 @@ func parseSettings(tag string, o wirejson.Object, loc []any, errs *fieldErrs) *d
 		}
 	}
 	return s
+}
+
+// maxToolTokens bounds a tool model's token budgets as reasoning_max_tokens is bounded.
+const maxToolTokens = 1<<31 - 1
+
+// optTokens is a positive integer token budget at key, nil when unset.
+func optTokens(o wirejson.Object, key string, loc []any, errs *fieldErrs) *int {
+	v, ok := o.Get(key)
+	if !ok || v == nil {
+		return nil
+	}
+	l := append(append([]any{}, loc...), key)
+	if n, isNum := v.(interface{ Int64() (int64, error) }); isNum {
+		if i, err := n.Int64(); err == nil && i > 0 {
+			if i > maxToolTokens {
+				*errs = append(*errs, httpx.ValueError(fmt.Sprintf("%s must be at most %d", key, maxToolTokens), l...))
+				return nil
+			}
+			x := int(i)
+			return &x
+		}
+	}
+	*errs = append(*errs, httpx.ValueError(key+" must be a positive integer", l...))
+	return nil
+}
+
+func parseToolModels(o wirejson.Object, loc []any, errs *fieldErrs) *[]domain.ToolModel {
+	v, ok := o.Get("models")
+	if !ok || v == nil {
+		return nil
+	}
+	l := append(append([]any{}, loc...), "models")
+	arr, isArr := v.([]any)
+	if !isArr {
+		*errs = append(*errs, httpx.ListType(l...))
+		return nil
+	}
+	out := make([]domain.ToolModel, 0, len(arr))
+	for i, it := range arr {
+		il := append(append([]any{}, l...), i)
+		x, isObj := it.(wirejson.Object)
+		if !isObj {
+			*errs = append(*errs, httpx.FieldError{Type: "model_attributes_type", Loc: il,
+				Msg: "Input should be a valid dictionary or object to extract fields from"})
+			continue
+		}
+		id, hasID := x.Get("model_id")
+		ids, isStr := id.(string)
+		switch {
+		case !hasID:
+			*errs = append(*errs, httpx.Missing(append(append([]any{}, il...), "model_id")...))
+			continue
+		case !isStr:
+			*errs = append(*errs, httpx.StringType(append(append([]any{}, il...), "model_id")...))
+			continue
+		}
+		m := domain.ToolModel{ModelID: ids}
+		m.ReasoningEffort, _ = optString(x, "reasoning_effort", il, errs)
+		m.ReasoningMaxTokens = optTokens(x, "reasoning_max_tokens", il, errs)
+		m.MaxTokens = optTokens(x, "max_tokens", il, errs)
+		out = append(out, m)
+	}
+	return &out
 }
 
 func parsePermissions(o wirejson.Object, loc []any, errs *fieldErrs) *[]domain.MCPPermission {

@@ -31,7 +31,7 @@ func (s *Service) InstancesOfKind(ctx context.Context, ws scope.Workspace, kind 
 		if v.Model == nil || v.Model.Kind != kind {
 			continue
 		}
-		out = append(out, api.InstanceName{ID: v.ID, Name: v.Name, ModelName: v.Model.ModelName})
+		out = append(out, api.InstanceName{ID: v.ID, Name: v.Name, ModelName: v.Model.ModelName, Kind: kind})
 	}
 	return out, nil
 }

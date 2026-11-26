@@ -66,8 +66,12 @@ func agentSpec(d agentsapi.Definition) api.AgentSpec {
 		spec.Tools = make([]api.ToolConfig, len(d.Tools))
 		for i, t := range d.Tools {
 			st := t.Settings
+			var models []api.ToolModel
+			for _, m := range st.Models {
+				models = append(models, api.ToolModel(m))
+			}
 			spec.Tools[i] = api.ToolConfig{Type: t.Type, Name: t.Name, Settings: api.ToolConfigSettings{
-				DisabledMethods: st.DisabledMethods, ImageModelID: st.ImageModelID, VideoModelID: st.VideoModelID,
+				DisabledMethods: st.DisabledMethods, ImageModelID: st.ImageModelID, VideoModelID: st.VideoModelID, Models: models,
 				AllowedTools: st.AllowedTools, OpenAPIConnectionID: st.OpenAPIConnectionID, LoadMode: st.LoadMode,
 				DescriptionOverride: st.DescriptionOverride, DelegateAgentID: st.AgentID, A2AURL: st.A2AURL, AuthSecretName: st.AuthSecretName,
 			}}

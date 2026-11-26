@@ -3873,7 +3873,7 @@
       },
       "BundleToolset": {
         "additionalProperties": false,
-        "description": "A built-in toolset with its settings. agentarea/media needs image_model or video_model.",
+        "description": "A built-in toolset with its settings. agentarea/media needs image_model or video_model; agentarea/llm needs models.",
         "properties": {
           "image_model": {
             "anyOf": [
@@ -3886,6 +3886,21 @@
             ],
             "description": "The image model instance the toolset generates with: its id, its name, or its model's name, as the agent's model; a literal or ${setup.x}.",
             "title": "Image Model"
+          },
+          "models": {
+            "description": "agentarea/llm: the models the toolset may call, each named as the agent's model (a literal or ${setup.x}), or a BundleToolsetModel with its default reasoning and output budget.",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/components/schemas/BundleToolsetModel"
+                }
+              ]
+            },
+            "title": "Models",
+            "type": "array"
           },
           "name": {
             "minLength": 1,
@@ -3909,6 +3924,63 @@
           "name"
         ],
         "title": "BundleToolset",
+        "type": "object"
+      },
+      "BundleToolsetModel": {
+        "additionalProperties": false,
+        "description": "A model agentarea/llm may call and the reasoning and output budget a call gets unless it sets its own; reasoning_effort and reasoning_max_tokens exclude each other.",
+        "properties": {
+          "max_tokens": {
+            "anyOf": [
+              {
+                "maximum": 2147483647,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The most tokens an answer may take.",
+            "title": "Max Tokens"
+          },
+          "name": {
+            "description": "The model instance: its id, its name, or its model's name, as the agent's model; a literal or ${setup.x}.",
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A reasoning level the model takes; a literal or ${setup.x}.",
+            "title": "Reasoning Effort"
+          },
+          "reasoning_max_tokens": {
+            "anyOf": [
+              {
+                "maximum": 2147483647,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A reasoning token budget, for a provider that takes one.",
+            "title": "Reasoning Max Tokens"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "BundleToolsetModel",
         "type": "object"
       },
       "BundleTriggerOn": {
@@ -4945,8 +5017,61 @@
         "title": "CodeToolConfig",
         "type": "object"
       },
+      "CodeToolModel": {
+        "description": "A model instance agentarea/llm may call, with the reasoning and output budget a call gets unless it sets its own.\n\nreasoning_effort and reasoning_max_tokens exclude each other; a decision model takes neither, nor max_tokens.",
+        "properties": {
+          "max_tokens": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The most tokens an answer may take.",
+            "title": "Max Tokens"
+          },
+          "model_id": {
+            "description": "The model instance's id.",
+            "title": "Model Id",
+            "type": "string"
+          },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A reasoning level the model takes, such as low or high.",
+            "title": "Reasoning Effort"
+          },
+          "reasoning_max_tokens": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A reasoning token budget, for a provider that takes one.",
+            "title": "Reasoning Max Tokens"
+          }
+        },
+        "required": [
+          "model_id"
+        ],
+        "title": "CodeToolModel",
+        "type": "object"
+      },
       "CodeToolSettings": {
-        "description": "Settings for a built-in code toolset.\n\nThe model ids are model instances of the workspace, each of the kind its\ntoolset needs: ``agentarea/media`` takes an image and/or a video model.\nNo other toolset takes one.",
+        "description": "Settings for a built-in code toolset.\n\nThe model ids are model instances of the workspace, each of the kind its\ntoolset needs: ``agentarea/media`` takes an image and/or a video model,\n``agentarea/llm`` the chat and decision models it may call (``models``).\nNo other toolset takes one.",
         "properties": {
           "disabled_methods": {
             "anyOf": [
@@ -4973,6 +5098,21 @@
             ],
             "description": "agentarea/media: model instance generating images.",
             "title": "Image Model Id"
+          },
+          "models": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CodeToolModel"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "agentarea/llm: the model instances the toolset may call, at least one, each a chat or decision model.",
+            "title": "Models"
           },
           "requires_user_confirmation": {
             "anyOf": [

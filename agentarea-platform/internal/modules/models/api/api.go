@@ -131,6 +131,8 @@ type Call struct {
 	MaxTokens          int
 	ReasoningEffort    string
 	ReasoningMaxTokens *int
+	// ResponseSchema is the JSON Schema the provider answers by; nil is free text.
+	ResponseSchema map[string]any
 	// Funded: billing holds the call, so a platform credential may be used.
 	Funded  bool
 	OnChunk func(Chunk)
@@ -175,8 +177,12 @@ type SpecUse interface {
 }
 
 // InstanceName is a model instance by the names a bundle may give it:
-// the instance's own name, or its model's name.
-type InstanceName struct{ ID, Name, ModelName string }
+// the instance's own name, or its model's name. Kind is its model's kind,
+// ReasoningLevels the reasoning efforts it takes (its model's, else its provider's).
+type InstanceName struct {
+	ID, Name, ModelName, Kind string
+	ReasoningLevels           []string
+}
 
 // Directory is what a bundle deploy reads of models: the active instances
 // of a kind a workspace sees, and the currency it bills in.

@@ -286,6 +286,8 @@ type Deps struct {
 	// Describer and Decider serve the model calls made outside a run (OneShotModels).
 	Describer modelsapi.Describer
 	Decider   modelsapi.Decider
+	// ModelNames names the models the agentarea/llm toolset may call.
+	ModelNames modelsapi.InstanceNames
 	// Media and VideoJobs serve the agentarea/media toolset.
 	Media     modelsapi.Media
 	VideoJobs modelsapi.VideoJobs

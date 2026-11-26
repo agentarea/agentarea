@@ -126,11 +126,20 @@ type BundleSkill struct {
 	RenamedFrom           *string
 }
 
-// BundleToolset is a code toolset of an agent and the image and video models
-// it generates with, each named as an agent's model is.
+// BundleToolset is a code toolset of an agent, the image and video models it
+// generates with and the models it calls, each named as an agent's model is.
 type BundleToolset struct {
 	Name                   string
 	ImageModel, VideoModel *string
+	Models                 []BundleToolsetModel
+}
+
+// BundleToolsetModel is a model a toolset calls, named as an agent's model
+// is, and the reasoning and output budget it calls it with by default.
+type BundleToolsetModel struct {
+	Name                          string
+	ReasoningEffort               *string
+	ReasoningMaxTokens, MaxTokens *int64
 }
 
 // BundleAgent is an agent the bundle creates.
@@ -787,21 +796,26 @@ func (c *checker) reasoningEffort(v any, loc []any) *string {
 
 // reasoningMaxTokens is checked_reasoning_max_tokens, a before-validator.
 func (c *checker) reasoningMaxTokens(v any, loc []any) *int64 {
+	return c.tokens(v, "reasoning_max_tokens", loc)
+}
+
+// tokens is a positive token budget named key, at most maxReasoningMaxTokens.
+func (c *checker) tokens(v any, key string, loc []any) *int64 {
 	if v == nil {
 		return nil
 	}
 	n, ok := v.(json.Number)
 	if !ok || strings.HasPrefix(string(n), "-") {
-		c.valueError("reasoning_max_tokens must be a positive integer", loc)
+		c.valueError(key+" must be a positive integer", loc)
 		return nil
 	}
 	i, err := n.Int64()
 	if err != nil || i > maxReasoningMaxTokens {
-		c.valueError(fmt.Sprintf("reasoning_max_tokens must be at most %d", maxReasoningMaxTokens), loc)
+		c.valueError(fmt.Sprintf("%s must be at most %d", key, maxReasoningMaxTokens), loc)
 		return nil
 	}
 	if i <= 0 {
-		c.valueError("reasoning_max_tokens must be a positive integer", loc)
+		c.valueError(key+" must be a positive integer", loc)
 		return nil
 	}
 	return &i
@@ -878,7 +892,7 @@ func bundleToolsetFrom(c *checker, v any, loc []any) (BundleToolset, bool) {
 	}
 	o, ok := v.(wirejson.Object)
 	if !ok {
-		c.valueError("a toolset is its name, or a mapping of name, image_model and video_model", loc)
+		c.valueError("a toolset is its name, or a mapping of name, image_model, video_model and models", loc)
 		return BundleToolset{}, false
 	}
 	f := fields{o, loc}
@@ -894,7 +908,53 @@ func bundleToolsetFrom(c *checker, v any, loc []any) (BundleToolset, bool) {
 			}
 		}
 	}
-	c.extra(o, []string{"name", "image_model", "video_model"}, loc)
+	if v, ok := f.get("models"); ok {
+		l, isList := v.([]any)
+		if !isList {
+			c.add(fieldErr("list_type", "Input should be a valid list", f.at("models")))
+		} else {
+			out.Models = []BundleToolsetModel{}
+			for i, x := range l {
+				if m, ok := toolsetModelFrom(c, x, f.atList("models", i)); ok {
+					out.Models = append(out.Models, m)
+				}
+			}
+		}
+	}
+	c.extra(o, []string{"name", "image_model", "video_model", "models"}, loc)
+	return out, c.count() == before
+}
+
+// toolsetModelFrom is a model's name, or a mapping of its name and default budgets.
+func toolsetModelFrom(c *checker, v any, loc []any) (BundleToolsetModel, bool) {
+	if s, ok := v.(string); ok && s != "" {
+		return BundleToolsetModel{Name: s}, true
+	}
+	o, ok := v.(wirejson.Object)
+	if !ok {
+		c.valueError("a model is its name, or a mapping of name, reasoning_effort, reasoning_max_tokens and max_tokens", loc)
+		return BundleToolsetModel{}, false
+	}
+	f := fields{o, loc}
+	before := c.count()
+	out := BundleToolsetModel{Name: c.requiredStr(f, "name", 1, 0)}
+	if v, ok := f.get("reasoning_effort"); ok {
+		if got, ok := c.optStr(v, 0, f.at("reasoning_effort")); ok && got != nil && *got != "" {
+			out.ReasoningEffort = got
+		}
+	}
+	for _, t := range []struct {
+		key string
+		dst **int64
+	}{{"reasoning_max_tokens", &out.ReasoningMaxTokens}, {"max_tokens", &out.MaxTokens}} {
+		if v, ok := f.get(t.key); ok {
+			*t.dst = c.tokens(v, t.key, f.at(t.key))
+		}
+	}
+	c.extra(o, []string{"name", "reasoning_effort", "reasoning_max_tokens", "max_tokens"}, loc)
+	if out.ReasoningEffort != nil && out.ReasoningMaxTokens != nil {
+		c.valueError("set reasoning_effort or reasoning_max_tokens, not both", loc)
+	}
 	return out, c.count() == before
 }
 
@@ -1440,12 +1500,13 @@ func (a BundleAgent) dump() wirejson.Object {
 	return withRenamedFrom(out, a.RenamedFrom)
 }
 
-// toolsetList dumps a toolset without settings as its name, so the
-// fingerprint of an agent that sets none stays what it was.
+// toolsetList dumps a toolset without settings as its name, and a model
+// without budgets as its name, so the fingerprint of an agent that sets
+// none stays what it was.
 func toolsetList(l []BundleToolset) []any {
 	out := make([]any, len(l))
 	for i, t := range l {
-		if t.ImageModel == nil && t.VideoModel == nil {
+		if t.ImageModel == nil && t.VideoModel == nil && t.Models == nil {
 			out[i] = t.Name
 			continue
 		}
@@ -1456,9 +1517,35 @@ func toolsetList(l []BundleToolset) []any {
 		if t.VideoModel != nil {
 			o = append(o, wirejson.Member{Key: "video_model", Value: *t.VideoModel})
 		}
+		if t.Models != nil {
+			models := make([]any, len(t.Models))
+			for j, m := range t.Models {
+				models[j] = m.dump()
+			}
+			o = append(o, wirejson.Member{Key: "models", Value: models})
+		}
 		out[i] = o
 	}
 	return out
+}
+
+func (m BundleToolsetModel) dump() any {
+	if m.ReasoningEffort == nil && m.ReasoningMaxTokens == nil && m.MaxTokens == nil {
+		return m.Name
+	}
+	o := wirejson.Object{{Key: "name", Value: m.Name}}
+	if m.ReasoningEffort != nil {
+		o = append(o, wirejson.Member{Key: "reasoning_effort", Value: *m.ReasoningEffort})
+	}
+	for _, t := range []struct {
+		key string
+		n   *int64
+	}{{"reasoning_max_tokens", m.ReasoningMaxTokens}, {"max_tokens", m.MaxTokens}} {
+		if t.n != nil {
+			o = append(o, wirejson.Member{Key: t.key, Value: json.Number(fmt.Sprint(*t.n))})
+		}
+	}
+	return o
 }
 
 func (a BundleAutomation) dump() wirejson.Object {

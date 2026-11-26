@@ -879,7 +879,7 @@ func (in *bundleInstaller) modelID(ctx context.Context, a BundleAgent) (string, 
 	if a.Model != nil {
 		model = *a.Model
 	}
-	id, problem, err := in.w.modelID(ctx, "model", modelsapi.KindChat, resolvePlaceholders(model, in.values))
+	id, problem, err := in.w.modelID(ctx, "model", []string{modelsapi.KindChat}, resolvePlaceholders(model, in.values))
 	if err != nil {
 		return "", err
 	}

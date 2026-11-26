@@ -407,9 +407,9 @@ type deployChecks interface {
 	secretProblem(ctx context.Context, name string) (string, error)
 	// existing is the one connection of kind the workspace has under name; problem when it has none or several.
 	existing(ctx context.Context, kind EntityKind, name string) (id, problem string, err error)
-	// modelID is the model instance of kind ref names: its id, or the name of
-	// one; problem, about setting, when it names none or several.
-	modelID(ctx context.Context, setting, kind, ref string) (id, problem string, err error)
+	// modelID is the model instance of one of kinds ref names: its id, or the
+	// name of one; problem, about setting, when it names none or several.
+	modelID(ctx context.Context, setting string, kinds []string, ref string) (id, problem string, err error)
 	billingCurrency() string
 	streamProblem(ctx context.Context, spec catalogapi.BundleStreamSpec) (string, error)
 	openAPIProblem(ctx context.Context, spec catalogapi.BundleOpenAPISpec) (string, error)
@@ -955,6 +955,14 @@ func (a *bundleAnalyzer) checkWrites(ctx context.Context, b *Bundle, issues *[]P
 						fmt.Sprintf("toolset '%s' %s", ts.Name, m.setting), resolvePlaceholders(*m.ref, a.values)})
 				}
 			}
+			for _, m := range ts.Models {
+				settings = append(settings, struct{ setting, value string }{
+					fmt.Sprintf("toolset '%s' models", ts.Name), resolvePlaceholders(m.Name, a.values)})
+				if m.ReasoningEffort != nil {
+					settings = append(settings, struct{ setting, value string }{
+						fmt.Sprintf("toolset '%s' model '%s' reasoning_effort", ts.Name, m.Name), resolvePlaceholders(*m.ReasoningEffort, a.values)})
+				}
+			}
 		}
 		for _, s := range settings {
 			var optional []string
@@ -972,7 +980,7 @@ func (a *bundleAnalyzer) checkWrites(ctx context.Context, b *Bundle, issues *[]P
 		if modelID == "" || unresolved {
 			continue
 		}
-		resolved, problem, err := a.checks.modelID(ctx, "model", modelsapi.KindChat, modelID)
+		resolved, problem, err := a.checks.modelID(ctx, "model", []string{modelsapi.KindChat}, modelID)
 		if err != nil {
 			return err
 		}
@@ -1360,6 +1368,7 @@ func agentDeps(ag BundleAgent) []entityRef {
 
 // codeTools are the agent's code toolsets with the model instances their
 // settings name, setup placeholders resolved; problem when one names none or several.
+// A called model is a chat or decision instance.
 func codeTools(ctx context.Context, checks deployChecks, ag BundleAgent, values wirejson.Object) ([]catalogapi.BundleTool, string, error) {
 	out := make([]catalogapi.BundleTool, 0, len(ag.Toolsets))
 	for _, ts := range ag.Toolsets {
@@ -1372,7 +1381,7 @@ func codeTools(ctx context.Context, checks deployChecks, ag BundleAgent, values 
 			if m.ref == nil {
 				continue
 			}
-			id, problem, err := checks.modelID(ctx, m.setting, m.kind, resolvePlaceholders(*m.ref, values))
+			id, problem, err := checks.modelID(ctx, m.setting, []string{m.kind}, resolvePlaceholders(*m.ref, values))
 			if err != nil {
 				return nil, "", err
 			}
@@ -1381,9 +1390,34 @@ func codeTools(ctx context.Context, checks deployChecks, ag BundleAgent, values 
 			}
 			*m.dst = &id
 		}
+		if ts.Models != nil {
+			t.Models = []catalogapi.BundleToolModel{}
+		}
+		for _, m := range ts.Models {
+			id, problem, err := checks.modelID(ctx, "models", []string{modelsapi.KindChat, modelsapi.KindDecision}, resolvePlaceholders(m.Name, values))
+			if err != nil {
+				return nil, "", err
+			}
+			if problem != "" {
+				return nil, fmt.Sprintf("toolset '%s': %s", ts.Name, problem), nil
+			}
+			tm := catalogapi.BundleToolModel{ModelID: id, ReasoningMaxTokens: intOf(m.ReasoningMaxTokens), MaxTokens: intOf(m.MaxTokens)}
+			if m.ReasoningEffort != nil {
+				tm.ReasoningEffort = strp(resolvePlaceholders(*m.ReasoningEffort, values))
+			}
+			t.Models = append(t.Models, tm)
+		}
 		out = append(out, t)
 	}
 	return out, "", nil
+}
+
+func intOf(n *int64) *int {
+	if n == nil {
+		return nil
+	}
+	i := int(*n)
+	return &i
 }
 
 func (a *bundleAnalyzer) populateAgentEntities(ctx context.Context, b *Bundle, entities *[]PreviewEntity) error {
@@ -1719,7 +1753,7 @@ func (a *bundleAnalyzer) modelMoved(ctx context.Context, ag BundleAgent) (Entity
 	if name == "" || a.checks == nil || owned == nil || owned.ModelID == nil {
 		return StatusUnchanged, nil, nil
 	}
-	id, problem, err := a.checks.modelID(ctx, "model", modelsapi.KindChat, name)
+	id, problem, err := a.checks.modelID(ctx, "model", []string{modelsapi.KindChat}, name)
 	if err != nil {
 		return "", nil, err
 	}

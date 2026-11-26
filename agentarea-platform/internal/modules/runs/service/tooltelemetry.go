@@ -178,7 +178,7 @@ func toolKind(b api.ToolBinding) string {
 			return toolKindBuiltin
 		}
 		switch b.Code.Namespace {
-		case shellToolset, filesToolset, webToolset, contextToolset, mediaToolset:
+		case shellToolset, filesToolset, webToolset, contextToolset, mediaToolset, llmToolset:
 			return toolKindBuiltin
 		}
 		return toolKindPlatform

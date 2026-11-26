@@ -355,7 +355,7 @@ func (fakeBundleMCPs) SecretProblem(context.Context, authn.Caller, string) (stri
 	return "", nil
 }
 
-// fakeModelNames names chat instances, and image and video ones, and bills in RUB.
+// fakeModelNames names chat instances, and image, video and decision ones, and bills in RUB.
 type fakeModelNames struct {
 	instances []modelsapi.InstanceName
 	media     map[string][]modelsapi.InstanceName
@@ -373,8 +373,9 @@ func demoModels() fakeModelNames {
 	return fakeModelNames{instances: []modelsapi.InstanceName{{ID: "model-us", Name: "us-model", ModelName: "us"},
 		{ID: "model-gpt", Name: "GPT", ModelName: "gpt-5"}},
 		media: map[string][]modelsapi.InstanceName{
-			modelsapi.KindImage: {{ID: "model-flux", Name: "us-image", ModelName: "flux-pro"}, {ID: "model-sd", Name: "sd", ModelName: "stable-diffusion"}},
-			modelsapi.KindVideo: {{ID: "model-veo", Name: "veo", ModelName: "veo-3"}}}}
+			modelsapi.KindImage:    {{ID: "model-flux", Name: "us-image", ModelName: "flux-pro"}, {ID: "model-sd", Name: "sd", ModelName: "stable-diffusion"}},
+			modelsapi.KindVideo:    {{ID: "model-veo", Name: "veo", ModelName: "veo-3"}},
+			modelsapi.KindDecision: {{ID: "model-s1", Name: "s1", ModelName: "system-one"}}}}
 }
 
 type deployFixture struct {

@@ -19,14 +19,24 @@ func (e *BundleRefusal) Error() string { return e.Msg }
 var ErrBundleEntityGone = errors.New("the entity went away mid-update")
 
 // BundleTool names one tool of an agent: a code toolset with the image and
-// video model instances it generates with, an MCP connection by id, a delegate
-// (Type "agent", Name its key in the bundle, AgentID the agent), or an OpenAPI
-// connection (Type "openapi", Name and ConnectionID its id).
+// video model instances it generates with and the models it calls, an MCP
+// connection by id, a delegate (Type "agent", Name its key in the bundle,
+// AgentID the agent), or an OpenAPI connection (Type "openapi", Name and
+// ConnectionID its id).
 type BundleTool struct {
 	Type, Name                 string
 	AgentID                    *string
 	ConnectionID               *string
 	ImageModelID, VideoModelID *string
+	Models                     []BundleToolModel
+}
+
+// BundleToolModel is a model instance a code toolset calls and its default
+// reasoning and output budget.
+type BundleToolModel struct {
+	ModelID                       string
+	ReasoningEffort               *string
+	ReasoningMaxTokens, MaxTokens *int
 }
 
 // BundleFile is one file of a skill package, path relative to its root.

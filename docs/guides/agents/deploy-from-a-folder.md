@@ -153,8 +153,27 @@ change the object; changing its `name` does — see
         video_model: veo-3
     ```
 
+    `agentarea/llm` calls the models it lists, so it takes `models`: each entry
+    names a chat or decision instance as `model` is, or is a mapping of `name`
+    and the budget a call gets unless it sets its own, `reasoning_effort` or
+    `reasoning_max_tokens`, and `max_tokens`:
+
+    ```yaml
+    toolsets:
+      - name: agentarea/llm
+        models:
+          - gemini-3.8-flash
+          - name: gemini-4-argon
+            reasoning_effort: high
+            max_tokens: 8000
+    ```
+
+    `name` and `reasoning_effort` may be `${setup.<key>}`. A level the model
+    does not list, or both a level and a budget, blocks the plan; see
+    [Platform toolsets](/reference/platform-toolsets).
+
     On a redeploy the agent's toolset takes the models the file names, and a
-    change of either one is an update in the plan.
+    change of any of them, or of an entry's budget, is an update in the plan.
 
     A model name that matches no instance, or several, blocks the plan and
     lists the candidates. `<cur>` in a limit is the deployment's billing

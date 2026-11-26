@@ -265,7 +265,7 @@ func (s *Service) codeTools(ctx context.Context, r *runTools, c runsapi.ToolConf
 		def := runsapi.ToolDefinition{Name: name, Description: m.Description, Parameters: m.Parameters}
 		b := runsapi.ToolBinding{Source: "code", PolicyNames: []string{ts.Namespace, ts.ShortName()},
 			Code: &runsapi.CodeBinding{Namespace: ts.Namespace, Method: m.Method, DisabledMethods: c.Settings.DisabledMethods,
-				ImageModelID: c.Settings.ImageModelID, VideoModelID: c.Settings.VideoModelID}}
+				ImageModelID: c.Settings.ImageModelID, VideoModelID: c.Settings.VideoModelID, Models: c.Settings.Models}}
 		if err := r.bind(name, def, b, true); err != nil {
 			return err
 		}

@@ -17,12 +17,21 @@ type AnswerCheck struct {
 	RewriteInstruction string
 }
 
+// ToolModel is a model a code toolset may call and its default reasoning and output budget.
+type ToolModel struct {
+	ModelID            string
+	ReasoningEffort    string
+	ReasoningMaxTokens *int
+	MaxTokens          *int
+}
+
 // ToolSettings holds every tool type's settings; a type reads only its own.
 // AllowedTools is the MCP tool names or the OpenAPI operation names.
 type ToolSettings struct {
 	DisabledMethods     []string
 	ImageModelID        string
 	VideoModelID        string
+	Models              []ToolModel
 	AllowedTools        []string
 	OpenAPIConnectionID string
 	LoadMode            string

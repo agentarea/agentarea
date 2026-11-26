@@ -699,17 +699,38 @@ type CodeToolConfig struct {
 // CodeToolConfigType defines model for CodeToolConfig.Type.
 type CodeToolConfigType string
 
+// CodeToolModel A model instance agentarea/llm may call, with the reasoning and output budget a call gets unless it sets its own.
+//
+// reasoning_effort and reasoning_max_tokens exclude each other; a decision model takes neither, nor max_tokens.
+type CodeToolModel struct {
+	// MaxTokens The most tokens an answer may take.
+	MaxTokens *int `json:"max_tokens"`
+
+	// ModelId The model instance's id.
+	ModelId string `json:"model_id"`
+
+	// ReasoningEffort A reasoning level the model takes, such as low or high.
+	ReasoningEffort *string `json:"reasoning_effort"`
+
+	// ReasoningMaxTokens A reasoning token budget, for a provider that takes one.
+	ReasoningMaxTokens *int `json:"reasoning_max_tokens"`
+}
+
 // CodeToolSettings Settings for a built-in code toolset.
 //
 // The model ids are model instances of the workspace, each of the kind its
-// toolset needs: “agentarea/media“ takes an image and/or a video model.
+// toolset needs: “agentarea/media“ takes an image and/or a video model,
+// “agentarea/llm“ the chat and decision models it may call (“models“).
 // No other toolset takes one.
 type CodeToolSettings struct {
 	DisabledMethods *[]string `json:"disabled_methods"`
 
 	// ImageModelId agentarea/media: model instance generating images.
-	ImageModelId             *string `json:"image_model_id"`
-	RequiresUserConfirmation *bool   `json:"requires_user_confirmation"`
+	ImageModelId *string `json:"image_model_id"`
+
+	// Models agentarea/llm: the model instances the toolset may call, at least one, each a chat or decision model.
+	Models                   *[]CodeToolModel `json:"models"`
+	RequiresUserConfirmation *bool            `json:"requires_user_confirmation"`
 
 	// VideoModelId agentarea/media: model instance generating videos.
 	VideoModelId *string `json:"video_model_id"`

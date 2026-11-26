@@ -100,6 +100,9 @@ type Model struct {
 }
 
 // Request is LLMRequest.
+// responseSchemaName names the schema a call answers by.
+const responseSchemaName = "answer"
+
 type Request struct {
 	Messages           []api.Message
 	Tools              []api.ToolDefinition
@@ -107,6 +110,7 @@ type Request struct {
 	MaxTokens          int
 	ReasoningEffort    string
 	ReasoningMaxTokens *int
+	ResponseSchema     map[string]any
 }
 
 // Delta is one LLMResponse of the stream: only what is new, tool calls as a
@@ -465,6 +469,10 @@ func (m Model) streamOpenAI(ctx context.Context, r Request, yield func(Delta) er
 	if r.MaxTokens != 0 {
 		payload["max_tokens"] = r.MaxTokens
 	}
+	if r.ResponseSchema != nil {
+		payload["response_format"] = map[string]any{"type": "json_schema",
+			"json_schema": map[string]any{"name": responseSchemaName, "schema": r.ResponseSchema}}
+	}
 	fields, err := m.Profile.ReasoningFields(r.ReasoningEffort, r.ReasoningMaxTokens)
 	if err != nil {
 		return err
@@ -581,6 +589,9 @@ func (m Model) streamOpenAI(ctx context.Context, r Request, yield func(Delta) er
 func (m Model) streamAnthropic(ctx context.Context, r Request, yield func(Delta) error) error {
 	if r.ReasoningEffort != "" || (r.ReasoningMaxTokens != nil && *r.ReasoningMaxTokens != 0) {
 		return &domain.ReasoningSettingError{Msg: "the Anthropic transport does not take reasoning settings yet"}
+	}
+	if r.ResponseSchema != nil {
+		return &domain.ReasoningSettingError{Msg: "this provider takes no response schema"}
 	}
 	url, err := m.apiURL("/messages")
 	if err != nil {

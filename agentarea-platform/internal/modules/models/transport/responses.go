@@ -115,6 +115,9 @@ func (m Model) streamResponses(ctx context.Context, r Request, yield func(Delta)
 		payload["parallel_tool_calls"] = false
 	}
 	payload["input"] = input
+	if r.ResponseSchema != nil {
+		payload["text"] = map[string]any{"format": map[string]any{"type": "json_schema", "name": responseSchemaName, "schema": r.ResponseSchema}}
+	}
 	if r.ReasoningMaxTokens != nil && *r.ReasoningMaxTokens != 0 {
 		return &domain.ReasoningSettingError{Msg: "this provider takes a reasoning level (reasoning_effort), not a token budget"}
 	}
