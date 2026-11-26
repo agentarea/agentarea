@@ -158,10 +158,13 @@ func runtimeToolsets() []CodeToolset {
 						"description": "The most tokens the answer may take."},
 				}, "model", "prompt")},
 			{Method: "decide", Description: "Ask a decision model questions about a state; returns one answer per question, as JSON. " +
-				"With output writes the answers to that file and returns a short line.",
+				"With output writes the answers to that file and returns its path and size.",
 				Parameters: obj(map[string]any{
 					"model": str("The decision model to ask: one this agent may use, by its instance name, its model's name or its id."),
-					"state": map[string]any{"type": "object", "description": "What the questions are about."},
+					"state": map[string]any{"type": []any{"array", "object"}, "description": "What the questions are about: a list of state items " +
+						`({"type": "text", "text": "..."}, ...) or an object.`},
+					"files": map[string]any{"type": []any{"array", "null"}, "items": str("A task workspace path."), "default": nil,
+						"description": "Task workspace files (PDFs whole, images) appended to state as items; state must then be a list. At most 15 MB together."},
 					"questions": map[string]any{"type": "object", "description": "The questions by key. Each is " +
 						`{"type": "choice", "instructions": "...", "criteria": {"<option>": "<when it applies>", ...}} or ` +
 						`{"type": "score", "instructions": "...", "criteria": ["<what raises the score>", ...]}.`},

@@ -38,10 +38,11 @@ func (r llmResolver) Model(_ context.Context, _ modelsapi.Principal, id string) 
 }
 
 type llmFixture struct {
-	s      *Service
-	models *fakeModels
-	rt     *fakeRuntime
-	bill   *fakeBilling
+	s       *Service
+	models  *fakeModels
+	rt      *fakeRuntime
+	bill    *fakeBilling
+	decided modelsapi.Decision
 }
 
 func newLLMFixture(t *testing.T, reply string) *llmFixture {
@@ -66,8 +67,8 @@ func newLLMFixture(t *testing.T, reply string) *llmFixture {
 				Provider: modelsapi.ProviderProfile{PDFInput: true, MaxImageEdge: 2000}},
 			llmArgon: {ModelID: llmArgon, ModelName: "gemini-4-argon", Prices: modelsapi.ModelPrices{Input: &price, Output: &price}},
 		},
-		Describer: describedModels{llmS1: {ModelID: llmS1, ModelName: "system-one", DisplayName: modelsapi.KindDecision}},
-		Decider: fakeDecider{reply: modelsapi.DecisionReply{Answers: map[string]map[string]any{
+		Describer: describedModels{llmS1: {ModelID: llmS1, ModelName: "system-one", DisplayName: modelsapi.KindDecision, SupportsVision: true}},
+		Decider: fakeDecider{got: &f.decided, reply: modelsapi.DecisionReply{Answers: map[string]map[string]any{
 			"q": {"type": "choice", "choice": "yes"}}, CostUSD: &price}},
 	})
 	return f
@@ -312,6 +313,33 @@ func TestLLMDecideAsksTheDecisionModel(t *testing.T) {
 	args["model"] = "flash"
 	if out := f.call(t, llmTokens(1000), llmInvocation("decide", args)); out.Success || out.Error != "model 'flash' is a chat model; call it with llm_call" {
 		t.Fatalf("out = %+v", out)
+	}
+}
+
+func TestLLMDecideAppendsFilesToTheState(t *testing.T) {
+	f := newLLMFixture(t, "x")
+	f.rt.files["plan.pdf"] = pdfOf(23)
+	f.rt.files["sheet.png"] = pngBytes(t, 40, 30)
+	text := map[string]any{"type": "text", "text": "a flat"}
+	args := map[string]any{"model": "s1", "state": []any{text}, "files": []any{"plan.pdf", "sheet.png"},
+		"questions": map[string]any{"q": map[string]any{"type": "choice"}}}
+	if out := f.call(t, llmTokens(1000), llmInvocation("decide", args)); !out.Success {
+		t.Fatalf("out = %+v", out)
+	}
+	items, _ := f.decided.State.([]any)
+	if len(items) != 3 || items[0].(map[string]any)["text"] != "a flat" {
+		t.Fatalf("state = %v", f.decided.State)
+	}
+	file := items[1].(map[string]any)["file"].(map[string]any)
+	if file["filename"] != "plan.pdf" || !strings.HasPrefix(file["file_data"].(string), "data:application/pdf;base64,") {
+		t.Fatalf("a 23-page PDF goes whole: %v", items[1])
+	}
+	if img := items[2].(map[string]any)["image_url"].(map[string]any); !strings.HasPrefix(img["url"].(string), "data:image/png;base64,") {
+		t.Fatalf("image item = %v", items[2])
+	}
+	args["state"] = map[string]any{"sheet": 3}
+	if out := f.call(t, llmTokens(1000), llmInvocation("decide", args)); out.Success || out.Error != "with files, state must be a list of state items" {
+		t.Fatalf("object state with files: %+v", out)
 	}
 }
 

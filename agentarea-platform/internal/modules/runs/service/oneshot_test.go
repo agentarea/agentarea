@@ -25,9 +25,15 @@ func (d describedModels) Describe(_ context.Context, _ modelsapi.Principal, id, 
 	return m, nil
 }
 
-type fakeDecider struct{ reply modelsapi.DecisionReply }
+type fakeDecider struct {
+	reply modelsapi.DecisionReply
+	got   *modelsapi.Decision
+}
 
-func (f fakeDecider) Decide(context.Context, modelsapi.Principal, modelsapi.Decision) (modelsapi.DecisionReply, error) {
+func (f fakeDecider) Decide(_ context.Context, _ modelsapi.Principal, d modelsapi.Decision) (modelsapi.DecisionReply, error) {
+	if f.got != nil {
+		*f.got = d
+	}
 	return f.reply, nil
 }
 

@@ -443,10 +443,6 @@ func (t llmTools) decide(ctx context.Context, inv ToolInvocation) (ToolOutput, e
 	if err != nil || problem != "" {
 		return mediaError(problem), err
 	}
-	state, err := llmObject(inv.Args, "state", true)
-	if err != nil {
-		return mediaError(err.Error()), nil
-	}
 	questions, err := llmObject(inv.Args, "questions", true)
 	if err != nil {
 		return mediaError(err.Error()), nil
@@ -458,6 +454,10 @@ func (t llmTools) decide(ctx context.Context, inv ToolInvocation) (ToolOutput, e
 	model, err := s.d.Describer.Describe(ctx, modelsapi.Principal(p), m.entry.ModelID, modelsapi.KindDecision)
 	if err != nil {
 		return ToolOutput{}, err
+	}
+	state, problem, err := t.decisionState(ctx, inv, model)
+	if err != nil || problem != "" {
+		return mediaError(problem), err
 	}
 	if err := s.gateModelCall(ctx, p, model, t.policy); err != nil {
 		return ToolOutput{}, err
@@ -491,6 +491,74 @@ func (t llmTools) decide(ctx context.Context, inv ToolInvocation) (ToolOutput, e
 		return ToolOutput{}, err
 	}
 	return t.deliver(ctx, inv, out, output, string(answers))
+}
+
+// maxDecisionFileBytes bounds the files one decision attaches, together.
+const maxDecisionFileBytes = 15 << 20
+
+// decisionState is the call's state with its files appended as state items:
+// a PDF whole, as a decision model reads it, an image by data URL.
+func (t llmTools) decisionState(ctx context.Context, inv ToolInvocation, model modelsapi.ResolvedModel) (any, string, error) {
+	state, present := inv.Args["state"]
+	if !present || state == nil {
+		return nil, "state is required", nil
+	}
+	items, isList := state.([]any)
+	if _, isObject := state.(map[string]any); !isList && !isObject {
+		return nil, "state must be a list of state items or an object", nil
+	}
+	raw, present := inv.Args["files"]
+	if !present || raw == nil {
+		return state, "", nil
+	}
+	list, ok := raw.([]any)
+	if !ok {
+		return nil, "files must be a list of task workspace paths", nil
+	}
+	if len(list) == 0 {
+		return state, "", nil
+	}
+	if !isList {
+		return nil, "with files, state must be a list of state items", nil
+	}
+	if !model.SupportsVision {
+		return nil, fmt.Sprintf("model %s does not read images or PDFs", model.ModelName), nil
+	}
+	total := 0
+	for _, x := range list {
+		name, ok := x.(string)
+		if !ok {
+			return nil, "files must be a list of task workspace paths", nil
+		}
+		if refusal := domain.FilePathRefusal(name); refusal != "" {
+			return nil, refusal, nil
+		}
+		data, _, err := t.s.d.Runtime.ReadFile(ctx, inv.Principal.WorkspaceID, filesTask(inv), name)
+		if errors.Is(err, sandboxapi.ErrFileNotFound) {
+			return nil, "file " + name + " does not exist", nil
+		}
+		if err != nil {
+			return nil, "", err
+		}
+		if total += len(data); total > maxDecisionFileBytes {
+			return nil, fmt.Sprintf("files come to more than %d MB; one decision takes at most that", maxDecisionFileBytes>>20), nil
+		}
+		if http.DetectContentType(data) == pdfMimeType {
+			url := "data:" + pdfMimeType + ";base64," + base64.StdEncoding.EncodeToString(data)
+			items = append(items, map[string]any{"type": "file", "file": map[string]any{"file_data": url, "filename": path.Base(name)}})
+			continue
+		}
+		info, isImage, err := inspectImage(data)
+		if !isImage {
+			return nil, name + " is neither an image (PNG, JPEG, GIF, WebP) nor a PDF", nil
+		}
+		if err != nil {
+			return nil, name + ": " + err.Error(), nil
+		}
+		url := "data:" + info.MimeType + ";base64," + base64.StdEncoding.EncodeToString(data)
+		items = append(items, map[string]any{"type": "image_url", "image_url": map[string]any{"url": url}})
+	}
+	return items, "", nil
 }
 
 // deliver is the answer as the tool's result, or written to output with its path and size in its place.
