@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"unicode/utf8"
 
 	governanceapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/governance/api"
@@ -15,14 +16,18 @@ import (
 
 // The shell and file toolsets run in the task's sandbox (shell_toolset,
 // file_toolset over SandboxFileStore), so code a run saves is what its
-// commands see.
+// commands see; the built-in read_file reads a task input from the task
+// workspace without one.
 const (
 	shellToolset = "agentarea/shell"
-	filesToolset = "agentarea/files"
+	filesToolset = domain.FilesToolset
 )
 
 // sandboxTools is the code binding of the shell and file toolsets.
-type sandboxTools struct{ rt sandboxapi.Runtime }
+type sandboxTools struct {
+	rt sandboxapi.Runtime
+	ws sandboxapi.TaskWorkspace
+}
 
 func (s *Service) sandboxCaller(in ToolCall) ToolCaller {
 	b := in.Binding
@@ -32,7 +37,7 @@ func (s *Service) sandboxCaller(in ToolCall) ToolCaller {
 	if b.Code.Namespace != shellToolset && b.Code.Namespace != filesToolset {
 		return nil
 	}
-	return sandboxTools{rt: s.d.Runtime}
+	return sandboxTools{rt: s.d.Runtime, ws: s.d.Workspace}
 }
 
 // WorkspaceTaskKey names, in a run's metadata, the task whose files the run works on: a
@@ -140,22 +145,25 @@ func (t sandboxTools) saveFile(ctx context.Context, ws, task string, args map[st
 	return name, nil
 }
 
-// readFile is read_file: a text file as text (offset and limit by line), an
-// image as the image itself, a PDF's pages as a PDF file.
+// readFile is read_file: a text file as text (offset and limit by line, then
+// grep, head or tail, capped), an image as the image itself, a PDF's pages as
+// a PDF file.
 func (t sandboxTools) readFile(ctx context.Context, ws, task string, args map[string]any) (ToolOutput, error) {
 	text := func(s string) (ToolOutput, error) {
 		return ToolOutput{Success: true, Result: s, Source: "builtin"}, nil
 	}
-	name, err := stringArg(args, "file_name")
+	name, err := stringArg(args, "path")
 	if err != nil {
 		return ToolOutput{}, err
 	}
 	pages, _ := args["pages"].(string)
+	grep, _ := args["grep"].(string)
 	offset, limit := intArg(args, "offset"), intArg(args, "limit")
+	head, tail := intArg(args, "head"), intArg(args, "tail")
 	if refusal := domain.FilePathRefusal(name); refusal != "" {
 		return text("Error reading file: " + refusal)
 	}
-	data, _, err := t.rt.ReadFile(ctx, ws, task, name)
+	data, err := t.read(ctx, ws, task, name)
 	if errors.Is(err, sandboxapi.ErrFileNotFound) {
 		return text("Error: File " + name + " does not exist")
 	}
@@ -184,14 +192,27 @@ func (t sandboxTools) readFile(ctx context.Context, ws, task string, args map[st
 	if !utf8.Valid(data) {
 		return text("Error reading file: 'utf-8' codec can't decode the file")
 	}
-	if offset == 0 && limit == 0 {
-		return text(string(data))
+	content := string(data)
+	if offset != 0 || limit != 0 {
+		var why string
+		if content, why = readLines(content, offset, limit); why != "" {
+			return failed(why)
+		}
 	}
-	lines, why := readLines(string(data), offset, limit)
-	if why != "" {
-		return failed(why)
+	return text(domain.FilterOutput(content, grep, &head, &tail))
+}
+
+// read is a task input from the task workspace, any other file from the sandbox.
+func (t sandboxTools) read(ctx context.Context, ws, task, name string) ([]byte, error) {
+	if !strings.HasPrefix(name, domain.TaskInputsPrefix) {
+		data, _, err := t.rt.ReadFile(ctx, ws, task, name)
+		return data, err
 	}
-	return text(lines)
+	if t.ws == nil {
+		return nil, errors.New("task input files cannot be read: this deployment has no task workspace")
+	}
+	data, _, err := t.ws.Get(ctx, ws, task, name)
+	return data, err
 }
 
 func intArg(args map[string]any, name string) int {

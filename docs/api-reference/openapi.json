@@ -18016,6 +18016,21 @@
       },
       "TaskCommandPayload": {
         "properties": {
+          "attachments": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "queue_message only: staging refs of uploaded files to attach to the running task; they are named under the message.",
+            "title": "Attachments"
+          },
           "budget_usd": {
             "anyOf": [
               {

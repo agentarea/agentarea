@@ -252,7 +252,7 @@ func (r *agentRun) buildTools() ([]api.ToolDefinition, error) {
 	if !r.questionsAvailable() {
 		tools = slices.DeleteFunc(tools, func(t api.ToolDefinition) bool { return t.Name == domain.ToolRequestUserInput })
 	}
-	tools = append(tools, domain.RecallHistoryTool(), domain.ReadToolOutputTool())
+	tools = append(tools, domain.RecallHistoryTool(), domain.ReadFileTool())
 	for _, t := range tools {
 		if t.Name == domain.ToolWait {
 			return nil, nonRetryable("tool name 'wait' is reserved for the workflow's built-in wait; rename the agent tool that uses it", ErrReservedToolName)

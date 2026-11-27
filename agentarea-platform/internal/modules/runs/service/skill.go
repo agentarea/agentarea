@@ -83,14 +83,18 @@ func (s *Service) activateSkill(ctx context.Context, p Principal, ws scope.Works
 		s.d.Log.WarnContext(ctx, "could not put the skill's files in the sandbox", "skill", name, "error", err)
 		directory, paths = "", nil
 	}
-	pointer := fmt.Sprintf("Read it with read_tool_output(\"%s\"), or search it with read_tool_output(\"%s\", grep=\"pattern\").", in.ToolCallID, in.ToolCallID)
+	kept := domain.ToolOutputPath(in.ToolCallID, body)
+	pointer := fmt.Sprintf("Read it with read_file(\"%s\"), or search it with read_file(\"%s\", grep=\"pattern\").", kept, kept)
 	if directory != "" {
 		pointer = fmt.Sprintf("Read it in full from %s/SKILL.md with the shell tool, e.g. bash(\"cat %s/SKILL.md\").", directory, directory)
 	}
 	content, summarized := domain.SkillEntry(name, body, in.MaxTokens, directory, paths, pointer)
 	if summarized && directory == "" {
-		if err := s.putText(ctx, domain.OutputKey(p.WorkspaceID, in.TaskID, in.ToolCallID), body, "application/json"); err != nil {
-			return SkillActivated{}, s.skillFailure(name, &UnreachableError{Service: "Object storage", Err: err})
+		if s.d.Workspace == nil {
+			return SkillActivated{}, s.skillFailure(name, errors.New("the skill is too long to inline and this deployment has no task workspace to keep it in"))
+		}
+		if _, err := s.keepToolOutput(ctx, p, in.TaskID, firstOf(in.FilesTaskID, in.TaskID), in.WorkflowID, in.ToolCallID, body); err != nil {
+			return SkillActivated{}, s.skillFailure(name, &UnreachableError{Service: "Task workspace", Err: err})
 		}
 	}
 	entry := domain.Entry{
@@ -157,16 +161,8 @@ func (s *Service) putSkillFiles(ctx context.Context, p Principal, in SkillActiva
 		put[i] = sandboxapi.WorkspaceFile{Path: f.Path, Data: f.Data}
 		paths[i] = f.Path
 	}
-	actor := &sandboxapi.Actor{UserID: p.UserID, ActorType: "agent"}
-	if p.AgentID != "" {
-		actor.AgentID = &p.AgentID
-	}
-	actor.TaskID = &in.TaskID
-	filesTask := in.TaskID
-	if in.FilesTaskID != "" {
-		filesTask = in.FilesTaskID
-	}
-	if _, err := s.d.Workspace.PutFiles(ctx, p.WorkspaceID, filesTask, put, sandboxapi.WriteOptions{Owner: in.WorkflowID, Actor: actor}); err != nil {
+	opts := sandboxapi.WriteOptions{Owner: in.WorkflowID, Actor: agentActor(p, in.TaskID)}
+	if _, err := s.d.Workspace.PutFiles(ctx, p.WorkspaceID, firstOf(in.FilesTaskID, in.TaskID), put, opts); err != nil {
 		return "", nil, err
 	}
 	return domain.SkillWorkspaceDir(in.Skill.Name, in.Skill.ID), paths, nil

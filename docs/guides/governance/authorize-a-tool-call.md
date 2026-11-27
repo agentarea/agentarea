@@ -192,7 +192,7 @@ agent never attempting it rather than attempting and being refused.
   <Accordion title="A tool the model should not see is still in its context">
     Disclosure keeps tools that require approval, and always keeps the
     control-flow tools (`completion`, `task_complete` , `request_user_input` ,
-    `recall_history` , `read_tool_output` , `activate_tool_source` ,
+    `recall_history` , `read_file` , `activate_tool_source` ,
     `load_tools` ) regardless of policy, so a restrictive rule cannot strand a
     run.
   </Accordion>

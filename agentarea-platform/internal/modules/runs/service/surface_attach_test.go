@@ -94,3 +94,54 @@ func TestSubmitAttachesAnEventsFilesToItsTaskAndNamesThemInAFollowUp(t *testing.
 		t.Fatal("the first file is gone")
 	}
 }
+
+// stagedUploads is the workspace's upload staging: Head of what was uploaded, Delete recorded.
+type stagedUploads struct {
+	sandboxapi.Files
+	heads   map[string]sandboxapi.ObjectHead
+	deleted []string
+}
+
+func (f *stagedUploads) Head(_ context.Context, _ scope.Workspace, path string) (sandboxapi.ObjectHead, bool, error) {
+	h, ok := f.heads[path]
+	return h, ok, nil
+}
+
+func (f *stagedUploads) Delete(_ context.Context, _ scope.Workspace, _, path string) error {
+	f.deleted = append(f.deleted, path)
+	return nil
+}
+
+func TestQueueMessageAttachesUploadedFilesToTheRunningTask(t *testing.T) {
+	s, p, _, _, _, ctx := createSurface(t)
+	files := &attachStore{files: map[string]map[string][]byte{}}
+	uploads := &stagedUploads{heads: map[string]sandboxapi.ObjectHead{
+		"staging/u1/plan.pdf": {SHA256: digestOf("staging/u1/plan.pdf"), Size: 2 << 20, ContentType: "application/pdf"},
+	}}
+	x := &signalled{}
+	s.d.Workspaces, s.d.Files, s.d.Executor = files, uploads, x
+	got, err := s.Create(ctx, CreateRequest{AgentID: p.AgentID, Description: "go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg := "Вот план"
+	if _, err := s.SendCommand(ctx, p.AgentID, got.Task.ID, Command{Command: api.CommandQueueMessage, Message: &msg,
+		Attachments: []string{"staging/u1/plan.pdf"}}); err != nil {
+		t.Fatal(err)
+	}
+	if a := files.attached; len(a) != 1 || a[0] != got.Task.ID+":inputs/attachments/plan.pdf" {
+		t.Fatalf("attached %v", a)
+	}
+	if len(x.messages) != 1 || x.messages[0] != "Вот план\n\nAttached file: inputs/attachments/plan.pdf (application/pdf, 2.0 MB)" {
+		t.Fatalf("messages %q", x.messages)
+	}
+	if len(uploads.deleted) != 1 || uploads.deleted[0] != "staging/u1/plan.pdf" {
+		t.Fatalf("the consumed upload stays staged: %v", uploads.deleted)
+	}
+	if _, err := s.SendCommand(ctx, p.AgentID, got.Task.ID, Command{Command: api.CommandQueueMessage, Attachments: []string{"uploads/x.pdf"}}); err == nil {
+		t.Fatal("a ref outside staging/ was attached")
+	}
+	if _, err := s.SendCommand(ctx, p.AgentID, got.Task.ID, Command{Command: api.CommandQueueMessage}); err == nil {
+		t.Fatal("an empty queue_message was accepted")
+	}
+}

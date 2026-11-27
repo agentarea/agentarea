@@ -41,7 +41,6 @@ func RegisterActivities(w durable.Worker, a *Activities) {
 func (a *Activities) byName() map[string]any {
 	return map[string]any{
 		api.ActivityStoreContextOutput:       a.StoreContextOutput,
-		api.ActivityReadContextOutput:        a.ReadContextOutput,
 		api.ActivitySearchHistory:            a.SearchHistory,
 		api.ActivityRecallHistory:            a.RecallHistory,
 		api.ActivityDelegatedTaskSpend:       a.DelegatedTaskSpend,
@@ -154,15 +153,12 @@ func contextResult(content string, err error) ContextResult {
 	return ContextResult{Success: true, Content: content}
 }
 
-// StoreContextOutput is store_context_output; a failure is reported, not raised.
+// StoreContextOutput is store_context_output: the output becomes a task file,
+// whose path is the content; a failure is reported, not raised.
 func (a *Activities) StoreContextOutput(ctx context.Context, req StoreOutputRequest) (ContextResult, error) {
-	return contextResult("", a.svc.StoreOutput(ctx, principal(req.Principal), req.TaskID, req.OutputID, req.Content)), nil
-}
-
-// ReadContextOutput is read_context_output.
-func (a *Activities) ReadContextOutput(ctx context.Context, req ReadOutputRequest) (ContextResult, error) {
-	content, err := a.svc.ReadOutput(ctx, principal(req.Principal), req.TaskID, req.FilesTaskID, req.OutputID, req.Grep, req.Head, req.Tail)
-	return contextResult(content, err), nil
+	path, err := a.svc.StoreOutput(ctx, principal(req.Principal), req.TaskID, req.FilesTaskID,
+		activity.GetInfo(ctx).WorkflowExecution.ID, req.OutputID, req.Content)
+	return contextResult(path, err), nil
 }
 
 // SearchHistory is search_history.

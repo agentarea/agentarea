@@ -25,8 +25,9 @@ it being attached per task.
 
 <Info>
 - A configured object store behind the artifact service
-- An agent equipped with a tool that reads files — the shell
-  (`agentarea/shell`) or the file tool (`agentarea/files`)
+- Nothing to attach for reading: every agent has the built-in `read_file`,
+  which reads `inputs/` without a sandbox; add the shell (`agentarea/shell`)
+  to process the files with programs
 - [The file model](/concepts/sandbox/the-file-model) for how task scoping works
 </Info>
 

@@ -68,7 +68,7 @@ func httpMethods() []string {
 func reservedTools() map[string]bool {
 	return map[string]bool{
 		"completion": true, "task_complete": true, "request_user_input": true, "recall_history": true,
-		"read_tool_output": true, "activate_tool_source": true, "activate_skill": true, "load_tools": true, "wait": true,
+		"read_file": true, "activate_tool_source": true, "activate_skill": true, "load_tools": true, "wait": true,
 	}
 }
 

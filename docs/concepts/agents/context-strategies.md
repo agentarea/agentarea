@@ -74,29 +74,35 @@ matters more than it sounds.
 ### Output offloading
 
 Under `hybrid` and `dynamic`, a tool result longer than 8,000 characters (about
-2,000 tokens) is written to object storage under `tasks/{workspace_id}/{task_id}`
-and replaced in the conversation by a summary.
+2,000 tokens) is written as a task file, `inputs/tool-outputs/<id>.json` (or
+`.txt` when the result is not JSON), and replaced in the conversation by a
+summary. The file sits with the task's other inputs, so a sandbox the task
+already runs receives it, and a shell can process it with `jq` or `python`.
+A subtask's outputs go to the task whose files it works on.
 
-The summary is not a truncation. It carries a header naming the stored id with
+The summary is not a truncation. It carries a header naming the file with
 the exact character and line counts, then the first 500 characters, then — if
 the content is longer than head plus tail — the last 200 characters, and it ends
 by telling the model how to get the rest:
 
 ```text
-[Output stored as <output_id> — 41,208 chars, 913 lines]
+[Output stored in inputs/tool-outputs/<id>.json — 41,208 chars, 913 lines]
 Preview:
 <first 500 chars>
 ...
 <last 200 chars>
 
-Use read_tool_output("<output_id>") for full content,
-or read_tool_output("<output_id>", grep="pattern") to search.
+Read it with read_file("inputs/tool-outputs/<id>.json"), narrowed with grep,
+head or tail, or process it in the shell, e.g. with jq or python.
 ```
 
-The `grep` parameter is the point. The common case is not "read all 41,000
+`read_file` is a built-in tool every agent has, with or without the files
+toolset. It reads a path under `inputs/` from the task workspace without
+starting a sandbox, and any other path from the sandbox. Its `grep`
+parameter is the point. The common case is not "read all 41,000
 characters back" but "find the three lines that matter", and offloading turns an
-unaffordable read into an affordable search. A read-back is itself capped at
-16,000 characters.
+unaffordable read into an affordable search. A text read is itself capped at
+16,000 characters and is never offloaded again.
 
 Offloading is best-effort in both directions. If the store fails inside the
 workflow, the full content stays in the conversation — the agent is never
@@ -185,7 +191,7 @@ such failure mode: the tool is either in the list or it is not.
 `hybrid` is the default because its two features have no behavioural cost. The
 model is not asked to do anything differently; large outputs arrive summarized
 with a documented way to read more. The one thing it does ask is that
-the model understands `read_tool_output`, and that is a normal tool call rather
+the model understands `read_file`, and that is a normal tool call rather
 than a multi-turn plan.
 
 The cost of making this a setting at all is that the same agent behaves
@@ -212,7 +218,7 @@ reproduce on a model whose spec leaves the default unset.
   and not for dense JSON, minified code, or non-Latin scripts.
 - **The preview may not contain the useful part.** 500 characters of head and
   200 of tail is a small window on a 40,000-character output. The model has to
-  decide from that whether a `read_tool_output` call is warranted.
+  decide from that whether a `read_file` call is warranted.
 - **Activating an unknown tool source is silent.** `ToolCatalog.activate`
   returns an empty list for a name it does not know rather than an error,
   deliberately, on the assumption the model hallucinated it.

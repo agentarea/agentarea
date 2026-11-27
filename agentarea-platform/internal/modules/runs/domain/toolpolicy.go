@@ -24,12 +24,15 @@ const (
 	ToolTaskComplete       = "task_complete"
 	ToolRequestUserInput   = "request_user_input"
 	ToolRecallHistory      = "recall_history"
-	ToolReadToolOutput     = "read_tool_output"
+	ToolReadFile           = "read_file"
 	ToolActivateToolSource = "activate_tool_source"
 	ToolActivateSkill      = "activate_skill"
 	ToolLoadTools          = "load_tools"
 	ToolWait               = "wait"
 )
+
+// FilesToolset is the code toolset of the task's files; read_file runs on its caller.
+const FilesToolset = "agentarea/files"
 
 // Unmetered reports a call that does not consume the tool-call quota.
 func Unmetered(name string) bool { return name == ToolCompletion || name == ToolTaskComplete }
@@ -37,11 +40,21 @@ func Unmetered(name string) bool { return name == ToolCompletion || name == Tool
 // ControlFlowTool reports a workflow tool policy never gates.
 func ControlFlowTool(name string) bool {
 	switch name {
-	case ToolCompletion, ToolTaskComplete, ToolRequestUserInput, ToolRecallHistory, ToolReadToolOutput,
+	case ToolCompletion, ToolTaskComplete, ToolRequestUserInput, ToolRecallHistory, ToolReadFile,
 		ToolActivateToolSource, ToolActivateSkill, ToolLoadTools, ToolWait:
 		return true
 	}
 	return false
+}
+
+// ReadFileBinding is how the built-in read_file reaches the file toolset's caller.
+func ReadFileBinding() api.ToolBinding {
+	return api.ToolBinding{Source: "code", Code: &api.CodeBinding{Namespace: FilesToolset, Method: ToolReadFile}}
+}
+
+// IsReadFile reports a call of the built-in read_file, which policy never gates.
+func IsReadFile(tool string, b api.ToolBinding) bool {
+	return tool == ToolReadFile && b.Source == "code" && b.Code != nil && b.Code.Namespace == FilesToolset && b.Code.Method == ToolReadFile
 }
 
 // MeteredToolCallCount counts the calls that consume the governed quota.

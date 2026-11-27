@@ -444,6 +444,8 @@ type TaskArtifactItem struct {
 
 // TaskCommandPayload defines model for TaskCommandPayload.
 type TaskCommandPayload struct {
+	// Attachments queue_message only: staging refs of uploaded files to attach to the running task; they are named under the message.
+	Attachments     *[]string                     `json:"attachments"`
 	BudgetUsd       *TaskCommandPayload_BudgetUsd `json:"budget_usd"`
 	Command         string                        `json:"command"`
 	Message         *string                       `json:"message"`

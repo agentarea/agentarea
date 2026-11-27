@@ -126,7 +126,7 @@ There is no retry endpoint. Retrying means starting a new task.
     |---|---|---|
     | `change_model` | `model_instance_id` | Switch the model for the remaining iterations. |
     | `update_budget` | `budget_usd` | Set a new absolute spend ceiling. Cannot go below what has already been spent. |
-    | `queue_message` | `message` | Inject a user message before the next model call. |
+    | `queue_message` | `message`, `attachments` | Inject a user message before the next model call. `attachments` are `staging/…` refs of uploaded files: they are attached to the task under `inputs/attachments/` and named under the message. Either one is enough. |
     | `remove_message` | `message_id` | Drop a queued message before the agent sees it. |
 
     ```bash

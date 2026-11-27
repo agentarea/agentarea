@@ -4,3 +4,4 @@ discover_available_tools_activity -- folded into resolve_run_config_activity (de
 discover_tool_providers_activity -- folded into resolve_run_config_activity (decision 3c)
 resolve_agent_tools_activity -- folded into resolve_run_config_activity (decision 3c)
 resolve_model_activity -- folded into resolve_run_config_activity (decision 3c)
+read_context_output -- read_tool_output is gone; the built-in read_file reads an offloaded output as the task file inputs/tool-outputs/<id> through execute_tool

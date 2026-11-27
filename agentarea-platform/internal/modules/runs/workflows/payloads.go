@@ -484,19 +484,10 @@ type RecallHistoryResult struct {
 type StoreOutputRequest struct {
 	Principal Principal `json:"principal"`
 	TaskID    string    `json:"task_id"`
-	OutputID  string    `json:"output_id"`
-	Content   string    `json:"content"`
-}
-
-type ReadOutputRequest struct {
-	Principal Principal `json:"principal"`
-	TaskID    string    `json:"task_id"`
 	// FilesTaskID is the task whose files the run works on, when not its own.
 	FilesTaskID string `json:"files_task_id,omitempty"`
 	OutputID    string `json:"output_id"`
-	Grep        string `json:"grep"`
-	Head        *int   `json:"head"`
-	Tail        *int   `json:"tail"`
+	Content     string `json:"content"`
 }
 
 type SearchHistoryRequest struct {

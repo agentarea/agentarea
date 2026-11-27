@@ -21,6 +21,7 @@ import (
 const (
 	attachmentInputPrefix   = "inputs/attachments/"
 	skillInputPrefix        = "inputs/skills/"
+	toolOutputInputPrefix   = "inputs/tool-outputs/"
 	maxHydrationViewBytes   = 16 * 1024 * 1024
 	maxHydrationPinAdvances = 3
 )
@@ -33,12 +34,18 @@ type hydrationViewRecord struct {
 
 // IsAttachmentInputPath accepts exactly inputs/attachments/<one segment>, the
 // only shape the platform stages follow-up files into.
-func IsAttachmentInputPath(value string) bool {
+func IsAttachmentInputPath(value string) bool { return isFlatInputPath(value, attachmentInputPrefix) }
+
+// IsToolOutputInputPath accepts exactly inputs/tool-outputs/<one segment>: a
+// tool output too long for the conversation is kept there.
+func IsToolOutputInputPath(value string) bool { return isFlatInputPath(value, toolOutputInputPrefix) }
+
+func isFlatInputPath(value, prefix string) bool {
 	normalized, err := NormalizeRelativePath(value)
-	if err != nil || normalized != value || !strings.HasPrefix(value, attachmentInputPrefix) {
+	if err != nil || normalized != value || !strings.HasPrefix(value, prefix) {
 		return false
 	}
-	name := strings.TrimPrefix(value, attachmentInputPrefix)
+	name := strings.TrimPrefix(value, prefix)
 	return name != "" && !strings.Contains(name, "/")
 }
 
@@ -54,9 +61,10 @@ func IsSkillInputPath(value string) bool {
 }
 
 // IsAddableInputPath is an input a live sandbox may receive after it was
-// hydrated: a follow-up attachment, or a file of a skill activated mid-task.
+// hydrated: a follow-up attachment, a file of a skill activated mid-task, or
+// an offloaded tool output.
 func IsAddableInputPath(value string) bool {
-	return IsAttachmentInputPath(value) || IsSkillInputPath(value)
+	return IsAttachmentInputPath(value) || IsSkillInputPath(value) || IsToolOutputInputPath(value)
 }
 
 // additiveAttachmentDiff reports the paths current adds to previous when every
@@ -184,7 +192,7 @@ func (r *Repository) loadHydrationView(ctx context.Context, workspaceID, taskID,
 
 // HydrationAdditions returns the entries a live sandbox hydrated from
 // fromRevision lacks under toRevision. Anything other than a pure addition of
-// inputs/attachments/<name> files is a conflict.
+// addable inputs (IsAddableInputPath) is a conflict.
 func (r *Repository) HydrationAdditions(ctx context.Context, workspaceID, taskID, prefix, fromRevision, toRevision string) ([]Entry, error) {
 	if err := ValidateIdentifier("workspace_id", workspaceID); err != nil {
 		return nil, err

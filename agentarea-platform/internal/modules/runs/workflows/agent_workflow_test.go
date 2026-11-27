@@ -385,6 +385,29 @@ func TestToolCallRunsThroughTheToolActivity(t *testing.T) {
 	}
 }
 
+func TestReadFileIsABuiltInPolicyNeverGates(t *testing.T) {
+	f := newFakeRun()
+	f.llm[parentTask] = turns(
+		calls(ToolCall{ID: "call-1", Name: domain.ToolReadFile, Arguments: `{"path": "inputs/tool-outputs/call_0.json", "grep": "x"}`}),
+		calls(complete("call-2", "done")),
+	)
+	env := newEnv(t, f)
+	req := request(nil)
+	req.Policy.Tools = &api.ToolsPolicy{Allowed: []string{}, Denied: []string{"*"}}
+	req.Policy.Approval = &api.ApprovalPolicy{EscalationRules: []string{"*"}}
+	env.ExecuteWorkflow(AgentExecutionWorkflow, req)
+
+	if res := result(t, env); !res.Success {
+		t.Fatalf("result = %+v", res)
+	}
+	if len(f.toolCalls) != 1 || !domain.IsReadFile(f.toolCalls[0].ToolName, f.toolCalls[0].Binding) || f.toolCalls[0].Args["grep"] != "x" {
+		t.Fatalf("tool calls = %+v", f.toolCalls)
+	}
+	if tools := f.messages(parentTask, "tool"); len(tools) < 1 || tools[0].Content != "found it" {
+		t.Fatalf("tool rows = %+v", tools)
+	}
+}
+
 func TestApprovalWaitsForAPersonThenRunsTheTool(t *testing.T) {
 	for _, approved := range []bool{true, false} {
 		f := newFakeRun()

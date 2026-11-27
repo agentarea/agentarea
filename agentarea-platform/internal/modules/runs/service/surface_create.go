@@ -267,30 +267,15 @@ func (s *Surface) stageAttachments(ctx context.Context, c authn.Caller, taskID s
 	used := map[string]bool{}
 	out := make([]any, 0, len(refs))
 	for _, ref := range refs {
-		if !strings.HasPrefix(ref, "staging/") {
-			return nil, httpx.HTTPError(http.StatusUnprocessableEntity, "Invalid attachment ref: "+ref)
-		}
-		head, found, err := s.d.Files.Head(ctx, c.Workspace, ref)
-		if errors.Is(err, sandboxapi.ErrInvalidPath) {
-			return nil, httpx.HTTPError(http.StatusUnprocessableEntity, "Invalid attachment ref: "+ref)
-		}
+		staged, err := s.stagedAttachment(ctx, c, ref)
 		if err != nil {
-			return nil, s.internal(ctx, "Failed to read a staged attachment", err)
+			return nil, err
 		}
-		if !found {
-			return nil, httpx.NotFound("attachment ref not found")
-		}
-		if head.SHA256 == "" {
-			return nil, httpx.HTTPError(http.StatusUnprocessableEntity, "attachment integrity digest is unavailable")
-		}
-		contentType := head.ContentType
-		if contentType == "" {
-			contentType = "application/octet-stream"
-		}
-		base := ref[strings.LastIndex(ref, "/")+1:]
-		if base == "" {
-			base = "attachment"
-		}
+		head := struct {
+			SHA256 string
+			Size   int64
+		}{staged.SHA256, staged.Size}
+		contentType, base := staged.ContentType, staged.Name
 		name := dedupeName(base, used)
 		used[name] = true
 		rel := "inputs/attachments/" + name
@@ -313,6 +298,36 @@ func (s *Surface) stageAttachments(ctx context.Context, c authn.Caller, taskID s
 		})
 	}
 	return out, nil
+}
+
+// stagedAttachment is an uploaded staging object as a file to attach: its
+// digest, size, type and name, checked as stageAttachments checks them.
+func (s *Surface) stagedAttachment(ctx context.Context, c authn.Caller, ref string) (api.TaskAttachment, error) {
+	if !strings.HasPrefix(ref, "staging/") {
+		return api.TaskAttachment{}, httpx.HTTPError(http.StatusUnprocessableEntity, "Invalid attachment ref: "+ref)
+	}
+	head, found, err := s.d.Files.Head(ctx, c.Workspace, ref)
+	if errors.Is(err, sandboxapi.ErrInvalidPath) {
+		return api.TaskAttachment{}, httpx.HTTPError(http.StatusUnprocessableEntity, "Invalid attachment ref: "+ref)
+	}
+	if err != nil {
+		return api.TaskAttachment{}, s.internal(ctx, "Failed to read a staged attachment", err)
+	}
+	if !found {
+		return api.TaskAttachment{}, httpx.NotFound("attachment ref not found")
+	}
+	if head.SHA256 == "" {
+		return api.TaskAttachment{}, httpx.HTTPError(http.StatusUnprocessableEntity, "attachment integrity digest is unavailable")
+	}
+	contentType := head.ContentType
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	base := ref[strings.LastIndex(ref, "/")+1:]
+	if base == "" {
+		base = "attachment"
+	}
+	return api.TaskAttachment{Key: ref, Name: base, SHA256: head.SHA256, Size: head.Size, ContentType: contentType}, nil
 }
 
 // deleteStaging is _delete_staging_refs: a failure is logged, never raised.

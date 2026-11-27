@@ -58,8 +58,8 @@ ones needing approval, because those escalate to a human rather than fail.
 
 A fixed set of control-flow tools is always disclosed regardless of policy:
 `completion`, `task_complete`, `request_user_input`, `recall_history`,
-`read_tool_output`, `activate_tool_source` and `load_tools`. They reach no
-external system and are never gated on execution. Without `completion` an agent
+`read_file`, `activate_tool_source` and `load_tools`. They reach nothing
+outside the run and its own task files and are never gated on execution. Without `completion` an agent
 could never finish, and without `request_user_input` it could never ask — so a
 restrictive policy must not be able to strand a run.
 

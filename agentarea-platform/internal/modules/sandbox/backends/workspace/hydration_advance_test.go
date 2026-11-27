@@ -108,6 +108,11 @@ func TestAdditiveAttachmentDiff(t *testing.T) {
 		{"file straight under the skills root", []Entry{first}, []Entry{first, {RelativePath: "inputs/skills/loose.md", SHA256: "5"}}, nil},
 		{"skills root lookalike", []Entry{first}, []Entry{first, {RelativePath: "inputs/skills-x/a/SKILL.md", SHA256: "5"}}, nil},
 		{"skill traversal", []Entry{first}, []Entry{first, {RelativePath: "inputs/skills/a/../../brief.txt", SHA256: "5"}}, nil},
+		{"tool output offloaded", []Entry{brief, first}, []Entry{brief, first, {RelativePath: "inputs/tool-outputs/call_1.json", SHA256: "8"}},
+			[]string{"inputs/tool-outputs/call_1.json"}},
+		{"nested tool output", []Entry{first}, []Entry{first, {RelativePath: "inputs/tool-outputs/dir/call_1.json", SHA256: "5"}}, nil},
+		{"tool outputs root lookalike", []Entry{first}, []Entry{first, {RelativePath: "inputs/tool-outputs-x/call_1.json", SHA256: "5"}}, nil},
+		{"tool output traversal", []Entry{first}, []Entry{first, {RelativePath: "inputs/tool-outputs/../brief.txt", SHA256: "5"}}, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -217,10 +217,11 @@ func TestExecuteToolOffloadsLargeOutputStoresImagesAndRelaysProgress(t *testing.
 	big := strings.Repeat("x", domain.OutputOffloadChars+1)
 	shot := pngBytes(t, 6, 4)
 	tool := &fakeTool{out: ToolOutput{Success: true, Result: big, Images: []ToolImage{{Data: shot, MimeType: "image/png"}, {Data: []byte("PNG"), MimeType: "image/png"}}}}
-	s := New(Deps{Blob: b, Events: ev, Pricing: eurPricing{}, Tools: map[string]ToolCaller{"mcp": tool}, Log: quiet()})
+	ws := &taskFiles{}
+	s := New(Deps{Blob: b, Workspace: ws, Events: ev, Pricing: eurPricing{}, Tools: map[string]ToolCaller{"mcp": tool}, Log: quiet()})
 	p := testPrincipal()
 	out, err := s.ExecuteTool(context.Background(), p, ToolCall{
-		TaskID: "t1", ToolCallID: "c1", ToolName: "search", ActivityID: "7", Attempt: 2,
+		TaskID: "t1", ToolCallID: "c1", ToolName: "search", ActivityID: "7", Attempt: 2, RunMetadata: map[string]any{WorkspaceTaskKey: "parent"},
 		Binding: api.ToolBinding{Source: "mcp", MCP: &api.MCPBinding{InstanceID: "i1", RawName: "search"}},
 	})
 	if err != nil {
@@ -230,11 +231,12 @@ func TestExecuteToolOffloadsLargeOutputStoresImagesAndRelaysProgress(t *testing.
 		!bytes.Equal(b.m[domain.ImageKey(p.WorkspaceID, "t1", "mcp_tool_7_image_1")], shot) {
 		t.Fatalf("images %+v", out.Images)
 	}
-	if notes := string(b.m[domain.OutputKey(p.WorkspaceID, "t1", "mcp_tool_7")]); !strings.Contains(notes, "[image 2 not kept: image/png is not PNG, JPEG, GIF or WebP]") {
-		t.Fatalf("a broken image was not named: %.200q", notes[len(notes)-120:])
+	kept := p.WorkspaceID + "/parent/inputs/tool-outputs/mcp_tool_7.txt"
+	if notes := string(ws.files[kept]); !strings.Contains(notes, "[image 2 not kept: image/png is not PNG, JPEG, GIF or WebP]") {
+		t.Fatalf("a broken image was not named: %v", ws.files)
 	}
-	stored := string(b.m[domain.OutputKey(p.WorkspaceID, "t1", "mcp_tool_7")])
-	if !strings.HasPrefix(stored, big) || !strings.Contains(out.Out.Result, "mcp_tool_7") || out.Out.Result == big {
+	stored := string(ws.files[kept])
+	if !strings.HasPrefix(stored, big) || !strings.HasPrefix(out.Out.Result, "[Output stored in inputs/tool-outputs/mcp_tool_7.txt") || out.Out.Result == big {
 		t.Fatalf("offload: stored %d chars, result %.80q", len(stored), out.Out.Result)
 	}
 	if out.Attempt == nil || *out.Attempt != 2 || out.Payer != "workspace" {
@@ -347,21 +349,6 @@ func TestValidateArtifactsFailsClosed(t *testing.T) {
 	}
 }
 
-func TestStoreAndReadOutputThroughTheContextStore(t *testing.T) {
-	s := New(Deps{Blob: newMemBlob(), Log: quiet()})
-	p := testPrincipal()
-	if err := s.StoreOutput(context.Background(), p, "t1", "o1", "alpha\nbeta\ngamma"); err != nil {
-		t.Fatal(err)
-	}
-	got, err := s.ReadOutput(context.Background(), p, "t1", "", "o1", "beta", nil, nil)
-	if err != nil || !strings.Contains(got, "beta") || strings.Contains(got, "alpha") {
-		t.Fatalf("read %q %v", got, err)
-	}
-	if err := s.StoreOutput(context.Background(), Principal{}, "t1", "o1", "x"); appErr(t, err).Type != "ValueError" {
-		t.Fatal("an incomplete principal was accepted")
-	}
-}
-
 func TestFileToolsRunInTheSandbox(t *testing.T) {
 	rt := &fakeRuntime{files: map[string][]byte{}}
 	s := New(Deps{Runtime: rt, Log: quiet()})
@@ -386,10 +373,10 @@ func TestFileToolsRunInTheSandbox(t *testing.T) {
 	if got := call("save_file", map[string]any{"contents": "x", "file_name": "../x"}); got != "Error saving to file: path escapes workspace sandbox: '../x'" {
 		t.Fatalf("escape %q", got)
 	}
-	if got := call("read_file", map[string]any{"file_name": "outputs/a.md"}); got != "hi" {
+	if got := readFileCall(s, map[string]any{"path": "outputs/a.md"}, nil).Result; got != "hi" {
 		t.Fatalf("read %q", got)
 	}
-	if got := call("read_file", map[string]any{"file_name": "nope"}); got != "Error: File nope does not exist" {
+	if got := readFileCall(s, map[string]any{"path": "nope"}, nil).Result; got != "Error: File nope does not exist" {
 		t.Fatalf("missing %q", got)
 	}
 	want := "{\n  \"scope\": \"/\",\n  \"pattern\": \"*.md\",\n  \"files_found\": 1,\n  \"files\": [\n    \"outputs/a.md\"\n  ]\n}"
@@ -407,78 +394,76 @@ func TestReadFileShowsAnImageToTheModel(t *testing.T) {
 	if err := png.Encode(&b, img); err != nil {
 		t.Fatal(err)
 	}
-	rt := &fakeRuntime{files: map[string][]byte{"inputs/plan.png": b.Bytes(), "inputs/blob.bin": {0xff, 0xfe, 0x00},
-		"inputs/plan.pdf": append([]byte("%PDF-1.7\n"), 0xff, 0xfe)}}
+	rt := &fakeRuntime{files: map[string][]byte{"docs/plan.png": b.Bytes(), "docs/blob.bin": {0xff, 0xfe, 0x00},
+		"docs/plan.pdf": append([]byte("%PDF-1.7\n"), 0xff, 0xfe)}}
 	s := New(Deps{Runtime: rt, Log: quiet()})
 	read := func(name string) ToolOutput {
 		t.Helper()
-		in := ToolCall{TaskID: "t1", ToolName: "read_file", Args: map[string]any{"file_name": name},
-			Binding: api.ToolBinding{Source: "code", Code: &api.CodeBinding{Namespace: "agentarea/files", Method: "read_file"}}}
+		in := ToolCall{TaskID: "t1", ToolName: "read_file", Args: map[string]any{"path": name}, Binding: domain.ReadFileBinding()}
 		out, err := s.dispatch(context.Background(), testPrincipal(), in, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return out
 	}
-	out := read("inputs/plan.png")
+	out := read("docs/plan.png")
 	if !out.Success || len(out.Images) != 1 || out.Images[0].MimeType != "image/png" {
 		t.Fatalf("%+v", out)
 	}
-	if want := fmt.Sprintf("inputs/plan.png is an image (image/png, 3000x1500 px, %d KB); it is attached.", (b.Len()+1023)/1024); out.Result != want || !bytes.Equal(out.Images[0].Data, b.Bytes()) {
+	if want := fmt.Sprintf("docs/plan.png is an image (image/png, 3000x1500 px, %d KB); it is attached.", (b.Len()+1023)/1024); out.Result != want || !bytes.Equal(out.Images[0].Data, b.Bytes()) {
 		t.Fatalf("result %q, want %q", out.Result, want)
 	}
-	if out := read("inputs/blob.bin"); len(out.Images) != 0 || !strings.Contains(out.Result, "can't decode") {
+	if out := read("docs/blob.bin"); len(out.Images) != 0 || !strings.Contains(out.Result, "can't decode") {
 		t.Fatalf("binary %+v", out)
 	}
-	if out := read("inputs/plan.pdf"); len(out.Images) != 0 || !strings.HasPrefix(out.Result, "Error reading file: inputs/plan.pdf: not a readable PDF:") {
+	if out := read("docs/plan.pdf"); len(out.Images) != 0 || !strings.HasPrefix(out.Result, "Error reading file: docs/plan.pdf: not a readable PDF:") {
 		t.Fatalf("broken pdf %+v", out)
 	}
 }
 
 func TestReadFileReadsPDFPages(t *testing.T) {
-	rt := &fakeRuntime{files: map[string][]byte{"inputs/short.pdf": pdfOf(4), "inputs/plan.pdf": pdfOf(42), "notes.txt": []byte("a\nb\nc\nd\ne")}}
+	rt := &fakeRuntime{files: map[string][]byte{"docs/short.pdf": pdfOf(4), "docs/plan.pdf": pdfOf(42), "notes.txt": []byte("a\nb\nc\nd\ne")}}
 	s := New(Deps{Runtime: rt, Log: quiet()})
 	read := func(args map[string]any) ToolOutput {
 		t.Helper()
-		in := ToolCall{TaskID: "t1", ToolName: "read_file", Args: args,
-			Binding: api.ToolBinding{Source: "code", Code: &api.CodeBinding{Namespace: "agentarea/files", Method: "read_file"}}}
+		in := ToolCall{TaskID: "t1", ToolName: "read_file", Args: args, Binding: domain.ReadFileBinding()}
 		out, err := s.dispatch(context.Background(), testPrincipal(), in, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return out
 	}
-	out := read(map[string]any{"file_name": "inputs/short.pdf"})
+	out := read(map[string]any{"path": "docs/short.pdf"})
 	if len(out.Images) != 1 || out.Images[0].MimeType != "application/pdf" || out.Images[0].Pages != 4 ||
-		out.Result != "inputs/short.pdf: pages 1-4 of 4 (PDF); it is attached." {
+		out.Result != "docs/short.pdf: pages 1-4 of 4 (PDF); it is attached." {
 		t.Fatalf("short %+v", out)
 	}
-	if out := read(map[string]any{"file_name": "inputs/plan.pdf"}); len(out.Images) != 0 ||
-		out.Result != "inputs/plan.pdf has 42 pages; read up to 20 at a time with pages, e.g. pages: \"1-5\"." {
+	if out := read(map[string]any{"path": "docs/plan.pdf"}); len(out.Images) != 0 ||
+		out.Result != "docs/plan.pdf has 42 pages; read up to 20 at a time with pages, e.g. pages: \"1-5\"." {
 		t.Fatalf("long without pages %+v", out)
 	}
-	out = read(map[string]any{"file_name": "inputs/plan.pdf", "pages": "3-5"})
-	if len(out.Images) != 1 || out.Images[0].Pages != 3 || out.Result != "inputs/plan.pdf: pages 3-5 of 42 (PDF); it is attached." {
+	out = read(map[string]any{"path": "docs/plan.pdf", "pages": "3-5"})
+	if len(out.Images) != 1 || out.Images[0].Pages != 3 || out.Result != "docs/plan.pdf: pages 3-5 of 42 (PDF); it is attached." {
 		t.Fatalf("pages %+v", out)
 	}
 	for args, want := range map[string]string{
-		"1-21":  "Error reading file: inputs/plan.pdf: pages 1-21 is 21 pages; read up to 20 at a time",
-		"40-45": "Error reading file: inputs/plan.pdf: pages 40-45 is past the last page, 42",
+		"1-21":  "Error reading file: docs/plan.pdf: pages 1-21 is 21 pages; read up to 20 at a time",
+		"40-45": "Error reading file: docs/plan.pdf: pages 40-45 is past the last page, 42",
 	} {
-		if out := read(map[string]any{"file_name": "inputs/plan.pdf", "pages": args}); out.Result != want || len(out.Images) != 0 {
+		if out := read(map[string]any{"path": "docs/plan.pdf", "pages": args}); out.Result != want || len(out.Images) != 0 {
 			t.Fatalf("pages %s: %q", args, out.Result)
 		}
 	}
-	if out := read(map[string]any{"file_name": "notes.txt", "pages": "1"}); out.Result != "Error reading file: notes.txt: pages is for PDF files" {
+	if out := read(map[string]any{"path": "notes.txt", "pages": "1"}); out.Result != "Error reading file: notes.txt: pages is for PDF files" {
 		t.Fatalf("pages on text %q", out.Result)
 	}
-	if out := read(map[string]any{"file_name": "notes.txt", "offset": float64(2), "limit": float64(2)}); out.Result != "b\nc\n[lines 2-3 of 5; read on with offset: 4]" {
+	if out := read(map[string]any{"path": "notes.txt", "offset": float64(2), "limit": float64(2)}); out.Result != "b\nc\n[lines 2-3 of 5; read on with offset: 4]" {
 		t.Fatalf("offset %q", out.Result)
 	}
-	if out := read(map[string]any{"file_name": "notes.txt", "offset": float64(4)}); out.Result != "d\ne" {
+	if out := read(map[string]any{"path": "notes.txt", "offset": float64(4)}); out.Result != "d\ne" {
 		t.Fatalf("offset to the end %q", out.Result)
 	}
-	if out := read(map[string]any{"file_name": "notes.txt", "offset": float64(9)}); out.Result != "Error reading file: notes.txt: offset 9 is past the last line, 5" {
+	if out := read(map[string]any{"path": "notes.txt", "offset": float64(9)}); out.Result != "Error reading file: notes.txt: offset 9 is past the last line, 5" {
 		t.Fatalf("offset past the end %q", out.Result)
 	}
 }

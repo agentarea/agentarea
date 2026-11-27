@@ -10373,6 +10373,12 @@ export type TaskArtifactItem = {
  */
 export type TaskCommandPayload = {
   /**
+   * Attachments
+   *
+   * queue_message only: staging refs of uploaded files to attach to the running task; they are named under the message.
+   */
+  attachments?: Array<string> | null;
+  /**
    * Budget Usd
    */
   budget_usd?: number | string | null;

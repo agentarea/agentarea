@@ -67,7 +67,7 @@ func (r *agentRun) executeToolCalls(ctx workflow.Context, calls []ToolCall) erro
 	}
 	r.toolCallsUsed = attempted
 
-	var completion, delegations, regular, recall, skills, readOutput, sources, loads, inputs []ToolCall
+	var completion, delegations, regular, recall, skills, sources, loads, inputs []ToolCall
 	for _, c := range calls {
 		switch c.Name {
 		case domain.ToolCompletion, domain.ToolTaskComplete:
@@ -76,8 +76,6 @@ func (r *agentRun) executeToolCalls(ctx workflow.Context, calls []ToolCall) erro
 			inputs = append(inputs, c)
 		case domain.ToolRecallHistory:
 			recall = append(recall, c)
-		case domain.ToolReadToolOutput:
-			readOutput = append(readOutput, c)
 		case domain.ToolActivateToolSource:
 			sources = append(sources, c)
 		case domain.ToolLoadTools:
@@ -102,7 +100,7 @@ func (r *agentRun) executeToolCalls(ctx workflow.Context, calls []ToolCall) erro
 		if err := r.requestUserInput(ctx, inputs[0]); err != nil {
 			return err
 		}
-		skipped := slices.Concat(inputs[1:], recall, readOutput, sources, loads, skills, delegations, regular, completion)
+		skipped := slices.Concat(inputs[1:], recall, sources, loads, skills, delegations, regular, completion)
 		for _, c := range skipped {
 			r.toolMessage(c, inputSkipped)
 		}
@@ -112,7 +110,7 @@ func (r *agentRun) executeToolCalls(ctx workflow.Context, calls []ToolCall) erro
 		calls []ToolCall
 		run   func(workflow.Context, ToolCall) error
 	}{
-		{recall, r.recallHistory}, {readOutput, r.readToolOutput}, {sources, r.activateToolSource},
+		{recall, r.recallHistory}, {sources, r.activateToolSource},
 		{loads, r.loadTools}, {skills, r.activateSkill},
 	}
 	for _, s := range steps {
@@ -190,7 +188,10 @@ func (r *agentRun) gate(ctx workflow.Context, c ToolCall) (bool, bool, error) {
 			return false, false, nil
 		}
 	}
-	action, _ := domain.DecideToolPolicy(r.cfg.Policy, c.Name, domain.NamesFor(&r.cfg, c.Name))
+	action := domain.ToolAllow
+	if c.Name != domain.ToolReadFile {
+		action, _ = domain.DecideToolPolicy(r.cfg.Policy, c.Name, domain.NamesFor(&r.cfg, c.Name))
+	}
 	switch action {
 	case domain.ToolDeny:
 		r.deny(ctx, c, "not permitted by policy", false, false)
@@ -395,6 +396,14 @@ func failureText(err error) string {
 	return err.Error()
 }
 
+// binding is how a tool's call reaches its caller; the built-in read_file has its own.
+func (r *agentRun) binding(name string) api.ToolBinding {
+	if name == domain.ToolReadFile {
+		return domain.ReadFileBinding()
+	}
+	return r.cfg.Bindings[name]
+}
+
 // executeTool runs a capability tool through its activity.
 func (r *agentRun) executeTool(ctx workflow.Context, c ToolCall) error {
 	args := parseArgs(c)
@@ -410,7 +419,7 @@ func (r *agentRun) executeTool(ctx workflow.Context, c ToolCall) error {
 	}
 	req := ToolCallRequest{
 		Principal: r.principal, TaskID: r.taskID, ExecutionID: r.executionID, ToolCallID: c.ID, ToolName: c.Name,
-		Args: args, Binding: r.cfg.Bindings[c.Name], Policy: r.cfg.Policy, Counters: r.counters(),
+		Args: args, Binding: r.binding(c.Name), Policy: r.cfg.Policy, Counters: r.counters(),
 		RunMetadata: r.metadata, PolicyApprovalGranted: granted,
 	}
 	started := workflow.Now(ctx).UTC()
@@ -484,9 +493,12 @@ func (r *agentRun) recordToolResult(ctx workflow.Context, c ToolCall, args map[s
 		r.serviceCostUsed = r.serviceCostUsed.Add(res.ServiceCost)
 		r.enforceAgentSpendCap()
 	}
-	text, err := r.maybeOffload(ctx, res.Result, c.ID)
-	if err != nil {
-		return err
+	text := res.Result
+	if c.Name != domain.ToolReadFile {
+		var err error
+		if text, err = r.maybeOffload(ctx, res.Result, c.ID); err != nil {
+			return err
+		}
 	}
 	r.messages = append(r.messages, Message{Role: "tool", Content: text, ToolCallID: c.ID, Name: c.Name, Attachments: res.Images, Meta: meta})
 	data := map[string]any{
@@ -553,12 +565,12 @@ func mergeInto(dst map[string]any, srcs ...map[string]any) {
 
 func (r *agentRun) offloads() bool { return r.cfg.ContextStrategy == "hybrid" || r.dynamic() }
 
-// maybeOffload stores a large output and hands the model a summary instead.
+// maybeOffload keeps a large output in a task file and hands the model a summary instead.
 func (r *agentRun) maybeOffload(ctx workflow.Context, content, outputID string) (string, error) {
 	if !r.offloads() || len([]rune(content)) <= outputOffloadChars {
 		return content, nil
 	}
-	req := StoreOutputRequest{Principal: r.principal, TaskID: r.taskID, OutputID: outputID, Content: content}
+	req := StoreOutputRequest{Principal: r.principal, TaskID: r.taskID, FilesTaskID: r.sharedFilesTask(), OutputID: outputID, Content: content}
 	var res ContextResult
 	err := workflow.ExecuteActivity(activityCtx(ctx, api.ActivityStoreContextOutput, "", 0), api.ActivityStoreContextOutput, req).Get(ctx, &res)
 	if err != nil {
@@ -569,7 +581,7 @@ func (r *agentRun) maybeOffload(ctx workflow.Context, content, outputID string) 
 		return content, nil
 	}
 	if res.Success {
-		return domain.OutputSummary(content, outputID), nil
+		return domain.OutputSummary(content, res.Content), nil
 	}
 	return content, nil
 }
@@ -624,39 +636,6 @@ func (r *agentRun) recallHistory(ctx workflow.Context, c ToolCall) error {
 		parts = append(parts, fmt.Sprintf("[%s] %s: %s", e.Timestamp.Format("2006-01-02T15:04:05.999999-07:00"), e.Type, data))
 	}
 	r.toolMessage(c, strings.Join(parts, "\n"))
-	return nil
-}
-
-func optionalInt(v any) *int {
-	if f, ok := v.(float64); ok {
-		return ptr(int(f))
-	}
-	return nil
-}
-
-func (r *agentRun) readToolOutput(ctx workflow.Context, c ToolCall) error {
-	args := parseArgs(c)
-	id, _ := args["output_id"].(string)
-	if id == "" {
-		r.toolMessage(c, "Error: output_id is required.")
-		return nil
-	}
-	grep, _ := args["grep"].(string)
-	req := ReadOutputRequest{Principal: r.principal, TaskID: r.taskID, FilesTaskID: r.sharedFilesTask(), OutputID: id, Grep: grep, Head: optionalInt(args["head"]), Tail: optionalInt(args["tail"])}
-	var res ContextResult
-	var content string
-	err := workflow.ExecuteActivity(activityCtx(ctx, api.ActivityReadContextOutput, "", 0), api.ActivityReadContextOutput, req).Get(ctx, &res)
-	switch {
-	case err != nil && (isCancellation(err) || ctx.Err() != nil):
-		return err
-	case err != nil:
-		content = fmt.Sprintf("Failed to read output '%s': %s", id, failureText(err))
-	case res.Success:
-		content = res.Content
-	default:
-		content = "Error reading output: " + res.Error
-	}
-	r.toolMessage(c, content)
 	return nil
 }
 
