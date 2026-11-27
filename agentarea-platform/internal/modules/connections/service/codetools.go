@@ -72,7 +72,8 @@ func sandboxToolsets() []CodeToolset {
 			{Method: "bash", Description: "Run a bash command and return stdout, stderr, and the exit code.",
 				Parameters: obj(map[string]any{
 					"command": str("The bash command to run. It starts in the task's working directory; use paths relative to it, " +
-						"such as outputs/report.md. Chain steps with && or put them in a script."),
+						"such as outputs/report.md. Only files under it reach the task; a file written elsewhere, such as ~ or /tmp, does not. " +
+						"Chain steps with && or put them in a script."),
 					"timeout_seconds": map[string]any{"type": []any{"integer", "null"}, "default": nil,
 						"description": "Seconds the command may run before it is stopped. Omit for the default; asking for more " +
 							"than the sandbox allows returns an error naming the maximum."},
