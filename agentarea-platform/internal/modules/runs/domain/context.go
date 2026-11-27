@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -22,12 +23,8 @@ const (
 	skillContentTag        = "<skill_content"
 )
 
-// OutputKey, HistoryChunkKey, HistoryPrefix and ImageKey are where a task's
-// offloaded context lives in object storage (context_store.py).
-func OutputKey(workspaceID, taskID, outputID string) string {
-	return fmt.Sprintf("tasks/%s/%s/outputs/%s.json", workspaceID, taskID, outputID)
-}
-
+// HistoryChunkKey, HistoryPrefix and ImageKey are where a task's offloaded
+// context lives in object storage (context_store.py).
 func HistoryChunkKey(workspaceID, taskID string, index int) string {
 	return fmt.Sprintf("tasks/%s/%s/history/chunk_%d.json", workspaceID, taskID, index)
 }
@@ -40,23 +37,28 @@ func ImageKey(workspaceID, taskID, imageID string) string {
 	return fmt.Sprintf("tasks/%s/%s/images/%s", workspaceID, taskID, imageID)
 }
 
-// TaskInputPrefix is where a run's input files sit in its task workspace.
-const TaskInputPrefix = "inputs/attachments/"
+// TaskInputsPrefix is where a task's inputs sit in its task workspace:
+// attachments, skill files and offloaded tool outputs.
+const TaskInputsPrefix = "inputs/"
+
+const toolOutputsDir = TaskInputsPrefix + "tool-outputs/"
 
 func pathSegment(s string) bool {
 	return s != "" && s != "." && s != ".." && !strings.ContainsAny(s, "/\\") &&
 		!strings.ContainsFunc(s, func(r rune) bool { return r < 0x20 || r == 0x7f })
 }
 
-// IsTaskInputPath accepts exactly inputs/attachments/<one segment>, the path
-// a run is told its input files have.
-func IsTaskInputPath(name string) bool {
-	rest, ok := strings.CutPrefix(name, TaskInputPrefix)
-	return ok && pathSegment(rest)
-}
-
-// IsOutputID accepts an output id that names one object under the task's outputs.
+// IsOutputID accepts an output id that names one file under the task's tool outputs.
 func IsOutputID(id string) bool { return pathSegment(id) }
+
+// ToolOutputPath is the task file a tool output too long for the conversation
+// is kept in: JSON as .json, any other text as .txt.
+func ToolOutputPath(outputID, content string) string {
+	if json.Valid([]byte(content)) {
+		return toolOutputsDir + outputID + ".json"
+	}
+	return toolOutputsDir + outputID + ".txt"
+}
 
 func runeLen(s string) int { return len([]rune(s)) }
 
@@ -76,7 +78,7 @@ func runeTail(s string, n int) string {
 	return string(r[len(r)-n:])
 }
 
-// lineMatcher is the grep of read_tool_output: a case-insensitive regex, or a
+// lineMatcher is the grep of read_file: a case-insensitive regex, or a
 // literal substring when the pattern is not one.
 func lineMatcher(pattern string) func(string) bool {
 	re, err := regexp.Compile("(?i)" + pattern)
@@ -86,7 +88,7 @@ func lineMatcher(pattern string) func(string) bool {
 	return re.MatchString
 }
 
-// FilterOutput is read_output: grep, then head or tail lines, capped at ReadOutputMaxChars.
+// FilterOutput is read_file's grep, then head or tail lines, capped at ReadOutputMaxChars.
 func FilterOutput(content, grep string, head, tail *int) string {
 	lines := strings.Split(content, "\n")
 	if grep != "" {
@@ -111,7 +113,7 @@ func FilterOutput(content, grep string, head, tail *int) string {
 	}
 	result := strings.Join(lines, "\n")
 	if runeLen(result) > ReadOutputMaxChars {
-		result = runeHead(result, ReadOutputMaxChars) + fmt.Sprintf("\n... [truncated at %d chars]", ReadOutputMaxChars)
+		result = runeHead(result, ReadOutputMaxChars) + fmt.Sprintf("\n... [truncated at %d chars; narrow it with grep, head, tail or offset and limit]", ReadOutputMaxChars)
 	}
 	return result
 }
@@ -180,16 +182,16 @@ func thousands(n int) string {
 	return b.String()
 }
 
-// OutputSummary is build_output_summary: what the model reads of an offloaded output.
-func OutputSummary(content, outputID string) string {
+// OutputSummary is what the model reads of an output kept in the task file at path.
+func OutputSummary(content, path string) string {
 	total := runeLen(content)
 	lines := strings.Count(content, "\n") + 1
-	s := fmt.Sprintf("[Output stored as %s — %s chars, %d lines]\n", outputID, thousands(total), lines)
+	s := fmt.Sprintf("[Output stored in %s — %s chars, %d lines]\n", path, thousands(total), lines)
 	s += fmt.Sprintf("Preview:\n%s\n", runeHead(content, OutputSummaryHeadChars))
 	if total > OutputSummaryHeadChars+OutputSummaryTailChars {
 		s += fmt.Sprintf("...\n%s\n", runeTail(content, OutputSummaryTailChars))
 	}
-	return s + fmt.Sprintf("\nUse read_tool_output(\"%s\") for full content, or read_tool_output(\"%s\", grep=\"pattern\") to search.", outputID, outputID)
+	return s + fmt.Sprintf("\nRead it with read_file(\"%s\"), narrowed with grep, head or tail, or process it in the shell, e.g. with jq or python.", path)
 }
 
 // EstimateTokens approximates a text's tokens at four characters each.

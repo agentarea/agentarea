@@ -540,6 +540,21 @@ func commandBody(v any, in *input, errs *[]httpx.FieldError) {
 	}
 	in.command.Message, _ = str(o, "message", 0, 0, true, loc, errs)
 	in.command.MessageID, _ = str(o, "message_id", 0, 0, true, loc, errs)
+	if v, present := o.Get("attachments"); present && v != nil {
+		l := at(loc, "attachments")
+		list, isList := v.([]any)
+		if !isList {
+			*errs = append(*errs, httpx.ListType(l...))
+		}
+		for i, item := range list {
+			s, isStr := item.(string)
+			if !isStr {
+				*errs = append(*errs, httpx.StringType(at(l, i)...))
+				continue
+			}
+			in.command.Attachments = append(in.command.Attachments, s)
+		}
+	}
 }
 
 type notMoney string

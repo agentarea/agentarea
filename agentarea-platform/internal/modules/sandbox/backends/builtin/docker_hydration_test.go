@@ -207,3 +207,49 @@ func TestDockerBackendSerializesConcurrentHydration(t *testing.T) {
 		t.Fatalf("concurrent hydration calls = %d, want 1", calls.Load())
 	}
 }
+
+func TestDockerBackendAdvancesALiveWorkspaceToANewRevision(t *testing.T) {
+	incarnation := uuid.NewString()
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/health" {
+			http.Error(response, "unexpected request", http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(response).Encode(map[string]string{
+			"status": "waiting", "incarnation": incarnation,
+		})
+	}))
+	defer server.Close()
+	backend := sharedExecutor(server.URL)
+	var hydrations atomic.Int32
+	hydrate := func(context.Context) error {
+		hydrations.Add(1)
+		return nil
+	}
+	var advancedFrom []string
+	advance := func(_ context.Context, from string) error {
+		advancedFrom = append(advancedFrom, from)
+		return nil
+	}
+	first := strings.Repeat("a", 64)
+	second := strings.Repeat("b", 64)
+	for _, revision := range []string{first, second, second} {
+		if err := backend.EnsureWorkspaceHydrated(
+			context.Background(), "workspace-1", "task-1", revision, hydrate, advance,
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if hydrations.Load() != 1 || len(advancedFrom) != 1 || advancedFrom[0] != first {
+		t.Fatalf("hydrations = %d, advanced from %v; want one hydration and one advance from the first revision", hydrations.Load(), advancedFrom)
+	}
+
+	refuse := errors.New("not additive")
+	err := backend.EnsureWorkspaceHydrated(
+		context.Background(), "workspace-1", "task-1", strings.Repeat("c", 64), hydrate,
+		func(context.Context, string) error { return refuse },
+	)
+	if !errors.Is(err, refuse) {
+		t.Fatalf("err = %v, want the advance refusal", err)
+	}
+}

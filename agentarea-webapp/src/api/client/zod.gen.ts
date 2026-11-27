@@ -4186,6 +4186,7 @@ export const zTaskArtifactItem = z.object({
  * TaskCommandPayload
  */
 export const zTaskCommandPayload = z.object({
+  attachments: z.array(z.string()).nullish(),
   budget_usd: z
     .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
     .nullish(),

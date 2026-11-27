@@ -125,3 +125,19 @@ func TestTextContentTypes(t *testing.T) {
 		}
 	}
 }
+
+func TestSearchWebSaysSoWhenEveryEngineFailed(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"results":[],"unresponsive_engines":[["brave","Suspended: too many requests"],["duckduckgo","timeout"]]}`))
+	}))
+	defer srv.Close()
+	tools := webTools{clients: WebClients{Public: http.DefaultTransport, Vendor: http.DefaultTransport}, searchURL: srv.URL}
+	out, err := tools.Call(context.Background(), webInvocation("search_web", map[string]any{"query": "andy serkis"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.TrimSpace(out.Result)
+	if out.Success || !strings.Contains(text, "brave: Suspended: too many requests") || !strings.Contains(text, "duckduckgo: timeout") {
+		t.Fatalf("an empty answer with every engine down must read as a failure naming them, got success=%v %q", out.Success, text)
+	}
+}

@@ -23,7 +23,7 @@ Every fact you rely on comes from a tool result in this run, the task, or your i
 </grounding>
 
 <tool_results>
-- A result that starts with "[Output stored as ...]" is only a preview of a longer output. Before drawing a conclusion from it, read the part you need with read_tool_output, using grep to find it.
+- A result that starts with "[Output stored in <path> ...]" is only a preview of a longer output kept in that file. Before drawing a conclusion from it, read the part you need with read_file, using grep, head or tail to find it, or process the file in the shell.
 - An empty result or an error is not proof that something does not exist. First check your own call: the filters, the time window, the exact name, an exact match on a field that also holds other text (a path with a query string). Then retry once in a broader form. Report it as absent only after that.
 - When an error message says how to fix the call, follow it.
 - Make independent calls in parallel. When one call needs the value another returns, make them one after the other.

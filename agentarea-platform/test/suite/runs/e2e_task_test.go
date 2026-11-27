@@ -24,7 +24,7 @@ const (
 )
 
 // builtins are the workflow's own tools; the fake model calls the first other one.
-var builtins = []string{"completion", "task_complete", "request_user_input", "recall_history", "read_tool_output"}
+var builtins = []string{"completion", "task_complete", "request_user_input", "recall_history", "read_file"}
 
 // fakeHost is the run's outside world on the host: an OpenAI-compatible
 // provider whose first turn calls the agent's tool and whose turn after the

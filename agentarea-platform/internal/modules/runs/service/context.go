@@ -8,70 +8,50 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode/utf8"
 
-	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/blob"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/db"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/kernel/scope"
 	"github.com/agentarea/agentarea/agentarea-platform/internal/modules/runs/domain"
 	sandboxapi "github.com/agentarea/agentarea/agentarea-platform/internal/modules/sandbox/api"
 )
 
-// StoreOutput keeps a large tool output for read_tool_output (context.py store_context_output).
-func (s *Service) StoreOutput(ctx context.Context, p Principal, taskID, outputID, content string) error {
-	if _, err := workspace(p); err != nil {
-		return err
-	}
-	return s.putText(ctx, domain.OutputKey(p.WorkspaceID, taskID, outputID), content, "application/json")
-}
-
-// ReadOutput reads a stored output, or one of the task's input files by its
-// inputs/attachments/<name> path, through grep, head or tail.
-// filesTaskID is the task whose files the run works on; "" is taskID's own.
-func (s *Service) ReadOutput(ctx context.Context, p Principal, taskID, filesTaskID, outputID, grep string, head, tail *int) (string, error) {
+// StoreOutput keeps a tool output too long for the conversation in a file of
+// the task whose files the run works on (filesTaskID; "" is taskID's own) and
+// returns its path, which read_file and the shell read.
+func (s *Service) StoreOutput(ctx context.Context, p Principal, taskID, filesTaskID, workflowID, outputID, content string) (string, error) {
 	if _, err := workspace(p); err != nil {
 		return "", err
 	}
-	var content string
-	var err error
-	switch {
-	case domain.IsTaskInputPath(outputID):
-		files := taskID
-		if filesTaskID != "" {
-			files = filesTaskID
-		}
-		content, err = s.readTaskInput(ctx, p, files, outputID)
-	case domain.IsOutputID(outputID):
-		content, err = s.getText(ctx, domain.OutputKey(p.WorkspaceID, taskID, outputID))
-		if errors.Is(err, blob.ErrNotFound) {
-			err = fmt.Errorf("no stored output %q; pass the id an [Output stored as ...] line names, or a task input file path %s<name>", outputID, domain.TaskInputPrefix)
-		}
-	default:
-		err = fmt.Errorf("%q is neither a stored output id nor a task input file path %s<name>", outputID, domain.TaskInputPrefix)
-	}
-	if err != nil {
-		return "", err
-	}
-	return domain.FilterOutput(content, grep, head, tail), nil
+	return s.keepToolOutput(ctx, p, taskID, firstOf(filesTaskID, taskID), workflowID, outputID, content)
 }
 
-// readTaskInput reads a text input file of the task from its task workspace;
-// it needs no sandbox.
-func (s *Service) readTaskInput(ctx context.Context, p Principal, taskID, path string) (string, error) {
+func (s *Service) keepToolOutput(ctx context.Context, p Principal, taskID, filesTask, workflowID, outputID, content string) (string, error) {
 	if s.d.Workspace == nil {
-		return "", errors.New("task input files cannot be read: this deployment has no task workspace")
+		return "", errors.New("a tool output cannot be kept: this deployment has no task workspace")
 	}
-	data, ct, err := s.d.Workspace.Get(ctx, p.WorkspaceID, taskID, path)
-	if errors.Is(err, sandboxapi.ErrFileNotFound) {
-		return "", fmt.Errorf("no task input file %q", path)
+	if !domain.IsOutputID(outputID) {
+		return "", fmt.Errorf("%q cannot name a tool output file", outputID)
 	}
-	if err != nil {
+	path := domain.ToolOutputPath(outputID, content)
+	contentType := "text/plain; charset=utf-8"
+	if strings.HasSuffix(path, ".json") {
+		contentType = "application/json"
+	}
+	file := sandboxapi.WorkspaceFile{Path: path, Data: []byte(content), ContentType: contentType}
+	opts := sandboxapi.WriteOptions{Owner: workflowID, Actor: agentActor(p, taskID)}
+	if _, err := s.d.Workspace.PutFiles(ctx, p.WorkspaceID, filesTask, []sandboxapi.WorkspaceFile{file}, opts); err != nil {
 		return "", err
 	}
-	if !utf8.Valid(data) {
-		return "", fmt.Errorf("task input file %q is not text (%s)", path, ct)
+	return path, nil
+}
+
+// agentActor is the agent of a run writing into its task workspace.
+func agentActor(p Principal, taskID string) *sandboxapi.Actor {
+	actor := &sandboxapi.Actor{UserID: p.UserID, ActorType: "agent", TaskID: &taskID}
+	if p.AgentID != "" {
+		actor.AgentID = &p.AgentID
 	}
-	return string(data), nil
+	return actor
 }
 
 type historyMessage struct {

@@ -123,7 +123,7 @@ func TestActivitySpecs(t *testing.T) {
 		api.ActivityCallLLM, api.ActivityCompactMessages, api.ActivityExecuteTool, api.ActivityGetRemoteTask,
 		api.ActivityCancelRemoteTask, api.ActivityValidateArtifacts,
 		api.ActivityActivateSkill, api.ActivityRecallHistory, api.ActivityStoreContextOutput,
-		api.ActivityReadContextOutput, api.ActivitySearchHistory, api.ActivityRunRunnerTurn,
+		api.ActivitySearchHistory, api.ActivityRunRunnerTurn,
 		api.ActivityDeliverToRunner, api.ActivityStartUndispatchedTasks, api.ActivitySyncCronSchedules,
 		api.ActivityEvaluateTriggerConditions, api.ActivityExecuteTrigger, api.ActivityRecordTriggerExecution,
 		api.ActivityFireTriggerBatch, api.ActivityCloseTriggerBatch,

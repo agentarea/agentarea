@@ -90,7 +90,7 @@ func (d *Docker) EnsureWorkspaceHydrated(
 	ctx context.Context,
 	workspaceID, taskID, revision string,
 	hydrate func(context.Context) error,
-	_ func(context.Context, string) error,
+	advance func(context.Context, string) error,
 ) error {
 	d.hydrationRunMu.Lock()
 	defer d.hydrationRunMu.Unlock()
@@ -104,11 +104,20 @@ func (d *Docker) EnsureWorkspaceHydrated(
 		d.hydrationMu.Unlock()
 		return nil
 	}
-	if d.hydrated[key] != "" {
-		d.hydrationMu.Unlock()
-		return fmt.Errorf("live Docker development workspace revision cannot change: the development executor does not support adding inputs to a live workspace")
-	}
+	from := d.hydrated[key]
 	d.hydrationMu.Unlock()
+	if from != "" {
+		if advance == nil {
+			return fmt.Errorf("live Docker development workspace is hydrated from revision %s and cannot move to %s", from, revision)
+		}
+		if err := advance(ctx, from); err != nil {
+			return fmt.Errorf("live Docker development workspace is hydrated from revision %s and cannot move to %s: %w", from, revision, err)
+		}
+		d.hydrationMu.Lock()
+		d.hydrated[key] = revision
+		d.hydrationMu.Unlock()
+		return nil
+	}
 	if err := hydrate(ctx); err != nil {
 		return err
 	}

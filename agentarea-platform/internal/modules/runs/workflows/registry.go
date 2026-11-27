@@ -70,8 +70,6 @@ func ActivitySpecs() []ActivitySpec {
 	return []ActivitySpec{
 		{Name: api.ActivityStoreContextOutput, Kind: durable.KindData, Queue: QueueAgent,
 			In: StoreOutputRequest{}, Out: ContextResult{}, StartToClose: activity, Retry: retry(2), Step: 1},
-		{Name: api.ActivityReadContextOutput, Kind: durable.KindData, Queue: QueueAgent,
-			In: ReadOutputRequest{}, Out: ContextResult{}, StartToClose: activity, Retry: retry(2), Step: 1},
 		{Name: api.ActivitySearchHistory, Kind: durable.KindData, Queue: QueueAgent,
 			In: SearchHistoryRequest{}, Out: ContextResult{}, StartToClose: activity, Retry: retry(2), Step: 1},
 		{Name: api.ActivityRecallHistory, Kind: durable.KindData, Queue: QueueAgent,

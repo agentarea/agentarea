@@ -164,7 +164,10 @@ func (s *Service) executeTool(ctx context.Context, p Principal, in ToolCall, cal
 	if err != nil {
 		return ToolResult{}, err
 	}
-	action, reason := domain.DecideToolPolicy(in.Policy, in.ToolName, toolNamesOf(in.Binding))
+	action, reason := domain.ToolAllow, ""
+	if !domain.IsReadFile(in.ToolName, in.Binding) {
+		action, reason = domain.DecideToolPolicy(in.Policy, in.ToolName, toolNamesOf(in.Binding))
+	}
 	switch {
 	case action == domain.ToolDeny:
 		call.set(toolOutcomeDenied)
@@ -496,7 +499,8 @@ func outputID(prefix, activityID string) string {
 	return prefix + "_" + b.String()
 }
 
-// keepOutput stores the tool's images and offloads a result over the offload size.
+// keepOutput stores the tool's images and offloads a result over the offload
+// size to a task file; read_file's own result is never offloaded.
 func (s *Service) keepOutput(ctx context.Context, p Principal, in ToolCall, out ToolOutput) ([]domain.ImageRef, string, error) {
 	prefix := "tool"
 	if in.Binding.Source == "mcp" {
@@ -535,15 +539,17 @@ func (s *Service) keepOutput(ctx context.Context, p Principal, in ToolCall, out 
 	if len(notes) == 0 {
 		content = out.Result
 	}
-	if content == "" || len([]rune(content)) <= domain.OutputOffloadChars || in.TaskID == "" {
+	if content == "" || len([]rune(content)) <= domain.OutputOffloadChars || in.TaskID == "" || domain.IsReadFile(in.ToolName, in.Binding) {
 		return refs, content, nil
 	}
-	if err := s.putText(ctx, domain.OutputKey(p.WorkspaceID, in.TaskID, id), content, "application/json"); err != nil {
+	files := filesTask(ToolInvocation{TaskID: in.TaskID, RunMetadata: in.RunMetadata})
+	path, err := s.keepToolOutput(ctx, p, in.TaskID, files, in.WorkflowID, id, content)
+	if err != nil {
 		s.d.Log.WarnContext(ctx, "activity output offload failed", "output_id", id, "error", err)
 		head := string([]rune(content)[:domain.OutputOffloadChars])
 		return refs, fmt.Sprintf("%s\n... [activity output truncated at %d chars; offload failed: %v]", head, domain.OutputOffloadChars, err), nil
 	}
-	return refs, domain.OutputSummary(content, id), nil
+	return refs, domain.OutputSummary(content, path), nil
 }
 
 // meter is the call's lines: its connection's cost when it answered, and each settled wallet payment.

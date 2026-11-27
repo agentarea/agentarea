@@ -103,23 +103,29 @@ func RecallHistoryTool() api.ToolDefinition {
 	}
 }
 
-// ReadToolOutputTool reads an offloaded tool output.
-func ReadToolOutputTool() api.ToolDefinition {
+// ReadFileTool reads a task file: an input or an offloaded tool output from
+// the task workspace, any other path from the sandbox.
+func ReadFileTool() api.ToolDefinition {
 	return api.ToolDefinition{
-		Name: ToolReadToolOutput,
-		Description: "Read a previously stored tool output, or a task input file. Use when you see " +
-			"'[Output stored as ...]' in a tool result and need the full content, or when the task " +
-			"names an input file at inputs/attachments/<name>; no sandbox is needed. " +
-			"Supports grep filtering and head/tail slicing.",
+		Name: ToolReadFile,
+		Description: "Read a file of this task. Files under inputs/ (attachments, skills, and tool outputs too long " +
+			"for the conversation, which a result names as '[Output stored in inputs/tool-outputs/...]') are read " +
+			"without a sandbox; any other path is read from the working directory the shell sees. Text comes back " +
+			"as text: offset and limit read a range of lines, then grep keeps matching lines and head or tail the " +
+			"first or last of them. An image (PNG, JPEG, GIF, WebP) is shown to you; a PDF is attached as the pages " +
+			"themselves, at most 20 at a time, and pages is required for one over 10 pages.",
 		Parameters: obj{
 			"type": "object",
 			"properties": obj{
-				"output_id": obj{"type": "string", "description": "The output ID from the stored result reference, or a task input file path inputs/attachments/<name>"},
-				"grep":      obj{"type": "string", "description": "Filter lines matching this regex pattern"},
-				"head":      obj{"type": "integer", "description": "Return only first N lines"},
-				"tail":      obj{"type": "integer", "description": "Return only last N lines"},
+				"path":   obj{"type": "string", "description": "Path relative to the working directory, e.g. inputs/tool-outputs/call_1.json or outputs/report.md."},
+				"pages":  obj{"type": "string", "description": `PDF pages to read, one page or a range, e.g. "3" or "1-5"; at most 20.`},
+				"offset": obj{"type": "integer", "description": "Text: the line to start from, 1-based."},
+				"limit":  obj{"type": "integer", "description": "Text: how many lines to read."},
+				"grep":   obj{"type": "string", "description": "Text: keep only lines matching this case-insensitive regex."},
+				"head":   obj{"type": "integer", "description": "Text: return only the first N lines."},
+				"tail":   obj{"type": "integer", "description": "Text: return only the last N lines."},
 			},
-			"required": []any{"output_id"},
+			"required": []any{"path"},
 		},
 	}
 }

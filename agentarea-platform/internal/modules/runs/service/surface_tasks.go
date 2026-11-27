@@ -761,6 +761,8 @@ type Command struct {
 	BudgetUSD       *money.Decimal
 	Message         *string
 	MessageID       *string
+	// Attachments are staging refs queue_message attaches to the task first.
+	Attachments []string
 }
 
 // ErrResumeUnavailable: continuing a closed conversation in a new run needs
@@ -802,12 +804,24 @@ func (s *Surface) SendCommand(ctx context.Context, agentID, taskID string, cmd C
 			return nil, err
 		}
 	case api.CommandQueueMessage:
-		if cmd.Message == nil || *cmd.Message == "" {
-			return nil, httpx.HTTPError(http.StatusBadRequest, "message is required for queue_message")
+		message := ""
+		if cmd.Message != nil {
+			message = *cmd.Message
 		}
-		delivered, err = s.queueFollowUp(ctx, c, t, *cmd.Message)
+		if message == "" && len(cmd.Attachments) == 0 {
+			return nil, httpx.HTTPError(http.StatusBadRequest, "message or attachments is required for queue_message")
+		}
+		if len(cmd.Attachments) > 0 {
+			if message, err = s.attachToMessage(ctx, c, t.ID, message, cmd.Attachments); err != nil {
+				return nil, err
+			}
+		}
+		delivered, err = s.queueFollowUp(ctx, c, t, message)
 		if err != nil {
 			return nil, err
+		}
+		if delivered && len(cmd.Attachments) > 0 {
+			s.deleteStaging(ctx, c, cmd.Attachments)
 		}
 	case api.CommandRemoveMessage:
 		if cmd.MessageID == nil || *cmd.MessageID == "" {
@@ -826,6 +840,24 @@ func (s *Surface) SendCommand(ctx context.Context, agentID, taskID string, cmd C
 		return nil, httpx.HTTPError(http.StatusConflict, "Task is not running; the command could not be delivered to its workflow.")
 	}
 	return wirejson.Object{{Key: "status", Value: "accepted"}, {Key: "command", Value: cmd.Command}}, nil
+}
+
+// attachToMessage attaches uploaded staging files to the task, as the pure
+// addition a running sandbox takes in, and names them under the message.
+func (s *Surface) attachToMessage(ctx context.Context, c authn.Caller, taskID, message string, refs []string) (string, error) {
+	files := make([]api.TaskAttachment, 0, len(refs))
+	for _, ref := range refs {
+		f, err := s.stagedAttachment(ctx, c, ref)
+		if err != nil {
+			return "", err
+		}
+		files = append(files, f)
+	}
+	added, err := s.attachFiles(ctx, c.Workspace, taskID, files, true)
+	if err != nil {
+		return "", s.internal(ctx, "Failed to attach files to the running task", err)
+	}
+	return strings.TrimSpace(message + "\n\n" + attachedLines(added)), nil
 }
 
 // messageSender is message_sender: who a queued message is from.

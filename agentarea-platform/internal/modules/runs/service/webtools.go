@@ -101,7 +101,8 @@ func (t webTools) search(ctx context.Context, args map[string]any) string {
 		return fmt.Sprintf("Error searching the web: search service answered %d", resp.StatusCode)
 	}
 	var payload struct {
-		Results any `json:"results"`
+		Results      any     `json:"results"`
+		Unresponsive [][]any `json:"unresponsive_engines"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, webMaxBytes)).Decode(&payload); err != nil {
 		return "Error searching the web: " + err.Error()
@@ -128,6 +129,18 @@ func (t webTools) search(ctx context.Context, args map[string]any) string {
 			continue
 		}
 		results = append(results, result{Title: title, URL: link, Snippet: textOf(m["content"]), Engine: textOf(m["engine"])})
+	}
+	if len(results) == 0 && len(payload.Unresponsive) > 0 {
+		engines := make([]string, 0, len(payload.Unresponsive))
+		for _, pair := range payload.Unresponsive {
+			parts := make([]string, 0, len(pair))
+			for _, p := range pair {
+				parts = append(parts, fmt.Sprint(p))
+			}
+			engines = append(engines, strings.Join(parts, ": "))
+		}
+		return "Error searching the web: no search engine answered (" + strings.Join(engines, "; ") +
+			"). The search is down, not empty: try again later or fetch a page you know directly."
 	}
 	return compactJSON(map[string]any{"query": query, "results": results})
 }

@@ -92,8 +92,9 @@ An entry takes at most a tenth of the model's context window
 a run's activated skills together take at most
 `AGENTAREA_TASK_SKILLS_WINDOW_SHARE` of it (30%). Sizes are counted with the
 tokenizer model calls are metered with. A larger `SKILL.md` is summarized: its
-size, its opening, and the path of its copy in the sandbox (or a
-`read_tool_output` id when there is no sandbox); a skill activated once the
+size, its opening, and the path of its copy in the sandbox (or, when the
+skill's files could not be put there, of its text kept as
+`inputs/tool-outputs/<id>.txt`, read with `read_file`); a skill activated once the
 skills' share is used up is not loaded, and the model is told why. Activated
 entries are never compacted, so the caps hold for the rest of the run.
 

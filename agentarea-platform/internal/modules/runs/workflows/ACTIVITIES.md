@@ -87,16 +87,17 @@ real Postgres) in this order, and the Go `AgentExecutionWorkflow` serves
 flagged agents only once steps 1 to 12 exist. Steps 13 and 14 belong to phase
 3 (reconciler, cron sync, triggers).
 
-### Step 1. Context store: `store_context_output`, `read_context_output`, `search_history` (data)
+### Step 1. Context store: `store_context_output`, `search_history` (data)
 
 - Python `ACT/agent/context.py:93-147`; `WF/context_tools.py:58,162,208`.
-- `StoreOutputRequest` / `ReadOutputRequest` / `SearchHistoryRequest` →
-  `ContextResult`. Failure is reported in `error`, never raised.
-- Effects: blob put/get/grep under `tasks/{workspace}/{task}/outputs/{id}.json`
-  and `.../history/chunk_{n}.json` (`EX/workflows/context_store.py:43`).
-  Store runs for outputs over 8000 chars when the strategy offloads; read
-  returns at most 16 000 chars.
-- 5 min, 2 attempts. Deps: kernel `blob`. Billing: none.
+- `StoreOutputRequest` / `SearchHistoryRequest` → `ContextResult`. Failure is
+  reported in `error`, never raised.
+- Effects: an output over 8000 chars, when the strategy offloads, becomes the
+  task file `inputs/tool-outputs/{id}.json` (`.txt` when not JSON) in the task
+  workspace of the task whose files the run works on; the result's content is
+  its path, which the built-in `read_file` and the shell read. History chunks
+  are blobs under `tasks/{workspace}/{task}/history/chunk_{n}.json`.
+- 5 min, 2 attempts. Deps: task workspace, kernel `blob`. Billing: none.
 
 ### Step 2. `recall_history_activity` (data)
 
