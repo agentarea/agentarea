@@ -173,7 +173,8 @@ One request to a decision model.
 | Name | Type | Default | Description |
 |---|---|---|---|
 | `model` | string | | One of the listed decision models, named as for `llm_call`. Required |
-| `state` | object | | What the questions are about. Required |
+| `state` | list or object | | What the questions are about: state items (`{"type": "text", "text": …}`, …) or an object. Required |
+| `files` | string[] | `null` | Task workspace files appended to `state` as items: a PDF whole (`{"type": "file", …}`, no page limit), an image by data URL. `state` must then be a list; at most 15 MB together |
 | `questions` | object | | The questions by key: `{"type": "choice", "instructions": …, "criteria": {"<option>": "<when>"}}` or `{"type": "score", "instructions": …, "criteria": ["…"]}`. Required |
 | `output` | string | `null` | A task workspace path to write the answers to |
 
