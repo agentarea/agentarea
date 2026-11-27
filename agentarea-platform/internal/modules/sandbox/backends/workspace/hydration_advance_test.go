@@ -102,6 +102,12 @@ func TestAdditiveAttachmentDiff(t *testing.T) {
 		{"absolute path added", []Entry{first}, []Entry{first, {RelativePath: "/inputs/attachments/c.pdf", SHA256: "5"}}, nil},
 		{"prefix lookalike added", []Entry{first}, []Entry{first, {RelativePath: "inputs/attachments-x/c.pdf", SHA256: "5"}}, nil},
 		{"tombstone added", []Entry{first}, []Entry{first, {RelativePath: "inputs/attachments/c.pdf", Deleted: true}}, nil},
+		{"skill activated mid-task", []Entry{brief, first}, []Entry{brief, first,
+			{RelativePath: "inputs/skills/smeta-ab12/SKILL.md", SHA256: "6"}, {RelativePath: "inputs/skills/smeta-ab12/scripts/calc.py", SHA256: "7"}},
+			[]string{"inputs/skills/smeta-ab12/SKILL.md", "inputs/skills/smeta-ab12/scripts/calc.py"}},
+		{"file straight under the skills root", []Entry{first}, []Entry{first, {RelativePath: "inputs/skills/loose.md", SHA256: "5"}}, nil},
+		{"skills root lookalike", []Entry{first}, []Entry{first, {RelativePath: "inputs/skills-x/a/SKILL.md", SHA256: "5"}}, nil},
+		{"skill traversal", []Entry{first}, []Entry{first, {RelativePath: "inputs/skills/a/../../brief.txt", SHA256: "5"}}, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -151,6 +157,27 @@ func TestPrepareCurrentHydrationAdvancesPinForAddedAttachment(t *testing.T) {
 	}
 	if _, err := repository.PrepareCurrentHydration(context.Background(), ref.WorkspaceID, ref.TaskID, "inputs"); err != nil {
 		t.Fatalf("steady-state PrepareCurrentHydration() error = %v", err)
+	}
+}
+
+func TestPrepareCurrentHydrationAdvancesPinForASkillActivatedMidTask(t *testing.T) {
+	repository, storage, ref, manifest := repositoryFixture(t)
+	brief := inputEntry(t, repository, storage, ref, "inputs/brief.txt", "brief")
+	first := inputEntry(t, repository, storage, ref, "inputs/skills/smeta-ab12/SKILL.md", "first skill")
+	ref, manifest = commitInputs(t, repository, storage, ref, manifest, brief, first)
+	before, err := repository.PrepareCurrentHydration(context.Background(), ref.WorkspaceID, ref.TaskID, "inputs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := inputEntry(t, repository, storage, ref, "inputs/skills/kvartira-cd34/SKILL.md", "second skill")
+	ref, _ = commitInputs(t, repository, storage, ref, manifest, brief, first, second)
+	after, err := repository.PrepareCurrentHydration(context.Background(), ref.WorkspaceID, ref.TaskID, "inputs")
+	if err != nil {
+		t.Fatalf("PrepareCurrentHydration() after a second skill error = %v", err)
+	}
+	additions, err := repository.HydrationAdditions(context.Background(), ref.WorkspaceID, ref.TaskID, "inputs", before.RevisionSHA256, after.RevisionSHA256)
+	if err != nil || len(additions) != 1 || additions[0] != second {
+		t.Fatalf("HydrationAdditions() = %#v, %v", additions, err)
 	}
 }
 

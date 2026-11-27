@@ -340,8 +340,8 @@ func (r *WorkspaceRuntime) materializeAddedAttachments(
 	}
 	downloads := make([]workspace.Download, 0, len(additions))
 	for _, entry := range additions {
-		if !workspace.IsAttachmentInputPath(entry.RelativePath) {
-			return fmt.Errorf("workspace provider attempted to add non-attachment input %q", entry.RelativePath)
+		if !workspace.IsAddableInputPath(entry.RelativePath) {
+			return fmt.Errorf("workspace provider attempted to add input %q, which is neither an attachment nor a skill file", entry.RelativePath)
 		}
 		download, ok := planned[entry.RelativePath]
 		if !ok || download.SHA256 != entry.SHA256 || download.Size != entry.Size || download.Mode != entry.Mode {
