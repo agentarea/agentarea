@@ -1,0 +1,36 @@
+# Hot reload for the development stack. docker-compose.dev.yaml runs `app` from
+# the Dockerfile's `dev` stage with this tree mounted at
+# /src/agentarea/agentarea-platform: air rebuilds `agentarea` on a change and
+# restarts `agentarea all`. A failed build leaves the running process as it was.
+#
+# The enterprise overlay mounts its tree beside this one and overrides
+# build.cmd and build.include_dir on the command line; root stays /src so both
+# trees are under it.
+root = "/src"
+tmp_dir = "/tmp/air"
+
+[build]
+cmd = "cd agentarea/agentarea-platform && go build -o /tmp/agentarea ./cmd/agentarea"
+entrypoint = ["/tmp/agentarea", "all"]
+include_dir = ["agentarea/agentarea-platform"]
+# Go sources and the files go:embed puts in the binary.
+include_ext = ["go", "sql", "json", "yaml", "html", "txt", "svg", "png"]
+exclude_dir = [
+  "agentarea/agentarea-platform/test",
+  "agentarea/agentarea-platform/tools",
+  "agentarea/agentarea-platform/deploy",
+  "agentarea/agentarea-platform/sandbox-runtime",
+  "agentarea/agentarea-platform/temporal-config",
+  "agentarea/agentarea-platform/.omc",
+]
+exclude_regex = ["_test\\.go$"]
+# A save often touches several files; build once for the batch.
+delay = 500
+# The old process stops within AGENTAREA_SHUTDOWN_TIMEOUT (3s in the dev
+# compose) and frees :8000 before the new binary starts.
+send_interrupt = true
+kill_delay = "5s"
+
+[log]
+time = true
+main_only = true
