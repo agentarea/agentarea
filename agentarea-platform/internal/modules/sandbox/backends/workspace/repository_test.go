@@ -661,3 +661,25 @@ func (f *fakeS3) PresignPutObject(_ context.Context, _ *s3.PutObjectInput, _ ...
 	f.presignCalls++
 	return &v4.PresignedHTTPRequest{URL: "https://object-storage.invalid/put", Method: http.MethodPut, SignedHeader: http.Header{}}, nil
 }
+
+func TestManifestRefTakesFencingTokenZeroOnlyForTheUnleasedGenerationZero(t *testing.T) {
+	ref := func(generation, base, token int64) ManifestRef {
+		sum := strings.Repeat("a", 64)
+		return ManifestRef{
+			SchemaVersion: SchemaVersion, WorkspaceID: "ws-1", TaskID: "task-1", Generation: generation,
+			BaseGeneration: base, FencingToken: token, ManifestSHA256: sum,
+			ManifestURI: fmt.Sprintf("s3://trusted/root/workspaces/ws-1/tasks/task-1/manifests/%d-%s.json", generation, sum),
+		}
+	}
+	if err := ref(0, 0, 0).Validate(); err != nil {
+		t.Fatalf("generation 0 written before any lease was refused: %v", err)
+	}
+	for _, r := range []ManifestRef{ref(1, 0, 0), ref(0, 0, -1)} {
+		if err := r.Validate(); err == nil {
+			t.Fatalf("generation %d with fencing_token %d was accepted", r.Generation, r.FencingToken)
+		}
+	}
+	if err := ref(1, 0, 1).Validate(); err != nil {
+		t.Fatal(err)
+	}
+}
