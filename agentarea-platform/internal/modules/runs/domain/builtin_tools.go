@@ -21,9 +21,9 @@ func CompletionTool() api.ToolDefinition {
 				"result": obj{"type": "string", "description": "Your complete response to the user. This is what they will read."},
 				"artifacts": obj{
 					"type": "array", "items": obj{"type": "string"}, "maxItems": 1000,
-					"description": "Files outside outputs/ the response also delivers, as " +
-						"workspace-relative paths such as reports/result.pdf. Everything " +
-						"in outputs/ is delivered without being listed.",
+					"description": "Other task files the response also delivers, as " +
+						"workspace-relative paths such as reports/result.pdf. Files at the top of " +
+						"the working directory and in outputs/ are delivered without being listed.",
 				},
 				"outcome": obj{
 					"type": "string", "enum": []any{"completed", "blocked"},

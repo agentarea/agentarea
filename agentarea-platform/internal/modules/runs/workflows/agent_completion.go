@@ -170,16 +170,22 @@ func (r *agentRun) pairCompletionCall(c ToolCall) {
 
 // rejectCompletion answers a malformed completion with the contract error.
 func (r *agentRun) rejectCompletion(c ToolCall, reason string) {
+	r.refuseCompletion(c, "invalid_completion_arguments", reason, domain.Ordered{
+		{Key: "instruction", Value: "Call completion again with a non-empty result. Files at the top of " +
+			"the working directory and in outputs/ are delivered on their own; artifacts, when given, is an " +
+			"array of other workspace-relative paths."},
+	}...)
+}
+
+// refuseCompletion answers a completion the run does not accept, so the model goes on.
+func (r *agentRun) refuseCompletion(c ToolCall, status, reason string, extra ...domain.KV) {
 	r.success = false
 	r.finalResponse = ""
 	r.awaitingInput = false
 	r.pairCompletionCall(c)
-	r.messages = append(r.messages, Message{Role: "tool", Name: domain.ToolCompletion, ToolCallID: c.ID, Content: domain.PyDumpsCompact(domain.Ordered{
-		{Key: "status", Value: "invalid_completion_arguments"}, {Key: "error", Value: reason},
-		{Key: "instruction", Value: "Call completion again with a non-empty result. Files in " +
-			"outputs/ are delivered on their own; artifacts, when given, is an " +
-			"array of other workspace-relative paths."},
-	})})
+	r.messages = append(r.messages, Message{Role: "tool", Name: domain.ToolCompletion, ToolCallID: c.ID, Content: domain.PyDumpsCompact(append(domain.Ordered{
+		{Key: "status", Value: status}, {Key: "error", Value: reason},
+	}, extra...))})
 }
 
 func issueValues(issues []ArtifactIssue) []any {
@@ -236,7 +242,7 @@ func (r *agentRun) validationFeedback(c ToolCall, res ArtifactValidationResult) 
 		{Key: "status", Value: "validation_failed"}, {Key: "validation_state", Value: res.State},
 		{Key: "repair_attempt", Value: r.validationRepairs}, {Key: "repair_attempts_remaining", Value: 2 - r.validationRepairs},
 		{Key: "generation", Value: res.Generation}, {Key: "issues", Value: issueValues(res.Issues)},
-		{Key: "instruction", Value: "Repair or create the missing output in outputs/, or drop the path " +
+		{Key: "instruction", Value: "Repair or create the missing file, or drop the path " +
 			"from artifacts, then call completion again. Do not claim success until " +
 			"validation passes."},
 	})})

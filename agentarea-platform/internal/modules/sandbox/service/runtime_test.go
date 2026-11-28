@@ -272,11 +272,11 @@ func TestValidateArtifacts(t *testing.T) {
 		}
 		switch r.URL.Path {
 		case "/sandbox/files":
-			if r.URL.Query().Get("ensure") != "false" || r.URL.Query().Get("list") != "outputs" {
+			if q := r.URL.Query(); q.Get("ensure") != "false" || !q.Has("list") || q.Get("list") != "" {
 				w.WriteHeader(http.StatusBadRequest)
 				return true
 			}
-			_, _ = io.WriteString(w, `{"paths":["outputs/r.md","notes.txt"]}`)
+			_, _ = io.WriteString(w, `{"paths":[".bash_history","answer.txt","inputs/attachments/a.pdf","outputs/r.md","work/raw.txt"]}`)
 		case "/sandbox/artifacts":
 			if r.Method == http.MethodGet {
 				_, _ = io.WriteString(w, `{"items":[]}`)
@@ -302,7 +302,7 @@ func TestValidateArtifacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.State != "failed" || len(v.Evidence) != 2 || v.Evidence[0].Path != "report.pdf" || v.Evidence[1].Path != "outputs/r.md" {
+	if v.State != "failed" || len(v.Evidence) != 3 || v.Evidence[0].Path != "report.pdf" || v.Evidence[1].Path != "answer.txt" || v.Evidence[2].Path != "outputs/r.md" {
 		t.Fatalf("validation = %+v", v)
 	}
 	if len(v.Issues) != 1 || v.Issues[0].Code != "artifact_missing" {

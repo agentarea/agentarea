@@ -137,6 +137,11 @@ func (r *agentRun) executeToolCalls(ctx workflow.Context, calls []ToolCall) erro
 		}
 	}
 	if len(completion) == 1 {
+		if len(calls) > 1 && workflow.GetVersion(ctx, "completion-alone-in-its-turn", workflow.DefaultVersion, 1) == 1 {
+			r.refuseCompletion(completion[0], "completion_beside_other_calls", "Not completed: the other calls of this turn "+
+				"ran, and their results are above. Read them, then call completion on its own with a result that reflects them.")
+			return nil
+		}
 		return r.handleCompletion(ctx, completion[0], false)
 	}
 	return nil

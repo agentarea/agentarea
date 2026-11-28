@@ -800,3 +800,30 @@ func TestAnUnmarkedFollowUpKeepsTheStartingConfig(t *testing.T) {
 		t.Fatalf("resolved %d times, tools offered %v", len(f.resolves), offered)
 	}
 }
+
+func TestACompletionBesideOtherCallsWaitsUntilTheModelHasSeenTheirResults(t *testing.T) {
+	f := newFakeRun()
+	f.tool = func(ToolCallRequest) (ToolCallResult, error) {
+		return ToolCallResult{Success: false, Error: "sandbox execution cancelled"}, nil
+	}
+	f.llm[parentTask] = turns(
+		calls(ToolCall{ID: "call-1", Name: "search", Arguments: `{"q": "x"}`}, complete("call-2", "I wrote the file")),
+		calls(complete("call-3", "The write failed")),
+	)
+	env := newEnv(t, f)
+	env.ExecuteWorkflow(AgentExecutionWorkflow, request(nil))
+
+	res := result(t, env)
+	if !res.Success || res.FinalResponse != "The write failed" {
+		t.Fatalf("result = %+v", res)
+	}
+	var refusal string
+	for _, m := range f.messages(parentTask, "tool") {
+		if m.ToolCallID == "call-2" {
+			refusal = m.Content
+		}
+	}
+	if !strings.Contains(refusal, "completion_beside_other_calls") {
+		t.Fatalf("completion beside the failed call answered %q", refusal)
+	}
+}
