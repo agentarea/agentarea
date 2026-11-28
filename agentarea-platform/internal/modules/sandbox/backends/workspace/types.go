@@ -120,7 +120,9 @@ func (r ManifestRef) Validate() error {
 	if len(r.ManifestSHA256) != 64 || !isLowerHex(r.ManifestSHA256) {
 		return fmt.Errorf("manifest_sha256 must be a lowercase SHA-256 hex digest")
 	}
-	if r.FencingToken <= 0 {
+	// Generation 0 is the empty manifest the control plane writes before any
+	// writer took the lease, so it carries no token yet; every later one does.
+	if r.FencingToken < 0 || (r.FencingToken == 0 && r.Generation != 0) {
 		return fmt.Errorf("invalid fencing_token")
 	}
 	parsed, err := url.Parse(r.ManifestURI)
