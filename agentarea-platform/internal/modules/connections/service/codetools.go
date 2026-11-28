@@ -57,7 +57,7 @@ func sandboxToolsets() []CodeToolset {
 				"produce .pdf, .xlsx, images and other binary files with a program in the shell.",
 				Parameters: obj(map[string]any{
 					"contents":  str("The full text to write."),
-					"file_name": str("Path relative to the working directory, e.g. outputs/summary.md."),
+					"file_name": str("Path relative to the working directory, e.g. summary.md."),
 					"overwrite": map[string]any{"type": "boolean", "default": true, "description": "Replace an existing file; false refuses to."},
 				}, "contents", "file_name")},
 			{Method: "list_files", Description: "List the files in the working directory.",
@@ -72,7 +72,9 @@ func sandboxToolsets() []CodeToolset {
 			{Method: "bash", Description: "Run a bash command and return stdout, stderr, and the exit code.",
 				Parameters: obj(map[string]any{
 					"command": str("The bash command to run. It starts in the task's working directory; use paths relative to it, " +
-						"such as outputs/report.md. Only files under it reach the task; a file written elsewhere, such as ~ or /tmp, does not. " +
+						"such as report.md. Files at its top level and under outputs/ go out with your answer; files in other folders " +
+						"stay with the task only, so keep downloads and intermediate files in one. A file written outside it, such as " +
+						"~ or /tmp, does not reach the task. " +
 						"Chain steps with && or put them in a script."),
 					"timeout_seconds": map[string]any{"type": []any{"integer", "null"}, "default": nil,
 						"description": "Seconds the command may run before it is stopped. Omit for the default; asking for more " +

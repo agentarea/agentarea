@@ -34,7 +34,7 @@ func storeUnavailable(msg string) api.ArtifactValidation {
 }
 
 // ValidateArtifacts is validate_published_artifacts: every declared path and
-// every file under outputs/ is published before the task completes.
+// every delivered file is published before the task completes.
 func (r runtime) ValidateArtifacts(ctx context.Context, workspaceID, taskID string, declaredPaths []string) (api.ArtifactValidation, error) {
 	var declared []string
 	for _, raw := range declaredPaths {
@@ -55,7 +55,7 @@ func (r runtime) ValidateArtifacts(ctx context.Context, workspaceID, taskID stri
 		}
 		return storeUnavailable("artifact store authentication is not configured"), nil
 	}
-	outputs, fail := r.outputsInSandbox(ctx, workspaceID, taskID)
+	outputs, fail := r.deliveredInSandbox(ctx, workspaceID, taskID)
 	if fail != nil {
 		return *fail, ctx.Err()
 	}
@@ -113,8 +113,19 @@ func (r runtime) ValidateArtifacts(ctx context.Context, workspaceID, taskID stri
 	return out, nil
 }
 
-func (r runtime) outputsInSandbox(ctx context.Context, workspaceID, taskID string) ([]string, *api.ArtifactValidation) {
-	q := url.Values{"workspace_id": {workspaceID}, "task_id": {taskID}, "list": {outputsDir}, "ensure": {"false"}}
+// delivered is whether a task file goes out with the task's answer: a file at
+// the top of the working directory, as a task names one (answer.txt,
+// report.pdf), or one under outputs/. Dotfiles and folders other than outputs/
+// (downloads, a cloned repository, inputs/) stay task files only.
+func delivered(p string) bool {
+	if strings.HasPrefix(p, outputsDir+"/") {
+		return true
+	}
+	return !strings.Contains(p, "/") && !strings.HasPrefix(p, ".")
+}
+
+func (r runtime) deliveredInSandbox(ctx context.Context, workspaceID, taskID string) ([]string, *api.ArtifactValidation) {
+	q := url.Values{"workspace_id": {workspaceID}, "task_id": {taskID}, "list": {""}, "ensure": {"false"}}
 	resp, err := r.s.call(ctx, http.MethodGet, r.s.managerURL("/sandbox/files", q), bearer(r.s.d.Manager.FileSecret), nil, 60*time.Second)
 	if err != nil {
 		r.s.d.Log.WarnContext(ctx, "sandbox outputs could not be listed", "error", err)
@@ -146,7 +157,7 @@ func (r runtime) outputsInSandbox(ctx context.Context, workspaceID, taskID strin
 		if err != nil {
 			return invalid()
 		}
-		if strings.HasPrefix(p, outputsDir+"/") {
+		if delivered(p) {
 			out = append(out, p)
 		}
 	}
